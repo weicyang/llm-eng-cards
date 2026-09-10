@@ -8,7 +8,7 @@
 
 291 张卡片 · 36 张主干 · 原理 → 应用 → 生产
 
-**[在线阅读](https://weicyang.github.io/llm-eng-cards/)** · **[主干 36](./LEARNING_PATH.md)**
+**[在线阅读](https://weicyang.github.io/llm-eng-cards/)** · **[主干 36](https://weicyang.github.io/llm-eng-cards/#start)**
 
 ## 为什么有这个库
 
