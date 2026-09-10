@@ -1,14 +1,14 @@
 # LLM 工程知识卡片
 
-**在线阅读：** [weicyang.github.io/llm-eng-cards](https://weicyang.github.io/llm-eng-cards/)
-
 **From Attention to Production.**
 
-给已经会调模型 API 的工程师。不追热点，先理解机制，再做成应用，最后解决生产问题。
+给已经会调模型 API 的工程师。不追热点，先理解机制，再做成 RAG / Agent，最后把系统撑上线。
 
-> 每张卡回答一个判断：什么时候用，什么时候不要用。
+> 每张卡回答一个判断：什么时候用，什么时候不要用。别人讲「RAG 是什么」，这里讲「什么时候该上 RAG，什么时候不要上」。
 
-[在线阅读](https://weicyang.github.io/llm-eng-cards/) · [主干路径](./LEARNING_PATH.md)
+291 张卡片 · 36 张主干 · 原理 → 应用 → 生产
+
+**[在线阅读](https://weicyang.github.io/llm-eng-cards/)** · **[主干 36](./LEARNING_PATH.md)**
 
 ## 为什么有这个库
 
