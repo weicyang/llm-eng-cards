@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 工程知识卡片 · 从 Attention 到上线</title>
+<meta name="description" content="给会调模型 API 的工程师：原理成立、能力做成、上线后哪个旋钮先动。">
+<style>
+:root {
+  --bg:#f4f1ea;
+  --bg-2:#fffdf8;
+  --ink:#1c1917;
+  --ink-2:#44403c;
+  --ink-3:#78716c;
+  --line:rgba(28,25,23,.10);
+  --line-2:rgba(28,25,23,.18);
+  --fund:#4338ca;
+  --fund-soft:rgba(67,56,202,.10);
+  --app:#0f766e;
+  --app-soft:rgba(15,118,110,.10);
+  --prod:#c2410c;
+  --prod-soft:rgba(194,65,12,.10);
+  --shadow:0 10px 30px -18px rgba(28,25,23,.35);
+  --sans:"Segoe UI","PingFang SC","Hiragino Sans GB","Noto Sans SC","Microsoft YaHei",sans-serif;
+  --serif:Georgia,"Songti SC","Noto Serif SC","SimSun",serif;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,monospace;
+}
+html.dark {
+  --bg:#12110f;
+  --bg-2:#1c1a17;
+  --ink:#f5f0e8;
+  --ink-2:#d6d0c6;
+  --ink-3:#a8a097;
+  --line:rgba(245,240,232,.10);
+  --line-2:rgba(245,240,232,.18);
+  --fund:#a5b4fc;
+  --fund-soft:rgba(165,180,252,.12);
+  --app:#5eead4;
+  --app-soft:rgba(94,234,212,.12);
+  --prod:#fdba74;
+  --prod-soft:rgba(253,186,116,.12);
+  --shadow:0 16px 40px -20px rgba(0,0,0,.55);
+}
+* { box-sizing:border-box; margin:0; padding:0; }
+html { scroll-behavior:smooth; }
+body {
+  font-family:var(--sans);
+  background:
+    radial-gradient(900px 420px at 12% -10%, var(--fund-soft), transparent 55%),
+    radial-gradient(800px 380px at 92% 0%, var(--app-soft), transparent 50%),
+    var(--bg);
+  color:var(--ink);
+  line-height:1.65;
+  min-height:100vh;
+}
+a { color:inherit; text-decoration:none; }
+button, input { font:inherit; color:inherit; }
+
+.top {
+  position:sticky; top:0; z-index:40;
+  display:flex; align-items:center; gap:18px;
+  padding:12px 28px;
+  background:color-mix(in srgb, var(--bg) 82%, transparent);
+  backdrop-filter:blur(14px);
+  border-bottom:1px solid var(--line);
+}
+.brand { display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.01em; }
+.brand b { width:10px; height:10px; border-radius:50%;
+  background:linear-gradient(135deg,var(--fund),var(--app),var(--prod)); }
+.brand span { color:var(--ink-3); font-weight:500; font-size:13px; }
+.top nav { display:flex; gap:4px; margin-left:12px; }
+.top nav a, .icon-btn {
+  padding:6px 10px; border-radius:8px; color:var(--ink-3); font-size:13px;
+}
+.top nav a:hover, .icon-btn:hover { background:var(--bg-2); color:var(--ink); }
+.top-actions { margin-left:auto; display:flex; gap:8px; align-items:center; }
+.icon-btn { border:1px solid var(--line); background:var(--bg-2); cursor:pointer; }
+.search-chip { font-family:var(--mono); font-size:12px; color:var(--ink-3); }
+
+.wrap { max-width:1120px; margin:0 auto; padding:0 28px 80px; }
+.page-nav {
+  position:fixed; right:22px; top:108px; width:148px;
+  display:flex; flex-direction:column; gap:8px;
+  font-size:12px; color:var(--ink-3);
+}
+.page-nav a { padding-left:10px; border-left:2px solid var(--line); }
+.page-nav a.active, .page-nav a:hover { color:var(--ink); border-color:var(--fund); }
+
+.hero { padding:72px 0 28px; max-width:760px; }
+.eyebrow {
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--fund); margin-bottom:14px;
+}
+.hero h1 {
+  font-family:var(--serif);
+  font-size:clamp(36px, 6vw, 58px);
+  line-height:1.12; letter-spacing:-.03em; margin-bottom:16px;
+}
+.hero h1 em { font-style:normal; color:var(--fund); }
+.lede { font-size:18px; color:var(--ink-2); max-width:640px; }
+.stats {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:12px;
+  margin:28px 0 18px; max-width:720px;
+}
+.stat { background:var(--bg-2); border:1px solid var(--line); border-radius:14px; padding:14px 16px; box-shadow:var(--shadow); }
+.stat b { display:block; font-size:22px; letter-spacing:-.03em; }
+.stat span { font-size:12px; color:var(--ink-3); }
+.search {
+  display:flex; align-items:center; gap:10px;
+  background:var(--bg-2); border:1px solid var(--line-2);
+  border-radius:14px; padding:12px 14px; max-width:720px;
+}
+.search input { flex:1; border:0; outline:0; background:transparent; font-size:15px; }
+.search kbd { font-family:var(--mono); font-size:11px; color:var(--ink-3); border:1px solid var(--line); border-radius:6px; padding:2px 6px; }
+
+.section { margin-top:64px; }
+.section h2 { font-size:22px; letter-spacing:-.02em; margin-bottom:6px; }
+.section .hint { color:var(--ink-3); font-size:14px; margin-bottom:18px; }
+
+.layers { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.layer {
+  display:block; background:var(--bg-2); border:1px solid var(--line);
+  border-radius:18px; padding:22px; box-shadow:var(--shadow);
+  min-height:180px; transition:transform .15s ease, border-color .15s;
+}
+.layer:hover { transform:translateY(-3px); border-color:var(--line-2); }
+.layer .kicker { font-family:var(--mono); font-size:11px; letter-spacing:.12em; text-transform:uppercase; margin-bottom:8px; }
+.layer h3 { font-size:22px; margin-bottom:8px; }
+.layer p { color:var(--ink-2); font-size:14px; }
+.layer.fund { --c:var(--fund); }
+.layer.app { --c:var(--app); }
+.layer.prod { --c:var(--prod); }
+.layer .kicker, .layer h3 { color:var(--c); }
+
+.featured { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.feat {
+  background:var(--bg-2); border:1px solid var(--line); border-radius:16px;
+  padding:18px; min-height:150px;
+}
+.feat .meta { font-size:12px; color:var(--ink-3); margin-bottom:8px; display:flex; gap:8px; }
+.badge { font-size:11px; padding:2px 8px; border-radius:999px; background:var(--fund-soft); color:var(--fund); }
+.feat h3 { font-size:17px; margin-bottom:8px; }
+.feat p { font-size:13.5px; color:var(--ink-2); }
+
+.catalog { display:grid; gap:22px; }
+.group { background:var(--bg-2); border:1px solid var(--line); border-radius:18px; padding:8px 6px; }
+.group h3 {
+  font-size:13px; letter-spacing:.08em; text-transform:uppercase;
+  padding:12px 16px 8px; color:var(--ink-3);
+}
+.row {
+  display:grid; grid-template-columns:52px 1fr 88px;
+  gap:10px; align-items:center;
+  padding:10px 16px; border-radius:12px;
+}
+.row:hover { background:color-mix(in srgb, var(--ink) 4%, transparent); }
+.row .no { font-family:var(--mono); font-size:12px; color:var(--ink-3); }
+.row .title { font-weight:600; }
+.row .out { font-size:13px; color:var(--ink-3); }
+.row.hidden { display:none; }
+.status { font-size:11px; color:var(--ink-3); text-align:right; }
+.status.live { color:var(--app); }
+
+.updates { display:flex; flex-direction:column; gap:12px; }
+.update { display:grid; grid-template-columns:92px 1fr; gap:14px; padding:12px 0; border-bottom:1px solid var(--line); }
+.update time { font-family:var(--mono); font-size:12px; color:var(--ink-3); }
+
+.foot {
+  margin-top:72px; padding-top:22px; border-top:1px solid var(--line);
+  display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap;
+  color:var(--ink-3); font-size:13px;
+}
+
+#palette {
+  position:fixed; inset:0; background:rgba(12,10,8,.45);
+  display:none; align-items:flex-start; justify-content:center; padding-top:14vh; z-index:60;
+}
+#palette.open { display:flex; }
+.pal {
+  width:min(640px,92vw); background:var(--bg-2); border:1px solid var(--line-2);
+  border-radius:16px; overflow:hidden; box-shadow:var(--shadow);
+}
+.pal input { width:100%; border:0; outline:0; background:transparent; padding:16px 18px; font-size:16px; border-bottom:1px solid var(--line); }
+.pal .hits { max-height:360px; overflow:auto; }
+.hit { display:block; padding:10px 18px; }
+.hit:hover, .hit.active { background:color-mix(in srgb, var(--fund) 10%, transparent); }
+.hit b { display:block; }
+.hit span { font-size:12px; color:var(--ink-3); }
+
+.empty { display:none; padding:20px; color:var(--ink-3); text-align:center; }
+.empty.show { display:block; }
+
+@media (max-width:980px) {
+  .page-nav { display:none; }
+  .layers, .featured, .stats { grid-template-columns:1fr; }
+  .row { grid-template-columns:40px 1fr; }
+  .status { display:none; }
+  .hero { padding-top:40px; }
+  .top nav { display:none; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="./">
+    <b></b> LLM Eng Cards
+    <span>从 Attention 到上线</span>
+  </a>
+  <nav>
+    <a href="#paths">三层路径</a>
+    <a href="#featured">精选</a>
+    <a href="#catalog">目录</a>
+    <a href="#updates">更新</a>
+  </nav>
+  <div class="top-actions">
+    <button class="icon-btn" id="openSearch" type="button">搜索 <span class="search-chip">⌘K</span></button>
+    <button class="icon-btn" id="themeBtn" type="button" aria-label="切换主题">◐</button>
+    <a class="icon-btn" href="https://github.com/weicyang/llm-eng-cards">GitHub</a>
+  </div>
+</header>
+
+<aside class="page-nav" aria-label="本页导航">
+  <a href="#hero">概览</a>
+  <a href="#paths">三层路径</a>
+  <a href="#featured">精选</a>
+  <a href="#catalog">主干目录</a>
+  <a href="#updates">最新更新</a>
+</aside>
+
+<main class="wrap">
+  <section class="hero" id="hero">
+    <p class="eyebrow">Open knowledge cards · 2026</p>
+    <h1>先懂它为什么成立，<br>再决定<em>上线时动哪颗旋钮</em>。</h1>
+    <p class="lede">给已经会调模型 API 的工程师。公开仓只发一条能走完的主干：原理 → 应用 → 生产。不是 300 张卡片倾倒，也不是从零教程。</p>
+    <div class="stats">
+      <div class="stat"><b>36</b><span>主干卡片</span></div>
+      <div class="stat"><b>3</b><span>学习层级</span></div>
+      <div class="stat"><b>0</b><span>已迁入公开</span></div>
+      <div class="stat"><b>周更</b><span>1 张 DEEP / 次</span></div>
+    </div>
+    <label class="search">
+      <span>⌕</span>
+      <input id="q" type="search" placeholder="搜索卡片、机制或决策点…" autocomplete="off">
+      <kbd>⌘K</kbd>
+    </label>
+  </section>
+
+  <section class="section" id="paths">
+    <h2>推荐路径</h2>
+    <p class="hint">按领域进入。每条路径对应一组核心卡，读完应能做决定，而不是只记住名词。</p>
+    <div class="layers">
+      <a class="layer fund" href="#g-fundamentals">
+        <div class="kicker">01 · Fundamentals</div>
+        <h3>基础原理</h3>
+        <p>它凭什么成立。Attention、解码、KV Cache、LoRA、推理模型。后面两层会反复引用这里。</p>
+      </a>
+      <a class="layer app" href="#g-applications">
+        <div class="kicker">02 · Applications</div>
+        <h3>应用能力</h3>
+        <p>怎么做成能力。Prompt / Context、RAG 链路、Agent Loop、记忆与评测。</p>
+      </a>
+      <a class="layer prod" href="#g-production">
+        <div class="kicker">03 · Production</div>
+        <h3>生产工程</h3>
+        <p>上线后先动哪个旋钮。部署、投机解码、流式、成本、注入与沙箱。以及什么时候关掉。</p>
+      </a>
+    </div>
+  </section>
+
+  <section class="section" id="featured">
+    <h2>精选专题</h2>
+    <p class="hint">网上系统文章少、又最能体现本仓判断力的三张，作为迁入优先级。</p>
+    <div class="featured">
+      <article class="feat">
+        <div class="meta"><span class="badge">原理 · 12</span><span>待迁入</span></div>
+        <h3>推理模型与测试时计算</h3>
+        <p>思考 token 必须独立预算。什么任务该开思考，什么任务纯属浪费。</p>
+      </article>
+      <article class="feat">
+        <div class="meta"><span class="badge">生产 · 31</span><span>待迁入</span></div>
+        <h3>投机解码生产落地</h3>
+        <p>高并发不要直接关掉投机，该把草稿缩短。长上下文超过阈值会变成负收益。</p>
+      </article>
+      <article class="feat">
+        <div class="meta"><span class="badge">应用 · 25</span><span>待迁入</span></div>
+        <h3>多模态视觉文档 RAG</h3>
+        <p>版面即语义时，OCR 会丢结构。页面当图像检索是并列路线，不是替代。</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section" id="catalog">
+    <h2>主干目录</h2>
+    <p class="hint">按编号读，不要按文件夹乱点。状态 planned 表示尚未从工场迁入公开仓。</p>
+    <div class="catalog" id="catalogRoot"></div>
+    <p class="empty" id="empty">没有匹配的卡片。试试「KV」「评测」或「沙箱」。</p>
+  </section>
+
+  <section class="section" id="updates">
+    <h2>最新更新</h2>
+    <div class="updates">
+      <article class="update">
+        <time datetime="2026-09-10">2026-09-10</time>
+        <div>
+          <strong>公开仓首页上线。</strong>
+          三层路径、主干 36 张目录与精选判断先公开，卡片按周迁入。
+        </div>
+      </article>
+      <article class="update">
+        <time datetime="2026-09-10">2026-09-10</time>
+        <div>
+          <strong>仓库创建。</strong>
+          正文 CC BY-NC-SA 4.0，示例代码 MIT。不收录面试速成、采集稿和来源不清的数字。
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div>LLM Eng Cards · 纯 HTML · GitHub Pages</div>
+    <div>
+      <a href="./LEARNING_PATH.md">学习路径</a> ·
+      <a href="./CONTRIBUTING.md">贡献</a> ·
+      <a href="./LICENSE">License</a>
+    </div>
+  </footer>
+</main>
+
+<div id="palette" aria-hidden="true">
+  <div class="pal">
+    <input id="pq" type="search" placeholder="搜索主干卡片…" autocomplete="off">
+    <div class="hits" id="hits"></div>
+  </div>
+</div>
+
+<script>
+const CARDS = [
+  {n:"01", layer:"fundamentals", title:"张量与维度", out:"看懂后面所有形状变换在说什么"},
+  {n:"02", layer:"fundamentals", title:"Attention 手撕", out:"自己写出缩放点积注意力"},
+  {n:"03", layer:"fundamentals", title:"Multi-Head Attention", out:"说明为什么一个头不够、多头怎么拼"},
+  {n:"04", layer:"fundamentals", title:"位置编码", out:"解释模型如何知道 token 顺序"},
+  {n:"05", layer:"fundamentals", title:"Decoder-only", out:"对照三种架构说出生产默认选型"},
+  {n:"06", layer:"fundamentals", title:"Token 机制", out:"算清中英文 token、窗口和费用"},
+  {n:"07", layer:"fundamentals", title:"解码与采样", out:"Temperature / Top-p / 贪心怎么选"},
+  {n:"08", layer:"fundamentals", title:"KV Cache", out:"解释 prefill / decode 和显存为什么涨"},
+  {n:"09", layer:"fundamentals", title:"MoE", out:"说清专家路由和它带来的工程代价"},
+  {n:"10", layer:"fundamentals", title:"LoRA / QLoRA", out:"判断要不要微调、用哪种 PEFT"},
+  {n:"11", layer:"fundamentals", title:"RL for LLM", out:"分清 PPO / GRPO / 奖励模型各自管哪一段"},
+  {n:"12", layer:"fundamentals", title:"推理模型与测试时计算", out:"决定何时开思考、预算怎么熔断"},
+  {n:"13", layer:"applications", title:"五层 Prompt", out:"把提示词拆成可维护的分层资产"},
+  {n:"14", layer:"applications", title:"Prompt vs Context", out:"分清「怎么说」和「给什么」"},
+  {n:"15", layer:"applications", title:"RAG 架构", out:"判断 Naive / Advanced / Modular 处在哪一层"},
+  {n:"16", layer:"applications", title:"文档切片", out:"按文档类型选切法，而不是固定长度一刀切"},
+  {n:"17", layer:"applications", title:"混合检索", out:"决定关键词、向量、重排怎么接"},
+  {n:"18", layer:"applications", title:"重排", out:"说清重排增益和它吃掉的延迟"},
+  {n:"19", layer:"applications", title:"RAG 评估", out:"先评检索再评回答"},
+  {n:"20", layer:"applications", title:"Agent Loop", out:"画出最小闭环：模型、工具、停止条件"},
+  {n:"21", layer:"applications", title:"Function Calling / MCP", out:"为工具选协议，并写出失败时的降级"},
+  {n:"22", layer:"applications", title:"上下文窗口", out:"为长任务做预算，而不是整段塞历史"},
+  {n:"23", layer:"applications", title:"记忆", out:"分清短记忆、长记忆、检索，避免污染"},
+  {n:"24", layer:"applications", title:"Agent 评测", out:"任务完成率、工具正确率、成本一起看"},
+  {n:"25", layer:"applications", title:"多模态视觉文档 RAG", out:"判断 OCR 何时必须换成页面图像检索"},
+  {n:"26", layer:"applications", title:"GUI Agent / 实时语音 Agent", out:"选一条产品链路打穿"},
+  {n:"27", layer:"production", title:"部署选型", out:"云 API / 托管 / 自建 / 混合四维过滤"},
+  {n:"28", layer:"production", title:"显存与硬件", out:"上机器前估出装得下还是会 OOM"},
+  {n:"29", layer:"production", title:"推理框架", out:"按负载在 vLLM / SGLang / TensorRT-LLM 里选型"},
+  {n:"30", layer:"production", title:"连续批处理", out:"解释高并发下吞吐和延迟为什么互相咬"},
+  {n:"31", layer:"production", title:"投机解码生产落地", out:"按接受率和上下文长度决定开、缩短还是关"},
+  {n:"32", layer:"production", title:"流式传输", out:"为 SSE / WebSocket / 断线选一层方案"},
+  {n:"33", layer:"production", title:"成本与计费", out:"把输入、输出、思考 token 分成三本账"},
+  {n:"34", layer:"production", title:"可观测性", out:"为一次请求补上 trace、token、质量指标"},
+  {n:"35", layer:"production", title:"Prompt 注入", out:"把不可信输入当成默认情况来防"},
+  {n:"36", layer:"production", title:"Agent 沙箱", out:"给工具调用划权限平面"}
+];
+const GROUPS = [
+  {id:"g-fundamentals", key:"fundamentals", title:"基础原理 · 它凭什么成立"},
+  {id:"g-applications", key:"applications", title:"应用能力 · 怎么做成能力"},
+  {id:"g-production", key:"production", title:"生产工程 · 上线后先动哪个旋钮"}
+];
+
+const root = document.getElementById("catalogRoot");
+root.innerHTML = GROUPS.map(g => `
+  <section class="group" id="${g.id}">
+    <h3>${g.title}</h3>
+    ${CARDS.filter(c => c.layer===g.key).map(c => `
+      <div class="row" data-q="${(c.n+c.title+c.out).toLowerCase()}">
+        <div class="no">${c.n}</div>
+        <div>
+          <div class="title">${c.title}</div>
+          <div class="out">${c.out}</div>
+        </div>
+        <div class="status">planned</div>
+      </div>`).join("")}
+  </section>`).join("");
+
+function applyFilter(term) {
+  const q = term.trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll(".row").forEach(row => {
+    const ok = !q || row.dataset.q.includes(q);
+    row.classList.toggle("hidden", !ok);
+    if (ok) shown++;
+  });
+  document.querySelectorAll(".group").forEach(g => {
+    g.style.display = g.querySelector(".row:not(.hidden)") ? "" : "none";
+  });
+  document.getElementById("empty").classList.toggle("show", !!q && shown===0);
+}
+
+document.getElementById("q").addEventListener("input", e => applyFilter(e.target.value));
+
+const pal = document.getElementById("palette");
+const pq = document.getElementById("pq");
+const hits = document.getElementById("hits");
+function renderHits(term) {
+  const q = term.trim().toLowerCase();
+  const list = CARDS.filter(c => !q || (c.n+c.title+c.out).toLowerCase().includes(q)).slice(0, 8);
+  hits.innerHTML = list.map((c,i) => `<a class="hit${i===0?" active":""}" href="#g-${c.layer}"><b>${c.n} · ${c.title}</b><span>${c.out}</span></a>`).join("");
+}
+function openPal() {
+  pal.classList.add("open"); pal.setAttribute("aria-hidden","false");
+  pq.value = document.getElementById("q").value; renderHits(pq.value); pq.focus();
+}
+function closePal() { pal.classList.remove("open"); pal.setAttribute("aria-hidden","true"); }
+document.getElementById("openSearch").onclick = openPal;
+pq.addEventListener("input", e => renderHits(e.target.value));
+pal.addEventListener("click", e => { if (e.target===pal) closePal(); });
+hits.addEventListener("click", () => closePal());
+window.addEventListener("keydown", e => {
+  const meta = e.metaKey || e.ctrlKey;
+  if (meta && e.key.toLowerCase()==="k") { e.preventDefault(); openPal(); }
+  if (e.key==="Escape") closePal();
+});
+
+const themeBtn = document.getElementById("themeBtn");
+const saved = localStorage.getItem("lec-theme");
+if (saved==="dark" || (!saved && matchMedia("(prefers-color-scheme: dark)").matches)) {
+  document.documentElement.classList.add("dark");
+}
+themeBtn.onclick = () => {
+  document.documentElement.classList.toggle("dark");
+  localStorage.setItem("lec-theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
+};
+
+const navLinks = [...document.querySelectorAll(".page-nav a")];
+const secs = navLinks.map(a => document.querySelector(a.getAttribute("href"))).filter(Boolean);
+window.addEventListener("scroll", () => {
+  let cur = secs[0];
+  secs.forEach(s => { if (s.getBoundingClientRect().top < 120) cur = s; });
+  navLinks.forEach(a => a.classList.toggle("active", a.getAttribute("href")==="#"+cur.id));
+});
+</script>
+</body>
+</html>

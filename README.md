@@ -1,5 +1,7 @@
 # LLM 工程知识卡片
 
+**在线阅读：** [weicyang.github.io/llm-eng-cards](https://weicyang.github.io/llm-eng-cards/)
+
 **From Attention to Production.** Decision cards for engineers who already know how to call a model API.
 
 给已经会调模型 API 的工程师：先懂它为什么这样算，再把它做成能力，最后按延迟、成本、安全把系统撑住。
