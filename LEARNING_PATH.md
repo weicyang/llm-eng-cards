@@ -2,16 +2,16 @@
 
 先读完这一页列出的卡，再进 `extended/`。编号是阅读顺序，不是私有站里的 N/T/G 编号。
 
-状态：`planned` = 尚未迁入公开仓。首发会先放下表中的主干，再按周补。
+状态：可点开的已经公开，空白的按路径顺序补齐。
 
 ## 原理 · 它凭什么成立
 
 | 序 | 卡 | 读完能做什么 | 状态 |
 |---|---|---|---|
-| 01 | 张量与维度 | 看懂后面所有形状变换在说什么 | planned |
-| 02 | Attention 手撕 | 自己写出缩放点积注意力 | planned |
-| 03 | Multi-Head Attention | 说明为什么一个头不够、多头怎么拼 | planned |
-| 04 | 位置编码 | 解释模型如何知道 token 顺序 | planned |
+| 01 | [张量与维度](./cards/fundamentals/tensor_fundamentals.html) | 看懂后面所有形状变换在说什么 | live |
+| 02 | [Attention 手撕](./cards/fundamentals/attention_from_scratch.html) | 自己写出缩放点积注意力 | live |
+| 03 | [Multi-Head Attention](./cards/fundamentals/mha_from_scratch.html) | 说明为什么一个头不够、多头怎么拼 | live |
+| 04 | [位置编码](./cards/fundamentals/positional_encoding.html) | 解释模型如何知道 token 顺序 | live |
 | 05 | Decoder-only | 对照 Encoder / Encoder-Decoder 说出生产默认选型 | planned |
 | 06 | Token 机制 | 算清中英文 token、窗口和费用 | planned |
 | 07 | 解码与采样 | Temperature / Top-p / 贪心怎么选、何时不该调 | planned |
@@ -19,7 +19,7 @@
 | 09 | MoE | 说清专家路由和它带来的工程代价 | planned |
 | 10 | LoRA / QLoRA | 判断要不要微调、用哪种 PEFT | planned |
 | 11 | RL for LLM | 分清 PPO / GRPO / 奖励模型各自管哪一段 | planned |
-| 12 | 推理模型与测试时计算 | 决定何时开思考、预算怎么熔断 | planned |
+| 12 | [推理模型与测试时计算](./cards/fundamentals/reasoning_models_test_time_compute.html) | 决定何时开思考、预算怎么熔断 | live |
 
 ## 应用 · 怎么做成能力
 
@@ -37,7 +37,7 @@
 | 22 | 上下文窗口 | 为长任务做预算，而不是把历史整段塞进去 | planned |
 | 23 | 记忆 | 分清短记忆、长记忆、检索，避免记忆污染 | planned |
 | 24 | Agent 评测 | 用任务完成率、工具正确率、成本一起看 | planned |
-| 25 | 多模态视觉文档 RAG | 判断 OCR 路线何时必须换成页面图像检索 | planned |
+| 25 | [多模态视觉文档 RAG](./cards/applications/multimodal_visual_document_rag.html) | 判断 OCR 路线何时必须换成页面图像检索 | live |
 | 26 | GUI Agent 或实时语音 Agent | 选一条产品链路打穿（另一条后补） | planned |
 
 ## 生产 · 上线后先动哪个旋钮
@@ -48,14 +48,14 @@
 | 28 | 显存与硬件 | 在上机器前估出装得下还是会 OOM | planned |
 | 29 | 推理框架 | 按负载在 vLLM / SGLang / TensorRT-LLM 里选型 | planned |
 | 30 | 连续批处理 | 解释高并发下吞吐和延迟为什么互相咬 | planned |
-| 31 | 投机解码生产落地 | 按接受率和上下文长度决定开、缩短还是关 | planned |
+| 31 | [投机解码生产落地](./cards/production/speculative_decoding_production.html) | 按接受率和上下文长度决定开、缩短还是关 | live |
 | 32 | 流式传输 | 为 SSE / WebSocket / 断线选一层方案 | planned |
 | 33 | 成本与计费 | 把输入、输出、思考 token 分成三本账 | planned |
 | 34 | 可观测性 | 为一次请求补上 trace、token、质量指标 | planned |
 | 35 | Prompt 注入 | 把不可信输入当成默认情况来防 | planned |
 | 36 | Agent 沙箱 | 给工具调用划权限平面，而不是只靠提示词 | planned |
 
-## 迁入规则
+## 补齐规则
 
 1. 每周最多迁入 1 张 DEEP 或 2 张 GUIDE，优先补主干上「下一张还没公开」的卡。
 2. 私有站里的重复卡要合并后再发。Token、采样、KV Cache 这类只保留一张主卡。
