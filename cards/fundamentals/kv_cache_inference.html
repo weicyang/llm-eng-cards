@@ -1,0 +1,1135 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>08 · KV Cache</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#3fb950;--accent3:#d2a8ff;--accent4:#f0883e;--accent5:#ff7b72;--dim:#8b949e;--code-bg:#1c2129}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.75;font-size:16px;padding-left:300px}
+.container{max-width:960px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:2.4rem;font-weight:800;text-align:center;margin-bottom:.3rem;background:linear-gradient(135deg,#58a6ff,#3fb950,#d2a8ff);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:var(--dim);font-size:1.05rem;margin-bottom:2.5rem}
+h2{font-size:1.55rem;font-weight:700;margin:2.8rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border);color:var(--accent)}
+h3{font-size:1.15rem;font-weight:600;color:var(--accent3);margin:1.4rem 0 .6rem}
+p{margin:.7rem 0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+ul,ol{margin:.6rem 0 .6rem 1.6rem}
+li{margin:.35rem 0}
+strong{color:#f0f6fc}
+code{background:var(--code-bg);padding:.15em .4em;border-radius:4px;font-size:.92em;font-family:"SFMono-Regular",Consolas,"Liberation Mono",Menlo,monospace;color:var(--accent3)}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;margin:1rem 0;font-size:.88rem;line-height:1.6}
+pre code{background:none;padding:0;color:var(--text)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem 1.6rem;margin:1.2rem 0}
+.interview-tip{background:linear-gradient(135deg,rgba(88,166,255,.08),rgba(63,185,80,.06));border:1px solid rgba(88,166,255,.25);border-radius:10px;padding:1.2rem 1.5rem;margin:1.4rem 0}
+.interview-tip::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.interview-tip ul{margin:.4rem 0 0 1.4rem}
+.interview-tip li{margin:.3rem 0;font-size:.95rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}
+th,td{border:1px solid var(--border);padding:.6rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent);font-weight:600}
+td{color:var(--text)}
+tr:nth-child(even) td{background:rgba(22,27,34,.6)}
+details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.7rem 0;padding:0}
+details[open]{padding-bottom:.6rem}
+summary{cursor:pointer;padding:.8rem 1.2rem;font-weight:600;color:var(--accent);list-style:none;display:flex;align-items:center;gap:.5rem}
+summary::before{content:"▸";transition:transform .2s;font-size:.85rem;color:var(--accent3)}
+details[open] summary::before{transform:rotate(90deg)}
+summary::-webkit-details-marker{display:none}
+details .answer{padding:.4rem 1.2rem .6rem;color:var(--text);line-height:1.7}
+.formula{background:var(--code-bg);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;text-align:center;font-size:1.05rem;color:var(--accent3);font-family:"SFMono-Regular",Consolas,monospace;overflow-x:auto}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.toc{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.3rem 1.6rem;margin-bottom:2.5rem}
+.toc h3{color:var(--accent);margin-top:0}
+.toc ol{margin:.6rem 0 0 1.4rem}
+.toc li{margin:.35rem 0;font-size:.95rem}
+.toc a{color:var(--text)}
+.toc a:hover{color:var(--accent)}
+.highlight{color:var(--accent4);font-weight:600}
+.tag{display:inline-block;padding:.15em .55em;border-radius:4px;font-size:.78rem;font-weight:600;margin-right:.3rem}
+.tag-green{background:rgba(63,185,80,.15);color:#3fb950}
+.tag-blue{background:rgba(88,166,255,.15);color:#58a6ff}
+.tag-orange{background:rgba(240,136,62,.15);color:#f0883e}
+.tag-red{background:rgba(255,123,114,.15);color:#ff7b72}
+.compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.compare-grid .card{margin:0}
+@media(max-width:640px){
+  .container{padding:1.2rem 1rem 3rem}
+  h1{font-size:1.7rem}
+  h2{font-size:1.25rem}
+  .compare-grid{grid-template-columns:1fr}
+  table{font-size:.8rem}
+  th,td{padding:.4rem .5rem}
+  
+}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+
+/* 标准组件体系 */
+.section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.5rem 1.6rem;margin:1.6rem 0}
+.section>h2:first-child{margin-top:0}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+div.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9;font-weight:400}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、自回归推理过程</a>
+<a href="#s2">二、KV Cache 原理</a>
+<a href="#s3">三、Prefill vs Decode</a>
+<a href="#s4">四、Continuous Batching</a>
+<a href="#s5">五、PagedAttention (vLLM)</a>
+<a href="#s6">六、Speculative Decoding</a>
+<a href="#s7">七、KV Cache 压缩</a>
+<a href="#s8">八、推理框架对比</a>
+<a href="#s9">九、推理性能指标</a>
+<a href="#s10">十、生产推理系统</a>
+<a href="#s11">十一、全栈优化策略</a>
+<a href="#qa">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>08 · KV Cache</h1>
+<p class="subtitle">从自回归生成到高效推理系统 — 理解大模型推理的核心瓶颈与优化手段</p>
+
+<!-- ============================================================ -->
+<div class="section">
+<h2 id="s1">一、自回归推理过程</h2>
+<div class="intuition-box">
+<p>自回归生成天然是串行的：想快，就只能在"每一步少算点"和"一步多产出几个 Token"上做文章。</p>
+</div>
+
+<h3>逐 Token 生成</h3>
+<p>Transformer 语言模型采用 <strong>自回归（autoregressive）</strong>方式生成文本：每一步根据前面所有 Token 的信息，预测下一个 Token，将其追加到序列末尾，再进行下一步预测。</p>
+
+<pre><code>输入:  [x₁, x₂, ..., xₜ]
+模型:  P(xₜ₊₁ | x₁, x₂, ..., xₜ)
+输出:  xₜ₊₁
+循环:  [x₁, ..., xₜ, xₜ₊₁] → P(xₜ₊₂ | ...) → ...</code></pre>
+
+<h3>每步都需要所有前文的 K/V</h3>
+<p>在 Self-Attention 中，当前 Token 的 Query 需要与<strong>所有前文 Token 的 Key 做点积</strong>得到注意力分数，再对所有前文 Token 的 <strong>Value 加权求和</strong>。这意味着：</p>
+<ul>
+<li>生成第 <code>t</code> 个 Token 时，需要前面 <code>t-1</code> 个 Token 的 K 和 V</li>
+<li>朴素实现下，每步都要<strong>重新计算</strong>所有 Token 的 K/V → 重复计算量巨大</li>
+</ul>
+
+<h3>朴素推理的 O(n²) 问题</h3>
+<p>生成长度为 <code>n</code> 的序列时：</p>
+<ul>
+<li>第 1 步计算 1 个 K/V，第 2 步计算 2 个，…，第 n 步计算 n 个</li>
+<li>总计算量 = <code>1 + 2 + ... + n = O(n²)</code></li>
+<li>这使得<strong>长序列生成</strong>的延迟随序列长度平方级增长，完全不可接受</li>
+</ul>
+
+<div class="interview-tip">
+<ul>
+<li>自回归生成是<strong>串行的</strong>，无法对输出 Token 进行并行化（与训练形成鲜明对比）</li>
+<li>朴素推理的瓶颈在于<strong>重复计算 K/V</strong>，这正是 KV Cache 要解决的问题</li>
+<li>计算复杂度从 O(n²) 降到 O(n) 是 KV Cache 最核心的价值</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s2">二、KV Cache 原理</h2>
+<div class="intuition-box">
+<p><span class="term">KV Cache</span> 就是把已经算过的历史 K/V 存下来不再重算——省下的是计算，付出的是显存。</p>
+</div>
+
+<h3>核心思路：缓存已计算的 K/V</h3>
+<p>已经生成的 Token 对应的 Key 和 Value <strong>不会随后续 Token 的生成而改变</strong>（因果注意力掩码保证了这一点）。因此可以将它们<strong>缓存到 GPU 显存中</strong>，后续步骤直接复用，无需重新计算。</p>
+
+<pre><code># 朴素推理（无 Cache）
+step t: 计算 K₁,V₁, K₂,V₂, ..., Kₜ,Vₜ → Attention → 输出 xₜ₊₁
+
+# 使用 KV Cache
+step t: 从缓存取 K₁..Kₜ₋₁, V₁..Vₜ₋₁
+         仅计算新 Token 的 Kₜ, Vₜ
+         追加到缓存
+         Attention([K₁..Kₜ], [V₁..Vₜ]) → 输出 xₜ₊₁</code></pre>
+
+<h3>缓存逐步节省的计算量</h3>
+<table>
+<tr><th>步骤</th><th>无 KV Cache（朴素）</th><th>有 KV Cache（缓存）</th><th>节省比例</th></tr>
+<tr><td><strong>第 1 步</strong></td><td>计算 1 个 K/V → Attention</td><td>计算 1 个 K/V → Attention</td><td>0%（首步无差异）</td></tr>
+<tr><td><strong>第 2 步</strong></td><td>重新计算 2 个 K/V → Attention</td><td>复用缓存 + 新增 1 个 K/V</td><td>50%</td></tr>
+<tr><td><strong>第 10 步</strong></td><td>重新计算 10 个 K/V → Attention</td><td>复用缓存 + 新增 1 个 K/V</td><td>90%</td></tr>
+<tr><td><strong>第 100 步</strong></td><td>重新计算 100 个 K/V → Attention</td><td>复用缓存 + 新增 1 个 K/V</td><td>99%</td></tr>
+<tr><td><strong>第 1000 步</strong></td><td>重新计算 1000 个 K/V → Attention</td><td>复用缓存 + 新增 1 个 K/V</td><td>99.9%</td></tr>
+</table>
+
+<h3>KV Cache 在 Attention 中的数据流</h3>
+<pre><code>第 t 步生成 Token_t：
+  ┌─────────────────────────────────────────────────────┐
+  │ Query_t (新计算)                                    │
+  │   ↓                                                  │
+  │ Q_t × [K_1, K_2, ..., K_{t-1}, K_t]ᵀ / √d_k       │
+  │         ↑ 从 KV Cache 读取          ↑ 新计算并缓存   │
+  │   ↓                                                  │
+  │ softmax(scores) × [V_1, V_2, ..., V_{t-1}, V_t]     │
+  │                     ↑ 从 KV Cache 读取    ↑ 新缓存   │
+  │   ↓                                                  │
+  │ Output_t → 送入 FFN → Token_t                        │
+  └─────────────────────────────────────────────────────┘
+
+第 t+1 步：
+  KV Cache 新增一行：[K_t, V_t]
+  Query_{t+1} 与缓存中全部 t+1 个 K 做点积
+  → 只需计算 1 个新 K/V，其余全部复用</code></pre>
+
+<div class="arch-diagram">  KV Cache 随解码步数增长的样子：算得越久，显存越紧，每步也越慢
+
+  显存
+   ▲
+   │                                              ┌──────  第 n 步
+   │                                    ┌─────────┘
+   │                          ┌─────────┘        每步新增一行 [K_t, V_t]
+   │                ┌─────────┘                  增量恒定 → 总量线性增长
+   │      ┌─────────┘
+   │  ┌───┘
+   └──┴────────────────────────────────────────────────────►  解码步 t
+
+  每一层每一步都要把整个 Cache 读一遍：
+     step 1   读 1 行  ─┐
+     step 2   读 2 行   │  读取量同样线性增长
+     step t   读 t 行  ─┘  而 decode 是 memory-bound
+                          → 序列越长，每 Token 越慢（TPOT 随长度上升）
+
+  ┌── 显存里的三块地 ───────────────────────────────────┐
+  │  模型权重   固定，不随请求变                         │
+  │  激活值     和 batch 相关，但量小                    │
+  │  KV Cache   ← 唯一随「并发数 × 上下文长度」双向膨胀的 │
+  └────────────────────────────────────────────────────┘
+
+  ★ 所以生产上限的算法是：可用显存 ÷ 每请求 KV Cache = 最大并发
+  ★ 压缩 KV Cache 同时买到两样东西：更高并发，和更快的 decode</div>
+
+<h3>内存换速度</h3>
+<p>KV Cache 是典型的 <strong>空间换时间</strong>策略：</p>
+<ul>
+<li><span class="tag tag-green">优势</span> 每步只需计算 1 个 Token 的 K/V，计算量从 O(n²) → O(n)</li>
+<li><span class="tag tag-orange">代价</span> 需要额外显存存储所有历史 K/V，且随序列长度线性增长</li>
+</ul>
+
+<h3>KV Cache 大小计算公式</h3>
+<div class="formula">
+KV Cache Size = 2 × L × n_heads × d_head × seq_len × dtype_bytes
+</div>
+
+<p>各项含义：</p>
+<table>
+<tr><th>符号</th><th>含义</th><th>示例 (LLaMA-2 7B)</th></tr>
+<tr><td><code>2</code></td><td>K 和 V 各一份</td><td>—</td></tr>
+<tr><td><code>L</code></td><td>Transformer 层数</td><td>32</td></tr>
+<tr><td><code>n_heads</code></td><td>注意力头数（KV 头数，GQA 下更少）</td><td>32</td></tr>
+<tr><td><code>d_head</code></td><td>每头维度</td><td>128</td></tr>
+<tr><td><code>seq_len</code></td><td>序列长度</td><td>4096</td></tr>
+<tr><td><code>dtype_bytes</code></td><td>数据类型字节数（FP16=2, FP8=1）</td><td>2 (FP16)</td></tr>
+</table>
+
+<p><strong>LLaMA-2 7B 示例：</strong></p>
+<pre><code>2 × 32 × 32 × 128 × 4096 × 2 bytes
+= 2 × 32 × 32 × 128 × 4096 × 2
+= 2,147,483,648 bytes ≈ 2 GB（单条序列！）</code></pre>
+<p>可见 KV Cache 的<strong>显存占用非常惊人</strong>，尤其在大 batch 或长序列场景下会成为主要显存瓶颈。</p>
+
+<div class="interview-tip">
+<ul>
+<li>KV Cache 将推理计算量从 O(n²) 降到 O(n)，是<strong>所有现代推理引擎的基础</strong></li>
+<li>必须能手算 KV Cache 大小 — 高频考点</li>
+<li>KV Cache 只在<strong>推理阶段</strong>使用；训练使用 Teacher Forcing，可以并行处理所有 Token</li>
+<li>GQA/MQA 通过减少 KV 头数来压缩 Cache 大小（见第 7 节）</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s3">三、Prefill vs Decode</h2>
+<div class="intuition-box">
+<p><span class="term">Prefill</span> 缺算力，<span class="term">Decode</span> 缺带宽——两个阶段的瓶颈不同，所以优化手段基本不通用。</p>
+</div>
+
+<p>使用 KV Cache 后，LLM 推理自然分成两个截然不同的阶段：</p>
+
+<div class="compare-grid">
+<div class="card">
+<h3 style="color:#3fb950">Prefill 阶段（首 Token 延迟）</h3>
+<ul>
+<li>处理完整 Prompt（一次性输入所有 Token）</li>
+<li>并行计算所有 Prompt Token 的 K/V</li>
+<li>填充 KV Cache</li>
+<li><strong>计算密集（Compute-bound）</strong></li>
+<li>GPU 算力利用率高，类似训练</li>
+<li>决定 <strong>TTFT</strong>（Time To First Token）</li>
+</ul>
+</div>
+<div class="card">
+<h3 style="color:#f0883e">Decode 阶段（逐 Token 生成）</h3>
+<ul>
+<li>每步只处理 1 个新 Token</li>
+<li>从 KV Cache 读取历史 K/V</li>
+<li>计算量小但需要大量内存读取</li>
+<li><strong>内存带宽瓶颈（Memory-bound）</strong></li>
+<li>GPU 算力利用率极低（&lt;10%）</li>
+<li>决定 <strong>TPS</strong>（Tokens Per Second）</li>
+</ul>
+</div>
+</div>
+
+<div class="arch-diagram">  同一张卡上，两个阶段站在 Roofline 的两端
+
+   算力
+   (FLOPS)
+     ▲
+     │        ┌──────────────────── 峰值算力（被 Tensor Core 决定）
+     │       ╱ ▲
+     │      ╱  │  Prefill 落在这边
+     │     ╱   │  一次算 N 个 Token 的 K/V
+     │    ╱    │  大矩阵乘，计算/访存比高
+     │   ╱     │  → Compute-Bound，利用率 50~80%
+     │  ╱
+     │ ╱  ▲
+     │╱   │  Decode 落在这边
+     ╱    │  每步只算 1 个 Token
+     │    │  却要把整个 KV Cache 读一遍
+     │    │  → Memory-Bound，算力利用率 &lt;10%
+     └────┴─────────────────────────────────────► 计算强度 FLOPs/Byte
+
+   ┌──────────────┬─────────────────┬──────────────────┐
+   │              │ Prefill         │ Decode           │
+   ├──────────────┼─────────────────┼──────────────────┤
+   │ 决定的指标    │ TTFT            │ TPS / TPOT       │
+   │ 加大 batch    │ 收益有限（已满） │ 收益巨大（在空转）│
+   │ 有效优化      │ FlashAttention  │ 量化 / 投机解码   │
+   │              │ 张量并行        │ Continuous Batch │
+   └──────────────┴─────────────────┴──────────────────┘
+
+   ★ Decode 阶段处理 1 个 Token 和 γ 个 Token 耗时接近——这正是投机解码成立的前提
+   ★ 也是为什么 Batching 对吞吐帮助极大，对单请求延迟几乎没帮助</div>
+
+<h3>硬件利用率差异</h3>
+<table>
+<tr><th>特征</th><th>Prefill</th><th>Decode</th></tr>
+<tr><td>处理 Token 数</td><td>N（整个 Prompt）</td><td>1（每步一个）</td></tr>
+<tr><td>计算/访存比</td><td>高（大矩阵乘法）</td><td>极低（向量×矩阵）</td></tr>
+<tr><td>瓶颈</td><td>计算 (FLOPS)</td><td>内存带宽 (GB/s)</td></tr>
+<tr><td>GPU 利用率</td><td>高 (50-80%)</td><td>低 (&lt;10%)</td></tr>
+<tr><td>优化方向</td><td>Tensor 并行、FlashAttention</td><td>Batching、量化、投机解码</td></tr>
+</table>
+
+<div class="interview-tip">
+<ul>
+<li>Prefill 是 <strong>compute-bound</strong>，Decode 是 <strong>memory-bound</strong> — 这是最核心的区别</li>
+<li>Decode 阶段 GPU 利用率极低，因此引入 Batching 来提升吞吐</li>
+<li>部分系统（如 Sarathi、Splitwise）将 Prefill 和 Decode <strong>分离到不同 GPU</strong>以优化资源利用</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s4">四、Continuous Batching</h2>
+<div class="intuition-box">
+<p>静态批处理的浪费不在于算得慢，而在于短请求算完后还要陪着最长的那个请求空等。</p>
+</div>
+
+<h3>静态 Batching 的浪费</h3>
+<p>传统静态 Batching 将多个请求组成一个 batch 一起推理，但每个请求的生成长度不同。<strong>短请求结束后必须等待最长请求完成</strong>，GPU 在等待期间被浪费（padding idle）。</p>
+
+<pre><code>静态 Batching:
+Req A: |████████████████████|............| ← 已完成，空等
+Req B: |████████████████████████████████| ← 最长请求
+Req C: |█████████████|...................| ← 已完成，空等
+       └─────── 所有请求必须等 B 完成 ────────┘</code></pre>
+
+<h3>Iteration-level Scheduling</h3>
+<p><span class="term">Continuous Batching</span>（也叫 <strong>Inflight Batching</strong>）的核心思想是在<strong>每个 decode 迭代</strong>级别进行调度：</p>
+<ul>
+<li>一旦某个请求生成了 EOS Token，<strong>立即释放其资源</strong>并插入新请求</li>
+<li>不再等待整个 batch 完成</li>
+<li>GPU 始终在做有效计算</li>
+</ul>
+
+<pre><code>Continuous Batching:
+Req A: |████████████████████|
+Req D:                      |██████████████████| ← A 完成后立即插入
+Req B: |████████████████████████████████|
+Req C: |█████████████|
+Req E:               |███████████████████████| ← C 完成后立即插入
+       └─────── GPU 始终满载 ────────────────┘</code></pre>
+
+<h3>Orca 论文</h3>
+<p>Continuous Batching 的概念由 <strong>Orca (OSDI 2022)</strong> 论文正式提出。核心贡献：</p>
+<ul>
+<li>提出 <strong>Iteration-level Scheduling</strong>：每个 decode step 都可以调度</li>
+<li>实现 <strong>Selective Batching</strong>：允许 batch 内不同请求处于不同阶段（有的在 prefill，有的在 decode）</li>
+<li>相比静态 Batching，吞吐量提升 <strong>2-8x</strong></li>
+</ul>
+
+<div class="interview-tip">
+<ul>
+<li>Continuous Batching 解决的是<strong>静态 Batching 中 GPU 空闲浪费</strong>的问题</li>
+<li>核心调度粒度从 <strong>request-level → iteration-level</strong></li>
+<li>几乎所有现代推理引擎（vLLM、TGI、TensorRT-LLM）都已实现 Continuous Batching</li>
+<li>提升的是<strong>吞吐量（throughput）</strong>，对单请求延迟帮助有限</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s5">五、PagedAttention (vLLM)</h2>
+<div class="intuition-box">
+<p>把操作系统那套分页搬到显存上：不再按最长可能长度预留，而是用多少给多少，碎片就没了。</p>
+</div>
+
+<h3>KV Cache 碎片化问题</h3>
+<p>传统推理框架为每个请求<strong>预分配最大长度的 KV Cache</strong>，但实际生成长度往往远小于最大长度。这造成：</p>
+<ul>
+<li><strong>内部碎片</strong>：预分配空间未被完全使用</li>
+<li><strong>外部碎片</strong>：请求结束释放后留下不连续的空闲块</li>
+<li>实际 KV Cache 显存利用率仅 <strong>20-40%</strong></li>
+</ul>
+
+<h3>分页管理（类似 OS 虚拟内存）</h3>
+<p><span class="term">PagedAttention</span> 借鉴操作系统的<strong>虚拟内存分页机制</strong>：</p>
+<ul>
+<li>将 KV Cache 切分为固定大小的 <strong>Block</strong>（类似内存页，通常 16 个 Token 一块）</li>
+<li>Block 不要求物理连续，通过 <strong>Block Table</strong> 映射逻辑位置 → 物理位置</li>
+<li>按需分配，用多少分配多少，消除内部碎片</li>
+<li>空闲 Block 可以分配给任意请求，消除外部碎片</li>
+</ul>
+
+<h3>Block Table</h3>
+<pre><code>逻辑 Token 序列:  [T₀ T₁ T₂ T₃ | T₄ T₅ T₆ T₇ | T₈ T₉ ...]
+                   Block 0        Block 1        Block 2
+
+Block Table (请求 A):
+┌─────────┬──────────────┐
+│ 逻辑块号 │ 物理块地址    │
+├─────────┼──────────────┤
+│    0    │  GPU Block 7  │
+│    1    │  GPU Block 2  │
+│    2    │  GPU Block 15 │  ← 物理不连续，但逻辑连续
+└─────────┴──────────────┘</code></pre>
+
+<h3>Copy-on-Write</h3>
+<p>当多个请求共享相同的 Prompt（如 Beam Search 或 Parallel Sampling），它们的 Prompt 部分 KV Cache 完全相同。PagedAttention 支持：</p>
+<ul>
+<li>多个请求的 Block Table <strong>指向同一物理 Block</strong>（共享）</li>
+<li>当某个请求需要修改共享 Block 时，才<strong>复制一份</strong>（Copy-on-Write）</li>
+<li>Parallel Sampling 场景可节省 <strong>55%</strong> 显存</li>
+</ul>
+
+<h3>Prefix Caching：跨请求共享 KV Cache</h3>
+<p>很多 LLM 请求共享相同的系统提示（System Prompt）或前缀，PagedAttention 的 Block 机制天然支持<span class="term">前缀缓存</span>：</p>
+<ul>
+<li>相同的 System Prompt 只计算一次 K/V，缓存为共享 Block</li>
+<li>后续请求直接引用这些 Block，无需重新 Prefill</li>
+<li>在 System Prompt 很长（如 2000+ Token）的场景下，TTFT 可降低 50-80%</li>
+<li>vLLM 通过 <code>--enable-prefix-caching</code> 启用此功能</li>
+</ul>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个客服问答服务开了 Prefix Caching，System Prompt 约 1800 Token，预期绝大多数请求都能命中共享前缀。</p>
+<p><strong>问题：</strong>上线后命中率长期只有个位数百分比，TTFT 和没开时几乎一样。排查发现 System Prompt 模板里带了两样东西：一个精确到秒的当前时间，和一个每次请求随机生成的会话 ID，两者都拼在最前面。前缀匹配是从第一个 Token 开始逐块比对的，第一个 Block 就不同，后面 1800 个 Token 再一样也没用。</p>
+<p><strong>方案：</strong>把 System Prompt 拆成两段：不变的角色设定、规则、示例放最前面；时间、会话 ID、用户画像这些每次都变的内容挪到用户消息里。时间精度也从秒降到天，因为业务上并不需要更细。</p>
+<p><strong>效果：</strong>前缀命中率升到约 九成，TTFT 中位数降了约 六成。这里没有换任何组件，只是把"会变的内容"从前缀里挪走了——前缀缓存的收益完全取决于 Prompt 的拼装顺序。</p>
+</div>
+
+<h3>内存利用率提升</h3>
+<table>
+<tr><th>指标</th><th>传统方式</th><th>PagedAttention</th></tr>
+<tr><td>显存利用率</td><td>20-40%</td><td>&gt;95%</td></tr>
+<tr><td>可服务并发数</td><td>基准</td><td>2-4x 提升</td></tr>
+<tr><td>碎片浪费</td><td>严重</td><td>仅最后一个 Block 有少量浪费</td></tr>
+</table>
+
+<div class="interview-tip">
+<ul>
+<li>PagedAttention 解决的是 <strong>KV Cache 显存碎片化</strong>，而非计算效率</li>
+<li>类比 OS 虚拟内存：Block=页，Block Table=页表，Copy-on-Write=写时复制</li>
+<li>vLLM 是最早实现 PagedAttention 的框架，发表于 <strong>SOSP 2023</strong></li>
+<li>提升的是<strong>显存利用率和并发能力</strong>，从而提升系统吞吐</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s6">六、Speculative Decoding</h2>
+<div class="intuition-box">
+<p>让小模型先猜几个 Token，大模型一次性验证——猜对了白赚，猜错了也不亏，输出分布还完全不变。</p>
+</div>
+
+<h3>核心思路：小模型草稿 + 大模型验证</h3>
+<p>标准自回归解码每步只能生成 1 个 Token（因为下一个 Token 依赖上一个）。<strong><span class="term">Speculative Decoding</span></strong>（投机解码）打破了这一限制：</p>
+
+<ol>
+<li><strong>Draft 阶段</strong>：用一个小而快的 Draft Model 快速生成 γ 个候选 Token</li>
+<li><strong>Verify 阶段</strong>：将这 γ 个 Token 一次性送入大模型并行验证</li>
+<li><strong>Accept/Reject</strong>：大模型从左到右逐个检查，接受概率匹配的 Token，在第一个被拒绝的位置用大模型自己的分布重新采样</li>
+</ol>
+
+<pre><code>Draft Model (68M):  快速生成 γ=5 个候选
+  → [the, cat, sat, on, the]
+
+Target Model (7B):  并行验证 5 个 Token
+  → [the ✓, cat ✓, sat ✓, on ✓, a ✗] → 接受前 4 个 + 重采样第 5 个
+
+结果: 一次大模型 forward pass 生成了 5 个 Token！</code></pre>
+
+<h3>加速比分析</h3>
+<p>设 Draft Model 接受率为 α，每次生成 γ 个候选：</p>
+<div class="formula">
+期望接受 Token 数 = (1 - αᵞ⁺¹) / (1 - α)<br>
+加速比 ≈ 期望接受数 / (c + 1)，其中 c = Draft 开销 / Target 开销
+</div>
+<ul>
+<li>α 越高（Draft 越准），加速越明显</li>
+<li>Draft Model 越小越快，<code>c</code> 越小，加速越好</li>
+<li>实际加速通常为 <strong>2-3x</strong>，最优可达 <strong>3-4x</strong></li>
+</ul>
+
+<h3>Draft Model 选择</h3>
+<table>
+<tr><th>策略</th><th>说明</th><th>优缺点</th></tr>
+<tr><td>独立小模型</td><td>同系列小模型（如 LLaMA-68M 做 LLaMA-7B 的 draft）</td><td>简单灵活；需要额外显存</td></tr>
+<tr><td>自草稿 (Self-Draft)</td><td>跳过部分层 / 早退（如 Medusa、EAGLE）</td><td>无需额外模型；需要微调</td></tr>
+<tr><td>N-gram / 检索</td><td>从 Prompt 或历史中检索匹配片段</td><td>零额外计算；仅适合重复性内容</td></tr>
+<tr><td>Medusa</td><td>在大模型上加多个预测头，并行预测多个位置</td><td>高质量；需要训练额外头</td></tr>
+</table>
+
+<div class="interview-tip">
+<ul>
+<li>Speculative Decoding <strong>不改变输出分布</strong>（数学等价于直接用大模型采样）— 这是最关键的性质</li>
+<li>加速来源于：用一次大模型 forward pass <strong>验证多个 Token</strong>，而大模型 forward pass 在 decode 阶段是 memory-bound 的，处理 1 个 Token 和 γ 个 Token 耗时接近</li>
+<li>接受率 α 是核心指标 — Draft 与 Target 分布越接近，α 越高</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s7">七、KV Cache 压缩</h2>
+<div class="intuition-box">
+<p>压 KV Cache 有四条正交的路：少存几个头、每个数存得更省、别浪费空位、干脆扔掉不重要的——它们可以叠着用。</p>
+</div>
+
+<h3>GQA / MQA 减少 KV 头数</h3>
+<p>标准 Multi-Head Attention (MHA) 中 Q、K、V 头数相同。通过减少 K/V 头数可以直接压缩 KV Cache：</p>
+
+<table>
+<tr><th>方法</th><th>Q 头数</th><th>KV 头数</th><th>Cache 压缩比</th><th>代表模型</th></tr>
+<tr><td>MHA</td><td>32</td><td>32</td><td>1x (基准)</td><td>LLaMA-1, GPT-3</td></tr>
+<tr><td>GQA</td><td>32</td><td>8</td><td>4x</td><td>LLaMA-2 70B, Mistral</td></tr>
+<tr><td>MQA</td><td>32</td><td>1</td><td>32x</td><td>PaLM, Falcon</td></tr>
+<tr><td>MLA</td><td>—</td><td>低秩压缩为 Latent Vector</td><td>5-10x</td><td>DeepSeek-V2/V3</td></tr>
+<tr><td>CLA</td><td>—</td><td>跨层共享 K/V（相邻层复用）</td><td>2-3x</td><td>Hunyuan-Large</td></tr>
+</table>
+
+<p>质量损失对比：GQA &lt;0.5%，MLA &lt;0.5%，MQA 1-2%。MLA 不存储完整的 K/V 矩阵，而是用低秩投影将 K/V 压缩到低维 Latent Vector，推理时再展开——DeepSeek-V3 借此将每 Token KV 压到约 50 KB（见第二章模型表）。注意 MLA 和 CLA 都需要在<strong>模型训练时</strong>采用，无法对已训练模型追加。</p>
+
+<h3>KV Cache 量化</h3>
+<p>将 KV Cache 从 FP16 量化到更低精度：</p>
+<ul>
+<li><strong>FP8 (E4M3)</strong>：2x 压缩，精度损失极小，已被 TensorRT-LLM 支持（需 H100/B200 等 Hopper+ 硬件加速）</li>
+<li><strong>INT8</strong>：2x 压缩，需要校准（Calibration），硬件支持广泛</li>
+<li><strong>INT4</strong>：4x 压缩，需要搭配 group-wise 量化或校准</li>
+<li><strong>KIVI</strong>：Key 用 INT2，Value 用 INT4，结合 residual 补偿，可达 5-6x 压缩</li>
+</ul>
+
+<div class="card">
+<p><strong>vLLM FP8 KV Cache 实测数据（2026 年 4 月）：</strong>在 H100 上对 LLaMA-3.1-8B 启用 <code>--kv-cache-dtype fp8</code>，Decode 阶段的每 Token 延迟降至 BF16 的 54%（最佳情况），128K 上下文下 Needle-in-a-Haystack 准确率从修复前的 13% 恢复到 91%（BF16 基线）。关键修复：Flash Attention 3 内核中的 FP8 累积精度问题通过两级累积策略解决。注意：滑动窗口注意力层（如 gpt-oss-20b 的 128 Token 窗口层）不适合 FP8，应使用 <code>--kv-cache-dtype-skip-layers sliding_window</code> 跳过。</p>
+</div>
+
+<h3>滑动窗口丢弃</h3>
+<p>只保留最近 <code>W</code> 个 Token 的 KV Cache，丢弃更早的。<strong>Mistral</strong> 采用了这种方式（W=4096）。</p>
+<ul>
+<li>优势：KV Cache 大小固定为 O(W)，不随序列增长</li>
+<li>劣势：丢失远距离依赖，不适合需要全局信息的任务</li>
+</ul>
+
+<h3>H2O (Heavy Hitter Oracle)</h3>
+<p>观察到注意力分数呈<strong>幂律分布</strong>：少数 "Heavy Hitter" Token 获得大部分注意力权重。H2O 策略：</p>
+<ul>
+<li>始终保留注意力得分最高的 Top-k Token 的 KV（Heavy Hitters）</li>
+<li>加上最近的窗口 Token</li>
+<li>动态淘汰中间不重要的 Token</li>
+<li>可将 KV Cache 压缩到 <strong>20%</strong> 而不显著损失质量</li>
+</ul>
+
+<h3>StreamingLLM</h3>
+<p>发现 LLM 在推理时，<strong>开头几个 Token（attention sink）</strong>始终获得高注意力，即使它们语义上不重要。StreamingLLM 的策略：</p>
+<ul>
+<li>保留前 <code>k</code> 个 Sink Token + 最近 <code>W</code> 个窗口 Token</li>
+<li>支持<strong>无限长度</strong>的流式推理</li>
+<li>相比纯滑动窗口，PPL 显著降低</li>
+</ul>
+
+<div class="formula">
+KV Cache = [Sink Tokens (前4个)] + [滑动窗口 (最近 W 个)]
+</div>
+
+<h3>Token 合并</h3>
+<p>将语义相近的相邻 Token 合并为一个，可压缩 KV Cache <strong>2-4x</strong>，适合冗余内容较多的场景；缺点是合并过程本身有一定计算开销。</p>
+
+<h3>优化叠加效果</h3>
+<p>量化、内存管理、前缀共享、稀疏化四个方向相互正交，可以叠加使用：</p>
+<pre><code>KV Cache 全栈优化叠加效果（LLaMA-3 70B, 128K context）：
+
+原始 KV Cache（BF16, GQA）:
+  每 Token = 320 KB, 128K context = 43 GB/请求
+
+优化 1: + FP8 量化 (2x 压缩)
+  每 Token = 160 KB, 128K context = 21.5 GB/请求
+
+优化 2: + PagedAttention (消除碎片, 利用率 96%)
+  有效显存 = 21.5 / 0.96 = 22.4 GB（实际可用空间更多）
+
+优化 3: + Prefix Caching (共享 2K Token 系统提示)
+  首请求: 22.4 GB
+  后续请求: 22.4 - 0.64 (共享前缀) = 21.8 GB/请求
+
+优化 4: + 稀疏注意力 (保留 50% Token 的 KV)
+  有效 KV Cache = 21.8 × 0.5 = 10.9 GB/请求
+
+最终: 43 GB → 10.9 GB (4x 压缩)
+→ 同样硬件支撑 4x 并发请求
+→ 或在相同并发下支持 4x 更长上下文</code></pre>
+
+<div class="interview-tip">
+<ul>
+<li>GQA 是目前最主流的 KV Cache 压缩方案，LLaMA-2/3 等大模型均已采用</li>
+<li>量化和稀疏策略可以<strong>叠加</strong>使用（如 GQA + FP8 + 滑动窗口）</li>
+<li>StreamingLLM 的 Attention Sink 现象揭示了 LLM 注意力的有趣特性</li>
+<li>高频问题：MHA vs GQA vs MQA 的 trade-off（质量 vs 速度 vs 显存）</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s8">八、推理框架对比</h2>
+<div class="intuition-box">
+<p>框架选型其实是在选一套 KV Cache 管理策略，剩下的差异远没有这一项影响大。</p>
+</div>
+
+<table>
+<tr>
+<th>框架</th>
+<th>核心特性</th>
+<th>适用场景</th>
+<th>性能特点</th>
+</tr>
+<tr>
+<td><strong>vLLM</strong></td>
+<td>PagedAttention, Continuous Batching, Speculative Decoding, Tensor Parallel</td>
+<td>在线服务、高并发 API 部署</td>
+<td>显存效率最优；吞吐量领先；OpenAI 兼容 API</td>
+</tr>
+<tr>
+<td><strong>TGI</strong><br>(HuggingFace)</td>
+<td>Flash Attention, Continuous Batching, 量化 (GPTQ/AWQ/BitsAndBytes), Token Streaming</td>
+<td>HuggingFace 生态用户、快速部署</td>
+<td>开箱即用；与 HF Hub 深度集成；Rust 实现性能好</td>
+</tr>
+<tr>
+<td><strong>TensorRT-LLM</strong><br>(NVIDIA)</td>
+<td>TensorRT 编译优化, FP8/INT4 量化, Inflight Batching, Multi-GPU 并行</td>
+<td>NVIDIA GPU 上追求极致性能</td>
+<td>单卡性能最强；编译优化充分；配置复杂</td>
+</tr>
+<tr>
+<td><strong>llama.cpp</strong></td>
+<td>纯 C/C++ 实现, GGUF 量化 (Q4/Q5/Q8), CPU/Metal/CUDA 后端</td>
+<td>本地部署、边缘设备、CPU 推理、个人使用</td>
+<td>极低资源要求；CPU 友好；社区活跃</td>
+</tr>
+</table>
+
+<h3>选型建议</h3>
+<div class="card">
+<ul>
+<li><strong>高并发在线服务</strong> → vLLM（显存效率 + 吞吐量最优）</li>
+<li><strong>快速原型 / HF 生态</strong> → TGI（开箱即用）</li>
+<li><strong>极致性能（NVIDIA GPU）</strong> → TensorRT-LLM（编译优化到位）</li>
+<li><strong>本地 / 边缘 / CPU</strong> → llama.cpp（最小依赖）</li>
+<li><strong>Apple Silicon</strong> → llama.cpp (Metal) 或 MLX</li>
+</ul>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>vLLM 的核心竞争力是 <strong>PagedAttention + 高效调度</strong></li>
+<li>TensorRT-LLM 的核心竞争力是 <strong>图编译优化 + 量化</strong></li>
+<li>llama.cpp 让大模型推理<strong>民主化</strong>，在消费级硬件上也能运行</li>
+<li>实际部署中常根据硬件、模型、场景综合选择</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s9">九、推理性能指标</h2>
+<div class="intuition-box">
+<p>吞吐和延迟是同一份显存的两种花法，任何调参之前先想清楚这次要买哪一个。</p>
+</div>
+
+<table>
+<tr><th>指标</th><th>全称</th><th>定义</th><th>优化方向</th></tr>
+<tr>
+<td><strong>TTFT</strong></td>
+<td>Time To First Token</td>
+<td>从请求发送到接收到第一个 Token 的时间</td>
+<td>优化 Prefill：FlashAttention、Tensor 并行、Prompt 缓存</td>
+</tr>
+<tr>
+<td><strong>TPS</strong></td>
+<td>Tokens Per Second</td>
+<td>单个请求每秒生成的 Token 数（又叫 decode speed）</td>
+<td>优化 Decode：量化、投机解码、更快的内存带宽</td>
+</tr>
+<tr>
+<td><strong>Throughput</strong></td>
+<td>系统吞吐量</td>
+<td>系统每秒处理的总 Token 数（所有请求合计）</td>
+<td>Continuous Batching、PagedAttention、大 batch</td>
+</tr>
+<tr>
+<td><strong>Latency</strong></td>
+<td>端到端延迟</td>
+<td>从请求到完整响应的总时间 = TTFT + 输出长度 / TPS</td>
+<td>综合优化各阶段</td>
+</tr>
+</table>
+
+<h3>指标之间的关系</h3>
+<div class="card">
+<pre><code>Latency = TTFT + (output_tokens / TPS)
+
+Throughput = Σ(所有并发请求的 TPS)
+           ≈ batch_size × single_TPS（理想情况下，decode 阶段近似线性扩展）
+
+TTFT 主要受 Prefill 影响:
+  TTFT ≈ prompt_tokens × compute_per_token / GPU_FLOPS
+
+TPS 主要受 Decode 影响:
+  TPS ≈ model_bandwidth / (2 × model_params × dtype_bytes)  (roofline 近似)</code></pre>
+</div>
+
+<h3>常见优化手段与影响的指标</h3>
+<table>
+<tr><th>优化手段</th><th>TTFT</th><th>TPS</th><th>Throughput</th></tr>
+<tr><td>FlashAttention</td><td>✅ 降低</td><td>—</td><td>—</td></tr>
+<tr><td>KV Cache</td><td>—</td><td>✅ 提升</td><td>✅ 提升</td></tr>
+<tr><td>Continuous Batching</td><td>—</td><td>—</td><td>✅✅ 大幅提升</td></tr>
+<tr><td>PagedAttention</td><td>—</td><td>—</td><td>✅ 提升（更多并发）</td></tr>
+<tr><td>量化 (INT4/FP8)</td><td>✅ 降低</td><td>✅ 提升</td><td>✅ 提升</td></tr>
+<tr><td>Speculative Decoding</td><td>—</td><td>✅✅ 大幅提升</td><td>—</td></tr>
+<tr><td>Tensor Parallel</td><td>✅ 降低</td><td>✅ 提升</td><td>—</td></tr>
+<tr><td>Prompt Caching</td><td>✅✅ 大幅降低</td><td>—</td><td>✅ 提升</td></tr>
+</table>
+
+<div class="interview-tip">
+<ul>
+<li>需要区分 <strong>TTFT（首 Token 延迟）</strong>和 <strong>TPS（生成速度）</strong>— 它们对应不同阶段</li>
+<li><strong>Throughput vs Latency</strong> 常常存在 trade-off：增大 batch 提升吞吐但增加单请求延迟</li>
+<li>优化时要先判断瓶颈在 Prefill（compute-bound）还是 Decode（memory-bound）</li>
+<li>Roofline Model 可用于分析当前系统是 compute-bound 还是 memory-bound</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s10">十、生产推理系统：KV Cache 如何决定系统架构</h2>
+<div class="intuition-box">
+<p>生产上限不是模型算得多快决定的，是"一张卡能同时装下几份 KV Cache"决定的。</p>
+</div>
+
+<p>KV Cache 不仅是模型层面的优化——它直接决定了推理系统的架构设计：并发请求数、GPU 显存规划、服务部署拓扑、甚至商业模式（定价策略）。</p>
+
+<h3>KV Cache 对核心性能指标的影响</h3>
+<table>
+<tr><th>性能指标</th><th>KV Cache 的影响</th><th>优化手段</th></tr>
+<tr><td><strong>并发请求数</strong></td><td>KV Cache 是显存最大消耗者，直接限制 batch 上限</td><td>FP8 量化 + PagedAttention</td></tr>
+<tr><td><strong>TTFT（首 Token 延迟）</strong></td><td>长 Prompt 的 Prefill 需要批量计算大量 K/V</td><td>Prefix Caching 复用已计算的 K/V</td></tr>
+<tr><td><strong>TPOT（每 Token 延迟）</strong></td><td>每步需要读取整个 KV Cache（memory-bound）</td><td>减小 KV Cache 大小 → 减少读取量</td></tr>
+<tr><td><strong>最大上下文长度</strong></td><td>KV Cache 随上下文线性增长，受限于 GPU 显存</td><td>GQA + 量化 + 稀疏注意力</td></tr>
+<tr><td><strong>GPU 利用率</strong></td><td>Decode 阶段为 memory-bound，计算利用率低（30-50%）</td><td>增大 Batch Size（需更多显存给 KV Cache）</td></tr>
+</table>
+
+<h3>推理框架的 KV Cache 管理对比</h3>
+<table>
+<tr><th>推理框架</th><th>KV Cache 管理</th><th>量化支持</th><th>特色功能</th><th>适用场景</th></tr>
+<tr><td><strong>vLLM</strong></td><td>PagedAttention（Block=16）</td><td>FP8, INT8, INT4</td><td>Prefix Caching, Continuous Batching</td><td>通用高吞吐推理</td></tr>
+<tr><td><strong>SGLang</strong></td><td>RadixAttention（前缀树）</td><td>FP8, INT8</td><td>结构化生成、多轮对话优化</td><td>Agent / 多轮对话</td></tr>
+<tr><td><strong>TensorRT-LLM</strong></td><td>In-flight Batching</td><td>FP8 (H100原生), INT4</td><td>深度优化 NVIDIA GPU 内核</td><td>NVIDIA GPU 极致性能</td></tr>
+<tr><td><strong>llama.cpp</strong></td><td>连续数组 + KV Shift</td><td>Q4_0~Q8_0 多级量化</td><td>CPU/GPU 混合推理</td><td>边缘设备 / 个人电脑</td></tr>
+</table>
+
+<h3>生产部署容量规划</h3>
+<div class="arch-diagram">  一张卡的显存怎么分，以及一个请求怎么从排队走到返回
+
+  ┌──────────────── GPU 显存预算 ────────────────┐
+  │ ███████████████████  模型权重（固定）          │
+  │ ███                  激活值预留（随 batch 小幅变）│
+  │ ░░░░░░░░░░░░░░░░░░░░░░░░░░░░  KV Cache 池      │
+  │                     ↑ 剩下的全部给它，按 Block 切  │
+  └─────────────────────────────────────────────┘
+             最大并发 ≈ KV Cache 池 ÷ 每请求 KV Cache
+
+  请求路径：
+
+    新请求
+      │
+      ▼
+  ┌─────────────┐   Block 池够分吗？
+  │  等待队列    │────── 不够 ──► 继续排队（或直接拒绝 / 抢占低优先级请求）
+  └──────┬──────┘
+         │ 够
+         ▼
+  ┌─────────────┐   命中共享前缀？
+  │  前缀匹配    │────── 命中 ──► 直接引用已有 Block，跳过这段 Prefill
+  └──────┬──────┘
+         ▼
+  ┌─────────────┐  一次性算完整个 Prompt 的 K/V，写入 Block
+  │   Prefill   │  → 决定 TTFT
+  └──────┬──────┘
+         ▼
+  ┌─────────────┐  每轮迭代与其他请求拼进同一个 batch
+  │   Decode    │  某请求吐出 EOS ──► 立刻释放它的 Block，放新请求进来
+  │  （循环）    │  → 决定 TPS，并把 GPU 一直喂满
+  └──────┬──────┘
+         ▼
+      释放 Block，归还池子
+
+  ★ 队列长度、Block 池占用率是最值得报警的两个量，比 GPU 利用率有用得多
+  ★ Block 池打满时的策略（排队 / 拒绝 / 抢占）直接决定用户看到的是慢还是错</div>
+
+<pre><code># 容量规划公式
+可用 KV Cache 空间 = GPU 总显存 - 模型权重 - 激活值预留
+
+最大并发请求数 = 可用 KV Cache 空间 / (每请求 KV Cache 大小)
+
+示例: LLaMA-3 70B FP8 权重, BF16 KV Cache, H100 80GB × 4
+  模型权重: 70 GB (FP8)
+  激活值预留: ~10 GB
+  可用 KV Cache: 320 - 70 - 10 = 240 GB
+  每请求 32K context: 10.7 GB
+  最大并发: 240 / 10.7 ≈ 22 个请求</code></pre>
+
+<div class="card">
+<p><strong>生产案例：</strong>某 AI 编码助手服务（日均 300 万次推理请求，平均上下文 8K Token），使用 vLLM + LLaMA-3 70B FP8 部署在 8×H100 80GB 集群上。初始配置（BF16 KV Cache）最大并发 40 请求，高峰期排队严重，P99 延迟 12 秒。启用 FP8 KV Cache + Prefix Caching（共享 1.5K Token 的系统提示）后，最大并发提升到 85 请求，P99 延迟降至 4.2 秒，月 GPU 成本从 $28,000 降至 $16,000（减少 4 张 GPU）。</p>
+</div>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个内部推理服务为了把吞吐做上去，把最大并发序列数从 64 一路调到 256，压测时总吞吐确实涨了约 七成。</p>
+<p><strong>问题：</strong>上线后投诉反而变多。日志显示 P50 延迟只涨了一点，但 P99 从 3 秒涨到 20 秒以上，还偶发请求被直接拒绝。原因有两层：并发一高，KV Cache 池被占满，新请求要么排长队要么被拒；同时 batch 里只要混进几个超长上下文请求，每轮迭代都要把这几份巨大的 Cache 读一遍，整个 batch 的其他请求全被拖慢。吞吐是总量指标，它涨了不代表每个用户变快了。</p>
+<p><strong>方案：</strong>三处调整：① 最大并发回调到压测中 P99 仍达标的档位，而不是吞吐最高的档位；② 按上下文长度分两个队列，长请求单独限流，不和短请求混在一个 batch 里；③ 把 KV Cache 池占用率和队列长度做成报警项，占用率超过阈值就提前拒绝而不是无限排队。</p>
+<p><strong>效果：</strong>P99 回到 5 秒以内，总吞吐相比峰值配置只降了约 一成五。教训是压测目标不能只写吞吐，必须带上 P99 约束，否则调出来的参数一定是牺牲尾延迟换来的。</p>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>在生产环境中，KV Cache 管理是 LLM 推理系统的<strong>第一瓶颈</strong>——不是计算不够快，而是显存不够大</li>
+<li>每减少 1 GB 的 KV Cache 浪费，就意味着可以多处理一个并发请求</li>
+<li>PagedAttention 和 FP8 KV Cache 已成为生产推理系统的标配——它们直接决定了同样的硬件能服务多少用户</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s11">十一、全栈优化策略与最佳实践</h2>
+<div class="intuition-box">
+<p>这套优化没有银弹，但有明确的先后：先选对模型架构，再选对框架，最后才轮到调参。</p>
+</div>
+
+<p>整合前面各章的知识，形成一套完整的 KV Cache 优化策略——从模型选择到推理配置到硬件规划。</p>
+
+<h3>优化策略优先级矩阵</h3>
+<table>
+<tr><th>优先级</th><th>优化策略</th><th>实施难度</th><th>收益</th><th>适用阶段</th></tr>
+<tr><td><strong>P0</strong></td><td>选择 GQA 架构模型（LLaMA-3, Qwen-2.5）</td><td>低（选模型即可）</td><td>KV Cache 4-8x 压缩</td><td>模型选型</td></tr>
+<tr><td><strong>P1</strong></td><td>启用 PagedAttention（使用 vLLM/SGLang）</td><td>低（框架默认）</td><td>显存利用率 30% → 96%</td><td>框架选择</td></tr>
+<tr><td><strong>P1</strong></td><td>启用 Prefix Caching（共享 System Prompt）</td><td>低（一行参数）</td><td>TTFT 降低 50-80%</td><td>部署配置</td></tr>
+<tr><td><strong>P2</strong></td><td>启用 FP8 KV Cache（H100+ GPU）</td><td>中（需验证精度）</td><td>KV Cache 2x 压缩 + Decode 加速</td><td>部署配置</td></tr>
+<tr><td><strong>P2</strong></td><td>模型权重 FP8 量化</td><td>中（需校准）</td><td>权重显存减半</td><td>部署配置</td></tr>
+<tr><td><strong>P3</strong></td><td>Continuous Batching</td><td>中（框架支持）</td><td>吞吐量提升 2-3x</td><td>调度策略</td></tr>
+<tr><td><strong>P3</strong></td><td>Disaggregated Prefill（分离 Prefill/Decode）</td><td>高（需多集群）</td><td>长 Prompt 场景 TTFT 降低 3-5x</td><td>架构设计</td></tr>
+</table>
+
+<h3>vLLM 生产配置参考</h3>
+<pre><code>vllm serve meta-llama/Llama-3.1-70B-Instruct \
+  --tensor-parallel-size 4 \
+  --dtype auto \
+  --kv-cache-dtype fp8_e5m2 \
+  --enable-prefix-caching \
+  --block-size 16 \
+  --max-num-seqs 256 \
+  --max-num-batched-tokens 16384 \
+  --gpu-memory-utilization 0.92</code></pre>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>把不变的内容放在 Prompt 最前面，时间戳和会话 ID 挪到后面，前缀缓存才有机会命中</li>
+<li>压测目标同时写吞吐和 P99，按满足 P99 的最大档位设并发，而不是按吞吐最高的档位</li>
+<li>按上下文长度分队列，长短请求不要混进同一个 batch</li>
+<li>把 KV Cache 池占用率和排队长度作为一线报警指标</li>
+<li>换量化精度后用长上下文样本单独验一遍，短样本看不出累积误差</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要拿 GPU 利用率判断推理服务是否健康，decode 阶段它本来就低</li>
+<li>不要把 max-model-len 设得远超真实需求，预留出来的空间是实打实占着的</li>
+<li>不要在 Block 池打满时无限排队，超时的请求既占资源又已经没人要了</li>
+<li>不要只按峰值吞吐调参，尾延迟的恶化通常在压测报告里看不见</li>
+<li>不要假定低精度 KV Cache 在任何层、任何长度上都无损，需要逐项验证</li>
+</ul>
+</div>
+</div>
+
+<h3>故障排查：KV Cache 相关问题</h3>
+<table>
+<tr><th>问题现象</th><th>根因</th><th>解决方案</th></tr>
+<tr><td><strong>CUDA Out of Memory</strong></td><td>KV Cache + 模型权重超过 GPU 显存</td><td>降低 <code>--max-num-seqs</code>、启用 FP8 KV、减少 <code>--max-model-len</code></td></tr>
+<tr><td><strong>TTFT 过长</strong></td><td>长 Prompt 的 Prefill 阶段计算量大</td><td>启用 Prefix Caching、缩短 System Prompt</td></tr>
+<tr><td><strong>TPOT 随序列增长</strong></td><td>KV Cache 变大 → 每步读取更多数据</td><td>FP8 量化减少 KV 大小、启用 GQA 模型</td></tr>
+<tr><td><strong>长上下文精度下降</strong></td><td>FP8 KV Cache 累积精度损失</td><td>升级 vLLM 版本（FA3 累积修复）、跳过滑动窗口层</td></tr>
+<tr><td><strong>并发请求被拒绝</strong></td><td>KV Cache 空间耗尽，无法分配新 Block</td><td>增加 GPU 数量、启用 FP8 KV、降低最大上下文长度</td></tr>
+</table>
+
+<h3>最佳实践 Do / Don't</h3>
+<div class="compare-grid">
+<div class="card">
+<h3 style="color:#3fb950">✅ Do</h3>
+<ul>
+<li><strong>优先选择 GQA 模型：</strong>KV Cache 压缩 4-8x，质量损失可忽略</li>
+<li><strong>使用 vLLM/SGLang 作为推理框架：</strong>自动启用 PagedAttention</li>
+<li><strong>启用 Prefix Caching：</strong>相同 System Prompt 的请求共享 KV Cache</li>
+<li><strong>H100+ GPU 启用 FP8 KV：</strong>显存减半，Decode 加速，精度几乎无损</li>
+<li><strong>基于监控数据调参：</strong>用 Prometheus 采集 KV Cache 利用率，动态调整 max-num-seqs</li>
+<li><strong>容量规划用公式：</strong>显存 - 权重 - 激活 = 可用 KV Cache 空间</li>
+</ul>
+</div>
+<div class="card">
+<h3 style="color:#ff7b72">❌ Don't</h3>
+<ul>
+<li><strong>不要在 A100 上启用 FP8 KV：</strong>A100 不支持 FP8 硬件加速，会回退到软件模拟</li>
+<li><strong>不要设置过大的 max-model-len：</strong>KV Cache 按最大长度预分配会浪费显存</li>
+<li><strong>不要忽略 KV Cache 监控：</strong>显存溢出是最常见的生产故障</li>
+<li><strong>不要在滑动窗口层启用 FP8：</strong>小窗口下 FP8 开销无法被摊薄</li>
+<li><strong>不要假设 FP8 完全无损：</strong>长上下文（128K+）需要验证精度</li>
+<li><strong>不要混用不同精度的 KV Cache：</strong>同一请求的 K 和 V 必须使用相同精度</li>
+</ul>
+</div>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>KV Cache 优化的终极目标是<strong>用更少的显存服务更多的请求</strong></li>
+<li>标准推理栈：<strong>GQA 模型 + vLLM + FP8 KV Cache + Prefix Caching + Continuous Batching</strong></li>
+<li>这套组合在 H100 上可将每请求成本降低到 2023 年的约 1/10</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="qa">Q&amp;A</h2>
+
+<details>
+<summary>Q1: 什么是 KV Cache？为什么需要它？</summary>
+<div class="answer">
+<p><strong>KV Cache</strong> 是在自回归推理时，将已计算过的每层 Attention 的 Key 和 Value 向量缓存在 GPU 显存中的机制。</p>
+<p><strong>为什么需要：</strong>自回归生成每步都需要当前 Token 的 Query 与所有前文 Token 的 Key 做点积。如果不缓存，每步都要重新计算所有前文的 K/V，总计算量为 O(n²)。有了 KV Cache，每步只计算一个新 Token 的 K/V 并追加到缓存中，总计算量降为 O(n)。这是<strong>用显存空间换计算时间</strong>的经典策略。</p>
+</div>
+</details>
+
+<details>
+<summary>Q2: KV Cache 的大小如何计算？以 LLaMA-2 7B 为例。</summary>
+<div class="answer">
+<p>公式：<code>2 × layers × kv_heads × d_head × seq_len × dtype_bytes</code></p>
+<p>LLaMA-2 7B：32 层，32 个 KV 头，每头 128 维，FP16 (2 bytes)。</p>
+<p>对于 seq_len=4096：<code>2 × 32 × 32 × 128 × 4096 × 2 = 2 GB</code>（单条序列）。</p>
+<p>如果 batch_size=32，总 KV Cache = 64 GB，已超出单张 A100 80GB 的显存。这说明 KV Cache 是大模型推理的<strong>核心显存瓶颈</strong>。</p>
+</div>
+</details>
+
+<details>
+<summary>Q3: Prefill 和 Decode 阶段有何区别？各自的瓶颈是什么？</summary>
+<div class="answer">
+<p><strong>Prefill 阶段</strong>：一次性处理完整 Prompt，并行计算所有 Token 的 K/V 填充 Cache。这一阶段涉及大矩阵乘法，是 <strong>compute-bound</strong>（受 GPU FLOPS 限制），GPU 利用率高。它决定了 TTFT（首 Token 延迟）。</p>
+<p><strong>Decode 阶段</strong>：逐 Token 生成，每步只计算一个新 Token，但需要读取整个 KV Cache。计算量小但内存访问量大，是 <strong>memory-bound</strong>（受 GPU 内存带宽限制），GPU 算力利用率极低（通常 &lt;10%）。它决定了 TPS（每秒 Token 数）。</p>
+</div>
+</details>
+
+<details>
+<summary>Q4: 什么是 Continuous Batching？相比静态 Batching 有什么优势？</summary>
+<div class="answer">
+<p><strong>静态 Batching</strong>：将多个请求打包成 batch，必须等所有请求都完成才释放资源。短请求完成后 GPU 空等，浪费算力。</p>
+<p><strong>Continuous Batching（Orca 论文提出）</strong>：在每个 decode iteration 级别进行调度。请求一旦完成（生成 EOS），立即释放其 KV Cache 并插入新请求。GPU 始终保持高利用率。</p>
+<p>吞吐量提升 <strong>2-8x</strong>，几乎所有现代推理引擎都已采用。</p>
+</div>
+</details>
+
+<details>
+<summary>Q5: PagedAttention 是什么？解决了什么问题？</summary>
+<div class="answer">
+<p>PagedAttention 借鉴了 OS 虚拟内存的分页机制来管理 KV Cache。传统方式为每个请求预分配最大长度的连续 KV Cache，导致严重的内部和外部碎片（利用率仅 20-40%）。</p>
+<p>PagedAttention 将 KV Cache 切分为固定大小的 Block（通常 16 Token），通过 Block Table 映射逻辑块到物理块。按需分配、不要求连续，利用率提升到 95% 以上。还支持 Copy-on-Write，在 Beam Search 等共享 Prompt 场景下避免重复存储。</p>
+</div>
+</details>
+
+<details>
+<summary>Q6: Speculative Decoding 的原理是什么？为什么它不改变输出分布？</summary>
+<div class="answer">
+<p><strong>原理：</strong>用小而快的 Draft Model 连续生成 γ 个候选 Token，然后将这 γ 个 Token 一次性送入大模型并行验证。大模型从左到右检查每个 Token 的概率，接受与大模型分布一致的 Token，在第一个拒绝位置用大模型分布重新采样。</p>
+<p><strong>不改变分布的原因：</strong>验证使用了修正的拒绝采样（modified rejection sampling）。接受条件为 <code>min(1, P_target(x)/P_draft(x))</code>，拒绝后从 <code>norm(max(0, P_target - P_draft))</code> 重新采样。数学上可以证明，最终每个 Token 的分布与直接从大模型采样完全一致。</p>
+</div>
+</details>
+
+<details>
+<summary>Q7: GQA、MQA、MHA 有什么区别？各自的 trade-off 是什么？</summary>
+<div class="answer">
+<p><strong>MHA (Multi-Head Attention)</strong>：Q、K、V 各有 n 个头。质量最好但 KV Cache 最大。</p>
+<p><strong>GQA (Grouped-Query Attention)</strong>：Q 有 n 个头，K/V 只有 g 个头（g &lt; n），每组 Q 头共享同一组 K/V 头。Cache 压缩 n/g 倍，质量损失很小。代表：LLaMA-2 70B (g=8)。</p>
+<p><strong>MQA (Multi-Query Attention)</strong>：K/V 只有 1 个头，所有 Q 头共享。Cache 压缩 n 倍，但质量可能有明显下降。代表：PaLM、Falcon。</p>
+<p>目前 <strong>GQA 是最佳平衡点</strong>，大多数新模型都采用 GQA。</p>
+</div>
+</details>
+
+<details>
+<summary>Q8: StreamingLLM 中的 Attention Sink 是什么？为什么需要保留开头 Token？</summary>
+<div class="answer">
+<p><strong>Attention Sink 现象：</strong>研究发现 LLM 在推理时，无论输入内容如何，最前面的几个 Token（通常前 4 个）始终获得极高的注意力分数。这并非因为它们语义重要，而是 Softmax 需要一个"汇聚点"来分配剩余的注意力权重。</p>
+<p>如果使用纯滑动窗口丢弃了这些 Sink Token，模型的 PPL 会急剧上升甚至崩溃。StreamingLLM 的做法是<strong>始终保留前 k 个 Sink Token + 最近 W 个 Token</strong>，从而实现稳定的无限长度流式推理。</p>
+</div>
+</details>
+
+<details>
+<summary>Q9: vLLM、TGI、TensorRT-LLM、llama.cpp 分别适合什么场景？</summary>
+<div class="answer">
+<ul>
+<li><strong>vLLM</strong>：最适合高并发在线服务。PagedAttention 提供最优显存效率，Continuous Batching 提供高吞吐。提供 OpenAI 兼容 API。</li>
+<li><strong>TGI</strong>：适合 HuggingFace 生态用户快速部署。开箱即用，与 HF Hub 深度集成。</li>
+<li><strong>TensorRT-LLM</strong>：适合 NVIDIA GPU 上追求极致单卡性能。通过图编译和深度量化（FP8）实现最高推理速度，但配置较复杂。</li>
+<li><strong>llama.cpp</strong>：适合本地 / 边缘 / CPU 部署。纯 C++ 实现，支持 GGUF 量化在消费级硬件运行大模型。</li>
+</ul>
+</div>
+</details>
+
+<details>
+<summary>Q10: 如何分析推理性能瓶颈？TTFT 高和 TPS 低分别怎么优化？</summary>
+<div class="answer">
+<p><strong>TTFT 高（首 Token 慢）→ Prefill 阶段瓶颈（compute-bound）：</strong></p>
+<ul>
+<li>使用 FlashAttention 减少 Attention 计算开销</li>
+<li>Tensor Parallel 多卡分担 Prefill 计算</li>
+<li>Prompt Caching：缓存相同前缀的 KV Cache，避免重复 Prefill</li>
+<li>减少 Prompt 长度（Prompt 压缩）</li>
+</ul>
+<p><strong>TPS 低（生成慢）→ Decode 阶段瓶颈（memory-bound）：</strong></p>
+<ul>
+<li>量化（INT4/FP8）减少模型权重和 KV Cache 的内存访问量</li>
+<li>Speculative Decoding：一次 forward pass 生成多个 Token</li>
+<li>GQA/MQA 减少 KV Cache 读取量</li>
+<li>使用更高带宽的 GPU（如 H100 vs A100）</li>
+</ul>
+<p>使用 <strong>Roofline Model</strong> 可以量化分析当前系统处于 compute-bound 还是 memory-bound，从而选择正确的优化方向。</p>
+</div>
+</details>
+
+<details>
+<summary>Q11: 为什么 KV Cache 只缓存 Key 和 Value，不缓存 Query？</summary>
+<div class="answer">
+<p>在自回归生成中，Query 只代表当前正在生成的 Token 的查询向量——每一步的 Query 都是新的，不会在后续步骤中被复用。而 Key 和 Value 代表所有已生成 Token 的信息，在后续每一步的 Attention 计算中都需要被读取。</p>
+<p>具体来说：生成第 t+1 个 Token 时，Q_{t+1} 需要与 K_1 到 K_{t+1} 做点积，但 K_1 到 K_t 的值与上一步完全相同（因为它们对应的是已经固定的历史 Token），所以可以缓存。Q_t 在生成完第 t 个 Token 后就不再需要了——下一步会用新的 Q_{t+1}。缓存 Query 不仅没有收益，还会浪费显存。</p>
+</div>
+</details>
+
+<details>
+<summary>Q12: PagedAttention 的 Block Size 应该选多大？为什么 vLLM 默认是 16？</summary>
+<div class="answer">
+<p>Block Size 是一个空间和时间的 trade-off。Block 越小，内部碎片越少（最后一个 Block 的浪费更少），但 Block Table 更大，管理开销更高，GPU Kernel 的并行效率也更低。Block 越大，GPU Kernel 可以更高效地并行处理一个 Block 内的 Token（利用 Shared Memory），但内部碎片更严重。</p>
+<p>vLLM 选择 16 是基于实验数据的平衡点：(1) 16 个 Token × 128 head_dim = 2048 个浮点数，刚好填满一个 GPU Shared Memory Bank，Kernel 效率最高；(2) 平均内部碎片仅 8 个 Token（半个 Block），浪费可忽略；(3) Block Table 大小可控（128K 上下文 = 8192 个 Block，页表约 64 KB）。对于超长上下文（1M+），可以尝试增大到 32 以减少页表开销。</p>
+</div>
+</details>
+
+<details>
+<summary>Q13: FP8 KV Cache 在长上下文（128K+）下真的能保持精度吗？需要注意什么？</summary>
+<div class="answer">
+<p>可以，但需要注意两个关键点。第一，必须使用修复了 FP8 累积精度问题的 vLLM 版本（2026 年 4 月之后）。早期版本在 Flash Attention 3 内核中使用 FP16 累积，导致 128K Needle-in-a-Haystack 准确率从 91% 暴跌到 13%。修复方案是两级累积策略：Block 内使用 FP32 累积，Block 间使用 FP32 归约。</p>
+<p>第二，对于混合注意力模型（包含滑动窗口层的模型如 gpt-oss-20b），滑动窗口层不适合 FP8——因为窗口很小（如 128 Token），FP8 的量化/反量化开销无法被足够的计算量摊薄。使用 <code>--kv-cache-dtype-skip-layers sliding_window</code> 跳过这些层，对大窗口层使用 FP8。在 head_dim=128 的标准模型上（如 LLaMA-3.1），FP8 KV Cache 的精度损失可以忽略。</p>
+</div>
+</details>
+
+<details>
+<summary>Q14: KV Cache 占满了 GPU 显存怎么办？有哪些应急措施？</summary>
+<div class="answer">
+<p>按优先级执行以下应急措施：(1) 立即措施：降低 <code>--max-num-seqs</code>（减少并发请求数），这会直接减少同时存在的 KV Cache 数量；(2) 降低 <code>--max-model-len</code>（缩短最大上下文长度），减少每个请求的 KV Cache 大小；(3) 降低 <code>--gpu-memory-utilization</code> 从 0.95 到 0.90，为系统预留更多缓冲空间避免 OOM。长期措施：启用 FP8 KV Cache（2x 压缩）、启用 Prefix Caching（共享前缀）、增加 GPU 数量、或切换到 GQA/MLA 架构的模型。预防措施：配置 Prometheus 监控 KV Cache 使用率，当超过 85% 时自动告警，避免等到 OOM 才发现。</p>
+</div>
+</details>
+
+<details>
+<summary>Q15: Disaggregated Prefill（分离 Prefill 和 Decode）是什么？什么时候需要用它？</summary>
+<div class="answer">
+<p>传统推理系统将 Prefill（处理 Prompt）和 Decode（生成 Token）两个阶段放在同一组 GPU 上执行。问题是：Prefill 是计算密集型（大矩阵并行运算），Decode 是显存带宽密集型（读取 KV Cache），两者的硬件需求完全不同。混合执行时，Prefill 会"霸占"GPU 计算资源，导致正在 Decode 的请求延迟飙升。Disaggregated Prefill 将两个阶段分离到不同的 GPU 集群：Prefill 集群专门处理 Prompt（高 GPU 计算利用率），计算完的 KV Cache 传输到 Decode 集群（高显存带宽利用率）。</p>
+<p>适用场景：(1) Prompt 很长（&gt;4K Token），Prefill 耗时超过 200ms；(2) 对 TPOT 延迟要求严格（&lt;30ms/Token）；(3) 有足够的 GPU 资源部署两套集群。对于大多数短 Prompt 场景（&lt;1K Token），Continuous Batching 已经足够，不需要 Disaggregated Prefill。</p>
+</div>
+</details>
+
+<details>
+<summary>Q16: MLA 相比 GQA 有什么优势？为什么 DeepSeek-V3 能在 128K 上下文下只用 6.4 GB KV Cache？</summary>
+<div class="answer">
+<p>GQA 通过减少 KV 头数来压缩 KV Cache（如 64 个 Q 头共享 8 组 KV，压缩 8x）。MLA 更进一步——它不存储完整的 K/V 矩阵，而是用一个低秩投影将 K/V 压缩到一个低维向量（Latent Vector），推理时再展开。具体来说：标准 MHA 的 KV 维度是 num_heads × head_dim（如 64 × 128 = 8192），MLA 将 KV 压缩到一个 512 维的 Latent Vector，压缩比约 16x。</p>
+<p>DeepSeek-V3（671B MoE，61 层）使用 MLA 后，每 Token 的 KV 仅约 50 KB（对比同规模 MHA 模型约 1 MB/Token），128K 上下文下仅 6.4 GB/请求——这使得在 8×H100 80GB 上可以同时处理大量并发请求。MLA 的代价是需要额外的上投影计算（Latent → Full K/V），但这个计算量远小于重新计算 K/V 的开销。</p>
+</div>
+</details>
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

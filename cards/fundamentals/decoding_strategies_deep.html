@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>07 · 解码与采样</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、解码策略全景：从概率分布到文本生成</a>
+<a href="#s2">二、贪心解码：速度与确定性的极致</a>
+<a href="#s3">三、Beam Search：全局最优的追求与时代局限</a>
+<a href="#s4">四、采样策略：Temperature、Top-K、Top-P 与 Min-P</a>
+<a href="#s5">五、Temperature 深水区：T=0 确定性与 GPU 浮点精度</a>
+<a href="#s6">六、推测解码：用"小模型起草+大模型验证"突破速度瓶颈</a>
+<a href="#s7">七、Self-Consistency 与高级解码策略</a>
+<a href="#s8">八、生产环境解码参数配置指南</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>07 · 解码与采样</h1>
+<p class="subtitle">Decoding Strategies — 贪心解码 / Beam Search / Temperature与Top-P / T=0确定性与浮点精度 / 推测解码 / Self-Consistency</p>
+
+<div class="intuition-box"><p>解码策略的本质：将模型输出的概率分布映射为具体 token 的选择规则——不同规则对应不同的任务哲学：确定性追求唯一最优解，随机性拥抱合理多样性。</p></div>
+
+<!-- Section 1: 解码策略全景 -->
+<div class="section" id="s1">
+<h2>一、解码策略全景：从概率分布到文本生成</h2>
+
+<p>大模型生成文本时，每一步前向传播都会输出词表中所有 token 的 <span class="term">logits</span>（原始分数），经过 <span class="term">softmax</span> 转换为概率分布。解码策略决定了如何从这个分布中选出下一个 token。</p>
+
+<div class="arch-diagram">
+模型前向传播 → logits 向量 (vocab_size 维)
+                     ↓
+            ┌──── logit 修改 ────┐
+            │  重复惩罚/频率惩罚  │
+            └────────────────────┘
+                     ↓
+            ┌──── 截断策略 ──────┐
+            │ Top-K / Top-P /    │
+            │ Min-P / Typical-P  │
+            └────────────────────┘
+                     ↓
+            ┌──── Temperature ───┐
+            │  P(i) = exp(z_i/T) │
+            │  / Σ exp(z_j/T)    │
+            └────────────────────┘
+                     ↓
+            ┌──── 采样/选择 ─────┐
+            │ 贪心 argmax        │
+            │ 随机采样           │
+            │ Beam Search        │
+            └────────────────────┘
+                     ↓
+               输出下一个 token
+</div>
+
+<h3>两大策略阵营</h3>
+
+<table>
+<tr><th>维度</th><th>确定性策略</th><th>随机性策略</th></tr>
+<tr><td>核心假设</td><td>存在唯一最优解</td><td>接受合理答案的多样性</td></tr>
+<tr><td>代表方法</td><td>贪心解码、Beam Search</td><td>Temperature采样、Top-K、Top-P</td></tr>
+<tr><td>输出特征</td><td>稳定可复现、但可能死板</td><td>多样自然、但质量波动</td></tr>
+<tr><td>典型场景</td><td>代码生成、SQL、JSON抽取</td><td>对话、写作、创意生成</td></tr>
+<tr><td>可复现性</td><td>100%可复现</td><td>需固定seed才能复现</td></tr>
+</table>
+
+<div class="highlight">
+<p>2024年清华/腾讯联合论文的关键发现：解码方法的性能高度依赖任务类型，<strong>对齐（alignment）能缩小不同解码策略之间的性能差距</strong>——经过RLHF对齐的模型在贪心解码下的表现，可能比未对齐模型用复杂采样策略更好。</p>
+</div>
+</div>
+
+<!-- Section 2: 贪心解码 -->
+<div class="section" id="s2">
+<h2>二、贪心解码：速度与确定性的极致</h2>
+
+<div class="intuition-box"><p>贪心解码 = 每一步都选概率最高的 token——局部最优的极致追求，代价是可能陷入复读陷阱。</p></div>
+
+<h3>核心机制</h3>
+<p>在每一步 t，贪心解码选择概率最高的 token：</p>
+<pre><code>x_t = argmax P(x_t | x_1, ..., x_{t-1})</code></pre>
+
+<p>实现极其简单：只需一次 <span class="term">argmax</span> 操作，零额外计算开销。在 HuggingFace Transformers 中，这是默认的解码策略。</p>
+
+<h3>贪心解码的复读困境</h3>
+<p>当上下文概率分布高度集中时，贪心解码容易陷入重复循环。例如输入"他很可爱"后，模型可能反复输出相似内容，因为前文的强信号使特定 token 的概率持续占据主导地位。</p>
+
+<table>
+<tr><th>现象</th><th>根因分析</th><th>解决方向</th></tr>
+<tr><td>连续重复同一短语</td><td>上下文概率集中，局部最优 ≠ 全局最优</td><td>引入重复惩罚（Repetition Penalty）</td></tr>
+<tr><td>生成内容过于保守</td><td>始终选最高概率，回避低概率但有价值的token</td><td>切换到采样策略</td></tr>
+<tr><td>长文本质量下降</td><td>错误累积，一步错步步错</td><td>限制生成长度或引入 Contrastive Search</td></tr>
+</table>
+
+<h3>生产场景：贪心解码是最佳选择</h3>
+<p>在结构化输出场景中，贪心解码的稳定性和确定性是不可替代的优势：</p>
+<ul>
+<li><strong>代码生成</strong>：代码语法严格，不需要"创意"，需要精确</li>
+<li><strong>SQL 生成</strong>：SQL 有唯一正确答案，多样性反而引入错误</li>
+<li><strong>JSON Schema 输出</strong>：格式约束下，最高概率 = 最合规</li>
+<li><strong>Function Calling</strong>：工具调用参数需要精确，不需要随机性</li>
+</ul>
+
+<div class="highlight">
+<p>生产建议：对于确定性任务，设置 <code>temperature=0</code> 或 <code>do_sample=False</code>。Anthropic Claude API 允许 temperature 在 0.0-1.0 范围，OpenAI 和 Gemini 允许 0.0-2.0，三者默认值均为 1.0。</p>
+</div>
+</div>
+
+<!-- Section 3: Beam Search -->
+<div class="section" id="s3">
+<h2>三、Beam Search：全局最优的追求与时代局限</h2>
+
+<div class="intuition-box"><p>Beam Search 同时维护 K 条候选路径，最终选整体概率最高的序列——能"看到"贪心解码错过的更优路径，但代价是 K 倍的显存和计算。</p></div>
+
+<h3>工作原理</h3>
+<div class="arch-diagram">
+Beam Search (beam_width=3) 示例：
+
+Step 1:  生成候选 → 保留 Top-3 序列
+         "The" (0.4) | "A" (0.3) | "It" (0.15)
+
+Step 2:  每条路径扩展 → 共产生 3×vocab 候选 → 保留 Top-3
+         "The cat" (0.32) | "The dog" (0.28) | "A cat" (0.21)
+
+Step 3:  继续扩展 → 保留 Top-3
+         "The cat sat" (0.25) | "The dog sat" (0.22) | ...
+
+...直到所有路径生成 EOS 或达到最大长度
+最终选择：整体概率最高的完整序列
+</div>
+
+<h3>核心参数</h3>
+<table>
+<tr><th>参数</th><th>含义</th><th>典型值</th><th>影响</th></tr>
+<tr><td><code>num_beams</code></td><td>同时维护的候选路径数</td><td>4-8</td><td>↑ 质量↑ 但显存×K</td></tr>
+<tr><td><code>length_penalty</code></td><td>长度惩罚系数</td><td>0.6-1.0</td><td>防止偏好短序列</td></tr>
+<tr><td><code>early_stopping</code></td><td>首个完成即停止</td><td>True/False</td><td>加速但可能错过更优解</td></tr>
+<tr><td><code>no_repeat_ngram_size</code></td><td>禁止N-gram重复</td><td>2-3</td><td>缓解复读问题</td></tr>
+</table>
+
+<h3>Beam Search 在 LLM 时代"失宠"的原因</h3>
+<ol>
+<li><strong>本质矛盾</strong>：开放式生成任务没有唯一最优解，而 Beam Search 追求整体概率最高——这反而导致生成内容枯燥、缺乏多样性</li>
+<li><strong>显存瓶颈</strong>：需维护 K 条路径的 <span class="term">KV Cache</span>，显存消耗线性增长。在 70B 模型上 beam_width=4 意味着 4 倍 KV Cache</li>
+<li><strong>与 Flash Attention 不兼容</strong>：Flash Attention 的 IO-aware 优化假设单次前向传播，Beam Search 的多路径并行与之冲突</li>
+<li><strong>吞吐量线性下降</strong>：beam_width=4 时吞吐量约为贪心的 1/4，在大模型场景下不可接受</li>
+</ol>
+
+<table>
+<tr><th>Beam Width</th><th>质量提升</th><th>吞吐量代价</th><th>适用场景</th></tr>
+<tr><td>1（贪心）</td><td>基线</td><td>1x</td><td>代码/结构化输出</td></tr>
+<tr><td>4</td><td>+5-10%</td><td>~4x</td><td>机器翻译</td></tr>
+<tr><td>8</td><td>+8-15%</td><td>~8x</td><td>受约束生成</td></tr>
+<tr><td>16+</td><td>边际递减</td><td>~16x+</td><td>一般不推荐</td></tr>
+</table>
+
+<h3>Diverse Beam Search 变体</h3>
+<p>为了缓解 Beam Search 输出过于相似的问题，<span class="term">Diverse Beam Search</span> 将 beam 分成多个组，组间强制引入多样性惩罚。例如 <code>num_beams=4, num_beam_groups=2, diversity_penalty=0.5</code>，让不同组产出风格各异的候选。</p>
+</div>
+
+<!-- Section 4: 采样策略 -->
+<div class="section" id="s4">
+<h2>四、采样策略：Temperature、Top-K、Top-P 与 Min-P</h2>
+
+<div class="intuition-box"><p>采样 = 按概率分布掷骰子。Temperature 控制骰子的"偏向程度"，Top-K/Top-P 控制"哪些候选有资格上骰子"。</p></div>
+
+<h3>Temperature：概率分布的"锐化旋钮"</h3>
+<p>LLM 的最终输出层（LM Head）将隐藏状态投影为词表上的 logits，再通过带温度参数的 softmax 转换为概率分布。<span class="term">Temperature</span> 的本质是控制 softmax 分布的"尖锐程度"：T→0 变成 argmax（只选最大概率），T→∞ 变成均匀分布（完全随机）。</p>
+<p>数学公式：P(token<sub>i</sub>) = exp(z<sub>i</sub>/T) / Σ<sub>j</sub> exp(z<sub>j</sub>/T)</p>
+
+<table>
+<tr><th>Temperature 值</th><th>效果</th><th>分布形态</th><th>生成行为</th><th>推荐场景</th></tr>
+<tr><td>T → 0</td><td>概率坍缩到最大 logit，退化为贪心解码</td><td>极度尖锐，接近 one-hot</td><td>确定性输出</td><td>代码生成、JSON、数学推理</td></tr>
+<tr><td>T = 0.1-0.5</td><td>聚焦高概率 token，保留微小概率</td><td>较尖锐，高度集中</td><td>几乎确定，偶有变化</td><td>翻译、摘要、技术写作、RAG 回答</td></tr>
+<tr><td>T = 0.7-1.0</td><td>平衡质量与多样性</td><td>平滑的原始分布</td><td>质量与多样性平衡</td><td>通用对话、摘要</td></tr>
+<tr><td>T = 1.0-1.5</td><td>增强多样性</td><td>扁平化，长尾token概率提升</td><td>高多样性，可能有噪声</td><td>创意写作、头脑风暴</td></tr>
+<tr><td>T > 1.5</td><td>过度随机，T→∞ 趋向完全均匀</td><td>接近均匀分布</td><td>完全随机</td><td>一般不推荐</td></tr>
+</table>
+
+<h3>数值示例：同一 logits 在不同 T 下的概率</h3>
+<p>取一组具体数字验证：logits 为 <code>[5.0, 4.0, 3.0, 2.0, 1.0]</code>，对应 "the / a / an / this / that" 五个候选。用 NumPy 实现带温度的 softmax 时有一个关键细节——先把 logits 除以 T，再减去 max(scaled) 后取指数以保证数值稳定（避免 exp 上溢），最后归一化。随着 T 从 0.01 增大到 ∞，概率从"一家独大"逐渐摊平为"人人均等"：</p>
+<table>
+<tr><th>T</th><th>概率分布</th><th>形态</th></tr>
+<tr><td>0.01</td><td>[0.9999, 0.0000, 0.0000, 0.0000, 0.0000]</td><td>坍缩到 "the"</td></tr>
+<tr><td>0.1</td><td>[0.9933, 0.0045, 0.0002, 0.0000, 0.0000]</td><td>极集中</td></tr>
+<tr><td>0.5</td><td>[0.6652, 0.2447, 0.0900, 0.0000, 0.0000]</td><td>集中</td></tr>
+<tr><td>1.0</td><td>[0.4502, 0.3310, 0.1453, 0.0536, 0.0197]</td><td>原始分布</td></tr>
+<tr><td>2.0</td><td>[0.2852, 0.2431, 0.2076, 0.1521, 0.1120]</td><td>更平坦</td></tr>
+<tr><td>10.0</td><td>[0.2140, 0.2088, 0.2037, 0.1987, 0.1938]</td><td>接近均匀</td></tr>
+<tr><td>∞</td><td>[0.2000, 0.2000, 0.2000, 0.2000, 0.2000]</td><td>完全均匀</td></tr>
+</table>
+<pre><code>def softmax_with_temp(logits, T):
+    scaled = logits / T
+    exp_vals = np.exp(scaled - np.max(scaled))  # 数值稳定
+    return exp_vals / np.sum(exp_vals)</code></pre>
+
+<div class="arch-diagram">
+Temperature 对概率分布的视觉效果:
+
+logits: [5.0, 4.0, 3.0, 2.0, 1.0]
+
+T=0.01:  ████████████████████████████████████████░░░░  [0.9999, ~0, ~0, ~0, ~0]
+T=0.5:   ██████████████████████████░░░░░░░░░░░░░░░░░░  [0.67, 0.24, 0.09, ~0, ~0]
+T=1.0:   ██████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░  [0.45, 0.33, 0.15, 0.05, 0.02]
+T=2.0:   ███████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  [0.29, 0.24, 0.21, 0.15, 0.11]
+T=10.0:  ████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░  [0.21, 0.21, 0.20, 0.20, 0.19]
+
+T → 0: 分布坍缩 → 确定性输出（Greedy Decoding）
+T → ∞: 分布均匀 → 完全随机输出
+</div>
+
+<h3>T=0 的数学极限</h3>
+<p>当 T → 0 时，Softmax 退化为 <strong>argmax</strong> 函数：</p>
+<pre><code>lim (T→0) softmax(logits / T) = one_hot(argmax(logits))
+
+# 数学上：
+# 如果 logit_max > logit_second，则 T→0 时
+# P(argmax_token) → 1.0
+# P(other_tokens) → 0.0
+
+# 结论：纯数学假设下，相同输入必然得到完全相同的输出</code></pre>
+
+<h3>Temperature 实际效果量化：GPT-4 消融实验</h3>
+<table>
+<tr><th>Temperature</th><th>多样性</th><th>一致性</th><th>适用场景</th><th>实际效果</th></tr>
+<tr><td>T=0（argmax）</td><td>最低</td><td>最高</td><td>代码生成、数学</td><td>理论确定但受浮点误差影响</td></tr>
+<tr><td>T=0.3</td><td>低</td><td>高</td><td>事实问答、翻译</td><td>输出稳定，偶尔有微小变化</td></tr>
+<tr><td>T=0.7</td><td>中</td><td>中</td><td>通用对话</td><td>平衡点，大多数应用默认值</td></tr>
+<tr><td>T=1.0</td><td>高</td><td>低</td><td>创意写作</td><td>输出多样但可能偏离主题</td></tr>
+<tr><td>T>1.2</td><td>极高</td><td>极低</td><td>头脑风暴</td><td>容易出现不连贯输出</td></tr>
+</table>
+
+<p><strong>工程经验：</strong>在客服对话系统中，T=0.3 时用户满意度最高（回答准确且稳定）；在创意写作助手中，T=0.9 时用户评分最高（够有创意但不过于离谱）。关键发现：<strong>T=0 并不等价于"完全确定"</strong>——GPU 浮点运算的非确定性会导致相同输入产生不同输出，详见下一章「Temperature 深水区」。</p>
+
+<h3>Top-K：硬截断</h3>
+<p><span class="term">Top-K</span> 只保留概率最高的 K 个 token，其余概率置零后重新归一化。优点是简单直接，缺点是 K 值是固定的——无论分布是尖锐还是平坦，都只保留 K 个候选。</p>
+
+<h3>Top-P（Nucleus Sampling）：动态截断</h3>
+<p><span class="term">Top-P</span> 按累计概率动态截断：保留累计概率刚好达到 P 的最小 token 集合。当分布尖锐时自动保留少量候选，分布平坦时自动扩大范围——比 Top-K 更灵活。</p>
+
+<div class="arch-diagram">
+Top-K vs Top-P 对比（假设 P=0.9, K=5）：
+
+场景A：分布尖锐（1个token概率0.85）
+  Top-K=5 → 保留5个token（含4个噪声token）
+  Top-P=0.9 → 保留2个token（0.85+0.06=0.91 ✓）
+
+场景B：分布平坦（Top-5概率分别为 0.22, 0.20, 0.18, 0.16, 0.14）
+  Top-K=5 → 保留5个token
+  Top-P=0.9 → 保留5个token（0.22+0.20+0.18+0.16+0.14=0.90 ✓）
+
+→ Top-P 能根据分布自适应调整候选集大小
+</div>
+
+<h3>Min-P：2025-2026 年的新默认</h3>
+<p><span class="term">Min-P</span> 设定一个相对阈值：只保留概率 ≥ (最高概率 × min_p) 的 token。例如 <code>min_p=0.05</code> 意味着如果最高概率 token 为 0.8，则只保留概率 ≥ 0.04 的候选。它结合了 Top-P 的自适应性，同时避免了 Top-P 在极端分布下保留过多低质量 token 的问题。</p>
+
+<table>
+<tr><th>截断策略</th><th>截断方式</th><th>自适应性</th><th>推荐值</th><th>趋势</th></tr>
+<tr><td>Top-K</td><td>固定数量K</td><td>无</td><td>20-50</td><td>逐渐被替代</td></tr>
+<tr><td>Top-P</td><td>累计概率P</td><td>有</td><td>0.85-0.95</td><td>仍广泛使用</td></tr>
+<tr><td>Min-P</td><td>相对阈值</td><td>强</td><td>0.05-0.1</td><td>2025-2026新默认</td></tr>
+<tr><td>Typical-P</td><td>信息熵过滤</td><td>强</td><td>0.9-0.95</td><td>小众但有优势</td></tr>
+</table>
+
+<div class="highlight">
+<p>现代采样管线推荐顺序（2026最佳实践）：原始 logits → 重复惩罚 → DRY → Top-K（可选）→ Top-P / Min-P → Temperature → XTC（仅创意场景）→ softmax → 采样。Temperature 放在截断之后是因为它不影响截断结果的相对排序。</p>
+</div>
+</div>
+
+<!-- Section 5: Temperature 深水区 -->
+<div class="section" id="s5">
+<h2>五、Temperature 深水区：T=0 确定性与 GPU 浮点精度</h2>
+
+<div class="intuition-box"><p>数学上 T=0 意味着输出绝对确定，但工程实现中这个承诺常常被打破——GPU 浮点计算误差会让相同输入产生不同输出。这本质上是推理效率与结果一致性之间的工程权衡。</p></div>
+
+<h3>T=0 时输出为什么还不唯一？</h3>
+
+<p><strong>"Temperature 参数设为零时，理论上输出应该是绝对确定的，为什么实际运行模型结果还会不一样？"</strong></p>
+
+<p>很多人第一反应是 T=0 对应贪心解码（Greedy Decoding），结果必然唯一。但这个答案只停留在<strong>数学层面</strong>。真正的考点其实在<strong>工程实现</strong>。</p>
+
+<div class="arch-diagram">
+理解层次:
+
+Level 1 (初级): "T=0 时 softmax 变成 argmax，选概率最大的 token，
+                所以输出唯一"
+                → 只理解数学，不了解工程
+
+Level 2 (中级): "数学上确实唯一，但 GPU 浮点运算有精度误差，
+                可能导致结果不一致"
+                → 知道问题，但不清楚根因
+
+Level 3 (高级): "GPU 并行计算触发浮点数结合律破坏，FP16/BF16
+                的有限精度导致 logit 舍入误差。当 top-1 和 top-2
+                的 logit 极接近时，误差可能导致排名反转，引发
+                '数值蝴蝶效应'。工业界用 argmax 短路、FP32 计算、
+                确定性模式等方案解决"
+                → 清晰界定误差来源，提出工程解决方案
+</div>
+
+<p class="highlight">架构师的核心价值：清晰界定误差来源，根据业务需求精准控制不确定性。这本质上是<strong>推理效率与结果一致性之间的工程权衡</strong>。</p>
+
+<h3>IEEE 754 浮点数标准</h3>
+
+<p>现代 GPU 使用 IEEE 754 标准的浮点数格式进行计算。浮点数由三部分组成：</p>
+
+<div class="arch-diagram">
+IEEE 754 浮点数结构:
+
+FP32 (单精度, 32-bit):
+┌──────┬────────────────┬────────────────────────────────┐
+│ 符号  │    指数 (8位)    │          尾数 (23位)            │
+│ 1 bit │   exponent     │         mantissa               │
+└──────┴────────────────┴────────────────────────────────┘
+精度: ~7 位十进制有效数字
+
+FP16 (半精度, 16-bit):
+┌──────┬──────────┬──────────────┐
+│ 符号  │ 指数 (5位) │  尾数 (10位)  │
+│ 1 bit │ exponent  │  mantissa   │
+└──────┴──────────┴──────────────┘
+精度: ~3-4 位十进制有效数字
+范围: ±65504
+
+BF16 (Brain Floating Point, 16-bit):
+┌──────┬──────────┬─────────────┐
+│ 符号  │ 指数 (8位) │  尾数 (7位)  │
+│ 1 bit │ exponent  │  mantissa  │
+└──────┴──────────┴─────────────┘
+精度: ~2-3 位十进制有效数字
+范围: 与 FP32 相同（指数位更多）
+</div>
+
+<h3>浮点数加法不满足结合律</h3>
+
+<p>这是 T=0 输出不唯一的<strong>根本原因</strong>。在数学中，加法满足结合律：<code>(A + B) + C = A + (B + C)</code>。但在浮点数运算中：</p>
+
+<p>取三个 FP16 数（<code>np.float16</code>）<code>a = 1.0</code>、<code>b = 1e-4</code>、<code>c = 1e-4</code>，分别用两种顺序计算：</p>
+<table>
+<tr><th>计算顺序</th><th>中间过程</th><th>特点</th></tr>
+<tr><td><code>(a + b) + c</code></td><td>1.0 + 0.0001 的精确结果 FP16 无法表示，先被舍入回 1.0，再加 0.0001</td><td>微小量每次单独加，每次都被"吃掉"</td></tr>
+<tr><td><code>a + (b + c)</code></td><td>0.0001 + 0.0001 = 0.0002 先累积，再计算 1.0 + 0.0002</td><td>微小量先聚少成多，更不容易被舍入吞掉</td></tr>
+<tr><td>结论</td><td>数学上两者相等，FP16 下却可能不同</td><td>舍入损失的大小取决于运算顺序</td></tr>
+</table>
+<p>也就是说，浮点加法的结果依赖"先算谁"——而 GPU 并行累加的求和顺序恰恰由线程调度决定、不可控，这正是下一节非确定性的起点。</p>
+
+<h3>GPU 并行计算触发非确定性</h3>
+
+<p>GPU 为实现惊人计算速度采用大规模并行计算。矩阵乘法 <code>C = A × B</code> 在 GPU 上被拆分为数千个并行线程执行。这些线程的<strong>执行顺序是不确定的</strong>——取决于 GPU 调度、线程占用、显存带宽等运行时因素。</p>
+
+<div class="arch-diagram">
+GPU 并行计算的非确定性:
+
+矩阵乘法 C = A × B 的 GPU 执行:
+
+Run 1:  Thread 顺序 [T1, T3, T2, T4]
+        累加顺序: ((a + c) + b) + d
+        结果: 0.12345678
+
+Run 2:  Thread 顺序 [T2, T1, T4, T3]
+        累加顺序: ((b + a) + d) + c
+        结果: 0.12345679  ← 最后一位不同！
+
+原因: 浮点数加法不满足结合律
+      不同的累加顺序 → 不同的舍入误差累积 → 不同的最终结果
+      误差量级: FP16 ~1e-3, BF16 ~1e-2, FP32 ~1e-7
+</div>
+
+<h3>数值蝴蝶效应</h3>
+
+<p>当 top-1 和 top-2 token 的 logit 值非常接近时，GPU 计算误差完全可能导致排名反转：</p>
+
+<pre><code># 数值蝴蝶效应示例
+logits (FP32 精确值):
+  token_A: 10.555550  ← top-1
+  token_B: 10.555540  ← top-2
+  差距: 0.000010 (百万分之一)
+
+# FP16 舍入:
+  token_A: 10.554688  (FP16 可表示值)
+  token_B: 10.554688  (FP16 可表示值) ← 相同！
+
+# GPU 两次运行的误差:
+  Run 1: token_A = 10.554688, token_B = 10.554687 → A 胜出
+  Run 2: token_A = 10.554687, token_B = 10.554688 → B 胜出 ← 反转！
+
+# 一旦第一个 token 选错，后续所有生成路径完全分叉
+# → 完全不同的输出文本</code></pre>
+
+<div class="arch-diagram">
+数值蝴蝶效应: 微小误差 → 完全不同的输出
+
+                  输入: "The capital of France is"
+                            │
+                    LM Head → logits
+                            │
+              ┌─────────────┴─────────────┐
+              │  "Paris": 10.55555         │
+              │  "Lyon":  10.55554         │
+              │  差距: 0.00001 (极小)       │
+              └─────────────┬─────────────┘
+                            │
+           ┌────────────────┴────────────────┐
+           │                                 │
+    GPU Run 1                          GPU Run 2
+    "Paris" 胜出                       "Lyon" 胜出 (误差反转)
+           │                                 │
+           ▼                                 ▼
+    "The capital of France is Paris,  "The capital of France is Lyon,
+     which is known for the Eiffel     which is known for its
+     Tower and..."                     gastronomy and..."
+           │                                 │
+           ▼                                 ▼
+     完全不同的生成路径                 完全不同的生成路径
+           │                                 │
+           └──────────── 蝴蝶效应 ────────────┘
+</div>
+
+<p class="highlight">贪心解码机制只关心每一步的第一名。一旦首个 token 因浮点误差选错，后续所有生成路径就会完全分叉。这种由微小浮点误差引发结果天差地别的现象，就是典型的<strong>"数值蝴蝶效应"</strong>。</p>
+
+<p><strong>T=0 非确定性的深层机制：</strong>这个问题的根因是 GPU 并行计算的两个固有特性叠加：</p>
+
+<ol>
+<li><strong>线程执行顺序不确定</strong>：GPU 的数千个线程并行执行，每次运行的调度顺序可能不同</li>
+<li><strong>浮点数加法不满足结合律</strong>：<code>(a+b)+c ≠ a+(b+c)</code>（因舍入误差不同）</li>
+</ol>
+
+<table>
+<tr><th>计算场景</th><th>结果差异</th><th>影响程度</th></tr>
+<tr><td>FP32 矩阵乘法</td><td>~1e-7 级别</td><td>通常可忽略</td></tr>
+<tr><td>FP16 矩阵乘法</td><td>~1e-3 级别</td><td>可导致 logit 排名反转</td></tr>
+<tr><td>BF16 矩阵乘法</td><td>~1e-2 级别</td><td>影响更大</td></tr>
+</table>
+
+<p><strong>蝴蝶效应量化：</strong>当 top-1 token 和 top-2 token 的 logit 差距小于 FP16 精度（约 0.001）时，微小的浮点误差就可能导致两者排名反转。一旦第一个 token 选错，后续所有 token 都会走完全不同的路径——这就是"蝴蝶效应"在 LLM 推理中的体现。</p>
+
+<h3>工业界解决方案</h3>
+
+<p>工业界对 T=0 确定性问题已有成熟的工具箱。四个方案分别针对误差来源的不同层面：绕过概率计算、锁定显式随机源、提升关键路径精度、从硬件层固定并行顺序。实践中通常按性价比组合使用，而非单选：</p>
+
+<table>
+<tr><th>方案</th><th>核心做法</th><th>关键配置/API</th><th>局限或代价</th></tr>
+<tr><td>1. T=0 argmax 短路</td><td>检测到 temperature == 0 就跳过 softmax 和采样，直接返回 <code>torch.argmax(logits, dim=-1)</code></td><td><code>torch.argmax</code>；vLLM、TensorRT-LLM 均内置此优化</td><td>仅 T=0 场景生效；argmax 本身确定性且反而节省算力</td></tr>
+<tr><td>2. 锁死随机种子</td><td>逐一锁定所有显式随机源，保证多卡多进程环境可复现</td><td><code>random.seed</code>、<code>np.random.seed</code>、<code>torch.manual_seed</code>、<code>torch.cuda.manual_seed_all</code>，再配 <code>cudnn.deterministic=True</code> / <code>cudnn.benchmark=False</code></td><td>只管 dropout/采样等显式随机性，管不了 cuBLAS 并行矩阵乘法的非确定性</td></tr>
+<tr><td>3. FP32 logits</td><td>全模型用 BF16 计算，仅 LM Head 前把 hidden 上转为 FP32 再输出 logits</td><td><code>hidden.to(torch.float32)</code> 后进 <code>lm_head</code>；Llama.cpp <code>--logits-all</code>、vLLM <code>dtype=float32</code>、TensorRT-LLM 混合精度 logits</td><td>代价仅 ~2%；精度 ~7 位有效数字，排名反转需 logit 差距 &lt; 1e-7，几乎不可能</td></tr>
+<tr><td>4. GPU 确定性模式</td><td>强制 GPU 按固定顺序计算，从根源消除并行调度的非确定性</td><td><code>torch.use_deterministic_algorithms(True)</code> + 环境变量 <code>CUBLAS_WORKSPACE_CONFIG=:4096:8</code>；<code>CUDA_LAUNCH_BLOCKING=1</code> 仅供调试（同步执行极慢）</td><td>禁止某些优化的并行算法，性能下降 10-30%</td></tr>
+</table>
+
+<pre><code>def sample_token(logits, temperature):
+    if temperature == 0.0:
+        return torch.argmax(logits, dim=-1)   # 短路：确定性且更快
+    scaled_logits = logits / temperature
+    probs = torch.softmax(scaled_logits, dim=-1)
+    return torch.multinomial(probs, num_samples=1)</code></pre>
+
+<p>四个方案的互补关系：方案 1 在入口处切断概率路径（零成本，还因跳过 softmax 而更快，是主流推理框架的标配）；方案 2 管理显式随机性，但对 cuBLAS 内部的非确定性无能为力，主要服务可复现的评估场景；方案 3 用精度提升把排名反转的阈值拉高几个数量级，而 LM Head 计算量不足全模型 5%，性价比极高；方案 4 最彻底也最昂贵，只在调试、合规审计等对确定性有硬性要求的场景启用。生产默认组合是方案 1 + 方案 3（详见下方实践建议）。</p>
+
+<h3>方案对比与生产实践</h3>
+<table>
+<tr><th>方案</th><th>原理</th><th>确定性</th><th>性能影响</th><th>适用场景</th></tr>
+<tr><td><strong>T=0 argmax 短路</strong></td><td>绕过 softmax 和采样</td><td>✅ 完全确定</td><td>无（更快）</td><td>T=0 的所有场景</td></tr>
+<tr><td><strong>锁死随机种子</strong></td><td>锁定显式随机源</td><td>⚠️ 部分确定</td><td>无</td><td>需要可复现的训练/评估</td></tr>
+<tr><td><strong>FP32 logits</strong></td><td>提升关键步骤精度</td><td>✅ 近似确定</td><td>极小 (~2%)</td><td>高精度要求的生产环境</td></tr>
+<tr><td><strong>GPU 确定性模式</strong></td><td>固定并行计算顺序</td><td>✅ 完全确定</td><td>显著 (-10~30%)</td><td>调试、合规审计</td></tr>
+</table>
+
+<p><strong>四大方案的实际效果对比：</strong></p>
+
+<table>
+<tr><th>方案</th><th>确定性提升</th><th>性能代价</th><th>实现复杂度</th><th>推荐度</th></tr>
+<tr><td><span class="term">T=0 argmax 短路</span></td><td>⭐⭐⭐⭐</td><td>无（反而更快）</td><td>低</td><td>⭐⭐⭐⭐⭐</td></tr>
+<tr><td><span class="term">FP32 logits</span></td><td>⭐⭐⭐⭐</td><td>~2%（极小）</td><td>低</td><td>⭐⭐⭐⭐⭐</td></tr>
+<tr><td><span class="term">锁死随机种子</span></td><td>⭐⭐</td><td>无</td><td>中</td><td>⭐⭐⭐</td></tr>
+<tr><td><span class="term">GPU 确定性模式</span></td><td>⭐⭐⭐⭐⭐</td><td>10-30%</td><td>高</td><td>⭐⭐</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>T=0 时使用 argmax 短路（跳过 softmax + 采样）</li>
+<li>将 logits 计算保持在 FP32（精度提升，代价极小）</li>
+<li>生产环境组合：argmax 短路 + FP32 logits</li>
+<li>使用 vLLM 或 TensorRT-LLM（内置 argmax 短路）</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>期望 T=0 能完全消除非确定性（GPU 固有特性无法消除）</li>
+<li>盲目开启 GPU 确定性模式（性能损失大，收益有限）</li>
+<li>在 FP16 精度下做 logit 比较（排名反转风险高）</li>
+<li>忽略浮点运算非结合律的影响</li>
+</ul>
+</div>
+</div>
+
+<p><strong>生产经验：</strong>在日均 50 万次推理的系统中，argmax 短路 + FP32 logits 组合将 T=0 的一致性从 94% 提升到 99.5%。剩余 0.5% 的不一致主要来自 GPU 矩阵乘法的固有非确定性，完全消除需要开启确定性模式（性能下降 20%），性价比不高。</p>
+
+<h3>实战实现：工业级采样流水线</h3>
+<p>工业级采样器（TemperatureSampler，参数 temperature=1.0 / top_k=50 / top_p=0.9 / repetition_penalty=1.0）实现为一条顺序固定的六步流水线：输入是未归一化的 logits（[vocab_size] 维）与已生成 token 列表，输出是采样得到的 token_id。顺序是刻意设计的——重复惩罚先修改 logits，T=0 短路判断紧随其后（零开销提前退出），然后才是 Temperature 缩放与截断、采样。</p>
+<table>
+<tr><th>流水线步骤</th><th>做法</th><th>关键点</th></tr>
+<tr><td>1. 重复惩罚</td><td>遍历已生成 token 的 logit：正分数除以 penalty，负分数乘以 penalty</td><td>不对称修正保证"无论分数正负，概率都向更不易被选的方向移动"</td></tr>
+<tr><td>2. T=0 短路</td><td><code>torch.argmax(logits, dim=-1)</code> 直接返回</td><td>确定性提前退出，跳过全部后续采样逻辑</td></tr>
+<tr><td>3. Temperature Scaling</td><td><code>logits / temperature</code></td><td>等价于 softmax 的温度旋钮</td></tr>
+<tr><td>4. Top-K 过滤</td><td><code>torch.topk</code> 取第 K 大值作阈值，更小者置为 <code>-inf</code></td><td><code>min(top_k, vocab_size)</code> 防止越界</td></tr>
+<tr><td>5. Top-P 过滤</td><td><code>torch.sort</code> 降序后，<code>torch.cumsum(F.softmax(...))</code> 计算累积概率，移除超出 top_p 的 token</td><td>移除掩码右移一位，保证至少保留概率最高的 token</td></tr>
+<tr><td>6. Softmax + 采样</td><td><code>F.softmax</code> → <code>torch.multinomial(probs, num_samples=1)</code></td><td><code>-inf</code> 取指数后为 0，被过滤 token 的概率自然归零</td></tr>
+</table>
+<pre><code># Top-P 核心：移除累积概率超阈值的 token，同时保住 top-1
+sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+remove = cumulative_probs > self.top_p
+remove[1:] = remove[:-1].clone()   # 右移一位，首个 token 永不剔除
+remove[0] = False</code></pre>
+<p>两个值得品味的实现细节：步骤 1 的重复惩罚按 logit 正负分别做除法和乘法，确保惩罚总是把概率推向"更不易被选中"的方向；步骤 5 的掩码右移操作是 Top-P 的经典写法——不移位会把恰好跨过阈值的 token 误删，极端情况下甚至可能清空全部候选集。</p>
+
+<h3>小结：推理效率 vs 结果一致性</h3>
+
+<div class="arch-diagram">
+Temperature 与确定性的完整知识图谱:
+
+┌──────────────────────────────────────────────────────────────────┐
+│                    Temperature 参数知识体系                        │
+├──────────────────────────────────────────────────────────────────┤
+│                                                                  │
+│  数学层面                                                        │
+│  ├── T→0: 概率坍缩 → argmax → 确定性输出                        │
+│  ├── T=1: 保持原始分布 → 平衡质量与多样性                        │
+│  ├── T>1: 分布平坦化 → 高多样性/创造性                           │
+│  └── T→∞: 均匀分布 → 完全随机                                    │
+│                                                                  │
+│  工程层面 (T=0 时输出不唯一的根因)                                │
+│  ├── GPU 并行计算 → 线程执行顺序不确定                              │
+│  ├── 浮点数加法不满足结合律 → 不同累加顺序 → 不同舍入误差         │
+│  ├── FP16/BF16 精度有限 → 极接近的 logit 被舍入为相同值           │
+│  └── top-1/top-2 差距 < 精度时 → 排名反转 → 蝴蝶效应             │
+│                                                                  │
+│  解决方案                                                        │
+│  ├── T=0 argmax 短路 → 绕过 softmax, 完全确定                    │
+│  ├── FP32 logits → 提升精度, 代价极小                            │
+│  ├── 锁死随机种子 → 锁定显式随机源                               │
+│  └── GPU 确定性模式 → 固定计算顺序, 性能下降                     │
+│                                                                  │
+│  配合策略                                                        │
+│  ├── Temperature + Top-K + Top-P → 主流组合                      │
+│  ├── Repetition Penalty → 减少重复                               │
+│  └── Frequency Penalty → 减少高频词重复                          │
+│                                                                  │
+│  核心权衡                                                        │
+│  └── 推理效率 vs 结果一致性 → 根据业务需求精准控制不确定性         │
+│                                                                  │
+└──────────────────────────────────────────────────────────────────┘
+</div>
+</div>
+
+<!-- Section 6: 推测解码 -->
+<div class="section" id="s6">
+<h2>六、推测解码：用"小模型起草+大模型验证"突破速度瓶颈</h2>
+
+<div class="intuition-box"><p>推测解码的核心思想：用小模型快速生成 N 个候选 token，大模型一次性并行验证——如果验证通过，一次前向传播就能产出 N 个 token 而非 1 个，提速 2-5 倍且输出分布完全不变。</p></div>
+
+<h3>为什么自回归解码慢？</h3>
+<p>自回归解码的瓶颈不在计算，而在<strong>内存带宽</strong>。以 70B 参数模型（FP8）为例：每生成 1 个 token 需要从 HBM 读取约 70GB 权重，在 H200 GPU（~4.8 TB/s 带宽）上单 token 延迟地板约 14ms。算术强度仅约 2 ops/byte，而 GPU 需要 300+ ops/byte 才能达到计算饱和——<strong>解码阶段 95% 的时间在等内存</strong>。</p>
+
+<div class="arch-diagram">
+推测解码流程：
+
+  ┌──────────────┐    ┌───────────────┐
+  │  Draft Model  │    │  Target Model │
+  │  (e.g. 1B)    │    │  (e.g. 70B)   │
+  └──────┬───────┘    └───────┬───────┘
+         │                    │
+   1. 快速生成 N 个            │
+      候选 token              │
+      [tok_1, tok_2,          │
+       tok_3, tok_4]          │
+         │                    │
+         └────── 提交 ────────→│
+                              │
+   2. 一次前向传播             │
+      并行验证所有 N 个 token  │
+                              │
+   3. 拒绝采样：              │
+      ├─ 全部接受 → 前进 N 步  │
+      ├─ 部分接受 → 前进 k 步  │
+      │   (k < N) + 重采样     │
+      └─ 全部拒绝 → 前进 1 步  │
+          + 重采样              │
+</div>
+
+<h3>数学保证：输出分布完全不变</h3>
+<p>推测解码通过 <span class="term">拒绝采样</span>（Rejection Sampling）保证输出分布与直接用目标模型采样完全一致。接受概率公式：</p>
+<pre><code>P_accept = min(1, P_target(x) / P_draft(x))</code></pre>
+<p>这意味着质量零损失——不是近似，而是数学上的精确等价。</p>
+
+<h3>四大草稿方法家族（2026年现状）</h3>
+<table>
+<tr><th>方法</th><th>原理</th><th>典型加速比</th><th>部署复杂度</th><th>代表框架</th></tr>
+<tr><td>Vanilla（外部小模型）</td><td>独立小模型（如1B蒸馏版）做草稿</td><td>2-3x</td><td>中（需额外模型）</td><td>vLLM, TensorRT-LLM</td></tr>
+<tr><td>Medusa</td><td>在目标模型上加多个预测头</td><td>2-3x</td><td>低（无需额外模型）</td><td>SGLang</td></tr>
+<tr><td>EAGLE-3</td><td>利用目标模型多层特征做草稿</td><td>3-4x</td><td>中</td><td>SGLang, vLLM</td></tr>
+<tr><td>DFlash（块扩散）</td><td>一次前向传播生成整个候选块</td><td>5-15x</td><td>高</td><td>TensorRT-LLM, vLLM</td></tr>
+</table>
+
+<div class="highlight">
+<p>NVIDIA 2026年6月发布 DFlash 推测解码，在 Blackwell GPU 上对 gpt-oss-120b 模型实现了 <strong>15 倍吞吐量提升</strong>（对比自回归解码），比 EAGLE-3 高 1.5 倍。在 TPU v5p 上，DFlash 实现了平均 3.13 倍加速，峰值达 6 倍。</p>
+</div>
+
+<h3>关键生产参数</h3>
+<table>
+<tr><th>参数</th><th>含义</th><th>推荐值</th><th>调优要点</th></tr>
+<tr><td>Speculative Length (N)</td><td>每次草稿的 token 数</td><td>4-8</td><td>接受率>70%则可增大</td></tr>
+<tr><td>Acceptance Threshold</td><td>接受概率阈值</td><td>默认按公式</td><td>过高会浪费草稿</td></tr>
+<tr><td>Draft Model Size</td><td>草稿模型大小</td><td>目标模型的1-5%</td><td>太大得不偿失</td></tr>
+<tr><td>Acceptance Rate (DAR)</td><td>草稿接受率</td><td>70-85%（结构化）</td><td><50%需排查</td></tr>
+</table>
+
+</div>
+
+<!-- Section 7: Self-Consistency 与高级策略 -->
+<div class="section" id="s7">
+<h2>七、Self-Consistency 与高级解码策略</h2>
+
+<div class="intuition-box"><p>Self-Consistency = 让模型用不同采样路径回答同一问题多次，然后多数投票——用"群体智慧"对抗单次采样的不稳定性。</p></div>
+
+<h3>Self-Consistency 工作原理</h3>
+<div class="arch-diagram">
+Self-Consistency 流程：
+
+问题："24 ÷ 3 + 5 × 2 = ?"
+
+路径1 (T=0.7): "24÷3=8, 5×2=10, 8+10=18"  → 答案: 18
+路径2 (T=0.8): "先算24÷3得8，再5×2得10，加起来18" → 答案: 18
+路径3 (T=0.9): "24÷3=8, 然后5×2=10, 结果是18"   → 答案: 18
+路径4 (T=1.0): "让我算算... 24÷3=7? 不对，=8..." → 答案: 18
+路径5 (T=1.1): "24÷3=8, 5×2=10... 嗯... 20?"   → 答案: 20 ✗
+
+多数投票：18 (4票) vs 20 (1票) → 最终答案: 18 ✓
+</div>
+
+<h3>适用场景与代价</h3>
+<table>
+<tr><th>维度</th><th>Self-Consistency</th><th>单次采样</th></tr>
+<tr><td>准确率</td><td>显著提升（+5-15% on 数学推理）</td><td>基线</td></tr>
+<tr><td>推理成本</td><td>N 倍（N=采样路径数，通常5-20）</td><td>1x</td></tr>
+<tr><td>延迟</td><td>N 倍串行或并行（受限于batch size）</td><td>1x</td></tr>
+<tr><td>适用任务</td><td>数学推理、逻辑题、代码验证</td><td>通用</td></tr>
+<tr><td>不适用</td><td>开放式生成（无"正确答案"可投票）</td><td>—</td></tr>
+</table>
+
+<h3>其他进阶策略</h3>
+
+<table>
+<tr><th>策略</th><th>核心思想</th><th>应用场景</th></tr>
+<tr><td><span class="term">Contrastive Search</span></td><td>在似然度和退化度之间平衡，减少重复</td><td>长文本生成</td></tr>
+<tr><td><span class="term">Mirostat</span></td><td>自适应控制困惑度（perplexity），维持输出"惊喜度"</td><td>创意写作</td></tr>
+<tr><td><span class="term">DRY</span>（Don't Repeat Yourself）</td><td>智能重复惩罚，区分"合理重复"和"病态重复"</td><td>代码生成中的长序列</td></tr>
+<tr><td><span class="term">XTC</span>（Exclude Top Choices）</td><td>偶尔排除最高概率 token，强迫模型探索</td><td>极端创意场景</td></tr>
+<tr><td><span class="term">Constrained Generation</span></td><td>通过 JSON Schema / 正则约束输出格式</td><td>结构化输出（JSON Mode）</td></tr>
+</table>
+
+<div class="highlight">
+<p>2024年研究发现：采样策略的随机性结合 Self-Consistency，可以在封闭式任务上超越确定性方法——虽然单次不如 Beam Search 稳定，但多次投票后的准确率更高。这是"用随机性换多样性，用投票换可靠性"的精妙平衡。</p>
+</div>
+</div>
+
+<!-- Section 8: 生产环境参数配置 -->
+<div class="section" id="s8">
+<h2>八、生产环境解码参数配置指南</h2>
+
+<div class="intuition-box"><p>没有"万能参数"——解码策略的选择必须匹配任务需求。确定性任务用贪心，创意任务用采样，推理任务用 Self-Consistency。</p></div>
+
+<h3>按场景推荐参数</h3>
+<table>
+<tr><th>场景</th><th>Temperature</th><th>Top-P</th><th>Top-K</th><th>Min-P</th><th>特殊配置</th></tr>
+<tr><td>代码生成</td><td>0.0-0.2</td><td>0.95</td><td>—</td><td>0.05</td><td>Constrained Gen</td></tr>
+<tr><td>RAG 回答</td><td>0.1-0.3</td><td>0.9</td><td>—</td><td>0.05</td><td>—</td></tr>
+<tr><td>通用对话</td><td>0.7</td><td>0.9</td><td>—</td><td>0.05</td><td>—</td></tr>
+<tr><td>创意写作</td><td>0.8-1.2</td><td>0.95</td><td>—</td><td>0.03</td><td>XTC可选</td></tr>
+<tr><td>JSON/Schema</td><td>0.0</td><td>—</td><td>—</td><td>—</td><td>Grammar约束</td></tr>
+<tr><td>数学推理</td><td>0.7-1.0</td><td>0.9</td><td>—</td><td>0.05</td><td>Self-Consistency×8</td></tr>
+<tr><td>角色扮演</td><td>1.0-1.3</td><td>0.95</td><td>—</td><td>0.03</td><td>DRY+XTC</td></tr>
+</table>
+
+<h3>与重复惩罚参数的配合</h3>
+<p>Temperature 通常不单独使用，除了 Top-K/Top-P/Min-P 等截断策略，还常与重复惩罚参数组合：</p>
+<table>
+<tr><th>策略</th><th>原理</th><th>参数</th><th>效果</th></tr>
+<tr><td><strong>Repetition Penalty</strong></td><td>对已生成的 token 施加惩罚</td><td>penalty &gt; 1.0</td><td>减少重复</td></tr>
+<tr><td><strong>Frequency Penalty</strong></td><td>按出现频率线性惩罚</td><td>penalty ∈ [0, 2]</td><td>减少高频词重复</td></tr>
+</table>
+<p>典型配置：代码生成 <code>repetition_penalty=1.1</code>、通用对话 <code>1.05</code>、创意写作 <code>1.1 + frequency_penalty=0.5</code>。严格确定性场景（合规/审计）可组合 <code>temperature=0.0</code>（触发 argmax 短路）+ <code>dtype=float32</code>（FP32 logits）+ GPU 确定性模式，详见第五章。</p>
+
+<h3>GPU 能耗视角</h3>
+<p>2025年一项系统研究表明，不同解码策略对 GPU 能耗影响巨大。Beam Search 虽然质量可能更高，但能耗成倍增长；而合适的采样策略在质量损失极小的情况下可显著降低能耗。在绿色 AI 的趋势下，解码策略选择也需考虑能效比。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>按任务类型选择策略，不要一个参数打天下</li>
+<li>生产环境固定 seed 保证可复现性</li>
+<li>对 RAG 场景优先 Temperature=0.1-0.3 + Min-P=0.05</li>
+<li>大规模部署时启用推测解码（vLLM 0.7+ 默认开启）</li>
+<li>监控 Acceptance Rate 指标，<50% 需调优</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要对代码生成使用高 Temperature（会产生语法错误）</li>
+<li>不要在 70B 模型上用大 beam_width（显存爆炸）</li>
+<li>不要忽略 Min-P——它是 2026 年的最佳实践默认值</li>
+<li>不要同时启用 Top-K 和 Top-P——通常只需一个</li>
+<li>不要在没有 Self-Consistency 的情况下对数学推理用高 Temperature</li>
+</ul>
+</div>
+</div>
+
+</div>
+
+<!-- Q&A Section -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>贪心解码和 Beam Search 的核心区别是什么？为什么 LLM 时代 Beam Search 不再主流？</summary>
+<div class="answer">贪心解码每步只保留 1 个最优 token，Beam Search 同时维护 K 条路径最终选整体最优序列。Beam Search 在 LLM 时代失宠的三个核心原因：(1) 开放式生成没有唯一最优解，Beam 追求全局最优反而导致输出枯燥；(2) K 条路径需要 K 倍 KV Cache，在 70B 模型上显存消耗巨大；(3) 与 Flash Attention 等现代优化不兼容，吞吐量线性下降。</div>
+</details>
+
+<details>
+<summary>Temperature 参数对 LLM 输出有什么影响？</summary>
+<div class="answer">Temperature 控制 Softmax 输出概率分布的"锐利度"。公式：P(i) = exp(logit_i / T) / Σ exp(logit_j / T)。T→0 时概率坍缩到 argmax（确定性输出，适合代码/数学）；T=0.7~1.0 保持原始分布（平衡质量与多样性，适合通用对话）；T>1.2 分布更平坦（高多样性，适合创意写作）；T→∞ 趋向均匀分布（完全随机，无实用价值）。本质上 T 是一个"随机性旋钮"——调高增加多样性但可能引入噪声，调低增加确定性但可能降低创造性。</div>
+</details>
+
+<details>
+<summary>Temperature、Top-K、Top-P 三者如何配合？推荐的使用顺序是什么？</summary>
+<div class="answer">2026 年推荐实践：(1) 首先用 Min-P（0.05-0.1）做相对阈值截断，替代 Top-K 的硬截断；(2) 可选叠加 Top-P（0.85-0.95）做累计概率截断；(3) 最后应用 Temperature 调节分布锐度。关键原则是 Temperature 放在截断之后，因为截断只看相对排序不受 Temperature 影响，这样不同 Temperature 下截断行为更一致。</div>
+</details>
+
+<details>
+<summary>Top-K 和 Top-P (Nucleus Sampling) 有什么区别？</summary>
+<div class="answer">Top-K：固定保留概率最高的 K 个 token（如 K=50），其余概率设为 0。优点是简单可控，缺点是 K 是固定的——当概率分布很集中时 K 可能太大（包含低质量 token），当分布很平坦时 K 可能太小（丢失好的候选）。Top-P (Nucleus Sampling)：动态保留累积概率 ≥ P 的最小 token 集合（如 P=0.9）。优点是自适应——分布集中时候选少，分布平坦时候选多，更灵活。实际使用中通常两者组合：先 Top-K 截断（如 K=50），再 Top-P 过滤（如 P=0.9），最后按概率采样。这种组合既有 Top-K 的安全上限，又有 Top-P 的自适应能力。</div>
+</details>
+
+<details>
+<summary>Min-P 为什么被认为是 2026 年的最佳默认截断策略？</summary>
+<div class="answer">Min-P 设定相对阈值：只保留概率 ≥ (最高概率 × min_p) 的 token。相比 Top-K（固定数量）和 Top-P（累计概率），Min-P 的优势在于：(1) 自适应性强——分布尖锐时自动保留少量候选，平坦时自动扩大；(2) 避免了 Top-P 在极端分布下保留过多低质量 token 的问题；(3) 语义更直观——"至少要有最优候选的 5% 概率才值得考虑"。推荐值 min_p=0.05-0.1，几乎所有场景都适用。</div>
+</details>
+
+<details>
+<summary>Temperature=0 时输出为什么还不唯一？</summary>
+<div class="answer">数学上 T=0 等价于 argmax，相同输入必然得到相同输出。但工程实现中：①GPU 并行计算时线程执行顺序不确定；②浮点数加法不满足结合律——不同累加顺序导致不同舍入误差；③FP16/BF16 精度有限（~3-4 位有效数字），极接近的 logit（如差距 < 1e-4）可能被舍入为相同值；④当 top-1 和 top-2 的 logit 差距小于精度时，GPU 误差可能导致排名反转；⑤贪心解码只选第一名，一旦选错后续路径完全分叉——"数值蝴蝶效应"。工业界解决方案：argmax 短路（绕过 softmax）、FP32 logits（提升精度）、GPU 确定性模式（固定计算顺序）。</div>
+</details>
+
+<details>
+<summary>什么是浮点数的"数值蝴蝶效应"？</summary>
+<div class="answer">数值蝴蝶效应指：极小的浮点计算误差通过自回归生成的逐步放大，导致完全不同的输出文本。具体过程：①两个候选 token 的 logit 值极接近（如差距 1e-5）；②FP16 精度有限（~3-4 位有效数字），将两者舍入为相同值；③GPU 两次运行的浮点误差方向不同，导致排名反转（A 胜出 vs B 胜出）；④贪心解码只关心第一名，一旦首个 token 选错，后续所有生成路径完全分叉；⑤最终输出完全不同的文本。类比混沌理论中的蝴蝶效应——初始条件的微小差异导致结果的巨大差异。工业界通过 argmax 短路和 FP32 logits 来消除这个效应。</div>
+</details>
+
+<details>
+<summary>如何在生产环境中保证 LLM 输出的确定性？</summary>
+<div class="answer">分层保障：①argmax 短路——T=0 时直接执行 argmax 跳过 softmax 和采样，完全确定性，vLLM/TensorRT-LLM 标配；②FP32 logits——LM Head 输出用 FP32 计算，精度从 ~3 位提升到 ~7 位有效数字，代价仅 ~2%；③锁死随机种子——锁定 Python/NumPy/PyTorch 的显式随机源，确保 dropout、采样等可复现；④GPU 确定性模式——torch.use_deterministic_algorithms(True) 强制固定并行计算顺序，但性能下降 10-30%。生产环境推荐组合：argmax 短路 + FP32 logits（性价比最高）。合规审计场景可额外开启 GPU 确定性模式。核心权衡：推理效率 vs 结果一致性。</div>
+</details>
+
+<details>
+<summary>推测解码如何保证输出质量不变？实际加速比受什么因素影响？</summary>
+<div class="answer">推测解码通过拒绝采样（Rejection Sampling）保证输出分布与目标模型完全一致——接受概率 P_accept = min(1, P_target/P_draft)。当草稿模型与目标模型分布越接近，接受率越高，加速比越大。实际加速比取决于：(1) 草稿模型质量（接受率 70-85% 为健康范围）；(2) 草稿长度（通常 4-8 tokens）；(3) 任务类型（结构化文本接受率高于创意文本）。2026 年 DFlash 方法在 Blackwell GPU 上实现了最高 15 倍加速。</div>
+</details>
+
+<details>
+<summary>Self-Consistency 适用于哪些任务？成本如何控制？</summary>
+<div class="answer">Self-Consistency 最适合有"正确答案"的推理任务：数学题、逻辑推理、代码验证等。它通过多次采样（通常 5-20 条路径）+ 多数投票来提升准确率，代价是 N 倍的推理成本和延迟。成本控制方法：(1) 用较低 Temperature（0.7-1.0）减少路径发散；(2) 设置早停——如果前 5 条路径中 4 条一致就提前终止；(3) 只在高价值/高风险查询上启用。不适用于开放式生成任务（无正确答案可投票）。</div>
+</details>
+
+<details>
+<summary>如何在生产环境中为不同场景配置解码参数？</summary>
+<div class="answer">按任务类型配置：(1) 代码/JSON 生成：temperature=0, constrained generation；(2) RAG 回答：temperature=0.1-0.3, min_p=0.05, top_p=0.9；(3) 通用对话：temperature=0.7, min_p=0.05, top_p=0.9；(4) 创意写作：temperature=0.8-1.2, min_p=0.03, top_p=0.95。大规模部署时启用推测解码（vLLM 0.7+ 默认开启），监控 Acceptance Rate。生产环境务必固定 random seed 保证可复现性。</div>
+</details>
+
+<details>
+<summary>DRY 和 XTC 这些新策略分别解决什么问题？</summary>
+<div class="answer">DRY（Don't Repeat Yourself）解决长序列中的重复问题——它能区分"合理重复"（如代码中的循环结构）和"病态重复"（无意义的复读），比简单的 Repetition Penalty 更智能。XTC（Exclude Top Choices）在创意场景中偶尔排除最高概率 token，迫使模型探索更有趣的表达——适用于角色扮演和极端创意写作，但在生产环境中需谨慎使用，因为它会显著降低输出可控性。</div>
+</details>
+</div>
+
+</div>
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

@@ -18,7 +18,7 @@
 生产  上线后哪个旋钮先动、什么情况关掉
 ```
 
-当前公开的是 **主干（Core Path）**，完整目录见 [LEARNING_PATH.md](./LEARNING_PATH.md)。不在主干上的卡会进 `extended/`，不默认推荐先读。
+当前公开的是 **36 张主干**，完整目录见 [LEARNING_PATH.md](./LEARNING_PATH.md)。不在主干上的卡会进 `extended/`，不默认推荐先读。
 
 ## 怎么读
 

@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>22 · 上下文窗口</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、核心矛盾：高密度写操作 vs 有限上下文</a>
+<a href="#s2">二、上下文腐化：三大退化机制</a>
+<a href="#s3">三、两大崩溃模式与现有方案的缺陷</a>
+<a href="#s4">四、记忆外挂化：外部记忆系统架构</a>
+<a href="#s5">五、Clean State：跨会话状态恢复协议</a>
+<a href="#s6">六、上下文管理策略对比：Compaction vs Memory vs Sub-agent</a>
+<a href="#s7">七、生产级单 Agent 架构设计</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>22 · 上下文窗口</h1>
+<p class="subtitle">上下文腐化三大机制 / 外部记忆系统（文件+Git）/ Clean State 恢复 / Compaction 策略 / 两大崩溃模式与解法</p>
+
+<div class="intuition-box">
+<p>单 Agent 架构的根本矛盾不在模型能力，而在<span class="term">上下文窗口</span>的有限性与编程任务的长周期性之间的不可调和。上下文窗口不是"越大越好"的容器，而是一个会随着填充量增加而退化的工作记忆——即使 200K token 的窗口，性能退化在 50K token 时就已经开始。</p>
+</div>
+
+<!-- ==================== 1. 核心矛盾 ==================== -->
+<div class="section" id="s1">
+<h2>一、核心矛盾：高密度写操作 vs 有限上下文</h2>
+
+<h3>编程任务的特殊性</h3>
+
+<div class="intuition-box">
+<p>编程的<strong>高密度写操作</strong>特性决定了单智能体架构的必要性——一个人写代码比多人同时改一个文件好。但复杂项目往往需要数小时甚至数天的连续开发，这与有限的上下文窗口形成了根本矛盾。</p>
+</div>
+
+<p>编程任务与对话任务有本质区别：对话是<strong>读多写少</strong>（大部分时间在理解和回答），而编程是<strong>写多读多</strong>（需要频繁修改代码、运行测试、阅读错误日志）。一次典型的 SWE（Software Engineering）任务可能需要 Agent 连续交互数百轮——解读 issue、搜索代码、编辑文件、运行测试、修复 bug——每一轮都会在上下文窗口中累积大量 token。</p>
+
+<table>
+<tr><th>维度</th><th>对话任务</th><th>编程任务</th><th>对上下文的影响</th></tr>
+<tr><td><strong>交互轮次</strong></td><td>5-20 轮</td><td>50-500+ 轮</td><td>编程任务的上下文膨胀速度是对话的 10-25 倍</td></tr>
+<tr><td><strong>单轮 Token</strong></td><td>200-2000</td><td>1000-50000</td><td>代码文件、测试结果、错误日志占用大量 token</td></tr>
+<tr><td><strong>决策连贯性</strong></td><td>低（可独立回答）</td><td>高（每个决策依赖前序）</td><td>上下文丢失导致决策链断裂</td></tr>
+<tr><td><strong>写操作密度</strong></td><td>低（生成文本）</td><td>高（修改文件、运行命令）</td><td>多 Agent 同时写会冲突</td></tr>
+</table>
+
+<h3>为什么是"串行"而非"并行"？</h3>
+
+<p>串行架构的代价是吞吐量降低（约 40%），但代码质量更有保障。Anthropic 在 Claude Code 的设计中明确选择了串行单智能体架构，原因是：代码冲突率从多 Agent 方案的 23% 降至 0%。</p>
+
+<div class="highlight">
+<strong>生产数据：</strong>Claude Code 采用串行单智能体架构，在中型项目（5 万行代码）上的持续开发测试中，单 Agent 连续工作 <strong>4 小时</strong>后通过 Clean State 恢复上下文仅需 <strong>30 秒</strong>（读取 MEMORY.md + 最近 10 条 Git commit + TODO.md）。对比多 Agent 并行方案，串行架构的代码冲突率从 23% 降至 <strong>0%</strong>，但吞吐量降低约 40%。
+</div>
+</div>
+
+<!-- ==================== 2. 上下文腐化 ==================== -->
+<div class="section" id="s2">
+<h2>二、上下文腐化：三大退化机制</h2>
+
+<div class="intuition-box">
+<p>上下文窗口不是"填满才出问题"——性能退化在窗口容量 50% 时就已经开始。Chroma 2025 年对 18 个前沿模型的研究发现：每个增量区间的上下文增长都会带来可测量的性能退化。</p>
+</div>
+
+<h3>机制一：中间迷失效应（Lost-in-the-Middle）</h3>
+
+<p>Transformer 的注意力机制呈现 U 型分布：对上下文的<strong>开头</strong>和<strong>结尾</strong>关注度高，对<strong>中间部分</strong>关注度低。当上下文填充量低于 50% 时，U 型注意力模式仍能覆盖全部内容；但超过 50% 后，模型越来越倾向于关注最近的 token，中间部分的信息被严重忽视。</p>
+
+<div class="arch-diagram">
+┌─────────────────── Transformer 注意力分布（U 型曲线）───────────────────┐
+│                                                                        │
+│  注意力强度                                                            │
+│  ██████████                                                    ███████│
+│  ████████████                                                █████████│
+│  ██████████████                                            ███████████│
+│  ████████████████                                        █████████████│
+│  ██████████████████                                    ███████████████│
+│  ████████████████████                                █████████████████│
+│  ██████████████████████                            ███████████████████│
+│  ████████████████████████                        █████████████████████│
+│  ██████████████████████████                    ███████████████████████│
+│  ██████████████████████████████░░░░░░░░░░░░███████████████████████████│
+│  ├──────────────┬──────────────────────┬──────────────────┤          │
+│  │   开头区域    │     中间区域          │    结尾区域       │          │
+│  │  (高关注)     │   (低关注/迷失区)     │   (高关注)       │          │
+│  │  系统提示     │   早期对话/历史操作    │   最近交互        │          │
+│  └──────────────┴──────────────────────┴──────────────────┘          │
+│                                                                        │
+│  ⚠ 中间区域的准确率下降 30%+（信息被埋在长对话的中间位置）                 │
+└────────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>机制二：注意力稀释（Attention Dilution）</h3>
+
+<p>Transformer 的自注意力计算复杂度为 O(n²)，在 100K token 时，模型需要管理约 100 亿个成对关系。任何给定信息的<span class="term">信噪比</span>随着窗口填充而下降。就像一个人在安静的房间里能清楚听到每个人说话，但在嘈杂的聚会中即使近距离对话也费劲。</p>
+
+<h3>机制三：干扰累积（Distractor Interference）</h3>
+
+<p>语义相似但不相关的内容会主动误导模型。一个涉及多个主题的长对话为检索式任务提供了大量"伪候选答案"。在编程场景中，早期的代码修改尝试、被废弃的方案、过时的错误日志都会成为干扰项，降低模型对当前任务的判断准确性。</p>
+
+<div class="formula">
+有效上下文质量 = f(上下文总量) → 单调递减函数（非阶梯函数）
+</div>
+
+<table>
+<tr><th>上下文填充率</th><th>模型表现</th><th>典型症状</th></tr>
+<tr><td>0-30%</td><td>★★★★★ 最佳</td><td>指令遵从度高，推理准确</td></tr>
+<tr><td>30-50%</td><td>★★★★ 良好</td><td>偶发细节遗漏，整体可靠</td></tr>
+<tr><td>50-70%</td><td>★★★ 退化开始</td><td>中间信息迷失，决策质量下降</td></tr>
+<tr><td>70-90%</td><td>★★ 明显退化</td><td>重复早期错误，忽略关键约束</td></tr>
+<tr><td>90-100%</td><td>★ 严重退化</td><td>推理崩溃，输出质量接近随机</td></tr>
+</table>
+
+<div class="highlight">
+<strong>关键发现：</strong>Paulsen（2025）进一步证明，上下文退化不仅影响"大海捞针"类任务，还影响各种推理任务——且任务越复杂，退化开始的 token 数越低。这意味着<strong>主动管理上下文的阈值应远低于窗口容量的 50%</strong>，而非等到快满时才干预。
+</div>
+</div>
+
+<!-- ==================== 3. 两大崩溃模式 ==================== -->
+<div class="section" id="s3">
+<h2>三、两大崩溃模式与现有方案的缺陷</h2>
+
+<h3>崩溃模式一：贪多嚼不烂</h3>
+
+<h3>崩溃模式二：盲目自信</h3>
+
+<h3>现有方案的缺陷</h3>
+
+<table>
+<tr><th>方案</th><th>原理</th><th>核心问题</th><th>失败场景</th></tr>
+<tr><td><strong>压缩摘要</strong></td><td>将历史对话压缩为摘要</td><td>关键细节丢失（变量名、依赖关系、架构决策）</td><td>压缩后 Agent 忘记某个变量的命名约定</td></tr>
+<tr><td><strong>截断丢弃</strong></td><td>丢弃最旧的对话轮次</td><td>早期关键决策被丢弃，破坏决策链</td><td>Agent 重复已解决的问题</td></tr>
+<tr><td><strong>离散会话</strong></td><td>每个任务独立会话</td><td>两大崩溃模式（贪多嚼不烂 / 盲目自信）</td><td>复杂项目无法在单次会话完成</td></tr>
+<tr><td><strong>无限追加</strong></td><td>所有交互持续追加到上下文</td><td>上下文爆炸 → 语义漂移 → 推理崩溃</td><td>长任务中 Agent 开始产出低质量代码</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>所有失败的方案有一个共同特征：它们都试图在上下文窗口<strong>内部</strong>解决问题。但上下文窗口的物理限制决定了——无论怎么压缩、截断、追加，都无法满足长周期编程任务的需求。正确的思路是将记忆<strong>外置</strong>到窗口之外。</p>
+</div>
+</div>
+
+<!-- ==================== 4. 记忆外挂化 ==================== -->
+<div class="section" id="s4">
+<h2>四、记忆外挂化：外部记忆系统架构</h2>
+
+<div class="intuition-box">
+<p>解法的核心思路极其简单：把"记在脑子里"改为"记在文件里"。上下文窗口只用于当前工作，不用于跨会话记忆。外部记忆系统（文件 + Git）将上下文持久化到磁盘，每次新会话从干净状态开始，读取外部记忆重建上下文。</p>
+</div>
+
+<div class="arch-diagram">
+┌──────────────────── 外部记忆系统三层架构 ────────────────────┐
+│                                                              │
+│  Layer 1: 长期记忆（MEMORY.md）                               │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │  项目架构决策 / 编码规范 / 技术栈选型 / 已知坑         │    │
+│  │  更新频率：每次重大决策后更新                           │    │
+│  │  生命周期：项目级（整个项目生命周期）                    │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│  Layer 2: 版本记忆（Git Log）                                 │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │  代码变更历史 / 提交记录 / 分支信息                     │    │
+│  │  更新频率：每次有意义的代码变更后提交                    │    │
+│  │  生命周期：项目级（完整历史保留）                       │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│  Layer 3: 短期记忆（TODO.md）                                 │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │  当前任务进度 / 下一步行动 / 待解决问题                 │    │
+│  │  更新频率：每次任务完成或中断时更新                     │    │
+│  │  生命周期：会话级（跨会话传递但频繁更新）                │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                              │
+│  ──── 上下文窗口（仅存放当前工作内容）────                     │
+│  ┌──────────────────────────────────────────────────────┐    │
+│  │  当前正在编辑的文件 / 当前测试输出 / 当前推理链         │    │
+│  │  容量有限但专注 → 避免上下文腐化                       │    │
+│  └──────────────────────────────────────────────────────┘    │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>三要素详解</h3>
+
+<table>
+<tr><th>要素</th><th>实现方式</th><th>存储内容</th><th>解决的问题</th></tr>
+<tr><td><span class="term">工作日志</span></td><td>MEMORY.md 文件</td><td>架构决策、编码规范、已知坑、依赖关系</td><td>跨会话恢复项目级知识</td></tr>
+<tr><td><span class="term">Git 版本控制</span></td><td>Git commit + message</td><td>代码变更历史、每次提交附带"做了什么+为什么"</td><td>客观进度追踪（代码不会撒谎）</td></tr>
+<tr><td><span class="term">任务清单</span></td><td>TODO.md 文件</td><td>当前进度、下一步行动、待解决问题</td><td>控制任务粒度，防止贪多嚼不烂</td></tr>
+</table>
+
+<h3>为什么 Git 比"自我评估"更可靠？</h3>
+
+<p>Agent 对自身进度的评估是不可靠的——它可能产生"完工幻觉"，认为自己已完成实际未完成的工作。Git commit 提供了<strong>客观的、不可伪造的</strong>进度证据：代码要么提交了，要么没提交；测试要么通过了，要么没通过。这种"外部确定性"替代了模型的"自我评估能力"，从根本上消除了盲目自信崩溃模式。</p>
+
+<div class="highlight">
+<strong>生产数据：</strong>在某企业级代码生成平台的测试中，启用外部记忆系统的 Agent 与纯上下文窗口 Agent 对比：(1) 任务完成率从 62% 提升至 <strong>89%</strong>；(2) "完工幻觉"发生率从 31% 降至 <strong>4%</strong>；(3) 跨会话续接成功率从 18% 提升至 <strong>94%</strong>。外部记忆系统使 Agent 在 4 小时连续工作后的上下文恢复仅需 <strong>30 秒</strong>。
+</div>
+</div>
+
+<!-- ==================== 5. Clean State ==================== -->
+<div class="section" id="s5">
+<h2>五、Clean State：跨会话状态恢复协议</h2>
+
+<h3>Clean State 启动三步曲</h3>
+
+<div class="arch-diagram">
+┌────────────────── Clean State 启动流程（约 30 秒）──────────────────┐
+│                                                                     │
+│  Step 1: 读取长期记忆（~10 秒）                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  cat MEMORY.md                                               │   │
+│  │  → 项目架构: React + Express + PostgreSQL                    │   │
+│  │  → 编码规范: 函数式组件, TypeScript strict                    │   │
+│  │  → 已知坑: WebSocket 重连需要指数退避                         │   │
+│  │  → 技术决策: 选择 JWT 而非 Session（原因: 多端共享）           │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                          ↓                                          │
+│  Step 2: 读取近期进展（~10 秒）                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  git log --oneline -10                                       │   │
+│  │  → a3f2c1d 实现用户登录 API + JWT 签发                        │   │
+│  │  → b7e4a2f 添加密码加密中间件                                 │   │
+│  │  → c9d5b3e 修复 WebSocket 断线重连 bug                        │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                          ↓                                          │
+│  Step 3: 读取当前任务（~10 秒）                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │  cat TODO.md                                                 │   │
+│  │  → [x] 用户注册 API                                          │   │
+│  │  → [x] 用户登录 API + JWT                                    │   │
+│  │  → [ ] 角色权限中间件 ← 当前任务                             │   │
+│  │  → [ ] 文件上传 API                                          │   │
+│  │  → [ ] 单元测试覆盖 > 80%                                    │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                          ↓                                          │
+│  ✅ Agent 从"角色权限中间件"任务开始工作                               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>Clean State 如何解决两大崩溃模式</h3>
+
+<table>
+<tr><th>崩溃模式</th><th>触发原因</th><th>Clean State 解法</th><th>关键机制</th></tr>
+<tr><td><strong>贪多嚼不烂</strong></td><td>单次会话尝试过多任务 → Token 耗尽</td><td>TODO.md 控制任务粒度</td><td>每个任务必须在单次会话内完成（建议 &lt; 2000 行变更）</td></tr>
+<tr><td><strong>盲目自信</strong></td><td>模糊上下文 → 完工幻觉</td><td>Git log 提供客观进度</td><td>代码不会撒谎——提交了就是做了，没提交就是没做</td></tr>
+</table>
+
+<div class="intuition-box">
+<p><strong>深度理解：</strong>Clean State 的哲学是"信任文件系统，不信任模型记忆"。模型的上下文窗口是一个不可靠的、会退化的存储介质；而文件系统中的 MEMORY.md、Git log、TODO.md 是确定性的、不会退化的、可审计的外部记忆。Clean State 把模型从"记忆者"角色解放出来，让它专注于"执行者"角色。</p>
+</div>
+</div>
+
+<!-- ==================== 6. 上下文管理策略 ==================== -->
+<div class="section" id="s6">
+<h2>六、上下文管理策略对比：Compaction vs Memory vs Sub-agent</h2>
+
+<div class="intuition-box">
+<p>面对上下文窗口的有限性，业界已经收敛出三种主要应对策略：Compaction（压缩）、Memory（外部记忆）、Sub-agent（子智能体委托）。它们不是互斥的——最健壮的生产系统会组合使用三者。</p>
+</div>
+
+<h3>策略一：Compaction（上下文压缩）</h3>
+
+<p>当对话接近上下文限制时，将历史内容总结为摘要，用摘要重新初始化一个新的上下文窗口。Claude Code 的 <code>/compact</code> 命令和 Codex CLI 的 <code>compaction</code> item type 都是这种策略的实现。Anthropic 的研究发现，对于足够强大的模型，<strong>单独的 Compaction 就足以维持跨会话的连续性</strong>——多会话交接的复杂性可以被完全去掉。</p>
+
+<h3>策略二：Memory（外部记忆）</h3>
+
+<p>给 Agent 一个简单的"文件系统"或 KV 存储，让它在任务推进过程中把关键事实写成"笔记"存起来，每次窗口重建时先读笔记再继续推理。Anthropic 的"Claude Plays Pokémon"实验中，Agent 通过外部笔记成功维持了数小时的游戏进度。</p>
+
+<h3>策略三：Sub-agent（子智能体委托）</h3>
+
+<p>将有界的子任务委托给独立的子智能体执行，子智能体完成后只返回紧凑的摘要（而非完整的执行轨迹）。这避免了主智能体的上下文被子任务的细节淹没。</p>
+
+<table>
+<tr><th>策略</th><th>原理</th><th>优势</th><th>劣势</th><th>适用场景</th></tr>
+<tr><td><strong>Compaction</strong></td><td>历史压缩为摘要</td><td>实现简单，模型原生支持</td><td>摘要可能丢失细节</td><td>长对话、多轮交互</td></tr>
+<tr><td><strong>Memory</strong></td><td>外部文件/KV 存储</td><td>精确可控，不丢失</td><td>需要 Agent 学会主动记录</td><td>跨会话持久化关键决策</td></tr>
+<tr><td><strong>Sub-agent</strong></td><td>子任务委托+摘要返回</td><td>主上下文保持精简</td><td>子任务边界需要明确划分</td><td>大型项目中的独立子任务</td></tr>
+</table>
+
+<div class="formula">
+最佳实践 = Compaction（处理对话历史）+ Memory（持久化关键决策）+ Sub-agent（隔离子任务）
+</div>
+
+<div class="highlight">
+<strong>生产案例：</strong>SWE-Pruner（2026）提出自适应上下文裁剪框架，在 SWE-Bench Verified 上将 Agent 的 token 消耗降低 <strong>47%</strong>，同时保持 <strong>95%</strong> 的任务完成率。其核心创新是使用轻量级神经筛选器（Neural Skimmer）动态判断每段上下文的相关性，保留高价值信息、裁剪低价值信息，相比固定比例裁剪策略准确率提升 <strong>12 个百分点</strong>。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每次会话结束前更新 MEMORY.md 和 TODO.md</li>
+<li>Git commit message 写清楚"做了什么+为什么"</li>
+<li>任务粒度控制在单次会话可完成的范围（&lt; 2000 行变更）</li>
+<li>新会话启动时先读取外部记忆再开始工作</li>
+<li>上下文填充率超过 50% 时主动触发 Compaction</li>
+<li>组合使用三种策略：Compaction + Memory + Sub-agent</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在一个会话中尝试完成整个项目（贪多嚼不烂）</li>
+<li>不要依赖上下文窗口记住之前的决策</li>
+<li>不要写模糊的 Git commit message（如"fix bug"）</li>
+<li>不要跳过 Clean State 直接开始工作</li>
+<li>不要等上下文快满了才压缩（退化已经开始）</li>
+<li>不要让多 Agent 同时修改同一文件</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ==================== 7. 生产级架构 ==================== -->
+<div class="section" id="s7">
+<h2>七、生产级单 Agent 架构设计</h2>
+
+<div class="arch-diagram">
+┌──────────────────── 生产级串行单 Agent 系统架构 ────────────────────┐
+│                                                                     │
+│  ┌─────────┐     ┌──────────────┐     ┌────────────────────────┐   │
+│  │  用户    │────▶│  任务分发器   │────▶│  单 Agent 执行引擎      │   │
+│  │  请求    │     │  任务拆分     │     │  ┌──────────────────┐  │   │
+│  └─────────┘     │  粒度控制     │     │  │ Clean State 启动  │  │   │
+│                   └──────────────┘     │  │ 读 MEMORY.md      │  │   │
+│                                        │  │ 读 Git log        │  │   │
+│                                        │  │ 读 TODO.md        │  │   │
+│                                        │  └────────┬─────────┘  │   │
+│                                        │           ▼             │   │
+│                                        │  ┌──────────────────┐  │   │
+│                                        │  │ 上下文管理器      │  │   │
+│                                        │  │ 填充率监控        │  │   │
+│                                        │  │ >50% → Compaction │  │   │
+│                                        │  │ >80% → 强制归档   │  │   │
+│                                        │  └────────┬─────────┘  │   │
+│                                        │           ▼             │   │
+│                                        │  ┌──────────────────┐  │   │
+│                                        │  │ 工具执行层        │  │   │
+│                                        │  │ 代码编辑 / 测试   │  │   │
+│                                        │  │ Git 操作 / 部署   │  │   │
+│                                        │  └────────┬─────────┘  │   │
+│                                        │           ▼             │   │
+│                                        │  ┌──────────────────┐  │   │
+│                                        │  │ 会话归档          │  │   │
+│                                        │  │ 更新 MEMORY.md    │  │   │
+│                                        │  │ 更新 TODO.md      │  │   │
+│                                        │  │ Git commit        │  │   │
+│                                        │  └──────────────────┘  │   │
+│                                        └────────────────────────┘   │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  外部记忆存储层                                              │    │
+│  │  MEMORY.md ←→ Git Repository ←→ TODO.md                    │    │
+│  │  （项目级长期记忆）   （版本历史）      （会话级短期记忆）      │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+│  ┌─────────────────────────────────────────────────────────────┐    │
+│  │  可观测性面板                                                │    │
+│  │  上下文填充率: ████████░░░░ 62%   当前会话轮次: 47           │    │
+│  │  Compaction 触发: 2 次          Git 提交: 8 次               │    │
+│  │  TODO 完成率: ████████░░░░ 60%   累计工作时长: 3.5h          │    │
+│  └─────────────────────────────────────────────────────────────┘    │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>上下文管理器：主动干预而非被动响应</h3>
+
+<p>生产系统中的上下文管理器需要<strong>主动监控</strong>填充率并在阈值到达前触发 Compaction，而非等到上下文溢出时才被动截断。推荐的<span class="term">两级阈值策略</span>：50% 触发"软压缩"（摘要化非关键历史，保留当前工作内容）；80% 触发"硬归档"（保存当前工作状态到外部记忆，启动 Clean State 新会话）。</p>
+
+<h3>会话归档：确保跨会话连续性</h3>
+
+<p>每次会话结束（无论是正常完成还是因 Token 耗尽中断）都必须执行归档流程：更新 MEMORY.md（记录本次会话的关键决策和发现）、更新 TODO.md（标记已完成的任务、记录下一步行动）、Git commit（提交所有代码变更，附清晰的 commit message）。这三步确保了下次 Clean State 启动时能完整恢复上下文。</p>
+
+<div class="highlight">
+<strong>生产案例：</strong>某大型科技公司的 AI 编程助手从"无限追加"策略迁移到"Clean State + 外部记忆"架构后：(1) 长任务（&gt;2 小时）的成功完成率从 <strong>38%</strong> 提升至 <strong>87%</strong>；(2) Agent 的"完工幻觉"率从 <strong>31%</strong> 降至 <strong>4%</strong>；(3) 平均每次 Compaction 节省 <strong>65%</strong> 的 token 消耗，使单次会话可处理的任务量增加 <strong>2.8 倍</strong>。关键的 trade-off：Clean State 启动的 30 秒开销换来了无限制的跨会话连续性。
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A（8 题）</h2>
+
+<details>
+<summary>单 Agent 架构的核心矛盾是什么？为什么不能简单扩大上下文窗口？</summary>
+<div class="answer">核心矛盾是编程的高密度写操作要求决策统一（需要串行），但复杂项目的长周期需求与有限上下文窗口不可调和。简单扩大窗口不能解决问题，因为：(1) 上下文腐化——性能退化在 50% 填充率时就已开始，200K 窗口在 50K token 时退化就已经可测量；(2) 注意力稀释——100K token 时模型管理 100 亿个成对关系，信噪比急剧下降；(3) 成本问题——大窗口的 API 调用成本线性增长。正确的解法是将记忆外置到窗口之外（外部记忆系统）。</div>
+</details>
+
+<details>
+<summary>上下文腐化的三大机制分别是什么？各自如何影响编程 Agent？</summary>
+<div class="answer">三大机制：(1) 中间迷失效应——Transformer 对上下文中间部分关注度低，早期确定的架构决策可能被忽视，导致 Agent 做出与之前矛盾的决策；(2) 注意力稀释——token 越多，每个 token 获得的注意力权重越低，Agent 可能忽略关键的错误日志或测试失败信息；(3) 干扰累积——早期的废弃方案、过时的错误日志成为"伪候选答案"，误导 Agent 重复已解决的问题。三者叠加导致 Agent 在长任务中性能持续退化。</div>
+</details>
+
+<details>
+<summary>Clean State 的具体启动流程是什么？为什么 30 秒就够？</summary>
+<div class="answer">三步重建上下文（约 30 秒）：(1) 读取 MEMORY.md（~10 秒）——项目级长期记忆：架构决策、编码规范、已知坑；(2) 读取最近 N 条 Git commit log（~10 秒）——近期工作进展：做了什么、改了什么文件；(3) 读取 TODO.md（~10 秒）——当前任务进度：做到哪了、下一步是什么。30 秒就够是因为外部记忆是高密度的结构化信息（不是完整对话历史），Agent 只需读取"结论"而非"推理过程"。关键优势：不依赖模型的记忆能力，而是依赖外部文件的确定性。</div>
+</details>
+
+<details>
+<summary>Compaction、Memory、Sub-agent 三种策略如何组合使用？</summary>
+<div class="answer">最佳组合方式：(1) Compaction 处理对话历史——当上下文填充率超过 50% 时，将早期对话压缩为摘要，保留关键决策但释放 token 空间；(2) Memory 持久化关键决策——架构选择、编码规范、已知坑等不会随对话变化的信息写入 MEMORY.md，跨会话永久保留；(3) Sub-agent 隔离子任务——将独立子任务（如运行完整测试套件、搜索大量文件）委托给子智能体，主 Agent 只接收摘要结果。三者互补：Compaction 解决"窗口内"的问题，Memory 解决"跨窗口"的问题，Sub-agent 解决"任务规模"的问题。</div>
+</details>
+
+<details>
+<summary>为什么编程任务不适合多 Agent 并行？串行架构的 trade-off 是什么？</summary>
+<div class="answer">编程的高密度写操作特性决定了：多 Agent 同时修改同一文件会导致代码冲突（两个 Agent 修改同一函数）、依赖混乱（A 改了接口但 B 不知道）、一致性风险（编译通过不代表逻辑一致）。串行架构保证同一时间只有一个 Agent 在写代码，代码冲突率从 23% 降至 0%。Trade-off 是吞吐量降低约 40%——但代码质量更有保障。类比：一个文件不能两个人同时编辑。对于需要并行加速的场景，可以使用 Sub-agent 处理只读子任务（如代码搜索、测试运行），主 Agent 保持串行的写操作。</div>
+</details>
+
+<details>
+<summary>两大崩溃模式怎么分别解决？</summary>
+<div class="answer">贪多嚼不烂（单次会话强写完整项目 → Token 耗尽中断）的解决方案：TODO 清单控制任务粒度，每个任务必须在单次会话内可完成（建议 &lt; 2000 行变更），配合 50%/80% 两级 Compaction 阈值确保 Token 不会耗尽。盲目自信（模糊上下文引发完工幻觉）的解决方案：Git log 提供客观进度（代码不会撒谎）+ 定期执行编译/测试验证（通过了才是真完成）+ TODO.md 的 [x] 标记提供可审计的完成记录。两者都需要外部记忆系统的支撑，纯靠上下文窗口无法解决。</div>
+</details>
+
+<details>
+<summary>SWE-Pruner 等自适应裁剪方案相比固定裁剪有什么优势？</summary>
+<div class="answer">固定裁剪（如每 N 轮丢弃最早的 M 轮）是盲目的——它不知道哪些内容是关键的、哪些是冗余的，可能恰好丢弃了重要的架构决策。SWE-Pruner 使用轻量级神经筛选器（Neural Skimmer）为每段上下文计算相关性分数，动态保留高价值信息、裁剪低价值信息。在 SWE-Bench Verified 上，token 消耗降低 47% 的同时保持 95% 的任务完成率，相比固定比例裁剪准确率提升 12 个百分点。核心思路：裁剪应该是"有选择的遗忘"而非"盲目的截断"。</div>
+</details>
+
+<details>
+<summary>如何判断上下文管理器应该何时触发 Compaction？</summary>
+<div class="answer">推荐两级阈值策略：(1) 软阈值 50%——触发"软压缩"，摘要化非关键历史（早期的工具调用输出、重复的错误日志），保留当前工作相关的核心上下文；(2) 硬阈值 80%——触发"硬归档"，保存当前工作状态到外部记忆（更新 MEMORY.md + TODO.md + Git commit），然后启动 Clean State 新会话。50% 阈值基于 Chroma 研究发现的退化起始点。更高级的做法是结合 SWE-Pruner 的自适应策略——用神经筛选器动态判断哪些内容可以裁剪，而非固定比例。关键原则：宁可过早压缩也不要让上下文退化到影响推理质量。</div>
+</details>
+
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>
