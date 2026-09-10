@@ -8,7 +8,7 @@
 
 > 每张卡回答一个判断：什么时候用，什么时候不要用。
 
-[从第 01 张开始](./cards/transformer/tensor_fundamentals.html) · [主干路径](./LEARNING_PATH.md) · [在线阅读](https://weicyang.github.io/llm-eng-cards/)
+[从 Attention 开始](./cards/transformer/attention_from_scratch.html) · [主干路径](./LEARNING_PATH.md) · [在线阅读](https://weicyang.github.io/llm-eng-cards/)
 
 ## 为什么有这个库
 

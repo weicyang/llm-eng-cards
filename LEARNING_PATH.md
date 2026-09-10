@@ -13,8 +13,8 @@
 
 | 序 | 卡 |
 |---|---|
-| 01 | [张量与维度](./cards/transformer/tensor_fundamentals.html) |
-| 02 | [Attention 手撕](./cards/transformer/attention_from_scratch.html) |
+| 01 | [Attention 手撕](./cards/transformer/attention_from_scratch.html) |
+| 02 | [张量与维度](./cards/transformer/tensor_fundamentals.html) |
 | 03 | [Multi-Head Attention](./cards/transformer/mha_from_scratch.html) |
 | 04 | [位置编码](./cards/transformer/positional_encoding.html) |
 | 05 | [Decoder-only](./cards/transformer/decoder_only_transformer.html) |
