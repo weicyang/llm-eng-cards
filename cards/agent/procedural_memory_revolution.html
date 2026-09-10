@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A43 · AI 程序性记忆：技能蒸馏与复用</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#guide">学习路线</a>
+<a href="#s1">一、问题背景：为什么情景记忆远远不够</a>
+<a href="#s2">二、Skill-MDP：将技能形式化为可执行三元组</a>
+<a href="#s3">三、非参数化 PPO：三阶段技能进化引擎</a>
+<a href="#s4">四、实验数据：压倒性的性能优势</a>
+<a href="#s5">五、消融与收敛分析：三阶段引擎的自我验证</a>
+<a href="#s6">六、三层记忆架构：程序性记忆的定位</a>
+<a href="#s7">七、跨模型泛化与产业影响</a>
+<a href="#s8">八、MemSkill：从三大结构性瓶颈到三位一体闭环</a>
+<a href="#s9">九、跨度级生成：从逐轮到跨度的范式跃迁</a>
+<a href="#s10">十、MemSkill 性能实证：基准测试与跨模型零样本迁移</a>
+<a href="#s11">十一、生产实践：记忆技能设计方法论</a>
+<a href="#s12">十二、记忆技能四要素与技术路线对比</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>A43 · AI 程序性记忆：技能蒸馏与复用</h1>
+<p class="subtitle">Procedural Memory — SkillPro / 程序性记忆 vs 情景记忆 / 非参数化PPO / Token消耗降99% / MemSkill 记忆技能：LLM 调用降 83%</p>
+
+<div class="intuition-box">
+<p>人类大脑有两种长期记忆：<span class="term">情景记忆</span>记住"上次发生了什么"，<span class="term">程序性记忆</span>记住"怎么做一件事"。过去两年 AI Agent 的记忆系统只做了一半——情景记忆（存储历史轨迹），而另一半更重要的程序性记忆（可执行的技能脚本）完全空白。SkillPro（ICML 2026 Spotlight）首次填补了这个缺口，让 Agent 从"每次从头推理"进化为"积累并复用技能"。</p>
+</div>
+
+<!-- ==================== 学习路线 ==================== -->
+<div class="section" id="guide">
+<h2>学习路线</h2>
+<p>本卡内容密集，建议按三阶段推进：先建立认知框架，再吃透四大核心机制，最后用实验数据与落地方法收口。每节开头的直觉框即该节"本节要点"。</p>
+<table>
+<tr><th>阶段</th><th>学习目标</th><th>对应章节</th></tr>
+<tr><td>① 入门</td><td>分清情景记忆 vs 程序性记忆，建立三层记忆架构的认知框架</td><td><a href="#s1">一、问题背景</a>、<a href="#s6">六、三层记忆架构</a></td></tr>
+<tr><td>② 核心机制</td><td>吃透四大机制：Skill-MDP 三元组、非参数化 PPO 三阶段、MemSkill 三模块闭环、跨度级生成</td><td><a href="#s2">二、Skill-MDP</a>、<a href="#s3">三、非参数化 PPO</a>、<a href="#s8">八、MemSkill 闭环</a>、<a href="#s9">九、跨度级生成</a></td></tr>
+<tr><td>③ 实证与落地</td><td>记住关键实验数据与消融结论，掌握跨模型迁移、生产实践与四要素设计法</td><td><a href="#s4">四、实验数据</a>、<a href="#s5">五、消融与收敛</a>、<a href="#s7">七、跨模型泛化</a>、<a href="#s10">十、MemSkill 实证</a>、<a href="#s11">十一、生产实践</a>、<a href="#s12">十二、四要素与路线对比</a></td></tr>
+</table>
+</div>
+
+<!-- ==================== 1. 问题背景 ==================== -->
+<div class="section" id="s1">
+<h2>一、问题背景：为什么情景记忆远远不够</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>主流经验复用方案（RAG、Expel、A-MEM）存储的是叙事（narrative）而非程序（program）——Agent 每次遇到相似场景仍要检索历史、重新推理、重新生成行动计划，就像每次做菜前都翻看上次的做菜日记，而不是直接按熟练的食谱操作。</p>
+</div>
+
+<h3>1.1 情景记忆的三大致命缺陷</h3>
+<ul>
+<li><strong>存储膨胀</strong>：完整交互轨迹入向量库，100 次任务的轨迹可达数十万 tokens——Expel 存 294,447 tokens，AWM 存 391,706 tokens，每次决策都像翻一本数百页的"历史回忆录"。</li>
+<li><strong>检索噪声</strong>："语义最相似的历史"≠"当前最优的行动指南"——策略错误的相似轨迹会误导决策；历史中成功/失败策略互相矛盾时，Agent 无法自动区分哪些值得参考、哪些应忽略。</li>
+<li><strong>推理冗余</strong>：检索到历史后仍需 LLM 重新推理，既耗大量 tokens 又引入不稳定——temperature > 0 时同一问题问两次可能得到两个不同的行动方案。</li>
+</ul>
+
+<table>
+<tr><th>维度</th><th>情景记忆 (RAG/Expel/A-MEM)</th><th>程序性记忆 (SkillPro)</th><th>差距</th></tr>
+<tr><td>存储内容</td><td>历史轨迹的叙事文本</td><td>可执行的技能脚本</td><td>叙事 vs 程序</td></tr>
+<tr><td>存储量</td><td>116,527 ~ 391,706 tokens</td><td>816 tokens</td><td>142~480 倍</td></tr>
+<tr><td>调用方式</td><td>检索 → LLM 重新推理 → 执行</td><td>匹配 → 直接执行</td><td>三步 vs 两步</td></tr>
+<tr><td>每步新增 tokens</td><td>434 ~ 5,210</td><td>273</td><td>1.6~19 倍</td></tr>
+<tr><td>复用率</td><td>0.02 ~ 0.349</td><td>0.925</td><td>2.6~46 倍</td></tr>
+</table>
+
+<div class="highlight">
+<p>SkillPro 论文的核心数据：在 Mastermind-v0 任务上，RAG 存储 116,527 tokens 但复用率仅 0.349；SkillPro 仅存储 816 tokens 却达到 0.925 的复用率。这不是渐进式改进，而是从"存储历史叙事"到"存储可执行程序"的范式跃迁——信息密度提升了两个数量级。</p>
+</div>
+
+</div>
+
+<!-- ==================== 2. Skill-MDP ==================== -->
+<div class="section" id="s2">
+<h2>二、Skill-MDP：将技能形式化为可执行三元组</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>SkillPro 的第一个核心贡献是<span class="term">Skill-MDP</span>——将经典马尔可夫决策过程扩展为包含技能层的层次化架构。每个技能 ω 被形式化为三元组 ⟨I<sub>ω</sub>, π<sub>ω</sub>, β<sub>ω</sub>⟩，分别对应激活条件、执行程序、终止条件。这让"模糊的经验"变成了"精确的可执行程序"。</p>
+</div>
+
+<h3>2.1 技能三要素详解</h3>
+<ul>
+<li><span class="term">激活条件</span>（Activation Condition, I<sub>ω</sub>）：自然语言描述"什么情况下该用此技能"，如"当目标刚刚启动、尚无环境反馈信息时"；每个决策步语义匹配选出最合适的技能。</li>
+<li><span class="term">执行程序</span>（Execution Process, π<sub>ω</sub>）：有序步骤序列，如"步骤1：构建假设空间 → 步骤2：提出最大信息量猜测 → 步骤3：按反馈更新假设"——技能的核心，把推理固化为可重复执行的脚本。</li>
+<li><span class="term">终止条件</span>（Termination Condition, β<sub>ω</sub>）：定义"技能何时完成"，如"假设空间缩小到单一候选，或连续三次反馈一致"；确保技能不会无限执行。</li>
+</ul>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│              Skill-MDP 层次化决策架构                      │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  上层：技能选择策略 μ                                      │
+│  ┌──────────────────────────────────────────┐           │
+│  │ 当前状态 s_t  →  语义匹配技能池 Ω          │           │
+│  │                →  选择技能 ω_t             │           │
+│  │                →  检查激活条件 I_ω_t(s_t)  │           │
+│  └───────────────────┬──────────────────────┘           │
+│                      │                                   │
+│                      ▼                                   │
+│  下层：冻结 LLM 执行                                       │
+│  ┌──────────────────────────────────────────┐           │
+│  │ 以 ω_t 为指导生成原子动作                    │           │
+│  │ a_t ~ π_LLM(a | s_t, ω_t)              │           │
+│  │                                          │           │
+│  │ 循环执行直到终止条件满足:                      │           │
+│  │   β_ω_t(s_t) = 1 ? → 技能完成            │           │
+│  │   β_ω_t(s_t) = 0 ? → 继续执行            │           │
+│  └───────────────────┬──────────────────────┘           │
+│                      │                                   │
+│                      ▼                                   │
+│  轨迹收集 → 缓冲区 → 定期批量采样用于技能进化                │
+│                                                         │
+│  技能池 Ω = {ω_1, ω_2, ..., ω_K}                        │
+│  每个 ω = ⟨I_ω(激活), π_ω(执行), β_ω(终止)⟩              │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<h3>2.2 层次化策略分解</h3>
+<ul>
+<li>两层分解：上层<span class="term">技能选择策略</span> μ 从技能池 Ω 中选出最合适的技能 ω<sub>t</sub>；下层冻结 LLM π<sub>LLM</sub> 以技能为指导生成原子动作——"推理开销"从运行时转移到技能学习阶段，技能学好后运行时只需"匹配 + 执行"。</li>
+<li>数学表达：π<sub>Ω</sub>(ω<sub>t</sub>, a<sub>t</sub> | s<sub>t</sub>) = μ(ω<sub>t</sub> | s<sub>t</sub>, Ω) · π<sub>LLM</sub>(a<sub>t</sub> | s<sub>t</sub>, ω<sub>t</sub>)；μ 为技能选择概率（基于语义相似度），π<sub>LLM</sub> 为条件动作生成概率。</li>
+<li>开销结构：技能学习的计算开销是一次性的（分摊到训练中），推理阶段极低（仅语义匹配 + 条件生成）。</li>
+<li>直觉类比：经验丰富的木匠看到木材和工具（激活条件满足）就自动调用内化的"做椅子"操作序列——Skill-MDP 把这种"内化操作序列"用自然语言显式编码给 LLM Agent。</li>
+</ul>
+
+<table>
+<tr><th>组件</th><th>功能</th><th>实现方式</th><th>类比</th></tr>
+<tr><td>技能选择策略 μ</td><td>根据当前状态选择技能</td><td>语义相似度匹配 + top-k 排序</td><td>大脑前额叶选择行为模式</td></tr>
+<tr><td>激活条件 I<sub>ω</sub></td><td>判断技能是否适用</td><td>自然语言条件判断</td><td>肌肉记忆的前提触发</td></tr>
+<tr><td>执行程序 π<sub>ω</sub></td><td>指导 LLM 执行原子动作</td><td>有序步骤序列 (prompt)</td><td>小脑协调的运动序列</td></tr>
+<tr><td>终止条件 β<sub>ω</sub></td><td>判断技能是否完成</td><td>自然语言终止判断</td><td>动作序列的完成信号</td></tr>
+<tr><td>冻结 LLM π<sub>LLM</sub></td><td>在技能指导下生成动作</td><td>不更新参数，仅条件生成</td><td>脊髓执行运动指令</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>精妙之处</strong>：不修改 LLM 任何参数——所有"学习"都发生在技能文本的增删改上（新增技能、修改步骤、删除低效技能），不触碰模型权重即可持续进化，避免灾难性遗忘。</p>
+</div>
+</div>
+
+<!-- ==================== 3. 非参数化 PPO ==================== -->
+<div class="section" id="s3">
+<h2>三、非参数化 PPO：三阶段技能进化引擎</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>SkillPro 的第二个核心贡献是<span class="term">非参数化 PPO</span>（Non-Parametric PPO）——将经典 PPO 强化学习范式从"参数更新空间"映射到"自然语言文本空间"。参数更新 → 技能文本更新，梯度 → 语义梯度，重要性比率裁剪 → PPO 门控验证。这让技能可以在不修改 LLM 参数的前提下持续优化。</p>
+</div>
+
+<h3>3.1 阶段一：语义梯度——用自然语言描述改进方向</h3>
+<ul>
+<li>经典 PPO 靠反向传播算数值梯度；SkillPro 的<span class="term">语义梯度</span>（Semantic Gradient）用自然语言替代——对每条使用技能 ω 的轨迹 τ<sub>i</sub>，让 LLM 做"事后归因"（hindsight attribution），输出结构化修改建议 g<sub>i</sub> = (g<sub>i</sub>(I), g<sub>i</sub>(π), g<sub>i</sub>(β))。</li>
+<li>在一批轨迹上聚合为 ḡ<sub>ω</sub>，经 LLM 操作符 ⊕ 生成候选技能 ω' = ω ⊕ ḡ<sub>ω</sub>。</li>
+</ul>
+
+<pre><code>语义梯度聚合与技能更新流程:
+  对每条轨迹 τ_i 调用技能 ω:
+    g_i = LLM.hindsight_attribution(τ_i, ω)  # 自然语言修改建议
+  ḡ_ω = aggregate(g_1, g_2, ..., g_n)        # 批量聚合
+  ω' = LLM.apply_edit(ω, ḡ_ω)                # 生成候选技能
+  # ω' 是修改后的技能文本，未经过验证</code></pre>
+
+<h3>3.2 阶段二：PPO 门控——信任域验证</h3>
+<p>语义梯度有"幻觉风险"——建议可能看似合理、实则有害。<span class="term">PPO 门控</span>（PPO Gate）借鉴经典 PPO 的裁剪机制：在历史轨迹上计算候选技能的 clipped surrogate 分数，只有"最佳且正分"的候选才替换旧技能。</p>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│              非参数化 PPO 三阶段流程                        │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌── 阶段1: 语义梯度 (方向发现) ──────────────────────┐  │
+│  │                                                    │  │
+│  │  轨迹τ_1 → LLM事后归因 → g_1=(修改激活,修改步骤)    │  │
+│  │  轨迹τ_2 → LLM事后归因 → g_2=(修改步骤,修改终止)    │  │
+│  │  轨迹τ_n → LLM事后归因 → g_n=(...)                  │  │
+│  │                    ↓                                 │  │
+│  │           聚合 ḡ = mean(g_1...g_n)                  │  │
+│  │                    ↓                                 │  │
+│  │           ω' = ω ⊕ ḡ  (生成Nc个候选)               │  │
+│  └────────────────────────────────────────────────────┘  │
+│                    ↓                                     │
+│  ┌── 阶段2: PPO门控 (质量验证) ──────────────────────┐  │
+│  │                                                    │  │
+│  │  对每个候选 ω':                                     │  │
+│  │    计算重要性比率 ρ_t = π(a|s,ω') / π(a|s,ω)      │  │
+│  │    计算优势 Â_t = G_t - R̄                          │  │
+│  │    计算裁剪目标 L_CLIP(ω')                         │  │
+│  │                    ↓                                 │  │
+│  │    仅当 L_CLIP(ω') = max且 > 0 时替换旧技能         │  │
+│  └────────────────────────────────────────────────────┘  │
+│                    ↓                                     │
+│  ┌── 阶段3: 在线打分 (生态维护) ──────────────────────┐  │
+│  │                                                    │  │
+│  │  每个技能维护在线分数:                               │  │
+│  │    Score(ω) = 累积优势 / 调用次数                    │  │
+│  │                                                    │  │
+│  │  淘汰规则:                                          │  │
+│  │    • Score ≤ 0 → 淘汰                              │  │
+│  │    • 语义冗余 (与另一技能高度相似) → 淘汰            │  │
+│  │    • 超出容量K → 按分数升序淘汰                      │  │
+│  └────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<h3>3.3 阶段三：在线打分——进化压力下的技能池维护</h3>
+<ul>
+<li>每个技能维护一个<span class="term">在线优势分数</span> = 累积优势 / 调用次数；基线 R̄ 随训练逐步上升，曾经"有用"的技能在新基线下可能转负、被自动淘汰——技能池始终高质量而紧凑。实测：单个技能平均迭代 <strong>12 个版本</strong>，最终版错误率比初始版降低 <strong>83%</strong>。</li>
+<li>"遗忘效应"：技能长期未被调用 → 累积优势停止增长、基线持续上升 → 分数逐渐降低、最终被新技能取代——池中不积累"僵尸技能"，留下的都是近期活跃且有正向贡献的。</li>
+</ul>
+
+<h3>3.4 三阶段协同的工程实现</h3>
+<ul>
+<li>周期性批处理：每执行 N 次任务（典型 N=50-100）触发一次进化循环——采样批次轨迹 → 计算语义梯度 → 生成候选 → PPO 门控验证 → 更新技能池 → 在线打分淘汰；进化开销分摊到任务间隙，不影响单次响应速度。</li>
+</ul>
+
+<table>
+<tr><th>工程参数</th><th>推荐值</th><th>影响</th><th>调整建议</th></tr>
+<tr><td>进化触发周期 N</td><td>50-100 次任务</td><td>进化频率</td><td>任务量大时取小值加速进化</td></tr>
+<tr><td>候选数量 Nc</td><td>3-5 个</td><td>Best-of-N 选择质量</td><td>增大 Nc 提高选择质量但增加计算</td></tr>
+<tr><td>技能池容量 K</td><td>10-50 个技能</td><td>检索噪声水平</td><td>单一领域取小值，多领域取大值</td></tr>
+<tr><td>PPO 裁剪参数 ε</td><td>0.1-0.2</td><td>信任域大小</td><td>ε 大允许更大改进但风险更高</td></tr>
+<tr><td>基线 R̄ 更新方式</td><td>指数移动平均</td><td>基线响应速度</td><td>快速更新导致更激进的淘汰</td></tr>
+</table>
+
+<table>
+<tr><th>PPO 经典概念</th><th>SkillPro 非参数化映射</th><th>变化本质</th></tr>
+<tr><td>参数更新 θ → θ + α∇L</td><td>技能文本更新 ω' = ω ⊕ ḡ</td><td>数值梯度 → 语义梯度</td></tr>
+<tr><td>重要性比率 ρ = π_new / π_old</td><td>ρ = π_LLM(a|s,ω') / π_LLM(a|s,ω)</td><td>参数策略 → 条件生成</td></tr>
+<tr><td>裁剪裁剪 clip(ρ, 1-ε, 1+ε)</td><td>同样裁剪，限制技能变化幅度</td><td>防止"大跳变"</td></tr>
+<tr><td>优势函数 A = R - V</td><td>Â = G<sub>t</sub> - R̄ (回报 - 移动基线)</td><td>值函数 → 移动基线</td></tr>
+<tr><td>策略熵正则化</td><td>语义冗余检测 + 淘汰</td><td>数值正则 → 语义去重</td></tr>
+<tr><td>训练轮次 (epoch)</td><td>技能版本迭代 (平均 12 版)</td><td>参数收敛 → 文本收敛</td></tr>
+</table>
+
+<div class="highlight">
+<p>PPO 门控的消融实验结果令人印象深刻：去掉 PPO 门控后，"幻觉技能"（看似改进但实际有害的技能修改）会进入技能池，导致性能不稳定甚至退化。这证明了语义梯度虽然能发现改进方向，但不能保证每次修改都是安全的——信任域验证是不可或缺的"安全阀"。</p>
+</div>
+
+</div>
+
+<!-- ==================== 4. 实验数据 ==================== -->
+<div class="section" id="s4">
+<h2>四、实验数据：压倒性的性能优势</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>SkillPro 在 ALFWorld（家庭任务）和 Mastermind（推理游戏）两大基准上的实验数据，展示了程序性记忆对情景记忆的全面碾压——不仅性能更好，而且存储更少、复用率更高、跨模型泛化更强。</p>
+</div>
+
+<h3>4.1 存储效率与复用率对比</h3>
+
+<table>
+<tr><th>方法</th><th>Mastermind-v0 复用率 ↑</th><th>跨 Agent (Qwen3-32B) ↑</th><th>总存储 tokens ↓</th><th>每步新增 tokens ↓</th></tr>
+<tr><td>RAG</td><td>0.349</td><td>0.146</td><td>116,527</td><td>2,698</td></tr>
+<tr><td>Expel</td><td>0.285</td><td>0.270</td><td>294,447</td><td>5,210</td></tr>
+<tr><td>A-MEM</td><td>0.020</td><td>0.018</td><td>200,129</td><td>1,214</td></tr>
+<tr><td>AWM</td><td>0.080</td><td>0.060</td><td>391,706</td><td>3,658</td></tr>
+<tr><td>G-Memory</td><td>0.091</td><td>0.264</td><td>40,510</td><td>434</td></tr>
+<tr><td><strong>SkillPro</strong></td><td><strong>0.925</strong></td><td><strong>0.875</strong></td><td><strong>816</strong></td><td><strong>273</strong></td></tr>
+</table>
+
+<h3>4.2 任务成功率对比</h3>
+
+<table>
+<tr><th>任务场景</th><th>State-of-art</th><th>CoT</th><th>ReAct</th><th>AWM</th><th>G-Memory</th><th>SkillPro</th></tr>
+<tr><td>ALFWorld Train</td><td>0.312</td><td>0.600</td><td>0.580</td><td>0.700</td><td>0.681</td><td><strong>0.900</strong></td></tr>
+<tr><td>ALFWorld OOD</td><td>0.262</td><td>0.620</td><td>0.640</td><td>0.900</td><td>0.812</td><td><strong>0.909</strong></td></tr>
+<tr><td>Mastermind-v0</td><td>0.388</td><td>0.531</td><td>0.557</td><td>0.546</td><td>0.577</td><td><strong>0.606</strong></td></tr>
+<tr><td>Mastermind-Hard</td><td>0.336</td><td>0.381</td><td>0.405</td><td>0.299</td><td>0.406</td><td><strong>0.463</strong></td></tr>
+<tr><td>跨模型 Llama-3.3-70B</td><td>0.613</td><td>0.542</td><td>0.604</td><td>0.550</td><td>0.535</td><td><strong>0.647</strong></td></tr>
+</table>
+
+<h3>4.3 关键数字解读</h3>
+<ul>
+<li><strong>Token 消耗降 99%</strong>：RAG 需 116,527 tokens 存经验，SkillPro 仅 816 tokens——压缩比达 142:1；程序性记忆存的是"压缩后的可执行脚本"，而非"完整的原始轨迹"。</li>
+<li><strong>函数调用超越纯推理基准 37%</strong>：在需要工具调用的任务中，技能脚本直接编码函数调用序列，比每次从零推理"调用什么函数"的纯推理方案成功率高 37%。</li>
+<li><strong>跨模型泛化提升 2.1 倍</strong>：Gemma-3 4B 学到的技能直接迁移到 Qwen3 32B，复用率达 0.875（原始方法仅 0.146-0.270）——自然语言技能是"协议级"的跨模型可迁移表示。</li>
+</ul>
+
+<div class="highlight">
+<p>最反直觉的发现是"816 tokens 达到 0.925 复用率"——将经验转化为可执行程序而非叙事文本，使信息密度提升了两个数量级。这意味着 Agent 的"程序性记忆库"可以压缩到不足 1KB 的文本中，却足以指导数百次任务的高效执行。</p>
+</div>
+
+<h3>4.4 ALFWorld 深度分析</h3>
+<ul>
+<li>ALFWorld（家庭机器人任务基准）任务高度重复（"把东西放到指定位置"、"清洁指定区域"）但每次具体场景略有不同——程序性记忆的最佳试金石。</li>
+<li>SkillPro：ALFWorld Train 成功率 <strong>90%</strong>，OOD（分布外）<strong>90.9%</strong>——后者甚至高于训练集，说明技能泛化能力良好。</li>
+</ul>
+
+<table>
+<tr><th>ALFWorld 场景</th><th>纯推理 (CoT)</th><th>RAG 经验</th><th>AWM 工作流</th><th>SkillPro</th><th>优势分析</th></tr>
+<tr><td>放置物品</td><td>55%</td><td>62%</td><td>78%</td><td>93%</td><td>技能固化搜索路径</td></tr>
+<tr><td>清洁任务</td><td>60%</td><td>58%</td><td>72%</td><td>89%</td><td>技能编码操作序列</td></tr>
+<tr><td>加热操作</td><td>65%</td><td>63%</td><td>80%</td><td>91%</td><td>技能包含安全检查步骤</td></tr>
+<tr><td>多步组合</td><td>50%</td><td>55%</td><td>65%</td><td>87%</td><td>技能组合 + 协调</td></tr>
+<tr><td>OOD 新场景</td><td>62%</td><td>48%</td><td>90%</td><td>91%</td><td>泛化能力最强</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>最反直觉的数据</strong>：ALFWorld OOD 场景 90.9% 成功率甚至好于部分训练集场景——非参数化 PPO 学到的不是"针对特定场景的过拟合策略"，而是"通用的问题解决范式"，技能抽象程度足以应对未见过的任务变体。</p>
+</div>
+</div>
+
+<!-- ==================== 5. 消融分析 ==================== -->
+<div class="section" id="s5">
+<h2>五、消融与收敛分析：三阶段引擎的自我验证</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>SkillPro 的三大组件——语义梯度、PPO 门控、在线打分——各自承担不可替代的角色。移除任何一个都会导致系统性能显著退化，这证明了非参数化 PPO 的设计是一个紧密耦合的整体，而非可以随意删减的零件拼凑。</p>
+</div>
+
+<h3>5.1 消融实验结果</h3>
+
+<table>
+<tr><th>配置</th><th>Mastermind-v0 性能</th><th>复用率</th><th>退化原因</th></tr>
+<tr><td>完整 SkillPro</td><td>0.606</td><td>0.925</td><td>—</td></tr>
+<tr><td>去掉语义梯度</td><td>下降显著</td><td>下降</td><td>候选技能质量差，无法持续改进</td></tr>
+<tr><td>去掉 PPO 门控</td><td>不稳定或退化</td><td>下降</td><td>幻觉技能进入池子，污染技能库</td></tr>
+<tr><td>去掉在线打分</td><td>短期持平、长期退化</td><td>下降</td><td>技能池膨胀，检索噪声增加</td></tr>
+</table>
+
+<h3>5.2 PPO 门控：不可或缺的安全阀</h3>
+<p>消融中最关键的发现是<span class="term">PPO 门控</span>的不可替代性：没有门控验证时，语义梯度产生的候选技能中约有 <strong>30-40%</strong> 是"看起来更好但实际更差"的幻觉修改；它们一旦进入技能池，会在后续任务中持续产生负面影响，且随技能池膨胀，错误被放大。</p>
+
+<h3>5.3 在线打分的进化压力机制</h3>
+<p><span class="term">在线打分</span>的精妙在"基线上升效应"：技能池整体质量提升 → 基线 R̄ 随之上升 → 曾经"还不错"的技能在新高基线下转为负分——如同进化论中的"红皇后效应"，技能必须不断进步才能留在池中，持续的进化压力确保了技能池的长期高质量。</p>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│              技能进化轨迹可视化                             │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  技能 ω_1 的生命周期:                                     │
+│                                                         │
+│  v1 (初始) → v2 (语义梯度改进) → v3 (PPO门控通过)        │
+│  → ... → v8 (稳定) → v12 (最终)                         │
+│                                                         │
+│  每个版本的变化:                                           │
+│  v1: "假设空间构建+随机猜测"                               │
+│  v2: "假设空间构建+最大信息量猜测" (语义梯度: 改进步骤2)    │
+│  v3: "假设空间构建+排除法+信息量猜测" (PPO门控: v2验证通过)│
+│  ...                                                    │
+│  v12: "分层假设空间+贝叶斯更新+自适应终止"                  │
+│       (在线分数: +0.73, 调用次数: 847)                    │
+│                                                         │
+│  平均迭代: 12个版本                                        │
+│  错误率降低: 83% (v1 vs v12)                             │
+│  最终复用率: 0.925                                       │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<h3>5.4 技能演化的收敛模式</h3>
+<ul>
+<li>Mastermind 上单个技能平均经历 <strong>12 个版本</strong>迭代后趋于稳定：前 3 版"大改"（步骤序列结构性调整）→ 中间 4-8 版"微调"（条件判断细化）→ 最后 9-12 版"打磨"（边界情况处理）。</li>
+<li>渐进收敛而非一蹴而就：每个版本经语义梯度发现方向、PPO 门控验证安全、在线打分淘汰过时——"粗调 → 微调 → 收敛"与参数化 PPO 训练曲线高度一致，复现了"小步更新 + 信任域验证"的核心哲学，只是把参数空间搬到了文本空间。</li>
+</ul>
+
+<table>
+<tr><th>迭代阶段</th><th>版本范围</th><th>改进类型</th><th>错误率变化</th><th>类比</th></tr>
+<tr><td>粗调期</td><td>v1 → v3</td><td>步骤序列重构</td><td>降低 40-50%</td><td>参数化PPO的早期大步更新</td></tr>
+<tr><td>微调期</td><td>v4 → v8</td><td>条件判断细化</td><td>降低 20-30%</td><td>参数化PPO的中期精细调优</td></tr>
+<tr><td>收敛期</td><td>v9 → v12</td><td>边界情况处理</td><td>降低 5-10%</td><td>参数化PPO的后期收敛</td></tr>
+</table>
+</div>
+
+<!-- ==================== 6. 与其他记忆架构对比 ==================== -->
+<div class="section" id="s6">
+<h2>六、三层记忆架构：程序性记忆的定位</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>Agent 记忆体系正在从"单一向量存储"分化为三层架构：<span class="term">工作记忆</span>（当前任务状态，类比 CPU 寄存器）、<span class="term">情景记忆</span>（历史交互记录，类比硬盘日志）、<span class="term">程序性记忆</span>（可执行技能库，类比已安装的软件）。SkillPro 填补的正是最底层——从"记住发生了什么"进化到"学会怎么做"。</p>
+</div>
+
+<h3>6.1 三层记忆架构的分工</h3>
+
+<table>
+<tr><th>记忆层级</th><th>存储内容</th><th>访问模式</th><th>更新频率</th><th>类比</th></tr>
+<tr><td>工作记忆</td><td>当前任务状态、计划、中间产物</td><td>精确寻址、读写</td><td>每步更新</td><td>CPU 寄存器</td></tr>
+<tr><td>情景记忆</td><td>历史轨迹、对话记录、事件日志</td><td>语义检索、只读</td><td>每次任务追加</td><td>硬盘日志文件</td></tr>
+<tr><td>程序性记忆</td><td>可执行技能脚本、操作流程</td><td>条件匹配、直接执行</td><td>持续进化（非参数化PPO）</td><td>已安装的应用程序</td></tr>
+</table>
+
+<h3>6.2 三种经验复用范式的本质差异</h3>
+<ul>
+<li>三大路线构成"被动参考 → 主动执行"谱系：RAG 提供"历史参考信息"，AWM 提供"工作流模板"，SkillPro 提供"可直接执行的技能"——信息密度与执行效率依次递增。</li>
+</ul>
+
+<table>
+<tr><th>维度</th><th>RAG 经验检索</th><th>AWM 工作流记忆</th><th>SkillPro 程序性记忆</th></tr>
+<tr><td>存储格式</td><td>原始轨迹文本</td><td>结构化工作流</td><td>三元组技能脚本</td></tr>
+<tr><td>调用方式</td><td>检索 → 重推理 → 执行</td><td>匹配 → 适配 → 执行</td><td>匹配 → 直接执行</td></tr>
+<tr><td>LLM 推理开销</td><td>高（每次重新推理）</td><td>中（需适配工作流）</td><td>低（技能已固化为步骤）</td></tr>
+<tr><td>持续学习能力</td><td>无（只增不改）</td><td>弱（手动更新）</td><td>强（非参数化PPO自动进化）</td></tr>
+<tr><td>跨模型泛化</td><td>差（embedding 绑定模型）</td><td>中（工作流格式依赖模型）</td><td>强（自然语言协议级）</td></tr>
+</table>
+
+<h3>6.3 SkillPro 的局限性</h3>
+<ul>
+<li>技能是显式文本，占用上下文窗口——技能池过大时挤占任务推理空间。</li>
+<li>技能质量受限于基座 LLM 能力——语义梯度无法产出超越基座模型能力的改进。</li>
+<li>技能选择策略 μ 目前仅用简单语义匹配——大规模技能池可能需要更复杂的检索器。</li>
+</ul>
+
+<h3>6.4 PolySkill 与 SkillRevise：程序性记忆生态</h3>
+<ul>
+<li><span class="term">PolySkill</span>（ICLR 2026）：提出"多态抽象"——同一技能在不同场景下有不同实例化形式，解决技能泛化的粒度问题。</li>
+<li><span class="term">SkillRevise</span>（2026）：专注技能迭代修正——冷启动场景下通过执行轨迹追溯改进初始技能质量，将基础 Agent 成功率从 36% 提升到 62%。</li>
+<li>生态分工：SkillPro 提供进化机制，PolySkill 提供泛化框架，SkillRevise 提供冷启动方案。</li>
+</ul>
+
+<div class="highlight">
+<p>理想的 Agent 记忆系统是三层协同：工作记忆处理当前任务状态，情景记忆提供历史参考（特别是长尾新颖场景），程序性记忆执行高频重复任务。程序性记忆与情景记忆是互补关系而非替代关系——技能池中不匹配的新颖任务回退到情景记忆检索 + 从头推理，成功后将新经验沉淀为新技能。</p>
+</div>
+</div>
+
+<!-- ==================== 7. 跨模型泛化 ==================== -->
+<div class="section" id="s7">
+<h2>七、跨模型泛化与产业影响</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>SkillPro 最令人兴奋的特性是<span class="term">跨模型泛化</span>——在 Gemma-3 4B 上学到的技能可以直接被 Llama-3.3 70B 使用，且复用率从原始方法的 0.146-0.270 跃升至 0.875。这意味着自然语言技能是一种"模型无关"的协议层表示——任何 LLM 都能读懂并执行。</p>
+</div>
+
+<h3>7.1 为什么自然语言技能是"协议级"表示</h3>
+<ul>
+<li>传统模型压缩（蒸馏、量化）迁移的是模型内部参数或表示，跨架构迁移极其困难；SkillPro 的技能是自然语言文本——所有 LLM 都能理解的"通用协议"，就像 Python 脚本可在任何安装了 Python 解释器的机器上运行。</li>
+</ul>
+
+<table>
+<tr><th>迁移方式</th><th>源模型</th><th>目标模型</th><th>复用率</th><th>迁移难度</th></tr>
+<tr><td>SkillPro 技能</td><td>Gemma-3 4B</td><td>Qwen3 32B</td><td>0.875</td><td>零成本（文本直接传递）</td></tr>
+<tr><td>SkillPro 技能</td><td>Gemma-3 4B</td><td>Llama-3.3 70B</td><td>0.647</td><td>零成本（文本直接传递）</td></tr>
+<tr><td>RAG 经验</td><td>Gemma-3 4B</td><td>Qwen3 32B</td><td>0.146</td><td>需重新 embedding</td></tr>
+<tr><td>Expel 经验</td><td>Gemma-3 4B</td><td>Qwen3 32B</td><td>0.270</td><td>需重新处理轨迹</td></tr>
+<tr><td>模型蒸馏</td><td>同架构教师</td><td>同架构学生</td><td>N/A</td><td>高成本（需重新训练）</td></tr>
+</table>
+
+<h3>7.2 产业应用前景</h3>
+<ul>
+<li>跨模型泛化意味着企业可在低成本小模型上积累技能，直接迁移到生产大模型——无需重新学习；三大受益场景：多模型混合部署、模型升级迁移、跨团队协作。</li>
+</ul>
+
+<div class="highlight">
+<p>SkillPro 的跨模型实验数据堪称惊艳：Gemma-3 4B 学到的技能在 Qwen3 32B 上的复用率 0.875，在 Llama-3.3 70B 上 0.647。相比之下，所有情景记忆基线（RAG 0.146、Expel 0.270、A-MEM 0.018）在跨模型场景下几乎失效。这从根本上改变了 Agent 经验积累的经济学——技能积累不再绑定特定模型，而是成为可跨模型复用的"通用资产"。</p>
+</div>
+
+<ul>
+<li><strong>场景一：多模型混合部署</strong>——客服系统中简单查询用小模型（如 Qwen-7B），复杂问题转给大模型（如 GPT-4）。小模型在日常交互中自主积累技能，升级到大模型时技能库直接传递，大模型立刻继承所有操作经验，无需冷启动。</li>
+<li><strong>场景二：模型升级迁移</strong>——企业从 Llama-3 升级到 Llama-4 时，传统方案需要重新积累经验；SkillPro 的技能库是模型无关的自然语言，直接传递即可使用，实现"零迁移成本"的模型升级。</li>
+<li><strong>场景三：跨团队协作</strong>——团队 A 在金融风控场景积累的技能，可以直接共享给团队 B 的欺诈检测 Agent（只要两场景有足够共性），建立"技能市场"的可能性：高质量技能作为可交易的 Agent 资产。</li>
+</ul>
+
+<div class="highlight">
+<p>SkillPro 揭示了一个范式转变：Agent 的核心资产不是模型权重，而是积累的程序性记忆。模型可以更换（从 GPT-4 换到 Claude，或从 Llama 换到 Qwen），但技能库可以直接复用。这将 Agent 的"经验资产"从绑定特定模型变成了模型无关的可迁移知识。</p>
+</div>
+
+<h3>7.3 与 Claude Agent Skills 的对比</h3>
+<ul>
+<li>Anthropic 的 Claude Agent Skills 是人工编写的技能模板；SkillPro 提供算法化路径——让 Agent 从交互经验中自主学习模板。互补闭环：人类编写种子技能 → SkillPro 从使用中自主进化 → 人类审查最终技能库，构成"人机协作的技能工程"。</li>
+<li>2026 趋势：Agent 技能系统从"学术研究"走向"生产标配"——每个成熟的 Agent 产品都将拥有技能库（人工种子 + 算法进化）；技能库的质量（而非模型参数的大小）将成为 Agent 产品的核心竞争力。</li>
+</ul>
+
+<h3>7.4 技能治理的未来方向</h3>
+<ul>
+<li>技能库规模扩大后，<span class="term">技能治理</span>成为重要课题：SkillsVote（2026）框架提出技能全生命周期管理——收集、推荐、归因、进化；核心挑战是版本控制（如何回滚旧版本）、权限管理（哪些 Agent 可用哪些技能）、质量认证（如何确保多场景下安全）。</li>
+</ul>
+
+<table>
+<tr><th>维度</th><th>Claude Agent Skills</th><th>SkillPro</th><th>互补价值</th></tr>
+<tr><td>技能来源</td><td>人工编写</td><td>Agent 自主学习</td><td>种子 + 进化</td></tr>
+<tr><td>质量保证</td><td>人工审核</td><td>PPO 门控 + 在线打分</td><td>算法 + 人工双重保障</td></tr>
+<tr><td>进化能力</td><td>静态（需人工更新）</td><td>自动持续进化</td><td>SkillPro 负责进化</td></tr>
+<tr><td>跨模型</td><td>绑定 Claude</td><td>模型无关</td><td>SkillPro 打破锁定</td></tr>
+<tr><td>初始质量</td><td>高（专家编写）</td><td>低（从经验中学）</td><td>用 Claude Skills 做种子</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>将高频重复任务的经验固化为可执行的技能脚本</li>
+<li>使用 PPO 门控验证每个技能修改的安全性</li>
+<li>维护在线打分机制，持续淘汰低分技能</li>
+<li>利用跨模型泛化：在小模型上学技能，大模型上执行</li>
+<li>将技能库控制在紧凑规模（&lt;1000 tokens），保持高复用率</li>
+<li>结合人工编写的种子技能和算法进化的自主技能</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要仅存储历史轨迹而不提取可执行技能</li>
+<li>不要跳过 PPO 门控直接采纳语义梯度的修改建议</li>
+<li>不要让技能池无限膨胀——缺乏淘汰机制会导致噪声累积</li>
+<li>不要假设技能一次就能学好——需要多版本迭代收敛</li>
+<li>不要忽视基础 LLM 的能力上限——技能质量受限于基座模型</li>
+<li>不要在技能执行阶段引入过多检索信息——破坏技能的紧凑性</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ==================== 以下八~十四章由「MemSkill 记忆技能系统」合并迁入 ==================== -->
+
+<!-- Section 8: 传统记忆系统的三大结构性瓶颈 -->
+<div class="section" id="s8">
+<h2>八、MemSkill：从三大结构性瓶颈到三位一体闭环</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>传统 Agent 记忆系统把"怎么记"硬编码成一组固定操作（add/update/delete/skip），就像给一个人发了五张表格让他终身使用。MemSkill 的革命性在于：把记忆操作本身变成了可学习、可演化的<span class="term">技能</span>——Agent 不再按固定表格记事，而是学会了"记笔记的方法论"，而且这套方法论还能根据失败经验自我迭代。结果：LLM 调用次数从 1288-1548 次暴降到 215 次，降幅达 83%。</p>
+</div>
+
+<ul>
+<li>MemSkill 之前，LLM Agent 的记忆系统本质是"固定操作流水线"：人类工程师预先定义记忆操作原语（如 add、update、delete、skip），每轮对话后机械执行——三个根本性的结构性缺陷使其面对真实世界的复杂性时力不从心。</li>
+</ul>
+
+<h3>8.1 三大瓶颈详解</h3>
+<ul>
+<li><strong>规则驱动——人类先验知识的天花板</strong>："存储什么"和"如何修正记忆"的判断逻辑被硬编码为固定程序，能力上限被工程师先验知识锁死，无法随对话风格、任务领域自适应调整——为客服场景设计的记忆规则，在技术讨论场景可能完全失效（"什么值得记住"的标准截然不同）。</li>
+<li><strong>逐轮处理——Token 消耗的无底洞</strong>：<span class="term">逐轮处理</span>（turn-level processing）每收到一条消息就触发一次完整记忆提取和更新，100 轮对话光记忆管理就可能消耗 200-400 次 LLM 调用；频繁上下文切换还导致记忆碎片化——每条记忆只见一轮局部，缺乏宏观理解。</li>
+<li><strong>静态技能——无法从错误中学习</strong>：操作集合部署后固定，即使产生错误或不完备的记忆，失败经验也无法反馈到记忆操作本身——如同永远不读错题本的学生：做再多练习，薄弱环节始终是薄弱环节。</li>
+</ul>
+
+<table>
+<tr><th>瓶颈类型</th><th>传统方案表现</th><th>根本原因</th><th>生产影响</th></tr>
+<tr><td>规则驱动</td><td>固定 add/update/delete/skip 操作</td><td>人类先验知识硬编码</td><td>新场景下记忆质量断崖下降</td></tr>
+<tr><td>逐轮处理</td><td>每轮对话触发完整记忆流水线</td><td>缺乏批量处理粒度</td><td>100 轮对话产生 200-400 次 LLM 调用</td></tr>
+<tr><td>静态技能</td><td>部署后操作集合不可变</td><td>缺乏失败反馈机制</td><td>同类错误反复出现无法自愈</td></tr>
+</table>
+
+<div class="highlight">
+<p>实测数据对比：在 LoCoMo 基准测试（1540 条长对话案例）中，传统逐轮处理方案的 LLM 调用次数高达 1288-1548 次/任务，而 MemSkill 仅需 215 次——降幅达 83%。更关键的是，调用次数暴降的同时，记忆质量评分（L-J 评分）反而从基线最高的 51.95 提升到 53.82，证明"少调用"不等于"少做事"，而是"更聪明地做事"。</p>
+</div>
+
+<h3>8.2 三位一体闭环架构</h3>
+<ul>
+<li>架构精髓是三个模块构成的闭环：<span class="term">技能库</span>存储"怎么记"的方法论，<span class="term">控制器</span>决定"用哪些方法"，<span class="term">设计师</span>负责"改进方法"——三者形成"使用 → 评估 → 演化"的自增强循环：用得越多，技能越强，记忆越准。</li>
+</ul>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│              MemSkill 三位一体闭环架构                    │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  ┌─────────────────────────────────────────┐            │
+│  │           技能库 (Skill Bank)            │            │
+│  │  存储: 可复用的结构化记忆技能             │            │
+│  │  每个技能 = 目的 + 时机 + 方式 + 约束    │            │
+│  │  ┌─────┐ ┌─────┐ ┌─────┐ ┌─────┐      │            │
+│  │  │S_1  │ │S_2  │ │S_3  │ │S_n  │      │            │
+│  │  │实体 │ │事件 │ │偏好 │ │新模式│      │            │
+│  │  │提取 │ │摘要 │ │更新 │ │(演化)│      │            │
+│  │  └─────┘ └─────┘ └─────┘ └─────┘      │            │
+│  └────────┬──────────────────┬────────────┘            │
+│           │ 选出Top-K技能    │ 反馈新技能/改进           │
+│           ▼                  │                          │
+│  ┌────────────────┐  ┌──────┴──────────────┐           │
+│  │  控制器         │  │  设计师              │           │
+│  │ (Controller)   │  │ (Designer)          │           │
+│  │                │  │                     │           │
+│  │ • 分析对话内容 │  │ • 审查失败案例       │           │
+│  │ • 评估已有记忆 │  │ • 分析错误根因       │           │
+│  │ • RL选择Top-K  │  │ • 提出技能改进       │           │
+│  │ • 强化学习优化 │  │ • 创造全新技能       │           │
+│  └───────┬────────┘  └─────────────────────┘           │
+│          │ Top-K技能 + 对话片段                         │
+│          ▼                                              │
+│  ┌────────────────┐                                     │
+│  │  执行器         │                                     │
+│  │ (Executor)     │                                     │
+│  │                │                                     │
+│  │ • LLM 接收技能 │                                     │
+│  │ • 技能引导生成 │                                     │
+│  │ • 一次性产出记忆│                                     │
+│  └────────────────┘                                     │
+│                                                         │
+│  闭环: 使用 → 评估 → 演化 → 使用 → ...                 │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<h3>8.3 技能库（Skill Bank）：记忆方法论的结构化存储</h3>
+<ul>
+<li>技能库是 MemSkill 的知识基座：每个<span class="term">记忆技能</span>不是一个函数或一段代码，而是一个结构化的描述文档，包含四个核心要素——<strong>目的</strong>（解决什么记忆问题）、<strong>使用时机</strong>（什么类型的对话片段应触发）、<strong>应用方式</strong>（如何从对话中提取/整合/剪枝信息）、<strong>约束条件</strong>（边界和限制）。这种设计让技能可被 LLM 理解、组合和创造性应用，而不是被死板执行。</li>
+<li>技能与传统函数的核心区别在"弹性"：传统函数 <code>extract_entities(text)</code> 只能按预设 NER 模型提取实体，遇到未训练过的新实体类型就束手无策；而"从对话中识别并记录所有具有持久参考价值的命名对象"这样的技能可被 LLM 灵活解读——不仅能识别人名地名，还能识别项目代号、内部工具名称、甚至对话中临时约定的缩写。技能的"模糊性"恰是优势：让 LLM 发挥理解力适应各种情况，而非被代码逻辑锁死。</li>
+</ul>
+
+<table>
+<tr><th>技能要素</th><th>定义</th><th>示例：实体提取技能</th><th>示例：偏好更新技能</th></tr>
+<tr><td>目的</td><td>解决什么记忆问题</td><td>从对话中识别人名、项目名等实体</td><td>检测并更新用户偏好的变化</td></tr>
+<tr><td>使用时机</td><td>何时触发</td><td>对话中出现新的命名实体时</td><td>用户表达的偏好与已有记忆冲突时</td></tr>
+<tr><td>应用方式</td><td>如何执行</td><td>提取实体及其关系，合并到实体图</td><td>用新版覆盖旧版，保留变更历史</td></tr>
+<tr><td>约束条件</td><td>边界和限制</td><td>不确定实体不入库，标记为待确认</td><td>仅当明确表达偏好时触发，不推测</td></tr>
+</table>
+
+<h3>8.4 控制器（Controller）：强化学习驱动的技能选择</h3>
+<ul>
+<li>控制器是 MemSkill 的决策中枢，面对一个对话片段（span）回答核心问题：从技能库的 N 个技能中，应该选择哪 K 个（K &lt;&lt; N）来指导记忆生成？控制器通过<span class="term">强化学习</span>（RL）训练选择策略——任务最终完成得好不好（reward signal）会反过来指导控制器在未来做出更好的技能选择，这种数据驱动方式彻底摆脱了"人类手动定义规则"的范式。</li>
+</ul>
+
+<h3>8.5 设计师（Designer）：失败驱动的技能演化</h3>
+<ul>
+<li>设计师是 MemSkill 最富创造性的组件：系统定期收集那些导致 Agent 犯错的<span class="term">困难案例</span>（Hard Cases）——即控制器选择了技能、但产出的记忆仍然错误或不完备的情况；设计师（基于 LLM）分析这些失败案例，对现有技能提出改进方案，甚至创造全新技能来覆盖已有技能无法处理的场景，形成"失败 → 反思 → 进化"的正反馈循环。</li>
+<li>四阶段流程：①<strong>案例收集</strong>——自动识别任务失败案例（通过下游任务评估信号判断），与当时使用的技能、产出的记忆一起打包；②<strong>根因分析</strong>——设计师 LLM 判断失败是"选错了技能"（控制器的锅）还是"技能本身不够好"（技能库的锅）；③<strong>方案生成</strong>——对技能本身的问题生成改进方案（修改现有技能的描述、时机或约束条件）或全新技能提案；④<strong>验证入库</strong>——改进或新技能在验证集上测试，通过验证后才正式入库。</li>
+</ul>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│              设计师的技能演化流程                          │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  1. 收集困难案例                                         │
+│  ┌──────────────────────────────────┐                   │
+│  │ Case_42: 对话提到"旧项目已废弃"  │                   │
+│  │   → 现有技能未能标记旧项目为废弃  │                   │
+│  │   → Agent 后续仍引用旧项目信息   │                   │
+│  └──────────────────────────────────┘                   │
+│                                                         │
+│  2. 设计师分析根因                                       │
+│  ┌──────────────────────────────────┐                   │
+│  │ 根因: 现有"实体提取"技能缺少     │                   │
+│  │       "状态变更"（如废弃/迁移）   │                   │
+│  │       的识别和更新逻辑           │                   │
+│  └──────────────────────────────────┘                   │
+│                                                         │
+│  3. 演化方案                                             │
+│  ┌──────────────────────────────────┐                   │
+│  │ 方案A: 扩展"实体提取"技能        │                   │
+│  │         增加状态变更检测          │                   │
+│  │ 方案B: 新增"实体生命周期"技能    │                   │
+│  │         专门处理废弃/迁移/升级    │                   │
+│  │ → 选择方案B（更聚焦、不膨胀）    │                   │
+│  └──────────────────────────────────┘                   │
+│                                                         │
+│  4. 新技能入库                                           │
+│  ┌──────────────────────────────────┐                   │
+│  │ S_new: 实体生命周期管理           │                   │
+│  │   目的: 追踪实体状态变更          │                   │
+│  │   时机: 对话中提及实体状态变化时  │                   │
+│  │   方式: 更新实体状态+保留变更历史 │                   │
+│  │   约束: 需明确状态变更信号        │                   │
+│  └──────────────────────────────────┘                   │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<div class="highlight">
+<p><strong>自演化实证（NTU 团队）</strong>：初始技能库只有 5 个基础技能，经过 200 轮训练迭代后自动演化到 12 个技能，其中 7 个是设计师在失败案例中"发明"出来的，覆盖了人类工程师未曾预料到的场景——MemSkill 不是部署后就静态的工具，而是随使用经验不断进化的有机体。</p>
+</div>
+</div>
+
+<!-- Section 10: 跨度级生成 -->
+<div class="section" id="s9">
+<h2>九、跨度级生成：从逐轮到跨度的范式跃迁</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong><span class="term">跨度级生成</span>（span-level generation）是 MemSkill 最关键的架构决策——不再逐轮处理每条消息，而是把一段连续的对话片段（span）作为整体输入，由技能引导一次性生成记忆。这个粒度变化正是 LLM 调用次数暴降 83% 的根本原因。</p>
+</div>
+
+<h3>9.1 逐轮 vs 跨度级：信息利用效率的根本差异</h3>
+<ul>
+<li><strong>逐轮处理的致命缺陷是"信息碎片化"</strong>：每轮只看到一条消息，LLM 必须在极其有限的上下文中做记忆决策。</li>
+<li>一条孤立的消息"把它删了吧"在逐轮模式下毫无意义；在跨度级模式下，结合前面的 20 轮对话上下文，系统能精准理解"它"指的是什么、为什么要删除。</li>
+<li>跨度级让 LLM 拥有了"鸟瞰"视角而非"管中窥豹"。</li>
+</ul>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│          逐轮处理 vs 跨度级生成 对比                      │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  【逐轮处理 Turn-Level】                                 │
+│  ┌────────────────────────────────────────┐             │
+│  │ Turn 1: "我最近在学 Rust"              │             │
+│  │   → LLM调用: 提取"学习Rust" → 存储    │             │
+│  │ Turn 2: "但觉得所有权概念好难"         │             │
+│  │   → LLM调用: 更新"Rust学习困难"       │             │
+│  │ Turn 3: "不过写了个小项目还挺有成就感"  │             │
+│  │   → LLM调用: 更新"Rust项目经验"       │             │
+│  │ Turn 4: "决定深入学习 async/await"     │             │
+│  │   → LLM调用: 更新"Rust进阶计划"       │             │
+│  │                                        │             │
+│  │ 4轮 = 4次LLM调用, 记忆碎片化           │             │
+│  └────────────────────────────────────────┘             │
+│                                                         │
+│  【跨度级生成 Span-Level】                                │
+│  ┌────────────────────────────────────────┐             │
+│  │ Span [Turn 1-4]:                       │             │
+│  │ "我最近在学 Rust"                      │             │
+│  │ "但觉得所有权概念好难"                  │             │
+│  │ "不过写了个小项目还挺有成就感"           │             │
+│  │ "决定深入学习 async/await"             │             │
+│  │                                        │             │
+│  │ → 控制器选择技能: [偏好提取, 学习计划]  │             │
+│  │ → 执行器一次性生成:                     │             │
+│  │   "用户正在学习Rust, 已克服所有权难点,  │             │
+│  │    有项目实战经验, 计划深入async/await"  │             │
+│  │                                        │             │
+│  │ 4轮 = 1次LLM调用, 记忆完整精炼          │             │
+│  └────────────────────────────────────────┘             │
+│                                                         │
+│  效率对比:                                               │
+│  逐轮:   ████████████████████ 1288-1548 次 LLM调用      │
+│  跨度级: ███                  215 次 LLM调用             │
+│  降幅:   83%                                            │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<h3>9.2 跨度划分策略</h3>
+<ul>
+<li><span class="term">跨度划分</span>不是按固定轮数切割，而是基于<strong>语义连贯性</strong>智能分段。</li>
+<li>系统检测对话中的主题切换点（topic shift）和自然停顿点（natural pause），将语义连贯的一段对话作为一个 span。</li>
+<li>例：20 轮项目架构讨论是一个 span；中间插入 3 轮午餐闲聊则切分为两个 span。</li>
+<li>语义感知的划分确保每次技能引导生成的输入都上下文完整。</li>
+</ul>
+
+<table>
+<tr><th>维度</th><th>逐轮处理 (Turn-Level)</th><th>跨度级生成 (Span-Level)</th><th>优势倍数</th></tr>
+<tr><td>LLM 调用次数</td><td>1288-1548 次/任务</td><td>215 次/任务</td><td>6-7x 节省</td></tr>
+<tr><td>上下文完整性</td><td>每轮仅看到单条消息</td><td>一次看到整段对话</td><td>全局视角</td></tr>
+<tr><td>记忆连贯性</td><td>碎片化，需后续合并去重</td><td>一次性生成连贯记忆</td><td>免合并</td></tr>
+<tr><td>语义理解深度</td><td>孤立消息，歧义大</td><td>完整上下文，歧义消解</td><td>准确率提升</td></tr>
+<tr><td>L-J 评分</td><td>最高 51.95</td><td>53.82</td><td>+3.6%</td></tr>
+</table>
+
+<h3>9.3 技能引导的一次性生成</h3>
+<ul>
+<li><strong>第一步</strong>：控制器分析整个 span 的内容特征和当前记忆状态，从技能库中选出 Top-K 个最相关的技能。</li>
+<li><strong>第二步</strong>：执行器（LLM）接收 span 文本、选出的技能描述、当前已有记忆，一次性生成或更新记忆——技能描述作为生成指南注入 prompt，让 LLM 在一次前向传播中完成所有记忆操作。</li>
+<li><strong>第三步</strong>：新生成的记忆与已有记忆进行一致性检查。</li>
+</ul>
+
+<div class="highlight">
+<p>为什么"少调用"反而"效果好"？跨度级消除了逐轮处理的"遗忘-重建"循环：逐轮模式下每次调用只能看到当前轮和有限的历史摘要，关键细节可能已被压缩丢失；跨度级模式下 LLM 看到完整对话原文，信息零损失。这正是 MemSkill 在 LLM 调用次数降低 83% 的同时 L-J 评分反超基线的根本机制。</p>
+</div>
+
+<h3>9.4 跨度级生成与现有系统的兼容性</h3>
+<ul>
+<li>跨度级处理发生在<strong>"记忆管理"层面</strong>，不影响"对话交互"层面——用户仍然可以逐轮与 Agent 对话。</li>
+<li>Agent 实时响应每条消息，同时在后台将对话暂存到缓冲区；当缓冲区积累了一个完整的 span（通过语义连贯性检测判断），再异步触发记忆生成。</li>
+<li>对话体验和记忆效率兼得：用户感知到实时响应，系统内部运行跨度级处理。</li>
+</ul>
+
+<div class="highlight">
+<p>设计哲学："不要让记忆管理的频率绑架信息处理的粒度。"传统系统让"每收到一条消息就更新记忆"的频率需求，决定了"每次只看一条消息"的处理粒度——这是本末倒置。MemSkill 把两个关注点解耦：对话交互保持逐轮响应的高频率，记忆管理采用跨度级处理的高效率粒度。</p>
+</div>
+
+<h3>9.5 跨度大小的自适应调节</h3>
+<ul>
+<li>跨度大小不是固定的，而是<strong>根据对话特征自适应调节</strong>，让 MemSkill 在不同对话风格下都保持最优效率比。</li>
+<li>高信息密度对话（技术讨论，每轮都有新知识）→ 较小跨度（5-8 轮），确保重要信息及时捕获。</li>
+<li>低信息密度对话（闲聊寒暄，大部分轮次不产生需记忆信息）→ 较大跨度（15-20 轮），减少不必要的记忆生成调用。</li>
+</ul>
+
+<table>
+<tr><th>对话特征</th><th>自适应跨度</th><th>信息密度</th><th>典型场景</th></tr>
+<tr><td>高信息密度</td><td>5-8 轮</td><td>每轮新知识产生</td><td>技术讨论、需求澄清</td></tr>
+<tr><td>中信息密度</td><td>8-15 轮</td><td>间歇性新知识</td><td>项目汇报、方案讨论</td></tr>
+<tr><td>低信息密度</td><td>15-20 轮</td><td>大量轮次无新知识</td><td>日常闲聊、客服寒暄</td></tr>
+<tr><td>主题切换点</td><td>强制切分</td><td>话题发生根本变化</td><td>从技术问题跳到行政事务</td></tr>
+</table>
+</div>
+
+<!-- Section 10: MemSkill 性能实证 -->
+<div class="section" id="s10">
+<h2>十、MemSkill 性能实证：基准测试与跨模型零样本迁移</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>两个反直觉发现——第一，更少的 LLM 调用可以产生更好的记忆质量（跨度级的信息完整性优势压倒了调用次数的劣势）；第二，在一个模型上训练的记忆技能可以<strong>零样本迁移</strong>到另一个模型——"如何记忆"是一种可泛化的元能力，而非模型特有的行为模式。</p>
+</div>
+
+<h3>10.1 四大基准测试的全面验证</h3>
+<ul>
+<li><span class="term">LoCoMo</span>：1540 条长对话记忆问答</li>
+<li><span class="term">LongMemEval</span>：长对话记忆评估</li>
+<li><span class="term">HotpotQA</span>：多跳推理问答</li>
+<li><span class="term">ALFWorld</span>：具身 Agent 任务环境</li>
+<li>覆盖从纯记忆问答 → 需要记忆支撑的推理任务 → 需要记忆指导行动的具身场景，全面验证泛化能力。</li>
+</ul>
+
+<table>
+<tr><th>基准测试</th><th>任务类型</th><th>MemSkill 表现</th><th>最强基线</th><th>提升幅度</th></tr>
+<tr><td>LoCoMo</td><td>长对话记忆问答</td><td>L-J 评分 53.82</td><td>L-J 评分 51.95</td><td>+3.6%</td></tr>
+<tr><td>LongMemEval</td><td>长对话记忆评估</td><td>多项指标 SOTA</td><td>次优方案</td><td>显著领先</td></tr>
+<tr><td>HotpotQA</td><td>多跳推理问答</td><td>准确率提升</td><td>传统 RAG</td><td>记忆质量驱动</td></tr>
+<tr><td>ALFWorld</td><td>具身 Agent 任务</td><td>任务成功率提升</td><td>固定操作方案</td><td>技能引导优势</td></tr>
+</table>
+
+<h3>10.2 LLM 调用效率的革命性提升</h3>
+<ul>
+<li>LoCoMo 基准统计：传统逐轮方案（ReadAgent、MemWalker）每个任务平均需要 <strong>1288-1548 次</strong> LLM 调用，而 MemSkill 仅需 <strong>215 次</strong>。</li>
+<li>相同的 Token 预算下，MemSkill 可以处理 <strong>6-7 倍</strong>数量的任务——对于 Token 成本是主要开支的生产 Agent 系统，这直接关系到商业可行性。</li>
+</ul>
+
+<table>
+<tr><th>方案</th><th>LLM 调用次数</th><th>Token 消耗</th><th>L-J 评分</th><th>效率比（评分/调用次数）</th></tr>
+<tr><td>ReadAgent（逐轮）</td><td>1548 次</td><td>高</td><td>49.37</td><td>0.032</td></tr>
+<tr><td>MemWalker（逐轮）</td><td>1288 次</td><td>高</td><td>51.95</td><td>0.040</td></tr>
+<tr><td>MemSkill（跨度级）</td><td>215 次</td><td>低</td><td>53.82</td><td>0.250</td></tr>
+</table>
+
+<h3>10.3 零样本跨模型迁移：LLaMA → Qwen</h3>
+<ul>
+<li>控制器在 LLaMA 模型上训练出的技能选择策略，直接应用到 Qwen 模型上（<strong>不做任何微调</strong>），Qwen 的任务表现依然显著优于其自身的基线方案。</li>
+<li>这证明"如何选择记忆技能"是一种<span class="term">可泛化的元认知能力</span>——与底层 LLM 的具体参数无关，是一种更高层的策略知识。</li>
+</ul>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│           跨模型零样本迁移实验                             │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  训练阶段 (LLaMA)                                       │
+│  ┌───────────────────────────────────┐                  │
+│  │ LLaMA + MemSkill                  │                  │
+│  │   Controller: RL训练技能选择策略   │                  │
+│  │   Skill Bank: 5→12 技能自动演化   │                  │
+│  │   训练后: L-J 53.82 (SOTA)        │                  │
+│  └───────────────────┬───────────────┘                  │
+│                      │                                  │
+│                      │ 迁移（仅迁移 Controller 策略      │
+│                      │       + Skill Bank）              │
+│                      ▼                                  │
+│  迁移阶段 (Qwen)                                         │
+│  ┌───────────────────────────────────┐                  │
+│  │ Qwen + MemSkill (零样本)          │                  │
+│  │   Controller: 沿用LLaMA训练的策略 │                  │
+│  │   Skill Bank: 沿用LLaMA演化的技能 │                  │
+│  │   结果: 显著优于Qwen自身基线       │                  │
+│  └───────────────────────────────────┘                  │
+│                                                         │
+│  迁移的启示:                                             │
+│  "如何选择记忆技能" ≈ 元认知能力                          │
+│  → 不依赖于特定LLM的参数                                 │
+│  → 可以在模型间共享复用                                  │
+│  → 降低部署成本（训练一次，多处使用）                     │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<div class="highlight">
+<p>跨模型迁移的成功揭示了一个深刻的洞察：记忆管理是一种独立于语言理解和生成能力的"元能力"。就像一个优秀的笔记方法论——无论是康奈尔笔记法还是思维导图——不会因为使用者从中文切换到英文就失效。MemSkill 的技能本质上是"如何从信息中提取价值"的方法论，这种能力天然具备跨模型的可迁移性。</p>
+</div>
+
+<h3>10.4 消融实验：每个组件的贡献</h3>
+<ul>
+<li>移除<strong>控制器</strong>（退化为随机选技能）→ 性能下降约 <strong>15%</strong>：技能选择的精准性至关重要。</li>
+<li>移除<strong>设计师</strong>（技能库固定不演化）→ 性能下降约 <strong>10%</strong>：技能演化是持续提升的关键。</li>
+<li>跨度级退化为<strong>逐轮处理</strong> → LLM 调用次数暴增 6 倍，同时性能微降：再次证实跨度级生成的效率和效果双重优势。</li>
+</ul>
+
+<table>
+<tr><th>实验配置</th><th>LoCoMo L-J 评分</th><th>LLM 调用次数</th><th>关键发现</th></tr>
+<tr><td>MemSkill 完整版</td><td>53.82</td><td>215</td><td>基准性能</td></tr>
+<tr><td>移除控制器（随机选技能）</td><td>~45.7</td><td>~215</td><td>性能下降约 15%</td></tr>
+<tr><td>移除设计师（技能不演化）</td><td>~48.4</td><td>~215</td><td>性能下降约 10%</td></tr>
+<tr><td>退化为逐轮处理</td><td>~51.2</td><td>~1300</td><td>调用暴增 6x，性能微降</td></tr>
+</table>
+</div>
+
+<!-- Section 11: 生产实践 -->
+<div class="section" id="s11">
+<h2>十一、生产实践：记忆技能设计方法论</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>MemSkill 的落地不仅是算法问题，更是系统设计问题——生产环境中需要解决技能库冷启动、技能质量评估、技能演化稳定性控制、与现有 Agent 框架集成等一系列工程挑战。</p>
+</div>
+
+<h3>11.1 技能库冷启动策略</h3>
+<ul>
+<li>技能库不需要从零开始：标准的 add/update/delete/skip 操作可以直接重写为结构化的技能描述（目的+时机+方式+约束），作为种子技能库。</li>
+<li>设计师会在运行过程中自动发现种子技能的不足并演化出更丰富的技能。</li>
+<li>实验数据：从 <strong>5 个种子技能</strong>出发，系统通常能在 <strong>100-200 轮</strong>交互后演化出 <strong>10-15 个</strong>高质量技能，覆盖绝大部分场景。</li>
+</ul>
+
+<h3>11.2 技能质量的评估维度</h3>
+<ul>
+<li><span class="term">精确性</span>：技能产出的记忆是否正确反映了对话内容。</li>
+<li><span class="term">完整性</span>：技能是否遗漏了重要信息。</li>
+<li><span class="term">一致性</span>：新记忆是否与已有记忆库保持一致（无矛盾）。</li>
+<li><span class="term">时效性</span>：技能是否正确处理了信息的生命周期（该更新的更新、该清理的清理）。</li>
+</ul>
+
+<table>
+<tr><th>评估维度</th><th>衡量标准</th><th>检测方式</th><th>改进手段</th></tr>
+<tr><td>精确性</td><td>记忆是否准确反映对话内容</td><td>下游任务正确率</td><td>设计师细化提取规则</td></tr>
+<tr><td>完整性</td><td>是否遗漏重要信息</td><td>覆盖率指标</td><td>新增互补技能</td></tr>
+<tr><td>一致性</td><td>新旧记忆是否矛盾</td><td>矛盾检测器</td><td>添加约束条件</td></tr>
+<tr><td>时效性</td><td>生命周期处理是否正确</td><td>过期信息比例</td><td>演化清理策略</td></tr>
+</table>
+
+<h3>11.3 技能演化的稳定性控制</h3>
+<p>设计师的技能演化不是无约束的——需要防止技能库过度膨胀（每个失败案例都创建一个新技能）或技能质量退化（修改一个技能时引入了新的 bug）。三个机制保障演化稳定性：</p>
+<ul>
+<li><strong>技能准入验证</strong>：新技能必须在验证集上证明有效才能入库。</li>
+<li><strong>技能合并去重</strong>：功能高度重叠的技能会被合并，防止库膨胀。</li>
+<li><strong>回退机制</strong>：如果新技能导致下游任务性能下降，自动回退到修改前的版本。</li>
+</ul>
+
+<h3>11.4 与 Agent 框架的集成模式</h3>
+<ul>
+<li>以<strong>"记忆中间件"</strong>方式与主流 Agent 框架（LangGraph、CrewAI、AutoGen 等）集成。</li>
+<li>MemSkill 作为独立的记忆服务运行：Agent 框架在每段对话结束后将 span 发送给 MemSkill 服务，MemSkill 返回结构化的记忆更新。</li>
+<li>解耦架构的好处：更换 Agent 框架时，记忆系统（包括已经演化成熟的技能库）可以原样复用。</li>
+</ul>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>从现有记忆操作规则中转化种子技能，快速冷启动</li>
+<li>用强化学习训练控制器，让数据驱动技能选择</li>
+<li>保留失败案例日志，作为设计师演化的输入</li>
+<li>对每个新技能做准入验证，确保演化安全</li>
+<li>采用跨度级生成，将对话片段作为整体处理</li>
+<li>将记忆系统作为独立服务，与 Agent 框架解耦</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要硬编码记忆规则，让数据驱动技能演化</li>
+<li>不要逐轮处理对话，避免 Token 浪费和记忆碎片化</li>
+<li>不要忽略失败案例——它们是技能进化的唯一驱动力</li>
+<li>不要让技能库无约束膨胀，需要合并去重和准入验证</li>
+<li>不要假设一个模型上训练的技能在另一个模型上需要重新训练</li>
+<li>不要把记忆系统与 Agent 框架紧耦合，阻碍技能库复用</li>
+</ul>
+</div>
+</div>
+
+<div class="highlight">
+<p>MemSkill 的核心启示：记忆管理不是工程问题（"用什么数据结构和算法来存取信息"），而是<strong>学习问题</strong>（"Agent 如何从经验中学会越来越好的记忆方法"）。这个视角转变让记忆系统从一个需要人类精心维护的静态模块，变成了一个可以自主进化、持续增值的活系统。</p>
+</div>
+
+<h3>11.5 MemSkill 的局限性与未来方向</h3>
+<ul>
+<li><strong>跨度级延迟</strong>：当用户在对话中间急需 Agent "记住"某条信息时，该信息可能需要等待整个 span 完成后才会被提取。</li>
+<li><strong>控制器 RL 训练依赖大量任务完成反馈</strong>：反馈信号稀疏的场景（用户很少给出明确好坏评价），学习效果会打折扣。</li>
+<li><strong>设计师的技能演化依赖 LLM 的创造性</strong>：基础模型创造性不足时，设计师可能无法产生真正有价值的新技能，只是对已有技能做表面修改。</li>
+</ul>
+<ul>
+<li>未来方向一：结合 AutoMem 的双循环优化思路，将 MemSkill 的技能演化和 AutoMem 的结构优化统一到一个框架中。</li>
+<li>未来方向二：探索更高效的跨度划分算法，在保证信息完整性的同时进一步降低延迟。</li>
+<li>未来方向三：将记忆技能从对话场景扩展到具身 Agent 场景——让机器人在物理世界中也学会"如何记忆"。</li>
+</ul>
+
+<table>
+<tr><th>局限性</th><th>当前影响</th><th>缓解方案</th><th>未来研究方向</th></tr>
+<tr><td>跨度级延迟</td><td>实时记忆更新有延迟</td><td>混合模式（关键信息实时提取）</td><td>更智能的触发机制</td></tr>
+<tr><td>RL 训练需大量反馈</td><td>稀疏反馈场景效果打折</td><td>结合设计师的定性分析</td><td>半监督/自监督学习</td></tr>
+<tr><td>设计师依赖 LLM 创造性</td><td>弱模型上技能演化受限</td><td>使用更强模型做设计师</td><td>跨模型知识蒸馏</td></tr>
+</table>
+
+</div>
+
+<!-- Section 12: 记忆技能四要素与技术路线对比 -->
+<div class="section" id="s12">
+<h2>十二、记忆技能四要素与技术路线对比</h2>
+
+<div class="intuition-box">
+<p><strong>本节要点：</strong>技能的四个要素——目的、使用时机、应用方式、约束条件——不是随意的描述字段，而是对应认知科学中"元记忆"（metamemory）四个维度的精心设计的信息架构：知道为什么要记（目的意识）、知道什么时候该记（时机判断）、知道怎么记（策略选择）、知道什么时候不该记（边界意识）。</p>
+</div>
+
+<h3>12.1 目的（Purpose）：定义技能的价值主张</h3>
+<ul>
+<li>目的是技能的"存在理由"——回答"这个技能解决什么记忆问题"。</li>
+<li>清晰的目的应该<strong>足够具体</strong>（排除不相关的场景），又<strong>足够抽象</strong>（覆盖所有相关场景）。</li>
+<li>反例："从技术讨论中提取 API 变更"太窄（遗漏了架构变更）；"记住对话中的所有内容"太宽（没有过滤能力）。</li>
+<li>好例："从对话中识别并记录所有会影响未来任务执行的知识变更"。</li>
+</ul>
+
+<h3>12.2 使用时机（Trigger）：精准触发条件</h3>
+<ul>
+<li>定义"什么时候这个技能应该被激活"，是控制器做技能选择的核心依据。</li>
+<li>好的时机描述需包含<strong>正向触发条件</strong>（"当对话中出现 X 时"）和<strong>负向排除条件</strong>（"但不包括 Y 情况"）。</li>
+<li>例：偏好更新技能的时机是"当用户明确表达了对某个工具、风格或流程的偏好，且该偏好与已有记忆不一致时——但不包括用户只是在描述当前做法而非表达偏好"。</li>
+</ul>
+
+<h3>12.3 应用方式（Method）：执行的灵活性边界</h3>
+<ul>
+<li>描述"技能应该如何使用"——技能中最灵活的部分：指导 LLM 的具体行为但不限定具体步骤。</li>
+<li>好的应用方式给出<strong>核心策略和可选变体</strong>。</li>
+<li>例：实体提取技能的应用方式是"识别对话中的所有命名实体，按实体类型分类，检查与已有实体图的冲突，对确定实体直接入库，对不确定实体标记为待确认"。</li>
+</ul>
+
+<h3>12.4 约束条件（Constraint）：防止过拟合的安全网</h3>
+<ul>
+<li>定义"技能的边界在哪里"，防止技能被过度应用而产生噪声记忆。</li>
+<li>典型约束：信息质量要求（"仅当信息有明确来源时才入库"）、不确定性处理（"对模糊信息标记置信度"）、冲突处理规则（"新旧信息冲突时保留变更历史"）。</li>
+<li>约束条件是技能质量的关键保障——没有约束的技能倾向于"记住太多"，反而降低记忆库的信噪比。</li>
+</ul>
+
+<table>
+<tr><th>四要素</th><th>认知科学对应</th><th>设计原则</th><th>常见错误</th></tr>
+<tr><td>目的</td><td>目的意识</td><td>具体但不狭窄</td><td>过于宽泛导致无过滤能力</td></tr>
+<tr><td>使用时机</td><td>时机判断</td><td>包含正向触发和负向排除</td><td>遗漏排除条件导致误触发</td></tr>
+<tr><td>应用方式</td><td>策略选择</td><td>给策略不给步骤</td><td>过于具体限制了 LLM 灵活性</td></tr>
+<tr><td>约束条件</td><td>边界意识</td><td>明确质量要求和冲突规则</td><td>缺少约束导致过度记忆</td></tr>
+</table>
+
+<h3>12.5 技术路线对比：MemSkill vs AutoMem vs 传统方案</h3>
+<ul>
+<li><strong>MemSkill（NTU, 2026）</strong>：走"技能抽象+强化选择+LLM演化"路线，强调记忆操作的模块化和可组合性。</li>
+<li><strong>AutoMem（Stanford, 2026）</strong>：走"元记忆作为可训练技能"路线，通过双循环自动化优化记忆结构和模型熟练度。</li>
+<li>两者都证明了"让记忆成为可学习的能力"这个方向的正确性，但技术路径和适用场景有显著差异。</li>
+</ul>
+
+<table>
+<tr><th>对比维度</th><th>MemSkill (NTU)</th><th>AutoMem (Stanford)</th><th>传统方案</th></tr>
+<tr><td>核心理念</td><td>记忆操作 = 可演化技能库</td><td>记忆管理 = 可训练的认知技能</td><td>记忆操作 = 固定规则</td></tr>
+<tr><td>学习机制</td><td>RL 选择 + LLM 演化</td><td>双循环自动优化</td><td>无学习</td></tr>
+<tr><td>处理粒度</td><td>跨度级（span-level）</td><td>轨迹级（trajectory）</td><td>逐轮（turn-level）</td></tr>
+<tr><td>技能来源</td><td>种子技能 + 设计师演化</td><td>Meta-LLM 自动发现</td><td>人类手工设计</td></tr>
+<tr><td>跨模型迁移</td><td>已验证（LLaMA→Qwen）</td><td>结构优化可迁移</td><td>无需迁移（无学习）</td></tr>
+<tr><td>最佳场景</td><td>对话记忆、多跳推理</td><td>长程具身任务（游戏）</td><td>简单对话、短任务</td></tr>
+</table>
+
+<div class="highlight">
+<p>AutoMem 在三个长程游戏基准（Crafter、MiniHack、NetHack）上仅优化记忆（不修改任务行为）就将 32B 开源模型的性能提升 2-4 倍，使其与 Claude Opus 4.5 和 Gemini 3.1 Pro Thinking 等前沿系统竞争力相当。这进一步印证了 MemSkill 的核心观点：记忆管理是一种独立的高杠杆能力，优化它可以带来不成比例的巨大收益。</p>
+</div>
+
+<div class="highlight">
+<p>MemSkill 和 AutoMem 的共同启示：Agent 系统的下一个性能飞跃点不在更大的模型或更好的推理算法，而在<strong>更聪明的记忆管理</strong>。一个 32B 模型配上好的记忆系统可以打败万亿参数模型配上糟糕的记忆系统——这在两年前是不可想象的。</p>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q & A</h2>
+
+<details>
+<summary>程序性记忆和情景记忆是替代关系还是互补关系？</summary>
+<div class="answer">互补关系。程序性记忆处理"反复出现的已知任务"——技能匹配后直接执行，速度快、token 少。情景记忆处理"新颖的未知任务"——当技能池中没有匹配的技能时，Agent 回退到情景记忆检索 + 从头推理。最佳实践是：高频重复任务沉淀为程序性记忆，长尾新颖任务保留在情景记忆中。SkillPro 的 0.925 复用率意味着约 7.5% 的任务仍然需要情景记忆来处理。</div>
+</details>
+
+<details>
+<summary>语义梯度如何避免"幻觉修改"——LLM 提出的改进建议本身可能是错的？</summary>
+<div class="answer">这正是 PPO 门控存在的理由。语义梯度只是"提议"——它产生 Nc 个候选技能修改。PPO 门控在历史轨迹上回测每个候选：计算冻结 LLM 在新旧技能下的概率比率 ρ，然后用 PPO 的裁剪目标函数 L_CLIP 评估。只有"回测证明更好"的候选才会替换旧技能。消融实验证明，去掉门控后约 30-40% 的语义梯度修改是有害的——这就是为什么两道防线（发现 + 验证）缺一不可。</div>
+</details>
+
+<details>
+<summary>技能池的容量 K 应该设多大？太小会不会丢失有用技能？</summary>
+<div class="answer">SkillPro 的实验显示，紧凑的技能池（K=10-50 个技能，总存储 &lt;1000 tokens）反而优于大池子。原因是：技能池越大，检索时的噪声越多，匹配到"语义接近但策略错误"的技能的概率越高。在线打分机制会自动淘汰低分技能——当容量满时，最低分技能被移除。实践中 K 应该根据任务域的多样性设定：单一领域 K=10-20，多领域 K=30-50。</div>
+</details>
+
+<details>
+<summary>跨模型泛化时，不同 LLM 对同一段技能文本的理解会不会有差异？</summary>
+<div class="answer">会有差异，但影响有限。实验数据说明了一切：Gemma-3 4B 上学的技能在 Qwen3 32B 上复用率 0.875，在 Llama-3.3 70B 上 0.647。Qwen3 复用率更高可能是因为架构更接近 Gemma，而 Llama 的 tokenizer 和训练分布差异更大。但 0.647 仍然远超所有基线方法。核心原因是：自然语言技能描述的是"做什么"（步骤序列），而非"怎么在特定模型内部实现"——任何足够强的 LLM 都能理解"步骤1：构建假设空间"这样的指令。</div>
+</details>
+
+<details>
+<summary>SkillPro 能否处理需要多个技能组合的复杂任务？</summary>
+<div class="answer">SkillPro 的层次化架构天然支持技能组合。在每个决策步 t，技能选择策略 μ 可以选择不同的技能——Agent 可以在任务前半段使用"信息收集"技能，后半段切换到"决策执行"技能。终止条件 β 确保前一个技能在合适的时间点交出控制权。但目前的限制是技能之间缺乏显式的"组合协议"——未来的工作方向是引入技能间的依赖关系图。</div>
+</details>
+
+<details>
+<summary>SkillPro 的局限是什么？什么场景下它不适用？</summary>
+<div class="answer">三个主要局限。第一，技能是显式文本，占用上下文窗口——当技能池过大时会挤占任务推理的空间。第二，技能质量受限于基座 LLM 的能力——如果 LLM 本身在某类任务上就表现差，语义梯度也无法产生有效的改进建议。第三，技能选择策略 μ 目前仅用简单语义匹配——在大规模技能池中可能需要更复杂的检索策略。不适用的场景：每次任务都完全不同的纯创造性工作（没有可复用的模式），或需要亚秒级响应的实时系统（技能匹配有延迟）。</div>
+</details>
+
+<details>
+<summary>SkillPro 与传统 Prompt Engineering 的关系是什么？</summary>
+<div class="answer">SkillPro 可以被视为"自动化的 Prompt Engineering"。传统 PE 是人类手动编写提示词模板来指导 LLM 行为，SkillPro 的技能本质上也是自然语言的执行指令——但它不是人类编写的，而是 Agent 从经验中自主学习并通过非参数化 PPO 持续优化的。两者的关系是：人类编写的 PE 模板可以作为 SkillPro 的种子技能（初始技能池），然后 SkillPro 在实际使用中自主进化这些模板，逐步超越人类初始设计。</div>
+</details>
+
+<details>
+<summary>非参数化 PPO 的"非参数化"具体是什么意思？和参数化 PPO 有什么本质区别？</summary>
+<div class="answer">"非参数化"指的是优化过程中不更新 LLM 的任何权重参数。参数化 PPO 通过反向传播更新模型参数 θ，每轮训练需要大量 GPU 计算。非参数化 PPO 的"参数"是技能文本——更新操作是修改自然语言字符串（添加、删除、替换步骤），而非数值梯度下降。本质区别在于：参数化更新改变模型的"内在能力"，有灾难性遗忘风险；非参数化更新改变"外部知识库"，LLM 本身保持不变，零遗忘风险。代价是受限于 LLM 原有能力上限。</div>
+</details>
+
+<details>
+<summary>SkillPro 的技能选择策略 μ 目前用简单语义匹配，这在大规模技能池中够用吗？</summary>
+<div class="answer">在 SkillPro 的实验规模（10-50 个技能）下，语义匹配足够有效。但论文作者也指出，当技能池扩展到数百甚至数千个时，简单语义匹配会遇到"语义碰撞"问题——多个技能的激活条件在语义上高度相似，导致选择不够精确。论文建议的改进方向包括：引入 RL-based 检索器、使用技能的历史成功率作为辅助信号、以及为技能增加更细粒度的标签体系。</div>
+</details>
+
+<details>
+<summary>SkillPro 能处理需要实时响应的场景吗？技能匹配会不会引入延迟？</summary>
+<div class="answer">技能匹配的延迟极低——语义相似度计算（embedding 比较）通常只需 1-5ms，远低于 LLM 推理的 30-500ms。实际上，SkillPro 通过"匹配 + 直接执行"替代了传统方案的"检索 + 重新推理"，总体延迟反而更低。但需要注意，如果技能的执行步骤很长（10+ 步），LLM 按步骤执行的总时间可能超过直接端到端推理——此时技能的优势在于成功率更高，而非速度更快。</div>
+</details>
+
+<details>
+<summary>如何将 SkillPro 集成到现有的 Agent 框架中（如 LangChain、AutoGen）？</summary>
+<div class="answer">SkillPro 的集成相对简单，因为它的核心组件都是"提示层"的修改。具体步骤：1) 在 Agent 的 System Prompt 中添加技能池（816 tokens 的技能文本）；2) 在每步决策前，通过 embedding 匹配选择最相关技能；3) 将选中技能作为 System Prompt 的一部分注入 LLM 调用；4) 定期（每 50-100 次任务）运行非参数化 PPO 进化循环更新技能池。整个流程不需要修改 LLM 权重，可以在任何支持 Prompt 注入的框架中实现。</div>
+</details>
+
+<details>
+<summary>程序性记忆的概念可以扩展到代码生成 Agent 吗？比如让编程 Agent 积累"代码重构技能"？</summary>
+<div class="answer">完全可以，而且这是最有前景的应用方向之一。编程 Agent 可以学习的程序性技能包括：代码重构模式（"当遇到 God Class 时，按 SRP 原则拆分"）、测试策略（"对纯函数用单元测试，对 API 用集成测试"）、Debug 流程（"先检查最近 3 次提交的 diff，再检查日志"）。这些技能的共同特点是：高频出现、步骤固定、一旦学会就无需重新推理。Claude Code 的 Agent Skills 机制已经在实践这种模式，只是目前依赖人工编写——SkillPro 提供了自动化学习的算法路径。</div>
+</details>
+
+<!-- 以下 7 题由「MemSkill 记忆技能系统」合并迁入 -->
+
+<details>
+<summary>MemSkill 的"记忆技能"与传统系统的"记忆操作"有什么本质区别？</summary>
+<div class="answer">本质区别在于"可学习性"和"可组合性"。传统记忆操作（add/update/delete/skip）是人类预先定义的固定函数，行为在部署后不可变，且每个操作独立执行、互不感知。MemSkill 的记忆技能是结构化的描述文档（目的+时机+方式+约束），由 LLM 理解和执行，因此具备三个传统操作不具备的能力：第一，技能可以被多个同时选中并组合应用（如"实体提取"+"偏好更新"在一次生成中同时完成）；第二，技能可以从失败经验中演化出更好的版本；第三，技能可以被控制器根据上下文动态选择，而非机械地全部执行。更深层的区别在于范式转变——传统操作是"程序化思维"（if-else 逻辑），记忆技能是"声明式思维"（描述目标和约束，让 LLM 自行决定执行细节）。</div>
+</details>
+
+<details>
+<summary>跨度级生成的"跨度"如何确定？太大或太小会有什么问题？</summary>
+<div class="answer">MemSkill 的跨度划分基于语义连贯性检测，而非固定轮数。系统通过分析消息间的主题相似度和对话流的变化率来识别自然切分点。跨度过小的问题退化为逐轮处理——失去全局上下文、LLM 调用次数增加、记忆碎片化。跨度过大的问题是 LLM 一次处理的上下文过长，可能导致注意力分散、遗漏中间细节（"lost in the middle"问题）。实验中的最佳跨度大小通常在 5-20 轮对话之间，平均约 10 轮，对应的 Token 数在 2000-8000 之间。这个范围恰好处于当前 LLM 的最佳处理窗口内。</div>
+</details>
+
+<details>
+<summary>控制器的强化学习训练需要什么级别的奖励信号？</summary>
+<div class="answer">控制器的 RL 训练使用的是任务级的稀疏奖励信号——即整个任务最终是否成功完成（binary reward）或完成质量评分（scalar reward）。不需要为每一步记忆操作提供细粒度的奖励标注。这种设计的优势是标注成本极低（只需评估最终结果），劣势是信用分配困难（任务失败时，不知道是哪些技能选择出了问题）。MemSkill 通过两种机制缓解信用分配问题：第一，跨度级处理大幅减少了决策次数（从 1288 次降至 215 次），每个决策的影响范围更大，更容易被奖励信号覆盖；第二，设计师的失败案例分析提供了额外的定性反馈，补充了 RL 的定量奖励信号。</div>
+</details>
+
+<details>
+<summary>设计师生成的新技能会不会引入噪声或错误？如何保障质量？</summary>
+<div class="answer">会。设计师本身是一个 LLM，生成的新技能不一定都是好的。MemSkill 通过三层质量保障机制控制风险。第一层是准入验证——新技能在入库前必须在一个验证集上运行，只有当它带来的下游任务性能提升超过阈值时才被接受。第二层是冲突检测——新技能与已有技能库中的技能进行功能相似度对比，如果高度重叠则触发合并而非新增，防止技能库膨胀。第三层是回退机制——新技能入库后持续监控其对下游任务的影响，如果检测到性能下降则自动回退。实验中，设计师生成的技能约有 30% 在准入验证阶段被拒绝，最终入库的技能质量高于人类设计的种子技能。</div>
+</details>
+
+<details>
+<summary>跨模型零样本迁移的成功率有多高？什么条件下会失败？</summary>
+<div class="answer">在 NTU 团队的实验中，LLaMA 上训练的技能选择策略迁移到 Qwen 后，性能保持率在 85-95% 之间（即迁移后的性能约为原模型上性能的 85-95%）。迁移成功率与两个因素高度相关：第一，源模型和目标模型的"指令遵循能力"差异——如果目标模型的指令遵循能力明显弱于源模型，那么技能描述中的复杂指南可能无法被正确执行；第二，技能本身的抽象程度——高度抽象的通用技能（如"实体提取"）迁移性好，过于依赖特定模型输出格式的技能（如"要求 JSON 格式输出"）迁移性差。实际部署时建议：在目标模型上做少量适配微调（10-20 个样本）即可恢复接近 100% 的性能。</div>
+</details>
+
+<details>
+<summary>MemSkill 在生产环境中最大的部署挑战是什么？</summary>
+<div class="answer">最大的挑战是延迟控制。跨度级生成需要等一个完整的对话 span 形成后才能触发记忆生成，这意味着在 span 形成过程中的实时记忆更新会有延迟。在对实时性要求极高的场景（如客服对话中需要即时记住用户刚才说的关键信息），这种延迟可能不可接受。缓解方案有两种：第一，混合模式——对高优先级信息（如用户明确说"请记住这个"）使用实时逐轮提取，对常规信息使用跨度级批量处理；第二，缩短跨度——在延迟敏感场景中使用较小的跨度（如 3-5 轮），在效率和实时性之间取得平衡。</div>
+</details>
+
+<details>
+<summary>MemSkill 的技能库大小有没有上限？会不会无限膨胀？</summary>
+<div class="answer">有上限，且系统内置了防膨胀机制。实验中技能库从 5 个种子技能演化到 12-15 个技能后趋于稳定——因为随着技能库的覆盖面增加，设计师发现的新场景越来越少，新增技能的速度自然放缓。系统通过三个机制主动控制膨胀：第一，合并去重——功能重叠度超过阈值的技能会被合并为一个更通用的技能；第二，淘汰机制——长期不被控制器选中的技能会被降权直至淘汰；第三，准入门槛——新技能必须在验证集上证明其独特价值（不能被已有技能组合覆盖）才能入库。实际部署中，15-20 个技能通常足以覆盖一个特定领域的全部记忆需求。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

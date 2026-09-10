@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST09 · AI 系统幂等设计 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left;vertical-align:top}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:"Courier New",monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:"Courier New",monospace;color:var(--orange);overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、幂等不是锁，而是“重复请求的业务记忆”</a>
+<a href="#s2">二、推荐实现：Redis SETNX + 状态机</a>
+<a href="#s3">三、AI 系统里哪些地方必须做，哪些地方别乱做</a>
+<a href="#s4">四、设计细节：Key、TTL、失败恢复一个都不能少</a>
+<a href="#s5">五、生产案例：Agent 工单系统如何从重复执行降到 0</a>
+<a href="#qa">Q&amp;A（8 题）</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>ST09 · AI 系统幂等设计</h1>
+<p class="subtitle">Idempotency for AI Systems — 用 Redis SETNX + 状态机挡住重试风暴，避免 Workflow、Tool、副作用任务被重复执行</p>
+
+<div class="section" id="s1">
+<h2>一、幂等不是锁，而是“重复请求的业务记忆”</h2>
+<div class="intuition-box"><p>幂等的本质不是把别人挡在门外，而是让系统记住“这件事已经做过没有、做到哪一步、最终结果是什么”。</p></div>
+<p><span class="term">幂等</span>（Idempotency）指同一个业务请求执行一次和执行多次，最终对业务世界产生的结果一致。在 AI 系统里，真正危险的不是重复算一遍，而是重复触发副作用，例如重复扣费、重复调用外部 API、重复写入向量库、重复发邮件。</p>
+<table>
+<tr><th>方案</th><th>解决的问题</th><th>致命缺口</th></tr>
+<tr><td>只加分布式锁</td><td>避免并发同时执行</td><td>挡住了第二个请求，却没有保存结果，后来的请求不知道该返回什么</td></tr>
+<tr><td>只做缓存</td><td>复用已完成结果</td><td>第一次执行期间没有处理中状态，无法解释“现在到底在做什么”</td></tr>
+<tr><td>幂等状态机</td><td>同时处理并发、重试、结果复用</td><td>需要设计状态、TTL 和失败恢复策略</td></tr>
+</table>
+<div class="highlight">在 AI 场景里，重试通常来自客户端超时、网关自动补偿、消息队列重复投递、Agent 自恢复机制。没有幂等时，这些"可靠性机制"会反过来制造重复扣费和重复执行。</div>
+<div class="intuition-box"><p>没有幂等的系统，每一个"为了可靠而生的重试"都会变成一次"不可控的副作用放大器"。</p></div>
+<div class="arch-diagram">重试风暴放大链路（无幂等时）:
+
+用户点击 "提交"
+    |
+    v
+前端超时 (15s) ----> 自动重试 #1
+    |                      |
+    v                      v
+网关超时 (20s) ----> 自动重试 #2
+    |                      |
+    v                      v
+MQ 重投递 --------> 重复消费 #3
+    |
+    v
+Agent 自恢复 -----> 重跑整条 Workflow #4
+
+结果: 1 次用户操作 = 5 次业务执行 = 重复扣费 + 重复发邮件 + 重复写库</div>
+<div class="intuition-box"><p>幂等设计的最高境界，是让调用方完全感知不到重试的存在——无论请求被发送了几次，拿到的结果和第一次成功执行时完全一致。</p></div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、推荐实现：Redis SETNX + 状态机</h2>
+<div class="intuition-box"><p>先抢到“唯一执行权”，再把执行过程写成状态机，系统就既能防重，又能回答后来者“现在是什么状态”。</p></div>
+<h3>状态机为什么比锁更适合 AI 工作流</h3>
+<p><span class="term">SETNX</span>（Set If Not Exists）是 Redis 的原子写入能力，它保证只有第一个请求能创建记录。关键不在于“抢到锁”本身，而在于它顺手创建了一个可查询的业务状态，后续请求看到的不是空白，而是正在处理、已成功或已失败。</p>
+<div class="arch-diagram">请求到达
+   |
+   v
+SETNX idempotent:{key}
+status=PROCESSING
+ttl=10m
+   |
+   +---- 创建成功 ----------> 执行业务 ---------> 写回 SUCCESS + result + ttl=24h
+   |
+   +---- 创建失败 ----------> 读取已有记录
+                              |
+                              +-- SUCCESS ----> 直接返回结果
+                              +-- PROCESSING -> 返回处理中/轮询
+                              +-- FAILED -----> 按策略允许重试或返回失败</div>
+<div class="arch-diagram">幂等令牌（Idempotency Token）完整流转:
+
+客户端                      网关                     业务服务                  Redis
+  |                          |                          |                       |
+  |-- 生成 idempotency_key ->|                          |                       |
+  |                          |-- 透传 key + payload --->|                       |
+  |                          |                          |-- SETNX key --------->|
+  |                          |                          |<-- 创建成功/已存在 ----|
+  |                          |                          |                       |
+  |                          |                          |-- [首次] 执行业务 ---->|
+  |                          |                          |-- 写回 SUCCESS ------->|
+  |                          |<-- 返回业务结果 ----------|                       |
+  |<-- 200 OK ---------------|                          |                       |
+  |                          |                          |                       |
+  |-- 超时重试 (同 key) ---->|                          |                       |
+  |                          |-- 透传 key + payload --->|                       |
+  |                          |                          |-- GET key ----------->|
+  |                          |                          |<-- SUCCESS + result --|
+  |                          |<-- 直接返回缓存结果 ------|                       |
+  |<-- 200 OK (复用结果) ----|                          |                       |
+</div>
+<p>上图展示了 <span class="term">幂等令牌</span>（Idempotency Token）从生成到复用的完整生命周期。关键点在于：令牌由客户端在首次请求时生成并持久化，所有后续重试都必须携带同一令牌，服务端据此判断是首次执行还是结果复用。</p>
+<p>上面的流转适合 AI 请求，因为很多链路执行时间长，可能跨越 RAG、Tool、LLM、数据库更新多个阶段。只加锁只能防止并发重入；状态机则能把系统从“互斥”升级为“可恢复、可观测、可复用”。</p>
+<div class="intuition-box"><p>锁只能回答“现在有没有人在做”，状态机还能回答“做到哪了、做完了没、做出来的是什么”。</p></div>
+<h3>TTL 策略的三层设计</h3>
+<p><span class="term">TTL</span>（Time To Live）是幂等记录的生命线。设得太短，执行还没结束记录就过期，重复请求会被当成新业务再次执行；设得太长，又会浪费存储并在业务变更后返回过时结果。推荐按三层分别配置：</p>
+<table>
+<tr><th>层级</th><th>TTL 范围</th><th>目的</th><th>回收策略</th></tr>
+<tr><td><span class="term">PROCESSING</span> 层</td><td>5 ~ 10 分钟</td><td>覆盖单次 Workflow 的最大执行时间</td><td>到期自动释放，下次请求视为新任务</td></tr>
+<tr><td><span class="term">SUCCESS</span> 层</td><td>24 小时 ~ 7 天</td><td>覆盖用户重试、页面刷新、链路补偿</td><td>按业务重要性分级回收，计费类保留更久</td></tr>
+<tr><td><span class="term">FAILED</span> 层</td><td>1 ~ 10 分钟</td><td>短时间防重放，允许退避后安全重试</td><td>短 TTL 到期后允许新请求重新尝试</td></tr>
+</table>
+<div class="highlight">生产里最稳妥的做法是让 PROCESSING 的 TTL 略大于工作流 P99 执行时间。如果 P99 是 45 秒，TTL 至少设 3 分钟；如果 P99 是 5 分钟，TTL 至少设 10 分钟。</div>
+<table>
+<tr><th>状态</th><th>含义</th><th>建议 TTL</th><th>设计原因</th></tr>
+<tr><td><strong>PROCESSING</strong></td><td>请求已被接管，业务仍在执行</td><td>5 到 10 分钟</td><td>防止实例崩溃后永久卡死，给自动恢复留窗口</td></tr>
+<tr><td><strong>SUCCESS</strong></td><td>请求已完成，可复用最终结果</td><td>24 小时到 7 天</td><td>覆盖用户重试、前端刷新、链路补偿等高频重复读</td></tr>
+<tr><td><strong>FAILED</strong></td><td>请求失败，带错误原因</td><td>1 到 10 分钟</td><td>避免瞬时错误无限重放，同时允许短时间后安全重试</td></tr>
+</table>
+<h3>一个最小可落地的数据结构</h3>
+<div class="formula">record = { status, request_hash, response, error, created_at, finished_at }</div>
+<p><span class="term">request_hash</span> 用来校验“同一个 key 是否真的对应同一份请求”。如果客户端误把两个不同请求塞进同一个 idempotency key，系统必须拒绝，否则幂等层会把错误结果复用给另一条业务。</p>
+<div class="highlight">生产里最常见的坑不是没有幂等，而是“只有 key，没有 payload 校验”。结果就是同一 key 被错误复用，导致看上去稳定，实际上返回了别人的结果。</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、AI 系统里哪些地方必须做，哪些地方别乱做</h2>
+<div class="intuition-box"><p>幂等应该加在“有副作用或成本昂贵的边界”，而不是对所有请求一刀切。</p></div>
+<h3>按业务语义划分边界</h3>
+<p><span class="term">副作用</span> 指请求除了返回结果，还会改变外部状态，例如扣费、写库、发通知、创建订单。AI 系统最大的误区，是把“模型推理”视为唯一成本点，而忽略了 Tool 调用和异步任务才是重复执行最危险的位置。</p>
+<table>
+<tr><th>场景</th><th>是否建议幂等</th><th>原因</th><th>推荐唯一键</th></tr>
+<tr><td>Chat Completion / 整个 AI 请求</td><td><strong>必须</strong></td><td>超时重试会重复消耗 Token，还可能重复触发工具链</td><td><code>request_id</code> 或业务层 <code>idempotency_key</code></td></tr>
+<tr><td>Agent Workflow</td><td><strong>强烈建议</strong></td><td>工作流长、步骤多，重放一次可能造成多次外部写操作</td><td><code>session_id + turn_id</code> 或 <code>workflow_id</code></td></tr>
+<tr><td>有副作用的 Tool</td><td><strong>必须</strong></td><td>转账、下单、发邮件、发消息不能接受重复执行</td><td><code>tool_call_id</code>、订单号、支付单号</td></tr>
+<tr><td>RAG 检索</td><td><strong>通常不需要</strong></td><td>只读且无副作用，重复执行更多是性能问题而不是一致性问题</td><td>更适合做 <code>query cache</code></td></tr>
+<tr><td>Embedding / 索引构建</td><td><strong>建议</strong></td><td>消息重复消费会让同一 chunk 被写两次，污染召回与统计</td><td><code>doc_id + chunk_id</code></td></tr>
+</table>
+<h3>旧方案和新方案的边界差异</h3>
+<table>
+<tr><th>思路</th><th>旧做法</th><th>工程化做法</th></tr>
+<tr><td>Chat API</td><td>把重试交给客户端 SDK</td><td>在网关或 Chat Service 入口统一做幂等和结果复用</td></tr>
+<tr><td>Agent</td><td>认为“失败就整条重跑”</td><td>在 Workflow 入口设幂等，在关键 Tool 层再做一次局部幂等</td></tr>
+<tr><td>RAG</td><td>什么都加锁</td><td>只做缓存和限流，不把无副作用查询误当成幂等问题</td></tr>
+</table>
+<div class="highlight">幂等的重点不是“请求会不会重复发来”，而是“重复发来以后会不会对外部世界产生第二次不可逆影响”。</div>
+<div class="intuition-box"><p>判断要不要做幂等，只需问一个问题：如果这条请求被无声地执行两次，用户能不能接受？不能接受就必须做。</p></div>
+<h3>容易误判的三个灰色地带</h3>
+<p>以下场景经常被团队忽略，但它们在 AI 系统中出现的频率比想象中高得多：</p>
+<table>
+<tr><th>灰色场景</th><th>常见误判</th><th>正确做法</th></tr>
+<tr><td>LLM 生成后写回数据库</td><td>以为只是“存个结果”</td><td>必须按 <code>request_id</code> 幂等，否则同一推理结果被写两份，污染下游统计</td></tr>
+<tr><td>异步回调通知</td><td>以为回调只来一次</td><td>回调天然不可靠，接收端必须做 <span class="term">幂等消费</span>，按事件 ID 去重</td></tr>
+<tr><td>Embedding 增量更新</td><td>以为消息队列保证 exactly-once</td><td>大部分 MQ 实际提供 at-least-once，同一 chunk 可能被消费两次，需按 <code>doc_id + chunk_id + version</code> 去重</td></tr>
+</table>
+<div class="highlight">在 Agent 架构中，<span class="term">Tool</span> 调用是最容易被忽视的副作用边界。一个“查询天气”的 Tool 看似只读，但如果它同时会写审计日志或触发计费，就需要重新评估幂等需求。</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、设计细节：Key、TTL、失败恢复一个都不能少</h2>
+<div class="intuition-box"><p>幂等设计真正难的不是写出 SETNX，而是把 key 生成、超时回收、异常恢复和结果校验全部补齐。</p></div>
+<h3>Key 设计要绑定业务语义</h3>
+<p><span class="term">Idempotency Key</span> 必须表达“这一件业务事实”，而不是随手生成一个随机值。随机 UUID 只能保证唯一，不能保证语义稳定；如果用户点击重试时产生了新 key，那系统就会把同一业务当成新请求重新执行。</p>
+<table>
+<tr><th>设计项</th><th>推荐做法</th><th>不要这样做</th></tr>
+<tr><td>Key 生成</td><td>由客户端或业务层稳定生成，与请求语义绑定</td><td>每次重试临时生成新 UUID</td></tr>
+<tr><td>Payload 校验</td><td>保存 <code>request_hash</code>，不一致就拒绝</td><td>只认 key，不看请求体是否一致</td></tr>
+<tr><td>返回策略</td><td>SUCCESS 直接回结果，PROCESSING 回处理中或短轮询</td><td>PROCESSING 时再次执行业务</td></tr>
+<tr><td>失败恢复</td><td>FAILED 保留短 TTL，并附错误原因和可重试策略</td><td>失败后立刻删 key，导致抖动时反复打爆下游</td></tr>
+</table>
+<h3>一个典型的落地流程</h3>
+<div class="arch-diagram">典型幂等落地流程:
+
+请求到达
+   |
+   +--> 校验 idempotency_key 是否存在
+   +--> 计算 request_hash，确认同 key 对应同一请求
+   +--> SETNX 写入 PROCESSING + 短 TTL
+   +--> 执行业务流程
+   +--> 成功: 写 SUCCESS + 结果 + 长 TTL
+   +--> 失败: 写 FAILED + 错误 + 短 TTL
+   +--> 重复请求: 按已有状态直接返回或等待</div>
+<p>这套流程之所以比“查缓存 -> 加锁 -> 执行 -> 写缓存”更稳，是因为每一步都围绕业务状态展开。系统崩溃时，后续请求至少知道上一条记录停在什么阶段，而不是只能猜测“锁是不是忘记释放了”。</p>
+<h3>幂等方案横向对比</h3>
+<table>
+<tr><th>维度</th><th>数据库唯一索引</th><th>Redis SETNX</th><th>消息去重表</th><th>乐观锁 (version)</th></tr>
+<tr><td>适用场景</td><td>写入型业务，如订单、账单</td><td>通用 API 幂等，尤其是长耗时 AI 请求</td><td>MQ 消费端去重</td><td>更新型操作，如库存扣减</td></tr>
+<tr><td>性能</td><td>受限于数据库写入 TPS</td><td>内存级，10 万+ QPS</td><td>取决于数据库</td><td>取决于数据库</td></tr>
+<tr><td>状态表达力</td><td>只能表达"存在/不存在"</td><td>可存 PROCESSING/SUCCESS/FAILED 多态</td><td>只能表达"已消费/未消费"</td><td>只能表达"版本是否匹配"</td></tr>
+<tr><td>故障恢复</td><td>依赖数据库事务</td><td>依赖 TTL 自动过期</td><td>依赖 TTL 或定期清理</td><td>无自动恢复，需业务重试</td></tr>
+<tr><td>AI 系统适配度</td><td>中（适合落库环节）</td><td><strong>高（推荐首选）</strong></td><td>高（适合异步链路）</td><td>低（不适合长流程）</td></tr>
+</table>
+<div class="highlight">在 AI 系统中，<span class="term">Redis SETNX</span> 之所以成为首选，是因为它同时满足三个条件：内存级性能足以扛住高并发重试、多态存储能表达完整状态机、TTL 机制天然解决了僵尸记录问题。</div>
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>让客户端重试时复用同一个业务 key</li>
+<li>保存请求哈希，防止错误复用</li>
+<li>给 PROCESSING 设置较短 TTL 防僵尸锁</li>
+<li>把最终结果和错误原因写回状态记录</li>
+<li>对 Tool 层和 Workflow 层分别建幂等边界</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要把随机 UUID 当成稳定业务 key</li>
+<li>不要只上分布式锁不保存结果</li>
+<li>不要让 PROCESSING 永不过期</li>
+<li>不要在重复请求到来时再次执行业务</li>
+<li>不要忽略失败态和异常恢复路径</li>
+</ul>
+</div>
+</div>
+<div class="highlight">如果一个系统只有 SUCCESS 缓存，没有 PROCESSING 和 FAILED，它解决的是“结果复用”，不是“幂等控制”。</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、生产案例：Agent 工单系统如何从重复执行降到 0</h2>
+<div class="intuition-box"><p>生产事故通常不是因为算法不够先进，而是因为一次超时重试让整个工作流又跑了一遍。</p></div>
+<h3>案例背景</h3>
+<p>某企业内部工单 Agent 日均处理约 8 万次请求，入口链路是“意图识别 -> 检索知识库 -> 调用工单 Tool -> 发送确认邮件”。改造前客户端超时阈值设为 15 秒，而完整工作流 P95 为 22 秒，结果前端和网关都会自动重试。</p>
+<table>
+<tr><th>阶段</th><th>改造前</th><th>改造后</th></tr>
+<tr><td>重复 Tool 调用率</td><td>2.8%</td><td>0.03%</td></tr>
+<tr><td>重复发邮件事件</td><td>日均 430 次</td><td>日均 4 次以内</td></tr>
+<tr><td>平均 Token 浪费</td><td>每日报废约 11 万 Token</td><td>下降到 6000 Token 以内</td></tr>
+<tr><td>故障定位时长</td><td>45 分钟</td><td>8 分钟</td></tr>
+</table>
+<h3>根因与修复</h3>
+<p>根因不是单一超时，而是缺少统一的 <span class="term">Workflow 入口幂等</span>。同一个用户重试请求会重跑整条链路，导致下游 Tool 把“再次请求”误当成“新业务”。修复时团队在入口增加 <code>idempotency_key</code>，对有副作用的 Tool 再加 <code>tool_call_id</code> 级别幂等，同时把 Redis 记录打到可观测平台里，允许排查时直接看到每次请求的状态流转。</p>
+<div class="arch-diagram">Client Retry
+    |
+    v
+API Gateway  ---- idempotency_key ----> Workflow Guard
+                                           |
+                                           +--> RAG (query cache)
+                                           +--> Tool A (tool_call_id)
+                                           +--> Tool B (tool_call_id)
+                                           +--> LLM
+
+数据流说明:
+1. 整个入口先做一次 Workflow 级防重
+2. 有副作用的 Tool 再做局部幂等
+3. RAG 不做幂等，只做缓存和限流</div>
+<div class="highlight">最有效的改造不是把所有地方都幂等化，而是把“整条工作流入口”和“有副作用的工具边界”这两个高风险断点守住。</div>
+<div class="intuition-box"><p>幂等改造的 ROI 极高：一个入口级 SETNX 加两个 Tool 级防重，就能把重复执行率从百分比级压到万分之几。</p></div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A（8 题）</h2>
+<details>
+<summary>为什么说幂等不能只靠分布式锁？</summary>
+<div class="answer"><p>因为分布式锁只能防止并发同时执行，不能告诉后来的请求“前一个请求做到哪了、结果是什么”。AI 工作流通常执行时间长，如果第二个请求只看到“锁没抢到”，它既拿不到结果，也不知道该等待还是失败。状态机方案把 PROCESSING、SUCCESS、FAILED 都记录下来，才能既防重又正确返回。</p></div>
+</details>
+<details>
+<summary>Chat Completion 为什么也需要幂等？它看起来只是一次推理。</summary>
+<div class="answer"><p>表面上是一次推理，实际上很多 Chat Completion 会串联 RAG、Tool、数据库写入、审计日志和计费。用户超时后重试时，如果入口不幂等，整条链会重新跑一遍，不仅浪费 Token，还可能重复触发外部副作用。所以应在网关或 Chat Service 入口统一拦截。</p></div>
+</details>
+<details>
+<summary>RAG 检索通常为什么不需要幂等？</summary>
+<div class="answer"><p>RAG Retrieval 大多是只读查询，重复执行不会改变外部状态，风险主要是性能浪费而不是业务错误。对于这类场景，更合适的手段是 query cache、限流和超时控制，而不是引入完整幂等状态机。只有检索链路会顺手写日志、更新统计或触发异步任务时，才需要重新评估边界。</p></div>
+</details>
+<details>
+<summary>Idempotency Key 应该由谁生成？</summary>
+<div class="answer"><p>最好由最了解业务语义的一层生成，通常是客户端、API 网关或业务服务入口，而不是最底层存储层。关键要求是：同一业务重试时 key 必须稳定，不同业务必须不同。如果只在服务端每次收到请求都随机生成 UUID，那么一旦重试到来，系统根本无法识别这是同一笔业务。</p></div>
+</details>
+<details>
+<summary>FAILED 状态为什么不建议立刻删除？</summary>
+<div class="answer"><p>因为真实故障常常伴随抖动和短时间重试。失败后立刻删除 key，会让下一次重试重新执行整条链路，把短暂故障放大成流量洪峰。保留一个短 TTL 的 FAILED 状态，可以告诉调用方“刚刚失败过”，并配合退避重试或人工介入，避免把下游持续打挂。</p></div>
+</details>
+<details>
+<summary>Workflow 已经做幂等了，Tool 层还要不要做？</summary>
+<div class="answer"><p>高风险 Tool 仍然要做。入口幂等负责挡住整条链路的重复提交，但在长工作流中，局部步骤可能因为补偿、恢复、异步队列或人工重放再次被触发。像支付、发券、发邮件、创建工单这类有副作用的 Tool，最好使用独立的 <code>tool_call_id</code> 或业务唯一键再做一层保护，形成"全局一次、局部再验一次"的双保险。</p></div>
+</details>
+<details>
+<summary>幂等记录存在 Redis 里，Redis 宕机了怎么办？</summary>
+<div class="answer"><p>首先要接受一个现实：幂等层本身也需要高可用。生产环境通常使用 Redis Sentinel 或 Cluster 模式保证故障自动切换。其次，对于计费、支付等零容忍场景，可以在数据库层再加一道唯一索引作为兜底，形成"Redis 挡第一道、数据库挡最后一道"的双层防线。Redis 短暂不可用时，宁可让请求失败并返回 503，也不能跳过幂等检查直接执行业务。</p></div>
+</details>
+<details>
+<summary>如何验证幂等层在生产中真正生效？</summary>
+<div class="answer"><p>核心是建立可观测指标。建议监控三个关键数据：<span class="term">幂等命中率</span>（重复请求被拦截的比例）、PROCESSING 状态平均停留时间、以及 FAILED 状态的错误分布。如果幂等命中率长期为 0，说明上游根本没有重试，或者 key 生成逻辑有误导致每次重试都用了新 key。可以定期做混沌测试，人为注入超时和重复请求，验证系统是否如预期返回缓存结果而非重复执行。</p></div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

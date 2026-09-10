@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L02 · BERT 与编码器模型</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#7ee787;--accent3:#d2a8ff;--accent4:#ffa657;--accent5:#ff7b72;--dim:#8b949e}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.75;font-size:16px;padding-left:300px}
+.container{max-width:960px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:2.4rem;font-weight:800;text-align:center;margin:2.5rem 0 .5rem;background:linear-gradient(135deg,#58a6ff,#d2a8ff,#ffa657);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:var(--dim);font-size:1.05rem;margin-bottom:2.5rem}
+h2{font-size:1.55rem;font-weight:700;margin:2.8rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border);color:var(--accent)}
+h3{font-size:1.15rem;font-weight:600;margin:1.4rem 0 .6rem;color:var(--accent3)}
+p{margin:.6rem 0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code{background:#1f2937;padding:2px 7px;border-radius:4px;font-size:.92em;font-family:"Fira Code",Consolas,monospace;color:var(--accent4)}
+pre{background:#1f2937;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;margin:1rem 0;line-height:1.6}
+pre code{background:none;padding:0;color:var(--text)}
+ul,ol{padding-left:1.6rem;margin:.5rem 0}
+li{margin:.35rem 0}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.95rem}
+th,td{border:1px solid var(--border);padding:.55rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent);font-weight:600}
+td{background:var(--bg)}
+tr:hover td{background:var(--surface)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.4rem 1.6rem;margin:1.2rem 0}
+.tip{border-left:4px solid var(--accent2);background:rgba(126,231,135,.06);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.tip::before{content:"知识要点";display:block;font-weight:700;color:var(--accent2);margin-bottom:.4rem;font-size:1.05rem}
+.warn{border-left:4px solid var(--accent4);background:rgba(255,166,87,.06);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.warn::before{content:"⚠ 注意";display:block;font-weight:700;color:var(--accent4);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section h2{color:var(--accent4)}
+details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.7rem 0;overflow:hidden}
+summary{padding:.85rem 1.2rem;cursor:pointer;font-weight:600;color:var(--accent);user-select:none;list-style:none;display:flex;align-items:center;gap:.5rem}
+summary::before{content:"▸";color:var(--accent3);font-size:1.1rem;transition:transform .2s}
+details[open] summary::before{transform:rotate(90deg)}
+summary:hover{background:rgba(88,166,255,.06)}
+details .answer{padding:.8rem 1.2rem 1.1rem;border-top:1px solid var(--border);color:var(--text);line-height:1.8}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.tag{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.82rem;font-weight:600;margin:2px 3px}
+.tag-blue{background:rgba(88,166,255,.15);color:var(--accent)}
+.tag-green{background:rgba(126,231,135,.15);color:var(--accent2)}
+.tag-purple{background:rgba(210,168,255,.15);color:var(--accent3)}
+.tag-orange{background:rgba(255,166,87,.15);color:var(--accent4)}
+.tag-red{background:rgba(255,123,114,.15);color:var(--accent5)}
+.diagram{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem;margin:1rem 0;font-family:"Fira Code",Consolas,monospace;font-size:.88rem;overflow-x:auto;white-space:pre;line-height:1.6;color:var(--dim)}
+.toc{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.6rem;margin:1.5rem 0}
+.toc ul{list-style:none;padding-left:0}
+.toc li{margin:.4rem 0}
+.toc a{color:var(--dim);transition:color .2s}
+.toc a:hover{color:var(--accent)}
+.toc-title{font-weight:700;color:var(--accent);margin-bottom:.6rem;font-size:1.05rem}
+@media(max-width:640px){
+  .container{padding:1rem 1rem 3rem}
+  h1{font-size:1.7rem}
+  h2{font-size:1.25rem}
+  
+  pre{font-size:.85rem}
+}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+/* 标准组件体系 */
+.section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.5rem 1.6rem;margin:1.6rem 0}
+.section>h2:first-child{margin-top:0}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、BERT 核心思想</a>
+<a href="#s2">二、BERT 架构</a>
+<a href="#s3">三、预训练与微调范式</a>
+<a href="#s4">四、RoBERTa</a>
+<a href="#s5">五、DeBERTa</a>
+<a href="#s6">六、ELECTRA</a>
+<a href="#s7">七、其他变体</a>
+<a href="#s8">八、Encoder-Only vs Decoder-Only</a>
+<a href="#s9">九、BERT 在现代 AI 中的角色</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+<div class="container">
+
+<h1>L02 · BERT 与编码器模型</h1>
+<p class="subtitle">Bidirectional Encoder Representations from Transformers — 理解编码器家族的核心架构与高频考点</p>
+
+<!-- ============================================================ -->
+<div class="section">
+<h2 id="s1">一、BERT 核心思想</h2>
+
+<div class="intuition-box">
+<p><span class="term">MLM</span> 是用"完形填空"逼模型同时看左右文——想填对被遮住的词，就必须把两侧信息都用上。代价是预训练时输入里有 <code>[MASK]</code>、微调时没有，这个<span class="term">掩码不一致</span>正是后续所有改进的主要靶子。</p>
+</div>
+
+<div class="arch-diagram">
+  同一句话，两类模型"能看到什么"的差别全写在注意力掩码里
+  （行 = 正在算的位置，列 = 能看到的位置，■ 可见，· 不可见）
+
+  ── BERT：双向全可见 ──────────────────────────────────
+              这  部  [MASK]  很  好  看
+      这       ■   ■     ■     ■   ■   ■
+      部       ■   ■     ■     ■   ■   ■
+      [MASK]   ■   ■     ■     ■   ■   ■   ◀ 左边"这部"＋右边"很好看"
+      很       ■   ■     ■     ■   ■   ■      一起用上，才能填出"电影"
+      好       ■   ■     ■     ■   ■   ■
+      看       ■   ■     ■     ■   ■   ■
+
+      损失只落在被遮住的位置上（通常约 15%）
+      ⇒ 表示质量高，但每步只有一小部分 token 提供学习信号
+      ⇒ 且因为"看得到未来"，它天生不能逐词往外生成
+
+  ── GPT：因果掩码，只看左边 ────────────────────────────
+              这  部  电  影  很  好
+      这       ■   ·   ·   ·   ·   ·
+      部       ■   ■   ·   ·   ·   ·
+      电       ■   ■   ■   ·   ·   ·
+      影       ■   ■   ■   ■   ·   ·
+      很       ■   ■   ■   ■   ■   ·
+      好       ■   ■   ■   ■   ■   ■
+
+      每个位置都预测下一个 token，全部位置都产生损失
+      ⇒ 训练信号密度高、天然支持生成
+      ⇒ 但任一位置的表示都缺右侧上下文
+
+  ─────────────────────────────────────────────────────────
+  BERT 的 15% 掩码比例是一笔权衡：
+     遮太少 ─▶ 每步学到的太少，训练不经济
+     遮太多 ─▶ 剩下的上下文不足以推断，任务变成瞎猜
+  而"预训练见得到 [MASK]、微调见不到"这个错配，
+  是 RoBERTa（动态换 mask）与 ELECTRA（干脆换任务）各自要解决的问题。
+</div>
+
+<h3>1.1 双向编码器</h3>
+<p>在 BERT 之前，语言模型要么是从左到右（GPT），要么是浅层双向拼接（ELMo）。BERT 的关键创新在于：<strong>通过 Masked Language Model 任务，让 Transformer Encoder 在预训练阶段真正实现深层双向上下文建模</strong>。</p>
+<p>每一层 Self-Attention 都同时关注输入序列中左侧和右侧的所有 Token，因此 BERT 的每个隐藏表示都融合了完整的上下文信息。</p>
+
+<h3>1.2 MLM（Masked Language Model）</h3>
+<p>BERT 在预训练时随机 Mask 15% 的 Token，然后让模型预测这些被遮盖的 Token。具体策略：</p>
+<ul>
+  <li><strong>80%</strong> 的概率替换为 <code>[MASK]</code></li>
+  <li><strong>10%</strong> 的概率替换为随机 Token</li>
+  <li><strong>10%</strong> 的概率保持不变</li>
+</ul>
+<p>这种策略的目的是缓解预训练与微调之间的不一致（微调时不存在 <code>[MASK]</code> Token）。</p>
+
+<h3>1.3 NSP（Next Sentence Prediction）</h3>
+<p>给定句子对 (A, B)，判断 B 是否是 A 的真实下一句。50% 正例（连续句子），50% 负例（随机采样）。该任务旨在让模型学习句间关系，但后续研究（RoBERTa）证明 NSP 的收益并不显著。</p>
+
+<h3>1.4 特殊 Token</h3>
+<table>
+  <tr><th>Token</th><th>位置</th><th>作用</th></tr>
+  <tr><td><code>[CLS]</code></td><td>序列开头</td><td>其最终隐藏状态作为整个序列的聚合表示，用于分类任务</td></tr>
+  <tr><td><code>[SEP]</code></td><td>句子之间 / 句末</td><td>分隔不同句子，帮助模型区分句对</td></tr>
+  <tr><td><code>[MASK]</code></td><td>随机位置</td><td>仅在 MLM 预训练时使用</td></tr>
+</table>
+
+<div class="tip">
+  <ul>
+    <li>BERT 的 "双向" 指的是 Self-Attention 同时看左右上下文，而非 BiLSTM 的双向拼接</li>
+    <li>MLM 的 80/10/10 策略是为了减少 pretrain-finetune 的 mismatch</li>
+    <li><code>[CLS]</code> 的输出不是简单的平均池化，而是通过 Self-Attention 聚合全局信息</li>
+    <li>NSP 已被 RoBERTa 证明没有显著帮助，但仍是 BERT 论文的重要考点</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s2">二、BERT 架构</h2>
+
+<div class="intuition-box">
+<p>BERT 只有编码器，所以它天生是"读者"而不是"作者"：每个位置都能看到全句，代价是无法一个词一个词往外吐。理解任务上这是优势，生成任务上这是硬约束。</p>
+</div>
+
+<h3>2.1 Transformer Encoder 堆叠</h3>
+<p>BERT 仅使用 Transformer 的 Encoder 部分（没有 Decoder 的 cross-attention 和 causal mask）。每个 Encoder Layer 包含：</p>
+<ol>
+  <li><strong>Multi-Head Self-Attention</strong> — 全量双向注意力（无 causal mask）</li>
+  <li><strong>Add &amp; LayerNorm</strong></li>
+  <li><strong>Feed-Forward Network</strong>（两层 Linear + GELU 激活）</li>
+  <li><strong>Add &amp; LayerNorm</strong></li>
+</ol>
+
+<div class="diagram">
+Input: [CLS] tok₁ tok₂ ... tokₙ [SEP]
+  │
+  ▼
+┌─────────────────────────────────┐
+│  Token Embeddings               │
+│  + Segment Embeddings (A/B)     │
+│  + Position Embeddings          │
+└────────────┬────────────────────┘
+             │
+        ┌────▼────┐
+        │ Encoder  │  × L layers
+        │  Block   │  (L=12 for Base, L=24 for Large)
+        └────┬────┘
+             │
+        ┌────▼────┐
+        │ [CLS]   │ → 分类 / 句向量
+        │ tok_i   │ → Token 级任务 (NER/QA)
+        └─────────┘</div>
+
+<h3>2.2 BERT-Base vs BERT-Large</h3>
+<table>
+  <tr><th>配置</th><th>BERT-Base</th><th>BERT-Large</th></tr>
+  <tr><td>层数 (L)</td><td>12</td><td>24</td></tr>
+  <tr><td>隐藏维度 (H)</td><td>768</td><td>1024</td></tr>
+  <tr><td>注意力头数 (A)</td><td>12</td><td>16</td></tr>
+  <tr><td>参数量</td><td>110M</td><td>340M</td></tr>
+  <tr><td>最大序列长度</td><td colspan="2">512 tokens</td></tr>
+</table>
+
+<h3>2.3 WordPiece 分词</h3>
+<p>BERT 使用 WordPiece 分词（词表大小约 30,000）。低频词被拆分为子词单元，前缀用 <code>##</code> 标记续接部分：</p>
+<pre><code>"embedding" → ["em", "##bed", "##ding"]
+"unaffable" → ["un", "##aff", "##able"]</code></pre>
+<p>WordPiece 类似 BPE（Byte-Pair Encoding），但基于最大似然而非频率合并。</p>
+
+<div class="tip">
+  <ul>
+    <li>BERT 输入 = Token Embedding + Segment Embedding + Position Embedding（三个相加，不是拼接）</li>
+    <li>BERT 使用学习到的绝对位置编码（Learned Absolute PE），最大支持 512</li>
+    <li>BERT-Base 的 12 层 768 维与 GPT-1 参数量相当，但预训练方式不同</li>
+    <li>WordPiece vs BPE：WordPiece 基于似然概率选择合并，BPE 基于频率</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s3">三、预训练与微调范式</h2>
+
+<div class="intuition-box">
+<p>这套范式的关键在"换头不换身"：主干权重整体复用，任务头小到只有一两个矩阵。正因为要学的东西少，下游任务往几千条标注就能起效——这是它当年席卷所有榜单的直接原因。</p>
+</div>
+
+<div class="arch-diagram">
+  一个主干，四种任务头：下游要改的只有最上面那一层
+
+                      ┌──────────────────────────────┐
+                      │   预训练好的 Encoder 主干      │
+                      │   （MLM ＋ NSP 训出来的权重）  │
+                      └───────────────┬──────────────┘
+                                      │  输出：每个位置一个向量
+                                      │        ＋ [CLS] 位置的句向量
+      ┌───────────────┬───────────────┼───────────────┬───────────────┐
+      ▼               ▼               ▼               ▼               ▼
+  ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐   ┌─────────┐
+  │单句分类  │   │句对分类  │   │序列标注  │   │抽取式QA │   │句向量    │
+  ├─────────┤   ├─────────┤   ├─────────┤   ├─────────┤   ├─────────┤
+  │取 [CLS] │   │两句用    │   │每个token│   │预测答案 │   │池化所有 │
+  │过一个   │   │[SEP]拼接 │   │各过一个 │   │的起始与 │   │token 向 │
+  │线性层   │   │取 [CLS] │   │线性层   │   │结束位置 │   │量得定长 │
+  └─────────┘   └─────────┘   └─────────┘   └─────────┘   └─────────┘
+   情感/意图      蕴含/相似      NER/分词       阅读理解      检索/聚类
+
+  ─────────────────────────────────────────────────────────
+  为什么这套范式当年这么好用：
+    · 任务头参数量相比主干几乎可以忽略 ⇒ 下游过拟合风险低
+    · 主干已经学好了语法与语义 ⇒ 几千条标注就能收敛
+    · 所有任务共享同一个主干 ⇒ 一次预训练，处处受益
+
+  它后来"输"给生成式接口的原因也在这张图里：
+  每加一个任务就要加一个头、单独训一遍、单独部署一份，
+  而生成式模型只需要换一句提示。
+</div>
+
+<h3>3.1 Pre-train then Fine-tune</h3>
+<p>BERT 开创了 NLP 的两阶段范式：</p>
+<ol>
+  <li><strong>预训练阶段</strong>：在大规模无标注语料上学习通用语言表示（MLM + NSP）</li>
+  <li><strong>微调阶段</strong>：在下游任务的标注数据上端到端微调全部参数</li>
+</ol>
+<p>这种范式的优势：预训练模型可以复用，微调时只需少量标注数据即可取得优秀效果。</p>
+
+<h3>3.2 下游任务适配</h3>
+<table>
+  <tr><th>任务类型</th><th>输入格式</th><th>输出层设计</th></tr>
+  <tr><td>文本分类</td><td><code>[CLS] text [SEP]</code></td><td><code>[CLS]</code> 向量 → Linear → Softmax</td></tr>
+  <tr><td>句对分类 / NLI</td><td><code>[CLS] sent_A [SEP] sent_B [SEP]</code></td><td><code>[CLS]</code> 向量 → Linear → Softmax</td></tr>
+  <tr><td>命名实体识别 (NER)</td><td><code>[CLS] tok₁ tok₂ ... [SEP]</code></td><td>每个 Token 向量 → Linear → CRF/Softmax</td></tr>
+  <tr><td>抽取式问答 (QA)</td><td><code>[CLS] question [SEP] context [SEP]</code></td><td>每个 Token 预测 start/end 概率</td></tr>
+</table>
+
+<div class="diagram">
+       [预训练]                    [微调]
+┌──────────────────┐     ┌──────────────────────────┐
+│ 大规模无标注语料   │     │  下游任务标注数据           │
+│                  │     │  (分类/NER/QA/句对)        │
+│ MLM + NSP        │     │                          │
+│    ↓             │     │  BERT + 任务头             │
+│ BERT 权重        │ ──→ │  端到端微调所有参数          │
+└──────────────────┘     └──────────────────────────┘</div>
+
+<div class="tip">
+  <ul>
+    <li>微调时学习率通常很小（2e-5 ~ 5e-5），epoch 数也少（2~4 epochs）</li>
+    <li>分类任务用 <code>[CLS]</code>，序列标注任务用每个 Token 的输出</li>
+    <li>QA 任务中 BERT 预测答案在 context 中的 start 和 end 位置</li>
+    <li>Pre-train + Fine-tune 是 "Feature Extraction"（冻结+线性探针）的升级版</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s4">四、RoBERTa</h2>
+
+<div class="intuition-box">
+<p>RoBERTa 一个架构参数都没改，只是把训练做对了：去掉 NSP、加大批量、加数据、每次换新的掩码位置。它的结论有点扎人——当年 BERT 的瓶颈是训练不足，而不是设计不足。</p>
+</div>
+
+<p><span class="tag tag-blue">Meta AI · 2019</span> <strong>Robustly Optimized BERT Pretraining Approach</strong></p>
+
+<p>RoBERTa 的核心贡献不是架构创新，而是证明 BERT 原始训练方案并非最优。主要改进：</p>
+
+<h3>4.1 去掉 NSP</h3>
+<p>RoBERTa 发现 NSP 任务不仅无益，甚至可能有害。移除 NSP 后模型在多个下游任务上都有提升。</p>
+
+<h3>4.2 更大 Batch &amp; 更多数据</h3>
+<table>
+  <tr><th>配置</th><th>BERT</th><th>RoBERTa</th></tr>
+  <tr><td>训练数据</td><td>16 GB (BookCorpus + Wiki)</td><td>160 GB (+ CC-News, OpenWebText, Stories)</td></tr>
+  <tr><td>Batch Size</td><td>256</td><td>8,000</td></tr>
+  <tr><td>训练步数</td><td>1M steps</td><td>500K steps（等效更多 token）</td></tr>
+  <tr><td>NSP 任务</td><td>✓</td><td>✗</td></tr>
+</table>
+
+<h3>4.3 动态 Masking</h3>
+<p>BERT 原版在数据预处理阶段就确定了 Mask 位置（静态 Masking），整个训练过程中每条数据的 Mask 方式固定。RoBERTa 在每个 epoch 动态生成新的 Mask 模式，增加训练多样性。</p>
+
+<h3>4.4 BPE 分词</h3>
+<p>RoBERTa 将 WordPiece 替换为 Byte-level BPE（词表 50K），避免了 UNK Token。</p>
+
+<div class="tip">
+  <ul>
+    <li>RoBERTa = BERT + 更优训练策略，架构完全不变</li>
+    <li>动态 Masking 的好处：每次看到同一句子时 Mask 不同位置，等价于数据增强</li>
+    <li>RoBERTa 证明了 "数据规模 + 训练策略" 的重要性远超架构改动</li>
+    <li>高频问题：RoBERTa 和 BERT 的区别？答四点：去 NSP、动态 Mask、更大 batch/数据、BPE 分词</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s5">五、DeBERTa</h2>
+
+<div class="intuition-box">
+<p><span class="term">解耦注意力</span>的出发点是承认"内容"和"位置"本来是两种信息：原始做法把位置向量直接加进词向量里混着算，DeBERTa 则让注意力分别算"内容对内容""内容对位置""位置对内容"这几项。信息不混在一起，模型就不必先学着把它们拆开。</p>
+</div>
+
+<p><span class="tag tag-purple">Microsoft · 2020</span> <strong>Decoding-enhanced BERT with Disentangled Attention</strong></p>
+
+<h3>5.1 解耦注意力（Disentangled Attention）</h3>
+<p>标准 BERT 将内容和位置信息加在一起后计算注意力。DeBERTa 将两者<strong>解耦</strong>为独立的向量：</p>
+<ul>
+  <li><strong>Content → Content</strong>：Token 语义之间的关注</li>
+  <li><strong>Content → Position</strong>：Token 语义对相对位置的关注</li>
+  <li><strong>Position → Content</strong>：相对位置对 Token 语义的关注</li>
+</ul>
+<p>注意力分数 = c2c + c2p + p2c（不含 p2p 项，因为绝对位置对间的注意力信息较少）。</p>
+
+<h3>5.2 相对位置编码增强</h3>
+<p>DeBERTa 使用相对位置编码（而非 BERT 的绝对位置），允许模型更好地泛化到不同长度的序列。相对位置矩阵 δ(i,j) 被 clip 到 [-k, k] 范围内。</p>
+
+<h3>5.3 Enhanced Mask Decoder (EMD)</h3>
+<p>在 MLM 预测阶段，DeBERTa 在最后一层之后引入<strong>绝对位置信息</strong>。理由是：预测被 Mask 的 Token 需要知道它在句子中的绝对位置（例如句首 vs 句尾的词分布不同）。</p>
+
+<div class="diagram">
+标准 BERT Attention:
+  Q = W_q · (content + position)
+  K = W_k · (content + position)
+  Attention = Q · K^T
+
+DeBERTa Disentangled Attention:
+  Q_c = W_qc · content    Q_p = W_qp · position
+  K_c = W_kc · content    K_p = W_kp · position
+  Attention = Q_c·K_c^T + Q_c·K_p^T + Q_p·K_c^T</div>
+
+<div class="tip">
+  <ul>
+    <li>DeBERTa 的关键：将注意力中的"内容"和"位置"分开计算再加和</li>
+    <li>相对位置编码的好处：可以更好泛化到训练时未见过的序列长度</li>
+    <li>EMD 在最后一层重新引入绝对位置 → 说明预测 Token 时绝对位置仍然重要</li>
+    <li>DeBERTa-V3（2021）进一步融合了 ELECTRA 的 RTD 训练方式</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s6">六、ELECTRA</h2>
+
+<div class="intuition-box">
+<p>ELECTRA 把"填空"换成了"找出哪个词被换过"。填空只有约 15% 的位置参与损失，判别却是每个位置都参与——同样的算力预算下，学习信号的密度差了好几倍。</p>
+</div>
+
+<div class="arch-diagram">
+  <span class="term">Replaced Token Detection</span>：用一个小生成器造假，让判别器逐个位置去分辨
+
+     原句：  这  部  电  影  很  好  看
+                     │
+                     ▼  随机遮住一部分位置
+     遮后：  这  部  [M]  影  很  [M]  看
+                     │
+                     ▼
+        ┌────────────────────────────────┐
+        │  Generator（小模型，做 MLM）    │   参数量通常只有判别器的
+        │  在被遮位置采样一个"像样"的词    │   四分之一到三分之一
+        └───────────────┬────────────────┘
+                        ▼
+     替换后：这  部  电  影  很  非常  看
+                              ▲
+                              └── 生成器把"好"换成了"非常"（似真而错）
+                        │
+                        ▼
+        ┌────────────────────────────────────────────────┐
+        │  Discriminator（主模型，做二分类）              │
+        │  对每一个位置回答：这个 token 是原文还是被换过？  │
+        └────────────────────────────────────────────────┘
+                        ▼
+     判别标签：这→原  部→原  电→原  影→原  很→原  非常→假  看→原
+               ✓     ✓     ✓     ✓     ✓     ✗      ✓
+               └────────── 7 个位置全部产生损失 ──────────┘
+
+  ─────────────────────────────────────────────────────────
+  与 MLM 的两点关键差别：
+
+    ① 信号密度   MLM：只有约 15% 的位置算损失
+                 RTD：100% 的位置都算损失  ⇒ 同算力下学得更快
+
+    ② 分布一致   MLM：预训练输入里有 [MASK]，微调时没有（错配）
+                 RTD：判别器看到的始终是正常词，只是有些被替换过
+                      ⇒ 预训练与微调的输入分布一致
+
+  训完之后生成器丢弃，只保留判别器作为下游主干。
+  代价：要同时训两个模型，且生成器的强弱需要调
+  （太弱造的假太好认，太强则难度过高、判别器学不动）。
+</div>
+
+<p><span class="tag tag-green">Google / Stanford · 2020</span> <strong>Efficiently Learning an Encoder that Classifies Token Replacements Accurately</strong></p>
+
+<h3>6.1 Replaced Token Detection (RTD)</h3>
+<p>MLM 只在 15% 的被 Mask 位置上计算损失，效率较低。ELECTRA 提出 RTD：对<strong>所有 Token</strong> 判断其是否被替换过，将训练信号从 15% 扩展到 100%。</p>
+
+<h3>6.2 Generator-Discriminator 架构</h3>
+<div class="diagram">
+原始输入:  the  chef  cooked  the  meal
+              ↓ mask
+Masked:    the [MASK] cooked  the  meal
+              ↓
+Generator (小BERT):
+           the  artist cooked  the  meal
+              ↓
+Discriminator (大BERT):
+           orig replaced orig  orig  orig
+           ✓      ✗      ✓     ✓     ✓
+</div>
+<ul>
+  <li><strong>Generator</strong>：一个小型 MLM 模型，负责为被 Mask 的位置生成 "替换 Token"</li>
+  <li><strong>Discriminator</strong>：主模型，判断每个 Token 是原始的还是被 Generator 替换的（二分类）</li>
+</ul>
+<p>训练完成后<strong>丢弃 Generator，只保留 Discriminator</strong>用于下游任务。</p>
+
+<h3>6.3 训练效率优势</h3>
+<p>ELECTRA-Small 只用 1 块 GPU 训练 4 天就能超越 GPT；ELECTRA-Base 在相同算力下显著优于 BERT-Base 和 RoBERTa-Base。核心原因：每个 Token 都参与损失计算，数据利用率高。</p>
+
+<div class="warn">
+  ELECTRA 不是 GAN！Generator 和 Discriminator 不是对抗训练，而是联合训练（Generator 用 MLM loss，Discriminator 用 RTD loss）。Generator 的梯度不会通过 Discriminator 反传。
+</div>
+
+<div class="tip">
+  <ul>
+    <li>MLM 只对 15% Token 计算 loss → RTD 对 100% Token 计算 loss → 训练效率大幅提升</li>
+    <li>ELECTRA ≠ GAN：没有对抗训练，Generator 是辅助模型</li>
+    <li>下游微调时只用 Discriminator，与 BERT 用法完全相同</li>
+    <li>ELECTRA 的思想已被 DeBERTa-V3 采用（ELECTRA + Disentangled Attention）</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s7">七、其他变体</h2>
+
+<div class="intuition-box">
+<p>这一批变体沿两个方向走：一个方向是往小走（跨层共享参数、知识蒸馏），目标是同等效果下更便宜；另一个方向是往任务走（改掩码粒度，遮整个片段而不是单个词），目标是让预训练任务更贴近下游要做的事。</p>
+</div>
+
+<h3>7.1 ALBERT（A Lite BERT）</h3>
+<p><span class="tag tag-orange">Google · 2019</span></p>
+<ul>
+  <li><strong>Embedding 因式分解</strong>：将 V×H 的 Embedding 矩阵分解为 V×E 和 E×H（E≪H），大幅减少参数</li>
+  <li><strong>跨层参数共享</strong>：所有 Transformer 层共享同一套参数（Attention + FFN），极大减小模型体积</li>
+  <li><strong>SOP（Sentence Order Prediction）</strong>：替代 NSP，判断两个句子的顺序是否正确（比 NSP 更难也更有效）</li>
+</ul>
+<p>ALBERT-xxlarge 参数量仅 235M（vs BERT-Large 340M），但性能更强。</p>
+
+<h3>7.2 DistilBERT</h3>
+<p><span class="tag tag-blue">Hugging Face · 2019</span></p>
+<ul>
+  <li>通过<strong>知识蒸馏</strong>将 BERT-Base 压缩为 6 层模型</li>
+  <li>保留 BERT 97% 的性能，速度提升 60%，体积减少 40%</li>
+  <li>蒸馏损失 = soft label loss (KL散度) + hard label loss (交叉熵) + cosine embedding loss</li>
+</ul>
+
+<h3>7.3 SpanBERT</h3>
+<p><span class="tag tag-purple">Meta AI · 2019</span></p>
+<ul>
+  <li><strong>Span Masking</strong>：连续 Mask 一段文本（span），而非随机单个 Token</li>
+  <li><strong>Span Boundary Objective (SBO)</strong>：利用 span 边界的 Token 预测 span 内被 Mask 的 Token</li>
+  <li>去掉 NSP，使用单句输入</li>
+  <li>在共指消解、关系抽取、QA 等 span 级任务上表现优异</li>
+</ul>
+
+<h3>对比总结</h3>
+<table>
+  <tr><th>模型</th><th>核心改进</th><th>参数量</th><th>主要优势</th></tr>
+  <tr><td>BERT</td><td>MLM + NSP</td><td>110M / 340M</td><td>开创 pretrain-finetune 范式</td></tr>
+  <tr><td>RoBERTa</td><td>训练策略优化</td><td>125M / 355M</td><td>证明训练配方的重要性</td></tr>
+  <tr><td>DeBERTa</td><td>解耦注意力 + 相对位置</td><td>134M / 390M</td><td>SuperGLUE 超越人类基线</td></tr>
+  <tr><td>ELECTRA</td><td>RTD + Gen-Disc</td><td>14M / 110M / 335M</td><td>训练效率最高</td></tr>
+  <tr><td>ALBERT</td><td>参数共享 + 因式分解</td><td>12M ~ 235M</td><td>极致参数压缩</td></tr>
+  <tr><td>DistilBERT</td><td>知识蒸馏</td><td>66M</td><td>推理速度快</td></tr>
+  <tr><td>SpanBERT</td><td>Span Masking + SBO</td><td>110M / 340M</td><td>span 级任务最强</td></tr>
+</table>
+
+<div class="tip">
+  <ul>
+    <li>ALBERT 的参数共享 ≠ 计算量减少，推理时仍然要过所有层</li>
+    <li>DistilBERT 的蒸馏三损失要记住：soft label + hard label + cosine</li>
+    <li>SpanBERT 的 Span Masking 思想被后来的 T5、GLM 等模型广泛采用</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s8">八、Encoder-Only vs Decoder-Only</h2>
+
+<div class="intuition-box">
+<p>编码器路线输给解码器路线，不是因为理解能力差，而是因为生成式接口能把所有任务统一成"续写"这一种形式，而分类头做不到——每加一个任务就要加一个头、训一遍、部署一份。赢的是接口，不是精度。</p>
+</div>
+
+<h3>8.1 为什么 BERT 不适合生成？</h3>
+<p>BERT 使用<strong>全量双向注意力</strong>（每个 Token 看到所有其他 Token），无法自回归地逐步生成文本。生成任务需要<strong>因果掩码（causal mask）</strong>来确保当前 Token 只能看到左侧上下文。</p>
+
+<table>
+  <tr><th>特性</th><th>Encoder-Only (BERT)</th><th>Decoder-Only (GPT)</th></tr>
+  <tr><td>注意力方式</td><td>双向（全量 Attention）</td><td>单向（Causal Mask）</td></tr>
+  <tr><td>预训练任务</td><td>MLM（完形填空）</td><td>Next Token Prediction（自回归）</td></tr>
+  <tr><td>生成能力</td><td>✗ 不能自回归生成</td><td>✓ 天然自回归</td></tr>
+  <tr><td>理解能力</td><td>✓ 强（双向上下文）</td><td>△ 较弱（仅左侧上下文）</td></tr>
+  <tr><td>参数效率</td><td>较高（同参数理解更强）</td><td>需更大规模才能涌现能力</td></tr>
+</table>
+
+<h3>8.2 Encoder-Only 的适用场景</h3>
+<ul>
+  <li><strong>文本分类</strong>：情感分析、意图识别、垃圾邮件检测</li>
+  <li><strong>序列标注</strong>：NER、POS Tagging、分词</li>
+  <li><strong>语义检索</strong>：将文本编码为向量，用于相似度搜索</li>
+  <li><strong>句对任务</strong>：NLI、语义相似度、问答匹配</li>
+  <li><strong>Cross-Encoder Reranking</strong>：精排阶段的相关性打分</li>
+</ul>
+
+<h3>8.3 为什么 Decoder-Only 成为主流？</h3>
+<p>大规模 Decoder-Only 模型（GPT-3/4, LLaMA, Claude）在理解任务上通过 In-Context Learning 也能取得优秀效果，同时还能做生成任务。当模型规模足够大时，单向注意力的信息损失可以被弥补。</p>
+
+<div class="tip">
+  <ul>
+    <li>BERT 不能生成的根本原因：没有 causal mask，无法自回归</li>
+    <li>Encoder-Only 在<strong>同等参数</strong>下理解能力通常强于 Decoder-Only</li>
+    <li>Decoder-Only 成为主流是因为"统一范式"：一个模型同时搞定理解和生成</li>
+    <li>Encoder-Only 在工业界仍广泛用于 Embedding、Reranking、分类等场景</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s9">九、BERT 在现代 AI 中的角色</h2>
+
+<div class="intuition-box">
+<p>编码器模型没有退场，只是换了岗位：现在它站在检索链路上做召回和精排，生成交给解码器。判断"这两段文本相不相关"这件事，双向编码依然是最合适的工具。</p>
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>在向量召回后面加一层精排，命中率抬升了 18 个点。<strong>背景</strong>——某检索问答系统用<span class="term">Bi-Encoder</span>把问题和文档各自编码成向量，靠近似最近邻从十万级文档里召回 top-50，再把前 5 条送进生成模型。<strong>问题</strong>——评测显示"正确答案出现在最终 top-5 里"的比例只有约 68%。原因在 Bi-Encoder 的结构：问题和文档是<strong>各自独立</strong>编码的，两者的交互只发生在最后那一次向量点积上，因此它能判断"大致同一主题"，却分不清"讲的是同一个条件还是相反的条件"。<strong>方案</strong>——保留 Bi-Encoder 做召回（快，能扫全库），在它后面接一层<span class="term">Cross-Encoder</span>：把问题和候选文档拼成一条输入一起过编码器，让两者在每一层都做交叉注意力，输出一个相关性分数，只对召回来的 50 条重排。<strong>效果</strong>——最终 top-5 的命中率从约 68% 升到约 86%，端到端延迟只增加了几十毫秒——因为重排的是 50 条而不是十万条。<strong>这就是两者的正确分工</strong>：Bi-Encoder 负责快而粗地把范围缩小，Cross-Encoder 负责慢而准地在小范围里排序。
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>高频分类任务上，小编码器模型比生成式接口更划算。<strong>背景</strong>——某平台的工单意图分类，日均调用量在百万次量级，最初直接调用生成式大模型、用提示词让它输出类别名。<strong>问题</strong>——三个方面都不理想：一是每次调用要带上任务描述和示例，输入 token 恒定开销高；二是 P99 延迟在数百毫秒量级，拖慢了整条工单流转；三是输出偶尔不在预定义的类别集合里，还得加一层清洗和兜底。而这个任务其实已经积累了数万条历史标注数据。<strong>方案</strong>——换成一个一亿参数级别的编码器模型加一个线性分类头，用历史标注做微调，单卡部署即可承载全部流量。<strong>效果</strong>——准确率从约 91% 升到约 93%（在标注充足的封闭分类任务上，小模型微调常常反过来更准），P99 延迟降到十几毫秒量级，单位调用成本下降两个数量级，并且输出天然被限制在类别集合内，兜底逻辑可以整段删掉。<strong>判据可以直接复用</strong>：标注充足、类别封闭、调用量大——这三个条件同时成立时，编码器路线几乎总是更优。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>判断任务是"理解"还是"生成"，理解类任务先考虑编码器模型</li>
+<li>检索链路按"Bi-Encoder 召回 ＋ Cross-Encoder 精排"两段式搭</li>
+<li>Cross-Encoder 只用于重排少量候选，别让它去扫全库</li>
+<li>做句向量时明确池化方式（<code>[CLS]</code> 还是均值），并在训练与推理侧保持一致</li>
+<li>标注充足、类别封闭、调用量大时，优先微调小模型而不是写提示</li>
+<li>选 Embedding 模型时按自己的真实语料和语种做评测，别只看公开榜单</li>
+<li>序列标注类任务注意子词与标签的对齐，标签应落在每个词的首个子词上</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要用编码器模型做开放式生成，它的结构从根上不支持自回归</li>
+<li>不要在 Bi-Encoder 上追求细粒度语义区分，那是 Cross-Encoder 的活</li>
+<li>不要把 <code>[CLS]</code> 向量当成通用句向量直接用，未经句向量任务训练时它并不好使</li>
+<li>不要在微调时沿用预训练的学习率量级，编码器微调通常要小一到两个数量级</li>
+<li>不要忽略最大长度截断，超长文本被截掉的部分对分类结果的影响往往很大</li>
+<li>不要混用不同模型的 tokenizer 和权重，词表不同则 Embedding 完全对不上</li>
+<li>不要因为"生成式模型更新"就把已经跑得很好的分类服务全部替换掉</li>
+</ul>
+</div>
+</div>
+
+<p>虽然 LLM 时代 Decoder-Only 是主角，但 BERT 类 Encoder 模型在以下场景中不可替代：</p>
+
+<h3>9.1 Embedding 模型</h3>
+<p>现代最强的文本 Embedding 模型大多基于 BERT 架构：</p>
+<table>
+  <tr><th>模型</th><th>基座</th><th>训练方法</th></tr>
+  <tr><td>E5 (Microsoft)</td><td>BERT / RoBERTa</td><td>对比学习 + 指令微调</td></tr>
+  <tr><td>BGE (BAAI)</td><td>BERT / RoBERTa</td><td>RetroMAE + 对比学习</td></tr>
+  <tr><td>GTE (Alibaba)</td><td>BERT</td><td>多阶段对比学习</td></tr>
+  <tr><td>Sentence-BERT</td><td>BERT</td><td>Siamese 网络 + 对比学习</td></tr>
+  <tr><td>Jina Embeddings</td><td>BERT</td><td>对比学习 + 长文本适配</td></tr>
+</table>
+<p>为什么用 Encoder？因为 Embedding 任务需要双向理解输入语义，且不需要生成能力；Encoder 模型参数少、推理快。</p>
+
+<h3>9.2 Cross-Encoder Reranker</h3>
+<p>在 RAG 系统中，Cross-Encoder 用于精排阶段：</p>
+<div class="diagram">
+Query + Document → [CLS] query [SEP] document [SEP]
+                         ↓
+                    BERT Encoder
+                         ↓
+                   [CLS] → Linear → 相关性分数</div>
+<p>Cross-Encoder 将 query 和 document 拼接输入 BERT，直接计算交互注意力，精度远高于 Bi-Encoder（但无法预计算向量，速度较慢）。</p>
+
+<h3>9.3 RAG 系统中的位置</h3>
+<div class="diagram">
+RAG Pipeline:
+
+User Query
+    │
+    ▼
+┌────────────────┐
+│ Bi-Encoder     │ ← BERT-based Embedding (E5/BGE)
+│ (向量检索)      │    快速召回 Top-K
+└───────┬────────┘
+        │ Top-K documents
+        ▼
+┌────────────────┐
+│ Cross-Encoder  │ ← BERT-based Reranker
+│ (精排)          │    精确打分 Top-N
+└───────┬────────┘
+        │ Top-N documents
+        ▼
+┌────────────────┐
+│ LLM Generator  │ ← Decoder-Only (GPT/LLaMA/Claude)
+│ (生成答案)      │    基于检索内容生成回答
+└────────────────┘</div>
+
+<div class="tip">
+  <ul>
+    <li>现代 Embedding 模型 (E5/BGE/GTE) 几乎都基于 BERT 架构</li>
+    <li>Bi-Encoder 快但粗，Cross-Encoder 精但慢 → RAG 中两者配合使用</li>
+    <li>BERT 在 RAG 中的角色：负责"检索"和"精排"环节，不做生成</li>
+    <li>常被问到 "BERT 还有用吗？" 一定要提 Embedding + Reranker</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<div class="qa-section">
+<h2 id="qa">Q&amp;A</h2>
+
+<details>
+  <summary>Q1：BERT 的 "双向" 和 ELMo 的 "双向" 有什么区别？</summary>
+  <div class="answer">
+    <p><strong>ELMo</strong> 使用两个独立的单向 LSTM（前向 + 后向），各自编码后拼接。两个方向的信息在最终拼接前互不影响，只是浅层的双向。</p>
+    <p><strong>BERT</strong> 使用 Transformer Encoder 的 Self-Attention，每个 Token 在每一层同时关注左右所有 Token，实现深层双向交互。</p>
+    <p>核心区别：ELMo 是"双向拼接"，BERT 是"双向融合"。BERT 的每个位置表示都融合了完整上下文，而 ELMo 的前向和后向编码在中间层互不可见。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q2：为什么 BERT 用 MLM 而不是传统语言模型（LM）？</summary>
+  <div class="answer">
+    <p>传统 LM（从左到右预测下一个 Token）只能看到左侧上下文，无法建模真正的双向依赖。而 NLU 任务（分类、NER、QA）通常需要理解完整上下文。</p>
+    <p>MLM 通过随机 Mask Token 并预测，使得模型可以在 Self-Attention 中同时利用左右上下文信息。这是 BERT 超越 GPT-1 的关键原因（GPT-1 参数量相当但在 GLUE 上弱于 BERT）。</p>
+    <p>代价是：MLM 不能用于自回归生成任务。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q3：MLM 中 80/10/10 策略的原因是什么？</summary>
+  <div class="answer">
+    <p><strong>80% → [MASK]</strong>：模型学会预测被 Mask 的位置。</p>
+    <p><strong>10% → 随机 Token</strong>：迫使模型不仅关注 <code>[MASK]</code> 位置，还关注所有位置的表示质量，增强鲁棒性。</p>
+    <p><strong>10% → 保持不变</strong>：让模型学会在输入正确时也能给出正确预测，缓解 pretrain-finetune 不一致问题（微调时没有 <code>[MASK]</code>）。</p>
+    <p>如果 100% 都替换为 <code>[MASK]</code>，模型会过度依赖 <code>[MASK]</code> 这个特殊 Token 的存在来决定是否需要"预测"，微调时表现会下降。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q4：RoBERTa 相比 BERT 做了哪些改进？为什么有效？</summary>
+  <div class="answer">
+    <p>RoBERTa 的四个关键改进：</p>
+    <ol>
+      <li><strong>去掉 NSP</strong>：NSP 是伪任务，正负例太容易区分，对模型帮助不大</li>
+      <li><strong>动态 Masking</strong>：每个 epoch 重新随机 Mask，等价于数据增强，相比静态 Mask 提供更多训练信号</li>
+      <li><strong>更大 Batch Size + 更多数据 + 更长训练</strong>：数据从 16GB → 160GB，Batch 从 256 → 8K，证明 BERT 严重欠训练</li>
+      <li><strong>Byte-level BPE 分词</strong>：消除 UNK Token，覆盖所有 Unicode 字符</li>
+    </ol>
+    <p>有效原因：BERT 的架构本身足够强大，但原始训练配方不够充分。RoBERTa 证明了"训练策略 >> 架构微调"。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q5：DeBERTa 的解耦注意力（Disentangled Attention）是如何工作的？</summary>
+  <div class="answer">
+    <p>标准 BERT 中，Token 的表示 = 内容嵌入 + 位置嵌入，两者相加后作为 Q/K/V 的输入。注意力矩阵 QK^T 展开后包含 c2c、c2p、p2c、p2p 四项交叉乘积，全部混在一起。</p>
+    <p>DeBERTa 将内容和位置分开建模：</p>
+    <ul>
+      <li>为内容和位置分别维护独立的 Q/K 投影矩阵</li>
+      <li>注意力分数 = c2c + c2p + p2c（去掉 p2p 项）</li>
+      <li>位置用<strong>相对位置编码</strong>而非绝对位置</li>
+    </ul>
+    <p>在 MLM 预测层（Enhanced Mask Decoder）再重新加入绝对位置信息。这种"先用相对位置建模中间表示，最后用绝对位置辅助预测"的策略效果显著。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q6：ELECTRA 为什么比 BERT 训练效率高？它和 GAN 有什么区别？</summary>
+  <div class="answer">
+    <p><strong>效率原因</strong>：BERT 的 MLM 只对 15% 被 Mask 的 Token 计算损失，85% 的 Token "浪费"了。ELECTRA 的 RTD 对所有 100% 的 Token 都计算二分类损失（是否被替换），数据利用率提高约 6-7 倍。</p>
+    <p><strong>与 GAN 的区别</strong>：</p>
+    <ul>
+      <li>GAN 的 Generator 通过 Discriminator 的梯度反传来训练 → 对抗关系</li>
+      <li>ELECTRA 的 Generator 用独立的 MLM loss 训练，不接收 Discriminator 的梯度 → 协作关系</li>
+      <li>ELECTRA 的 Generator 在训练后被丢弃，而 GAN 的 Generator 是最终产物</li>
+      <li>ELECTRA 的输入是离散 Token（不可微分），不能用 GAN 的梯度反传方式</li>
+    </ul>
+  </div>
+</details>
+
+<details>
+  <summary>Q7：ALBERT 的参数共享为什么能减少参数量但不减少计算量？</summary>
+  <div class="answer">
+    <p>ALBERT 的所有 Transformer 层共享同一套 Attention 和 FFN 参数。这意味着：</p>
+    <ul>
+      <li><strong>参数量</strong>减少到 1/L（L 为层数），因为只存储一套权重</li>
+      <li><strong>计算量不变</strong>，因为推理时仍然要逐层计算，每层都要做矩阵乘法，只是用的权重相同</li>
+    </ul>
+    <p>类比：一条生产线上 12 个工人做同样的工作 vs 1 个工人做 12 次。人数减少了但工作量没减。</p>
+    <p>此外 Embedding 因式分解 V×H → V×E + E×H（E=128, H=4096），参数从 V×4096 降为 V×128 + 128×4096。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q8：为什么 BERT 不适合生成任务？能否强行让 BERT 生成文本？</summary>
+  <div class="answer">
+    <p>BERT 不适合生成的根本原因：</p>
+    <ol>
+      <li><strong>无 causal mask</strong>：Self-Attention 看到了所有位置，无法确保自回归的顺序依赖</li>
+      <li><strong>预训练任务不匹配</strong>：MLM 是"完形填空"，而非逐步预测下一个 Token</li>
+      <li><strong>没有学到 P(x_t | x_{&lt;t})</strong>：BERT 建模的是 P(x_masked | x_unmasked)，不是条件概率链</li>
+    </ol>
+    <p>理论上可以用 BERT 做"非自回归生成"：一次性预测所有 <code>[MASK]</code> 位置，然后迭代精炼（如 Mask-Predict 方法）。但效果远逊于 GPT 类自回归模型。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q9：BERT 在 RAG 系统中扮演什么角色？</summary>
+  <div class="answer">
+    <p>在现代 RAG 系统中，BERT 类模型承担两个关键角色：</p>
+    <ol>
+      <li><strong>Bi-Encoder（向量检索）</strong>：基于 BERT 的 Embedding 模型（E5、BGE、GTE）将 query 和 document 分别编码为向量，通过近似最近邻（ANN）搜索快速召回 Top-K 候选</li>
+      <li><strong>Cross-Encoder（精排）</strong>：将 query 和 document 拼接输入 BERT，通过完整的交互注意力计算精确的相关性分数，对 Top-K 候选重排序</li>
+    </ol>
+    <p>Bi-Encoder 牺牲精度换速度（可离线预计算向量），Cross-Encoder 牺牲速度换精度（每对都要在线计算），两者互补。</p>
+    <p>最终检索到的文档作为上下文输入 LLM（Decoder-Only）生成答案。BERT 和 GPT 类模型在 RAG 中各司其职。</p>
+  </div>
+</details>
+
+<details>
+  <summary>Q10：现在 LLM 这么强大，BERT 还有存在的必要吗？</summary>
+  <div class="answer">
+    <p>BERT 类模型在以下场景<strong>仍不可替代</strong>：</p>
+    <ul>
+      <li><strong>Embedding 模型</strong>：文本向量化仍首选 BERT 架构（E5/BGE），因为双向理解更适合语义编码，且模型小、推理快</li>
+      <li><strong>低延迟场景</strong>：BERT-Base 仅 110M 参数，可以在 CPU 上毫秒级推理；LLM 动辄 7B+ 参数</li>
+      <li><strong>分类/NER 等判别任务</strong>：fine-tuned BERT 在特定领域数据上往往优于 zero-shot LLM</li>
+      <li><strong>边缘设备部署</strong>：DistilBERT (66M) 可在移动端运行</li>
+      <li><strong>成本考量</strong>：调用 LLM API 处理百万级文档的成本 >> 本地部署 BERT</li>
+    </ul>
+    <p>核心观点：BERT 和 LLM 不是替代关系，而是互补关系。BERT 适合"理解型"任务，LLM 适合"生成型"任务。在实际系统中两者经常协同工作（如 RAG）。</p>
+  </div>
+</details>
+
+</div>
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

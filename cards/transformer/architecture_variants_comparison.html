@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T15 · Encoder-only / Decoder-only / Encoder-Decoder 架构对比</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d2c0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+h4{color:var(--cyan);margin:1.2rem 0 .4rem;font-size:1rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+td{background:rgba(22,27,34,.6)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.formula{background:rgba(88,166,255,.06);border-left:3px solid var(--accent);padding:.8rem 1.2rem;margin:1rem 0;border-radius:0 6px 6px 0;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:.92rem;overflow-x:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、同一个Transformer，三种车型</a>
+<a href="#s2">二、注意力可见性：双向/causal/交叉</a>
+<a href="#s3">三、Encoder-only：理解型架构</a>
+<a href="#s4">四、Decoder-only：生成型架构</a>
+<a href="#s5">五、Encoder-Decoder：seq2seq架构</a>
+<a href="#s6">六、为什么生成式大模型都选Decoder-only</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>T15 · Encoder-only / Decoder-only / Encoder-Decoder 架构对比</h1>
+<p class="subtitle">Architecture Variants — 注意力可见性 / causal mask / 交叉注意力 / BERT·GPT·T5 / KV Cache / Decoder-only的胜利</p>
+
+<div class="intuition-box">
+<p>三种架构用的是同一台发动机（Self-Attention），区别只在<strong>每个 Token 被允许看见谁</strong>：全看见是理解，只看左边是生成，两边各管一摊是翻译。</p>
+</div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、同一个Transformer，三种车型</h2>
+
+<p>2017 年原始 Transformer 是一个"编码器 + 解码器"的完整结构，最初为机器翻译设计。之后的研究者发现：把其中一半拆掉，剩下的半套反而在特定任务上更纯粹、更高效。于是演化出三条路线——只留编码器的 <span class="term">Encoder-only</span>、只留解码器的 <span class="term">Decoder-only</span>、两者都留的 <span class="term">Encoder-Decoder</span>。它们都使用自注意力机制，核心差异在于注意力的"可见范围"如何被约束。</p>
+
+<div class="arch-diagram">
+图 1：三种架构的结构对比
+
+ Encoder-only              Decoder-only               Encoder-Decoder
+ ┌────────────┐            ┌────────────┐             ┌────────────┐
+ │ Encoder ×N │            │ Decoder ×N │             │ Encoder ×N │
+ │ 双向注意力  │            │ causal 注意力│            │ 双向注意力  │
+ └─────┬──────┘            └─────┬──────┘             └─────┬──────┘
+       │                         │                     cross │ attention
+       ▼                         ▼                          ▼
+  理解/打分整段输入          逐 token 向后生成          ┌────────────┐
+  (分类·NER·检索)           (聊天·代码·推理)           │ Decoder ×N │
+                                                      │ causal+交叉 │
+ BERT / RoBERTa             GPT / Llama / Qwen        └─────┬──────┘
+                                                            ▼
+                                                       seq2seq 生成
+                                                       (翻译·摘要·改写)
+                                                        T5 / BART
+</div>
+
+<p>一个 helpful 的类比是车型：Encoder-only 像轿车——专注把"理解路况"这一件事做到极致；Decoder-only 像越野车——擅长一步一步往前开（生成）；Encoder-Decoder 像拖挂房车——前面的车（编码器）看清全局，后面的挂车（解码器）按部就班地输出。三种车都能上路，但赛道不同。</p>
+
+<table>
+<tr><th>架构类型</th><th>注意力机制特征</th><th>核心能力</th><th>代表模型</th><th>适用场景</th></tr>
+<tr><td>Encoder-only</td><td>双向注意力：每个词都能看到上下文全部信息，无遮挡</td><td>深刻理解：对输入文本做精细分析</td><td>BERT、RoBERTa</td><td>情感分析、文本分类、命名实体识别、关键词提取</td></tr>
+<tr><td>Decoder-only</td><td>单向掩码注意力：只能看已生成的词，看不到未来的词</td><td>生成与推理：基于前文逐词预测下一个词</td><td>GPT 系列、Llama、Qwen、DeepSeek、Claude</td><td>聊天机器人、创意写作、逻辑推理、代码生成</td></tr>
+<tr><td>Encoder-Decoder</td><td>混合注意力：Encoder 看原文，Decoder 边看原文边生成</td><td>翻译与转换：把一种序列映射为另一种序列</td><td>T5、BART、原始 Transformer</td><td>机器翻译、长文本摘要、纠错改写</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>选架构的本质是选"信息可见性策略"：任务需要全局视野就用双向，需要逐步推进就用 causal，需要"参考一份材料再写作"就用编码-解码。</p>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、注意力可见性：双向/causal/交叉</h2>
+
+<p>三种架构都有自注意力计算，那区别到底在哪？答案就藏在注意力矩阵里：一个 L×L 的方阵，第 i 行第 j 列表示"第 i 个 Token 能不能看到第 j 个 Token"。不同的 mask 策略，画出来的可见性图案完全不同。以"远方有棵苹果树"五个 Token 为例。</p>
+
+<div class="arch-diagram">
+图 2：Encoder-only 的注意力可见性（双向，全矩阵 ✓）
+
+          Key→   远   方   有   棵  苹果树
+  Query 远      [ ✓    ✓    ✓    ✓    ✓ ]
+        方      [ ✓    ✓    ✓    ✓    ✓ ]
+        有      [ ✓    ✓    ✓    ✓    ✓ ]
+        棵      [ ✓    ✓    ✓    ✓    ✓ ]
+     苹果树     [ ✓    ✓    ✓    ✓    ✓ ]
+
+ 每个 token 同时看到全文 → "苹果树"也能反过来影响"远"的表示
+</div>
+
+<div class="arch-diagram">
+图 3：Decoder-only 的注意力可见性（causal mask，下三角 ✓）
+
+          Key→   远   方   有   棵  苹果树
+  Query 远      [ ✓    ✗    ✗    ✗    ✗ ]
+        方      [ ✓    ✓    ✗    ✗    ✗ ]
+        有      [ ✓    ✓    ✓    ✗    ✗ ]
+        棵      [ ✓    ✓    ✓    ✓    ✗ ]
+     苹果树     [ ✓    ✓    ✓    ✓    ✓ ]
+
+ ✗ = 被 causal mask 遮住的上三角：生成"棵"时绝不能看到"苹果树"
+</div>
+
+<div class="arch-diagram">
+图 4：Encoder-Decoder 的注意力可见性（双矩阵 + 交叉注意力）
+
+ Encoder 自注意力(原文, 双向):        Decoder 自注意力(译文, causal):
+        K→ 源1 源2 源3                      K→ 译1 译2 译3
+  Q 源1 [ ✓   ✓   ✓ ]                Q 译1 [ ✓   ✗   ✗ ]
+    源2 [ ✓   ✓   ✓ ]                  译2 [ ✓   ✓   ✗ ]
+    源3 [ ✓   ✓   ✓ ]                  译3 [ ✓   ✓   ✓ ]
+
+ 交叉注意力(全矩形): Q 来自译文, K/V 来自原文
+        K→ 源1 源2 源3
+  Q 译1 [ ✓   ✓   ✓ ]    生成每个译文词时，
+    译2 [ ✓   ✓   ✓ ]    都可以完整"查阅原文"
+    译3 [ ✓   ✓   ✓ ]
+</div>
+
+<p><span class="term">causal mask（因果掩码）</span>是 Decoder-only 的标志性设计：把注意力矩阵的上三角（未来位置）置为 -∞，softmax 之后权重变成 0。它的存在源于生成的因果性——人说话是一个字一个字从前往后说的，基于已说出口的话推理下一个字，不能预知未来。当生成到"苹果"这个词时，"树"不应该被看见，否则模型等于抄答案。</p>
+
+<pre><code># causal mask 的最小实现：上三角 = 未来位置
+L = 5
+mask = np.triu(np.ones((L, L)), k=1)  # 上三角为 1
+scores = scores + mask * (-1e9)       # 未来位置的分数打成约 -∞
+weights = softmax(scores)             # 未来位置的权重归零
+</code></pre>
+
+<p><span class="term">交叉注意力（Cross-Attention）</span>则是 Encoder-Decoder 独有的桥梁：Query 来自解码器当前的隐藏状态（"我现在想知道什么"），Key 和 Value 来自编码器对原文的输出（"原文里有什么可查"）。解码器每生成一个词，都会拿着自己的问题去原文里检索一遍相关信息。</p>
+
+<table>
+<tr><th>维度</th><th>双向注意力</th><th>causal 掩码注意力</th><th>交叉注意力</th></tr>
+<tr><td>可见范围</td><td>全文所有位置</td><td>仅当前及之前位置</td><td>译文看原文，全部可见</td></tr>
+<tr><td>Q/K/V 来源</td><td>全部来自同一输入</td><td>全部来自同一输入</td><td>Q 来自译文，K/V 来自原文</td></tr>
+<tr><td>矩阵形状</td><td>L×L 全 ✓</td><td>L×L 下三角 ✓</td><td>L译×L源 全 ✓ 矩形</td></tr>
+<tr><td>擅长</td><td>理解、判别</td><td>逐步生成</td><td>条件生成（参考原文写作）</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>注意力矩阵就是"考场座位表"：双向注意力是开卷考试，人人互看；causal mask 是单人闭卷，只能看自己写过的部分；交叉注意力允许答题时翻一本指定的参考书（原文），但不能翻答案页（未来的译文）。</p>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、Encoder-only：理解型架构</h2>
+
+<p>Encoder-only 架构只有编码器，代表模型是 2018 年的 BERT。它的预训练目标是 <span class="term">MLM（掩码语言建模）</span>：随机遮住句中 15% 的词，让模型根据上下文双向猜出被遮的词。因为猜词必须同时利用前后文，所以训练出了天然的双向注意力——每个字都能看到上下文所有信息。</p>
+
+<p>这种"先读完整段再下判断"的模式，与理解类任务完美契合：文本分类要读完才能判断情感，命名实体识别要结合上下文才能判定"苹果"是公司还是水果，语义检索需要整句的浓缩表示。用法上通常不生成文字，而是取模型的输出做打分或分类——在预训练模型后接一个小分类头，用少量标注数据微调即可。</p>
+
+<div class="highlight">
+<strong>生产案例：BERT 用双向理解横扫理解类榜单。</strong>2018 年 BERT 发布时，GLUE 基准的平均得分从此前最好的 ELMo 的 78.6 被 BERT-base（1.1 亿参数）提到 80.5，BERT-large（3.4 亿参数）进一步提到 82.1；在阅读理解数据集 SQuAD 1.1 上，BERT-large 的 F1 达到 93.2，首次超过人类标注水平的 91.2。此后 RoBERTa、ALBERT 等变体长期占据各类理解榜单，今天搜索系统里的语义召回、风控文本分类、评论情感分析，大量仍在用 BERT 家族的微调模型——因为它们只有 1 亿级参数，推理成本是百亿级生成模型的几十分之一。
+</div>
+
+<table>
+<tr><th>要点</th><th>说明</th></tr>
+<tr><td>预训练目标</td><td>MLM 完形填空（+ NSP 句对关系判断）</td></tr>
+<tr><td>输出形态</td><td>每个 token 的上下文向量 / 整句 [CLS] 向量，用于打分而非生成</td></tr>
+<tr><td>典型下游任务</td><td>文本分类、情感分析、NER、信息抽取、语义检索</td></tr>
+<tr><td>不擅长</td><td>开放式文本生成（双向注意力无法从左到右增量输出）</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Encoder-only 是"阅读理解选手"：先把文章从头到尾读两遍（双向），再回答选择题。让它现场写作文不是不行，而是它的训练方式压根没教过怎么逐字起稿。</p>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、Decoder-only：生成型架构</h2>
+
+<p>Decoder-only 架构只有解码器，是当今 GPT、Llama、Qwen、DeepSeek、Claude 等模型家族的统一选择。我们日常使用的 AI 产品——聊天、写代码、做推理——底层几乎都是这类<span class="term">生成式大模型</span>。它们的观察非常直观：大模型回答时是一个 token 一个 token 往外"吐"的，就像人说话从前往后逐字进行。</p>
+
+<p>这种逐词生成模拟了人类思维的因果性：基于已经说出口的前文推理下一个字，不能预知未来。因此 Decoder-only 用 causal mask 遮住未来位置，预训练目标就是最朴素的<span class="term">next-token 预测（下一个词预测）</span>：给定前文，预测下一个词，全语料每个位置都是一道练习题。</p>
+
+<pre><code># 训练时一条长度为 N 的序列，天然提供 N 个训练信号
+# 输入:  [t1, t2, t3, ..., tN-1]
+# 目标:  [t2, t3, t4, ..., tN  ]
+# 每个位置的预测都在 causal mask 保护下并行完成
+</code></pre>
+
+<p>推理阶段则完全自回归：生成第 t 个词时，把前面 t-1 个已生成词作为输入，预测下一个，循环直到输出结束符。为了让这个循环不重复计算，工程上使用 <span class="term">KV Cache</span>：之前 token 算过的 Key/Value 保持不变，缓存下来直接复用，每生成一个新词只需计算这一个新 token 的注意力。</p>
+
+<div class="highlight">
+<strong>生产案例：KV Cache 是 Decoder-only 推理的生死线。</strong>以 Llama-2-7B 为例（32 层、32 个 KV 头、head_dim=128、fp16）：每个 token 的 KV 缓存约 2 × 32 × 128 × 2B = 16KB/层，32 层合计 512KB；跑满 4096 上下文要吃掉约 2GB 显存，几乎与模型权重本身的一个分片相当。若不缓存、每步都全量重算前缀，生成 100 个 token 要重复前向约 5000 个 token 的计算量；有了 KV Cache，每步只算 1 个新 token。vLLM 进一步用 PagedAttention 把 KV 缓存分页管理，把碎片浪费变成可用容量，官方报告吞吐量较朴素实现提升 2~4 倍——可见 Decoder-only 的推理优化几乎全部围绕这块缓存展开。
+</div>
+
+<table>
+<tr><th>要点</th><th>说明</th></tr>
+<tr><td>预训练目标</td><td>next-token 预测，任意无标注文本都可直接当训练数据</td></tr>
+<tr><td>训练并行性</td><td>teacher forcing + causal mask，一条序列 N 个位置并行算出 N 个信号</td></tr>
+<tr><td>推理方式</td><td>自回归逐 token 生成，配 KV Cache 复用历史 K/V</td></tr>
+<tr><td>代表模型</td><td>GPT 系列（GPT-3 达 175B）、Llama、Qwen、DeepSeek、Claude</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Decoder-only 的哲学是"写好上一个字，猜好下一个字"。训练时做的题（根据前文猜后一个词）和推理时干的事（根据前文续写）一模一样——这种训练与推理形态的完全一致，是它后来统治 LLM 领域的第一块基石。</p>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、Encoder-Decoder：seq2seq架构</h2>
+
+<p>Encoder-Decoder（编码-解码器）架构保留了原始 Transformer 的完整形态，代表模型是 T5 和 BART，适合<span class="term">seq2seq（序列到序列）</span>任务——输入一个序列，输出另一个序列：翻译是中文序列到英文序列，摘要是长文序列到短文序列，纠错改写同理。</p>
+
+<p>它的分工非常清晰：<strong>Encoder 阶段用双向注意力把原文读透</strong>，生成一组充分融合的表示；<strong>Decoder 阶段负责生成译文/摘要</strong>，内部同时跑两种注意力——掩码自注意力处理已生成的部分（causal，不偷看未来），交叉注意力则随时回头查阅编码器输出的原文（全可见）。"边写边查原文"正是翻译质量的来源。</p>
+
+<pre><code># 交叉注意力：Q 问译文侧，K/V 查原文侧
+Q = decoder_hidden @ Wq   # 我当前需要什么信息
+K = encoder_out @ Wk      # 原文的"索引"
+V = encoder_out @ Wv      # 原文的"内容"
+out = softmax(Q @ K.T / sqrt(d)) @ V
+</code></pre>
+
+<div class="highlight">
+<strong>生产案例：T5 用"万物皆文本"统一了 seq2seq。</strong>Google 的 T5（最大版本 110 亿参数）把翻译、摘要、分类、问答全部改写成"文本进、文本出"的格式，用一个 Encoder-Decoder 模型、一套 text-to-text 目标通吃所有任务，在当时的 SuperGLUE 上逼近甚至部分超越专用模型。它证明了 Encoder-Decoder 的条件生成能力足够通用——但代价是：所有任务都要先人工设计"改写成 seq2seq"的模板，且推理时解码器每步都要背着整个编码器的 K/V，工程链路比单一 decoder 复杂一截。
+</div>
+
+<table>
+<tr><th>要点</th><th>说明</th></tr>
+<tr><td>预训练目标</td><td>T5 用 span corruption：遮住原文片段，让 decoder 还原</td></tr>
+<tr><td>两种注意力并存</td><td>decoder 内 causal 自注意力 + 对 encoder 的交叉注意力</td></tr>
+<tr><td>典型任务</td><td>机器翻译、长文本摘要、纠错改写、语音识别（Whisper 也是此结构）</td></tr>
+<tr><td>局限</td><td>需要"源→目标"成对的任务形态；通用对话场景不如 decoder-only 自然</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Encoder-Decoder 是"对照翻译工作法"：左边的人（编码器）把原文逐字读透，右边的人（解码器）一边落笔一边扭头查原文。写译文时可以随时回头看，但绝不能提前抄自己还没写出来的后半句。</p>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、为什么生成式大模型都选Decoder-only</h2>
+
+<p>三种架构都用自注意力，早期也三分天下，但今天 Decoder-only 几乎"统治"了 LLM 领域。这不是偶然，而是训练、推理、规模三个维度同时占优的结果。</p>
+
+<h3>理由一：训练目标最朴素，数据通吃且训推一致</h3>
+
+<p>next-token 预测不需要任何配对数据——互联网上每一段文本天然就是训练样本，每个位置都贡献一个监督信号，一条长度为 N 的序列提供 N 道题。相比之下，Encoder-Decoder 的 seq2seq 目标需要先把任务构造成"源-目标"对（T5 为此设计了复杂的 span corruption 和任务模板）。更关键的是训推一致：Decoder-only 训练时"给前文猜后词"，推理时"给前文续写"，动作完全相同；而 Encoder-only 的 MLM 是挖空填词，与自回归生成之间存在形态鸿沟。</p>
+
+<h3>理由二：causal 结构与 KV Cache 天然契合，推理工程红利最大</h3>
+
+<p>因为只看过去，历史 token 的 K/V 在后续生成中永远不变，可以放心缓存——这正是 KV Cache 成立的前提。整套推理工程（增量解码、continuous batching、PagedAttention、投机采样）都围绕"单一 decoder 栈 + 缓存"构建，结构简单、优化面集中。Encoder-Decoder 要同时维护编码器输出与两套注意力缓存，Encoder-only 则根本不产生增量生成流程。</p>
+
+<h3>理由三：规模化（scaling）收益最显著，生态全面收敛</h3>
+
+<p>从 GPT-2、GPT-3（175B 参数首次展示 few-shot 上下文学习能力）到 Llama、Qwen、DeepSeek，所有跨过百亿、千亿门槛的通用大模型都选择了 Decoder-only。在同等算力预算下， Decoder-only 把全部参数投入一条统一的生成通路，规模扩张带来的涌现能力与 scaling law 表现最稳定；开源社区、推理引擎、微调工具链也全部围绕它建设，形成正反馈。</p>
+
+<table>
+<tr><th>对比维度</th><th>Encoder-only</th><th>Decoder-only</th><th>Encoder-Decoder</th></tr>
+<tr><td>训练目标</td><td>MLM 挖空填词</td><td>next-token 预测</td><td>seq2seq / span 还原</td></tr>
+<tr><td>训练数据要求</td><td>纯文本</td><td>纯文本，每位置一个信号</td><td>需构造源-目标形式</td></tr>
+<tr><td>推理方式</td><td>一次前向出打分/向量</td><td>自回归逐 token + KV Cache</td><td>编码一次 + 解码自回归 + 交叉缓存</td></tr>
+<tr><td>KV Cache 友好度</td><td>不适用（不生成）</td><td>最佳，结构天然匹配</td><td>可用但需维护双份缓存</td></tr>
+<tr><td>训推一致性</td><td>弱（填词 vs 生成）</td><td>完全一致</td><td>中等</td></tr>
+<tr><td>当前生态位</td><td>理解/检索小模型</td><td>通用大模型主流</td><td>翻译/语音等特定 seq2seq</td></tr>
+</table>
+
+<table>
+<tr><th>你的任务</th><th>推荐架构</th><th>理由</th></tr>
+<tr><td>文本分类 / 情感 / NER</td><td>Encoder-only 微调</td><td>双向理解 + 亿级参数，成本低、延迟低</td></tr>
+<tr><td>语义检索 / 重排序</td><td>Encoder-only Embedding 模型</td><td>整句向量相似度，毫秒级响应</td></tr>
+<tr><td>聊天 / 代码 / 推理 / Agent</td><td>Decoder-only</td><td>训推一致、KV Cache 成熟、scaling 收益大</td></tr>
+<tr><td>翻译 / 摘要 / 语音识别</td><td>Encoder-Decoder 或 Decoder-only + Prompt</td><td>源-目标对齐清晰；大模型时代也可用提示词覆盖</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>按"任务需要看见什么"选架构：全局判别选双向，逐步生成选 causal</li>
+<li>评估生成模型时把 KV Cache 显存纳入容量规划（每 token 数百 KB 量级）</li>
+<li>理解类需求优先试 BERT 家族微调，成本可能只有大模型 API 的几十分之一</li>
+<li>长上下文场景关注 GQA/MQA 等 KV 头压缩技术（Llama-2-70B 用 8 个 KV 头省下约 3/4 缓存）</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要用 BERT 直接做开放式生成——双向注意力没有从左到右的生成通路</li>
+<li>不要为普通聊天场景硬上 Encoder-Decoder——双栈结构徒增工程复杂度</li>
+<li>不要训练 Decoder-only 时忘了 causal mask——模型会抄答案，loss 虚低、推理崩盘</li>
+<li>不要忽略 KV Cache 随上下文线性膨胀——4K 上下文 2GB，128K 上下文就是几十 GB</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>Decoder-only 的胜利不是"注意力更强"，而是"简单且一致"：一个目标函数吃下所有文本，一种推理路径配一块缓存，然后把省下来的所有工程复杂度都投给规模——规模又反过来放大了它的优势。</p>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>Decoder-only 为什么必须用 causal mask？训练时不加会怎样？</summary>
+<div class="answer">不加 mask 时每个位置都能看到包括未来在内的所有 token，预测"下一个词"就变成了看着答案抄答案：训练 loss 会迅速降到接近 0，看起来收敛极快，但模型学到的是复制而非推理。到了推理阶段没有未来可看（未来还没生成出来），模型就会彻底崩盘，输出混乱。causal mask 的作用就是在训练时人为制造"看不到未来"的约束，迫使模型只用前文信息预测下一个词，保证训练和推理面对的信息条件完全一致。</div>
+</details>
+
+<details>
+<summary>交叉注意力是怎么把 Encoder 和解码器连起来的？Q/K/V 分别来自哪？</summary>
+<div class="answer">交叉注意力中，Query 来自解码器当前层的隐藏状态，代表"生成到这一步，我需要原文里的什么信息"；Key 和 Value 来自编码器对原文的最终输出，代表"原文有哪些可供检索的内容"。解码器每生成一个新 token，都会用自己的 Q 去和原文所有位置的 K 算相关度，softmax 后对 V 加权求和，得到一份"针对当前词定制的原文摘要"。这样原文的信息在解码的每一步都能被按需查阅，而编码器只需前向计算一次，其输出可被所有解码步复用。</div>
+</details>
+
+<details>
+<summary>BERT 为什么不能做文本生成？</summary>
+<div class="answer">根本原因是注意力可见性与生成方式不匹配。文本生成必须从左到右增量进行：写第 t 个字时只能依据前 t-1 个字。而 BERT 的双向注意力让每个位置同时看到全文，它的训练目标 MLM 是"挖空填词"——已知两边上下文补中间，这与"从开头一路写到结尾"是两种完全不同的任务形态。此外双向表示无法增量扩展：新来一个词，全句所有位置的表示都要重算，没法像 causal 模型那样缓存前缀只算新词。所以 BERT 家族擅长判别与打分，不做开放式生成。</div>
+</details>
+
+<details>
+<summary>KV Cache 到底缓存了什么？为什么对 Decoder-only 特别重要？</summary>
+<div class="answer">缓存的是每一层注意力中历史 token 的 Key 和 Value 张量。在 causal 结构下，历史 token 的 K/V 只由它们自身的前缀决定，后续生成任何新词都不会改变，因此算过一次就能永久复用。没有缓存时，生成第 t 个词要把前 t-1 个词重新过一遍完整前向；有了缓存，每步只需计算新 token 自己的 Q/K/V 并与缓存拼接做注意力。以 Llama-2-7B 为例，缓存每个 token 约 512KB（32 层 × 16KB），4096 上下文约 2GB 显存，换来的是每步计算量从"重算全序列"降到"只算一个 token"。Decoder-only 的逐 token 自回归恰好让这份缓存每步都用得上，所以说 KV Cache 是它的推理生命线。</div>
+</details>
+
+<details>
+<summary>T5 也能做问答和翻译，为什么 ChatGPT 这类产品选择了 Decoder-only？</summary>
+<div class="answer">三个层面：第一，训练目标的通用性——next-token 预测直接利用任意自然文本，无需像 T5 那样把每个任务改写成 seq2seq 模板，数据规模和任务覆盖面天然更大；第二，训推一致与工程简洁——单一 decoder 栈配合 KV Cache，推理引擎、批处理、量化等优化全部可以围绕一条通路做深，而 Encoder-Decoder 要维护两套结构和双份缓存；第三，规模化的实证——GPT-3 之后， Decoder-only 在百亿千亿规模上表现出最强的涌现能力和 scaling 收益，业界随之全面收敛。T5 路线在翻译、摘要等结构化转换上依然优秀，但通用对话产品的最优解已经被实践反复验证为 Decoder-only。</div>
+</details>
+
+<details>
+<summary>注意力的可见性只有"双向"和"下三角"两种吗？</summary>
+<div class="answer">不止。这两种是最经典的极端情况，实际还存在多种混合形态：Prefix LM 让前缀部分双向可见、生成部分保持 causal（T5 的编码段、部分多模态模型采用）；滑动窗口注意力只允许看固定窗口内的邻居，用于降低长序列开销（Mistral 的 sliding window）；还有文档内双向、文档间隔离的打包策略，以及 Llama-2-70B 用 GQA 把 32 个 KV 头压到 8 个这类在"可见性不变的前提下压缩缓存"的变体。可见性的设计空间本质是在"信息充分性"与"计算/缓存成本"之间做权衡。</div>
+</details>
+
+<details>
+<summary>Encoder-only 在生成式大模型时代还有生存空间吗？</summary>
+<div class="answer">空间依然稳固，主要集中在三类场景：一是语义检索与重排序，Embedding 模型把句子压成一个向量做相似度计算，毫秒级响应，这是 RAG 系统的标配组件；二是轻量理解任务，评论情感分析、风控文本识别、命名实体识别等，BERT 级模型（约 1 亿参数）微调后精度足够，推理成本只有百亿级生成模型的几十分之一，边缘设备都能部署；三是作为大模型生态的配套，比如给 RAG 提供召回、给 Agent 做意图分类。结论是：生成归 Decoder-only，判别和检索归 Encoder-only，两者是分工而非替代。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

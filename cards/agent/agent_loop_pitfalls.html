@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A66 · Agent 死循环与生产防御</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.warning-box{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warning-box::before{content:"⚠️ 警告";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、死循环的五种类型</a>
+<a href="#s2">二、ReAct 死循环：怎么防？为什么会发生？</a>
+<a href="#s3">三、循环探测中间件：Harness AI 的解决方案</a>
+<a href="#s4">四、目标漂移：Agent 越跑越偏</a>
+<a href="#s5">五、Token 爆炸与成本控制</a>
+<a href="#s6">六、可观测性：怎么发现线上问题</a>
+<a href="#s7">七、生产踩坑闭环</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>A66 · Agent 死循环与生产防御</h1>
+<p class="subtitle">Agent Loop Pitfalls — ReAct 死循环根因分析、防循环三板斧、循环探测中间件、目标漂移治理、Token 爆炸防御、生产踩坑闭环</p>
+
+<div class="intuition-box"><p>Agent 死循环的本质：Observation 不够结构化，LLM 不知道是该重试还是换路子。修复：让工具返回结构化错误码 + retryable 字段，并通过循环探测中间件在重复行为时注入反思指令。</p></div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+
+<h2>一、死循环的五种类型</h2>
+
+<p>Agent 死循环（Doom Loop）不是单一现象，线上常见五种类型：</p>
+
+<table>
+<tr><th>类型</th><th>表现</th><th>根因</th><th>检测方式</th></tr>
+<tr><td><strong>重复动作循环</strong></td><td>连续 3+ 次调用相同 Tool+Args</td><td>工具返回不结构化，LLM 不知道换路</td><td>Tool+Args 哈希去重</td></tr>
+<tr><td><strong>文件修改循环</strong></td><td>对同一文件反复修改 10+ 次</td><td>缺乏整体架构反思，陷入局部优化</td><td>文件修改计数器</td></tr>
+<tr><td><strong>参数震荡循环</strong></td><td>不断改参数重试，但参数来回切换</td><td>错误信息不区分"参数错"vs"工具错"</td><td>参数 diff 相似度 >80%</td></tr>
+<tr><td><strong>目标漂移循环</strong></td><td>越跑越偏，30 步才发现偏离主线</td><td>上下文窗口被无关信息占据</td><td>目标对齐检查（每 5 步）</td></tr>
+<tr><td><strong>幻觉调用循环</strong></td><td>调用不存在的工具或 API</td><td>工具名校验不严，LLM 编造工具名</td><td>工具名白名单校验</td></tr>
+</table>
+
+<div class="warning-box">
+<strong>生产数据：</strong>某编码 Agent 在未部署防御时，<strong>12%</strong> 的任务陷入死循环（平均消耗 45,000 tokens 后仍无进展），月均 Token 浪费 <strong>$3,200</strong>。
+</div>
+
+<div class="intuition-box">
+<p>五种死循环的检测方式各不相同，但触发条件是同一个：Agent 手里没有"该换路了"的信号。工具只说失败不说为什么，参数错和服务挂了长得一模一样，于是模型只能把唯一会做的动作再做一遍。所以这五种类型的检测本质上都是在外部替 Agent 判断"这一步是不是白走了"——用 Tool+Args 哈希、文件修改计数、参数 diff 相似度这些机械指标，去补模型自己缺失的那个信号。</p>
+</div>
+
+<h2 id="s2">二、ReAct 死循环：怎么防？为什么会发生？</h2>
+
+<p>ReAct = <strong>Thought → Action → Observation → 循环</strong>，直到给出最终答案。但线上真实场景中，Agent 跑着跑着就不停了——一直在调同一个工具。</p>
+
+<h3>防死循环三板斧</h3>
+<div class="arch-diagram">ReAct 循环控制逻辑:
+
+1. 为每个任务设置最大步数，例如 15 步
+2. 记录最近几次 Tool + Args 组合
+3. 若连续 3 次调用相同动作:
+   -> 判定为重复尝试
+   -> 停止继续试错
+   -> 基于已有 observation 做总结回答
+4. 若总耗时超过任务超时:
+   -> 立即终止
+   -> 进入降级或人工接管</div>
+
+<table>
+<tr><th>防御手段</th><th>实现</th><th>说明</th></tr>
+<tr><td>最大步数</td><td>通常 15 步</td><td>超过强制终止</td></tr>
+<tr><td>重复动作检测</td><td>连续 3 次相同 Tool+Args</td><td>直接退出循环</td></tr>
+<tr><td>整体超时</td><td>任务级别 60 秒</td><td>兜底保护</td></tr>
+</table>
+
+<h3>死循环的根因分析</h3>
+
+<p>进一步追问"为什么会发生死循环"——层次更深一层：</p>
+
+<div class="arch-diagram">
+死循环根因链路:
+
+工具持续失败
+    ↓
+LLM 不知道是工具本身的问题
+还是参数不对
+    ↓
+不断改参数重试
+    ↓
+死循环
+
+根因: Observation 不够结构化
+工具只返回 "失败" 两个字
+LLM 没法判断"该不该重试"
+
+修复: 结构化错误码 + retryable 字段
+{"error": "RATE_LIMIT",
+ "retryable": true,
+ "retry_after": 5}</div>
+
+<p class="highlight">终止后要做<strong>兜底总结</strong>——让 LLM 基于已有 Observation 给用户一个"不完美但可用"的答案，而不是抛 500 错误。</p>
+</div>
+
+<!-- Section 3: 循环探测中间件 -->
+<div class="section" id="s3">
+<h2>三、循环探测中间件：Harness AI 的解决方案</h2>
+
+<div class="intuition-box">
+<p><span class="term">循环探测中间件</span>（Doom Loop Middleware）本质上是一个"强制中断机制"——在 Agent 和工具之间插入一层监控，当检测到重复行为时强制注入反思指令，打断死循环。</p>
+</div>
+
+<h3>三步机制</h3>
+<table>
+<tr><th>步骤</th><th>实现</th><th>效果</th></tr>
+<tr><td><strong>阈值监控</strong></td><td>记录文件修改次数，超限触发中断（N=10 次）</td><td>量化检测，不依赖主观判断</td></tr>
+<tr><td><strong>强制提示</strong></td><td>注入"重新审视整体架构"的强干预指令</td><td>给模型一个"换思路"的机会</td></tr>
+<tr><td><strong>非强制转向</strong></td><td>仅提供反思机会，不保证模型一定改变方向</td><td>保持 Agent 自主性</td></tr>
+</table>
+
+<h3>为什么是"非强制"转向？</h3>
+<ul>
+<li><strong>保护合理操作</strong>：Agent 可能确实需要修改同一文件 10+ 次来完成复杂重构</li>
+<li><strong>尊重自主决策</strong>：Agent 可能已有正确反思，只是需要一次"提醒"而非"命令"</li>
+<li><strong>更高成功率</strong>：生产数据显示 68% 的 Agent 在反思后<strong>自主选择</strong>正确策略，比强制转向成功率更高</li>
+</ul>
+
+<h3>阈值 N=10 怎么确定？</h3>
+<table>
+<tr><th>阈值</th><th>问题</th><th>后果</th></tr>
+<tr><td>太小（N=3）</td><td>正常迭代也会触发</td><td>"假阳性"率高，打断正常工作流</td></tr>
+<tr><td>太大（N=30）</td><td>浪费大量 Token 才触发</td><td>"假阴性"导致损失扩大</td></tr>
+<tr><td><strong>推荐（N=10）</strong></td><td>基于正常任务分布的 P95</td><td>95% 正常任务不触发，只有异常才触发</td></tr>
+</table>
+
+<h3>生产效果</h3>
+<table>
+<tr><th>指标</th><th>部署前</th><th>部署后</th><th>改善</th></tr>
+<tr><td>死循环率</td><td>12%</td><td>3%</td><td>↓ 75%</td></tr>
+<tr><td>死循环检出率</td><td>—</td><td>96%</td><td>—</td></tr>
+<tr><td>反思后切换策略率</td><td>—</td><td>68%</td><td>—</td></tr>
+<tr><td>月均 Token 浪费</td><td>$3,200</td><td>$180</td><td>↓ 94%</td></tr>
+</table>
+
+<div class="highlight">
+<strong>Build to Delete 设计哲学：</strong>循环探测中间件是临时支架，不是永久方案。当模型能力足够强不再陷入死循环时，这层中间件就应该被删除。GPT-5 测试中，中间件触发频率已降低 75%，说明护栏可以逐步退场。
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、目标漂移：Agent 越跑越偏</h2>
+
+<h3>真实案例</h3>
+<p>用户问"帮我查一下上季度销售额，然后看看同比怎么样"，Agent 查完 Q1 数据后，LLM 在 Observation 里看到一堆数据表，思路就跑偏了——开始自己加戏，去查"各品类明细"、"头部客户排名"，结果跑了 30 步才意识到用户只要同比。</p>
+
+<div class="intuition-box">
+<p>目标漂移不是模型忘了目标，而是目标被挤出了它的注意力范围——原始那句话只出现在第一轮，后面三十轮全是数据表，模型看到的"最相关的下一步"自然是继续查数据。所以治理手段不是把目标写得更清楚，而是把它<span class="term">重复出现</span>在每一轮上下文里，让它始终在竞争注意力，而不是躺在历史记录的最上面。</p>
+</div>
+
+<h3>两层治理方案</h3>
+
+<div class="arch-diagram">
+目标漂移治理:
+
+第一层: 每步目标对齐
+    系统提示词固定放 "当前目标：{original_goal}"
+    每一次 Thought 前 LLM 都要复述一遍目标
+
+第二层: 中途反思机制
+    每 5 步触发一次自检:
+    "我现在做的事情是否还在解决最初的问题？"
+    不是 → 强制回到主线
+
+效果:
+    漂移从 30 步才发现 → 5 步内纠正</div>
+
+<h3>死循环 vs 目标漂移：对比</h3>
+<table>
+<tr><th>维度</th><th>死循环（Doom Loop）</th><th>目标漂移</th></tr>
+<tr><td>表现</td><td>完全卡在某一步无法前进</td><td>逐渐偏离原始目标</td></tr>
+<tr><td>发作方式</td><td>急性发作</td><td>渐进式</td></tr>
+<tr><td>根因</td><td>陷入局部最优看不到全局</td><td>上下文被无关信息占据</td></tr>
+<tr><td>解决方案</td><td>"打断"——注入反思指令</td><td>"纠偏"——拉回原始目标</td></tr>
+<tr><td>共同点</td><td colspan="2">都依赖外部干预机制，Agent 自身无法意识到问题</td></tr>
+</table>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、Token 爆炸与成本控制</h2>
+
+<p><strong>Token 爆炸的真实场景</strong>：死循环与大工具输出常相伴发生——工具返回的数据表全塞进上下文，单轮输入 40K token，一上午烧了几百美金。</p>
+<p><strong>治理结论（三手段）</strong>：① 工具输出截断——超 2000 token 做摘要，原始数据只留 reference_id；② 模型路由——简单子任务走小模型，复杂推理走大模型；③ 语义缓存——相似查询复用结果。组合使用可降低 <strong>60-80%</strong> 成本。</p>
+<p>各手段的实现细节与效果数据见<a href="../engineering/token_cost_optimization.html#s5">《Token 成本优化》（ST04）第五节 · 智能路由与缓存</a>和<a href="../engineering/token_cost_optimization.html#s6">第六节 · Agent 特有成本模式</a>。</p>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、可观测性：怎么发现线上问题</h2>
+
+<p>一开始肉眼看日志，后面接 <strong>Langfuse</strong> 做 Tracing。关键指标设告警：</p>
+
+<div class="intuition-box">
+<p>这五个指标里最容易被忽略的是循环探测触发率。前四个告警的是"已经出事了"，只有它告警的是"护栏正在替你扛着"——触发率从 3% 涨到 15%，说明模型或工具那一侧发生了变化，护栏还在生效但已经在超负荷工作。护栏本身也需要被监控，否则它默默扛住的问题会一直不被发现，直到某天扛不住。</p>
+</div>
+
+<table>
+<tr><th>指标</th><th>告警阈值</th><th>采样策略</th></tr>
+<tr><td>p95 延迟</td><td>&gt; 30s</td><td>错误/慢请求 100%</td></tr>
+<tr><td>单请求 Token p99</td><td>&gt; 10,000</td><td>正常请求 10%</td></tr>
+<tr><td>工具成功率</td><td>&lt; 95%</td><td>成本可观测性平衡</td></tr>
+<tr><td>LLM 错误率</td><td>&gt; 2%</td><td>—</td></tr>
+<tr><td>循环探测触发率</td><td>&gt; 15%</td><td>—</td></tr>
+</table>
+
+<p>工具选型：LangChain 用 LangSmith，开源选 Langfuse，企业级选 Datadog LLM Observability。</p>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、生产踩坑闭环</h2>
+
+<div class="arch-diagram">
+Agent 生产踩坑闭环:
+
+用户目标
+    ↓
+每步目标对齐？
+    ❌ → 目标漂移 (30步才发现跑偏)
+    ✅ → 每 5 步反思一次
+    ↓
+工具执行
+    ↓
+工具输出 > 2K token？
+    ✂️ → 截断 + 摘要，只留 reference_id
+    直接进上下文 → Token 爆炸
+    ↓
+任务复杂度？
+    简单 → 💰 小模型
+    复杂 → 🧠 Opus / GPT-4
+    ↓
+📊 Langfuse Tracing
+    p95 延迟 > 30s / 错误率 > 2%？
+    🚨 → 分级告警
+
+目标对齐 → 输出截断 → 模型路由 → 可观测告警 → 反思回流
+缺一不可</div>
+
+<table>
+<tr><th>坑</th><th>解决手段</th></tr>
+<tr><td><span class="term">死循环</span></td><td>最大步数 + 重复动作检测 + 循环探测中间件 + 结构化错误码</td></tr>
+<tr><td><span class="term">目标漂移</span></td><td>每步目标对齐 + 每 5 步反思 + 强制回到主线</td></tr>
+<tr><td><span class="term">Token 爆炸</span></td><td>工具输出截断（&gt;2K 做摘要）+ reference_id 兜底</td></tr>
+<tr><td>成本失控</td><td>模型路由（简单任务小模型）+ 语义缓存，综合可降 60-80%</td></tr>
+<tr><td>发现不了问题</td><td>Tracing + 分级告警（p95 延迟 &gt;30s / 错误率 &gt;2%）</td></tr>
+<tr><td>幻觉工具调用</td><td>严格校验工具名白名单</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>最关键的信号：</strong>当被问"踩过什么坑"时，想听的是<strong>故事+数据+解决</strong>，不是复述八股文。要能说出具体数字（Token 从多少降到多少、延迟阈值怎么定的）。</p>
+</div>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>错误信息包含原因+建议操作（帮助 Agent 自纠错）</li>
+<li>设置最大重试次数 + 退避策略（防死循环）</li>
+<li>部署循环探测中间件（阈值 N=10，非强制反思）</li>
+<li>终止时做兜底总结（给用户"不完美但可用"的答案）</li>
+<li>组合使用缓存/压缩/异步降低 60-80% 成本</li>
+<li>Build to Delete：模型能力进步后逐步退场护栏</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要只返回"失败了"（Agent 会无限重试同样操作）</li>
+<li>不要在循环内累积全量上下文（Token 爆炸）</li>
+<li>不要忽略 429 限流信号（可能被封号）</li>
+<li>不要用固定延迟重试（应指数退避 + 抖动）</li>
+<li>不要强制中断 Agent（破坏自主性，用非强制反思）</li>
+<li>不要依赖永久护栏（掩盖模型本身问题）</li>
+</ul>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>Agent 为什么会陷入死循环？怎么从根本上解决？</summary>
+<div class="answer">表层防御：最大步数(15步)、重复动作检测(连续3次相同Tool+Args退出)、整体超时(60秒)。根因分析：Observation 不够结构化——工具只返回"失败"，LLM 无法判断该重试还是换路子。修复：工具错误要带结构化错误码和 retryable 字段，如 <code>{"error": "RATE_LIMIT", "retryable": true, "retry_after": 5}</code>。兜底：退出后让 LLM 基于已有 Observation 做总结，给用户可用答案而不是 500。</div>
+</details>
+
+<details>
+<summary>什么是循环探测中间件？和三板斧有什么区别？</summary>
+<div class="answer">循环探测中间件是 Harness AI 提出的进阶方案，在 Agent 和工具之间插入监控层。三步机制：(1) 阈值监控——记录文件修改次数，超限（N=10）触发中断；(2) 强制提示——注入"重新审视整体架构"的反思指令；(3) 非强制转向——仅提供换思路机会，不强制改变方向。与三板斧的区别：三板斧是"硬终止"（超过步数直接退出），中间件是"软干预"（注入反思但保持自主性）。生产数据：检出率 96%，68% 的 Agent 在反思后成功切换策略，Token 浪费从月均 $3,200 降至 $180（降幅 94%）。</div>
+</details>
+
+<details>
+<summary>Build to Delete 设计哲学是什么？</summary>
+<div class="answer">Build to Delete 意味着工程护栏是临时支架而非永久方案。核心逻辑：(1) 承认模型不完美，通过工程补丁提升短期成功率；(2) 模型能力在持续进步，护栏应逐步退场；(3) 过度依赖护栏会掩盖模型本身的问题。生产验证：GPT-5 测试中死循环率从 12% 降至 3%，中间件触发频率降低 75%，说明护栏可以逐步退场。</div>
+</details>
+
+<details>
+<summary>Agent 目标漂移怎么治理？</summary>
+<div class="answer">两层方案：(1) 每步目标对齐——系统提示词固定放"当前目标：{original_goal}"，每次 Thought 前 LLM 复述目标；(2) 中途反思机制——每 5 步触发自检"是否还在解决最初的问题"，偏离就强制回主线。实测从 30 步才发现漂移到 5 步内纠正。</div>
+</details>
+
+<details>
+<summary>死循环和目标漂移有什么关系？</summary>
+<div class="answer">死循环是"急性发作"——完全卡在某一步无法前进；目标漂移是"渐进式"——逐渐偏离原始目标。共同根因：上下文窗口被无关/重复信息占据，Agent 无法"跳出当前视角"重新审视全局。区别：死循环需要"打断"（注入反思），目标漂移需要"纠偏"（拉回目标）。两者的共同解决方案都依赖外部干预机制——Agent 自身无法意识到问题。</div>
+</details>
+
+<details>
+<summary>线上 Token 爆炸怎么处理？</summary>
+<div class="answer">两件事：(1) 工具输出截断——超 2000 token 的结果先做摘要再进上下文，原始数据只给 reference_id；(2) 模型路由——简单子任务（格式化金额、判断意图）用小模型，复杂推理才用 Opus。整体成本降约 60%。配合 Tracing 做监控，单请求 Token p99 超 1 万就告警。</div>
+</details>
+
+<details>
+<summary>阈值 N=10 设太小或太大会怎样？</summary>
+<div class="answer">N=10 是基于正常任务分布 P95 的经验值。太小（N=3）：正常迭代也会触发，"假阳性"率高，打断正常工作流。太大（N=30）：浪费大量 Token 才触发，"假阴性"导致损失扩大。确定方法：(1) 统计正常任务的修改次数分布；(2) 将阈值设在 P95 附近；(3) 定期根据模型能力调整（Build to Delete）。</div>
+</details>
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

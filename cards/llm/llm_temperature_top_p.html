@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L20 · Temperature 与 Top-p 采样策略</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、大模型预测下一个词的三步</a>
+<a href="#s2">二、Temperature — 控制概率差距</a>
+<a href="#s3">三、Top-p — 控制长尾截断</a>
+<a href="#s4">四、Temperature vs Top-p 对比与调参决策</a>
+<a href="#s5">五、生产调参案例</a>
+<a href="#s6">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>L20 · Temperature 与 Top-p 采样策略</h1>
+<p class="subtitle">大模型预测流程 → 生成分数 → Softmax 转概率 → 加权采样 → Temperature 作用 → Top-p 作用</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>模型的输出不是"查"出来的，而是"掷骰子"掷出来的：Temperature 调节骰子的公平程度，Top-p 决定哪些候选词有资格上桌——两个都调低，模型是严谨的会计；两个都调高，模型是奔放的诗人。</p>
+</div>
+
+<!-- ========== 1. 预测下一个词的三步 ========== -->
+<div class="section">
+<h2 id="s1">一、大模型预测下一个词的三步</h2>
+
+<p>大模型生成文本的方式是<span class="term">自回归（Autoregressive）</span>——把已生成的内容当作下一步的输入，一个词一个词地往后"接龙"，直到生成结束标记。每预测一个词，都要走完固定的三步：</p>
+
+<table>
+<tr><th>步骤</th><th>操作</th><th>输出</th></tr>
+<tr><td>① 生成分数</td><td>给词汇表中每个词打一个 <span class="term">Logit</span> 分数（模型对"下一个词是它"的原始置信度，可为任意实数）</td><td>每个词一个原始分数</td></tr>
+<tr><td>② 转概率</td><td>用 <span class="term">Softmax</span> 将分数转为概率（把任意实数分数压缩到 0~1 且总和为 1 的函数）</td><td>每个词一个概率值</td></tr>
+<tr><td>③ 加权采样</td><td>按概率随机选取输出词</td><td>最终输出的词</td></tr>
+</table>
+
+<div class="arch-diagram">
+┌────────────────────────────────────────────────┐
+│              自回归生成循环                      │
+│                                                │
+│  已有文本 ──→ 模型前向计算 ──→ Logits 分数      │
+│      ▲                            │            │
+│      │                            ▼            │
+│      │            Softmax（Temperature 在此生效）│
+│      │                            │            │
+│      │                            ▼            │
+│      │            Top-p 截断长尾候选词           │
+│      │                            │            │
+│      │                            ▼            │
+│      └────── 加权采样出一个词 ◄───┘            │
+│                                                │
+│  循环往复，直到生成结束符 &lt;EOS&gt;                 │
+└────────────────────────────────────────────────┘
+</div>
+
+<h3>Softmax 与 Temperature 的关系</h3>
+<p>Softmax 的公式里藏着 Temperature 的位置：每个词的分数先除以温度 T，再做指数归一化。T 就是那个控制"分数差距被放大还是缩小"的旋钮。</p>
+
+<div class="formula">P(i) = e^(Z_i / T) / Σⱼ e^(Z_j / T)</div>
+
+<h3>加权采样</h3>
+<p>将 0~100 的数轴按概率分配给各个词，生成随机数，落在哪个区间就输出哪个词。这保证了高分词有更大机会被选中，但低分词也有机会——正是这一点让模型输出带有"创造性"。</p>
+
+<pre><code>import numpy as np
+logits = np.array([2.0, 1.0, 0.1])   # 三个候选词的分数
+T = 0.5                              # Temperature
+probs = np.exp(logits / T)
+probs = probs / probs.sum()          # ≈ [0.84, 0.11, 0.05]
+token = np.random.choice(3, p=probs) # 加权采样</code></pre>
+
+<div class="intuition-box">
+<p>Logit 是"评委打分"，Softmax 是"把分数换算成胜率"，加权采样是"按胜率抽奖"——模型每吐一个字，就完整跑一遍这套流程。</p>
+</div>
+
+</div>
+
+<!-- ========== 2. Temperature ========== -->
+<div class="section">
+<h2 id="s2">二、Temperature — 控制概率差距</h2>
+
+<p><span class="term">Temperature (T)</span> 作用于 Softmax 函数中：每个分数先除以 T 再计算概率。它不改变候选词的排名，只改变排名之间的"贫富差距"。</p>
+
+<table>
+<tr><th>T 值</th><th>分数变化</th><th>概率分布</th><th>效果</th></tr>
+<tr><td>T = 1（默认）</td><td>不变</td><td>原始分布</td><td>平衡</td></tr>
+<tr><td>T = 0.1（低）</td><td>分数被放大 10 倍</td><td>差距拉大，赢家通吃</td><td>保守、稳定、死板</td></tr>
+<tr><td>T = 2.0（高）</td><td>分数被缩小一半</td><td>差距缩小，趋于均等</td><td>多样、随机、创意</td></tr>
+</table>
+
+<div class="arch-diagram">
+候选词概率分布随 Temperature 的变化：
+
+T = 0.1（低温）         T = 1.0（默认）        T = 2.0（高温）
+词A ████████████ 84%   词A ████████ 48%      词A ████ 30%
+词B █ 6%                词B ████ 27%         词B ████ 26%
+词C ▏2%                 词C ███ 15%          词C ████ 24%
+词D ▏1%                 词D ██ 10%           词D ███ 20%
+→ 赢家通吃，几乎确定     → 头部领先，留有变数    → 机会均等，天马行空
+</div>
+
+<h3>物理类比</h3>
+<p>Temperature 的命名直接借用了热力学：低温如冰，分子运动缓慢、结构稳定，对应输出保守确定；高温如蒸汽，分子活跃混乱，对应输出多样发散。这个类比精确地抓住了本质——温度衡量的就是系统的"混乱度"。</p>
+
+<h3>各类任务的典型温度</h3>
+<table>
+<tr><th>任务类型</th><th>推荐 T 值</th><th>理由</th></tr>
+<tr><td>代码生成 / 数学推理</td><td>0 ~ 0.3</td><td>答案唯一，要求稳定可复现</td></tr>
+<tr><td>事实问答 / 翻译</td><td>0.3 ~ 0.7</td><td>准确优先，允许措辞灵活</td></tr>
+<tr><td>营销文案 / 邮件</td><td>0.7 ~ 1.0</td><td>自然流畅，适度变化</td></tr>
+<tr><td>小说 / 头脑风暴</td><td>1.0 ~ 1.3</td><td>鼓励意外组合与新颖表达</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Temperature 的本质：调节分数之间的差距大小。低温 → 赢家通吃 → 稳定输出；高温 → 机会均等 → 多样输出。</p>
+</div>
+
+</div>
+
+<!-- ========== 3. Top-p ========== -->
+<div class="section">
+<h2 id="s3">三、Top-p — 控制长尾截断</h2>
+
+<p><span class="term">Top-p（核采样，Nucleus Sampling）</span>的作用是设定一个概率阈值：从概率最高的词开始累加，凑够 p 就停止，丢弃剩余的低概率"长尾词"，再在留下的候选词里重新归一化采样。与 Temperature 改变分布形状不同，Top-p 是直接"砍掉"分布的尾部。</p>
+
+<table>
+<tr><th>Top-p 值</th><th>保留词数</th><th>效果</th></tr>
+<tr><td>p = 1.0（默认）</td><td>全部保留</td><td>无截断</td></tr>
+<tr><td>p = 0.9</td><td>保留头部 3~5 个词</td><td>去掉明显不相关的词</td></tr>
+<tr><td>p = 0.6</td><td>只保留头部 2~3 个词</td><td>更加保守稳定</td></tr>
+</table>
+
+<div class="arch-diagram">
+Top-p = 0.9 的截断过程（按概率从高到低累加）：
+
+词A 48% ──┐
+词B 27% ──┤ 累加：48% → 75% → 90% ✓ 凑够 0.9，关门
+词C 15% ──┘
+────────────── 截断线 ──────────────
+词D 6%  ✗ 丢弃（长尾）
+词E 3%  ✗ 丢弃
+词F 1%  ✗ 丢弃
+</div>
+
+<p>Top-p 的巧妙之处在于它是<strong>动态</strong>的：模型很有把握时（头部概率集中），可能只留 1~2 个词；模型不确定时（概率分散），会自动放宽到十几个词。与之相关的还有 <span class="term">Top-k</span>——固定保留概率最高的 k 个词，不管概率分布长什么样，是一种"一刀切"的静态截断。</p>
+
+<div class="intuition-box">
+<p>Top-p 是概率世界的"保安"：从最靠谱的词开始放行，累计放行到占 90% 概率就关门，剩下那些不靠谱的长尾词一律拦在门外——防止模型输出"自行车的维修与保养"这种离谱回答。</p>
+</div>
+
+</div>
+
+<!-- ========== 4. 对比与调参决策 ========== -->
+<div class="section">
+<h2 id="s4">四、Temperature vs Top-p 对比与调参决策</h2>
+
+<table>
+<tr><th>维度</th><th>Temperature</th><th>Top-p</th></tr>
+<tr><td>控制什么</td><td>词之间的概率差距</td><td>长尾词的概率阈值</td></tr>
+<tr><td>调高效果</td><td>概率趋于均等 → 更多样</td><td>门槛放宽 → 更多样</td></tr>
+<tr><td>调低效果</td><td>赢家通吃 → 更稳定</td><td>门槛收紧 → 更稳定</td></tr>
+<tr><td>原理差异</td><td>改变概率分布形状</td><td>截断概率分布尾部</td></tr>
+<tr><td>候选词数量</td><td>不变（全部保留）</td><td>动态裁剪</td></tr>
+<tr><td>建议</td><td colspan="2" style="text-align:center">OpenAI 官方建议只调其中一个</td></tr>
+</table>
+
+<table>
+<tr><th>场景</th><th>推荐设置</th></tr>
+<tr><td>写代码、数学题</td><td>T 低 + p 低 → 严谨稳定</td></tr>
+<tr><td>写小说、头脑风暴</td><td>T 高 + p 高 → 创意发散</td></tr>
+</table>
+
+<div class="arch-diagram">
+任务类型 → 采样参数怎么选？
+
+          ┌───────────────┐
+          │   你的任务？    │
+          └───────┬───────┘
+      ┌───────────┼───────────┐
+      ▼           ▼           ▼
+   严谨型       平衡型       创意型
+  代码/数学    问答/翻译    文案/脑暴
+      │           │           │
+      ▼           ▼           ▼
+  T = 0~0.3    T = 0.4~0.7   T = 0.8~1.2
+  （或 p=0.5）  （或 p=0.9）  （或 p=0.95）
+      │           │           │
+      ▼           ▼           ▼
+  稳定可复现   准确且自然    多样有惊喜
+
+  原则：两个旋钮方向一致，调一个就够，别同时猛拧
+</div>
+
+<div class="note-box">
+OpenAI 官方文档明确建议：Temperature 和 Top-p 都会影响随机性，两者同时调整容易互相干扰、效果难以预测，通常只调其中一个，另一个保持默认。
+</div>
+
+<div class="intuition-box">
+<p>Temperature 调"贫富差距"，Top-p 调"准入门槛"，殊途同归地控制随机性——选一个旋钮拧到底，比两个都拧一半更可控。</p>
+</div>
+
+</div>
+
+<!-- ========== 5. 生产调参实践 ========== -->
+<div class="section">
+<h2 id="s5">五、生产调参案例</h2>
+
+<div class="highlight">
+<strong>案例一 · 代码补全助手降温：</strong>背景：某 IDE 代码补全插件默认 T=1.0，用户频繁反馈"补全出看似合理但跑不通的代码"。问题：高温下低概率的冷门 API 词频繁被抽中，pass@1（一次生成即通过测试的比例）只有 68%，且同一输入多次补全结果差异大，用户无法形成稳定预期。方案：仅将 Temperature 降到 0.2，Top-p 保持默认。效果：pass@1 提升到 81%，重复生成的一致性从 54% 升到 92%，用户采纳率提升约 25%。
+</div>
+
+<div class="highlight">
+<strong>案例二 · 营销文案批量生成升温：</strong>背景：某电商团队用模型批量生成商品卖点文案，默认参数下产出高度同质化。问题：100 篇文案去重后独特表达占比仅 31%，A/B 测试点击率平平。方案：仅将 Temperature 升到 0.95，并配合人工筛选兜底。效果：独特表达占比提升到 67%，最优文案组的点击率比原方案高 12%，且未出现事实性错误上升。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>按任务类型选温度：严谨任务 0~0.3，创意任务 0.8+</li>
+<li>一次只调一个参数，另一个保持默认</li>
+<li>需要可复现时固定 seed（若 API 支持）</li>
+<li>调参后用同一批测试用例回归验证效果</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要同时大改 Temperature 和 Top-p</li>
+<li>不要在代码/SQL 生成任务用 T &gt; 0.5</li>
+<li>不要以为 T=0 就 100% 可复现（浮点与批处理仍有微小差异）</li>
+<li>不要靠无限升温找创意，过高温度会输出胡话</li>
+</ul>
+</div>
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s6">Q&A</h2>
+
+<details>
+<summary>Temperature 和 Top-p 各自的原理是什么？有什么区别？</summary>
+<div class="answer">Temperature 作用于 Softmax 函数中，将每个词的分数先除以 T 再计算概率：T 低时分数差距被放大（赢家通吃），T 高时差距被缩小（趋于均等），但候选词一个都不会少。Top-p 设定概率阈值，从最高概率词开始累加，凑够 p 就丢弃剩余低概率词，是真正裁剪候选集。两者调高调低的方向一致（高→多样，低→稳定），但原理不同：Temperature 改变概率分布的形状，Top-p 截断概率分布的尾部。正因为作用机制重叠，OpenAI 建议只调其中一个。</div>
+</details>
+
+<details>
+<summary>大模型预测下一个词的完整流程是什么？</summary>
+<div class="answer">分三步：①生成分数——给词汇表中每个词打一个 Logit 原始分数（几万到几十万个词）；②转概率——用 Softmax 将分数转为概率，Temperature 参数在这一步生效（分数先除以 T 再做 Softmax）；③加权采样——按概率分配数轴区间，生成随机数决定输出哪个词，Top-p 在这一步之前先截断低概率长尾词。采样出的词会被追加到已有文本后面，整个流程不断重复，逐词生成直到遇到结束标记 &lt;EOS&gt;，这就是自回归生成。</div>
+</details>
+
+<details>
+<summary>Temperature 设为 0，输出就完全确定了吗？</summary>
+<div class="answer">理论上 T→0 等价于贪心采样（greedy），即每次都选概率最高的词，输出趋于确定。但工程上仍有微小不确定性：GPU 浮点运算在不同批次大小、不同硬件上的舍入可能有差异，当两个候选词概率极其接近时，排序可能翻转；部分 API 实现也会对 T=0 做极小值兜底。所以 T=0 能得到"高度稳定"而非"绝对可复现"，需要严格复现时还应配合固定随机种子（seed）和相同的请求参数。</div>
+</details>
+
+<details>
+<summary>Top-p 和 Top-k 有什么区别？怎么选？</summary>
+<div class="answer">Top-k 是静态截断：无论概率分布长什么样，固定只保留概率最高的 k 个词。Top-p 是动态截断：从最高概率词累加到总概率达到 p 为止，模型有把握时可能只留 1~2 个词，没把握时自动放宽到十几个词。Top-p 的优势在于能自适应分布的"尖锐"或"平坦"程度，避免 Top-k 在模型极确定时仍强行保留 k 个烂候选、或在极不确定时把 k 卡得太死的问题。主流 API 普遍提供 Top-p，Top-k 更多出现在开源模型的推理配置中。</div>
+</details>
+
+<details>
+<summary>为什么 OpenAI 官方建议只调 Temperature 和 Top-p 中的一个？</summary>
+<div class="answer">因为两者都在控制输出的随机性，作用方向一致且会互相纠缠：Temperature 改变分布形状后，Top-p 的截断点切到的词集也随之变化，两个参数同时调整时效果很难直观预测，调参变成在二维空间里盲搜。只调一个、另一个保持默认，能把问题降回一维，便于观察因果关系、积累调参经验。实践中的常见组合是：固定 Top-p=1（默认）只调 Temperature，或固定 Temperature=1 只调 Top-p。</div>
+</details>
+
+<details>
+<summary>代码生成、数学推理这类任务应该怎么设置采样参数？</summary>
+<div class="answer">这类任务答案高度收敛，正确性远比多样性重要，应该把随机性压到最低：Temperature 设为 0~0.3（很多代码助手直接用 0），Top-p 若可调则设为 0.5~0.95 收紧候选。低温让高概率的正确写法形成"赢家通吃"，避免冷门 API 和生僻语法被抽中——实测某代码补全插件把 T 从 1.0 降到 0.2 后，pass@1 从 68% 提升到 81%。如果确实需要多解（如探索多种实现方案），更好的做法是低温下多次采样（提高 n），而不是单纯升温。</div>
+</details>
+
+<details>
+<summary>调高 Temperature 是让模型"更有创意"还是"更容易胡说"？边界在哪？</summary>
+<div class="answer">两者是同一机制的一体两面：升温让低概率词有机会被选中，既带来了新颖表达，也放大了错误候选。边界取决于任务的"容错空间"——创意写作、头脑风暴容错空间大，T=0.9~1.3 的意外组合是收益；事实问答、医疗法律场景容错空间小，同样的温度就是风险。经验法则是：T 超过 1.2 后输出质量通常断崖式下滑，且升温带来的多样性收益递减；需要可控的多样性时，应优先用 Top-p 保留头部候选，而不是无限制升温。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1taSFBNEG4" target="_blank">Temperature & Top-p：掌控大模型的创造力开关</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

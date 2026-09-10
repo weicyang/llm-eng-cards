@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M11 · 腾讯云 AgentMemory 开源实现 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、痛点与定位：为什么需要记忆中枢</a>
+<a href="#s2">二、分层长期记忆：L0-L3 四层金字塔</a>
+<a href="#s3">三、符号化短期记忆：上下文卸载与画布</a>
+<a href="#s4">四、混合检索与降级设计：召回链路</a>
+<a href="#s5">五、团队记忆：四类资产与 Memory Hub</a>
+<a href="#s6">六、基准数据与生产落地</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>M11 · 腾讯云 AgentMemory 开源实现</h1>
+<p class="subtitle">四层分层记忆 / 符号化上下文卸载 / BM25+向量混合检索 / 团队记忆资产化 / 冷启动与部署</p>
+
+<div class="intuition-box">
+<p>记忆系统的本质不是"让 AI 存下更多东西"，而是"让人不必重复说过的话"——把已经付出的解释成本、试错成本变成下一次可以直接复用的资产。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、痛点与定位：为什么需要记忆中枢</h2>
+
+<p>用过 AI Agent 的人大概都遇到过同一个尴尬：你花了半小时给它讲清楚项目背景、编码规范、部署约束，换一个会话，一切归零。这不是模型不够聪明，而是架构上缺少一个"记忆层"。腾讯云数据库团队于 2026 年 5 月开源的 <span class="term">TencentDB Agent Memory</span>（下文简称 AgentMemory）——一套采用 MIT 协议、本地优先、可插件化接入主流 Agent 框架的分层记忆引擎——正是冲着这个问题来的。</p>
+
+<p>把痛点拆开看，其实是三个互相纠缠的工程问题：</p>
+<ul>
+<li><strong>跨会话断裂</strong>：昨天反复确认的代码规范，今天新开会话又全忘了，人被迫一遍遍重复教学；</li>
+<li><strong>事实与偏好混淆</strong>："我习惯用 pnpm"和"帮我查下天气"在普通上下文里被同等对待，系统分不清哪些值得长期保留；</li>
+<li><strong>上下文膨胀</strong>：任务越长，塞进上下文的历史信息和工具日志越多，Token 消耗持续攀升，模型注意力反而衰减。</li>
+</ul>
+
+<p>到了团队协作场景，矛盾被进一步放大：A 同学的 Agent 刚排查完一个故障，B 同学的 Agent 并不知道排查结论；五个成员用五个 Agent 会话，同一份项目背景要解释五遍。AgentMemory 的应对思路可以概括为一句话：<strong>压缩可以发生，但压缩结果必须可回查；抽象可以存在，但抽象必须带着索引。</strong>它既拒绝"把全部历史塞回上下文"的暴力回灌，也拒绝"压成摘要就扔掉原文"的不可逆压缩。</p>
+
+<p>这三个问题还会互相叠加：因为跨会话断裂，用户倾向于一次性把所有背景灌给 Agent，进一步加剧上下文膨胀；因为分不清事实与偏好，系统把一次性查询也当作长期记忆存下，污染后续召回。单点修补都会把压力转移到另一个环节——只做摘要就丢证据，只做画像就丢细节，只扩上下文窗口就烧预算。这正是"记忆中枢"必须以整体架构而非零散功能出现的原因。</p>
+
+<table>
+<tr><th>主流记忆方案</th><th>能解决什么</th><th>主要代价</th></tr>
+<tr><td>全量历史回灌</td><td>细节完整，几乎不丢上下文</td><td>Token 快速膨胀，注意力被日志噪音冲散</td></tr>
+<tr><td>强摘要压缩</td><td>成本低，上下文短</td><td>摘要不可逆，关键证据一旦被丢弃无法补救</td></tr>
+<tr><td>扁平向量库</td><td>可按语义找相似经验</td><td>缺少层次，不知道记忆属于哪个用户、项目、任务阶段</td></tr>
+<tr><td>只维护用户画像</td><td>保留长期偏好</td><td>过于抽象，无法支撑具体问题的证据追溯</td></tr>
+</table>
+
+<p>还有两个定位选择值得留意。其一是 MIT 协议加本地优先：记忆数据默认留在用户自己的 SQLite 与文件系统里，不出内网即可完整使用，合规敏感团队的采纳门槛被显著压低。其二是插件化而非框架化：AgentMemory 不接管 Agent 的决策循环，只在会话前后承担注入与回收，接入成本接近"装一个插件、开一个开关"，而不是重写应用——这也是它能同时被多个异构框架消费的前提。</p>
+
+<p>AgentMemory 的整体架构自下而上分三层：底层是数据底座，中间是短期、长期、团队三层记忆内核，上层是面向不同 Agent 形态的接入层。</p>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────────┐
+│  应用接入层   OpenClaw 插件 │ Hermes 网关 │ npm SDK │ Proxy │
+├─────────────────────────────────────────────────────────────┤
+│              记忆内核（三大能力）                          │
+│  ┌──────────────┐ ┌──────────────┐ ┌──────────────────────┐ │
+│  │ 短期记忆     │ │ 长期记忆     │ │ 团队记忆             │ │
+│  │ 符号化卸载   │ │ L0→L3 金字塔 │ │ 四类资产 + Memory Hub│ │
+│  │ Mermaid 画布 │ │ 提取/聚合/蒸馏│ │ 隔离 / 共享 / 装配   │ │
+│  └──────────────┘ └──────────────┘ └──────────────────────┘ │
+├─────────────────────────────────────────────────────────────┤
+│  数据底座   SQLite + sqlite-vec（本地） / 腾讯云向量数据库  │
+│             文件存储：refs/*.md 卸载文件 · Markdown 场景块  │
+└─────────────────────────────────────────────────────────────┘
+</div>
+
+<div class="highlight">
+<strong>项目影响力：</strong>AgentMemory 开源后 90 天内 GitHub Star 突破 20,000，多次登上 GitHub Trending 日榜第一；2026 年 8 月发布 v2.0.0 大版本，从个人记忆扩展到团队记忆（Team Memory）。它没有把自己做成又一个 Agent，而是定位为"站在 Agent 与大模型之间的记忆层"——这个定位决定了它可以被 CodeBuddy、OpenClaw、Claude Code 等完全不同的框架共同消费。
+</div>
+
+<div class="intuition-box">
+<p>记忆不是聊天记录仓库。聊天记录回答"说过什么"，记忆系统回答"下一次任务该带着什么出发"——前者是日志，后者是资产。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、分层长期记忆：L0-L3 四层金字塔</h2>
+
+<p>AgentMemory 长期记忆的核心是 <span class="term">分层记忆</span>（Memory Layering）：把"记住"拆成四种不同职责的信息表达，而不是把所有东西打碎倒进一个扁平向量库。官方把这套结构称为四层语义金字塔，从下到上依次是 L0 原始对话、L1 原子记忆、L2 场景块、L3 用户画像，层与层之间用"提取 → 聚合 → 蒸馏"的流水线连接，任何一层都可以独立升级或替换。</p>
+
+<div class="arch-diagram">
+              ┌───────────────────────────┐
+   注入上下文 │ L3 Persona  persona.md    │  长期稳定画像：偏好 / 工作方式
+              ├───────────────────────────┤
+              │ L2 Scenario  Markdown 场景块│  按项目/任务聚合的上下文集合
+              ├───────────────────────────┤
+              │ L1 Atom  结构化原子事实    │  指令 / 偏好 / 事件 + 来源指针
+              ├───────────────────────────┤
+   证据底座   │ L0 Conversation 原始对话   │  完整消息 + 工具证据（JSONL/SQLite）
+              └───────────────────────────┘
+        蒸馏 ↑（每 50 条原子更新画像）  聚合 ↑  提取 ↑（每 5 轮触发）
+</div>
+
+<h3>2.1 每层只做一件事</h3>
+<p><strong>L0 是证据底座。</strong>它记录原始 user/assistant 消息与工具调用结果，不急着判断哪些内容重要，先把干净的原始材料留下来。它的存在让上层抽取和总结有了兜底：如果 L1、L2、L3 的判断不可信，随时可以回到源消息核对。</p>
+<p><strong>L1 是 <span class="term">原子记忆</span>（Atom）层。</strong>把对话中的明确偏好、指令、历史事件抽成结构化事实，每条事实都带 <code>source_message_ids</code> 指针指向 L0 的原始消息。这个字段是整个可溯源体系的关键——一条事实不是凭空生成的，它能追溯到具体哪句话。</p>
+<p><strong>L2 是 <span class="term">场景块</span>（Scenario）层。</strong>单条 L1 事实适合检索，却不适合长期阅读。L2 把相关事实整理成 Markdown 场景块，比如"某业务项目的开发习惯""某类线上排障流程"，让碎片记忆变成可理解的上下文。</p>
+<p><strong>L3 是 <span class="term">用户画像</span>（Persona）层。</strong>持续蒸馏出稳定的 <code>persona.md</code>，沉淀长期偏好与工作方式，体积小、注入成本低，是每次会话启动时最先进入上下文的那部分记忆。</p>
+
+<table>
+<tr><th>层级</th><th>内容形态</th><th>存储介质</th><th>核心职责</th><th>召回时的用途</th></tr>
+<tr><td>L0 Conversation</td><td>原始消息 + 工具证据</td><td>JSONL / SQLite</td><td>保留证据，支持回查</td><td>争议核实、审计追溯</td></tr>
+<tr><td>L1 Atom</td><td>结构化事实（带来源指针）</td><td>SQLite + sqlite-vec</td><td>精准检索可执行信息</td><td>命中具体事实与约束</td></tr>
+<tr><td>L2 Scenario</td><td>Markdown 场景块</td><td>文件系统</td><td>把碎片组织成可读上下文</td><td>快速恢复工作现场</td></tr>
+<tr><td>L3 Persona</td><td>persona.md 画像</td><td>文件系统</td><td>低成本稳定注入</td><td>每轮默认携带的底色</td></tr>
+</table>
+
+<h3>2.2 异步提炼流水线：写入快，理解慢</h3>
+<p>记忆的"写入"和"理解"被刻意拆成两步：原始对话先落盘保证信息不丢，后台再按节奏提炼——默认每 5 轮对话触发一次 L1 提取，每积累约 50 条原子记忆蒸馏一次 L3 画像。提炼走大模型，所以有延迟，但延迟被放在后台，不卡当前对话。</p>
+
+<p>提炼节奏本身是可调的：<code>extractInterval</code> 控制多少轮对话触发一次 L1 提取。调小它，结构化记忆更新更及时，但模型调用次数与成本同步上升；调大则相反，适合对话密集、对实时召回要求不高的场景。经验法则是先按默认值跑一段时间，用召回命中率说话再决定去留——多数团队最后会保留默认节奏，因为真正高频复用的事实，往往在最初几轮对话里就已经稳定出现。</p>
+
+<div class="highlight">
+<strong>实测案例（第三方验证）：</strong>社区实测写入"我上午 10 点前不回即时消息，下午统一沟通"这条习惯后发现：原始对话几乎瞬间入库，结构化记忆约 10 秒后才可检索到。原因正是异步提炼——落盘只是存储动作，提炼要过模型。另外对照实验显示，一次性说三条规范与分三轮说三条规范，产出的记忆卡片颗粒度略有差异，但最终都会归并到同一个场景块下，说明提炼是按语义情境归并，而非按轮次机械切分。
+</div>
+
+<p>场景块的切分粒度也因此值得说明：它既不按天、也不按会话切，而是按语义情境聚合——同一项目里关于部署约束的讨论，哪怕分散在十几个会话里，最终也会归并进同一个场景块。这让"恢复工作现场"变成一次检索动作：取回一个场景块，等于同时取回该任务阶段的全部相关背景，而不必拼凑十几段互相孤立的摘要。</p>
+
+<div class="intuition-box">
+<p>低层保证据、高层保结构、中间靠索引串起来——就像一家公司，档案室存原件、部门存流程手册、老板脑子里只有组织架构图，需要细节时按图索骥回档案室查。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、符号化短期记忆：上下文卸载与画布</h2>
+
+<p>长期记忆解决"跨会话"问题，还有另一类问题发生在单次长任务内部：一个复杂研发任务跑下来，搜索结果、文件内容、测试日志、报错堆栈迅速堆满上下文窗口，模型开始抓不住重点。AgentMemory 的答案是 <span class="term">符号化记忆</span>（Symbolic Memory），其核心动作叫 <span class="term">上下文卸载</span>（Context Offload）。</p>
+
+<h3>3.1 卸载 + 画布：两步把日志变成地图</h3>
+<p>第一步，把冗长的工具输出原文搬到外部文件（<code>refs/*.md</code>），上下文里不再保留全文；第二步，把任务的状态流转编码成紧凑的 Mermaid 语法，放进一张轻量的"任务画布"。Agent 在上下文窗口里对着这张符号图做推理，需要某段原文时，用 <code>node_id</code> 把对应文件取回来。</p>
+
+<div class="arch-diagram">
+ 上下文窗口内                        外部持久化存储
+┌──────────────────────┐          ┌──────────────────────┐
+│ Mermaid 任务画布      │          │ refs/step-03.md      │
+│  A[读取配置]          │ node_id  │  （工具输出原文全文） │
+│    │                 ├─────────▶│ refs/step-07.md      │
+│  B[运行测试]──失败    │  按需取回 │  （测试日志原文）     │
+│    │                 │◀─────────┤ ...                  │
+│  C[定位修复点]        │          └──────────────────────┘
+└──────────────────────┘
+  符号层（几百 Token）      索引层       原文层（多大都不进窗口）
+  ──────── 确定性下钻：符号 → 索引 → 原文 ────────
+</div>
+
+<p>官方文档把这个机制描述为"从顶层符号到中层索引再到底层原文的确定性下钻"。注意"确定性"三个字：这不是靠语义相似度猜，而是画布节点与文件之间的一一引用，取回的必然是当初卸载的那份原文。</p>
+
+<table>
+<tr><th>策略</th><th>Token 占用</th><th>证据完整性</th><th>结构感</th><th>适用场景</th></tr>
+<tr><td>全部留在上下文</td><td>随任务线性爆炸</td><td>完整</td><td>无，全是噪音</td><td>短任务</td></tr>
+<tr><td>摘要后丢弃原文</td><td>低</td><td>不可逆丢失</td><td>弱</td><td>一次性问答</td></tr>
+<tr><td>符号化卸载（本项目）</td><td>低且稳定</td><td>原文可回取</td><td>画布保留任务结构</td><td>长链路任务</td></tr>
+</table>
+
+<h3>3.2 为什么"看地图"优于"读全文"</h3>
+<p>长任务里模型需要的不是日志本身，而是"我进行到哪一步、哪些分支试过、下一步该干什么"。Mermaid 画布恰好表达这种状态结构：节点是步骤，边是流转，失败分支也有记录。原文只在两种时刻被取回——需要核对细节、或需要引用证据。于是 Token 消耗从"与日志总量成正比"变成"与任务结构复杂度成正比"，后者增长慢得多。</p>
+
+<p>举个具体例子：一次"修复登录接口偶发超时"的任务里，Agent 先后执行读配置、压测、查日志、改连接池、回归验证五个步骤，每步工具输出都有数千 Token。若全部留在上下文，到第五步时窗口已被前四步的日志占满；而在符号化方案下，窗口里始终只有五个节点、它们之间的流转边，外加"第三步失败过一次"这样的状态标注，Agent 只在改连接池前取回过第三步的慢查询日志核对一次。复盘时会发现，实际取回原文的次数远小于卸载次数——多数原文从头到尾都没被再读一遍，这正是"地图优于全文"的直接证据。</p>
+
+<div class="intuition-box">
+<p>符号化记忆就像旅行时带地图而不是背着整座城市走：地图上标好了路口编号，需要看街景时按编号调出来，平时口袋里只装一张纸。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、混合检索与降级设计：召回链路</h2>
+
+<p>记忆存下来只是第一步，召回质量才决定体验。AgentMemory 的检索策略有两个鲜明特征：分层召回的顺序设计，以及"宁可少注入、绝不卡对话"的降级哲学。</p>
+
+<h3>4.1 混合检索：BM25 + 向量 + RRF 融合</h3>
+<p>默认召回采用混合策略：关键词通道用 <span class="term">BM25</span>（分词器同时支持中文与英文），语义通道用 <span class="term">sqlite-vec</span> 做向量相似度匹配，两路结果再用 <span class="term">RRF</span>（Reciprocal Rank Fusion，倒数排名融合）合成最终排序。BM25 擅长精确命中专有名词、报错码这类"必须一字不差"的查询；向量通道兜住换了说法仍能命中的语义查询；RRF 融合则避免任何一路单独决策的偏科。</p>
+
+<p>召回时默认先取 L3 画像与 L2 场景做快速上下文启动，需要具体事实时再下钻 L1/L0。会话期间 Agent 还可以显式调用两个检索工具：<code>tdai_memory_search</code>（查记忆）与 <code>tdai_conversation_search</code>（查历史对话），两者返回结果都带 <code>node_id</code>，支持继续向下追溯原文。</p>
+
+<p>三个关键阈值共同决定注入质量的下限：<code>recall.topK</code> 决定一次注入多少条记忆，太小会漏、太大会稀释注意力；<code>similarityThreshold</code> 过滤低质量命中，宁可空手也不注入噪音；超时上限保证最坏情况下对话不被拖慢。三者的调优方向互相牵制——想提高召回就放宽阈值、调大 topK，想控制成本就反着调。建议把"注入后任务表现是否变好"作为唯一裁判，而不是盯着召回率指标本身。</p>
+
+<table>
+<tr><th>检索通道</th><th>擅长</th><th>短板</th><th>在混合策略中的角色</th></tr>
+<tr><td>BM25 关键词</td><td>专有名词、报错码、精确短语</td><td>同义改写召回差</td><td>精确命中通道</td></tr>
+<tr><td>向量语义</td><td>换说法、跨语言、意图相近</td><td>语义相近≠事实命中</td><td>泛化召回通道</td></tr>
+<tr><td>RRF 融合</td><td>综合两路排名，抗单路偏科</td><td>依赖两路质量</td><td>最终排序器</td></tr>
+</table>
+
+<h3>4.2 降级链：记忆可以缺席，对话不能阻塞</h3>
+<p>生产系统里，记忆链路的每个环节都可能失败：向量服务超时、语义召回打不中、去重逻辑抖动。AgentMemory 为每个失败点预设了退路——默认召回 5 条、相似度阈值 0.6、超时上限 5 秒，超时就跳过本轮注入而不是阻塞对话。</p>
+
+<p>这条降级链还给运维留出了观测抓手："跳过注入"与"退回关键词检索"的触发频率，本身就是记忆链路的健康指标——前者频发提示向量服务抖动或阈值配置异常，后者占比升高说明语义通道质量下滑。把这两个计数接入常规监控，记忆组件就从出了问题才想起的黑盒，变成可以值班巡检的一等公民。</p>
+
+<table>
+<tr><th>失败点</th><th>降级策略</th><th>付出的代价</th></tr>
+<tr><td>语义检索无效果</td><td>退回关键词检索</td><td>损失部分泛化召回</td></tr>
+<tr><td>本轮注入超时（5 秒）</td><td>跳过注入，对话照常进行</td><td>本轮少了记忆增强</td></tr>
+<tr><td>去重判断失败</td><td>先新增记忆，后续再清理</td><td>短期冗余，可事后治理</td></tr>
+</table>
+
+<div class="highlight">
+<strong>召回质量的第三方验证：</strong>实测中先写入偏好"用户不接受临时语音沟通，优先异步文档"，然后新开对话、换说法提问——中文改述"我更喜欢语音沟通还是异步文档"能命中，换成英文"Would I prefer a quick sync call or an asynchronous document?"同样能命中。这说明系统提炼的是对话的内容语义而非原文字串，跨语言、跨表述的召回是可用的；但测试者也提醒，默认配置下不宜对强语义召回期望过高，精确事实类查询更依赖关键词通道。
+</div>
+
+<div class="intuition-box">
+<p>检索系统的第一美德不是"总能找到"，而是"找不到时不添乱"——降级路径的完备程度，决定了记忆组件是助力还是故障源。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、团队记忆：四类资产与 Memory Hub</h2>
+
+<p>v2.0 的最大升级是 Team Memory：长期记忆能力从个人扩展到团队。团队协作中产生的对话、文档、代码、工作方法，被整理成四类可复用的 <span class="term">记忆资产</span>（Memory Assets），在 <span class="term">Memory Hub</span> 控制台中统一管理，再按角色和任务装配给不同 Agent。</p>
+
+<h3>5.1 四类资产各司其职</h3>
+<table>
+<tr><th>资产类型</th><th>来源</th><th>形态</th><th>解决什么问题</th></tr>
+<tr><td>Chat Memory 对话记忆</td><td>历史 Agent 会话</td><td>L0-L3 分层提炼的结构化记忆</td><td>偏好、决策、背景不必每次重讲</td></tr>
+<tr><td>Skill 技能库</td><td>一次成功的排障/评审/需求拆解</td><td>含版本、触发边界、执行步骤、验证规则的完整工作流</td><td>验证过的方法在同类任务直接复用</td></tr>
+<tr><td>Wiki 知识图谱</td><td>产品文档、设计规范、运维手册</td><td>LLM-Wiki 结构化页面，支持自然语言查询</td><td>文档从"要通读"变成"可查询"</td></tr>
+<tr><td>CodeGraph 代码图谱</td><td>代码仓库自动索引</td><td>符号、文件、调用关系与影响路径</td><td>改代码前先算清楚会牵连哪里</td></tr>
+</table>
+
+<p>值得强调的是 Skill 不是 prompt 片段，而是带版本管理与审核流程的完整工作流——比如一套"线上排障 SOP"或"Git 工作流模板"，一个人沉淀、审核通过后可共享给全团队的所有 Agent。CodeGraph 也不止告诉你"代码在哪"，还回答"改它会影响什么"，支持冷启动：导入现有代码库即自动建立符号与调用路径索引。</p>
+
+<p>把个人记忆与团队记忆放在一起对比，能看清 v2.0 到底扩展了什么：</p>
+
+<table>
+<tr><th>维度</th><th>个人记忆（v1 能力）</th><th>团队记忆（v2 新增）</th></tr>
+<tr><td>作用范围</td><td>单一用户与自己的 Agent 会话</td><td>跨成员、跨 Agent、跨任务共享</td></tr>
+<tr><td>资产形态</td><td>L0-L3 分层记忆 + 卸载文件</td><td>Chat Memory、Skill、Wiki、CodeGraph 四类资产</td></tr>
+<tr><td>治理方式</td><td>个人私有，无需授权管理</td><td>Owner 负责制 + 版本管理 + 按角色授权</td></tr>
+<tr><td>冷启动来源</td><td>从零积累对话历史</td><td>导入存量代码库与文档即可建立索引</td></tr>
+<tr><td>失效治理</td><td>用户自行清理本地文件</td><td>Owner 评审、版本回退、按使用记录归档</td></tr>
+<tr><td>典型场景</td><td>个人助理、个人开发环境</td><td>项目组协作、运维值班、一人公司</td></tr>
+</table>
+
+<h3>5.2 按角色装配：每个 Agent 只拿需要的上下文</h3>
+<div class="arch-diagram">
+                  ┌────────────── Memory Hub 控制台 ──────────────┐
+                  │  Team 管理 · Agent 角色 · Task 绑定 · 权限     │
+                  └──────────────────┬───────────────────────────┘
+                                     │ 按角色+任务装配
+        ┌────────────────┬───────────┴──────────┬────────────────┐
+        ▼                ▼                      ▼                ▼
+  🛠 修复 Bug Agent  📋 需求分析 Agent      🧪 评审 Agent     🔭 调研 Agent
+  · CodeGraph        · 项目 Wiki            · CodeGraph       · 调研 Wiki
+  · 历史排障记忆      · 业务背景讨论          · 评审 Skill      · 竞品 Skill
+  · 修复 Skill       · Chat Memory          · 历史事件记忆     · 用户访谈记忆
+        │                │                      │                │
+        └────────────────┴─────── 同一套资产池，各取所需 ────────┘
+</div>
+
+<p>开新会话时，用户选择本次任务所属的 Team、使用的 Agent 和具体 Task，系统自动把相关记忆注入上下文。由于资产与具体模型、Agent 框架相互解耦，团队日后更换模型或工具，已积累的经验仍可继续使用，不必从头重建记忆体系。</p>
+
+<h3>5.3 治理：Owner、版本与权限</h3>
+<p>团队共享的前提是可控。Memory Hub 里每条记忆都有 Owner、版本、状态和使用记录；新建的 Chat Memory 和 Skill 默认只有创建者可见，共享需 Owner 主动发起，可按用户、角色、Agent 分别授权，范围从个人私有、团队共享到指定授权逐级放开。对"一人公司"（一个人加一支 Agent 团队）这种新形态，这套机制同样适用：调研、开发、评审各配各的记忆，不必每开一个工具就重讲一遍背景。</p>
+
+<p>资产的生命周期同样需要经营：记忆会过期——去年的部署约束今年可能已经废弃，曾经有效的排障 SOP 在架构重构后反而变成误导。Memory Hub 的使用记录让这类资产浮出水面：长期无人命中的场景块与 Skill 应当定期评审、降级或归档，就像清理不再被引用的代码。宁可记忆库小而准，也不要大而陈——过期的记忆比没有记忆更危险，因为它会以权威口吻给出错误答案。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>技能经人工审核后再共享给团队，把质量关前移</li>
+<li>给记忆资产打场景标签，装配时按任务精准选取</li>
+<li>新成员/新 Agent 入场先导入存量仓库与文档做冷启动</li>
+<li>定期回看使用记录，淘汰长期无人命中的资产</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要默认把所有记忆设为团队可见，敏感约束优先私有</li>
+<li>不要把 LLM 提炼的记忆当成必然正确，关键结论回查 L0 原文</li>
+<li>不要假设"同一工作区 = 同一记忆"，跨工具共享依赖稳定身份绑定</li>
+<li>不要期待装完即记住一切，自动捕捉依赖接入层正确配置</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>团队记忆的本质是把"理解成本"变成"组织资产"——已经付出过的解释、排障、评审，不应该随会话关闭而蒸发，而应该像代码一样被版本化、被复用。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、基准数据与生产落地</h2>
+
+<p>记忆方案好不好，不能只看召回演示，要看"Token 消耗"和"任务完成率"两条曲线能否同时改善——很多压缩方案能把 Token 砍下来，但任务随即跑偏、遗忘、重复分析。AgentMemory 作为 OpenClaw 插件，在连续长程会话（而非孤立单轮）上给出了官方基准，其中 SWE-bench 按每会话连续 50 个任务运行，模拟真实长任务的上下文累积压力。</p>
+
+<table>
+<tr><th>记忆能力</th><th>评测集</th><th>基线成功率</th><th>接入后</th><th>相对提升</th><th>Token 变化</th></tr>
+<tr><td>短期记忆</td><td>WideSearch</td><td>33%</td><td>50%</td><td>+51.52%</td><td>221.31M → 85.64M（−61.38%）</td></tr>
+<tr><td>短期记忆</td><td>SWE-bench</td><td>58.4%</td><td>64.2%</td><td>+9.93%</td><td>3474.1M → 2375.4M（−33.09%）</td></tr>
+<tr><td>短期记忆</td><td>AA-LCR</td><td>44.0%</td><td>47.5%</td><td>+7.95%</td><td>112.0M → 77.3M（−30.98%）</td></tr>
+<tr><td>长期记忆</td><td>PersonaMem</td><td>48%</td><td>76%</td><td>约 +59%</td><td>—</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例一（长任务降本提效）：</strong>在 WideSearch 长程检索任务上，接入符号化短期记忆后，Token 消耗从 221.31M 降至 85.64M，降幅 61.38%，而任务通过率反而从 33% 提升到 50%（相对提升 51.52%）。"花得更少、做得更多"同时出现，验证了上下文卸载不是有损压缩，而是把注意力从日志噪音重新集中到任务结构上。
+</div>
+
+<div class="highlight">
+<strong>生产案例二（长期画像准确率）：</strong>在 PersonaMem 评测（20 个独立画像、6462 条上下文、589 道高难推理题）上，启用分层长期记忆后总体准确率从 48% 提升到 76%（整体达 76.10%），用户事实召回率从不足 30% 提升到 79% 以上。这套数据已在腾讯云生产环境的编程、调研、文档分析、工作流编排四类长链路任务上得到验证。注意：基准由官方自测发布，采用前建议在自己的任务分布上复测。
+</div>
+
+<div class="highlight">
+<strong>生产案例三（连续长程编码任务）：</strong>SWE-bench 评测按单个会话连续跑 50 个真实软件工程任务，刻意制造上下文累积压力：不接入记忆时基线成功率 58.4%，总 Token 消耗 3474.1M；接入符号化短期记忆后，成功率升至 64.2%（相对提升 9.93%），Token 消耗降至 2375.4M，节省约 1098.7M（−33.09%）。会话越长、上下文累积压力越大，卸载机制的净收益越明显——这与"Token 消耗从与日志总量成正比、转为与任务结构复杂度成正比"的机制一致。同样提醒：该基准为官方自测，落地前应在自己的任务分布上复测。
+</div>
+
+<h3>6.1 四种接入方式与部署要点</h3>
+<table>
+<tr><th>接入方式</th><th>形态</th><th>典型用法</th><th>备注</th></tr>
+<tr><td>OpenClaw 插件</td><td>npm 包一行安装</td><td><code>openclaw plugins install @tencentdb-agent-memory/memory-tencentdb</code></td><td>需 Node.js ≥ 22.16，配置一个开关即可启用</td></tr>
+<tr><td>Hermes 网关</td><td>Docker 镜像</td><td>Agent + 插件 + 记忆网关打包运行，端口 8420</td><td>默认模型可替换为任意 OpenAI 兼容端点</td></tr>
+<tr><td>独立 npm 库</td><td>SDK 嵌入自研框架</td><td>本地 SQLite + sqlite-vec，零外部 API 依赖</td><td>适合隐私敏感、离线或资源受限部署</td></tr>
+<tr><td>团队版全量部署</td><td>Docker Compose 一键脚本</td><td><code>cp .env.example .env</code> 后 <code>./start-all.sh</code>，访问 localhost:8125</td><td>建议 ≥8GB 内存；需配置 Memory 组与 Proxy 组两套 LLM 密钥</td></tr>
+</table>
+
+<p>存储后端默认本地优先：SQLite 承载结构化数据，sqlite-vec 扩展提供向量检索，画像与场景块是可读性强的 Markdown 文件；团队版与企业版可切换到腾讯云向量数据库，获得备份、回档与权限控制。配置层面最常用的几个旋钮是：<code>extractInterval</code>（多少轮触发一次 L1 提取）、<code>recall.topK</code>（默认 5）、<code>similarityThreshold</code>（默认 0.6）以及短期卸载的 <code>maxContextTokens</code>。</p>
+
+<p>从基准回到日常使用，判断记忆系统是否真正生效有两个朴素信号：一是同一个背景说明是否还需要讲第二遍，二是长任务的 Token 账单是否随周数增长趋平。若两者都没有改善，先检查接入层配置是否真的生效——提取开关、召回阈值、卸载上限——再怀疑方案本身；实践中多数"记不住"的抱怨，最后都定位到某个默认值没有按任务形态调整。</p>
+
+<div class="intuition-box">
+<p>评估记忆系统请用双指标：只看省 Token 会奖励"遗忘"，只看召回率会奖励"囤积"，只有两条曲线同时改善的方案才值得进生产。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+<details>
+<summary>AgentMemory 和普通向量库 RAG 有什么本质区别？</summary>
+<div class="answer">向量库 RAG 把所有内容打碎成扁平切片，召回退化为对互不相连片段的盲搜，不知道某条记忆属于哪个用户、哪个项目、哪个任务阶段。AgentMemory 用 L0-L3 分层结构组织记忆：低层保留原始证据，高层沉淀稳定画像，中间层用场景块和来源指针把碎片串成可回查的链路。此外它还叠加了符号化短期记忆和团队级资产治理，这些都不是一个向量索引能覆盖的能力。</div>
+</details>
+<details>
+<summary>为什么要保留 L0 原始对话？直接存提炼后的事实不是更省空间？</summary>
+<div class="answer">因为提炼由大模型完成，必然存在抽错、漏抽、理解偏差的可能。L0 是整个体系的证据底座：每条 L1 事实都带 source_message_ids 指回原始消息，一旦上层结论可疑，可以逐级下钻回原文核对。这正是"压缩可以发生，但压缩结果必须可回查"的设计原则——省掉 L0 等于把记忆系统变成无法审计的黑盒，在生产环境不可接受。</div>
+</details>
+<details>
+<summary>Mermaid 符号记忆为什么能省 Token 又不丢信息？</summary>
+<div class="answer">它把"全文驻留上下文"改成了"结构驻留上下文、全文驻留外部文件"。工具输出原文被卸载到 refs/*.md，上下文里只保留 Mermaid 画布描述的步骤与状态流转，Token 占用从与日志总量成正比变为与任务结构复杂度成正比。关键在于卸载是带 node_id 引用的确定性下钻，不是摘要式的有损压缩：任何时刻需要原文都能按编号精确取回，所以信息没有丢，只是搬了位置。</div>
+</details>
+<details>
+<summary>检索为什么选 BM25 + 向量的混合方案，而不是纯向量？</summary>
+<div class="answer">两类查询的命中逻辑不同。"上次那个 TIMEOUT 报错怎么解决的"这类查询要求报错码一字不差地命中，向量检索只能做到语义相近，容易返回看似相关但并非答案的结果，这正是纯向量方案在记忆场景的根本局限。BM25 负责精确命中专有名词与错误码，向量通道兜住换说法、跨语言的语义查询，再用 RRF 倒数排名融合两路结果，避免单路偏科。</div>
+</details>
+<details>
+<summary>结构化记忆有大约 10 秒的提炼延迟，会不会影响使用？</summary>
+<div class="answer">对聊天和任务场景基本无感，因为系统刻意把写入与提炼拆成两步：原始对话瞬间落盘，提炼在后台异步进行，不阻塞当前对话。需要注意的是批量导入历史数据的场景——不能指望导入完成立刻全部可查，应预留提炼窗口，或在导入后稍作等待再开始依赖结构化记忆的高强度检索。</div>
+</details>
+<details>
+<summary>团队记忆里，哪些资产适合共享、哪些应该保持私有？</summary>
+<div class="answer">默认策略是"新建即私有，共享需审核"：新产生的 Chat Memory 和 Skill 只有创建者可见，由 Owner 主动发起共享并按用户、角色、Agent 分级授权。实践上，经过验证的排障 SOP、评审清单、发布检查表这类可复用的工作方法适合共享；包含个人偏好、敏感业务约束或未验证猜想的记忆应保持私有。判断标准只有一条：这条记忆被别的 Agent 复用后，是降低风险还是引入误导。</div>
+</details>
+<details>
+<summary>这套系统适合什么团队？什么场景下不建议上？</summary>
+<div class="answer">适合长链路、多会话、多 Agent 协作的场景：持续数周的项目开发、需要积累排障经验的运维团队、一人带多支 Agent 的一人公司，以及希望新成员和新 Agent 冷启动即接手存量经验的团队。不建议的场景包括：单轮即问即答的轻量对话（记忆收益抵不上提炼成本）、对延迟极端敏感的实时系统（召回有超时预算）、以及无法接受任何本地存储的高合规环境——后者需要先评估企业版的权限与审计能力是否满足要求。</div>
+</details>
+<details>
+<summary>新团队想做冷启动、把存量经验迁移进来，具体从哪几步入手？</summary>
+<div class="answer"><span class="term">冷启动</span>（Cold Start）有三条并行的导入路径：其一，把现有代码仓库交给 CodeGraph 自动索引，立即获得符号、调用关系与影响路径，Agent 改代码前就能评估牵连面；其二，把产品文档、设计规范、运维手册导入 Wiki，让文档从"需要通读"变成"可用自然语言查询"；其三，把历史 Agent 会话批量导入 L0，由后台异步提炼出 L1-L3 结构。注意两点：批量导入后要留出提炼窗口期，别指望导入完成就立即全部可查；顺序上建议先代码与文档、后对话历史，因为前者是相对独立的结构化知识，后者依赖前者提供的语境才能被正确归并到场景块。</div>
+</details>
+<details>
+<summary>记忆默认存在本地，换设备、多人共用时数据怎么办？</summary>
+<div class="answer">默认形态下，结构化数据在 SQLite，向量在 sqlite-vec，画像与场景块是可读的 Markdown 文件，卸载原文在 refs 目录——整个记忆目录可以直接打包带走，落到新机器上即可恢复，这是"本地优先"设计的附带红利。需要团队协作或高可用时，把存储后端切换到腾讯云向量数据库，可获得备份、回档与权限控制。多人共用的正确姿势不是共享同一份本地库，而是通过 Memory Hub 的团队空间按角色装配：个人记忆保持私有，共享资产走 Owner 授权，避免"同一工作区即同一记忆"的误解造成串扰。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

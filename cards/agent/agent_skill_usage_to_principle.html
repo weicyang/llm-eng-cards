@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A27 · Agent Skill 从使用到原理</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、Agent Skill 是什么</a>
+<a href="#s2">二、基础用法 — 创建与使用</a>
+<a href="#s3">三、Agent Skill 运行机制 — 按需加载</a>
+<a href="#s4">四、Reference — 按需中的按需加载</a>
+<a href="#s5">五、Script — 让 Skill 跑代码</a>
+<a href="#s6">六、渐进式披露三层架构</a>
+<a href="#s7">七、Agent Skill vs MCP</a>
+<a href="#s8">高频问答</a>
+</aside>
+<div class="container">
+
+<h1>A27 · Agent Skill 从使用到原理</h1>
+<p class="subtitle">Agent Skill 概念 → 基础用法 → Reference 按需加载 → Script 代码执行 → 渐进式披露三层架构 → Skill vs MCP</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>Agent Skill 就是给模型准备的"随用随翻的说明书"——把规则、流程、资料和脚本写成文件夹，模型按需三层加载，从此不用每次对话粘贴长提示词。</p>
+</div>
+
+<!-- ==================== 1. Agent Skill 概念 ==================== -->
+<div class="section">
+<h2 id="s1">一、Agent Skill 是什么</h2>
+
+<p>2025年10月 Anthropic 推出 <span class="term">Agent Skill</span>，起初仅用于 Claude 特定任务，但行业迅速跟进（VS Code、Codex、Cursor 均跟进支持）。12月 Anthropic 将其发布为<strong>开放标准</strong>，支持跨平台复用。</p>
+
+<p><strong>通俗定义：</strong>Agent Skill 就是大模型可以随时翻阅的"说明文档"——在 <code>skill.md</code> 文件中写好规则、流程和示例，模型在执行任务时自动参考，无需每次对话重复粘贴长要求。</p>
+
+<h3>实际场景示例</h3>
+<table>
+<tr><th>场景</th><th>Skill 中规定的内容</th></tr>
+<tr><td>智能客服</td><td>遇到投诉先安抚用户，不得随意承诺</td></tr>
+<tr><td>会议总结</td><td>按参会人员/议题/决定格式输出</td></tr>
+<tr><td>爆款文案</td><td>标题公式 + 结构 + 语气要求</td></tr>
+</table>
+
+<div class="highlight">
+Agent Skill 本质是一个以文件夹形式存在的、可动态加载的结构化系统提示词，包含指令、参考资料和代码脚本。
+</div>
+
+<div class="intuition-box">
+<p>Skill 本质是结构化的系统提示词——把"每次对话都要粘贴的长要求"存成文件，模型需要时自动翻阅。</p>
+</div>
+</div>
+
+<!-- ==================== 2. 基础用法 ==================== -->
+<div class="section">
+<h2 id="s2">二、基础用法 — 创建与使用</h2>
+
+<h3>Skill 文件夹结构</h3>
+<pre><code>~/.claude/skills/
+  └── 会议总结助手/           ← 文件夹名 = Skill 名称
+      └── skill.md            ← 核心文件</code></pre>
+
+<h3>skill.md 结构</h3>
+<pre><code>---
+name: 会议总结助手            ← metadata（元数据）
+description: 用于总结会议录音内容
+---
+
+## 规则                           ← instruction（指令）
+1. 必须总结参会人员、议题、决定
+2. 按以下格式输出...
+
+## 示例
+输入：[会议录音文本]
+输出：[格式化总结]</code></pre>
+
+<h3>skill.md 两大组成部分</h3>
+<table>
+<tr><th>部分</th><th>英文</th><th>作用</th></tr>
+<tr><td>元数据（metadata）</td><td>metadata</td><td>name + description，用于模型判断是否需要加载此 Skill</td></tr>
+<tr><td>指令（instruction）</td><td>instruction</td><td>具体的规则、流程、示例，指导模型如何执行任务</td></tr>
+</table>
+
+<p>一句话概括：<span class="term">metadata</span>（元数据，即 name 和 description）回答"这个 Skill 是什么、何时该用"，<span class="term">instruction</span>（指令，即规则与示例）回答"具体该怎么做"——前者用于匹配，后者用于执行。</p>
+
+<div class="intuition-box">
+<p>metadata 负责"被找到"，instruction 负责"把事做对"——一个管匹配，一个管执行。</p>
+</div>
+
+<h3>使用时机</h3>
+<p>在 Claude Code 中输入"你有哪些 agent skill"，Claude Code 会自动扫描 <code>~/.claude/skills/</code> 目录发现所有已安装的 Skill。</p>
+</div>
+
+<!-- ==================== 3. 运行机制 ==================== -->
+<div class="section">
+<h2 id="s3">三、Agent Skill 运行机制 — 按需加载</h2>
+
+<h3>完整调用流程</h3>
+<div class="arch-diagram">
+用户发送请求
+    ↓
+Claude Code 将所有 Skill 的 metadata（name + description）发给模型
+    ↓
+模型判断：用户请求匹配"会议总结助手"
+    ↓
+Claude Code 读取匹配 Skill 的完整 skill.md
+    ↓
+Claude Code 将用户请求 + 完整 skill.md 发给模型
+    ↓
+模型根据 skill.md 指令生成结果
+    ↓
+结果返回用户</div>
+
+<div class="highlight">
+核心机制：<strong>按需加载</strong>。所有 Skill 的名称和描述始终对模型可见（轻量级目录），但具体的指令内容只在被选中后才加载，大幅节省 Token。
+</div>
+
+<div class="intuition-box">
+<p>按需加载 = "目录常驻、正文用到才翻"——这正是 Skill 省 Token 的关键。</p>
+</div>
+
+<table>
+<tr><th>加载策略</th><th>每次对话放入上下文的内容</th><th>Token 消耗（以安装 10 个 Skill 为例）</th></tr>
+<tr><td>全量加载</td><td>所有 Skill 的完整 skill.md 正文</td><td>约 10 × 2000 = 20000 的固定消耗</td></tr>
+<tr><td>按需加载</td><td>metadata 目录 + 命中 Skill 的正文</td><td>通常只需 500–2000</td></tr>
+</table>
+</div>
+
+<!-- ==================== 4. Reference ==================== -->
+<div class="section">
+<h2 id="s4">四、Reference — 按需中的按需加载</h2>
+
+<p>当 Skill 需要引用大量外部资料（如财务规定、法律条文）时，全部写入 <code>skill.md</code> 会导致文件臃肿。<span class="term">Reference</span> 解决了这个问题。</p>
+
+<h3>文件结构</h3>
+<pre><code>会议总结助手/
+  ├── skill.md                  ← 主指令
+  └── 集团财务手册.md            ← Reference 文件</code></pre>
+
+<h3>在 skill.md 中声明触发条件</h3>
+<pre><code>## 财务提醒规则
+仅在提到"钱/预算/采购/费用"时触发。
+触发时读取"集团财务手册.md"，根据内容指出金额是否超标。</code></pre>
+
+<h3>Reference 的核心特性</h3>
+<ul>
+  <li><strong>条件触发</strong> — 只有当模型判断内容涉及财务时，才会加载 Reference 文件</li>
+  <li><strong>零消耗</strong> — 如果不涉及财务，Reference 文件不会被读取，不占一个 Token</li>
+  <li><strong>读取到上下文</strong> — Reference 的内容会被加载到模型上下文中供参考</li>
+</ul>
+
+<div class="intuition-box">
+<p>Reference 是"按需中的按需"：只有对话命中触发词，那本厚手册才会被翻开，否则不占一个 Token。</p>
+</div>
+</div>
+
+<!-- ==================== 5. Script ==================== -->
+<div class="section">
+<h2 id="s5">五、Script — 让 Skill 跑代码</h2>
+
+<p><span class="term">Script</span> 让 Agent Skill 从"只读文档"进化为"可执行动作"。</p>
+
+<h3>文件结构</h3>
+<pre><code>会议总结助手/
+  ├── skill.md
+  ├── 集团财务手册.md
+  └── upload.py                 ← Script 文件</code></pre>
+
+<h3>在 skill.md 中声明触发条件</h3>
+<pre><code>## 上传规则
+如果用户提到"上传/同步/发送到服务器"，
+必须运行 upload.py 脚本将总结上传到服务器。</code></pre>
+
+<div class="warn-box">
+Script 的关键特性：<strong>只执行不读取</strong>。Claude Code 不会去读代码内容，只关心执行结果。即使脚本写了 10000 行，消耗的模型上下文几乎为零。
+</div>
+
+<div class="intuition-box">
+<p>Script 只跑不读——代码可以写一万行，进入模型上下文的只有执行结果那一行。</p>
+</div>
+
+<h3>Script 执行流程</h3>
+<div class="arch-diagram">
+用户: "把会议总结上传到服务器"
+         ↓
+┌─ Claude Code ───────────────────────────────────┐
+│ 1. 匹配到 skill.md 中的"上传规则" → 条件触发    │
+│ 2. 直接执行 upload.py（不读取代码内容）         │
+│ 3. 接收脚本执行结果（成功/失败）                │
+└─────────────────────────────────────────────────┘
+         ↓
+   upload.py → 服务器: 上传总结文件
+         ↓
+   模型整理执行结果，回复用户
+</div>
+
+<h3>Reference vs Script 对比</h3>
+<table>
+<tr><th>维度</th><th>Reference</th><th>Script</th></tr>
+<tr><td>本质</td><td>被<strong>读取</strong>的参考资料</td><td>被<strong>执行</strong>的代码</td></tr>
+<tr><td>加载方式</td><td>内容放入模型上下文</td><td>不读取，只运行</td></tr>
+<tr><td>Token 消耗</td><td>有（文件越大越费）</td><td>几乎为零</td></tr>
+<tr><td>触发方式</td><td>条件触发</td><td>条件触发</td></tr>
+</table>
+</div>
+
+<!-- ==================== 6. 渐进式披露 ==================== -->
+<div class="section">
+<h2 id="s6">六、渐进式披露三层架构</h2>
+
+<p>Agent Skill 的设计是一个精密的<strong><span class="term">渐进式披露</span>（Progressive Disclosure，逐层展开信息，只加载当前步骤所需的内容）</strong>结构，共三层：</p>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────┐
+│ 第 1 层：元数据层 (Metadata)                         │
+│ 内容：所有 Skill 的 name + description               │
+│ 加载：始终加载（轻量级目录）                          │
+│ Token：极少                                         │
+├─────────────────────────────────────────────────────┤
+│ 第 2 层：指令层 (Instruction)                         │
+│ 内容：匹配 Skill 的 skill.md 正文                    │
+│ 加载：按需加载（仅被选中的 Skill）                    │
+│ Token：中等                                         │
+├─────────────────────────────────────────────────────┤
+│ 第 3 层：资源层 (Reference + Script)                  │
+│ 内容：参考资料文件 + 代码脚本                         │
+│ 加载：按需中的按需（仅条件触发时加载）                │
+│ Token：Reference 有消耗，Script 几乎零                │
+└─────────────────────────────────────────────────────┘</div>
+
+<p>这种三层架构确保了：即使安装了十几个 Skill，每次对话只加载必要的信息，Token 消耗始终可控。</p>
+
+<div class="intuition-box">
+<p>三层渐进式披露像剥洋葱：metadata 目录 → 命中的指令 → 触发的资源，一层一层剥，只加载当下需要的。</p>
+</div>
+
+<table>
+<tr><th>层级</th><th>内容</th><th>加载时机</th><th>Token 消耗</th></tr>
+<tr><td>① 元数据层</td><td>所有 Skill 的 name + description</td><td>始终加载</td><td>极少（几百）</td></tr>
+<tr><td>② 指令层</td><td>命中 Skill 的 skill.md 正文</td><td>按需（仅被选中时加载）</td><td>中等</td></tr>
+<tr><td>③ 资源层</td><td>Reference 参考资料 + Script 脚本</td><td>按需中的按需（仅条件触发时）</td><td>Reference 有消耗，Script 几乎零</td></tr>
+</table>
+</div>
+
+<!-- ==================== 7. Skill vs MCP ==================== -->
+<div class="section">
+<h2 id="s7">七、Agent Skill vs MCP</h2>
+
+<div class="highlight">
+Anthropic 官方定义：<strong>MCP connects Claude to data; Skills teach Claude what to do with that data.</strong><br>
+MCP 给大模型供给数据，Skill 教会大模型如何处理数据。
+</div>
+
+<table>
+<tr><th>维度</th><th>Agent Skill</th><th>MCP</th></tr>
+<tr><td>本质</td><td>说明文档（Markdown 文件）</td><td>独立运行的程序</td></tr>
+<tr><td>核心功能</td><td>教模型"怎么做"（规则/流程/经验）</td><td>给模型"接数据"（查询/读取/操作）</td></tr>
+<tr><td>代码能力</td><td>轻量脚本（Script）</td><td>完整的工具服务</td></tr>
+<tr><td>安全性</td><td>较低（脚本直接执行）</td><td>较高（协议化通信）</td></tr>
+<tr><td>适用场景</td><td>规则流程、格式要求、操作指南</td><td>数据查询、API 调用、外部系统集成</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>MCP 给模型递食材（数据），Skill 给模型递菜谱（规则）——两者互补，而非替代。</p>
+</div>
+
+<div class="arch-diagram">
+┌────────────────────┐        ┌────────────────────┐
+│    Agent Skill     │        │        MCP         │
+│ 教模型"怎么做"     │        │ 给模型"用什么"     │
+│ 规则 / 流程 / 格式 │        │ 查询 / 读取 / 操作 │
+└─────────┬──────────┘        └──────────┬─────────┘
+          └───────────┬──────────────────┘
+                      ↓
+          ┌────────────────────┐
+          │     模型综合处理    │
+          │ 按 MCP 取数据，     │
+          │ 按 Skill 加工输出   │
+          └────────────────────┘
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+  <li>用 Skill 定义输出格式、流程和规则</li>
+  <li>用 MCP 连接外部数据源和 API</li>
+  <li>Skill + MCP 结合使用效果最佳</li>
+  <li>Skill 的 Script 适合轻量脚本</li>
+  <li>用 Reference 拆分大文档，按需加载</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+  <li>不要用 Skill 替代 MCP 做复杂数据操作</li>
+  <li>不要在 skill.md 中塞入所有参考资料</li>
+  <li>不要用 Skill 的 Script 运行危险命令</li>
+  <li>不要忽略 metadata 的 description 质量</li>
+  <li>不要把安全敏感逻辑放在 Script 里</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ==================== 高频问答 ==================== -->
+<div class="qa-section">
+<h2 id="s8">高频问答</h2>
+
+<details>
+<summary>什么是 Agent Skill？它解决了什么核心问题？</summary>
+<div class="answer">Agent Skill 是一种以文件夹形式存在的结构化系统提示词，包含 skill.md（元数据+指令）、Reference（参考资料）和 Script（代码脚本）。核心解决的问题：①避免每次对话重复粘贴长提示词；②通过渐进式披露机制节省 Token（只加载必要的信息）；③将操作经验/规则/流程标准化，可跨平台复用。2025年 Anthropic 将其发布为开放标准，已被 VS Code、Cursor、Codex 等工具支持。</div>
+</details>
+
+<details>
+<summary>Agent Skill 的渐进式披露三层架构是什么？</summary>
+<div class="answer">三层架构：①元数据层（Metadata）— 所有 Skill 的 name + description，始终加载，相当于轻量级目录，Token 极少；②指令层（Instruction）— 匹配 Skill 的 skill.md 正文，按需加载，仅被选中的 Skill 才加载；③资源层（Reference + Script）— 按需中的按需，仅条件触发时加载。Reference 被读取到上下文（消耗 Token），Script 只执行不读取（几乎零 Token）。这种设计确保即使安装十几个 Skill，每次对话只加载必要信息。</div>
+</details>
+
+<details>
+<summary>Reference 和 Script 的加载方式有什么区别？</summary>
+<div class="answer">Reference 是"读"：当条件触发时，Claude Code 将文件内容加载到模型上下文中供参考，会消耗 Token。Script 是"跑"：Claude Code 不会读取代码内容，只执行脚本并获取运行结果，即使脚本写了上万行，消耗的模型上下文几乎为零。关键区别：Reference 增加模型的知识（提供信息），Script 扩展模型的能力（执行动作）。两者都是条件触发，但加载方式和对 Token 的影响截然不同。</div>
+</details>
+
+<details>
+<summary>Agent Skill 和 MCP 的区别是什么？什么时候用哪个？</summary>
+<div class="answer">Anthropic 官方总结：MCP connects Claude to data, Skills teach Claude what to do with that data。MCP 是独立运行的程序，负责给模型供给数据（查询数据库、调用 API）；Skill 是说明文档，教模型如何处理数据（格式要求、操作流程、规则约束）。Skill 本质是 Markdown 文件，MCP 本质是运行中的服务。选择原则：①定义输出格式/流程/规则 → Skill；②连接外部数据源/API → MCP；③大多数场景两者结合使用。Skill 的 Script 虽能连数据，但安全性和稳定性不及 MCP。</div>
+</details>
+
+<details>
+<summary>Agent Skill 的按需加载机制为什么能节省 Token？</summary>
+<div class="answer">按需加载分两步节省 Token：①初始阶段只将所有 Skill 的 metadata（name + description）发给模型，这是一个轻量级目录，即使有 20 个 Skill 也只占几百 Token；②模型判断用户请求匹配某个 Skill 后，Claude Code 才读取该 Skill 的完整 skill.md，而且只读取匹配的那一个；③Skill 内的 Reference 文件进一步条件触发，只在涉及特定内容时才加载。对比：如果将所有 Skill 的完整内容始终发给模型，10 个 Skill × 平均 2000 Token = 20000 Token 的固定消耗。按需加载后，通常只需 500-2000 Token。</div>
+</details>
+
+<details>
+<summary>如何设计一个高质量的 Agent Skill？</summary>
+<div class="answer">关键设计原则：①Metadata 的 description 要精准描述 Skill 的适用场景，这直接影响模型的匹配准确率；②Instruction 部分要有明确的规则和 few-shot 示例，确保模型理解输出格式；③用 Reference 拆分大文档（如财务手册、法律条文），设置精确的触发条件避免不必要加载；④Script 中的执行方法要在 skill.md 中写清楚，否则模型可能会去读取代码内容（浪费 Token）；⑤保持单一职责，一个 Skill 只做一类事情，避免"万能 Skill"。</div>
+</details>
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1cGigBQE6n" target="_blank">Agent Skill 从使用到原理，一次讲清</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+  <script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

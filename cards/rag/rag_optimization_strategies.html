@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G29 · RAG 优化 17 策略 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--cyan);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+@media(max-width:768px){.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、文档解析层（策略 1-4）</a>
+<a href="#s2">二、检索层（策略 5-9）</a>
+<a href="#s3">三、Embedding 层（策略 10-12）</a>
+<a href="#s4">四、生成层（策略 13-15）</a>
+<a href="#s5">五、系统层（策略 16-17）</a>
+<a href="#s6">六、优化优先级与 ROI 排序</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+<h1>G29 · RAG 优化 17 策略</h1>
+<p class="subtitle">从文档解析到答案生成的全链路优化指南 — 按 ROI 排序，逐层叠加</p>
+
+<div class="intuition-box">
+<p>RAG 优化的本质是"先解决垃圾进，再解决找不准，最后优化答不好"。跳过基础层直接上高级策略是最常见的反模式。</p>
+</div>
+
+<p><span class="term">RAG</span>（Retrieval-Augmented Generation）的本质是"开卷考试" — 模型不需要记住所有知识，而是实时从知识库中检索相关内容来辅助回答。17 个策略按优化阶段分类，覆盖<span class="term">文档解析 → Chunk 切分 → Embedding → 检索 → 重排序 → 生成</span>全链路。</p>
+
+<div class="arch-diagram">
+                    RAG 全链路优化全景图
+                    
+  ┌──────────┐    ┌──────────┐    ┌──────────┐
+  │ 文档解析  │ →  │ Chunk切分 │ →  │ Embedding│
+  │ (3策略)   │    │ (2策略)   │    │ (3策略)   │
+  └──────────┘    └──────────┘    └──────────┘
+                                        ↓
+  ┌──────────┐    ┌──────────┐    ┌──────────┐
+  │  生 成    │ ←  │  重排序   │ ←  │  检 索    │
+  │ (3策略)   │    │ (1策略)   │    │ (5策略)   │
+  └──────────┘    └──────────┘    └──────────┘
+</div>
+
+<!-- ==================== 文档解析层 ==================== -->
+<div class="section" id="s1">
+<h2>一、文档解析层（策略 1-4）</h2>
+
+<div class="intuition-box">
+<p>文档解析是 RAG 链路的源头 — 解析质量差，后面所有优化都是"在垃圾上雕花"。70% 的 RAG 问题可以追溯到解析和分块阶段。</p>
+</div>
+
+<h3>策略 1：智能分块</h3>
+<p>按语义边界切分文档，而非按固定字数。固定字数分块会在句子或段落中间切断，导致信息不完整。<span class="term">RecursiveCharacterTextSplitter</span> 按层级分隔符（段落 → 句子 → 词）逐级尝试切割，优先保持大结构完整。中文文档需要特别加入中文标点作为分隔符。</p>
+
+<p><strong>关键参数：</strong>chunk_size 通常为 256-1024 tokens，overlap 为 chunk_size 的 10-20%。chunk_size 应该匹配用户期望问的问题的"答案粒度" — 太大语义被稀释，太小信息断裂。</p>
+
+<h3>策略 2：元数据增强</h3>
+<p>为每个 chunk 添加结构化元数据（来源文档、时间、标签、标题层级），使检索时可以按元数据预过滤。例如查询"最新的退货政策"时，先按时间过滤最近 3 个月的文档，再做向量检索，大幅减少噪声。</p>
+
+<h3>策略 3：多模态解析</h3>
+<p>将图片、表格、公式等非文本内容转换为文本表示。表格可转为自然语言描述，图片可用 LLM 生成描述，公式可保留 LaTeX 表示。不处理多模态内容意味着丢失了文档中大量的结构化知识。</p>
+
+<h3>策略 4：层级索引</h3>
+<p>建立文档/章节/段落三级索引。粗粒度检索先定位到文档或章节，细粒度检索再精确定位到段落。对于大型知识库（万级文档），层级索引可以将检索时间从 O(N) 降到 O(log N)，同时提高检索精度。</p>
+
+<h3>解析层四策略横向对比</h3>
+<table>
+<tr><th>策略</th><th>解决什么问题</th><th>实施成本</th><th>该上的信号</th><th>不该上的信号</th></tr>
+<tr><td>1 · 智能分块</td><td>固定字数在句中截断，信息不完整</td><td>低（改切分脚本）</td><td>抽查 chunk 发现句子被切断、表格被劈开</td><td>文档本身是短 FAQ，一条就是一个 chunk</td></tr>
+<tr><td>2 · 元数据增强</td><td>无法按时间/来源/权限缩小范围</td><td>低（建库时写字段）</td><td>query 带"最新""某产品线"等限定词</td><td>知识库单一来源且从不更新</td></tr>
+<tr><td>3 · 多模态解析</td><td>表格、图片、公式里的知识全丢</td><td>高（引入解析模型）</td><td>源文档大量表格截图、扫描件</td><td>文档基本是纯文本 Markdown</td></tr>
+<tr><td>4 · 层级索引</td><td>万级文档下粗检索开销与噪声都大</td><td>中（多套一层索引）</td><td>文档数上万且章节结构清晰</td><td>文档数千级以内，扁平索引够用</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>分块策略的影响 > Embedding 模型的影响（在同一量级模型内）</li>
+<li>分块错误是不可恢复的 — 如果关键信息在分块时被切断，后续任何检索优化都无法弥补</li>
+<li>元数据增强是低成本高收益的优化，通常不需要改动模型或算法</li>
+</ul>
+</div>
+</div>
+
+<!-- ==================== 检索层 ==================== -->
+<div class="section" id="s2">
+<h2>二、检索层（策略 5-9）</h2>
+
+<div class="intuition-box">
+<p>检索层是 RAG 的核心引擎 — 找对了文档，生成层只需要"忠实复述"即可；找错了文档，再好的 LLM 也无能为力。</p>
+</div>
+
+<h3>策略 5：混合检索</h3>
+<p>将<span class="term">向量检索</span>（语义匹配）和 <span class="term">BM25</span>（关键词匹配）融合。向量检索擅长语义匹配（"怎么退货" ≈ "退款流程"），但对精确关键词匹配弱（产品型号、人名）。BM25 擅长精确匹配但对语义理解差。两者通过 <span class="term">RRF</span>（Reciprocal Rank Fusion）算法融合排序，互补优势。</p>
+
+<div class="formula">RRF 融合公式：score(doc) = Σ 1/(k + rank_i)
+<br>其中 k 通常取 60，rank_i 是文档在第 i 个检索器中的排名</div>
+
+<h3>策略 6：查询改写（HyDE）</h3>
+<p>用户的查询通常简短模糊（如"怎么部署"），与文档的正式表述有语义鸿沟。<span class="term">HyDE</span>（Hypothetical Document Embeddings）让 LLM 先生成一个"伪答案"（假设性的完整回答），再用伪答案去检索。伪答案更贴近文档的表述方式，检索效果更好。代价是多一次 LLM 调用（~500ms）。</p>
+
+<h3>策略 7：查询分解</h3>
+<p>将复杂的多跳问题拆为多个子问题分别检索。例如"LangChain 和 LlamaIndex 哪个更适合企业级应用？"可拆为：①LangChain 的企业级特性 ②LlamaIndex 的企业级特性 ③两者的企业级对比。每个子问题独立检索，结果合并后送入 LLM 做比较分析。</p>
+
+<h3>策略 8：查询扩展</h3>
+<p>用同义词和相关概念扩展查询，提升召回率。例如用户问"AI 编程助手"，扩展为"AI 编程助手 OR 代码补全 OR Copilot OR Cursor"。可通过 LLM 生成扩展词，或从知识图谱中提取相关概念。注意扩展过多会引入噪声，通常扩展 2-3 个同义词即可。</p>
+
+<h3>策略 9：重排序（Re-ranking）</h3>
+<p>用 <span class="term">Cross-Encoder</span> 对初检结果做精细排序。初筛（向量检索）速度快但精度有限，重排序对"问题-文档"对做深度理解打分，过滤噪音。实测精度提升 <strong>15-30%</strong>，延迟仅增加约 50-200ms。</p>
+
+<div class="arch-diagram">
+用户 Query
+    ↓
+混合检索（向量 + BM25，快但粗）→ Top-20 候选
+    ↓
+Cross-Encoder 重排序（慢但精）→ Top-3~5 精选
+    ↓
+送入 LLM 生成回答</div>
+
+<div class="highlight">
+<strong>重排序是 RAG 优化中 ROI 最高的策略：</strong>仅增加 50ms 延迟，准确率可提升 11 个百分点。相当于先用粗网捕鱼，再用细筛精选。
+</div>
+
+<h3>检索层五策略横向对比</h3>
+<table>
+<tr><th>策略</th><th>作用位置</th><th>提升哪个指标</th><th>延迟代价</th><th>主要风险</th></tr>
+<tr><td>5 · 混合检索</td><td>召回阶段（并行两路）</td><td>Recall（补上关键词盲区）</td><td>+5~30ms</td><td>需要多维护一套倒排索引</td></tr>
+<tr><td>6 · 查询改写 HyDE</td><td>检索前（改 query）</td><td>Recall（缩语义鸿沟）</td><td>约 +500ms（多一次 LLM）</td><td>伪答案编错时检索方向整体偏掉</td></tr>
+<tr><td>7 · 查询分解</td><td>检索前（拆成子问题）</td><td>多跳问题的覆盖率</td><td>N 倍检索 + 一次 LLM</td><td>拆错子问题会放大而非弥补错误</td></tr>
+<tr><td>8 · 查询扩展</td><td>检索前（加同义词）</td><td>Recall（长尾说法）</td><td>低</td><td>扩得太多直接引入噪声，建议 2~3 个</td></tr>
+<tr><td>9 · 重排序</td><td>召回后（精排 Top-20）</td><td>Precision（15~30%）</td><td>+50~200ms</td><td>候选集里本来就没有答案时无能为力</td></tr>
+</table>
+
+</div>
+
+<!-- ==================== Embedding 层 ==================== -->
+<div class="section" id="s3">
+<h2>三、Embedding 层（策略 10-12）</h2>
+
+<div class="intuition-box">
+<p>Embedding 是文档和查询的"通用语言" — 把文本变成向量，让机器能计算语义距离。Embedding 质量直接决定了检索的语义理解能力。</p>
+</div>
+
+<h3>策略 10：领域微调</h3>
+<p>用领域数据微调 Embedding 模型，使其更好地捕捉领域特定的语义关系。通用模型在垂直领域（如医学、法律、金融）表现往往不佳，因为训练数据中相关领域文本较少。微调后，"心肌梗死"和"心梗"的向量距离会显著缩小。典型微调数据量：5000-10000 对领域内查询-文档对。</p>
+
+<h3>策略 11：多向量索引</h3>
+<p>同一文档生成多个向量（标题向量、摘要向量、正文向量），查询时与最匹配的向量对齐。标题向量适合粗粒度检索（"这个文档讲什么？"），正文向量适合精确检索（"具体怎么操作？"）。解决单一向量无法同时表达文档全局语义和局部细节的问题。</p>
+
+<h3>策略 12：稀疏-稠密融合</h3>
+<p>将 <span class="term">SPLADE</span>（稀疏表示，类似学习的 BM25）与稠密向量融合。稀疏表示擅长精确关键词匹配和词汇扩展，稠密向量擅长语义理解。两者融合后，既能精确匹配关键词，又能理解语义，类似混合检索在向量层面的实现。</p>
+
+<h3>Embedding 层三策略横向对比</h3>
+<table>
+<tr><th>策略</th><th>改的是什么</th><th>存储/算力代价</th><th>适用场景</th></tr>
+<tr><td>10 · 领域微调</td><td>模型权重（让领域同义词靠拢）</td><td>一次训练 ＋ 全量重建索引</td><td>垂直领域黑话多，通用模型算不出"心梗 ≈ 心肌梗死"</td></tr>
+<tr><td>11 · 多向量索引</td><td>一篇文档的表示数量</td><td>存储涨到标题+摘要+正文三份</td><td>文档长且结构差异大，单向量既表达不了全局也丢细节</td></tr>
+<tr><td>12 · 稀疏-稠密融合</td><td>向量的类型（SPLADE + Dense）</td><td>稀疏向量额外索引开销</td><td>想在单一向量系统里拿到混合检索效果，不额外部署 BM25 通道</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>Embedding 微调的边际收益低于检索层优化 — 优先做好混合检索和重排序，再考虑微调</li>
+<li>多向量索引增加存储和计算成本，适合文档结构差异大的场景</li>
+<li>SPLADE 不需要额外的关键词检索通道，在单一向量系统内实现混合检索效果</li>
+</ul>
+</div>
+</div>
+
+<!-- ==================== 生成层 ==================== -->
+<div class="section" id="s4">
+<h2>四、生成层（策略 13-15）</h2>
+
+<div class="intuition-box">
+<p>生成层优化的核心矛盾：给 LLM 足够上下文让它理解，但不能太多让它迷失；要求它忠实复述检索内容，但不能太死板。</p>
+</div>
+
+<h3>策略 13：上下文压缩</h3>
+<p>检索结果直接送入 LLM 往往包含大量冗余和噪声。上下文压缩通过去重、摘要、提取关键段落等方式，将检索结果浓缩为高质量上下文。长上下文下 LLM 可能出现"Lost in the Middle"问题 — 对中间位置的信息关注度降低，压缩可以缓解这一问题。</p>
+
+<h3>策略 14：忠实性约束</h3>
+<p>在 Prompt 中明确要求"仅基于提供的上下文回答，如果上下文中没有相关信息，请说'我不确定'"。配合降低 Temperature（如 0.1）减少生成随机性，可显著提升 <span class="term">Faithfulness</span>（忠实性）。这是对抗幻觉最直接、成本最低的手段。</p>
+
+<div class="highlight">
+<strong>忠实性约束是 P0 必做策略中成本最低的：</strong>只需修改 Prompt 模板，零额外延迟，即可将幻觉率降低 30-50%。配合 citation 要求（"引用具体段落"），效果更佳。
+</div>
+
+<h3>策略 15：答案验证</h3>
+<p>生成回答后，自动检查答案是否有检索依据。可以用另一个 LLM 判断"这个回答是否完全基于提供的上下文"，或通过提取答案中的事实陈述逐条验证。无依据的回答可以标记为"低置信度"或直接要求重新生成。这相当于在输出端加了一道质检关卡。</p>
+
+<h3>生成层三策略横向对比</h3>
+<table>
+<tr><th>策略</th><th>作用环节</th><th>额外延迟</th><th>主要收益</th><th>过度使用的副作用</th></tr>
+<tr><td>13 · 上下文压缩</td><td>Context 组装时</td><td>低到中（看用不用 LLM 摘要）</td><td>缓解 Lost in the Middle，省 token</td><td>压过头会把答案本身摘掉</td></tr>
+<tr><td>14 · 忠实性约束</td><td>Prompt 模板 ＋ Temperature</td><td>零</td><td>幻觉率降 30~50%，成本最低</td><td>约束太死会让模型频繁答"我不确定"</td></tr>
+<tr><td>15 · 答案验证</td><td>生成之后（输出端质检）</td><td>高（多一次 LLM 判定）</td><td>拦住无依据回答，可标低置信度</td><td>判定模型自己也会误判，增加成本与延迟</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>Prompt 中强制"仅基于上下文回答"约束</li>
+<li>降低 Temperature（0.1）减少生成随机性</li>
+<li>要求 citation（引用具体段落编号）</li>
+<li>压缩上下文，保留高信息密度内容</li>
+<li>对高风险场景加答案验证关卡</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>将全部 Top-20 检索结果直接送入 LLM（噪声太多）</li>
+<li>用高 Temperature（>0.5）生成事实性回答</li>
+<li>忽略"Lost in the Middle"问题（长上下文中间信息被忽略）</li>
+<li>只优化 Prompt 而不管检索质量（垃圾进垃圾出）</li>
+<li>对低置信度回答不做任何处理就返回用户</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ==================== 系统层 ==================== -->
+<div class="section" id="s5">
+<h2>五、系统层（策略 16-17）</h2>
+
+<div class="intuition-box">
+<p>系统层优化不改变回答质量，但直接影响用户体验和运营成本 — 延迟降 1 秒，用户满意度可能提升 20%。</p>
+</div>
+
+<h3>策略 16：缓存优化</h3>
+<p>高频查询结果缓存，避免重复计算。语义缓存（基于 embedding 相似度匹配）可以命中相似但不完全相同的查询。例如"如何申请退款"和"退款流程怎么走"语义相似，可以复用缓存结果。缓存命中率通常可达 30-50%，直接降低 LLM 调用成本。</p>
+
+<h3>策略 17：异步预取</h3>
+<p>预测用户下一步可能问的问题并提前预检索。例如用户看完"产品介绍"后大概率会问"价格"和"如何购买"，可以异步预检索这两个方向的文档。配合流式输出（streaming），可以将用户感知延迟降低 40-60%。</p>
+
+<h3>系统层两策略横向对比</h3>
+<table>
+<tr><th>策略</th><th>优化的对象</th><th>典型收益</th><th>实施成本</th><th>失效/踩坑点</th></tr>
+<tr><td>16 · 缓存优化</td><td>重复计算（含语义相似 query）</td><td>命中率 30~50%，直接省 LLM 调用</td><td>中</td><td>知识库更新后不失效缓存，会持续返回旧答案</td></tr>
+<tr><td>17 · 异步预取</td><td>用户感知延迟</td><td>配合流式输出可降 40~60%</td><td>高（要猜下一个问题）</td><td>猜错就是白烧算力，热门路径外收益很低</td></tr>
+</table>
+</div>
+
+<!-- ==================== 优化优先级 ==================== -->
+<div class="section" id="s6">
+<h2>六、优化优先级与 ROI 排序</h2>
+
+<div class="intuition-box">
+<p>不要一次性上所有策略。从 P0 开始，每上一个策略就跑评测验证效果，确认有效再加下一个。避免过度工程化。</p>
+</div>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│              RAG 优化优先级（ROI 排序）                   │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  P0 · 必做（ROI 最高）                                  │
+│  ├── 智能分块（语义边界）         成本：低               │
+│  ├── 混合检索（向量 + BM25）      成本：中               │
+│  ├── 重排序（Cross-Encoder）      成本：低 (+50ms)      │
+│  └── 忠实性约束（Prompt 工程）    成本：极低             │
+│                                                         │
+│  P1 · 推荐做                                            │
+│  ├── 查询改写（HyDE）             成本：中 (+500ms)     │
+│  ├── 元数据增强                   成本：低               │
+│  ├── 上下文压缩                   成本：中               │
+│  └── 领域微调 Embedding           成本：高               │
+│                                                         │
+│  P2 · 按需做                                            │
+│  ├── 多模态解析                   成本：高               │
+│  ├── 查询分解                     成本：中               │
+│  ├── 多向量索引                   成本：中               │
+│  ├── 缓存优化                     成本：中               │
+│  ├── 层级索引                     成本：中               │
+│  ├── 查询扩展                     成本：低               │
+│  ├── 稀疏-稠密融合                成本：高               │
+│  ├── 答案验证                     成本：中               │
+│  └── 异步预取                     成本：高               │
+│                                                         │
+└─────────────────────────────────────────────────────────┘</div>
+
+<h3>生产案例：逐层优化效果</h3>
+<p>某企业内部知识库 RAG 系统的优化记录：</p>
+
+<table>
+<tr><th>阶段</th><th>优化策略</th><th>答案准确率</th><th>增量</th><th>延迟影响</th></tr>
+<tr><td>基线</td><td>固定切分 + 余弦检索</td><td>42%</td><td>—</td><td>1.2s</td></tr>
+<tr><td>+P1</td><td>语义切分 + overlap 20%</td><td>58%</td><td>+16pp</td><td>+0ms</td></tr>
+<tr><td>+P2</td><td>HyDE + 同义词扩展</td><td>71%</td><td>+13pp</td><td>+500ms</td></tr>
+<tr><td>+P3</td><td>bge-reranker 重排 top-20→5</td><td>82%</td><td>+11pp</td><td>+50ms</td></tr>
+<tr><td>+P4</td><td>元数据过滤（类型+时间）</td><td>87%</td><td>+5pp</td><td>+10ms</td></tr>
+</table>
+
+<p><strong>关键发现：</strong>P3 重排序的 ROI 最高（仅增加 50ms 延迟，准确率 +11pp）。P1 分块优化的实施成本最低（只需改切分脚本）。P4 边际收益递减（+5pp 但实施复杂度高）。每层优化的边际收益递减但累计效果显著，4 层叠加后准确率从 42% 提升至 87%。</p>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>RAG 优化应该从哪里开始？P0 策略为什么是这四个？</summary>
+<p class="answer">P0 四个策略覆盖了 RAG 全链路的核心环节：智能分块（源头质量）、混合检索（召回完整性）、重排序（精度）、忠实性约束（生成质量）。它们 ROI 最高且互不冲突。关键原则是从 P0 开始逐层叠加，每层跑评测验证效果后再加下一层。跳过基础层直接上高级策略（如跳过 Chunk 优化直接上 Reranker）是最常见的反模式 — 垃圾进垃圾出。</p>
+</details>
+
+<details>
+<summary>混合检索为什么比单一向量检索好？RRF 融合的原理是什么？</summary>
+<p class="answer">向量检索擅长语义匹配（"怎么退货" ≈ "退款流程"），但对精确关键词匹配弱（产品型号、人名）。BM25 擅长精确匹配但对语义理解差。两者互补：语义相似 + 关键词精确命中 = 更全面的召回。RRF（Reciprocal Rank Fusion）不依赖分数归一化（BM25 和向量相似度分数量纲不同），只看排名：score = Σ 1/(k + rank_i)，k 通常取 60。实践建议：BM25 + 向量各取 Top-20，RRF 融合后取 Top-5。</p>
+</details>
+
+<details>
+<summary>重排序为什么 ROI 最高？Cross-Encoder 和 Bi-Encoder 有什么区别？</summary>
+<p class="answer">初检用 Bi-Encoder（query 和 document 独立编码，计算快但交互弱）快速召回候选。重排序用 Cross-Encoder（query 和 document 拼接后一起过 Transformer，深度理解交互关系）精排，精度远高于 Bi-Encoder。相当于先用粗网捕鱼，再用细筛精选。重排序仅增加 50ms 延迟（Top-20 候选），但准确率可提升 11pp，是 RAG 优化中投入产出比最高的策略。</p>
+</details>
+
+<details>
+<summary>评估驱动开发怎么落地？怎么避免"改了 A 好了但 B 变差了"？</summary>
+<p class="answer">评估驱动开发 = 每次改动前先跑自动评估（如 RAGAS 四维指标），指标下降则回滚。落地步骤：①构建黄金测试集（200-500 条人工标注的查询-答案对）②接入评估框架（RAGAS/DeepEval），CI/CD 中自动跑评估 ③设定指标阈值（如 Faithfulness ≥ 0.85），低于阈值则阻断部署。避免"改了 A 好了 B 变差"：用消融实验（每次只改一个变量），在相同评估集上对比，确保净效果为正。生产数据：某系统实施后 3 个月内 Faithfulness 从 0.72 提升至 0.91。</p>
+</details>
+
+<details>
+<summary>HyDE 查询改写的原理和代价是什么？什么场景值得用？</summary>
+<p class="answer">原理：用户查询通常简短模糊，与文档正式表述有语义鸿沟。HyDE 先让 LLM 生成"伪答案"（假设性完整回答），再用伪答案的 embedding 去检索。伪答案更贴近文档表述，检索效果更好。代价：多一次 LLM 调用（~500ms + token 成本）。值得用的场景：复杂查询、用户表述与文档措辞差异大、对检索质量要求高。不值得用：简单事实查询（直接向量检索就够）、实时性要求极高的场景。</p>
+</details>
+
+<details>
+<summary>忠实性约束的 Prompt 应该怎么写？Temperature 怎么设？</summary>
+<p class="answer">核心 Prompt 要素：①"仅基于提供的上下文回答"②"如果上下文中没有相关信息，请说'我不确定'"③"引用具体段落编号作为依据"。Temperature 建议 0.1（事实性回答），创意性回答可放宽到 0.3-0.5。配合 citation 要求效果更佳 — 要求 LLM 标注每个陈述的来源段落，既约束了忠实性，也方便用户验证。实测可将幻觉率降低 30-50%，且零额外延迟。</p>
+</details>
+
+<details>
+<summary>上下文压缩有哪些具体方法？怎么避免压缩过度导致信息丢失？</summary>
+<p class="answer">常见方法：①提取式摘要（抽取关键句子）②LLM 摘要（让模型提炼要点）③去重（移除重复内容）④相关性过滤（只保留与 query 相关的段落）。避免过度压缩：保留 Top-3~5 个最相关的完整段落而非片段，对压缩前后的 Faithfulness 做对比验证。注意"Lost in the Middle"问题 — 长上下文中间位置的信息容易被忽略，将最相关内容放在开头和结尾。</p>
+</details>
+
+<details>
+<summary>语义缓存和精确缓存有什么区别？缓存一致性怎么保证？</summary>
+<p class="answer">精确缓存：query 完全相同时命中（hash 匹配），零误判但命中率低。语义缓存：query embedding 相似度 > 阈值时命中（如 cosine > 0.95），命中率高但有误判风险。一致性保证：①知识库更新时主动失效相关缓存 ②设定 TTL（如 24 小时过期）③对高风险场景（如医疗/法律）禁用缓存或降低相似度阈值。实践中语义缓存命中率 30-50%，可直接降低 LLM 调用成本 30%+。</p>
+</details>
+
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

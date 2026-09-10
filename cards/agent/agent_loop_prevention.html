@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A72 · Agent 防循环机制设计</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、死循环的四类成因</a>
+<a href="#s2">二、为什么提示词和最大次数都不算防线</a>
+<a href="#s3">三、执行轨迹校验与调用指纹</a>
+<a href="#s4">四、任务状态机与退出条件</a>
+<a href="#s5">五、DAG 预拆解：禁止循环依赖</a>
+<a href="#s6">六、状态存储、动态工具与降级兜底</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>A72 · Agent 防循环机制设计</h1>
+<p class="subtitle">Loop Prevention Design — 调用指纹 / 全局轨迹表 / 任务状态机 / DAG 无环约束 / 外置状态存储</p>
+
+<div class="intuition-box">
+<p>防循环不是让模型"记得别重复"，而是让重复在机制上根本发生不了：相同指纹的调用直接命中缓存，状态机的每个阶段都有硬退出条件，任务图静态无环。提示词只负责引导，轨迹校验和状态机才是防线。</p>
+</div>
+
+<!-- ==================== 1 ==================== -->
+<div class="section" id="s1">
+<h2>一、死循环的四类成因</h2>
+
+<div class="intuition-box">
+<p>死循环几乎从不是"模型不听话"造成的。它是任务拆解、工具反馈、依赖关系、上下文记忆四条链路上的问题叠加后的必然结果——每一条单独看都不足以致命，凑齐了就出不来了。</p>
+</div>
+
+<p>把 Agent 反复调用同一个工具归因为"模型不够聪明"，是最常见也最没有出路的诊断，因为它把问题推给了一个你无法直接修改的组件。实际上循环的每一类成因都对应着系统设计上一个可修的缺口。</p>
+
+<table>
+<tr><th>成因</th><th>发生机制</th><th>典型表现</th><th>对应的机制缺口</th></tr>
+<tr><td>子任务拆解冗余</td><td>分解时产生了语义重叠的子任务，各自独立执行</td><td>同一份数据被查了三遍，每遍都"成功"</td><td>分解结果未做去重与依赖检查</td></tr>
+<tr><td>工具返回结果模糊</td><td>返回空、返回不明确的错误、返回与问题弱相关的内容</td><td>模型判定"这次不算数"，用同样参数再来一次</td><td>缺少调用指纹去重，缺少结构化错误码</td></tr>
+<tr><td>多工具依赖成环</td><td>A 的输入依赖 B 的输出，B 的输入又依赖 A</td><td>两个工具交替调用，永远拿不到起始数据</td><td>依赖关系未显式建模，无环检测缺失</td></tr>
+<tr><td>长上下文遗忘轨迹</td><td>历史执行记录被压缩或挤出窗口</td><td>跑了 30 步之后重新开始做第 3 步做过的事</td><td>执行状态寄存在上下文里，未外置</td></tr>
+</table>
+
+<p>第四类的危害最容易被低估。上下文压缩是长任务的必然操作，一旦执行轨迹和业务内容混在同一份上下文里被一起压缩，Agent 就真的"忘了自己做过什么"。这时候它重新调用同一个工具，从它的视角看完全是合理决策——它掌握的信息里确实没有这条记录。<strong>指望通过延长上下文或改进压缩算法来解决这个问题，方向就错了：执行状态本来就不该放在上下文里。</strong></p>
+
+<h3>与《A66》的分工</h3>
+
+<p>本站已有一张卡专门讲死循环：<a href="../agent/agent_loop_pitfalls.html">《A66 · Agent 死循环与生产防御》</a>。两张卡讲的是同一个问题的两个面，务必分清边界再读。</p>
+
+<table>
+<tr><th>维度</th><th>《A66 · Agent 死循环与生产防御》</th><th>本文《A72 · 防循环机制设计》</th></tr>
+<tr><td>视角</td><td>现象与观测侧：线上出事了怎么看见、怎么止血</td><td>设计侧：怎么让这类事在机制上发生不了</td></tr>
+<tr><td>核心内容</td><td>死循环的类型划分、目标漂移、Token 爆炸与成本、可观测性建设、生产踩坑闭环</td><td>调用指纹与全局轨迹表、任务状态机与退出条件、DAG 无环约束、外置状态存储</td></tr>
+<tr><td>关键产出</td><td>一套能在线上及时发现异常并熔断的监控与告警体系</td><td>一套让重复调用在发出前就被拦下的确定性执行框架</td></tr>
+<tr><td>什么时候读</td><td>系统已经上线，需要知道循环长什么样、怎么捞出来</td><td>系统正在设计或重构，需要从执行框架层面根除循环</td></tr>
+</table>
+
+<p>简单说：<strong>A66 告诉你循环是什么样、怎么发现；本文告诉你怎么让它不发生。</strong>两者是互补的，缺任何一边都不完整——只有观测没有机制，你会一直在事后救火；只有机制没有观测，你无法知道机制本身有没有失效，也无法处理那些机制覆盖不到的变种（比如每次参数都不同但每次都无用的语义循环）。建议先读 A66 建立对现象的直觉，再用本文的机制去封住它们。</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────────┐
+│              防循环的机制分层（自下而上）                        │
+│                                                              │
+│  ┌────────────────────────────────────────────────────┐      │
+│  │ 提示词引导  "避免重复调用工具"                        │ 软   │
+│  │ 作用：降低模型提出重复调用的概率                       │ 约束 │
+│  │ 定位：优化项，不是防线                                │      │
+│  └────────────────────────────────────────────────────┘      │
+│  ══════════════ 以下全部为硬约束，由代码持有 ══════════════      │
+│  ┌────────────────────────────────────────────────────┐      │
+│  │ ① DAG 预拆解     依赖显式建模，静态检测环             │ 事前 │
+│  ├────────────────────────────────────────────────────┤      │
+│  │ ② 任务状态机     四阶段推进，每阶段有退出条件          │ 事中 │
+│  ├────────────────────────────────────────────────────┤      │
+│  │ ③ 调用指纹去重   同工具同入参 ──→ 命中缓存不再执行     │ 事中 │
+│  ├────────────────────────────────────────────────────┤      │
+│  │ ④ 外置状态存储   轨迹不随上下文压缩而丢失             │ 支撑 │
+│  ├────────────────────────────────────────────────────┤      │
+│  │ ⑤ 次数 + 超时熔断  最粗的底线，仅在③④故障时兜底       │ 兜底 │
+│  └────────────────────────────────────────────────────┘      │
+│                                                              │
+│  设计原则：越靠上的机制越精确，越靠下的机制越粗暴               │
+│            粗暴机制只能兜底，不能当主防线                       │
+└──────────────────────────────────────────────────────────────┘
+</div>
+
+</div>
+
+<!-- ==================== 2 ==================== -->
+<div class="section" id="s2">
+<h2>二、为什么提示词和最大次数都不算防线</h2>
+
+<div class="intuition-box">
+<p>提示词的生效是概率性的，最大调用次数的生效是滞后的。前者你不知道它有没有起作用，后者起作用时钱已经烧完了。两者都不能作为核心防线。</p>
+</div>
+
+<p>面对"怎么防死循环"这个问题，最常见的两个答案是"提示词里告诉模型不要重复调用"和"框架里加个最大调用次数"。这两条都有价值，但把它们当成防循环方案就有问题了——它们各自的失效方式都很确定。</p>
+
+<h3>提示词为什么只能做引导</h3>
+
+<p>提示词约束的失效不是"模型故意违反"，而是三个结构性原因：一是它的生效概率随上下文变长而衰减，恰好长任务才是循环高发区；二是它没有任何可观测性，你无法知道某一次它到底起没起作用，也就无法衡量改动的效果；三是它无法处理"模型认为这次重复是必要的"这种情况——模型自认为上次结果不可信，重试在它的逻辑里完全正当。</p>
+
+<p>正确的定位是：<strong>提示词负责降低模型提出重复调用的概率，代码负责保证提出了也执行不了。</strong>这两件事不冲突，但不能互相替代。把提示词写好能减少无谓的拦截，但系统的可靠性上界由代码那一层决定。</p>
+
+<h3>最大调用次数为什么是粗暴基线</h3>
+
+<p>最大调用次数的问题在于它是一个与任务无关的常数，而合理的调用次数与任务复杂度强相关。这就产生了一个无解的取舍：</p>
+
+<table>
+<tr><th>设置</th><th>简单任务</th><th>复杂任务</th><th>循环发生时</th><th>结论</th></tr>
+<tr><td>次数设小（如 10）</td><td>够用</td><td>正常任务被误杀，中途截断</td><td>能较快止损</td><td>牺牲了复杂任务的可用性</td></tr>
+<tr><td>次数设大（如 50）</td><td>够用</td><td>够用</td><td>照样循环 50 次才停，Token 已烧光</td><td>形同虚设</td></tr>
+<tr><td>按任务动态调整</td><td>够用</td><td>够用</td><td>取决于估算准确度</td><td>估算本身又依赖模型判断</td></tr>
+</table>
+
+<p>更根本的问题是<strong>它判断的维度不对</strong>：同一个工具用四十组不同参数调用四十次，那是在做研究；同一个工具用完全相同的参数调用三次，那就是循环。次数计数器完全区分不了这两种情况，因为它只数次数，不看内容。而防循环真正需要的判据是<strong>重复</strong>，不是<strong>数量</strong>。</p>
+
+<div class="highlight">
+主流框架的默认兜底值可以说明这类机制的定位：LangChain 的 AgentExecutor 默认 <code>max_iterations=15</code>，LangGraph 在图级别设 <code>recursion_limit</code>（默认 25），CrewAI 每个任务默认 <code>max_iter=25</code>，AutoGen 用 <code>max_consecutive_auto_reply</code>，而 PydanticAI 则不提供内置的循环检测。这些数字的共同点是：它们只保证"不会无限跑"，不保证"不会跑 25 次废的"。以 LangGraph 的典型循环形态为例——agent 节点提议工具调用、tools 节点返回同一个错误、agent 节点再用同样参数提议——<code>recursion_limit</code> 确实会终止它，但要等到二十多轮的输入 Token 全部计费之后。
+</div>
+
+<div class="intuition-box">
+<p>次数限制回答的是"跑多久算太久"，防循环需要回答的是"这一步是不是白跑"。前者是预算问题，后者是正确性问题，用预算机制解正确性问题必然低效。</p>
+</div>
+
+<table>
+<tr><th>机制</th><th>判据</th><th>拦截时机</th><th>误伤风险</th><th>该承担的角色</th></tr>
+<tr><td>提示词引导</td><td>模型自觉</td><td>提议阶段（概率性）</td><td>无</td><td>降低拦截频率的优化项</td></tr>
+<tr><td>最大调用次数</td><td>累计次数</td><td>次数耗尽后</td><td>高，复杂任务被截断</td><td>最外层兜底</td></tr>
+<tr><td>超时熔断</td><td>墙钟时间</td><td>超时后</td><td>中</td><td>最外层兜底</td></tr>
+<tr><td>调用指纹去重</td><td>工具名 + 入参哈希</td><td>调用发出前</td><td>低</td><td>核心防线</td></tr>
+<tr><td>状态机退出条件</td><td>阶段目标是否达成</td><td>阶段切换时</td><td>低</td><td>核心防线</td></tr>
+<tr><td>DAG 无环校验</td><td>依赖图是否有环</td><td>执行开始前</td><td>极低</td><td>事前根除</td></tr>
+</table>
+
+</div>
+
+<!-- ==================== 3 ==================== -->
+<div class="section" id="s3">
+<h2>三、执行轨迹校验与调用指纹</h2>
+
+<div class="intuition-box">
+<p>给每次工具调用算一个指纹，把指纹记在一张与模型上下文无关的表里。指纹重复即命中缓存，调用根本不会发出去——重复这件事就在物理上不成立了。</p>
+</div>
+
+<p><span class="term">调用指纹</span>是对一次工具调用做的确定性摘要，通常取工具名加上归一化后的核心入参，做一次哈希。它的作用是把"这次调用和之前那次是不是同一件事"从一个语义判断变成一次字符串比较。</p>
+
+<pre><code>fp = sha256(f"{tool_name}|{canonical_json(core_args)}").hexdigest()[:16]
+# canonical_json: 键排序、去除无关字段（如 request_id、时间戳）、
+#                 数值与大小写归一化，保证语义相同的入参得到相同指纹</code></pre>
+
+<p>这段代码里真正需要设计的是 <code>core_args</code> 的选取，而不是哈希算法。选窄了会漏判——把分页参数排除在外，那么"查第 1 页"和"查第 2 页"会被误判为重复；选宽了会漏防——把请求 ID、时间戳这类每次都不同的字段算进去，指纹就永远不会重复，去重机制形同虚设。<strong>核心入参的定义是每个工具各自的配置项，不能用一套全局规则套所有工具。</strong></p>
+
+<h3>全局轨迹表的字段与判定</h3>
+
+<p><span class="term">执行轨迹表</span>是本轮任务内所有调用的结构化流水，独立于模型上下文存储。它既是去重的依据，也是事后回放和排查的唯一可信记录。</p>
+
+<table>
+<tr><th>字段</th><th>作用</th><th>去重时的用法</th></tr>
+<tr><td><code>fingerprint</code></td><td>调用的唯一摘要</td><td>主键，命中即判定为重复</td></tr>
+<tr><td><code>tool</code> / <code>args</code></td><td>原始调用内容</td><td>用于人工排查和指纹配置调优</td></tr>
+<tr><td><code>result_digest</code></td><td>返回结果的摘要</td><td>识别"参数不同但结果相同"的隐性重复</td></tr>
+<tr><td><code>status</code></td><td>成功 / 失败 / 被拦截</td><td>失败的调用是否允许重试由此判断</td></tr>
+<tr><td><code>seq</code> / <code>ts</code></td><td>顺序与时间</td><td>用于滑动窗口内的环模式检测</td></tr>
+<tr><td><code>phase</code></td><td>所属状态机阶段</td><td>判断是否发生了阶段回退</td></tr>
+</table>
+
+<div class="arch-diagram">
+┌────────────────────────────────────────────────────────────┐
+│              轨迹校验的拦截链路                               │
+│                                                            │
+│   模型提议调用 {tool, args}                                 │
+│         │                                                  │
+│         ▼                                                  │
+│   ① 计算指纹 fp = hash(tool | canonical(core_args))        │
+│         │                                                  │
+│         ▼                                                  │
+│   ② 查轨迹表                                                │
+│      ├── fp 已存在 且 上次成功                              │
+│      │      └──→ 直接返回缓存结果 + 一条明确说明             │
+│      │           "该调用已于第 N 步执行，结果如下，           │
+│      │            如需不同结果请变更参数"                     │
+│      │           （不发起真实调用，计数 +1）                  │
+│      │                                                     │
+│      ├── fp 已存在 且 上次失败且可重试                       │
+│      │      └──→ 允许，但计入同指纹重试次数（上限 2）          │
+│      │                                                     │
+│      └── fp 不存在 ──→ 放行                                 │
+│         │                                                  │
+│         ▼                                                  │
+│   ③ 环模式检测（滑动窗口）                                    │
+│      取最近 N 步指纹序列，检测长度 1~k 的重复片段             │
+│      ├── 长度 1 重复 3 次 ──→ 同一调用卡死                   │
+│      ├── 长度 2 重复 3 次 ──→ 两工具乒乓                     │
+│      └── 长度 3+ 重复    ──→ 多节点绕圈                      │
+│         │                                                  │
+│         ▼ 命中任一模式                                       │
+│   ④ 中断当前策略 ──→ 强制阶段推进 or 升级人工                 │
+└────────────────────────────────────────────────────────────┘
+</div>
+
+<p>图中第三步的<strong>环模式检测</strong>比单纯的指纹去重更进一步：指纹去重只能拦住完全相同的调用，而实际循环经常是多个节点之间的绕圈。业界的一个可参考做法（RunGuard 的 LangGraph 循环守卫，2026）是维护一个约 32 步的滑动窗口，在窗口尾部扫描长度 1 到 8 的重复片段，任一片段连续重复 3 次即判定为循环。其中长度 1 对应同一工具卡死，长度 2 对应 agent 与 tools 节点之间的乒乓（工具报错、模型用同样参数再提议），更长的片段则对应规划器在几个节点之间来回绕的形态。</p>
+
+<h3>缓存返回的措辞很关键</h3>
+
+<p>指纹命中后怎么回给模型，直接决定它接下来会不会继续循环。如果只回一句"重复调用已被拦截"，模型收到的是一个失败信号，它很可能换个措辞再试一次；正确的做法是<strong>把它当作一次成功的调用来回应</strong>——返回上次的完整结果，并明确告知这是第几步执行的、如果需要不同结果应该改什么。这样模型收到的是"这件事已经做完了"，而不是"这件事没做成"。</p>
+
+<table>
+<tr><th>回应方式</th><th>模型收到的语义</th><th>后续行为</th></tr>
+<tr><td>"重复调用被拒绝"</td><td>失败</td><td>换措辞或换参数继续试，循环可能持续</td></tr>
+<tr><td>只返回缓存结果，无说明</td><td>成功但信息不足</td><td>可能因为结果和上次一样而再次怀疑</td></tr>
+<tr><td>缓存结果 + 执行步序 + 变更指引</td><td>已完成，且知道如何获得新结果</td><td>推进到下一步，或带着变更后的参数重来</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景：</strong>某企业知识问答 Agent 上线初期出现过一类顽固循环：内部检索工具在命中不到结果时返回空数组，模型判定"可能是我没查对"，用完全相同的查询词重试，如此往复直到框架的 25 步上限耗尽，单次会话消耗约 12 万 Token。接入调用指纹去重后，同参重复调用在发出前即被拦截并返回带说明的缓存结果，同类会话的平均步数从 25 步降到 6 步。真正解决问题的不是模型换了，而是"空结果"这个模糊信号第一次不再能触发无限重试。
+</div>
+
+</div>
+
+<!-- ==================== 4 ==================== -->
+<div class="section" id="s4">
+<h2>四、任务状态机与退出条件</h2>
+
+<div class="intuition-box">
+<p>状态机把"接下来做什么"从模型的自由发挥变成了在有限合法转移中的选择。模型只能提议下一个状态，能不能转由代码判定——循环需要的自由度就此消失。</p>
+</div>
+
+<p>调用指纹能拦住重复的调用，但拦不住"每次调用都不同却都在原地打转"的形态。这类循环需要一个更宏观的约束：<span class="term">任务状态机</span>——把执行过程切成有限个阶段，每个阶段有明确的进入条件和退出条件，阶段之间的转移由代码而非模型决定。</p>
+
+<h3>四阶段划分与退出条件</h3>
+
+<table>
+<tr><th>阶段</th><th>该阶段做什么</th><th>退出条件（满足即推进）</th><th>阶段内上限</th><th>超限后的动作</th></tr>
+<tr><td>任务分解</td><td>把用户诉求拆成子任务并建立依赖</td><td>产出通过 Schema 校验的子任务列表，且依赖图无环</td><td>2 次重规划</td><td>降级为单步直答或转人工</td></tr>
+<tr><td>工具调用</td><td>按依赖顺序执行子任务</td><td>所有子任务处于终态（成功/失败/跳过）</td><td>子任务数 × 3</td><td>把未完成子任务标记为失败，带残缺进入汇总</td></tr>
+<tr><td>结果汇总</td><td>整合各子任务产出，做一致性检查</td><td>关键证据齐备，或明确标注哪些缺失</td><td>1 次补充调用轮次</td><td>直接带缺口进入生成</td></tr>
+<tr><td>答案生成</td><td>产出最终回复</td><td>输出通过下游 Schema 与安全校验</td><td>2 次重写</td><td>输出降级版本并标注不确定性</td></tr>
+</table>
+
+<p>这张表里最重要的一列是最后一列：<strong>每个阶段超限后都必须有一个确定性的、单向向前的出口</strong>。如果超限后的动作是"回到上一阶段重来"，那状态机本身就成了循环的载体。允许回退的设计必须配上回退次数上限，且回退必须携带新信息（比如新的约束条件、被排除的选项），否则重来一遍的结果必然与上次相同。</p>
+
+<div class="arch-diagram">
+┌────────────────────────────────────────────────────────────┐
+│              任务状态机：合法转移与禁止转移                     │
+│                                                            │
+│   ┌──────────┐                                             │
+│   │ 任务分解  │ ──── 依赖图无环 & Schema 通过 ────┐          │
+│   └──────────┘                                   │          │
+│        ▲                                         ▼          │
+│        │ 允许，但最多 1 次           ┌──────────────┐        │
+│        │ 且必须携带新约束             │  工具调用     │        │
+│        └─────────────────────────────│（子任务循环） │        │
+│                                      └──────┬───────┘        │
+│                    ✗ 禁止：无新信息的重规划          │        │
+│                                             ▼               │
+│                                      ┌──────────────┐       │
+│                                      │  结果汇总     │       │
+│                                      └──────┬───────┘       │
+│                    ✗ 禁止：汇总 ──→ 分解           │       │
+│                       （方向性错误应由更高层处理）    ▼       │
+│                                      ┌──────────────┐       │
+│                                      │  答案生成     │       │
+│                                      └──────┬───────┘       │
+│                                             ▼               │
+│                                          [ 终态 ]            │
+│                                                             │
+│  硬约束：① 状态只能向前或按白名单回退                          │
+│          ② 每次回退必须携带上次没有的信息                      │
+│          ③ 阶段内步数超限 ──→ 强制向前，不允许原地重试          │
+│          ④ 全局阶段切换次数计数，超限直接进终态                 │
+└────────────────────────────────────────────────────────────┘
+</div>
+
+<p>状态机与 DAG 的关系值得澄清：状态机管的是<strong>宏观阶段</strong>，DAG 管的是<strong>阶段内子任务的依赖顺序</strong>。工具调用阶段内部按 DAG 拓扑序推进，整个任务则按状态机推进。两者结合起来，才能同时保证"不会在阶段之间打转"和"不会在子任务之间打转"。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每个阶段的退出条件用可判定的断言写死，如"输出通过 Schema 校验"</li>
+<li>回退路径列成白名单，未列出的转移一律拒绝</li>
+<li>每次回退必须携带新信息（新约束、已排除的选项），否则拒绝回退</li>
+<li>阶段内步数超限时强制向前推进，带着残缺结果也比原地打转好</li>
+<li>把当前阶段写进轨迹表，事后能一眼看出任务卡在哪个阶段</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要让模型自己决定当前处于哪个阶段，阶段由代码持有</li>
+<li>不要设计无上限的回退路径，可回退的状态机同样能构成循环</li>
+<li>不要把退出条件写成"模型认为已完成"，那等于没有退出条件</li>
+<li>不要在汇总阶段发现问题时直接跳回分解，那是目标层的问题</li>
+<li>不要把阶段划得太细，阶段越多合法转移越复杂，越容易出现意外环路</li>
+</ul>
+</div>
+</div>
+
+</div>
+
+<!-- ==================== 5 ==================== -->
+<div class="section" id="s5">
+<h2>五、DAG 预拆解：禁止循环依赖</h2>
+
+<div class="intuition-box">
+<p>指纹和状态机都是运行期的拦截，DAG 是编译期的根除。把依赖显式画成图，在执行开始前跑一次环检测——有环的计划根本不允许开跑。</p>
+</div>
+
+<p>前面两层机制都在执行过程中生效，属于"发生了再拦"。<span class="term">有向无环图</span>（DAG）预拆解则把检查前移到执行之前：先让模型产出完整的子任务依赖图，用确定性算法检测是否存在环，有环就拒绝这个计划并要求重新分解。</p>
+
+<p>这样做的价值不只是省下运行期的开销，更在于它提供了一个数学层面的保证：<strong>静态无环图加上有界的重试次数，执行必然在有限步内到达终态。</strong>这也是 2026 年提出的 Structured Graph Harness（SGH）方案的核心论点——把控制流从隐式的上下文提升为显式的静态 DAG，用一部分表达力换取可控性与可验证性，从而获得"有界终止"这一属性。</p>
+
+<h3>环检测与依赖冲突的处理</h3>
+
+<div class="arch-diagram">
+┌───────────────────────────────────────────────────────────┐
+│         从自然语言到可执行 DAG                              │
+│                                                           │
+│  用户诉求                                                  │
+│      │                                                    │
+│      ▼                                                    │
+│  ┌──────────────┐  模型产出：节点 + 依赖边                 │
+│  │ 分解为任务图  │  {id, tool, deps:[...], output_key}     │
+│  └──────┬───────┘                                         │
+│         ▼                                                 │
+│  ┌────────────────────────────────────────┐               │
+│  │ 静态校验（纯代码，无模型参与）             │               │
+│  │  ① 拓扑排序 ──→ 存在环？                 │               │
+│  │  ② 每个 deps 引用的节点是否存在           │               │
+│  │  ③ 每个节点的输入是否被上游产出覆盖        │               │
+│  │  ④ 是否存在孤立节点 / 不可达节点          │               │
+│  └──────┬─────────────────────────────────┘               │
+│         │                                                 │
+│    有环或不合法？                                           │
+│    ├── 是 ──→ 回灌结构化错误 ──→ 重新分解（上限 2 次）       │
+│    │          "节点 C 依赖 A，A 又依赖 C，                  │
+│    │           请指定其中一个的初始值来源"                    │
+│    │                                                      │
+│    └── 否 ──→ 按拓扑序调度执行                              │
+│                ├─ 无依赖关系的节点可并行                     │
+│                └─ 每个节点仍受调用指纹与阶段上限约束           │
+│                                                           │
+│  结论：图静态无环 + 节点重试有界 ──→ 有限步内必达终态          │
+└───────────────────────────────────────────────────────────┘
+</div>
+
+<p>环检测本身是标准算法（拓扑排序或深度优先的回边检测），工程上真正需要设计的是<strong>发现环之后怎么回灌</strong>。直接告诉模型"你的计划有环"帮助有限，有效的回灌要指出环在哪、由哪几条边构成、以及打破它的可行方向——通常是让其中一个节点改用常量、用户输入或默认值作为初始输入，从而切断闭环。</p>
+
+<table>
+<tr><th>依赖问题</th><th>静态检测方式</th><th>回灌内容</th><th>模型的可行修正</th></tr>
+<tr><td>直接成环 A↔B</td><td>拓扑排序失败</td><td>指出构成环的边</td><td>其中一方改用初始值或用户输入</td></tr>
+<tr><td>长环 A→B→C→A</td><td>深度优先回边检测</td><td>列出完整环路径</td><td>拆分节点或引入中间常量</td></tr>
+<tr><td>依赖不存在的节点</td><td>引用完整性检查</td><td>指出无效引用</td><td>补充缺失节点或修正引用</td></tr>
+<tr><td>输入无来源</td><td>输入覆盖检查</td><td>指出哪个字段没有上游产出</td><td>补充上游节点或标为需澄清</td></tr>
+<tr><td>子任务语义重叠</td><td>节点指纹相似度比对</td><td>指出疑似重复的节点对</td><td>合并节点</td></tr>
+</table>
+
+<p>最后一行处理的正是第一节提到的"子任务拆解冗余"：两个子任务用的工具相同、参数高度相似，实际上是同一件事被拆了两遍。在图校验阶段用节点指纹做一次相似度比对，可以在执行前就把它们合并掉，比等到运行期靠调用指纹去重要干净——后者虽然也能拦住，但计划里那个冗余节点会一直存在，影响后续的进度判断。</p>
+
+<div class="intuition-box">
+<p>DAG 的约束力来自"无环"这个性质本身，不来自模型的配合。只要图是静态的且校验是代码做的，模型有没有理解"不要循环依赖"这件事就不重要了。</p>
+</div>
+
+<table>
+<tr><th>方案</th><th>循环防护强度</th><th>灵活性</th><th>适用任务</th></tr>
+<tr><td>纯 ReAct 自由循环</td><td>无，全靠运行期拦截</td><td>最高</td><td>探索型、步数不可预知的任务</td></tr>
+<tr><td>状态机 + 阶段内自由</td><td>中，阶段间不会打转</td><td>中</td><td>流程可分段的通用业务</td></tr>
+<tr><td>预编译 DAG</td><td>强，事前根除环</td><td>低，变化需重新出图</td><td>高可靠、可并行的确定性任务</td></tr>
+<tr><td>DAG + 叶子节点内 ReAct</td><td>强，环被限制在叶子内</td><td>中高</td><td>大多数生产场景的推荐组合</td></tr>
+</table>
+
+</div>
+
+<!-- ==================== 6 ==================== -->
+<div class="section" id="s6">
+<h2>六、状态存储、动态工具与降级兜底</h2>
+
+<div class="intuition-box">
+<p>执行状态一旦寄存在模型上下文里，它就会随压缩而消失，防循环机制也就跟着失效。轨迹必须外置存储——这是前面所有机制能成立的地基。</p>
+</div>
+
+<p>指纹去重、状态机、DAG 三套机制有一个共同前提：<strong>系统必须准确知道"到目前为止已经做过什么"</strong>。如果这份记录放在模型上下文里，那么每一次上下文压缩都可能把它抹掉，三套机制会同时失效，而且失效得悄无声息。所以执行状态必须放在上下文之外的独立存储里，由编排层持有。</p>
+
+<table>
+<tr><th>状态放置方式</th><th>上下文压缩后</th><th>进程重启后</th><th>可回放</th><th>结论</th></tr>
+<tr><td>寄存在模型上下文</td><td>丢失</td><td>丢失</td><td>否</td><td>不可用于防循环</td></tr>
+<tr><td>进程内内存</td><td>保留</td><td>丢失</td><td>否</td><td>仅适合短任务、单实例</td></tr>
+<tr><td>外部存储（Redis / 数据库）</td><td>保留</td><td>保留</td><td>是</td><td>生产标准做法</td></tr>
+</table>
+
+<p>外置存储还带来两个附加收益：一是任务可以断点续跑，进程被调度到另一个实例上也能接着执行；二是每一次拦截都有据可查，可以事后回放整条决策路径，判断是机制误伤还是确实拦对了。</p>
+
+<h3>动态扩展工具怎么办</h3>
+
+<p>当工具是运行期动态注册的（比如通过 MCP 接入的第三方工具，或者用户自定义的工具），指纹机制会遇到一个新问题：<strong>系统不知道哪些参数属于核心入参</strong>。硬编码的核心字段配置对未知工具不适用，而全参数哈希又会因为请求 ID、时间戳这类字段而永不重复。</p>
+
+<table>
+<tr><th>策略</th><th>做法</th><th>准确度</th><th>适用</th></tr>
+<tr><td>Schema 推导</td><td>从工具声明的参数 Schema 里取必填字段作为核心入参</td><td>较高</td><td>工具声明规范的场景，首选</td></tr>
+<tr><td>字段黑名单</td><td>排除已知的易变字段名（request_id、timestamp、nonce、trace 等）</td><td>中</td><td>作为 Schema 推导的补充</td></tr>
+<tr><td>全参哈希 + 结果摘要</td><td>参数不同时，再比对返回结果摘要是否相同</td><td>中，滞后一步</td><td>参数无法归一化时的兜底</td></tr>
+<tr><td>保守放行 + 计数收紧</td><td>无法可靠计算指纹的工具，改用更严格的单工具调用次数上限</td><td>低</td><td>最后手段</td></tr>
+</table>
+
+<p>第三行的做法值得单独说明：当参数怎么归一化都对不齐时，可以退一步比对<strong>结果摘要</strong>——如果两次调用参数不同但返回内容的摘要一致，那实质上仍是重复劳动。这个判据滞后了一步（调用已经发生），但能拦住后续的第三次、第四次，也是识别"语义循环"的重要线索。</p>
+
+<h3>语义循环：指纹拦不住的那一类</h3>
+
+<p><span class="term">语义循环</span>指的是每次调用的参数都不同、指纹都不重复，但每次调用都同样无用的形态。它常见于上下文变长之后——随着历史不断累积，模型对原始任务的注意力被稀释，开始生成一些与目标越来越弱相关的调用，从"解决问题"退化成"四处探索"。</p>
+
+<p>指纹机制对这类循环无能为力，因为它按定义就不存在重复。识别它需要另一组信号：上下文规模的增长曲线、每步之后关键证据是否增加、以及与原始目标的相关度是否在下降。这类现象的观测手段与目标漂移的治理，正是 <a href="../agent/agent_loop_pitfalls.html">《A66 · Agent 死循环与生产防御》</a> 的重点内容——本文的机制负责封住可判定的重复，A66 的观测体系负责捞出这类判定不了的漂移，两者必须配套使用。</p>
+
+<h3>降级兜底：机制自身故障时</h3>
+
+<p>轨迹校验模块本身也会出故障——外部存储不可用、指纹计算异常、状态机配置加载失败。这时候不能因为防线挂了就让 Agent 裸奔，也不能因为防线挂了就直接拒绝所有任务。合理的做法是降级到最粗的那道兜底：最大调用次数加超时熔断。</p>
+
+<div class="arch-diagram">
+┌───────────────────────────────────────────────────────────┐
+│              防循环机制的降级链路                            │
+│                                                           │
+│  正常态：DAG 校验 + 状态机 + 指纹去重 + 外置轨迹              │
+│      │                                                    │
+│      │ 外置存储不可用                                       │
+│      ▼                                                    │
+│  降级一级：进程内内存轨迹 + 状态机 + 指纹去重                 │
+│      │  影响：任务不可跨实例续跑，重启后轨迹丢失               │
+│      │  同时：收紧最大调用次数（如 25 ──→ 12）               │
+│      │                                                    │
+│      │ 指纹或状态机模块异常                                  │
+│      ▼                                                    │
+│  降级二级：最大调用次数 + 超时熔断 + 单工具调用上限            │
+│      │  影响：只能事后止损，无法事前拦截                      │
+│      │  同时：调用次数进一步收紧，并对写操作禁用自动重试        │
+│      │  必须：打出降级告警，让人知道现在跑在裸奔模式           │
+│      │                                                    │
+│      │ 连兜底也触发                                         │
+│      ▼                                                    │
+│  终止：返回已完成部分 + 明确说明未完成项 ──→ 转人工            │
+│                                                           │
+│  原则：降级必须收紧预算，不能降级后还按原预算跑               │
+└───────────────────────────────────────────────────────────┘
+</div>
+
+<p>图中最后那条原则容易被漏掉：<strong>降级时必须同步收紧预算</strong>。防线削弱了还按原来的调用次数上限跑，等于把风险敞口放大了。合理的做法是每降一级就把次数上限砍掉一半左右，同时对写操作禁用自动重试，并打出明确的降级告警——运维需要知道系统当前跑在哪一档保护级别上。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>某内部工单处理 Agent 在一次 Redis 故障中暴露了这个问题：轨迹存储不可用后，系统按预案降级到最大次数兜底，但次数上限沿用了正常态的 30 次。故障持续的 40 分钟内，几条本该被指纹拦下的重复调用各自跑满了 30 步，Token 消耗是同期正常会话的 5 倍以上。修复方案不是提高 Redis 可用性，而是在降级预案里加上"每降一级，次数上限减半、写操作禁用自动重试、触发降级告警"这三条，之后同类故障期间的 Token 消耗回落到正常态的 1.3 倍左右。
+</div>
+
+<div class="intuition-box">
+<p>判断一套防循环方案是否可靠，只要问一个问题：把系统提示词整段删掉，它还拦得住吗？拦得住，说明防线在代码里；拦不住，说明之前所谓的防线只是一段建议。</p>
+</div>
+
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details><summary>这张卡和《A66 · Agent 死循环与生产防御》讲的不是一回事吗？</summary><div class="answer">是同一个问题的两个面，分工很清楚。A66 站在现象与观测侧：死循环有哪几种类型、目标漂移是怎么发生的、Token 怎么爆炸、线上出了问题怎么及时发现和止血，它的产出是一套监控告警与踩坑闭环。本文站在设计侧：怎么用调用指纹、执行轨迹表、任务状态机和 DAG 无环约束，让重复调用在发出之前就被拦下，它的产出是一套确定性的执行框架。两者互补且都不可缺——只有观测没有机制，你会一直在事后救火；只有机制没有观测，你既不知道机制本身有没有失效，也处理不了那些机制覆盖不到的变种，比如每次参数都不同却每次都无用的语义循环。建议先读 A66 建立对现象的直觉，再用本文的机制去封住它们。</div></details>
+
+<details><summary>为什么说最大调用次数是粗暴基线而不是防线？</summary><div class="answer">因为它判断的维度不对。同一个工具用四十组不同参数调用四十次是在做研究，用完全相同的参数调用三次就是循环，而次数计数器完全区分不了这两者——它只数次数，不看内容。这就导致一个无解的取舍：次数设小了，复杂任务在正常执行中被误杀；设大了，循环照样能跑满上限，Token 已经烧完才停。主流框架的默认值可以说明这类机制的定位，LangChain 的 AgentExecutor 默认 max_iterations 是 15，LangGraph 的 recursion_limit 默认 25，CrewAI 每任务默认 max_iter 25，它们的共同点是只保证"不会无限跑"，不保证"不会跑二十多次废的"。防循环真正需要的判据是重复，不是数量，所以次数限制只能作为最外层兜底。</div></details>
+
+<details><summary>调用指纹具体怎么算，哪些参数该算进去？</summary><div class="answer">指纹通常是工具名加上归一化后的核心入参做一次哈希，比如 sha256 后取前 16 位。真正需要设计的不是哈希算法而是核心入参的选取，而且这个选取必须逐工具配置，不能用一套全局规则。选窄了会漏判：把分页参数排除在外，"查第 1 页"和"查第 2 页"就会被误判为重复调用。选宽了会漏防：把 request_id、时间戳、trace_id 这类每次都不同的字段算进去，指纹就永远不会重复，去重机制形同虚设。归一化环节还要处理键排序、数值格式、大小写等问题，保证语义相同的入参一定得到相同指纹。对于运行期动态注册的工具，可以从它声明的参数 Schema 里取必填字段作为核心入参，再配一份易变字段黑名单兜底。</div></details>
+
+<details><summary>指纹命中后应该怎么回给模型？</summary><div class="answer">应该把它当作一次成功的调用来回应，而不是当作一次拒绝。如果只回"重复调用已被拦截"，模型收到的是失败信号，它很可能换个措辞或微调参数再试一次，循环并没有真正停止。正确的回应包含三部分：上次调用的完整结果、这次调用是在第几步已经执行过的说明、以及如果需要不同结果应该变更哪些参数的指引。这样模型收到的语义是"这件事已经做完了，结果在这里"，它的自然反应是推进到下一步，而不是继续纠缠。这个细节看起来很小，但它决定了拦截之后循环是真的终止了，还是只是换了个形式继续。</div></details>
+
+<details><summary>任务状态机和 DAG 是不是重复建设，只做一个行不行？</summary><div class="answer">不重复，它们管的是不同粒度。状态机管宏观阶段——任务分解、工具调用、结果汇总、答案生成这四段的推进顺序和退出条件，防的是在阶段之间来回打转，比如汇总时发现证据不足又跳回去重新分解，如此往复。DAG 管的是工具调用阶段内部子任务之间的依赖顺序，防的是子任务互相依赖形成闭环。只做状态机，阶段内的子任务仍可能成环；只做 DAG，宏观上仍可能出现整张图跑完又整体重来的情况。生产上比较推荐的组合是外层用状态机锁住阶段推进、工具调用阶段内按 DAG 拓扑序执行、叶子节点内部允许有限的 ReAct 式自由探索，这样既保住了总步数有上界，又保留了局部灵活性。</div></details>
+
+<details><summary>为什么执行状态一定要外置存储，放在上下文里不行吗？</summary><div class="answer">不行，而且这是最隐蔽的一类失效。长任务必然要做上下文压缩，一旦执行轨迹和业务内容混在同一份上下文里被一起压缩，Agent 就真的不知道自己做过什么了——这时候它重新调用同一个工具，从它掌握的信息看完全是合理决策。更麻烦的是，指纹去重、状态机、DAG 三套机制都建立在"系统准确知道已经做过什么"这个前提上，轨迹一丢，三套机制会同时失效，而且失效得悄无声息。所以轨迹必须放在上下文之外的独立存储里，由编排层持有。外置还带来两个附加收益：任务可以断点续跑，进程被调度到另一个实例上也能接着执行；每次拦截都有据可查，事后能回放整条决策路径判断是误伤还是拦对了。</div></details>
+
+<details><summary>每次参数都不一样但每次都没用，这种循环怎么办？</summary><div class="answer">这类叫语义循环，指纹机制对它无能为力，因为按定义它就不存在重复。它常见于上下文变长之后：历史不断累积，模型对原始任务的注意力被稀释，开始生成一些与目标越来越弱相关的调用，从解决问题退化成四处探索。识别它需要另一组信号——上下文规模的增长曲线、每一步之后关键证据是否真的增加、当前动作与原始目标的相关度是否在下降。工程上可行的做法包括：设置证据增量断言，连续若干步没有新增有效证据就强制推进阶段；监控上下文规模，超过阈值先做一次目标重述再继续；以及退一步比对返回结果的摘要，参数不同但结果摘要相同时同样判为重复劳动。这类现象的完整观测手段和目标漂移治理属于《A66》的范围。</div></details>
+
+<details><summary>轨迹校验模块自己挂了怎么办？</summary><div class="answer">降级到最粗的兜底，也就是最大调用次数加超时熔断，但降级时必须同步收紧预算。这一点最容易被漏掉：防线削弱了还按原来的次数上限跑，等于把风险敞口放大了。建议的降级链路是分级的——外置存储不可用时降到进程内内存轨迹，指纹或状态机模块异常时才降到纯次数兜底，每降一级把次数上限砍掉大约一半，同时对写操作禁用自动重试，并打出明确的降级告警让运维知道系统当前跑在哪一档保护级别上。如果连兜底也触发了，正确的做法是返回已完成的部分并明确说明哪些没做完，转人工处理，而不是静默失败或者继续尝试。</div></details>
+
+<details><summary>提示词在防循环里还有价值吗？</summary><div class="answer">有，但角色是优化项而不是防线。提示词的价值在于降低模型提出重复调用的概率，这样代码层的拦截就更少触发，交互也更顺畅。但它不能作为可靠性保障，原因有三：生效概率随上下文变长而衰减，而长任务恰恰是循环高发区；没有任何可观测性，你无法知道某一次它到底起没起作用，也就无法衡量改动效果；它处理不了"模型认为这次重复是必要的"这种情况——模型自认为上次结果不可信，重试在它的逻辑里完全正当。判断一套方案是否可靠有个很直接的检验方法：把系统提示词里所有关于"不要重复调用"的内容整段删掉，如果还拦得住，说明防线在代码里；如果拦不住，那之前所谓的防线只是一段建议。</div></details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

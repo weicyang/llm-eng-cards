@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>B03 · Redis 与缓存</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#d29922;--purple:#bc8cff;--red:#f85149}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--green));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .75rem;font-size:1.15rem}
+h4{color:var(--purple);margin:1rem 0 .5rem}
+p{margin:.6rem 0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+ul,ol{padding-left:1.5rem;margin:.5rem 0}
+li{margin:.3rem 0}
+code{background:#1f2937;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1f2937;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0;font-size:.85rem;line-height:1.5}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}
+th,td{border:1px solid var(--border);padding:.6rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent);font-weight:600}
+tr:nth-child(even){background:rgba(22,27,34,.5)}
+.section{margin:2rem 0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin:1.2rem 0}
+.interview-box{background:rgba(88,166,255,.08);border:1px solid rgba(88,166,255,.3);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem}
+.warn-box{background:rgba(210,153,34,.08);border:1px solid rgba(210,153,34,.3);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section details[open]{padding-bottom:1rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);padding:.2rem 0}
+.qa-section summary:hover{color:var(--accent)}
+.qa-section details p{margin:.5rem 0;padding-left:.5rem;border-left:2px solid var(--border)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.tag{display:inline-block;background:rgba(88,166,255,.15);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.8rem;margin:.1rem .2rem}
+.formula{background:#1f2937;border-radius:6px;padding:.8rem 1.2rem;margin:.8rem 0;font-family:"Courier New",monospace;text-align:center;color:var(--green);font-size:.95rem}
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;margin:1rem 0}
+.compare-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem}
+.compare-item h4{margin-top:0}
+.flow-box{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;text-align:center;font-size:.95rem}
+.flow-box .arrow{color:var(--accent);margin:0 .5rem}
+.section-num{color:var(--purple);font-weight:700;margin-right:.5rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+
+/* 标准组件体系 */
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、Redis 核心数据结构</a>
+<a href="#s2">二、持久化机制：RDB 与 AOF</a>
+<a href="#s3">三、集群模式与哨兵高可用</a>
+<a href="#s4">四、缓存穿透、击穿与雪崩</a>
+<a href="#s5">五、分布式锁（Redlock）</a>
+<a href="#s6">六、Redis 在 AI 场景中的应用</a>
+<a href="#s7">七、性能优化与运维实践</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>B03 · Redis 与缓存</h1>
+<p class="subtitle">Redis &amp; Caching — 数据结构、持久化、集群与缓存策略</p>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、Redis 核心数据结构</h2>
+<div class="intuition-box">
+<p>Redis 快的根本不是"数据在内存里"这一条，而是它把 <span class="term">数据结构</span> 搬到了服务端——排行榜不必把十万行拉回应用层再排序，一条 ZADD 加一条 ZRANGE 就在 Redis 里算完了，省掉的是十万次网络往返，不只是磁盘。</p>
+</div>
+
+
+<table>
+<tr><th>数据类型</th><th>底层编码</th><th>典型命令</th><th>应用场景</th></tr>
+<tr><td><strong>String</strong></td><td>SDS（Simple Dynamic String）</td><td>GET/SET/INCR/MGET</td><td>缓存、计数器、分布式锁、Session</td></tr>
+<tr><td><strong>Hash</strong></td><td>ziplist / hashtable</td><td>HGET/HSET/HGETALL</td><td>用户信息、对象属性、购物车</td></tr>
+<tr><td><strong>List</strong></td><td>quicklist（ziplist + linkedlist）</td><td>LPUSH/RPOP/LRANGE</td><td>消息队列、时间线、最新列表</td></tr>
+<tr><td><strong>Set</strong></td><td>intset / hashtable</td><td>SADD/SMEMBERS/SINTER</td><td>标签、去重、共同好友</td></tr>
+<tr><td><strong>ZSet</strong></td><td>ziplist / skiplist + hashtable</td><td>ZADD/ZRANGE/ZRANGEBYSCORE</td><td>排行榜、延迟队列、优先级队列</td></tr>
+<tr><td><strong>Stream</strong></td><td>Radix Tree + Listpack</td><td>XADD/XREAD/XREADGROUP</td><td>消息队列（支持消费组和 ACK）</td></tr>
+</table>
+
+<h3>高级数据结构</h3>
+<div class="card">
+<ul>
+<li><strong>Bitmap</strong>：位操作，适合签到、在线状态（<code>SETBIT/BITCOUNT</code>）</li>
+<li><strong>HyperLogLog</strong>：基数估算，内存仅 12KB 可统计 2^64 个元素的去重数（<code>PFADD/PFCOUNT</code>）</li>
+<li><strong>GEO</strong>：地理位置查询，底层 ZSet（<code>GEOADD/GEORADIUS</code>）</li>
+<li><strong>BloomFilter</strong>（RedisBloom 模块）：概率性判断元素是否存在，防缓存穿透</li>
+</ul>
+</div>
+
+<div class="interview-box">
+<ul>
+<li>ZSet 底层用 skiplist + hashtable：skiplist 支持范围查询 O(logN)，hashtable 支持 O(1) 单元素查找</li>
+<li>String 最大 512MB，但实际建议 &lt;10KB 避免大 Key</li>
+<li>Stream 是 Redis 5.0 新增的日志型数据结构，可替代 Pub/Sub 实现可靠消息队列</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、持久化机制：RDB 与 AOF</h2>
+<div class="intuition-box">
+<p><span class="term">RDB</span> 赌的是"崩溃不常发生"，<span class="term">AOF</span> 赌的是"最多只丢一秒"。生产上两个都开不是保守，而是它们分别负责恢复速度和数据安全，谁也替不了谁。</p>
+</div>
+
+
+<h3>RDB（Redis Database）</h3>
+<div class="card">
+<ul>
+<li>按时间间隔生成内存数据的<strong>二进制快照</strong></li>
+<li>使用 <code>fork()</code> 创建子进程，利用 Copy-On-Write 写时复制</li>
+<li>恢复速度快（直接加载二进制）</li>
+<li>可能丢失最后一次快照后的数据</li>
+</ul>
+<pre><code># redis.conf RDB 配置
+save 900 1      # 900秒内至少1次修改则快照
+save 300 10     # 300秒内至少10次修改则快照
+save 60 10000   # 60秒内至少10000次修改则快照</code></pre>
+</div>
+
+<h3>AOF（Append Only File）</h3>
+<div class="card">
+<ul>
+<li>记录每个写命令的<strong>文本日志</strong></li>
+<li>三种刷盘策略：<code>always</code>（每条刷盘）/ <code>everysec</code>（每秒，推荐）/ <code>no</code>（OS 决定）</li>
+<li>AOF 重写（BGREWRITEAOF）压缩文件大小</li>
+<li>Redis 7.0+ 引入 <strong>Multi-Part AOF</strong>（基础 AOF + 增量 AOF）</li>
+</ul>
+</div>
+
+<h3>两种持久化的写入与恢复路径</h3>
+<div class="arch-diagram">
+写入期:
+
+  客户端 SET k v
+        │
+        ▼
+  ┌──────────────┐
+  │   内存数据集   │
+  └──┬────────┬──┘
+     │        │
+     │        └──────────► AOF 缓冲区
+     │                        │ everysec 刷盘
+     │                        ▼
+     │                   appendonly.aof   (追加文本命令)
+     │                        │ 文件涨到阈值
+     │                        ▼
+     │                   BGREWRITEAOF     (fork 子进程重写为最小命令集)
+     │
+     │ save 60 10000 命中
+     ▼
+  fork() 子进程 ──► Copy-On-Write ──► dump.rdb   (二进制快照)
+
+  fork 期间父进程每改一页就复制一页，
+  写入越密集，内存峰值越接近数据集的 2 倍。
+
+重启恢复期:
+
+  AOF 与 RDB 都在  ──►  优先加载 AOF (数据更新，但要逐条重放)
+  只有 RDB         ──►  直接加载二进制，最快
+  只有 AOF         ──►  逐条重放命令，最慢
+</div>
+
+<h3>RDB vs AOF 对比</h3>
+<table>
+<tr><th>维度</th><th>RDB</th><th>AOF</th></tr>
+<tr><td>数据安全性</td><td>可能丢失分钟级数据</td><td>最多丢失 1 秒数据（everysec）</td></tr>
+<tr><td>恢复速度</td><td>快（二进制加载）</td><td>慢（重放命令）</td></tr>
+<tr><td>文件大小</td><td>紧凑</td><td>较大（可重写压缩）</td></tr>
+<tr><td>性能影响</td><td>fork() 时有短暂阻塞</td><td>everysec 影响小</td></tr>
+<tr><td>推荐</td><td colspan="2">生产环境建议 <strong>RDB + AOF 同时开启</strong></td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>RDB fork() 的 Copy-On-Write 机制是高频考点</li>
+<li>AOF everysec 是性能与安全的最佳平衡点</li>
+<li>Redis 7.0 的 Multi-Part AOF 解决了重写期间的可靠性问题</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、集群模式与哨兵高可用</h2>
+<div class="intuition-box">
+<p><span class="term">哨兵</span> 回答的是"主挂了谁顶上"，<span class="term">Cluster</span> 回答的是"一台机器装不下"。这是两个不同的问题，不要指望用一个方案去解决另一个。</p>
+</div>
+
+
+<h3>Redis Sentinel（哨兵）</h3>
+<div class="card">
+<ul>
+<li>监控主节点状态，自动故障转移（Failover）</li>
+<li>多个 Sentinel 节点通过投票决定主节点是否宕机</li>
+<li>客户端通过 Sentinel 获取当前主节点地址</li>
+<li><strong>不支持数据分片</strong> — 所有数据在单个主节点上</li>
+</ul>
+<div class="flow-box">
+<strong>Sentinel 1/2/3</strong> <span class="arrow">→</span> 监控 <span class="arrow">→</span> <strong>Master</strong> ← 复制 → <strong>Replica 1 / Replica 2</strong>
+<br>
+Master 宕机 <span class="arrow">→</span> Sentinel 投票 <span class="arrow">→</span> 选举新 Master <span class="arrow">→</span> 通知客户端
+</div>
+</div>
+
+<h3>Redis Cluster</h3>
+<div class="card">
+<ul>
+<li>数据分片到 <strong>16384 个 Slot</strong>，每个主节点负责一部分 Slot</li>
+<li>使用 <code>CRC16(key) % 16384</code> 计算 Key 所属 Slot</li>
+<li>节点间通过 Gossip 协议通信</li>
+<li>每个主节点可配从节点实现 HA</li>
+<li>不支持跨 Slot 的多 Key 操作（除非使用 Hash Tag <code>{tag}</code>）</li>
+</ul>
+<pre><code># Hash Tag 示例：保证相关 Key 在同一 Slot
+SET {user:100}.name "张三"
+SET {user:100}.age 25
+# 两个 Key 的 CRC16 只计算 {user:100} 部分</code></pre>
+</div>
+
+<h3>主从复制与哨兵切换的完整过程</h3>
+<div class="arch-diagram">
+正常状态:
+
+        ┌────────────┐  ┌────────────┐  ┌────────────┐
+        │ Sentinel 1 │  │ Sentinel 2 │  │ Sentinel 3 │
+        └──────┬─────┘  └──────┬─────┘  └──────┬─────┘
+               │  每秒 PING    │               │
+               └───────┬───────┴───────┬───────┘
+                       ▼               ▼
+                  ┌─────────┐     ┌───────────┐
+    写请求 ──────► │  Master │ ──► │ Replica 1 │
+                  │         │ 异步 ├───────────┤
+                  │         │ 复制 │ Replica 2 │
+                  └─────────┘     └───────────┘
+                                        ▲
+    读请求 ─────────────────────────────┘
+
+复制的三个阶段:
+  1) 全量同步   Replica 发 PSYNC ? -1 → Master fork 出 RDB → 传输 → 加载
+  2) 命令传播   Master 把写命令实时推给 Replica (异步，因此有延迟)
+  3) 断线重连   Replica 带 offset 发 PSYNC，对得上 repl-backlog 就走增量
+
+故障转移:
+
+  Master 无响应
+        │
+        ▼
+  单个 Sentinel 标记主观下线 (SDOWN)
+        │  向其他 Sentinel 求证
+        ▼
+  票数达到 quorum ──► 客观下线 (ODOWN)
+        │
+        ▼
+  Sentinel 之间选出 Leader (Raft 式投票)
+        │
+        ▼
+  按 复制偏移量最大 / slave-priority 挑一个 Replica
+        │
+        ▼
+  SLAVEOF NO ONE 提升为新 Master ──► 其余 Replica 改指向 ──► 通知客户端
+
+  代价: 异步复制下，旧 Master 已回包但尚未传出去的写会永久丢失。
+</div>
+
+<h3>Sentinel vs Cluster</h3>
+<table>
+<tr><th>维度</th><th>Sentinel</th><th>Cluster</th></tr>
+<tr><td>数据分片</td><td>❌ 不支持</td><td>✅ 16384 Slot</td></tr>
+<tr><td>容量上限</td><td>单机内存</td><td>所有主节点内存之和</td></tr>
+<tr><td>故障转移</td><td>自动（Sentinel 投票）</td><td>自动（节点投票）</td></tr>
+<tr><td>复杂度</td><td>较低</td><td>较高</td></tr>
+<tr><td>适用场景</td><td>数据量小、需高可用</td><td>数据量大、需水平扩展</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>Cluster 使用 16384 个 Slot 而非一致性哈希 — 简化了 Slot 迁移</li>
+<li>Hash Tag 是 Cluster 模式下 multi-key 操作的解决方案</li>
+<li>Sentinel 和 Cluster 可以同时使用，但通常二选一</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、缓存穿透、击穿与雪崩</h2>
+<div class="intuition-box">
+<p>穿透、击穿、雪崩听起来是三种事故，其实是同一个问题的三种形态：缓存没兜住的请求最后都由数据库来还，区别只在于漏下去的是"根本不存在的 Key"、"刚好过期的那一个热 Key"，还是"同一秒集体到期的一大片 Key"。</p>
+</div>
+
+
+<h3>三大经典问题</h3>
+<table>
+<tr><th>问题</th><th>定义</th><th>触发条件</th><th>解决方案</th></tr>
+<tr>
+<td><strong>缓存穿透</strong></td>
+<td>查询不存在的数据，缓存和 DB 都没有</td>
+<td>恶意攻击 / 非法参数</td>
+<td>① 布隆过滤器拦截<br>② 缓存空值（短 TTL）<br>③ 参数校验</td>
+</tr>
+<tr>
+<td><strong>缓存击穿</strong></td>
+<td>热点 Key 过期瞬间，大量请求直接打到 DB</td>
+<td>热点数据到期</td>
+<td>① 互斥锁（SETNX）<br>② 逻辑过期（不设 TTL，后台异步刷新）<br>③ 永不过期 + 主动更新</td>
+</tr>
+<tr>
+<td><strong>缓存雪崩</strong></td>
+<td>大量 Key 同时过期，DB 压力暴增</td>
+<td>批量导入相同 TTL / Redis 宕机</td>
+<td>① TTL 加随机偏移<br>② 多级缓存（L1 本地 + L2 Redis）<br>③ 限流降级<br>④ Redis 高可用</td>
+</tr>
+</table>
+
+<h3>读路径与击穿时的互斥回源</h3>
+<div class="arch-diagram">
+Cache-Aside 读路径:
+
+  请求 ──► GET cache:k
+              │
+       命中 ──┴── 未命中
+        │            │
+        ▼            ▼
+      返回      SETNX lock:k   (互斥，只放一个请求回源)
+                     │
+           抢到锁 ───┴─── 没抢到
+             │              │
+             ▼              ▼
+          查 DB        sleep 50ms 后重试 GET
+             │              │
+             ▼              │
+     SET cache:k v EX 300   │
+       + 随机偏移 0~60s     │
+             │              │
+             ▼              ▼
+        DEL lock:k      命中缓存，返回
+
+Cache-Aside 写路径 (先改库，再删缓存):
+
+  UPDATE db ──► DEL cache:k ──► 延迟 500ms ──► 再 DEL cache:k
+                                     └── 延迟双删，清掉这期间
+                                         被并发读回填的脏缓存
+
+  为什么是删而不是更新? 两个并发写更新缓存的先后顺序，
+  和它们更新数据库的先后顺序并不保证一致；删除则天然幂等。
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>某商品详情接口在凌晨把 20 万条数据批量预热进 Redis，TTL 统一写死 3600 秒。<strong>问题</strong>：一小时后这批 Key 在同一秒集体过期，约 8000 QPS 的请求全量落到 MySQL，100 个连接的连接池瞬间打满，接口 P99 从 30ms 涨到 12s，持续约 4 分钟。<strong>方案</strong>：TTL 改为 <code>3600 + rand(0,600)</code> 摊到 10 分钟窗口；热点 Key 额外做逻辑过期（value 内嵌 expire_at，到期后由后台线程刷新、前台仍返回旧值）；回源路径统一加 SETNX 互斥。<strong>效果</strong>：同一时刻真正回源的请求从 8000 降到个位数，DB 峰值 QPS 从 8000 降到不足 50，接口 P99 回到 35ms 以内。
+</div>
+
+<h3>缓存更新策略</h3>
+<div class="card">
+<h4>Cache-Aside（旁路缓存，最常用）</h4>
+<ul>
+<li><strong>读</strong>：先读缓存 → 命中则返回；未命中 → 读 DB → 写入缓存</li>
+<li><strong>写</strong>：先更新 DB → 再删除缓存（而非更新缓存）</li>
+<li>为什么删除而非更新？避免并发写导致的缓存与 DB 不一致</li>
+</ul>
+<h4>Read/Write-Through</h4>
+<ul>
+<li>缓存层封装 DB 读写，应用只与缓存交互</li>
+<li>写入时缓存同步写入 DB（Write-Through）或异步写入 DB（Write-Behind）</li>
+</ul>
+</div>
+
+<div class="interview-box">
+<ul>
+<li>穿透/击穿/雪崩的区别必须清晰 — 从触发原因和解决方案两个维度区分</li>
+<li>Cache-Aside 的"先更新 DB 再删除缓存"是标准答案</li>
+<li>延迟双删：更新 DB → 删缓存 → 延迟 N 毫秒 → 再删缓存（解决极端并发）</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、分布式锁（Redlock）</h2>
+<div class="intuition-box">
+<p>Redis 分布式锁真正难的不是加锁，而是"我以为我还持有锁，其实它 30 秒前就过期了"——所以 <span class="term">看门狗续期</span> 和释放时的 value 校验，比 SETNX 本身重要得多。</p>
+</div>
+
+
+<h3>基础分布式锁</h3>
+<div class="card">
+<pre><code># 加锁：原子操作 SET + NX + PX
+SET lock_key unique_value NX PX 30000
+
+# 释放锁：Lua 脚本保证原子性（先检查再删除）
+if redis.call("GET", KEYS[1]) == ARGV[1] then
+    return redis.call("DEL", KEYS[1])
+else
+    return 0
+end</code></pre>
+<h4>关键要素</h4>
+<ul>
+<li><strong>互斥</strong>：NX 保证只有一个客户端获取锁</li>
+<li><strong>防死锁</strong>：PX 设置自动过期时间</li>
+<li><strong>安全释放</strong>：unique_value 确保只释放自己的锁</li>
+<li><strong>续期</strong>：看门狗机制（Redisson 的 WatchDog）自动延长锁时间</li>
+</ul>
+</div>
+
+<h3>Redlock 算法</h3>
+<div class="card">
+<p>Martin Kleppmann 指出单节点 Redis 锁在主从切换时可能失效。Redlock 使用 <strong>N 个独立 Redis 实例</strong>（建议 5 个）：</p>
+<ol>
+<li>记录开始时间 T1</li>
+<li>依次向 N 个 Redis 实例请求加锁（相同 key 和随机 value，短超时）</li>
+<li>如果在 <strong>多数（N/2+1）</strong>实例上加锁成功，且总耗时 &lt; 锁过期时间，则加锁成功</li>
+<li>锁的有效时间 = 原始过期时间 - 加锁耗时</li>
+<li>释放时向所有实例发送释放命令</li>
+</ol>
+</div>
+
+<div class="warn-box">
+<p><strong>Redlock 争议</strong>：Martin Kleppmann 撰文指出 Redlock 在 GC 暂停、时钟跳变等场景下仍不安全。如果需要绝对安全的分布式锁，应使用 ZooKeeper 或 etcd（基于共识协议）。Redis 分布式锁适合大多数"尽力而为"的场景。</p>
+</div>
+
+<div class="interview-box">
+<ul>
+<li>Redis 分布式锁三要素：NX（互斥）+ PX（防死锁）+ Lua（安全释放）</li>
+<li>Redlock 的争议必须了解 — 提到 Martin Kleppmann 的批评是加分项</li>
+<li>Redisson 的 WatchDog 续期机制是 Java 生态的标准实现</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、Redis 在 AI 场景中的应用</h2>
+<div class="intuition-box">
+<p><span class="term">语义缓存</span> 把命中条件从"字符串完全相等"换成了"向量距离够近"，省下的是 LLM 调用费，代价是你必须为"多近才算同一个问题"这个阈值负责——阈值调松一点，用户就会拿到别人问题的答案。</p>
+</div>
+
+
+<h3>Semantic Cache（语义缓存）</h3>
+<div class="card">
+<p>传统缓存基于精确 Key 匹配，语义缓存基于<strong>语义相似度</strong>命中：</p>
+<div class="flow-box">
+用户提问 <span class="arrow">→</span> Embedding <span class="arrow">→</span> Redis 向量搜索（RediSearch）<span class="arrow">→</span> 相似度 &gt; 阈值 → 返回缓存答案
+<br>
+未命中 <span class="arrow">→</span> 调用 LLM <span class="arrow">→</span> 存入 Redis（向量 + 答案）
+</div>
+<ul>
+<li>Redis Stack 内置 RediSearch 模块，支持向量索引（HNSW/FLAT）</li>
+<li>显著降低 LLM API 调用成本（相似问题复用答案）</li>
+<li>适合 FAQ、客服、重复性高的场景</li>
+</ul>
+</div>
+
+<h3>Pub/Sub 与 Stream 模式</h3>
+<div class="card">
+<table>
+<tr><th>特性</th><th>Pub/Sub</th><th>Stream</th></tr>
+<tr><td>消息持久化</td><td>❌ 火即忘</td><td>✅ 持久化存储</td></tr>
+<tr><td>消费组</td><td>❌</td><td>✅ Consumer Group</td></tr>
+<tr><td>ACK 机制</td><td>❌</td><td>✅ XACK</td></tr>
+<tr><td>历史消息</td><td>❌ 只收实时</td><td>✅ 可回溯</td></tr>
+<tr><td>适用场景</td><td>实时通知、广播</td><td>可靠消息队列、事件流</td></tr>
+</table>
+</div>
+
+<div class="interview-box">
+<ul>
+<li>Redis 语义缓存是 AI 应用降本的关键技术 — 需理解向量检索 + 缓存的结合</li>
+<li>Stream vs Pub/Sub：需要可靠性选 Stream，纯广播选 Pub/Sub</li>
+<li>Redis Stack（RediSearch + RedisJSON + RedisBloom）是现代 Redis 的全栈方案</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、性能优化与运维实践</h2>
+<div class="intuition-box">
+<p><span class="term">大 Key</span> 和 <span class="term">热 Key</span> 是同一枚硬币的两面：前者让单次操作变慢，后者让单个节点被打满，而 Redis 的单线程模型意味着这两件事都会连累实例上所有其他请求。</p>
+</div>
+
+
+<h3>大 Key 问题</h3>
+<div class="card">
+<ul>
+<li><strong>定义</strong>：String &gt; 10KB，集合类型元素 &gt; 5000 个</li>
+<li><strong>危害</strong>：阻塞主线程、网络带宽占满、主从复制延迟、内存碎片</li>
+<li><strong>排查</strong>：<code>redis-cli --bigkeys</code>、<code>MEMORY USAGE key</code></li>
+<li><strong>解决</strong>：拆分大 Key（Hash 分片）、异步删除（<code>UNLINK</code>）、压缩 Value</li>
+</ul>
+</div>
+
+<h3>热 Key 问题</h3>
+<div class="card">
+<ul>
+<li><strong>定义</strong>：单个 Key 被极高频访问（如热门商品详情）</li>
+<li><strong>危害</strong>：单节点 CPU 打满、Cluster 单 Slot 热点</li>
+<li><strong>解决</strong>：① 本地缓存（L1 + L2）；② 读副本（READONLY 从节点读）；③ Key 拆分加后缀（随机路由到多个 Key）</li>
+</ul>
+</div>
+
+<h3>内存优化</h3>
+<div class="card">
+<ul>
+<li>使用合适的数据结构（Hash 替代多个 String 存储对象字段）</li>
+<li>设置 <code>maxmemory</code> + 淘汰策略（<code>allkeys-lru</code> 最常用）</li>
+<li>压缩 Value（Snappy/LZ4）</li>
+<li>短 Key 名节省内存（<code>u:100:n</code> vs <code>user:100:name</code>）</li>
+</ul>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<strong>删大 Key 一律用 UNLINK</strong>
+<p>UNLINK 只在主线程里摘链，真正的内存释放交给后台线程。DEL 一个上百万元素的 Hash 会把主线程卡住几百毫秒，期间所有命令排队。</p>
+</div>
+<div class="do">
+<strong>TTL 一律带随机偏移</strong>
+<p>批量写入时用 <code>base + rand(0, base/10)</code> 把过期时间摊开。就这一行改动，能挡掉绝大多数雪崩。</p>
+</div>
+<div class="do">
+<strong>线上巡检用 SCAN，不用 KEYS</strong>
+<p>KEYS * 会遍历整个键空间并阻塞主线程；SCAN 带游标分批返回，虽不保证快照一致性，但不会让线上停顿。</p>
+</div>
+<div class="dont">
+<strong>别把 Redis 当唯一数据源</strong>
+<p>AOF everysec 仍可能丢最后一秒，主从异步复制在切换时会丢更多。订单、余额这类数据必须有数据库兜底。</p>
+</div>
+<div class="dont">
+<strong>别在 Cluster 里做跨槽多 Key 操作</strong>
+<p>跨 Slot 的 MGET、MULTI 会直接报错。需要一起操作的 Key 用 Hash Tag <code>{user:100}</code> 绑到同一个 Slot。</p>
+</div>
+<div class="dont">
+<strong>别让单个 Key 无限增长</strong>
+<p>评论、日志一路追加进同一个 List 或 ZSet，几个月后就是几百 MB 的大 Key。写入时就按时间或 ID 分片，例如 <code>msg:{uid}:202601</code>。</p>
+</div>
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>某社区应用把每个话题的全部评论存进单个 Hash，最活跃话题积累到约 120 万个 field、序列化后约 340MB。<strong>问题</strong>：一次 HGETALL 耗时约 900ms，期间主线程完全阻塞，同实例其他命令的 P99 从 2ms 飙到 900ms；主从全量同步时这个 Key 一次性传输，还撑爆了复制缓冲区，Replica 反复重连。<strong>方案</strong>：按评论 ID 取模拆成 256 个子 Hash（<code>topic:{id}:c:{n}</code>），读取只取需要的分片；清理旧 Key 全部换成 UNLINK；把 <code>redis-cli --bigkeys</code> 加进每日巡检。<strong>效果</strong>：单次读取耗时降到 3ms 以内，实例 P99 稳定在 2ms 左右，主从全量同步不再中断。
+</div>
+
+<div class="interview-box">
+<ul>
+<li>大 Key 和热 Key 是 Redis 运维最常见的两大问题</li>
+<li>UNLINK 是 DEL 的异步版本 — 避免删除大 Key 时阻塞主线程</li>
+<li>maxmemory 淘汰策略：allkeys-lru（推荐缓存场景）、volatile-lru（有过期的 Key 先淘汰）、noeviction（写满报错）</li>
+</ul>
+</div>
+</div>
+
+<!-- Interview Q&A -->
+<div class="qa-section" id="qa">
+<h2 style="margin-top:3rem">🎯 Q&amp;A</h2>
+
+<details>
+<summary>Q1：Redis 为什么这么快？单线程如何实现高性能？</summary>
+<p>Redis 快的核心原因：① 纯内存操作，数据存储在 RAM 中，读写延迟纳秒级；② 单线程避免了上下文切换和锁竞争开销；③ I/O 多路复用（epoll/kqueue）一个线程处理数万连接；④ 高效的数据结构（SDS、ziplist、skiplist 等针对性优化）。Redis 的瓶颈是网络 I/O 而非 CPU，单线程模型已足够。6.0+ 引入多线程 I/O（多线程处理网络读写，命令执行仍单线程），进一步提升网络吞吐。</p>
+</details>
+
+<details>
+<summary>Q2：缓存穿透、击穿、雪崩有什么区别？如何解决？</summary>
+<p><strong>穿透</strong>：查询的数据在缓存和 DB 中都不存在（恶意攻击/非法 ID）→ 布隆过滤器拦截 + 缓存空值。<strong>击穿</strong>：热点 Key 恰好过期，瞬间大量请求打到 DB → 互斥锁（SETNX）让一个请求回源、其他等待；或使用逻辑过期（不设 TTL，后台异步刷新）。<strong>雪崩</strong>：大量 Key 同一时间过期或 Redis 宕机 → TTL 加随机偏移分散过期时间；多级缓存（本地 + Redis）；限流降级兜底。核心区分：穿透是"数据不存在"，击穿是"单个热点过期"，雪崩是"大面积过期/宕机"。</p>
+</details>
+
+<details>
+<summary>Q3：Redis 分布式锁如何实现？有哪些注意事项？</summary>
+<p>基础实现：<code>SET key value NX PX timeout</code> 原子加锁，Lua 脚本原子释放（先验证 value 再删除）。注意事项：① 必须设过期时间防死锁；② value 使用 UUID 防止误删他人的锁；③ 锁续期（Redisson WatchDog 机制）防止业务未完成锁已过期；④ 主从切换可能导致锁丢失 — 可使用 Redlock（多节点加锁取多数派）；⑤ Redlock 存在争议（时钟偏移、GC 暂停问题），强一致场景建议 ZooKeeper/etcd。</p>
+</details>
+
+<details>
+<summary>Q4：RDB 和 AOF 各自的优缺点？生产环境如何选择？</summary>
+<p><strong>RDB 优点</strong>：恢复速度快（二进制加载）、文件紧凑适合备份、fork 后对主线程影响小。<strong>RDB 缺点</strong>：可能丢失最后一次快照后的数据（分钟级），fork 大内存实例时短暂卡顿。<strong>AOF 优点</strong>：数据安全性高（everysec 最多丢 1 秒）、可读性好（文本格式）。<strong>AOF 缺点</strong>：文件较大、恢复慢（需重放命令）。生产建议：<strong>同时开启 RDB + AOF</strong>，AOF 保证数据安全，RDB 用于快速恢复和定期备份。Redis 7.0+ 的 Multi-Part AOF 进一步提升了可靠性。</p>
+</details>
+
+<details>
+<summary>Q5：Redis Cluster 如何进行数据分片？扩容时如何迁移数据？</summary>
+<p>Redis Cluster 将键空间划分为 16384 个 Slot，每个主节点负责一部分 Slot。Key 所属 Slot = CRC16(key) % 16384。扩容流程：① 新节点加入集群（<code>CLUSTER MEET</code>）；② 将目标 Slot 从旧节点迁移到新节点（<code>CLUSTER SETSLOT ... MIGRATING/IMPORTING</code>）；③ 逐个 Key 迁移（<code>MIGRATE</code> 命令，原子操作）；④ 迁移完成后更新 Slot 映射。迁移期间，如果客户端访问正在迁移的 Slot，旧节点返回 ASK 重定向到新节点。整个过程对客户端近乎透明。缩容类似但反向操作。</p>
+</details>
+
+<details>
+<summary>Q6：Redis 的过期 Key 是怎么被删掉的？和内存淘汰策略是什么关系？</summary>
+<p>这是两套机制，解决的是不同问题。<strong>过期删除</strong>处理"这个 Key 到点了"：惰性删除在每次访问 Key 时检查 TTL，过期就地删掉并返回空；定期删除由 serverCron 每秒执行 10 次，每次从设了 TTL 的 Key 里随机抽 20 个删掉已过期的，若过期比例超过 25% 就立刻再抽一轮。两者结合意味着"逻辑过期"和"物理删除"之间存在时间差，一个既不被访问、又一直没被随机抽中的 Key 可以在内存里躺很久，所以 <code>DBSIZE</code> 通常大于逻辑上的有效 Key 数。<strong>内存淘汰</strong>处理的是另一件事："内存不够了，得腾地方"：写命令执行前先检查是否触及 <code>maxmemory</code>，触及则按策略挑 Key 淘汰——noeviction 直接让写命令报错，allkeys-lru 在全部 Key 里按近似 LRU 淘汰，volatile-lru 只在设了 TTL 的 Key 里淘汰。选择要点是：纯缓存实例用 allkeys-lru；缓存和持久数据混在一个实例时用 volatile-lru，并严格保证持久数据不设 TTL，否则它们会被当成缓存淘汰掉。还有一个容易踩的坑：主从环境下 Replica 不会自行删除过期 Key，而是等 Master 传来 DEL，所以直接读 Replica 有极小概率读到已过期的值。</p>
+</details>
+</div>
+
+<div style="text-align:center;margin:3rem 0 1rem;color:#8b949e;font-size:.85rem">
+<p>— B03 · Redis 与缓存 · 完 —</p>
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEC14 · RAG 多租户细粒度权限管控</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、"打标签 + 过滤"为什么不够</a>
+<a href="#s2">二、五类失效场景</a>
+<a href="#s3">三、防线一：分片按最小权限切割</a>
+<a href="#s4">四、防线二：独立权限引擎逐片鉴权</a>
+<a href="#s5">五、防线三：生成前后两次合规校验</a>
+<a href="#s6">六、异常落地：降级、变更与审计</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>SEC14 · RAG 多租户细粒度权限管控</h1>
+<p class="subtitle">分片夹带 / 权限放大 / 推理泄密 / 变更不同步 / 租户越界 —— 从切分到生成的全链路权限闭环</p>
+
+<div class="intuition-box">
+<p>权限管控不是给文档贴张标签就完事的：标签贴在文档上，泄密发生在<strong>片段</strong>里、发生在<strong>推理</strong>中、发生在<strong>标签还没来得及更新</strong>的那几分钟里。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、"打标签 + 过滤"为什么不够</h2>
+
+<p>企业级多租户 RAG 的权限方案，绝大多数团队的第一版长这样：给每篇文档打上密级和可见范围标签，把用户身份作为元数据过滤条件传给向量库，再在 prompt 里补一句"不得泄露超出用户权限的内容"。</p>
+
+<p>这个方案看起来是完整的三层——数据侧标了、检索侧过滤了、生成侧约束了。但它的三层里每一层都建立在同一个假设上：<strong>权限的最小单位是文档</strong>。而 RAG 的最小单位从来不是文档，是<span class="term">分片</span>（chunk，把长文档切成的若干段，检索和拼接都以它为单位）。这个错配是后面所有问题的总根源。</p>
+
+<div class="arch-diagram">
+错配示意：权限贴在文档上，数据流转以分片为单位
+
+   权限标注的粒度                  实际流转的粒度
+  ┌──────────────────┐          ┌────┐┌────┐┌────┐┌────┐
+  │  年度经营报告.docx │   切分   │chunk││chunk││chunk││chunk│
+  │  密级：内部        │  ──────→ │  1 ││  2 ││  3 ││  4 │
+  └──────────────────┘          └────┘└────┘└────┘└────┘
+        一个标签                    ↑ 其中 chunk 3 里夹了一段
+                                    ↑ 本该"机密"的并购金额
+
+  过滤器看到的是"这篇文档是内部级，用户有内部权限"→ 整片放行
+  模型看到的是 chunk 3 的原文 → 照着念出来
+  从审计日志看，这次检索完全合规。
+</div>
+
+<p>而且这套方案对权限模型的复杂度也有严重低估。真实企业里，一个人能看什么，取决于部门、职级、所属项目组、临时授权、上级部门的权限继承，以及若干条互斥规则（比如"审计岗不得同时持有业务数据权限"）。这些条件是组合式的、带时效的、有优先级冲突的。</p>
+
+<h3>企业权限条件的真实复杂度</h3>
+<table>
+<tr><th>条件类型</th><th>示例</th><th>特点</th><th>向量库元数据过滤能否表达</th></tr>
+<tr><td><strong>部门</strong></td><td>财务部 / 研发部</td><td>静态、单值</td><td>可以</td></tr>
+<tr><td><strong>职级</strong></td><td>P6 以上可见</td><td>静态、可比较</td><td>勉强可以（需支持范围比较）</td></tr>
+<tr><td><strong>项目组</strong></td><td>参与"雅典娜"项目的成员</td><td>多值、动态变化</td><td>困难（需数组包含判断）</td></tr>
+<tr><td><strong>临时授权</strong></td><td>某人在 3 月 1 日至 15 日可查</td><td>带时间窗口</td><td>困难（需时间区间比较）</td></tr>
+<tr><td><strong>权限继承</strong></td><td>上级部门自动继承下级可见范围</td><td>树形递归</td><td>基本不可能</td></tr>
+<tr><td><strong>互斥规则</strong></td><td>持有 A 角色则自动剥夺 B 权限</td><td>需要逻辑推演</td><td>不可能</td></tr>
+</table>
+
+<p>向量库的元数据过滤本质上是一组简单的等值和范围判断，它被设计出来是为了做"按时间筛选""按来源筛选"这类轻量过滤，不是为了承载一套完整的访问控制模型。把企业权限逻辑塞进去，要么表达不了，要么写成一个几百行的过滤表达式然后没人敢改。</p>
+
+<div class="intuition-box">
+<p>元数据过滤是筛子，不是门锁。它能帮你缩小范围，但不能替你决定"这个人到底能不能看这一段"。</p>
+</div>
+
+<p>还有一层更根本的问题：<strong>prompt 里的那句"不得泄露"是请求，不是约束</strong>。模型没有能力判断哪些内容超权限——它看到的只是一堆文本，没有密级信息。让一个不知道边界在哪的执行者去自我约束，本身就不成立。</p>
+
+<h3>与 RAG 安全全景的分工</h3>
+
+<p>需要先划清一条边界。<a href="../security/rag_security.html">《SEC02 · RAG 安全》</a> 覆盖的是 RAG 的<strong>安全全景</strong>：知识库投毒、引用来源验证、PII 防护、上下文溢出防护等等，其中"权限隔离与文档分级"只是其中一节，讲的是这件事的基本盘和整体位置。<strong>本文把多租户细粒度权限单独拎出来，展开成从分片、检索到生成的全链路闭环</strong>——重点不在"要做权限隔离"这个结论，而在权限管控的每一个环节具体会怎么失效、每一道防线具体怎么建、异常情况怎么兜。看整体威胁面读 SEC02，落地权限体系读本文。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、五类失效场景</h2>
+
+<p>把"打标签 + 过滤 + prompt 约束"这套方案放到真实环境里，会从五个方向漏。这五类不是理论推演，它们分别对应权限链路上五个不同的薄弱点。</p>
+
+<div class="arch-diagram">
+五类失效在链路上的位置：
+
+  文档入库 ──→ 切分 ──→ 向量化 ──→ 检索 ──→ 重排 ──→ 拼接 ──→ 生成 ──→ 返回
+                 │                    │        │                 │        │
+                 ▼                    ▼        ▼                 ▼        ▼
+             ①分片夹带            ②权限放大  ⑤租户越界      ③推理泄密   （已无法挽回）
+             高低密级切进同一片    过滤条件   索引/命名空间   多片段拼接
+                                   算错或缺失  隔离不彻底     推出高密结论
+                 ▲
+                 │
+             ④变更不同步：权限调整后，分片上的标记还是旧的
+             （这一类不在某个固定环节，而是横跨整条链路的时间维度）
+</div>
+
+<h3>五类失效逐项拆解</h3>
+<table>
+<tr><th>失效类型</th><th>发生环节</th><th>根因</th><th>典型现象</th><th>可检出性</th></tr>
+<tr><td><strong>① 分片夹带</strong></td><td>切分</td><td>切分只看长度，不看密级边界</td><td>整片被合规放行，敏感句夹在中间被原样引用</td><td>极低（日志全绿）</td></tr>
+<tr><td><strong>② 权限放大</strong></td><td>检索</td><td>过滤条件构造错误、默认放行、缓存了他人结果</td><td>用户看到了本不该出现在候选集里的内容</td><td>中（可通过对比测试发现）</td></tr>
+<tr><td><strong>③ 推理泄密</strong></td><td>生成</td><td>多个合规低密片段组合出高密结论</td><td>每一片都合规，结论不合规</td><td>低（需要语义级判断）</td></tr>
+<tr><td><strong>④ 变更不同步</strong></td><td>横跨全链路</td><td>权限系统与分片标记异步，存在窗口期</td><td>离职/调岗后仍能检索到原权限内容</td><td>低（窗口期短，难复现）</td></tr>
+<tr><td><strong>⑤ 租户越界</strong></td><td>检索</td><td>共享索引、命名空间隔离不彻底、租户 ID 未强制注入</td><td>A 公司检索到 B 公司的数据</td><td>中（一旦发生就是重大事故）</td></tr>
+</table>
+
+<h3>①分片夹带：最隐蔽的一类</h3>
+
+<p>这是五类里最值得单独讲的，因为它完全不触发任何告警。切分器按固定长度或者按段落切，它不知道第 1200 到 1400 个字符之间那句话是机密级的。切完之后，这一片继承的是<strong>整篇文档</strong>的密级标签——如果文档整体标了"内部"，那这一片就是内部级，机密内容随之被降级放行。</p>
+
+<div class="highlight"><strong>示例场景：</strong>一份 40 页的年度经营报告整体标为"内部"，其中第 27 页有两段并购标的与作价信息属"机密"。按 800 字符切分后共产生约 90 个分片，那两段落在第 61 和第 62 个分片里，两个分片都继承了"内部"标签。任何有内部权限的员工问一句"公司今年有哪些对外投资"，检索命中这两片、过滤器合规放行、模型照着原文复述——从访问日志看，这是一次完全合规的检索。这类事故的调查难度极高，因为链路上没有任何一个环节报错。</div>
+
+<div class="intuition-box">
+<p>分片夹带的致命之处不在于它会发生，而在于它发生时所有监控都是绿的——你不是被攻破了，你是被自己的切分器放行的。</p>
+</div>
+
+<h3>③推理泄密：合规的零件拼出违规的成品</h3>
+
+<p>用户不会直接问"并购金额是多少"，他会问三个看起来无害的问题：这个季度的现金流变动、新增的子公司名单、某项支出的科目归类。每一个问题命中的片段都是低密级、都合规放行，但模型把它们拼在一起，推出了一个本该保密的结论。</p>
+
+<p>这类泄密的特殊性在于：<strong>它不是任何单一片段的问题，而是组合的问题</strong>。逐片鉴权在这里失效，因为每一片单独看都是干净的。所以它必须由生成后的合规校验来拦——那是第五节的内容。</p>
+
+<h3>⑤租户越界：低概率高代价</h3>
+
+<p>多租户 RAG 常见三种隔离方式，隔离强度和成本成反比。这里的选择直接决定了越界事故的概率下限。</p>
+<table>
+<tr><th>隔离方式</th><th>做法</th><th>隔离强度</th><th>成本</th><th>主要风险</th></tr>
+<tr><td><strong>共享索引 + 租户字段过滤</strong></td><td>所有租户数据同一索引，靠 tenant_id 过滤</td><td>弱</td><td>最低</td><td>一次漏传 tenant_id 就是跨租户泄露</td></tr>
+<tr><td><strong>共享实例 + 独立命名空间</strong></td><td>每租户一个 namespace / collection</td><td>中</td><td>中</td><td>命名空间路由出错、管理接口越权</td></tr>
+<tr><td><strong>独立实例</strong></td><td>每租户独立部署向量库</td><td>强</td><td>最高</td><td>成本与运维复杂度随租户数线性增长</td></tr>
+</table>
+
+<p>大多数团队最终落在中间那档。关键在于 <span class="term">tenant_id 不可绕过</span>——租户标识必须由服务端从鉴权凭证里提取并强制注入，绝不能是调用方传进来的一个可选参数。凡是"可选参数"，就一定有某条代码路径会漏传它。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、防线一：分片按最小权限切割</h2>
+
+<p>第一道防线解决的是①分片夹带。核心规则只有一条：<strong>单个分片内部的权限等级必须完全一致</strong>。做不到一致，就在密级发生变化的地方强制切开。</p>
+
+<div class="arch-diagram">
+权限感知切分 vs 长度优先切分
+
+  【长度优先】按 800 字符硬切
+  ┌──────────────────┬──────────────────┬──────────────────┐
+  │ 内部  内部  内部  │ 内部 ▓机密▓ 内部  │ 内部  内部  内部  │
+  └──────────────────┴──────────────────┴──────────────────┘
+                        ↑ 这一片继承"内部"，机密内容被降级放行
+
+  【权限优先】先按密级分段，再在段内按长度切
+  ┌──────────┬───────┬────────┬──────────┬──────────┐
+  │   内部    │▓机密▓ │  内部   │   内部    │   内部    │
+  └──────────┴───────┴────────┴──────────┴──────────┘
+       ↑ 密级切换处强制断开，每片只有一个密级
+       ↑ 代价：分片数变多、粒度变碎、可能切断语义
+</div>
+
+<p>实现路径通常是两步：先做<strong>密级识别</strong>，把文档标注成若干个密级连续区间；再在每个区间内部按常规策略（长度、语义、结构）切分。密级识别可以来自文档本身的结构化标记（很多规范的企业文档会用样式或标签标出密级段落）、规则匹配（金额、身份证、合同编号等模式）、或者分类模型。三种手段的可靠性依次递减，实践中要叠加使用。</p>
+
+<h3>三种密级识别手段</h3>
+<table>
+<tr><th>手段</th><th>依据</th><th>准确率</th><th>覆盖率</th><th>适用</th></tr>
+<tr><td><strong>结构化标记</strong></td><td>文档内的密级样式/标签/水印段</td><td>高</td><td>低（依赖文档规范）</td><td>有严格文档规范的组织</td></tr>
+<tr><td><strong>规则匹配</strong></td><td>正则识别金额、证件号、合同编号等</td><td>中（易误报）</td><td>中</td><td>结构化敏感信息</td></tr>
+<tr><td><strong>分类模型</strong></td><td>段落级密级分类器</td><td>中高（依赖训练数据）</td><td>高</td><td>大量非规范历史文档</td></tr>
+<tr><td><strong>人工复核</strong></td><td>抽样或全量人工确认</td><td>最高</td><td>取决于投入</td><td>核心机密文档必须走这条</td></tr>
+</table>
+
+<p>切分变细会带来副作用，必须正视：分片数量上升、单片语义完整性下降、检索召回质量可能受影响。缓解办法是<span class="term">父子分片</span>——子片用于向量检索保证精度，命中后再取回父片提供上下文，但<strong>父片的返回同样要过一遍鉴权</strong>。这里是个高危陷阱：很多实现里子片鉴权做了，父片扩展却直接放行，等于开了一扇后门。</p>
+
+<div class="intuition-box">
+<p>切分策略在权限体系里不是检索优化问题，是安全问题。切分器决定了权限标签的最小生效单位，它切错了，后面所有防线都在保护一个错误的边界。</p>
+</div>
+
+<h3>分片的权限元数据该带什么</h3>
+<table>
+<tr><th>字段</th><th>作用</th><th>注意事项</th></tr>
+<tr><td><code>tenant_id</code></td><td>租户隔离的硬边界</td><td>服务端强制注入，不接受调用方传入</td></tr>
+<tr><td><code>classification</code></td><td>密级（公开/内部/秘密/机密）</td><td>取分片内部的<strong>最高</strong>密级，不是文档密级</td></tr>
+<tr><td><code>scope</code></td><td>可见范围（部门/项目组/角色列表）</td><td>多值，需支持集合运算</td></tr>
+<tr><td><code>valid_from</code> / <code>valid_to</code></td><td>时效窗口</td><td>支撑临时授权与自动失效</td></tr>
+<tr><td><code>source_doc_id</code> + <code>offset</code></td><td>溯源定位</td><td>出事后能精确定位到原文位置</td></tr>
+<tr><td><code>policy_version</code></td><td>标记依据的策略版本</td><td>权限变更时用于识别陈旧分片</td></tr>
+</table>
+
+<p>最后一个字段容易被忽略但很关键：它让"哪些分片的权限标记已经过期"变成一个可以直接查询的问题，而不是靠全量重扫来发现。</p>
+</div>
+
+<div class="section" id="s4">
+<h2>四、防线二：独立权限引擎逐片鉴权</h2>
+
+<p>第二道防线解决②权限放大和⑤租户越界，同时兜住第一道防线的漏网之鱼。核心主张是：<strong>不依赖向量库的原生过滤做最终鉴权</strong>，而是在检索结果返回之后、进入 prompt 之前，由一个独立的权限引擎对每一个片段逐条判定。</p>
+
+<p>为什么不能只靠向量库？三个理由。第一，如第一节所述，它表达不了组合式权限。第二，它是"尽力而为"的——过滤条件构造错误时它不会报错，只会返回一个错误的结果集，失败是静默的。第三，权限逻辑散落在各处的查询语句里，无法审计、无法统一变更、无法回归测试。</p>
+
+<div class="arch-diagram">
+两阶段检索：向量库负责召回，权限引擎负责判定
+
+  用户 query + 身份凭证
+        │
+        ▼
+  ┌─────────────────┐
+  │  检索代理层       │ ← tenant_id 在这里强制注入，不可绕过
+  └────────┬────────┘
+           │ ① 粗筛：带上能表达的简单条件（tenant/密级上限）
+           ▼                                    目的是缩小范围，
+  ┌─────────────────┐                          不是最终鉴权
+  │   向量库检索      │  召回 top-50（放大召回量）
+  └────────┬────────┘
+           │
+           ▼ ② 逐片判定
+  ┌──────────────────────────────────────────┐
+  │            独立权限引擎（PDP）             │
+  │  输入：用户属性 + 片段元数据 + 策略集       │
+  │  逐条输出：允许 / 拒绝 / 脱敏后允许         │
+  │  每条判定写入审计日志（含命中的策略 ID）    │
+  └────────┬─────────────────────────────────┘
+           │
+           ▼ ③ 过滤后剩余 top-8 进入拼接
+      [ 上下文组装 ] ──→ [ 生成 ]
+</div>
+
+<p>这里有个实现细节值得注意：<strong>粗筛阶段要放大召回量</strong>。因为鉴权会砍掉一部分结果，如果只召回 top-8 再鉴权，很可能剩下两三条，回答质量塌方。常见做法是召回 top-50 甚至更多，鉴权后再取前 8 条。这笔额外的召回成本是权限体系必须付的。</p>
+
+<h3>权限引擎的职责边界</h3>
+<table>
+<tr><th>组件</th><th>职责</th><th>不该做什么</th></tr>
+<tr><td><strong>检索代理层</strong></td><td>注入租户标识、构造粗筛条件、编排调用</td><td>不做最终鉴权判定</td></tr>
+<tr><td><strong>向量库</strong></td><td>语义召回 + 简单条件粗筛</td><td>不承载复杂权限逻辑</td></tr>
+<tr><td><strong>权限引擎（PDP）</strong></td><td>依据策略集对每个片段独立判定</td><td>不负责召回，也不改写内容</td></tr>
+<tr><td><strong>策略管理</strong></td><td>策略的编写、版本、灰度、回滚</td><td>不在业务代码里硬编码规则</td></tr>
+<tr><td><strong>审计日志</strong></td><td>记录每次判定的输入、结果、命中策略</td><td>不记录敏感内容原文，只记标识</td></tr>
+</table>
+
+<p>把权限判定收敛到一个独立组件，最大的价值是<strong>它变成了可测试、可审计、可统一变更的一个点</strong>。策略改了，跑一遍回归用例就知道影响面；出了事，查审计日志就知道是哪条策略放行的。散落在各处的过滤表达式做不到这两件事中的任何一件。</p>
+
+<div class="intuition-box">
+<p>把鉴权交给向量库，等于把门锁交给筛子。筛子的职责是分拣，门锁的职责是拒绝——它们是两个东西，不该合并。</p>
+</div>
+
+<h3>如果向量库连粗筛都做不了</h3>
+
+<p>这是很现实的情况：底层向量库不支持复杂过滤，而且改不了源码。答案是<strong>把权限逻辑整体上移到检索代理层</strong>——向量库退化成纯语义检索引擎，只负责"找相似的"，所有权限判定在代理层完成。代价是召回量要开得更大（因为完全没有前置过滤），以及代理层的计算与内存压力上升。</p>
+
+<div class="formula">
+所需召回量 ≈ 目标条数 ÷ 该用户的平均可见比例 × 安全系数
+</div>
+
+<p>举例来说，如果某类用户的可见片段只占全库的两成，要稳定拿到 8 条可用结果，粗召回量至少要开到 <code>8 ÷ 0.2 × 1.5 = 60</code> 条。这个比例可以从审计日志里的历史通过率统计出来，并按用户角色分别设定，不必一刀切。</p>
+
+<div class="highlight"><strong>示例场景：</strong>某企业知识库共 12 万个分片，一线客服角色的可见比例约为 18%。初版实现直接召回 top-10 再鉴权，实测平均只剩 1.8 条通过，回答频繁出现"资料不足"。改为召回 top-80 后，鉴权通过条数稳定在 8 条以上，单次检索延迟增加约 40 毫秒——用可接受的延迟换回了可用性，同时权限判定一次没有放松。</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、防线三：生成前后两次合规校验</h2>
+
+<p>第三道防线解决③推理泄密，同时作为前两道防线的最后兜底。它分成两次：<strong>生成前校验拼好的上下文，生成后校验产出的答案</strong>。两次的检查对象和手段完全不同。</p>
+
+<h3>两次校验的分工</h3>
+<table>
+<tr><th>对比项</th><th>生成前校验（Pre-check）</th><th>生成后校验（Post-check）</th></tr>
+<tr><td>检查对象</td><td>拼装完成的 prompt 上下文</td><td>模型生成的答案文本</td></tr>
+<tr><td>主要目标</td><td>确认没有超权限片段混入</td><td>确认答案没有泄露超权限信息</td></tr>
+<tr><td>能拦的失效类型</td><td>①分片夹带残留、②权限放大、⑤租户越界</td><td>③推理泄密、模型自由发挥引入的内容</td></tr>
+<tr><td>主要手段</td><td>片段 ID 与鉴权结果比对、敏感模式扫描</td><td>实体级回查、密级分类、与授权片段的一致性比对</td></tr>
+<tr><td>处置方式</td><td>剔除可疑片段后继续，或直接拒绝</td><td>自动脱敏、替换兜底话术、转人工</td></tr>
+<tr><td>成本</td><td>低（规则为主）</td><td>高（可能需要模型参与判定）</td></tr>
+</table>
+
+<p>生成前校验的关键动作是<strong>对账</strong>：把即将进入 prompt 的每个片段 ID，与权限引擎刚才的判定结果逐一核对。这听起来冗余——刚判定完为什么还要再核一遍？因为判定和拼接之间往往隔着重排、去重、摘要、缓存等若干步骤，任何一步的实现瑕疵都可能让一个被拒绝的片段重新混进来。这是一次廉价的完整性检查，值得做。</p>
+
+<div class="arch-diagram">
+生成前后两次校验的处置分支：
+
+  [权限引擎输出：允许片段 ID 集合 A]
+                │
+                ▼
+  [重排/去重/摘要/缓存] ──→ 拼装上下文，实际片段 ID 集合 B
+                │
+                ▼
+        ┌───────────────┐
+        │ Pre-check：    │   B ⊆ A ?
+        │ 集合对账 + 扫描 │
+        └───────┬───────┘
+        通过 ────┴──── 不通过 → 剔除差集并告警（此处告警必查，说明链路有 bug）
+          │
+          ▼
+       [模型生成]
+          │
+          ▼
+        ┌────────────────────────────┐
+        │ Post-check：                │
+        │  ├ 答案中的实体是否可回溯到  │
+        │  │  授权片段？（无源即可疑） │
+        │  ├ 答案整体密级分类是否超限？│
+        │  └ 是否命中禁述清单？        │
+        └───────┬────────────────────┘
+                │
+     ┌──────────┼──────────┬─────────────┐
+     ▼          ▼          ▼             ▼
+   通过      局部脱敏    整体替换      转人工
+  直接返回   打码后返回  兜底话术      并留痕
+</div>
+
+<p>生成后校验里最有效的一招是 <span class="term">断言溯源</span>：答案里的每一个具体断言（数字、人名、机构名、结论），都应该能在授权片段里找到出处。找不到出处的断言有两种可能——模型幻觉，或者模型从多个片段推理得出。后者正是推理泄密，必须拦下。</p>
+
+<div class="intuition-box">
+<p>逐片鉴权保证"每块砖都合规"，生成后校验保证"砌出来的墙也合规"。推理泄密就发生在这两者之间的缝里。</p>
+</div>
+
+<h3>处置动作的三档强度</h3>
+<table>
+<tr><th>强度</th><th>触发条件</th><th>动作</th><th>用户感知</th></tr>
+<tr><td><strong>脱敏</strong></td><td>局部字段超权限（金额、姓名、编号）</td><td>替换为掩码或范围描述</td><td>能得到大部分答案，敏感处显示为已隐藏</td></tr>
+<tr><td><strong>兜底话术</strong></td><td>答案整体超权限或无法安全脱敏</td><td>替换为"该问题涉及的内容超出您的权限范围"</td><td>拿不到答案，但知道原因</td></tr>
+<tr><td><strong>转人工 + 冻结</strong></td><td>短时间内多次触发拦截，疑似探测</td><td>拒绝并触发安全告警、临时限制该会话</td><td>会话被中断</td></tr>
+</table>
+
+<p>兜底话术的措辞需要斟酌。"超出您的权限范围"本身就泄露了一个信息：这个东西存在。在高敏场景下更安全的表述是统一的"未检索到相关内容"，让存在性也不可推断。代价是用户体验变差，也可能引发无谓的重复尝试——这是安全与体验的取舍，由业务风险等级决定。</p>
+</div>
+
+<div class="section" id="s6">
+<h2>六、异常落地：降级、变更与审计</h2>
+
+<p>三道防线是正常路径。真正决定系统能不能上生产的，是异常路径怎么走。</p>
+
+<h3>权限变更不同步（失效场景④）</h3>
+
+<p>员工调岗、项目结束、临时授权到期、文档密级上调——这些事件发生的一瞬间，向量库里成千上万个分片的权限标记还是旧的。全量重建索引可能要几小时，这段窗口期就是暴露面。</p>
+
+<p>推荐的处置组合是三步：<strong>异步刷新分片标记 + 生效期间暂停相关检索 + 权限引擎实时查询最新策略</strong>。第三点尤其重要——分片元数据可以是异步的，但权限引擎的判定必须基于<strong>实时的</strong>用户属性和策略集。这样即使分片标记还没刷完，鉴权也不会放行。</p>
+
+<h3>四类变更的处置策略</h3>
+<table>
+<tr><th>变更类型</th><th>紧急程度</th><th>处置方式</th><th>窗口期风险</th></tr>
+<tr><td>用户离职 / 权限收回</td><td>最高</td><td>凭证立即失效，权限引擎实时拒绝</td><td>近乎为零（不依赖分片刷新）</td></tr>
+<tr><td>文档密级上调</td><td>高</td><td>先在权限引擎加一条临时拒绝策略，再异步重标</td><td>低（临时策略先兜住）</td></tr>
+<tr><td>用户调岗 / 权限变更</td><td>中</td><td>属性实时更新，分片标记异步刷新</td><td>低</td></tr>
+<tr><td>文档密级下调 / 扩大可见</td><td>低</td><td>纯异步刷新即可</td><td>无（不放大权限，只是延迟生效）</td></tr>
+</table>
+
+<p>注意最后一行的思路：<strong>收紧权限要立刻生效，放宽权限可以慢慢来</strong>。这个不对称原则能把绝大部分变更从"紧急"降级成"常规"。</p>
+
+<div class="intuition-box">
+<p>分片上的权限标记是缓存，权限引擎里的策略才是真相。缓存可以脏，判定不能脏。</p>
+</div>
+
+<h3>权限引擎故障时怎么办</h3>
+
+<p>这是整个体系里最需要明确态度的一点：<strong>权限引擎不可用时，自动降级为最低权限模式——只返回公开内容，绝不放大权限</strong>。宁可让所有人都查不到东西，也不能因为鉴权组件挂了就放行。</p>
+
+<div class="arch-diagram">
+故障降级的正确方向与错误方向：
+
+  权限引擎不可用
+        │
+        ├──── ❌ 错误：跳过鉴权，按原召回结果返回
+        │           "反正只是挂了一会儿" → 一次全量越权泄露
+        │
+        ├──── ❌ 错误：沿用最后一次成功的判定缓存
+        │           缓存里可能有已被收回的权限 → 静默越权
+        │
+        └──── ✅ 正确：降级为最低权限模式
+                    只返回 classification = 公开 的片段
+                    同时向用户明示"当前处于受限模式"
+                    并触发最高级别告警
+
+  原则：任何不确定的情况下，默认拒绝（fail-closed）。
+</div>
+
+<p>这就是安全领域的 <span class="term">fail-closed</span> 原则：组件失效时系统应当进入拒绝状态而非放行状态。它的代价是可用性——鉴权挂了，服务基本等于不可用。所以权限引擎本身必须做高可用，它是整条链路上最不能省成本的一环。</p>
+
+<h3>全程留痕与审计</h3>
+<table>
+<tr><th>审计对象</th><th>记录内容</th><th>用途</th><th>保留要求</th></tr>
+<tr><td>每次检索</td><td>用户身份、query 摘要、租户、召回数、通过数</td><td>还原访问行为</td><td>长期</td></tr>
+<tr><td>每条鉴权判定</td><td>片段 ID、判定结果、命中的策略 ID 与版本</td><td>出事后定位是哪条策略放行的</td><td>长期</td></tr>
+<tr><td>每次拦截</td><td>拦截层级、触发规则、处置动作</td><td>识别探测行为、优化规则</td><td>长期</td></tr>
+<tr><td>权限变更</td><td>变更前后、操作人、生效时间</td><td>合规审计</td><td>按监管要求</td></tr>
+<tr><td>降级事件</td><td>降级原因、持续时长、影响范围</td><td>故障复盘</td><td>长期</td></tr>
+</table>
+
+<p>审计日志本身也是敏感数据。记片段 ID 和策略 ID，不要记片段原文；记 query 的摘要或哈希，不要记完整问句——否则审计系统会变成第二个泄密面。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>切分时在<strong>密级切换处强制断开</strong>，保证单片内权限等级一致</li>
+<li>分片密级取片内<strong>最高</strong>密级，而不是继承文档密级</li>
+<li>把鉴权收敛到一个<strong>独立权限引擎</strong>，可测试、可审计、可统一变更</li>
+<li>粗筛放大召回量，按角色的历史通过率倒推需要召回多少条</li>
+<li>父子分片扩展时，<strong>父片同样要过鉴权</strong></li>
+<li>收紧权限立即生效，放宽权限允许异步</li>
+<li>鉴权组件故障时 fail-closed，降级到只出公开内容</li>
+<li>每条判定记录命中的策略 ID 与版本，出事能倒查</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>把整篇文档的密级直接继承给所有分片</li>
+<li>依赖向量库的元数据过滤做<strong>最终</strong>鉴权判定</li>
+<li>把 tenant_id 设计成调用方传入的可选参数</li>
+<li>只靠 prompt 里一句"不得泄露"约束模型——它根本不知道边界在哪</li>
+<li>鉴权失败时沿用缓存结果或直接放行</li>
+<li>召回 top-8 再鉴权，然后抱怨"资料不足"</li>
+<li>审计日志里记录片段原文和完整用户问句</li>
+<li>把权限逻辑硬编码进业务代码，改一次要发一次版</li>
+</ul>
+</div>
+</div>
+
+<div class="highlight"><strong>示例场景：</strong>某多租户知识库在一次策略调整后做全链路回归，用 300 条构造的越权探测用例跑了一遍：其中 47 条命中分片夹带（第一道防线拦下），11 条命中跨租户召回（第二道防线拦下），另有 6 条属于多片段拼接推理，前两道防线全部放行，最终由生成后的断言溯源校验拦住。这组数字说明一件事——三道防线拦的确实不是同一批风险，去掉任何一道，都会有一整类越权原样漏出去。</div>
+
+<h3>收尾：权限管控是闭环，不是标签</h3>
+
+<p>回到最初那个方案。它错的不是每一步，而是它把权限当成了一个可以"贴上去"的属性。真实情况是，权限在每一个环节都会被重新演绎一次：切分时它被继承（可能错误地继承）、检索时它被翻译成过滤条件（可能翻译不全）、拼接时它被隐式假设（假设前面已经判过了）、生成时它被完全遗忘（模型不知道有这回事）。</p>
+
+<p>所以能成立的方案只能是全链路的：每个环节都独立判一次，每个环节都假设上游可能出错，任何不确定都往拒绝的方向倒。这套思路放在 RAG 更广的安全议题下看只是其中一条纵深，其余的威胁面——知识库投毒、引用来源验证、PII 防护、上下文溢出——见 <a href="../security/rag_security.html">《SEC02 · RAG 安全》</a>，那张卡给的是全景和基本盘，本文给的是权限这一条线上的完整实现。</p>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details><summary>给文档打权限标签、把用户身份当过滤条件传给向量库，这套方案错在哪？</summary><div class="answer">错在它假设权限的最小单位是文档，而 RAG 实际流转的最小单位是分片。一篇整体标为"内部"的文档里可能夹着几段机密内容，切分后这些分片继承的是文档级标签，过滤器会合规放行整片，模型照着原文复述——从访问日志看这是一次完全合规的检索，没有任何环节报错。此外向量库的元数据过滤本质是简单的等值和范围判断，承载不了部门、职级、项目组、临时授权、权限继承、互斥规则这些组合式条件。而 prompt 里那句"不得泄露"更是无效的，因为模型看到的只是文本，它根本不知道哪些内容超出了当前用户的权限边界。</div></details>
+
+<details><summary>分片夹带具体是怎么发生的？为什么说它最难发现？</summary><div class="answer">切分器按固定长度或段落切分时，它不知道文档中间某句话的密级更高。切完之后这个分片继承整篇文档的密级标签，高密内容被静默降级。难发现的原因是整条链路上没有任何一个环节会报错：过滤器认为标签合规所以放行，模型正常生成，接口返回 200，审计日志里这是一次正常检索。你不是被攻破的，是被自己的切分器放行的。防御办法是权限感知切分——先做密级识别把文档标注成若干密级连续区间，再在区间内部按常规策略切分，并且分片的密级取片内最高密级而非继承文档密级。</div></details>
+
+<details><summary>推理泄密怎么拦？逐片鉴权对它为什么无效？</summary><div class="answer">逐片鉴权无效是因为推理泄密不是任何单一片段的问题，而是组合的问题。用户不直接问敏感结论，而是拆成几个看起来无害的问题，每个问题命中的片段都是低密级、都合规放行，但模型把它们拼起来推出了本该保密的结论。每一块砖都合规，砌出来的墙不合规。所以它只能由生成后的校验来拦，最有效的手段是断言溯源：答案里每一个具体断言——数字、人名、机构名、结论——都应该能在授权片段里找到出处，找不到出处的断言要么是幻觉要么是跨片段推理，两种都该拦。此外可以对答案整体做一次密级分类，判断输出的信息量是否超出了用户权限对应的档位。</div></details>
+
+<details><summary>底层向量库不支持复杂过滤、又改不了源码，怎么办？</summary><div class="answer">把权限逻辑整体上移到检索代理层，让向量库退化成纯语义检索引擎，只负责"找相似的"，所有权限判定由代理层的独立权限引擎完成。代价是没有前置过滤，粗召回量必须开得更大，否则鉴权砍完剩不下几条。召回量可以按公式估算：目标条数除以该角色的平均可见比例，再乘一个安全系数。这个可见比例可以从审计日志的历史通过率统计出来，并按角色分别设定。另外要接受代理层的计算与内存压力上升，以及单次检索延迟的小幅增加——这是权限体系必须付的成本，不能用它来论证"所以还是靠向量库过滤吧"。</div></details>
+
+<details><summary>权限变更之后，向量库里成千上万个分片的标记来不及刷新，窗口期怎么兜？</summary><div class="answer">关键是把分片元数据当成缓存、把权限引擎里的策略当成真相。分片标记可以异步刷新，但权限引擎的判定必须基于实时的用户属性和最新策略集，这样即使标记还是旧的，鉴权也不会放行。在此基础上按变更类型分级处置：用户离职这类权限收回，凭证立即失效、引擎实时拒绝，窗口期风险近乎为零；文档密级上调，先在引擎里加一条临时拒绝策略兜住，再异步重标；用户调岗，属性实时更新、标记异步刷新。而权限放宽和密级下调可以纯异步，因为它只是延迟生效、不会放大权限。核心是这个不对称原则：收紧立即生效，放宽允许慢慢来。</div></details>
+
+<details><summary>权限引擎自己挂了怎么办？能不能临时放行保可用性？</summary><div class="answer">不能，必须自动降级为最低权限模式，只返回公开内容。跳过鉴权直接返回原召回结果，等于一次全量越权泄露；沿用最后一次成功的判定缓存同样危险，因为缓存里可能包含已被收回的权限，会造成静默越权。正确做法是 fail-closed——组件失效时系统进入拒绝状态而非放行状态，同时向用户明示当前处于受限模式，并触发最高级别告警。代价是鉴权挂了服务基本等于不可用，所以权限引擎本身必须做高可用，它是整条链路上最不该省成本的一环。这个取舍没有中间地带：可用性可以事后补，泄露出去的内容收不回来。</div></details>
+
+<details><summary>三道防线是不是有冗余？能不能只做其中最强的一道？</summary><div class="answer">不能，因为三道防线拦的不是同一批风险。第一道防线在切分环节保证单片内权限等级一致，它拦的是分片夹带，这类风险在后两道防线看来完全"合规"，因为标签确实是对的（只是标错了）。第二道防线逐片鉴权拦的是权限放大和跨租户越界，它假设标签是对的，判定用户能不能看这一片。第三道防线拦的是推理泄密，前两道对它完全无效，因为参与推理的每一片都通过了鉴权。去掉任何一道，都会有一整类越权原样漏出去。此外后两道防线还互为兜底：生成前的集合对账能发现"被拒绝的片段又混进上下文"这类链路 bug，这类告警一旦出现必须查，说明重排、缓存或摘要环节有实现瑕疵。</div></details>
+
+<details><summary>本文和《SEC02 · RAG 安全》怎么分工？</summary><div class="answer">SEC02 讲的是 RAG 的安全全景，覆盖知识库投毒、引用来源验证、PII 防护、上下文窗口溢出等多条威胁线，其中"权限隔离与文档分级"只是其中一节，给的是这件事的基本盘和它在整体威胁面中的位置。本文把多租户细粒度权限这一条线单独展开成从分片、检索到生成的全链路闭环，重点不在"要做权限隔离"这个结论，而在每个环节具体会怎么失效、每道防线具体怎么建、异常路径怎么兜。想了解 RAG 整体面临哪些安全威胁读 SEC02，要落地一套企业级权限体系读本文。两者是全景图与单条纵深的关系。</div></details>
+
+<details><summary>多租户隔离用共享索引加租户字段过滤够吗？</summary><div class="answer">这是三种隔离方式里最弱也最便宜的一档，风险在于只要有一条代码路径漏传了 tenant_id，就是跨租户泄露，而这类事故一旦发生就是重大事故。如果要用这一档，最关键的约束是租户标识不可绕过：tenant_id 必须由服务端从鉴权凭证里提取并强制注入，绝不能是调用方传入的可选参数——凡是可选参数，一定会有某条路径漏传它。更稳妥的是中间那档，每个租户一个命名空间或独立集合，隔离强度和成本都适中，多数团队最终落在这里，需要额外注意的是命名空间路由的正确性和管理接口的越权。独立实例隔离最强但成本随租户数线性增长，通常只给最高敏感等级的客户使用。</div></details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

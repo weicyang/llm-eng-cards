@@ -6,7 +6,7 @@
 
 给已经会调模型 API 的工程师：先懂它为什么这样算，再把它做成能力，最后按延迟、成本、安全把系统撑住。
 
-> 这不是从零教程。公开仓按一条主干阅读：原理 → 应用 → 生产。
+> 面试时先走主干 36，再按追问进三个板块的完整目录。
 
 ## 三层路径
 
@@ -18,7 +18,7 @@
 生产  上线后哪个旋钮先动、什么情况关掉
 ```
 
-当前公开的是 **36 张主干**，完整目录见 [LEARNING_PATH.md](./LEARNING_PATH.md)。不在主干上的卡会进 `extended/`，不默认推荐先读。
+当前公开 **基础原理 / 应用能力 / 生产工程** 共 291 张卡，另有 [面试主干 36](./LEARNING_PATH.md)。不含前沿实践、面试速成页和源码深潜。
 
 ## 怎么读
 
@@ -30,10 +30,24 @@
 ## 仓库结构
 
 ```
-cards/fundamentals/     基础原理
-cards/applications/    应用能力
-cards/production/      生产工程
-extended/              不在主干、需要再清洗的卡
+index.html             面试主干 36 + 三个板块完整目录
+catalog.js             完整目录数据
+LEARNING_PATH.md       主干编号与链接
+cards/neural-networks/ 神经网络
+cards/transformer/     Transformer
+cards/llm/             大模型
+cards/training/        训练
+cards/reinforcement/   强化学习
+cards/rag/             RAG
+cards/agent/           Agent
+cards/memory/          记忆
+cards/data/            数据
+cards/database/        向量库
+cards/engineering/     工程
+cards/architecture/    架构
+cards/deploy/          部署与推理
+cards/security/        安全
+cards/audit/           审计与治理
 notebooks/             手撕类最小可运行片段
 ```
 

@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A53 · A2A 流式返回与多 Agent 协作</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么需要流式返回</a>
+<a href="#s2">二、流式返回的5条消息模式</a>
+<a href="#s3">三、Task 状态机</a>
+<a href="#s4">四、三Agent协作全流程</a>
+<a href="#s5">五、message/send vs message/stream 选择决策</a>
+<a href="#s6">六、可扩展性与生产实践</a>
+<a href="#s7">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>A53 · A2A 流式返回与多 Agent 协作</h1>
+<p class="subtitle">流式返回概念 → 5条消息模式 → 三Agent协作流程 → 调度Agent决策 → 可扩展性</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>流式返回的本质是把"等全做完再上菜"改成"边做边上"：被调用 Agent 先说"收到了"，再一段段推送结果，最后说"完成了"——5 条消息走完一个完整生命周期。</p>
+</div>
+
+<!-- ========== 1. 为什么需要流式返回 ========== -->
+<div class="section">
+<h2 id="s1">一、为什么需要流式返回</h2>
+
+<p>A52 讲的 <code>message/send</code> 同步调用很美好：调度 Agent 发出请求，被调用 Agent 一次性返回完整 Task。但这只适合短任务——查个天气几百毫秒到一两秒，等一等没感觉。现实中很多任务是长耗时的：汇总多数据源的报告要两三分钟，深度分析甚至更久。如果仍然同步等待，调用方只能干瞪眼，HTTP 连接还容易在长等待中超时断开。</p>
+
+<p><span class="term">流式返回</span>（Streaming，被调用方把结果拆成多条消息、边执行边推送给调用方的返回方式）就是为解决这个问题：调用方在第一时间收到"任务已提交"的确认，随后结果逐段到达。传输层通常基于 <span class="term">SSE</span>（Server-Sent Events，基于 HTTP 的服务器单向推送通道）实现，一条连接上服务器可以持续发数据，前端可以逐段渲染。</p>
+
+<table>
+<tr><th>维度</th><th>非流式（message/send）</th><th>流式（message/stream）</th></tr>
+<tr><td>首响应延迟</td><td>等全部执行完</td><td>毫秒级收到第一条消息</td></tr>
+<tr><td>用户体验</td><td>长时间空白等待</td><td>内容逐段出现，像打字机</td></tr>
+<tr><td>超时风险</td><td>长任务高</td><td>低，连接持续有数据</td></tr>
+<tr><td>实现复杂度</td><td>低，一问一答</td><td>中，要处理消息流和状态机</td></tr>
+<tr><td>适用任务</td><td>天气、汇率等秒级查询</td><td>报告、分析、生成等分钟级任务</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>非流式是"后厨全做完一起上菜"，流式是"火锅上一盘涮一盘"——总烹饪时间没变，但客人从第一盘就开始动筷子了。</p>
+</div>
+
+<p>是否支持流式不由调用方决定，而是被调用方在 Agent Card 的 <code>capabilities.streaming</code> 字段里声明。调度 Agent 注册时读到卡片，就会自动选择合适的调用方式——这是 A52"自我介绍"机制的自然延续。</p>
+
+</div>
+
+<!-- ========== 2. 流式返回的5条消息模式 ========== -->
+<div class="section">
+<h2 id="s2">二、流式返回的5条消息模式</h2>
+
+<p>当 Agent Card 声明 <code>streaming: true</code> 时，调用方使用 <code>message/stream</code> 方法。以机票 Agent 返回"航班信息"为例，一次完整的流式响应通常由 5 条消息组成：</p>
+
+<div class="arch-diagram">
+A2A Client（调度 Agent）              A2A Server（机票 Agent）
+      │                                     │
+      │  message/stream 请求                 │
+      ├────────────────────────────────────→│
+      │                                     │
+      │  ① status-update  state:"submitted" │ 创建 Task
+      │←────────────────────────────────────┤
+      │  ② artifact-update Part1:"你要查询的机票" │
+      │←────────────────────────────────────┤
+      │  ③ artifact-update Part2:"如下"       │
+      │←────────────────────────────────────┤
+      │  ④ artifact-update Part3:具体航班信息  │
+      │     lastChunk: true                 │ Artifact 交付完毕
+      │←────────────────────────────────────┤
+      │  ⑤ status-update  state:"completed" │ 任务完成，流结束
+      │←────────────────────────────────────┤
+</div>
+
+<table>
+<tr><th>消息序号</th><th>kind</th><th>内容</th><th>说明</th></tr>
+<tr><td>①</td><td><span class="term">status-update</span></td><td>state: "submitted"</td><td>任务已创建并提交</td></tr>
+<tr><td>②</td><td><span class="term">artifact-update</span></td><td>Part 1: "你要查询的机票"</td><td>Artifact 第一部分</td></tr>
+<tr><td>③</td><td>artifact-update</td><td>Part 2: "如下"</td><td>Artifact 第二部分</td></tr>
+<tr><td>④</td><td>artifact-update</td><td>Part 3: 具体航班信息<br><span class="term">lastChunk</span>: true</td><td>Artifact 最后部分</td></tr>
+<tr><td>⑤</td><td>status-update</td><td>state: "completed"</td><td>任务完成，流才真正结束</td></tr>
+</table>
+
+<div class="highlight">流式返回的一般模式：先提交任务（submitted）→ 逐步更新 Artifact（多次 artifact-update）→ 最后完成任务（completed）。<code>lastChunk: true</code> 只表示 Artifact 信息全部返回，不代表整个流式结束，还需要最后一条 status-update 标记完成。这是写解析逻辑时最容易踩的坑。</div>
+
+<div class="intuition-box">
+<p>记住"叮 → 叮叮叮 → 叮"的节奏：第一声叮是"收到"，中间几声是"正在写"，最后一声是"搞定"。看到 lastChunk 只代表"写完了"，不代表"下班了"。</p>
+</div>
+
+</div>
+
+<!-- ========== 3. Task 状态机 ========== -->
+<div class="section">
+<h2 id="s3">三、Task 状态机</h2>
+
+<p>流式返回中的 status-update 消息携带 Task 的状态。A2A 为 <span class="term">Task 生命周期</span>（Task 从创建到终结所经历的状态序列）定义了完整的状态机，视频重点讲了主路径上的 6 个状态：</p>
+
+<div class="arch-diagram">
+        submitted（已提交）
+              │
+              ↓
+        working（工作中）      ← 可选，长耗时任务上报进度
+              │
+              ↓
+   input-required（需要用户输入） ← 可选，补充输入后可回到 working
+              │
+              ↓
+   ┌──────────┼──────────┐
+   ↓          ↓          ↓
+completed   failed    canceled
+（已完成）   （失败）    （取消）
+
+协议还定义了 rejected / auth-failed / unknown，
+共 9 个状态，覆盖各类异常分支。
+</div>
+
+<table>
+<tr><th>状态</th><th>含义</th><th>典型触发场景</th></tr>
+<tr><td>submitted</td><td>任务已创建，尚未开始执行</td><td>流式返回的第一条消息</td></tr>
+<tr><td>working</td><td>正在执行中</td><td>长耗时任务上报进度</td></tr>
+<tr><td>input-required</td><td>需要调用方补充信息</td><td>"你要订哪个舱位？"——用户回答后继续执行</td></tr>
+<tr><td>completed</td><td>成功完成</td><td>正常结束，Artifact 全部交付</td></tr>
+<tr><td>failed</td><td>执行失败</td><td>下游 API 报错、参数非法</td></tr>
+<tr><td>canceled</td><td>被取消</td><td>调用方主动终止任务</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>状态机是长任务的"进度条"：调用方不用猜被调用方在干什么，看状态就知道它在跑、卡住了还是干完了。input-required 让 Agent 之间可以多轮协商，而不是一锤子买卖。</p>
+</div>
+
+<p>值得单独说的是 <code>input-required</code>：它让 A2A 不只是"问一次答一次"，而是支持 Agent 之间多轮交互——机票 Agent 可以反问调度 Agent"你更倾向哪天出发"，得到答复后从 input-required 回到 working 继续执行。同步的 message/send 场景很少用到它，流式场景才是它的主场。</p>
+
+</div>
+
+<!-- ========== 4. 三Agent协作全流程 ========== -->
+<div class="section">
+<h2 id="s4">四、三Agent协作全流程</h2>
+
+<p>把 A52 的同步调用和本集的流式返回合起来，就是一个完整的三 Agent 协作场景："5月1日至3日从西雅图飞纽约，选天气好的那天出发"。</p>
+
+<div class="arch-diagram">
+用户提问 → 平台 → 调度 Agent
+      │
+      │ 任务拆解：需要先查天气，再查机票
+      ↓
+① 调度 Agent → 天气 Agent（A2A: message/send）
+   "5月1日至3日西雅图天气"
+      ↓
+   天气 Agent 返回：5/1晴天, 5/2小雨, 5/3大雨
+      ↓
+② 调度 Agent 中间决策：选5月1日（晴天）
+      ↓
+③ 调度 Agent → 机票 Agent（A2A: message/stream）
+   "5月1日西雅图飞纽约的航班"
+      ↓
+   机票 Agent 流式返回5条消息
+   （submitted → artifact-update ×3 → completed）
+      ↓
+调度 Agent 汇总天气+机票信息 → 平台 → 用户
+</div>
+
+<p>整个流程中，调度 Agent 做了 5 个关键决策，每一个都有明确依据：</p>
+
+<table>
+<tr><th>步骤</th><th>决策</th><th>依据</th></tr>
+<tr><td>任务拆解</td><td>需要先查天气再查机票</td><td>用户问题的逻辑关系（日期取决于天气）</td></tr>
+<tr><td>Agent 选择</td><td>调用天气 Agent + 机票 Agent</td><td>Agent Card 中的 skills 匹配</td></tr>
+<tr><td>子问题生成</td><td>"5月1-3日天气" / "5月1日机票"</td><td>原始问题的分解，比原问题更具体</td></tr>
+<tr><td>中间决策</td><td>选5月1日（晴天）</td><td>天气 Agent 的返回结果</td></tr>
+<tr><td>结果汇总</td><td>整合天气+机票信息</td><td>两个 Agent 的 Task 与 Artifact</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>注意"子问题 ≠ 原问题"这个细节：调度 Agent 传给专业 Agent 的不是用户原话，而是分解后、具体化的子任务。调度 Agent 的核心价值是翻译，不是转发。</p>
+</div>
+
+<p>这条链路里，天气 Agent 用同步 <code>message/send</code>（查询快，没必要流式），机票 Agent 用流式 <code>message/stream</code>（结果长，逐段返回）。同一个 A2A 协议、两种返回方式，在一条协作流里共存——调用方只需读 Agent Card 按需选择。</p>
+
+</div>
+
+<!-- ========== 5. send vs stream 选择决策 ========== -->
+<div class="section">
+<h2 id="s5">五、message/send vs message/stream 选择决策</h2>
+
+<div class="arch-diagram">
+需要调用某个 A2A Agent？
+      │
+      ↓
+读它的 Agent Card → capabilities.streaming
+      │
+      ├── streaming: false ──→ message/send
+      │                        （一问一答，简单可靠）
+      │
+      └── streaming: true ──→ 优先 message/stream
+                               │
+                               ├── 任务很快、不关心过程 → 用 send 也行
+                               └── 长耗时 / 需要进度展示 → 必须 stream
+
+注意：即使被调用方流式返回，
+调度 Agent 也可能等全部结果到齐再汇总给用户——
+用户侧"看不看得到流"，取决于调度 Agent 的策略。
+</div>
+
+<table>
+<tr><th>场景</th><th>推荐方式</th><th>原因</th></tr>
+<tr><td>天气、汇率等秒级查询</td><td>message/send</td><td>结果短，等待成本几乎为零</td></tr>
+<tr><td>报告生成、数据分析（分钟级）</td><td>message/stream</td><td>避免超时，进度可见</td></tr>
+<tr><td>需要中途协商（input-required）</td><td>message/stream</td><td>状态机靠消息流驱动</td></tr>
+<tr><td>被调用方不支持流式</td><td>只能 message/send</td><td>受 Agent Card 声明约束</td></tr>
+</table>
+
+<div class="note-box">
+一个常见误解："机票 Agent 流式返回，用户就一定能看到打字机效果"。不一定——调度 Agent 完全可以选择等 5 条消息全部到齐后再汇总返回。流式是否传递到前端，取决于调度 Agent 的实现策略，A2A 协议本身不强制。
+</div>
+
+<div class="intuition-box">
+<p>流式是"声明"出来的（被调用方在 Agent Card 里声明）、"选择"出来的（调用方按卡片选 method）、"传递"出去的（调度 Agent 决定是否透传给用户）。三个动作，三个层次，别混为一谈。</p>
+</div>
+
+</div>
+
+<!-- ========== 6. 可扩展性与生产实践 ========== -->
+<div class="section">
+<h2 id="s6">六、可扩展性与生产实践</h2>
+
+<p>三 Agent 的方案可以直接扩展到更多 Agent：调度 Agent 始终作为总指挥，负责拆解任务和汇总结果；每个专业 Agent 独立部署，通过 Agent Card 自描述；调度 Agent 根据 skills 匹配自动选择合适的 Agent。只要 Agent 数量不是特别夸张，这套方案都成立。</p>
+
+<table>
+<tr><th>Agent 规模</th><th>推荐架构</th><th>主要约束</th></tr>
+<tr><td>2-5 个</td><td>单层调度（本视频方案）</td><td>几乎无约束</td></tr>
+<tr><td>5-20 个</td><td>单层调度 + 并行调用</td><td>调度 Agent 的上下文窗口与决策质量</td></tr>
+<tr><td>20+ 个</td><td>分层调度（调度 Agent 也有上级调度）</td><td>串行延迟累加、卡片匹配复杂度</td></tr>
+</table>
+
+<div class="highlight">
+<strong>背景：</strong>某企业报表 Agent 需要汇总销售、库存、财务三个数据源生成周报，单次执行耗时 2-3 分钟。<br>
+<strong>问题：</strong>最初用 message/send 同步调用，调用方干等 2-3 分钟，HTTP 连接频繁超时，用户以为系统挂了。<br>
+<strong>方案：</strong>在 Agent Card 声明 streaming: true，改用 message/stream：先返回 submitted 表示任务已接，再按章节逐段 artifact-update 推送内容，最后 completed 收尾。<br>
+<strong>效果：</strong>首屏延迟从 2-3 分钟降到 1 秒内，超时投诉归零，用户能看到报告"一段段长出来"。
+</div>
+
+<div class="highlight">
+<strong>背景：</strong>某智能客服系统要覆盖订单、退款、物流、售后、FAQ、风控 6 类业务，每类的业务规则和提示词都不同。<br>
+<strong>问题：</strong>6 种能力塞进一个全能 Agent，提示词臃肿、业务间互相干扰，改一条规则要全量回归。<br>
+<strong>方案：</strong>1 个调度 Agent + 6 个专业 Agent，各自独立暴露 Agent Card；调度 Agent 按 skills 匹配分发，跨业务请求（退款+物流）由调度 Agent 串行调用两个 Agent 完成。<br>
+<strong>效果：</strong>单个请求平均 2 跳内完成，单个 Agent 升级不停服，新业务接入只需加一张卡片，回归范围缩小到单个 Agent。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>在 Agent Card 中如实声明 streaming 能力</li>
+<li>解析流式时把 lastChunk 和 completed 分开处理</li>
+<li>需要协商的场景用 input-required 状态</li>
+<li>Agent 超过 20 个时引入分层调度</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要对不支持流式的 Agent 发 message/stream</li>
+<li>不要把 lastChunk: true 当成流结束信号</li>
+<li>不要让所有 Agent 共享一个上下文（应各自独立）</li>
+<li>不要忽略串行调用多 Agent 时的延迟累加</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>核心架构始终是"1 个调度 + N 个专业"：调度负责"找谁做、做什么、怎么整合"，专业 Agent 负责"把具体的事做好"，A2A 协议保证它们之间的沟通标准化。分工不变，规模增长方案就不变。</p>
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s7">Q&A</h2>
+
+<details>
+<summary>A2A 流式返回的消息模式是什么？</summary>
+<div class="answer">流式返回一般遵循 5 条消息模式：① status-update（state: "submitted"）— 任务已创建并提交；②③④ 多条 artifact-update — 逐步返回 Artifact 内容，每条携带一个 Part，最后一条的 lastChunk 设为 true；⑤ status-update（state: "completed"）— 任务完成。整体模式是：先提交 → 逐步更新内容 → 最后标记完成。注意 lastChunk: true 只表示 Artifact 信息返回完毕，不代表流式结束，还需要最后的 status-update 标记完成，解析代码要以 completed 作为收尾信号。</div>
+</details>
+
+<details>
+<summary>多Agent协作中，调度Agent扮演什么角色？</summary>
+<div class="answer">调度 Agent 是整个系统的总指挥，负责五件事：① 任务拆解 — 将用户的复杂问题分解为多个子任务；② Agent 匹配 — 根据已注册 Agent 的 skills 选择合适的 Agent；③ 子问题生成 — 为每个 Agent 生成针对性的子问题（不一定与原始问题相同）；④ 中间决策 — 根据前一个 Agent 的结果决定下一步（如根据天气选日期）；⑤ 结果汇总 — 整合所有 Agent 的返回，给出最终答案。调度 Agent 通常由平台在启动时创建，通过提示词设定职责，自己不执行具体业务。</div>
+</details>
+
+<details>
+<summary>message/send 和 message/stream 的选择依据是什么？</summary>
+<div class="answer">选择依据是被调用 Agent 的 Agent Card 中 capabilities.streaming 字段：① streaming: false → 使用 message/send，期望一次性返回完整结果；② streaming: true → 优先使用 message/stream，期望流式返回。调度 Agent 会读取 Agent Card 后自动选择合适的方式。对于用户来说，即使被调用 Agent 是流式返回的，调度 Agent 也可能等全部结果返回后才汇总给用户，所以用户侧可能看不到流式效果——流式是否透传取决于调度 Agent 的策略。</div>
+</details>
+
+<details>
+<summary>lastChunk: true 和流结束有什么区别？为什么要这样设计？</summary>
+<div class="answer">lastChunk: true 标记的是"这一个 Artifact 的内容交付完了"，但 Task 可能还有未完成的工作——比如 Agent 生成完第一个 Artifact 后还要生成第二个，或者还要做收尾动作。只有最后一条 status-update（state: "completed"）到达，整个流才真正结束。这样设计是因为 Artifact 交付完成和 Task 完成是两件事：前者是内容层面的，后者是任务层面的。写解析逻辑时，收到 lastChunk 只能拼接内容，收到 completed 才能释放资源、关闭连接。</div>
+</details>
+
+<details>
+<summary>input-required 状态什么时候出现？流程怎么继续？</summary>
+<div class="answer">当被调用 Agent 发现信息不足以继续执行时，会出现 input-required——比如机票 Agent 发现用户没说清楚舱位等级。此时 Agent 暂停执行，返回 state: "input-required" 的 status-update，并在消息里说明需要补充什么。调度 Agent（或用户）补充信息后，Task 从 input-required 回到 working 继续执行。这个机制让 A2A 支持的不只是单次问答，而是 Agent 之间的多轮协商，特别适合需求模糊的长任务。</div>
+</details>
+
+<details>
+<summary>A2A 方案可以扩展到多少 Agent？有什么限制？</summary>
+<div class="answer">理论上 A2A 方案可以支持任意数量的 Agent，核心架构始终是"1 个调度 Agent + N 个专业 Agent"。实际限制主要有三个：① 调度 Agent 的上下文窗口 — 需要处理所有 Agent Card 和返回结果；② 调度 Agent 的决策质量 — Agent 越多，匹配和拆解任务越复杂；③ 延迟 — 串行调用多个 Agent 时总延迟累加。当 Agent 数量特别多时，可能需要分层调度（调度 Agent 也有上级调度）或并行调用。目前主流实践中，单层调度支撑 10-20 个专业 Agent 没有问题。</div>
+</details>
+
+<details>
+<summary>为什么专业 Agent 之间不直接通信，而要都经过调度 Agent？</summary>
+<div class="answer">这是刻意的架构取舍。专业 Agent 互相不知道对方的存在，带来三个好处：① 可替换性 — 换掉机票 Agent 只需新 Agent 的卡片技能匹配，其他 Agent 毫无感知；② 可测试性 — 每个专业 Agent 可以单独测试，mock 一个调度 Agent 即可；③ 可控性 — 所有信息流都经过调度 Agent，方便审计、限流和错误定位。代价是调度 Agent 成为中枢，它的上下文和决策能力会成为系统上限，所以规模上去之后需要分层调度来分摊压力。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1dRTRzUED3" target="_blank">A2A协议深度解析 - 第2部分：流式返回 + 多Agent场景</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

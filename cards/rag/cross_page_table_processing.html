@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G15 · 跨页表格处理</title>
+<style>
+/* 项目标准 CSS */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、跨页表格的语义断裂问题</a>
+<a href="#s2">二、页面解析与跨页拼表</a>
+<a href="#s3">三、结构修复三操作</a>
+<a href="#s4">四、结构化切块四原则</a>
+<a href="#s5">五、双索引与问答策略</a>
+<a href="#s6">六、质量验证与测试用例</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>G15 · 跨页表格处理</h1>
+<p class="subtitle">先拼表后切块 / 续表四要素 / 结构修复三操作 / 双索引问答</p>
+
+<div class="intuition-box">
+<p>跨页表格的本质矛盾是：表格是"逻辑对象"，而 PDF 分页是"物理排版"。页边界由打印需求决定，与语义毫无关系。因此正确顺序永远是——先把碎片重组回完整逻辑表，再谈切块与检索；反过来做，后面每一步都在为前面的错误还债。</p>
+</div>
+
+<!-- ==================== Section 1 ==================== -->
+<div class="section" id="s1">
+<h2>一、跨页表格的语义断裂问题</h2>
+
+<p>跨页表格之所以难，根源在 PDF 格式的底层事实：文件只有一组把字符摆放在 (x, y) 坐标上的绘图指令，不存在"段落"与"表格"的语义结构，按页读取的解析器拿到的只是页面图形碎片，而不是"某张表的第 N 行"（PDF 解析难点与通用清洗流水线的系统论述见 <a href="../data/pdf_data_cleaning_rag.html#s1">D06 · PDF 数据清洗（RAG 场景）· 第一章</a>）。在这个前提下，看分页对表格造成的具体伤害：</p>
+
+<p>当一张逻辑表从第 5 页延续到第 6 页时，按页切分的管道会把它斩成两段。最典型的伤害场景：续页上只剩 <code>华北 760 +5%</code> 这样的裸数据，而"地区 / 收入 / 同比 / 单位：万元"这套表头留在了上一页。检索器即便命中了这个 chunk，大模型面对"760"也无法回答"这是哪个地区的什么指标"——于是要么拒答，要么编造。这就是<span class="term">语义断裂</span>：物理上每页都有字，逻辑上信息已经残缺。</p>
+
+<h3>三种典型断裂形态</h3>
+
+<table>
+<tr><th>断裂形态</th><th>具体表现</th><th>直接后果</th></tr>
+<tr><td>表头丢失</td><td>续页只有数据行，表头与单位留在上一页</td><td>数字失去归属，检索命中但答案必然错误或拒答</td></tr>
+<tr><td>跨页断行</td><td>一行的部分单元格被压到页尾、剩余部分挤到下一页页首</td><td>行被切成两半，拼接错误会把华北的数据安到华南头上</td></tr>
+<tr><td>多级表头破坏</td><td>"2024 年"横跨"收入 / 成本 / 利润"三列的层级结构被打平</td><td>指标与年份的从属关系丢失，聚合计算全面失真</td></tr>
+</table>
+
+<div class="arch-diagram">
+逻辑表（物理上跨第 5~6 页）                按页切分 + 固定长度切块的结果
+┌─────────────────────────────┐        ┌──────────────────────────────┐
+│ 第 5 页                      │        │ Chunk A（第 5 页尾部）         │
+│  地区   收入   同比  单位:万元 │        │  地区  收入  同比  单位:万元   │
+│  华东   1250   +18%          │  ───▶  │  华东  1250  +18%             │
+│  华南   980    +9%           │ 按页边界│  华南  980   +9%              │
+├ ─ ─ ─ ─ ─ 分页线 ─ ─ ─ ─ ─ ─ ┤ 硬切断 ├ ─ ─ ─ ─ ─ 语义断裂 ─ ─ ─ ─ ─ ┤
+│ 第 6 页（无表头续页）         │        │ Chunk B（第 6 页头部）         │
+│  华北   760    +5%           │        │  华北  760   +5%              │
+│  东北   420    -3%           │        │  东北  420   -3%  ← 表头在哪? │
+└─────────────────────────────┘        └──────────────────────────────┘
+        完整逻辑表：1 张 4 行                     碎片：2 个都无法独立回答问题的 chunk
+</div>
+
+<p>断裂的伤害是沿着管道逐级放大的：坏的解析产生残缺文本，残缺文本切出噪声 chunk，噪声 chunk 嵌入出无意义的向量，向量召回失败，最终表现为大模型幻觉。很多团队把表格问答不准归咎于 embedding 模型或 top-k 设置，实际上根因在上游的提取阶段——垃圾进，垃圾出。</p>
+
+<div class="highlight">
+<p>公开基准数据印证了"结构感知"的价值：在 NVIDIA 2024 年的 RAG 分块基准中，按版面（页面/元素）切块的方案取得 0.648 的 top-1 准确率，且方差 0.107 为所有切块器中最低，全面优于按固定 token 长度切分的所有方法。对表格密集文档，结论更直接——切块的边界必须跟着表格结构走，而不是跟着字数走。</p>
+</div>
+
+<h3>核心原则：先恢复完整逻辑表</h3>
+
+<p>正确的处理顺序只有一种：<strong>先拼表、再修复、后切块</strong>。即把分散在多页上的表格片段，依据位置、列结构、表头与上下文证据，重组为一张语义完整的逻辑表；随后修复重复表头、断行等瑕疵；最后才基于行列关系（而非页面边界）做结构化切块。每个最终产出的 chunk 都必须自带完整表头、主键标识、计量单位与数据来源，做到任何一个 chunk 被单独检索到，都能脱离原文档独立被理解。</p>
+
+<div class="intuition-box">
+<p>判断表格管道好坏的一条金标准：随机抽出一个 chunk，遮住来源文档，问自己"这行数字的指标名、年份、单位、口径是什么"——答不出来，就是断裂没修干净。</p>
+</div>
+</div>
+
+<!-- ==================== Section 2 ==================== -->
+<div class="section" id="s2">
+<h2>二、页面解析与跨页拼表</h2>
+
+<p>全流程分四步走：页面解析 → 跨页拼表 → 结构修复 → 结构化切块。先看总览，再逐个拆解前两步。</p>
+
+<div class="arch-diagram">
+PDF 文档集
+   │
+   ▼
+① 页面解析 ──────────── 文本型 PDF：字形坐标 + 边框线段
+   │                    扫描件：OCR + 版面分析模型
+   │  输出：逐页表格片段（携带页码 / bbox / 章节元数据）
+   ▼
+② 跨页拼表 ──────────── 续表四要素加权评分
+   │                    S ≥ 0.85 自动合并 │ 0.6~0.85 灰区人工复核 │ S &lt; 0.6 不合并
+   ▼
+③ 结构修复 ──────────── 删重复表头页脚 → 合并跨页断行 → 展开多级表头
+   │  输出：完整逻辑表（行 × 列 + 表头 + 单位 + 口径）
+   ▼
+④ 结构化切块 ──────────── 行原子性 / 业务分组 / 列族分割 / 父子分层
+   │
+   ▼
+双索引入库（表级索引 + 行级索引）──▶ 检索与问答
+</div>
+
+<h3>两条解析路线</h3>
+
+<p>解析路线由文档形态决定。文本型 PDF 有内嵌<span class="term">文本层</span>，字形坐标与边框线段都是精确数据，直接用坐标聚类即可还原单元格；扫描件没有文本层，必须先经 <span class="term">OCR</span>（光学字符识别，把图像中的文字转为带坐标的文本）再做<span class="term">版面分析</span>（layout analysis，用模型检测出页面中的表格、标题、正文等区域），由表格结构识别模型重建行列。关键纪律：无论哪条路线，每个表格片段都必须携带页码、边界框（bbox）、所在章节等元数据——这些是后续续表判断和证据链回溯的全部依据。</p>
+
+<table>
+<tr><th>维度</th><th>文本型 PDF</th><th>扫描件 / 图片型</th></tr>
+<tr><td>信息来源</td><td>内嵌文本层 + 矢量线段</td><td>渲染图像（无文本层）</td></tr>
+<tr><td>提取方式</td><td>字形坐标 + 边框交叉 / 空白推断</td><td>OCR 识别 + 版面分析模型检测</td></tr>
+<tr><td>单元格定位精度</td><td>高（坐标来自文件本身）</td><td>受图像质量限制，一般 95%~99%</td></tr>
+<tr><td>典型工具</td><td>pdfplumber / Camelot / PyMuPDF</td><td>MinerU / Unstructured (hi_res) / PaddleOCR</td></tr>
+<tr><td>主要风险</td><td>无边框表需空白推断，易错列</td><td>印章、水印、倾斜造成 OCR 错位</td></tr>
+</table>
+
+<h3>表格识别工具对比</h3>
+
+<p>选工具的核心问题不是"哪个最强"，而是"哪个能接住跨页"。一份公开的医学文献 PDF 表格提取实测给出了很扎眼的数字：在跨页表格场景下，Camelot 成功率 0%——它把每页识别为独立表格，完全不做跨页处理；pdfplumber 约 70%，需要自己写合并逻辑；PyMuPDF 约 80%，定制能力最强。也就是说，<strong>跨页合并几乎总是要自己建的一层</strong>，工具只决定你拿到的碎片质量。</p>
+
+<table>
+<tr><th>工具</th><th>技术路线</th><th>无边框表</th><th>扫描件</th><th>跨页能力</th><th>适用定位</th></tr>
+<tr><td>Camelot</td><td>计算机视觉（lattice 边框 / stream 空白）</td><td>弱</td><td>不支持</td><td>不支持，逐页独立</td><td>文本 PDF 的规整有框表，可视化调试好</td></tr>
+<tr><td>pdfplumber</td><td>字符坐标 + 版面推断</td><td>可配置</td><td>不支持</td><td>需自定义合并</td><td>复杂金融版式，容差参数精细可调</td></tr>
+<tr><td>PyMuPDF</td><td>规则引擎 + 高扩展 API</td><td>部分</td><td>混合 OCR</td><td>自定义实现</td><td>速度优先、需深度定制的批量管道</td></tr>
+<tr><td>Unstructured</td><td>版面分析 + OCR（hi_res 策略）</td><td>支持</td><td>支持</td><td>部分支持</td><td>混合文档一站式预处理，开箱即用</td></tr>
+<tr><td>MinerU</td><td>版面分析模型（UNet 有框 / SLANet+ 无框）</td><td>强</td><td>支持</td><td>内置 cross_page_table_merge</td><td>学术 / 财报端到端解析，自动表头去重</td></tr>
+</table>
+
+<p>值得一提的是模型化路线的进展：MinerU 的合并流程会先统一跨页列数、检测重复表头行，再修复跨页合并单元格的 colspan/rowspan，并识别"（续）"这类续表标记；ChatDOC 开源的 OCRFlux 则直接把"跨页表格合并"立为独立任务，发布了 1000 样本的中英文评测集。这条路线的方向很明确——把续表判断从手写规则升级为端到端模型。</p>
+
+<h3>续表判断四要素</h3>
+
+<p><span class="term">续表判断</span>要回答一个问题：上一页底部的表格片段与下一页顶部的表格片段，是不是同一张逻辑表？判断错了两个方向都致命：漏并造成断裂（假阴性），误并把两张独立表拼成一张（假阳性）。工程上稳定的做法是四要素加权评分：</p>
+
+<table>
+<tr><th>要素</th><th>检查点</th><th>权重</th><th>可量化信号</th></tr>
+<tr><td>位置</td><td>上页表格贴近页底 → 下页表格贴近页顶</td><td>0.25</td><td>表格底边距页底距离、顶边距页顶距离</td></tr>
+<tr><td>列结构</td><td>列数 / 列宽 / 各列数据类型一致</td><td>0.35</td><td>列数相等、列边界横向重合率、逐列类型一致率</td></tr>
+<tr><td>表头</td><td>重复表头（去重）或无表头（继承）</td><td>0.25</td><td>下页首行与上页表头相似度 ≥ 0.9，或首行全为数据型</td></tr>
+<tr><td>上下文</td><td>表名 / 章节 / 统计周期一致</td><td>0.15</td><td>同一章节标题下、出现"续表/（续）"、周期字样一致</td></tr>
+</table>
+
+<div class="formula">
+S = 0.25 × 位置分 + 0.35 × 列结构分 + 0.25 × 表头分 + 0.15 × 上下文分
+</div>
+
+<pre><code>def cont_score(a, b):
+    s  = 0.25 * pos_score(a, b)     # 上页贴底 → 下页贴顶
+    s += 0.35 * col_score(a, b)     # 列数 / 列宽 / 列类型
+    s += 0.25 * header_score(a, b)  # 重复表头 or 无表头续页
+    s += 0.15 * ctx_score(a, b)     # 章节 / 续表标记 / 统计周期
+    return s</code></pre>
+
+<p>权重设计的逻辑：列结构是最硬的证据（两张无关表恰好列数、列宽、类型全同的概率很低），故权重最高；位置是必要不充分条件（续表几乎必然出现在页底页首，但页底页首也可能是巧合）；上下文是辅助佐证。四个分数各自归一化到 0~1，可按语料分布回归微调权重。</p>
+
+<h3>置信度阈值与灰区人工复核</h3>
+
+<p>评分算出来之后不直接行动，而是按<span class="term">置信度</span>分三档处理：高分档自动合并，低分档果断分开，中间<span class="term">灰区</span>进入人工复核队列。这套"自动 + 灰区兜底"的机制是生产系统敢上线的前提——它把不确定样本从"听天由命"变成"可计量、可消化"的运营成本。</p>
+
+<div class="arch-diagram">
+   上页页尾表格 A ──────────────▶ 下页页首表格 B
+                    │
+                    ▼
+             四要素加权评分
+      S = 0.25位置 + 0.35列结构 + 0.25表头 + 0.15上下文
+                    │
+     ┌──────────────┼──────────────┐
+     ▼              ▼              ▼
+  S ≥ 0.85      0.6 ≤ S &lt; 0.85    S &lt; 0.6
+     │              │              │
+  自动合并       灰区人工复核        不合并
+     │           ┌──┴──┐           │
+     │           ▼     ▼           │
+     │         确认   驳回          │
+     ▼           ▼     ▼           ▼
+  续表成立      合并   拆分      两张独立表
+     │
+     ▼
+ 去重复表头 / 合并断行 ──▶ 进入结构修复
+</div>
+
+<p>阈值不是拍脑袋定的：上线前用 100~200 张人工标注的跨页表对做标定，画 S 值与合并正确率的关系曲线，取"自动合并正确率 ≥ 99%"对应的分数做上阈值、"误并率 ≥ 5%"对应的分数做下阈值。灰区占比通常落在 5%~10%，按单条 10 秒的人工复核成本计算，一份 5000 表的年报库也就 1~2 小时工作量，换来的是误并率趋近于零。</p>
+
+<div class="highlight">
+<p>生产案例：某券商研究所将 217 份上市公司年报（约 4.8 万页、6300 张表，其中跨页表占 34%）接入 RAG 知识库。基线方案按页切分、仅靠文本相似度去重，跨页合并准确率只有 62%——错误中 17% 是相邻独立表被误并、21% 是无表头续页被漏并，数值类问答准确率仅 47%。切换为四要素评分 + 双阈值机制后：合并准确率升至 97.3%，灰区样本占比 6.8%（约 140 条，人工复核平均 11 秒/条），数值类问答准确率升至 89%。</p>
+</div>
+
+<div class="intuition-box">
+<p>续表判断宁可保守，不可激进：漏并一张表，检索时还有机会靠上下文补救；误并两张表，污染的是入库后的永久数据，且极难被发现——用户只会觉得"答案总是差一点"。</p>
+</div>
+</div>
+
+<!-- ==================== Section 3 ==================== -->
+<div class="section" id="s3">
+<h2>三、结构修复三操作</h2>
+
+<p>拼起来的表还是"毛坯"：续页带着重复的表头和页眉页脚，跨页断行把一条记录切成两半，多级表头仍以 colspan 的形态蜷在结构里。结构修复就是三道精加工工序，顺序固定：先去噪，再补行，最后展平——顺序颠倒会互相干扰（比如先展平多级表头会让重复表头的比对基准错位）。</p>
+
+<table>
+<tr><th>操作</th><th>触发条件</th><th>判断依据</th><th>典型误伤</th></tr>
+<tr><td>删除重复表头 / 页眉页脚</td><td>续页片段首行或页边区域存在冗余文本</td><td>与首页表头相似度 ≥ 0.9；位于固定页边位置；"第 X 页共 Y 页"等正则模式；"（续）"标记</td><td>误删真实数据行（如每页都出现的"合计"行）</td></tr>
+<tr><td>合并跨页断行</td><td>上页末行 / 下页首行单元格不完整</td><td>单元格数少于总列数；行高明显偏矮；纵向位置贴页边；两半文本拼接后语义通顺</td><td>把两条不同记录强行拼成一行</td></tr>
+<tr><td>展开多级表头</td><td>表头存在 colspan / rowspan 层级</td><td>上级单元格跨多列（"2024 年"罩住"收入/成本/利润"）</td><td>展开方向写反，指标与年份错配</td></tr>
+</table>
+
+<h3>操作一：删除重复表头与页眉页脚</h3>
+
+<p>规范的长表在每页续排时会重复印刷表头，方便纸质阅读；页眉页脚则承载页码、公司名、密级等信息。这些内容在逻辑表中只应出现一次。识别依据有三层：文本层（与首页表头逐单元格比对，相似度 ≥ 0.9 判重）、位置层（页眉页脚固定在页面上/下边距区域，跨页重复出现）、模式层（正则匹配"第 X 页"、"机密"、"（续表）"等字样）。注意一个反直觉的坑：有些报表的"小计"行也会每页出现，它是真实数据，不能仅凭"重复出现"就删——必须叠加"位于表头区（表格第一行）"的位置约束。</p>
+
+<h3>操作二：合并跨页断行</h3>
+
+<p>排版引擎在分页时会把放不下一整行的单元格内容推到下一页，形成断行。修复依据是单元格坐标：若上页末行的单元格数少于表列数、且下页首行恰好补足缺额、且两者纵向位置都紧贴页边，则按列对齐把两半合并为一行。合并后要做一次校验：该行的列数等于总列数，且各列数据类型与列定义一致（数值列不出现文字）。对无法确信的断行（比如两半都能独立成行），保留拆分状态并打上待审标记，交给灰区流程处理。</p>
+
+<h3>操作三：展开多级表头</h3>
+
+<p>财报中常见"年份 → 指标"的两级表头：上层"2024 年"横跨三列，下层是"收入 / 成本 / 利润"。这种结构对纸质阅读友好，对检索与计算却是毒药——"收入"两列并排存在，不带上层限定就无法区分。展开规则是把层级路径压平成复合列名：</p>
+
+<div class="formula">
+2024 年 → [收入, 成本, 利润]   ⟶   2024-收入 | 2024-成本 | 2024-利润
+</div>
+
+<p>三级表头（年份 → 地区 → 指标）同理递归展开为"2024-华东-收入"。展平后的表变成一维结构，每一列都有全局唯一、自解释的名字，既能直接进 DataFrame 做聚合，也能让行级 chunk 的 KV 表述无歧义。</p>
+
+<div class="highlight">
+<p>公开研究验证了结构修复的回报：2026 年发表于 Emerging Science Journal 的一项工作，针对含嵌套表头的复杂表格文档，用 Camelot 高保真提取后做结构感知切块（保留学期、科目、学分、类别等字段关系），在 RAGAS 评测中取得 0.73 的答案准确率，显著高于标准解析 + 常规切块的多个基线。结论很清晰：解析质量与切块策略必须同时过关，表格语义关系才保得住。</p>
+</div>
+
+<div class="intuition-box">
+<p>结构修复的检验方法只有一个：把修复后的表渲染出来，与原件逐页对照十分钟。任何"看起来自动做对了"的管道，没经过人眼抽检就不算验证过。</p>
+</div>
+</div>
+
+<!-- ==================== Section 4 ==================== -->
+<div class="section" id="s4">
+<h2>四、结构化切块四原则</h2>
+
+<p>拿到完整逻辑表之后，切块的目标从"控制长度"变成"保持语义"。四条原则按优先级排列：</p>
+
+<table>
+<tr><th>原则</th><th>含义</th><th>违反后果</th><th>典型场景</th></tr>
+<tr><td>行原子性</td><td>一行记录是不可再分的最小单元，绝不从行中间切断</td><td>数值与指标名分离，产生"裸数字"碎片</td><td>所有表格切块的底线约束</td></tr>
+<tr><td>业务分组</td><td>同部门 / 同产品 / 同地区的行优先落在同一 chunk</td><td>对比类问题需要跨 chunk 拼数据，召回不全</td><td>分地区收入表、分产品成本表</td></tr>
+<tr><td>列族分割</td><td>宽表按业务指标族纵向切块（收入族 / 风险族 / 人员族）</td><td>单 chunk 塞 40 列，embedding 被无关列稀释</td><td>监管报表、经营月报等超宽表</td></tr>
+<tr><td>父子分层</td><td>超大表建"摘要父块 + 明细子块"两级结构</td><td>整表塞不进上下文，只存明细又丢全局视角</td><td>上千行的披露明细表</td></tr>
+</table>
+
+<h3>行原子性与 KV 富化</h3>
+
+<p><span class="term">行原子性</span>是四条原则中唯一没有例外的硬约束。在此基础上，行级 chunk 不应是原始行文本，而要做 <span class="term">KV 富化</span>：把表头语义注入每一行，展开成自解释的陈述。TableRAG 的实验表明，带 schema 富化的行嵌入在检索上稳定优于整表直接嵌入——因为"华东 1250 +18%"这样的向量没有语义锚点，而"地区=华东，收入=1250 万元，同比=+18%"能被"华东收入增长"这类查询稳稳命中。</p>
+
+<div class="formula">
+行 chunk = "表3-分地区收入 | 地区=华东, 收入=1250万元, 同比=+18% | 来源: 2024年报 p.12"
+</div>
+
+<h3>业务分组与列族分割</h3>
+
+<p><span class="term">业务分组</span>利用表内天然的分节信号（小计行、空行、缩进的层级行）把同组数据保持在同一 chunk，使"华东和华南谁增速快"这类组内对比问题一次召回即完整。<span class="term">列族分割</span>针对的是宽表：一张 40 列的经营月报，按"财务指标 / 风险指标 / 人力指标"纵向切成三个 chunk 族，每个 chunk 携带完整主键列（月份、机构）+ 本族指标列。用户问不良率时，检索器只需要命中风险族，不必拖着 30 个无关列一起进上下文。</p>
+
+<h3>父子分层</h3>
+
+<p>超过一定规模（经验值：50 行以上或 2000 token 以上）的表，单层切块顾此失彼。父子分层给出两级结构：<span class="term">父块</span>存表的摘要——表名、全部列名、行数、时间范围、一句话主题；<span class="term">子块</span>存行组明细。检索时子块负责命中，命中后按需上卷取回父块甚至整表，交给问答层处理。这一机制把"检索粒度"和"回答所需上下文"解耦，是大表场景的标准解。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每个 chunk 注入完整表头、主键、单位、来源页码</li>
+<li>用小计行 / 空行等天然分节信号做分组边界</li>
+<li>宽表先按业务列族纵切，再按行组横切</li>
+<li>大表建父子两级：摘要块定位，明细块命中</li>
+<li>切块参数用真实表格语料回归验证后再固化</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>按固定 token 数对表格做滑窗切割</li>
+<li>把 Markdown 表格当普通段落递归切分</li>
+<li>行 chunk 只存裸数据，不注入列名与单位</li>
+<li>为省存储丢弃"合计 / 小计"等汇总行</li>
+<li>整表直接 embedding，指望一个大向量扛所有查询</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>切块不是把表"剁碎"，而是把表"分装"——每个分装袋上都贴着完整的成分标签（表头、单位、口径、来源），拿走任何一袋都能独立食用。</p>
+</div>
+</div>
+
+<!-- ==================== Section 5 ==================== -->
+<div class="section" id="s5">
+<h2>五、双索引与问答策略</h2>
+
+<p>表格问答的查询谱系很宽：从"华东收入是多少"的点查，到"三大事业部收入合计"的聚合，单一索引无法两头兼顾——行级索引粒度细但缺全局，表级索引有全局但定位粗。答案是两套索引并行建设、按问题类型路由。</p>
+
+<table>
+<tr><th>维度</th><th>表级索引</th><th>行级索引</th></tr>
+<tr><td>索引内容</td><td>表名 / 字段说明 / 时间范围 / 所属章节</td><td>KV 富化后的行文本 + 页码等元数据</td></tr>
+<tr><td>粒度</td><td>每张逻辑表一条</td><td>每行（或每行组）一条</td></tr>
+<tr><td>职责</td><td>回答"哪张表能算这个问题"</td><td>回答"哪一行藏着这个事实"</td></tr>
+<tr><td>命中后动作</td><td>取回整表进入 DataFrame</td><td>返回行文本 + 原文证据</td></tr>
+<tr><td>擅长查询</td><td>聚合 / 趋势 / 跨行计算</td><td>点查 / 组内对比</td></tr>
+</table>
+
+<div class="arch-diagram">
+用户提问："2024 年三大事业部收入合计是多少"
+        │
+        ▼
+  问题类型路由（点查 / 对比 / 聚合 / 趋势）
+        │ 判定：聚合类
+        ▼
+ 表级索引检索 ──▶ 命中表 T12《分事业部营业收入表》
+        │          （表名 / 字段说明 / 时间范围匹配）
+        ▼
+ 按 table_id 取回全表 ──▶ DataFrame
+        │
+        ▼
+ SQL / DataFrame 精确计算 ──▶ sum(收入 | 年度=2024)
+        │
+        ▼
+ LLM 组织自然语言解释 ──▶ "合计 X 万元，其中事业部 A 占比 46%…"
+        │
+        ▼
+ 输出答案 + 证据链（文档 / 页码 / 表号 / 行号）
+</div>
+
+<h3>两条问答路径</h3>
+
+<p><strong>简单查询走行级路径</strong>：点查与组内对比问题由行级索引直接召回行组，LLM 阅读召回文本作答。行组里已包含表头与单位，回答不需要额外上下文。<strong>聚合分析走表级路径</strong>：一旦问题涉及求和、均值、排序、多期对比，就不该让 LLM 跨 chunk 读数字做算术——正确做法是表级索引定位整表、取回全量行进入 DataFrame 或 SQL，由计算引擎得出精确结果，LLM 只负责把数字翻译成结论。分工的原则一句话：检索负责找对表，代码负责算对数，模型负责讲清话。</p>
+
+<pre><code>df = load_rows(table_id="T12")          # 表级索引命中后取回全表
+ans = (df[df["年度"] == 2024]
+         .groupby("事业部")["收入"]
+         .sum())                         # 精确聚合，不依赖模型算术
+</code></pre>
+
+<table>
+<tr><th>问题类型</th><th>示例</th><th>路由</th><th>计算方式</th></tr>
+<tr><td>点查</td><td>"华东区 2024 收入是多少"</td><td>行级索引 → 召回行组</td><td>LLM 直读</td></tr>
+<tr><td>组内对比</td><td>"哪个地区同比增速最高"</td><td>行级索引 → 召回整组</td><td>LLM 比较或轻量排序</td></tr>
+<tr><td>聚合</td><td>"三大事业部收入合计"</td><td>表级索引 → 取回全表</td><td>DataFrame / SQL 计算</td></tr>
+<tr><td>趋势</td><td>"近三年收入变化"</td><td>表级索引 → 取回全表</td><td>DataFrame 计算 + 模型解释</td></tr>
+</table>
+
+<div class="highlight">
+<p>生产案例：某股份制银行的财报问答系统中，聚合类问题占总查询量的 38%。早期方案用纯文本 chunk 让 LLM 跨片段读数字做加法，聚合答案错误率高达 41%，错误集中在跨 chunk 漏行与数字误读。切换为双索引 + DataFrame 计算后，聚合错误率降至 3.2%（剩余错误全部来自检索未命中而非计算），平均响应时间从 6.8 秒降到 3.4 秒——模型不再需要通读长表，只消化计算结果。同领域的公开研究也指向同一结论：FinStat2SQL 这类"先结构化入库、再文本转 SQL"的管道，让微调后的 7B 小模型就能在财报问答上取得 61.33% 准确率、响应控制在 4 秒内。</p>
+</div>
+
+<p>还有一层常被忽略的设计：<span class="term">证据链</span>。表级索引命中时，返回给用户的不应只有答案，还应附"来源文档 + 页码 + 表号"；行级命中时附原文行快照。财务与合规场景里，一个不可回溯的数字答案等于没有答案。</p>
+
+<div class="intuition-box">
+<p>让 LLM 做算术，就像让诗人做审计——不是不努力，是工种不对。聚合永远交给代码，模型只负责把算好的数字讲成人话。</p>
+</div>
+</div>
+
+<!-- ==================== Section 6 ==================== -->
+<div class="section" id="s6">
+<h2>六、质量验证与测试用例</h2>
+
+<p>跨页表格管道的每个环节都可能静默出错，且错误会沿着管道向下游传播、放大。上线前必须建立两层防线：四项必检指标定验收线，用例矩阵定覆盖面。</p>
+
+<h3>四项必检</h3>
+
+<table>
+<tr><th>检查项</th><th>验证方法</th><th>建议验收线</th></tr>
+<tr><td>跨页合并准确性</td><td>人工标注 100~200 张跨页表对，与管道输出比对</td><td>合并准确率 ≥ 97%，误并率 ≤ 1%</td></tr>
+<tr><td>数据行完整性</td><td>逻辑表行数与原件逐表核对</td><td>100% 无丢行、无重复行</td></tr>
+<tr><td>表头 / 单位保留</td><td>抽检每个 chunk 是否含表头、单位、口径字段</td><td>100% 完备</td></tr>
+<tr><td>证据链完整性</td><td>任一 chunk 反查文档 / 页码 / 表号</td><td>100% 可回溯</td></tr>
+</table>
+
+<h3>测试用例矩阵</h3>
+
+<p>用例设计要覆盖"每一种续页形态 × 每一种易错判断"。以下六类是最小完备集，其中第 6 类（同构误并）专门测假阳性——大多数团队只测漏并、不测误并，而误并恰恰是更难被用户发现的错误。</p>
+
+<table>
+<tr><th>用例</th><th>输入特征</th><th>验证点</th></tr>
+<tr><td>重复表头</td><td>续页重复印刷完整表头</td><td>合并后表头仅存一份，行数 = 两页之和</td></tr>
+<tr><td>无表头续页</td><td>续页只有数据行</td><td>表头正确继承，列不错位</td></tr>
+<tr><td>跨页断行</td><td>一行单元格被压到两页</td><td>按坐标拼回一行，内容不重不漏</td></tr>
+<tr><td>多级表头</td><td>"年份 → 指标"两级表头</td><td>展平为复合列名，聚合结果正确</td></tr>
+<tr><td>跨 chunk 聚合</td><td>求和涉及两个以上行组块</td><td>路由至表级索引，计算结果与真值一致</td></tr>
+<tr><td>同构误并</td><td>相邻两张列结构相同的独立表</td><td>评分低于阈值，判定不合并</td></tr>
+</table>
+
+<p>用例集应固化为回归测试：每次调整解析工具、评分权重或阈值后全量重跑，任何一项回退即阻断发布。此外建议每月从生产语料中随机抽 30~50 张表做人眼巡检——自动指标能抓住"断了"，但抓不住"接歪了"。</p>
+
+<div class="highlight">
+<p>经验数值：在标注集上，四要素评分的区分度通常很明显——真续表对的 S 值中位数约 0.92，非续表对约 0.45，0.85 / 0.6 的双阈值在两分布之间留出了充足的安全间距。若你的语料上两个分布重叠严重（如大量同模板表格），优先加固列结构分的细粒度（逐列类型 + 列宽重合率），而不是盲目调阈值。</p>
+</div>
+
+<div class="intuition-box">
+<p>测试跨页管道有个"反向技巧"：专门构造坏输入——故意把两张无关表排成跨页形态、故意删掉续页表头——看管道会不会上当。能被对抗样本打穿的管道，生产语料迟早也会打穿它。</p>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么不直接把按页切分的表格碎片入库，让大模型在回答时自己拼接？</summary>
+<div class="answer">这条路在工程上走不通，原因有三。其一，检索是概率性的，跨页的两个碎片相似度不同，很可能只召回一半，模型拿到的永远是残缺上下文；其二，即使两个碎片都被召回，模型判断"这两段是否同一张表"仍需重复做续表判断，等于把入库期一次能解决的问题推到每次查询时重复支付成本；其三，碎片化表格的向量质量差，"华北 760 +5%"这类裸数据行根本无法被"华北收入"稳定命中。先拼表后切块是把结构问题一次性解决在离线阶段，让在线检索面对的每个 chunk 都是自解释的完整单元。</div>
+</details>
+
+<details>
+<summary>两张表列结构完全相同但其实是独立的表，续表判断如何避免误并？</summary>
+<div class="answer">这是续表判断的假阳性难题，靠单一信号无法解决，必须多要素交叉验证。列结构只是四要素之一（权重 0.35），还要看：位置要素——上一张表是否真的贴近页底（若它只占页面上半部分，后面还跟着正文，则几乎不可能续页）；表头要素——下页表若带有完整的新表头和表题，说明是新表；上下文要素——章节标题是否变化、有无"续表"标记。加权评分低于阈值时不合并，落入灰区的由人工裁决。另外可以在用例集中固化"同构相邻独立表"这类对抗样本做回归，确保评分函数对它有足够区分度。</div>
+</details>
+
+<details>
+<summary>Camelot、pdfplumber、MinerU 之间应该怎么选？</summary>
+<div class="answer">选型的第一问题不是精度，而是跨页与扫描件支持。公开实测显示 Camelot 对跨页表基本无解（每页识别为独立表），它适合文本型 PDF 中带完整边框的规整表格，且可视化调试体验好；pdfplumber 基于字符坐标，容差参数可调，适合金融报表这类复杂版式，但跨页合并要自己写；PyMuPDF 速度快、API 扩展性强，适合需要深度定制的批量管道；MinerU 走版面分析模型路线，有框表用 UNet、无框表用 SLANet+，内置跨页合并与表头去重，扫描件也能处理，适合财报、论文等端到端场景。实践上常见组合：文本页走 pdfplumber/PyMuPDF 定制管道，扫描页与复杂版式走 MinerU 或 Unstructured 的 hi_res 策略。</div>
+</details>
+
+<details>
+<summary>合并后的完整大表应该作为一个 chunk 整体入库吗？</summary>
+<div class="answer">不应该。整表入库的问题：超过 embedding 模型输入上限时会被截断；即使塞得下，几百行数据算出的向量是所有行的平均语义，点查时相似度反而不高；每次命中都把整表灌进上下文也浪费 token。正确做法是双轨：表级索引存表的摘要信息（表名、字段、时间范围、行数），行级索引存 KV 富化后的行组；大表再叠加父子分层——父块摘要定位、子块明细命中。这样点查走行级、聚合经表级取回全表计算，两种查询各走各的最短路径。</div>
+</details>
+
+<details>
+<summary>聚合类问题为什么不能直接让 LLM 跨 chunk 读数字计算？</summary>
+<div class="answer">三个原因。第一，召回不保证完整：求和需要的行分散在多个 chunk，检索 top-k 很可能漏掉其中几块，漏行的加法结果是系统性偏低的，且模型无法察觉自己漏了；第二，LLM 的算术不可靠，长表格中跨行读数容易串行、误读小数点与负号；第三，成本与延迟差——让模型通读几千 token 的表格做加法，远不如 DataFrame 一次 groupby。生产数据也支持这一分工：某银行系统将聚合计算从 LLM 转移到 DataFrame 后，聚合错误率从 41% 降到 3.2%，响应时间从 6.8 秒降到 3.4 秒。模型的职责是解释算好的结果，不是执行计算。</div>
+</details>
+
+<details>
+<summary>扫描件里的跨页表格处理流程有什么不同？</summary>
+<div class="answer">主干流程相同（解析 → 拼表 → 修复 → 切块），差异集中在第一步和误差预算上。扫描件没有文本层，必须先 OCR 加版面分析：表格区域由检测模型框出，行列结构由表格识别模型重建，字符坐标来自 OCR，精度通常在 95%~99%，低于文本型 PDF 的坐标级精度。这带来两个连锁影响：一是列结构对比要放宽容差（OCR 可能把列内文字识别错位），续表评分中的列宽对齐应基于检测框而非字符框；二是断行判断更依赖版面模型的行检测框。工程上建议对扫描件单独标定阈值，并把 OCR 置信度低的单元格标记出来，在灰区复核时优先展示。</div>
+</details>
+
+<details>
+<summary>置信度的双阈值应该怎么定？灰区人工复核的成本扛得住吗？</summary>
+<div class="answer">阈值要用标注数据标定，而不是拍脑袋：先人工标注 100~200 个跨页表对（含真续表与非续表），计算每对的评分 S，画出 S 与合并正确率的关系。上阈值取"自动合并正确率不低于 99%"的分数点（常见 0.85 左右），下阈值取"误并率升到 5%"的分数点（常见 0.6 左右）。灰区成本是可控的：生产语料上灰区占比一般在 5%~10%，以 5000 张表的年报库为例约 140~300 条待审，单条复核 10~15 秒，总计 1~2 人时。比起误并污染整个知识库后的排查成本，这是极便宜的保险。随着复核数据回流，阈值还可以周期性再标定。</div>
+</details>
+
+<details>
+<summary>多级表头展开后，原始表格结构信息还需要保留吗？</summary>
+<div class="answer">需要，保留在元数据而非正文里。展开的目的是让每一列获得全局唯一的自解释列名（"2024-华东-收入"），服务于检索与计算；但证据链要求答案能回溯到原件形态，因此逻辑表应同时保存两份表示：展平后的二维结构用于 DataFrame 计算与行级 KV 富化，原始层级结构（含 colspan/rowspan）作为元数据留存，供前端渲染原件样式的引用快照。这样用户追问"这个数在原文哪里"时，系统能展示与纸质文档一致的层级表头视图，而不是一个展平后的工程结构。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

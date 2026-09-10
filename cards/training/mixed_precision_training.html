@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W06 · 混合精度训练</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --accent: #58a6ff;
+  --accent2: #f78166;
+  --accent3: #7ee787;
+  --accent4: #d2a8ff;
+  --dim: #8b949e;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.7;
+  padding: 2rem 1rem 4rem;
+  padding-left: 300px;
+}
+.container { max-width: 960px; margin: 0 auto; }
+h1 {
+  text-align: center;
+  font-size: 2.4rem;
+  margin-bottom: 0.5rem;
+  background: linear-gradient(135deg, #58a6ff, #d2a8ff, #f78166);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.subtitle { text-align: center; color: var(--dim); margin-bottom: 3rem; font-size: 1.05rem; }
+h2 {
+  font-size: 1.5rem;
+  margin: 2.5rem 0 1rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+}
+h3 { font-size: 1.15rem; margin: 1.5rem 0 0.6rem; color: var(--accent3); }
+p, li { margin-bottom: 0.6rem; color: var(--text); }
+ul, ol { padding-left: 1.5rem; }
+code {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.9em;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+}
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+pre code { background: none; border: none; padding: 0; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.92rem;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.8rem;
+  text-align: center;
+}
+th { background: var(--surface); color: var(--accent); font-weight: 600; }
+td { background: var(--bg); }
+.interview-box {
+  background: var(--surface);
+  border-left: 4px solid var(--accent4);
+  border-radius: 0 8px 8px 0;
+  padding: 1rem 1.2rem;
+  margin: 1.5rem 0;
+}
+.interview-box strong { color: var(--accent4); }
+.interview-box ul { margin-top: 0.5rem; }
+.interview-box li { color: var(--text); margin-bottom: 0.4rem; }
+details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0.8rem 0;
+  padding: 0.8rem 1.2rem;
+}
+details[open] { padding-bottom: 1rem; }
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 0.3rem 0;
+}
+summary:hover { color: var(--accent3); }
+details p { margin-top: 0.6rem; color: var(--text); }
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight { color: var(--accent2); font-weight: 600; }
+.note {
+  background: rgba(88,166,255,0.08);
+  border: 1px solid rgba(88,166,255,0.3);
+  border-radius: 8px;
+  padding: 0.8rem 1rem;
+  margin: 1rem 0;
+  font-size: 0.92rem;
+}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{display:block;font-size:.95rem;font-weight:700;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+/* 标准组件体系 */
+.section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.5rem 1.6rem;margin:1.6rem 0}
+.section>h2:first-child{margin-top:0}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+div.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、浮点数基础</a>
+<a href="#s2">二、为什么用混合精度</a>
+<a href="#s3">三、FP16 训练的问题</a>
+<a href="#s4">四、Loss Scaling</a>
+<a href="#s5">五、AMP (Automatic Mixed Precision)</a>
+<a href="#s6">六、BF16 vs FP16</a>
+<a href="#s7">七、FP8 训练</a>
+<a href="#s8">八、Master Weights</a>
+<a href="#s9">九、混合精度最佳实践</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>W06 · 混合精度训练</h1>
+<p class="subtitle">Mixed Precision Training — 用更少的位数做更快的训练</p>
+
+<!-- Section 1 -->
+<div class="section">
+<h2 id="s1">一、浮点数基础</h2>
+
+<div class="intuition-box">
+<p>同样是 16 位，FP16 和 BF16 的差别只在于这 16 个格子怎么在"范围"和"刻度"之间分账：指数位决定<span class="term">动态范围</span>（能表示多大、多小），<span class="term">尾数位</span>决定精度（能分辨多细）。混合精度的所有麻烦，都是这笔分账的后果。</p>
+</div>
+
+<div class="arch-diagram">
+                 ┌─┬────────┬────────────────────────┐
+FP32   32 bit    │S│ E (8)  │        M (23)          │   范围 ±3.4e38    刻度最细
+                 └─┴────────┴────────────────────────┘
+                 ┌─┬─────┬──────────┐
+FP16   16 bit    │S│E (5)│  M (10)  │                    范围 ±65504     刻度较细
+                 └─┴─────┴──────────┘
+                 ┌─┬────────┬───────┐
+BF16   16 bit    │S│ E (8)  │ M (7) │                    范围 ±3.4e38    刻度较粗
+                 └─┴────────┴───────┘
+                 ┌─┬────┬───┐
+FP8    8 bit     │S│E(4)│M 3│                            范围 ±448       刻度很粗
+(E4M3)           └─┴────┴───┘
+
+        指数位 ──▶ 决定"能表示多大 / 多小"（动态范围，够不够用）
+        尾数位 ──▶ 决定"能分辨多细"（精度，准不准）
+
+  BF16 与 FP32 的指数位数完全相同 ⇒ 两者互转只是补零 / 截断低 16 位尾数，
+  不存在"转过去就溢出"的问题；FP16 的 5 位指数才是后面一切补丁的根源。
+</div>
+
+<h3>IEEE 754 标准</h3>
+<p>浮点数由三部分组成：<span class="highlight">符号位 (Sign)</span>、<span class="highlight">指数位 (Exponent)</span>、<span class="highlight">尾数位 (Mantissa/Fraction)</span>。数值 = (-1)^S × 2^(E-bias) × (1 + M)。</p>
+
+<h3>各精度位分配</h3>
+<table>
+<tr><th>格式</th><th>总位数</th><th>符号</th><th>指数</th><th>尾数</th><th>范围（约）</th><th>精度（有效位）</th></tr>
+<tr><td>FP32</td><td>32</td><td>1</td><td>8</td><td>23</td><td>±3.4×10³⁸</td><td>~7 位十进制</td></tr>
+<tr><td>FP16</td><td>16</td><td>1</td><td>5</td><td>10</td><td>±65504</td><td>~3.3 位十进制</td></tr>
+<tr><td>BF16</td><td>16</td><td>1</td><td>8</td><td>7</td><td>±3.4×10³⁸</td><td>~2.4 位十进制</td></tr>
+<tr><td>FP8 (E4M3)</td><td>8</td><td>1</td><td>4</td><td>3</td><td>±448</td><td>~1.2 位十进制</td></tr>
+<tr><td>FP8 (E5M2)</td><td>8</td><td>1</td><td>5</td><td>2</td><td>±57344</td><td>~0.9 位十进制</td></tr>
+</table>
+
+<div class="note">
+<strong>关键对比：</strong>FP16 指数位只有 5 位，动态范围小（容易溢出）；BF16 保持 FP32 相同的 8 位指数，范围一样大但精度较低；FP8 在 H100 上用于前向/反向加速。
+</div>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>能画出 FP32/FP16/BF16 的位布局</li>
+<li>理解"动态范围"取决于指数位数，"精度"取决于尾数位数</li>
+<li>BF16 = "截断版 FP32"（直接砍掉低 16 位尾数）</li>
+</ul>
+</div>
+
+<!-- Section 2 -->
+</div>
+
+<div class="section">
+<h2 id="s2">二、为什么用混合精度</h2>
+
+<div class="intuition-box">
+<p>低精度买到的是三样东西：Tensor Core 的算力翻倍、<span class="term">激活值</span>显存对半、分布式通信量对半。三样里只有第三样是"顺带的"，前两样才是把混合精度做成标配的真正理由。</p>
+</div>
+
+<h3>核心收益</h3>
+<ul>
+<li><strong>内存减半：</strong>FP16/BF16 参数占 FP32 一半空间 → 同 GPU 可训练更大 batch/模型</li>
+<li><strong>Tensor Core 加速：</strong>NVIDIA Tensor Core 对 FP16/BF16 矩阵乘法有专门硬件路径，吞吐量 2-8× 于 FP32 CUDA Core</li>
+<li><strong>通信带宽减半：</strong>分布式训练中 AllReduce 传输量减少 50%</li>
+<li><strong>训练大模型的必要条件：</strong>LLM (7B+) 若全 FP32 连单卡都放不下</li>
+</ul>
+
+<h3>Tensor Core 吞吐对比 (A100)</h3>
+<table>
+<tr><th>精度</th><th>TFLOPS</th><th>相对 FP32</th></tr>
+<tr><td>FP32 (TF32 mode)</td><td>156</td><td>1×</td></tr>
+<tr><td>FP16 / BF16</td><td>312</td><td>2×</td></tr>
+<tr><td>INT8</td><td>624</td><td>4×</td></tr>
+</table>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>混合精度不只是"省显存"，更是利用 Tensor Core 加速计算</li>
+<li>A100 默认对 FP32 矩阵乘法使用 TF32（19位），已是"隐式混合精度"</li>
+<li>通信减半对多机训练意义重大（带宽往往是瓶颈）</li>
+</ul>
+</div>
+
+<!-- Section 3 -->
+</div>
+
+<div class="section">
+<h2 id="s3">三、FP16 训练的问题</h2>
+
+<div class="intuition-box">
+<p>FP16 训练翻车只有两种死法：大数撞上 65504 变成 inf，小数掉到 6e-8 以下变成 0。两种死法的共同点是——梯度携带的信息在到达优化器之前就已经丢了，而 loss 曲线未必立刻告诉你。</p>
+</div>
+
+<h3>溢出 (Overflow)</h3>
+<p>FP16 最大值仅 65504。前向/反向中如果某个激活值或梯度 > 65504 就会变为 <code>inf</code>，随后传播导致 NaN。</p>
+
+<h3>下溢 (Underflow)</h3>
+<p>FP16 最小正次正规数约 6×10⁻⁸。许多梯度本身量级在 10⁻⁵ ~ 10⁻⁸ 之间，转为 FP16 后直接变为 0 → <span class="highlight">梯度消失</span>。</p>
+
+<h3>小梯度丢失</h3>
+<p>实验表明：直接用 FP16 训练时，约 5% 的梯度值落在 FP16 可表示的最小值以下，被截断为零。这些小梯度累积起来对参数更新有显著贡献。</p>
+
+<h3>数值不稳定操作</h3>
+<ul>
+<li><code>exp()</code>：指数函数很容易溢出</li>
+<li><code>softmax</code>：需要先减去 max 再求 exp</li>
+<li><code>sum reduction</code>：大量小值相加在低精度下误差累积</li>
+<li><code>LayerNorm</code>：方差计算对精度敏感</li>
+</ul>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>FP16 训练失败的两大原因：溢出（变 inf/NaN）和下溢（梯度归零）</li>
+<li>Loss Scaling 解决下溢，保留 FP32 Master Weights 解决精度丢失</li>
+<li>某些操作（softmax, norm, loss）必须在 FP32 下进行</li>
+</ul>
+</div>
+
+<!-- Section 4 -->
+</div>
+
+<div class="section">
+<h2 id="s4">四、Loss Scaling</h2>
+
+<div class="intuition-box">
+<p><span class="term">损失缩放</span>是把梯度临时放大到 FP16 能表示的区间里算完、更新前再缩回来。放大倍数只作用于"存储与传输"这一段，不改变数学上的更新量——所以它不是近似，是无损的搬运。</p>
+</div>
+
+<div class="arch-diagram">
+  FP16 能表示的正数区间（横轴为对数刻度）
+
+     ← 下溢盲区 →│←──────────── 可精确表示 ────────────→│← 溢出 →
+  0 ─────────────┼──────────────────────────────────────┼──────────▶
+              6e-8                                   65504
+
+  未缩放：真实梯度分布整体偏左，左半截直接被四舍五入成 0
+              ▁▂▃▅▇▅▃▂▁
+  ────────────┴─────────┴────────────────────────────────────────
+            1e-10     1e-6
+            └── 这一段全部归零，信息永久丢失 ──┘
+
+  乘上 S = 2^15 后：整条分布右移，完整落进可表示区间
+                                     ▁▂▃▅▇▅▃▂▁
+  ─────────────────────────────────┴─────────┴──────────────────
+                                 3e-6      3e-2
+                                 └── 全部保留 ──┘
+
+  更新前再 ÷ S 还原真实量级 ⇒ 缩放只发生在中间过程，结果不变。
+  S 太大 ─▶ 分布右端撞上 65504，出现 inf ─▶ 动态策略把 S 减半并丢弃本步。
+  S 太小 ─▶ 保护不足，左半截仍在归零 ─▶ 连续若干步无异常则把 S 翻倍。
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>某团队在 8×V100 上做 7B 模型的 FP16 微调。<strong>背景</strong>——V100 没有原生 BF16，只能走 FP16 + GradScaler 这条路。<strong>问题</strong>——前 200 步一切正常，之后 loss 变成 NaN；回看日志发现 GradScaler 的 scale 从 65536 一路减半掉到 256 仍未稳定，<span class="term">跳步</span>率（skipped steps）高达 18%，等于近五分之一的数据白跑。<strong>方案</strong>——先把初始 scale 从 2^16 降到 2^12 让它别一上来就撞顶，再加 1.0 的梯度裁剪压住尖峰，最后用二分法定位到一处残差累加在 FP16 下溢出、给该模块单独套 <code>autocast(enabled=False)</code>。<strong>效果</strong>——scale 稳定在 2^13~2^14 区间不再单调下滑，跳步率降到 0.5% 以下，训练跑完全程无 NaN。
+</div>
+
+<h3>核心思想</h3>
+<p>在反向传播前将 loss 乘以一个较大的 <span class="highlight">Scale Factor</span>（如 1024 或 65536），使梯度整体放大，避免下溢到 FP16 的"盲区"。更新参数前再除以同一 Scale Factor 恢复真实梯度。</p>
+
+<pre><code># 伪代码
+scaled_loss = loss * scale_factor
+scaled_loss.backward()          # FP16 梯度被放大
+optimizer.step(grad / scale_factor)  # 恢复真实梯度后更新 FP32 参数</code></pre>
+
+<h3>动态 Loss Scaling</h3>
+<p>固定 Scale Factor 可能太大（导致溢出）或太小（保护不足）。动态策略：</p>
+<ol>
+<li>初始 Scale Factor = 2¹⁵ 或 2¹⁶</li>
+<li>每 N 步（如 2000 步）若无 inf/NaN → Scale Factor × 2（放大）</li>
+<li>若检测到 inf/NaN → Scale Factor / 2（缩小），<strong>并跳过本次参数更新</strong></li>
+</ol>
+
+<h3>溢出检测与回退</h3>
+<pre><code>if any(grad == inf or grad == NaN):
+    scale_factor /= 2
+    skip this optimizer step   # 不更新参数
+else:
+    optimizer.step(grad / scale_factor)
+    if consecutive_ok_steps >= growth_interval:
+        scale_factor *= 2</code></pre>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>Loss Scaling 本质：在 FP16 可表示范围内"挪动"梯度分布</li>
+<li>动态 Scaling 通过"试探+回退"自动找到合适的缩放因子</li>
+<li>检测到 overflow 时必须跳过当前 step（否则污染参数）</li>
+<li>BF16 由于范围够大，通常不需要 Loss Scaling</li>
+</ul>
+</div>
+
+<!-- Section 5 -->
+</div>
+
+<div class="section">
+<h2 id="s5">五、AMP (Automatic Mixed Precision)</h2>
+
+<div class="intuition-box">
+<p>AMP 是两个独立零件的组合：autocast 负责"这个算子该用什么精度"，GradScaler 负责"梯度别掉到 0"。用 BF16 时第二个零件可以整个拿掉，这就是 BF16 代码更短的原因。</p>
+</div>
+
+<h3>PyTorch AMP API</h3>
+<pre><code>import torch
+from torch.cuda.amp import autocast, GradScaler
+
+scaler = GradScaler()
+
+for data, target in dataloader:
+    optimizer.zero_grad()
+
+    with autocast(dtype=torch.float16):   # 自动选择精度
+        output = model(data)
+        loss = criterion(output, target)
+
+    scaler.scale(loss).backward()         # 缩放 loss → FP16 梯度
+    scaler.step(optimizer)                # unscale → 检测 inf → 更新
+    scaler.update()                       # 调整 scale factor</code></pre>
+
+<h3>autocast 上下文管理器</h3>
+<p><code>autocast</code> 自动将支持的操作转为 FP16（或 BF16），不支持的保持 FP32。程序员无需手动管理每个 op 的精度。</p>
+
+<h3>白名单 / 黑名单</h3>
+<table>
+<tr><th>类别</th><th>操作</th><th>精度</th></tr>
+<tr><td>白名单 (FP16)</td><td>matmul, conv, linear, BMM</td><td>FP16 ✓</td></tr>
+<tr><td>黑名单 (FP32)</td><td>softmax, layer_norm, batch_norm, loss functions, exp, log, pow</td><td>FP32 保持</td></tr>
+<tr><td>灰名单</td><td>element-wise ops (ReLU, dropout, add)</td><td>跟随输入精度</td></tr>
+</table>
+
+<h3>GradScaler 内部流程</h3>
+<ol>
+<li><code>scaler.scale(loss)</code>：loss × current_scale</li>
+<li><code>.backward()</code>：梯度全部 × current_scale（FP16 下不会下溢）</li>
+<li><code>scaler.step(optimizer)</code>：先 <code>unscale_</code>（梯度 / scale），检查 inf/NaN，无异常则 <code>optimizer.step()</code></li>
+<li><code>scaler.update()</code>：根据是否检测到 inf 调整 scale_factor</li>
+</ol>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>AMP = autocast（精度选择）+ GradScaler（Loss Scaling）</li>
+<li>白名单是计算密集型 ops（受益于 Tensor Core），黑名单是精度敏感 ops</li>
+<li>autocast 只影响前向；反向自动匹配前向的精度</li>
+<li>PyTorch 2.0+ 推荐 <code>torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16)</code></li>
+</ul>
+</div>
+
+<!-- Section 6 -->
+</div>
+
+<div class="section">
+<h2 id="s6">六、BF16 vs FP16</h2>
+
+<div class="intuition-box">
+<p>BF16 = FP32 的范围 + 更粗的刻度。范围够大所以不会下溢，于是损失缩放、溢出检测、跳步回退这一整套补丁可以一起删掉——BF16 的价值一半在数值，一半在少了一堆要调的旋钮。</p>
+</div>
+
+<h3>BF16 的核心优势</h3>
+<table>
+<tr><th>对比维度</th><th>FP16</th><th>BF16</th></tr>
+<tr><td>指数位</td><td>5 位</td><td>8 位</td></tr>
+<tr><td>尾数位</td><td>10 位</td><td>7 位</td></tr>
+<tr><td>动态范围</td><td>±65504</td><td>±3.4×10³⁸（同 FP32）</td></tr>
+<tr><td>是否需要 Loss Scaling</td><td>必须</td><td>通常不需要</td></tr>
+<tr><td>精度</td><td>较高</td><td>较低（但够用）</td></tr>
+</table>
+
+<h3>硬件支持</h3>
+<ul>
+<li><strong>A100 / H100：</strong>原生 BF16 Tensor Core，吞吐与 FP16 相同</li>
+<li><strong>V100：</strong>不支持 BF16（只能用 FP16）</li>
+<li><strong>TPU：</strong>Google 从 TPUv2 起就使用 BF16</li>
+</ul>
+
+<h3>LLM 训练标配 BF16</h3>
+<p>GPT-3、LLaMA、PaLM 等大模型均使用 BF16 训练。原因：</p>
+<ul>
+<li>不需要 Loss Scaling → 代码更简单、训练更稳定</li>
+<li>范围与 FP32 相同 → 几乎不会 overflow</li>
+<li>精度损失在统计意义上可忽略（大模型的梯度噪声远大于 BF16 量化噪声）</li>
+</ul>
+
+<pre><code># BF16 训练（PyTorch）— 不需要 GradScaler
+with torch.amp.autocast(device_type='cuda', dtype=torch.bfloat16):
+    output = model(data)
+    loss = criterion(output, target)
+loss.backward()
+optimizer.step()</code></pre>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>BF16 = FP32 的范围 + 较低的精度 → 不需要 Loss Scaling</li>
+<li>LLM 训练首选 BF16（前提是硬件支持）</li>
+<li>如果用 V100 只能选 FP16 + GradScaler</li>
+<li>BF16 转 FP32 只需补零（低位尾数），转换极快</li>
+</ul>
+</div>
+
+<!-- Section 7 -->
+</div>
+
+<div class="section">
+<h2 id="s7">七、FP8 训练</h2>
+
+<div class="intuition-box">
+<p>位数越少，越依赖"先量尺寸再装箱"。FP8 的 ±448 窗口装不下任何未经缩放的真实张量，所以必须逐张量算缩放因子；而为了不多跑一遍前向去取最大值，就用上一步的历史最大值来估——这就是<span class="term">延迟缩放</span>。</p>
+</div>
+
+<h3>两种 FP8 格式</h3>
+<table>
+<tr><th>格式</th><th>指数</th><th>尾数</th><th>范围</th><th>用途</th></tr>
+<tr><td>E4M3</td><td>4</td><td>3</td><td>±448</td><td>前向（权重 & 激活）</td></tr>
+<tr><td>E5M2</td><td>5</td><td>2</td><td>±57344</td><td>反向（梯度）</td></tr>
+</table>
+<p>E4M3 精度更高（3 位尾数），适合表示权重和激活；E5M2 范围更大（5 位指数），适合梯度（梯度分布方差大）。</p>
+
+<h3>Transformer Engine</h3>
+<p>NVIDIA Transformer Engine 是 FP8 训练的软件框架，集成在 Megatron-LM / NeMo 中：</p>
+<ul>
+<li>自动对 Linear 层使用 FP8 GEMM</li>
+<li>管理 per-tensor scaling factor</li>
+<li>提供 FP8 与 BF16/FP16 之间的自动转换</li>
+</ul>
+
+<h3>延迟缩放 (Delayed Scaling)</h3>
+<p>FP8 范围极小，必须为每个 tensor 维护一个 scaling factor。<strong>延迟缩放</strong>策略：</p>
+<ol>
+<li>使用前几次迭代中的 <code>amax</code>（绝对值最大值）历史来计算当前 scale</li>
+<li><code>scale = FP8_MAX / amax_history.max()</code></li>
+<li>延迟一步应用（当前 step 的 amax 用于下一步的 scale 计算）</li>
+</ol>
+<p>这避免了需要两次 pass（先算 amax 再做计算）的开销。</p>
+
+<h3>H100 FP8 Tensor Core</h3>
+<p>H100 FP8 算力高达 <strong>~2000 TFLOPS</strong>（是 BF16 的约 2×），使训练速度可再翻倍。目前 FP8 训练还在早期阶段，主要用于大规模 LLM pre-training。</p>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>E4M3 用于前向（精度优先），E5M2 用于反向（范围优先）</li>
+<li>FP8 必须做 per-tensor scaling（不像 BF16 可以不 scale）</li>
+<li>延迟缩放 = 用历史 amax 估算当前 scale，避免额外 pass</li>
+<li>Transformer Engine 自动管理 FP8 ↔ higher precision 转换</li>
+</ul>
+</div>
+
+<!-- Section 8 -->
+</div>
+
+<div class="section">
+<h2 id="s8">八、Master Weights</h2>
+
+<div class="intuition-box">
+<p>FP16 负责快，FP32 的<span class="term">主权重</span>副本负责不把小的更新量四舍五入成零。两份权重不是冗余，是分工：一份用来算得快，一份用来记得准。</p>
+</div>
+
+<div class="arch-diagram">
+        ┌────────────────────────────────┐
+        │  FP32 Master Weights   W       │ ◀── 唯一的"真相副本"
+        │  FP32 Adam 状态  m, v          │     优化器只读写这里
+        └───────────────┬────────────────┘
+                        │ cast（每步开始，只读）
+                        ▼
+        ┌────────────────────────────────┐
+        │  FP16 / BF16 Weights   w       │     参与实际计算的工作副本
+        └───────────────┬────────────────┘
+                        ▼   autocast：matmul / conv / linear 走低精度
+                ┌───────────────┐
+                │    Forward    │ ──▶ loss（黑名单算子已提回 FP32）
+                └───────────────┘              │
+                                               │ × S  仅 FP16 需要
+                        ┌──────────────┐       ▼
+                        │   Backward   │ ◀── scaled_loss
+                        └──────┬───────┘
+                               ▼  FP16 梯度，已放大 S 倍（躲开下溢盲区）
+                     ┌──────────────────┐
+                     │  扫描 inf / NaN  │
+                     └───┬──────────┬───┘
+                    有   │          │   无
+                         ▼          ▼
+              S ← S / 2         grad ÷ S ──▶ 转 FP32
+              丢弃本步                        │
+              W 保持不动                       ▼
+                    │              ┌────────────────────────┐
+                    │              │ FP32 下更新 W、m、v     │
+                    └──────────────┴───────────┬────────────┘
+                                               │
+                        ▲──────── 回到顶部 ─────┘
+
+  关键：低精度只出现在"算"的路径上，"记"的路径（W / m / v）全程 FP32。
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>显存账必须分两侧算，否则容量预估一定对不上。<strong>背景</strong>——某团队按"混合精度显存减半"的说法给 7B 模型（70 亿参数）规划单卡容量。<strong>问题</strong>——纯 FP32 训练的参数侧固定开销是 4（权重）+ 4（梯度）+ 4（Adam m）+ 4（Adam v）= 16 字节/参数，约 112 GB；换成 FP16 混合精度后是 2（FP16 权重）+ 2（FP16 梯度）+ 4（FP32 主权重）+ 4 + 4 = 16 字节/参数，<strong>还是 112 GB，一个字节没省</strong>。照"减半"假设排的容量一上机就 OOM。<strong>方案</strong>——把混合精度重新定位成"激活侧减半 + 算力翻倍"，参数侧的 112 GB 交给优化器状态分片和 8-bit 优化器去解决，两条账分开核算。<strong>效果</strong>——预估与实测对上了；同时也解释了为什么长序列、大 batch 场景下混合精度的显存收益远比短序列明显——激活值随 batch × 序列长度增长，早已远大于参数侧。
+</div>
+
+<h3>为什么优化器状态保持 FP32</h3>
+<p>参数更新公式：<code>w = w - lr × grad</code>。当 <code>lr × grad</code> 的量级 &lt; FP16 精度（约 2⁻¹⁰ ≈ 0.001 的相对误差）时，<code>w - lr×grad</code> 在 FP16 下等于 <code>w</code>（更新被吞掉）。</p>
+
+<h3>混合精度训练的完整流程</h3>
+<pre><code># 训练循环
+# 1. FP32 master weights → 拷贝为 FP16 weights
+w_fp16 = w_fp32.half()
+
+# 2. FP16 前向传播
+with autocast():
+    loss = model_fp16(x)
+
+# 3. FP16 反向传播（带 loss scaling）
+scaled_loss = loss * scale_factor
+scaled_loss.backward()  # grad 是 FP16
+
+# 4. FP32 参数更新
+grad_fp32 = grad_fp16.float() / scale_factor
+w_fp32 = w_fp32 - lr * grad_fp32   # 在 FP32 下更新
+
+# Adam 的 m, v 也是 FP32</code></pre>
+
+<h3>内存分析</h3>
+<table>
+<tr><th>组件</th><th>精度</th><th>内存（per param）</th></tr>
+<tr><td>FP16 参数（前向/反向）</td><td>FP16</td><td>2 bytes</td></tr>
+<tr><td>FP16 梯度</td><td>FP16</td><td>2 bytes</td></tr>
+<tr><td>FP32 Master Weights</td><td>FP32</td><td>4 bytes</td></tr>
+<tr><td>Adam m (一阶动量)</td><td>FP32</td><td>4 bytes</td></tr>
+<tr><td>Adam v (二阶动量)</td><td>FP32</td><td>4 bytes</td></tr>
+<tr><td><strong>总计</strong></td><td></td><td><strong>16 bytes/param</strong></td></tr>
+</table>
+<p>对比纯 FP32 训练（4 + 4 + 4 + 4 = 16 bytes）似乎没省，但<strong>激活值内存减半</strong>是最大收益（激活 >> 参数），且计算速度提升 2×+。</p>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>Master Weights 必须 FP32：否则小学习率更新会被精度吞掉</li>
+<li>Adam 的 m/v 也必须 FP32（它们量级比参数小很多）</li>
+<li>混合精度的真正显存收益来自激活值减半（activation checkpointing 配合效果更好）</li>
+<li>能画出 FP16 forward → FP16 backward → FP32 update 的完整数据流</li>
+</ul>
+</div>
+
+<!-- Section 9 -->
+</div>
+
+<div class="section">
+<h2 id="s9">九、混合精度最佳实践</h2>
+
+<div class="intuition-box">
+<p>一条判据就能覆盖大半场景：算子是"乘加密集"的就交给低精度换速度，算子要"求和、求指数、求方差"的就留在 FP32 保正确。AMP 的黑白名单本质上就是这条判据的清单化。</p>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>硬件有原生 BF16 就直接上 BF16，省掉损失缩放这一整套要调的旋钮</li>
+<li>必须走 FP16 时用动态损失缩放，让它自己找工作点</li>
+<li>把 softmax、LayerNorm、loss、以及一切求和归约留在 FP32</li>
+<li>主权重和 Adam 的 m、v 一律 FP32，这是精度底线不是优化项</li>
+<li>把跳步率当一等监控指标，它比 loss 曲线更早暴露数值问题</li>
+<li>梯度累加放在 unscale 之后、FP32 缓冲区里做，避免多步累加误差</li>
+<li>定位不明 NaN 用二分法逐段关 autocast，比通读代码快得多</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在没有原生 BF16 的老卡上指定 bfloat16，拿不到 Tensor Core 加速</li>
+<li>不要在检测到 inf/NaN 后照常 <code>optimizer.step()</code>，NaN 会经动量传染到之后每一步</li>
+<li>不要照抄别人的初始 scale 常数，不同模型的梯度量级能差几个数量级</li>
+<li>不要把 Embedding、归一化层硬塞进低精度换速度，它们不吃 Tensor Core 却最先出问题</li>
+<li>不要只看 loss 没炸就断定精度没问题，小梯度静默归零时 loss 往往只是"收敛得慢"</li>
+<li>不要在低精度下做长序列的 sum / mean 归约，累加误差会随长度线性放大</li>
+<li>不要把损失缩放当成万能解药，它治下溢，不治梯度爆炸</li>
+</ul>
+</div>
+</div>
+
+<h3>数值稳定的 Softmax</h3>
+<pre><code># 不安全
+softmax(x) = exp(x) / sum(exp(x))   # exp(x) 可能溢出
+
+# 安全版本（PyTorch 默认实现）
+x_stable = x - x.max(dim=-1, keepdim=True)
+softmax(x) = exp(x_stable) / sum(exp(x_stable))</code></pre>
+<p>在 AMP 中，softmax 被放在黑名单中自动用 FP32 计算。</p>
+
+<h3>数值稳定的 LayerNorm</h3>
+<p>LayerNorm 涉及方差计算 <code>var = mean((x - mean)²)</code>。在 FP16 下如果 x 值较大，<code>(x-mean)²</code> 容易溢出。PyTorch 的 <code>nn.LayerNorm</code> 在 AMP 下自动提升为 FP32。</p>
+
+<h3>Gradient Accumulation 注意事项</h3>
+<ul>
+<li>梯度累加发生在 FP16/BF16 空间时，多步累加误差会放大</li>
+<li><strong>推荐：</strong>在 FP32 空间做累加（unscale 后累加到 FP32 buffer）</li>
+<li>PyTorch GradScaler 的 <code>unscale_</code> 在 <code>step()</code> 内调用，多步累加时只在最后一步调用 <code>scaler.step()</code></li>
+</ul>
+<pre><code>for i, (data, target) in enumerate(dataloader):
+    with autocast():
+        loss = model(data, target) / accumulation_steps
+    scaler.scale(loss).backward()
+
+    if (i + 1) % accumulation_steps == 0:
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()</code></pre>
+
+<h3>常见 NaN 排查</h3>
+<table>
+<tr><th>症状</th><th>可能原因</th><th>解决方案</th></tr>
+<tr><td>训练初期 NaN</td><td>初始 scale factor 太大</td><td>降低初始 scale（如 2¹²）</td></tr>
+<tr><td>Loss 突然 NaN</td><td>梯度爆炸 → FP16 溢出</td><td>Gradient Clipping + 降低 LR</td></tr>
+<tr><td>某层持续 NaN</td><td>该层对 FP16 精度敏感</td><td>用 <code>autocast(enabled=False)</code> 强制 FP32</td></tr>
+<tr><td>Scale factor 持续下降</td><td>模型不稳定 / LR 过大</td><td>检查模型架构和超参数</td></tr>
+<tr><td>Loss 不收敛但无 NaN</td><td>小梯度被下溢吞掉</td><td>增大 scale factor 初始值</td></tr>
+</table>
+
+<h3>其他实践建议</h3>
+<ul>
+<li>使用 <code>torch.autograd.detect_anomaly()</code> 定位 NaN 源头</li>
+<li>对于自定义 CUDA kernel，确保输入输出精度匹配</li>
+<li>Embedding 层通常保持 FP32（离散查表不受益于 Tensor Core）</li>
+<li>分布式训练中 AllReduce 在 FP16 下做，但 ring buffer 可用 FP32 避免累加误差</li>
+</ul>
+
+<div class="interview-box">
+<strong>💡 知识要点</strong>
+<ul>
+<li>Softmax/LayerNorm/Loss 必须 FP32 — 这是 AMP 黑名单的设计原因</li>
+<li>Gradient Accumulation 与 Loss Scaling 的交互：只在最终 step 做 unscale + update</li>
+<li>NaN 排查第一步：检查 scale factor 是否在持续下降</li>
+<li>遇到不明 NaN：逐层关闭 autocast 二分定位</li>
+</ul>
+</div>
+
+<!-- Q&A Section -->
+</div>
+
+<div class="section">
+<h2 id="qa">十、Q&amp;A</h2>
+
+<details>
+<summary>Q1: 混合精度训练为什么叫"混合"？具体混合了什么？</summary>
+<p>混合的是 FP16（或 BF16）和 FP32 两种精度。前向传播和反向传播使用 FP16 以加速计算和减少显存，参数更新和优化器状态使用 FP32 以保证数值精度。"混合"意味着同一训练过程中不同阶段、不同操作使用不同精度。</p>
+</details>
+
+<details>
+<summary>Q2: Loss Scaling 为什么能解决梯度下溢问题？</summary>
+<p>FP16 的最小正次正规数约为 6×10⁻⁸，许多梯度值低于此阈值会被截为 0。Loss Scaling 在反向传播前将 loss 放大（如 ×1024），使所有梯度整体放大相同倍数，将原本会下溢的小梯度"抬升"到 FP16 可表示的范围内。更新参数时再除以相同的 scale factor 恢复真实值。本质上是在 FP16 的有限动态范围内"挪动窗口"覆盖梯度分布。</p>
+</details>
+
+<details>
+<summary>Q3: BF16 为什么不需要 Loss Scaling？</summary>
+<p>BF16 有 8 位指数（与 FP32 相同），动态范围达 ±3.4×10³⁸，梯度不论多小都不会下溢到 0（因为范围足够覆盖任何正常梯度值）。FP16 只有 5 位指数，范围仅 ±65504，这才是需要 Loss Scaling 的根本原因。BF16 牺牲的是尾数精度（7 位 vs FP16 的 10 位），但对深度学习训练来说精度影响可忽略。</p>
+</details>
+
+<details>
+<summary>Q4: 为什么优化器状态（Adam 的 m 和 v）必须用 FP32？</summary>
+<p>Adam 的动量 m 和 v 通过指数移动平均积累梯度信息，量级可能远小于参数本身。如果用 FP16 存储：(1) m/v 的更新量可能小于 FP16 精度而被吞掉；(2) v 作为分母，精度不够会导致学习率不稳定。此外参数更新 w = w - lr*m/√v 中的增量通常很小，在 FP16 下可能 w - delta == w（精度不够表示差异）。</p>
+</details>
+
+<details>
+<summary>Q5: autocast 是如何决定哪些操作用 FP16 哪些保持 FP32 的？</summary>
+<p>PyTorch 维护了三个列表：(1) 白名单 — 计算密集型操作（matmul, conv, linear）自动用 FP16，这些操作受益于 Tensor Core 加速；(2) 黑名单 — 精度敏感操作（softmax, layernorm, loss）保持 FP32；(3) 灰名单 — element-wise 操作跟随输入精度。autocast 上下文内 PyTorch dispatcher 会拦截算子调用，根据列表自动 cast 输入 tensor 的精度。</p>
+</details>
+
+<details>
+<summary>Q6: 动态 Loss Scaling 检测到 overflow 时为什么要跳过整个 step？</summary>
+<p>因为一旦梯度中出现 inf/NaN，任何基于该梯度的参数更新都会"污染"模型权重。即使只有一个参数的梯度溢出，经过 optimizer（如 Adam）的动量累积，NaN 会传播到 m/v 中，进而影响后续所有 step。所以必须整个 step 作废，将 scale factor 减半后重新尝试。这次的梯度信息虽然丢失了，但模型参数保持了正确状态。</p>
+</details>
+
+<details>
+<summary>Q7: FP8 训练为什么需要 per-tensor scaling 而不是像 BF16 那样全局处理？</summary>
+<p>FP8 的动态范围极小（E4M3 仅 ±448），不同 tensor（权重、激活、梯度）的数值分布差异巨大。如果用统一 scale，要么大值溢出要么小值下溢。Per-tensor scaling 为每个 tensor 维护独立的 scale factor（= FP8_MAX / tensor_amax），将每个 tensor 的值域都映射到 FP8 能精确表示的范围内。延迟缩放则用历史 amax 估算，避免当前 step 需要两次 pass。</p>
+</details>
+
+<details>
+<summary>Q8: 混合精度训练的内存到底省在哪里？</summary>
+<p>参数相关内存（master weights + optimizer states）仍是 FP32 共 12 bytes/param，加上 FP16 参数和梯度共 16 bytes/param。看似没省。真正的节省来自：(1) <strong>激活值内存减半</strong> — 这在大 batch 或长序列时是主要显存消耗（远大于参数本身）；(2) FP16 梯度通信量减半（分布式训练）；(3) 更快的计算意味着可以用 activation checkpointing 换回更多显存。</p>
+</details>
+
+<details>
+<summary>Q9: 使用混合精度训练时如何排查持续出现的 NaN？</summary>
+<p>排查步骤：(1) 检查 GradScaler 的 scale factor 是否持续下降（说明频繁 overflow）；(2) 用 <code>torch.autograd.detect_anomaly()</code> 定位产生 NaN 的第一个操作；(3) 逐层用 <code>with autocast(enabled=False)</code> 强制 FP32，二分法定位问题层；(4) 检查是否有自定义操作未正确处理精度转换；(5) 考虑降低学习率或加 gradient clipping；(6) 检查数据中是否有异常值（极大/极小）进入模型。</p>
+</details>
+
+<details>
+<summary>Q10: TF32 是什么？它和混合精度训练的关系是什么？</summary>
+<p>TF32 (TensorFloat-32) 是 NVIDIA Ampere 架构引入的 19 位格式（1 位符号 + 8 位指数 + 10 位尾数）。A100 默认将 FP32 的矩阵乘法用 TF32 Tensor Core 执行——输入截断为 TF32 精度做乘法，累加器仍用 FP32。这是一种"隐式混合精度"：用户代码仍写 FP32，但硬件自动以较低精度计算。与显式 AMP 的区别是：TF32 不需要任何代码修改，但加速幅度（~2×）小于 FP16/BF16 AMP（~3-4×）。可通过 <code>torch.backends.cuda.matmul.allow_tf32 = False</code> 关闭。</p>
+</details>
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+  </body>
+</html>

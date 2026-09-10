@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A67 · AI 控制平面：Agent 失控熔断与接管 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.82rem;line-height:1.6;color:var(--cyan);white-space:pre;overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.warning-box{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warning-box::before{content:"⚠️ 警告";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.doc-footer{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--border);text-align:center;font-size:.82rem;color:#8b949e}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+@media(max-width:640px){h1{font-size:1.5rem}.practice-grid{grid-template-columns:1fr}table{font-size:.82rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、五大核心能力总览</a>
+<a href="#s2">二、精细访问控制工程实现</a>
+<a href="#s3">三、身份认证与持证上岗</a>
+<a href="#s4">四、全量可观测性</a>
+<a href="#s5">五、成本治理与熔断机制</a>
+<a href="#s6">六、数据主权与 PII 识别</a>
+<a href="#s7">七、为什么现有网关不够用</a>
+<a href="#s8">八、生产架构与案例</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+<div class="container">
+
+<h1>A67 · AI 控制平面：Agent 失控熔断与接管</h1>
+<p class="subtitle">AI Control Plane — 五大核心能力构建企业级 AI 治理基础设施，从"事后报告"到"毫秒级前置拦截"</p>
+
+<div class="intuition-box">
+<p>随着 AI 系统从简单对话框进化为自主运行智能体集群，传统点对点管理彻底失效。需要在基础设施层面建立 AI 控制平面，用交通指挥中心的思维来治理 AI 军队。三大支柱：可观测性（知道在做什么）+ 控制能力（能干预行为）+ 回滚机制（出错能恢复）。</p>
+</div>
+
+<!-- ==================== 1. 五大核心能力 ==================== -->
+<div class="section" id="s1">
+<h2>一、五大核心能力总览</h2>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│                  AI 控制平面五大能力                      │
+├─────────────────────────────────────────────────────────┤
+│                                                         │
+│  1 · 精细访问控制    精确到每个工具的调用权限             │
+│  2 · 身份认证        将真实用户身份注入每次 AI 请求       │
+│  3 · 全量可观测性    完整记录每次调用的来龙去脉           │
+│  4 · 成本治理        Token 预算 + 超支前拦截             │
+│  5 · 数据主权        敏感数据始终在企业内部处理           │
+│                                                         │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>能力</th><th>核心职责</th><th>不做会怎样</th><th>优先级</th></tr>
+<tr><td><span class="term">精细访问控制</span></td><td>精确到每个工具的调用权限</td><td>Agent 调用危险工具（删库、发邮件）</td><td>P0</td></tr>
+<tr><td><span class="term">身份认证</span></td><td>真实用户身份注入每次请求</td><td>无法追溯谁触发了什么操作</td><td>P0</td></tr>
+<tr><td><span class="term">全量可观测性</span></td><td>完整记录调用来龙去脉</td><td>出问题无法定位根因</td><td>P1</td></tr>
+<tr><td><span class="term">成本治理</span></td><td>Token 预算 + 超支拦截</td><td>一次死循环烧掉 $10,000</td><td>P0</td></tr>
+<tr><td><span class="term">数据主权</span></td><td>敏感数据内部处理</td><td>违反 GDPR / 等保合规</td><td>P0</td></tr>
+</table>
+
+<div class="highlight">
+<strong>治理理念的根本转变：</strong>从"事后报告"到"毫秒级前置拦截"。成本控制不再是月底看账单，而是执行前估算 Token 成本，超预算直接拦截。
+</div>
+</div>
+
+<!-- ==================== 2. 精细访问控制 ==================== -->
+<div class="section" id="s2">
+<h2>二、精细访问控制工程实现</h2>
+
+<div class="intuition-box">
+<p>纯 RBAC 在 Agent 场景下会迅速退化：为了让 Agent 在各种情境下都能干活，角色只能越开越宽，最后变成一个什么都能调的超级角色。补上属性维度（时间、来源、数据敏感级、当前任务上下文）之后，权限才能"平时收紧、需要时才放开"，而不是按最宽松的场景一刀切。</p>
+</div>
+
+<h3>权限模型：RBAC + ABAC 混合</h3>
+<table>
+<tr><th>维度</th><th>RBAC（角色访问控制）</th><th>ABAC（属性访问控制）</th><th>混合方案</th></tr>
+<tr><td>控制粒度</td><td>按角色（开发者/运维/客服）</td><td>按属性（时间/IP/敏感等级）</td><td>角色 + 属性组合</td></tr>
+<tr><td>示例</td><td>开发者可调用 debug 工具</td><td>仅工作时间可调用生产数据库</td><td>开发者 + 工作时间 → 允许</td></tr>
+<tr><td>灵活性</td><td>低（角色固定）</td><td>高（动态属性）</td><td>中等</td></tr>
+<tr><td>管理成本</td><td>低</td><td>高</td><td>中等</td></tr>
+</table>
+
+<h3>工具调用权限矩阵</h3>
+<table>
+<tr><th>工具类别</th><th>危险等级</th><th>权限策略</th><th>审计要求</th></tr>
+<tr><td>只读查询（搜索/读取）</td><td>低</td><td>默认允许</td><td>记录调用日志</td></tr>
+<tr><td>数据修改（写入/更新）</td><td>中</td><td>需显式授权 + 二次确认</td><td>记录 diff + 回滚快照</td></tr>
+<tr><td>高危操作（删除/发送/支付）</td><td>高</td><td>需人工审批 + 二次确认</td><td>全量录屏 + 审批记录</td></tr>
+<tr><td>系统操作（重启/部署）</td><td>极高</td><td>仅限白名单 Agent + 人工审批</td><td>全量审计 + 通知安全团队</td></tr>
+</table>
+
+<h3>运行时拦截流程</h3>
+<div class="arch-diagram">Agent 请求调用工具 → 控制平面拦截
+      │
+      ├──→ ① 权限检查（RBAC + ABAC）
+      │     不通过 → 拒绝 + 记录
+      │
+      ├──→ ② 敏感数据扫描（PII 检测）
+      │     发现 PII → 脱敏后放行 / 拒绝
+      │
+      ├──→ ③ Token 预算检查
+      │     超预算 → 拒绝 + 告警
+      │
+      └──→ ④ 放行 + 全量日志记录</div>
+</div>
+
+<!-- ==================== 3. 身份认证 ==================== -->
+<div class="section" id="s3">
+<h2>三、身份认证与持证上岗</h2>
+
+<h3>为什么每个 Agent 必须"持证上岗"？</h3>
+<p>Agent 不是匿名进程——它代表某个用户在执行操作。如果 Agent 删了数据库，必须能追溯到是谁触发的、什么时间、什么权限。</p>
+
+<h3>身份注入架构</h3>
+<table>
+<tr><th>层级</th><th>身份来源</th><th>注入方式</th><th>验证时机</th></tr>
+<tr><td>用户层</td><td>SSO / OAuth2 / LDAP</td><td>JWT Token 注入请求头</td><td>每次请求</td></tr>
+<tr><td>Agent 层</td><td>Agent ID + 版本号</td><td>X-Agent-ID 头</td><td>每次工具调用</td></tr>
+<tr><td>会话层</td><td>Session ID + 父 Agent ID</td><td>X-Session-ID 头</td><td>会话创建时</td></tr>
+</table>
+
+<div class="arch-diagram">身份传递链路:
+
+用户登录 (SSO) → JWT Token
+      │
+      ├──→ Agent 启动 → 携带 user_id + agent_id + session_id
+      │
+      ├──→ Agent 调用工具 → 控制平面验证:
+      │     ├── user_id 是否有权限调用此工具？
+      │     ├── agent_id 是否在白名单中？
+      │     └── session_id 是否有效（未过期）？
+      │
+      └──→ 审计日志记录: user_id + agent_id + tool + timestamp + result</div>
+
+<h3>多 Agent 协作的身份传递</h3>
+<p>当主 Agent 派发子 Agent 时，身份链不能断：</p>
+<ul>
+<li><strong>主 Agent</strong> 携带 user_id + agent_id</li>
+<li><strong>子 Agent</strong> 继承 user_id + 自己的 agent_id + parent_agent_id</li>
+<li><strong>审计日志</strong> 记录完整的调用链：user → main_agent → sub_agent → tool</li>
+</ul>
+</div>
+
+<!-- ==================== 4. 全量可观测性 ==================== -->
+<div class="section" id="s4">
+<h2>四、全量可观测性</h2>
+
+<div class="intuition-box">
+<p>Agent 可观测性和微服务可观测性最大的差别是：微服务出错通常伴随非 200 状态码，Agent 出错时每一次调用都是成功的，错的是决策序列。所以三支柱里 Traces 的权重要显著高于 Logs——只有把一次任务的完整调用链串起来看，才可能发现"它在原地绕圈"或"它挑了一个能跑通但不该用的工具"。</p>
+</div>
+
+<h3>三支柱：Logs + Metrics + Traces</h3>
+<table>
+<tr><th>支柱</th><th>内容</th><th>工具</th><th>关键指标</th></tr>
+<tr><td><strong>Logs</strong></td><td>每次工具调用的输入/输出/耗时/错误</td><td>ELK / Loki</td><td>错误率、延迟分布</td></tr>
+<tr><td><strong>Metrics</strong></td><td>聚合指标（QPS、Token 消耗、成功率）</td><td>Prometheus / Grafana</td><td>Token 成本趋势、成功率</td></tr>
+<tr><td><strong>Traces</strong></td><td>跨 Agent 的完整调用链</td><td>Jaeger / Tempo</td><td>端到端延迟、瓶颈定位</td></tr>
+</table>
+
+<h3>Trace 示例：一次用户请求的完整链路</h3>
+<div class="arch-diagram">Trace ID: abc-123
+├── [0ms]    用户输入 → 控制平面接收
+├── [2ms]    权限检查 → 通过
+├── [5ms]    PII 扫描 → 无敏感数据
+├── [8ms]    路由到 Agent-A
+├── [15ms]   Agent-A 调用工具 search_docs
+│   ├── [20ms]   search_docs 执行
+│   └── [180ms]  返回结果 (160ms)
+├── [185ms]  Agent-A 调用 LLM 生成回复
+│   ├── [190ms]  Prompt 发送 (2,400 tokens)
+│   ├── [1,200ms] LLM 响应 (800 tokens)
+│   └── [1,205ms] Token 成本: $0.0036
+├── [1,210ms] 输出 PII 扫描 → 无敏感数据
+├── [1,212ms] 返回用户
+└── [1,215ms] 审计日志写入
+
+Total: 1,215ms | Tokens: 3,200 | Cost: $0.0036</div>
+
+<h3>告警规则</h3>
+<table>
+<tr><th>告警</th><th>条件</th><th>级别</th><th>行动</th></tr>
+<tr><td>Token 成本飙升</td><td>5 分钟内成本 &gt; 日均 3 倍</td><td>P1</td><td>自动限流 + 通知运维</td></tr>
+<tr><td>错误率突增</td><td>5 分钟错误率 &gt; 10%</td><td>P1</td><td>自动降级 + 通知开发</td></tr>
+<tr><td>延迟异常</td><td>P95 延迟 &gt; 30s</td><td>P2</td><td>排查 + 扩容</td></tr>
+<tr><td>死循环检测</td><td>同一 Agent 10 分钟内调用同一工具 &gt; 20 次</td><td>P0</td><td>强制中断 + 通知</td></tr>
+</table>
+<p>进程内死循环防御机制见<a href="./agent_loop_pitfalls.html">《Agent 死循环与生产防御》（A66）</a>。</p>
+</div>
+
+<!-- ==================== 5. 成本治理 ==================== -->
+<div class="section" id="s5">
+<h2>五、成本治理与熔断机制</h2>
+
+<div class="intuition-box">
+<p>Agent 的成本风险不是"平均花得多"，而是"个别请求能瞬间花掉一个月的量"。一个进入死循环的 Agent 在几分钟内烧掉的额度，可能等于正常流量好几天的总和。这种尾部风险靠月度账单复盘完全接不住，只能靠请求发起前的预估拦截加运行中的累计计数来兜。</p>
+</div>
+
+<h3>三级成本防线</h3>
+<table>
+<tr><th>防线</th><th>时机</th><th>机制</th><th>效果</th></tr>
+<tr><td><strong>执行前估算</strong></td><td>Agent 发起请求时</td><td>根据任务类型 + 历史数据预估 Token 成本</td><td>拦截明显超预算请求</td></tr>
+<tr><td><strong>执行中监控</strong></td><td>Agent 运行过程中</td><td>实时统计已消耗 Token，达到 80% 告警</td><td>提前预警</td></tr>
+<tr><td><strong>执行后审计</strong></td><td>请求完成后</td><td>记录实际成本 vs 预估成本，优化估算模型</td><td>持续改进</td></tr>
+</table>
+
+<h3>熔断阈值设计</h3>
+<div class="arch-diagram">成本熔断三级阈值:
+
+Level 1: 单次请求预算
+  ├── 阈值: $0.50 / 请求
+  ├── 达到 → 拒绝执行 + 提示用户拆分任务
+  └── 可覆盖: 白名单用户可申请临时提额
+
+Level 2: 用户日预算
+  ├── 阈值: $50 / 用户 / 天
+  ├── 达到 80% → 告警用户
+  ├── 达到 100% → 暂停该用户所有 Agent
+  └── 恢复: 次日自动重置 / 管理员手动解锁
+
+Level 3: 系统总预算
+  ├── 阈值: $10,000 / 天
+  ├── 达到 80% → 全局限流（降低并发）
+  ├── 达到 100% → 紧急熔断（只允许只读操作）
+  └── 恢复: 运维团队确认后方可恢复</div>
+
+<p><strong>互补说明</strong>：百分比预算熔断见<a href="../engineering/token_cost_optimization.html">《Token 成本优化》（ST04）</a>，绝对额三级阈值为本卡方案。</p>
+
+<h3>Token 成本估算模型</h3>
+<table>
+<tr><th>任务类型</th><th>平均输入 Token</th><th>平均输出 Token</th><th>预估成本</th><th>实际偏差</th></tr>
+<tr><td>简单查询</td><td>500</td><td>200</td><td>$0.001</td><td>±20%</td></tr>
+<tr><td>文档总结</td><td>5,000</td><td>1,000</td><td>$0.009</td><td>±30%</td></tr>
+<tr><td>代码生成</td><td>2,000</td><td>3,000</td><td>$0.012</td><td>±50%</td></tr>
+<tr><td>复杂推理</td><td>10,000</td><td>5,000</td><td>$0.035</td><td>±40%</td></tr>
+</table>
+</div>
+
+<!-- ==================== 6. 数据主权 ==================== -->
+<div class="section" id="s6">
+<h2>六、数据主权与 PII 识别</h2>
+
+<div class="intuition-box">
+<p>数据主权的判断标准不是"数据现在在哪"，而是"数据一旦离开你还能不能把它删掉"。这正是脱敏必须做在发送之前而不是返回之后的原因：一旦敏感内容进了外部模型的上下文，后续任何输出侧过滤都只是掩盖，原始数据已经出域了。</p>
+</div>
+
+<h3>PII 识别：多层检测机制</h3>
+<table>
+<tr><th>检测层</th><th>技术</th><th>覆盖类型</th><th>延迟</th></tr>
+<tr><td>正则匹配</td><td>正则表达式</td><td>手机号、身份证号、邮箱、银行卡号</td><td>&lt;1ms</td></tr>
+<tr><td>NER 模型</td><td>命名实体识别（小模型）</td><td>姓名、地址、公司名</td><td>~5ms</td></tr>
+<tr><td>上下文推理</td><td>大模型辅助判断</td><td>隐含敏感信息（如"我的密码是..."）</td><td>~50ms</td></tr>
+</table>
+
+<h3>PII 处理策略</h3>
+<table>
+<tr><th>策略</th><th>适用场景</th><th>实现方式</th></tr>
+<tr><td><strong>脱敏替换</strong></td><td>Agent 不需要原始数据</td><td>138****5678 / 张*三 / 北京市***</td></tr>
+<tr><td><strong>Token 化</strong></td><td>需要保持引用一致性</td><td>手机号 → TOKEN_PHONE_001，处理完再还原</td></tr>
+<tr><td><strong>本地处理</strong></td><td>数据不能出域</td><td>PII 相关操作路由到本地部署的小模型</td></tr>
+<tr><td><strong>拒绝放行</strong></td><td>高敏感操作</td><td>检测到密码/密钥 → 直接拒绝 + 告警</td></tr>
+</table>
+
+<h3>数据主权架构</h3>
+<div class="arch-diagram">数据流向控制:
+
+用户输入（含 PII）
+      │
+      ├──→ PII 检测层
+      │     ├── 发现 PII → 脱敏 / Token 化
+      │     └── 无 PII → 直接放行
+      │
+      ├──→ 数据分类器
+      │     ├── 公开数据 → 可发送到外部模型
+      │     ├── 内部数据 → 仅限内部模型
+      │     ├── 机密数据 → 仅限本地部署
+      │     └── 绝密数据 → 禁止 AI 处理
+      │
+      └──→ 路由决策
+            ├── 非敏感 → 外部 API（GPT/Claude）
+            ├── 敏感 → 内部私有模型
+            └── 高敏感 → 拒绝处理</div>
+
+<div class="warning-box">
+<strong>合规红线：</strong>GDPR 要求用户数据"被遗忘权"——如果 Agent 把用户数据存储到了外部模型的上下文中，用户要求删除时无法执行。解决方案：敏感数据永远不发送到外部模型，或确保外部模型不持久化数据。
+</div>
+</div>
+
+<!-- ==================== 7. 现有网关不足 ==================== -->
+<div class="section" id="s7">
+<h2>七、为什么现有 API 网关不够用</h2>
+
+<table>
+<tr><th>能力</th><th>传统 API 网关</th><th>AI 控制平面</th><th>差距</th></tr>
+<tr><td>语义理解</td><td>只看 HTTP 请求体</td><td>理解 Prompt 语义</td><td>无法判断 Prompt 是否包含危险指令</td></tr>
+<tr><td>PII 识别</td><td>无</td><td>多层 PII 检测</td><td>无法判断请求中是否有身份证号</td></tr>
+<tr><td>Token 成本</td><td>按请求计费</td><td>按 Token 估算 + 熔断</td><td>无法做执行前成本估算</td></tr>
+<tr><td>递归检测</td><td>看 HTTP 状态码</td><td>检测 Agent 行为模式</td><td>死循环时看到的只是"正常请求"</td></tr>
+<tr><td>工具权限</td><td>按 API 路径控制</td><td>按工具粒度控制</td><td>无法控制 Agent 调用哪个具体工具</td></tr>
+</table>
+
+<div class="highlight">
+<strong>结论：</strong>未来企业需要建立私有 AI 网关层，在不改动应用代码的前提下，统一管理多模型平台和 AI Agent。这不是"加一个中间件"，而是基础设施层面的升级。
+</div>
+</div>
+
+<!-- ==================== 8. 生产架构 ==================== -->
+<div class="section" id="s8">
+<h2>八、生产架构与案例</h2>
+
+<h3>AI 控制平面部署架构</h3>
+<div class="arch-diagram">部署拓扑:
+
+                    ┌─────────────┐
+                    │  用户请求    │
+                    └──────┬──────┘
+                           │
+                    ┌──────▼──────┐
+                    │ AI 控制平面  │ ← 前置拦截层
+                    │ (Gateway)   │
+                    └──────┬──────┘
+                           │
+              ┌────────────┼────────────┐
+              │            │            │
+       ┌──────▼──────┐ ┌──▼──┐ ┌──────▼──────┐
+       │ Agent 集群   │ │ LLM │ │ 内部模型    │
+       │ (Claude Code │ │ API │ │ (私有部署)  │
+       │  自建 Agent) │ │     │ │             │
+       └──────────────┘ └─────┘ └─────────────┘</div>
+
+<h3>生产案例数据</h3>
+<table>
+<tr><th>指标</th><th>部署前</th><th>部署后</th><th>改善</th></tr>
+<tr><td>Token 超支事故</td><td>5 起/月</td><td>0 起/月</td><td>-100%</td></tr>
+<tr><td>死循环发现时间</td><td>15 分钟</td><td>30 秒</td><td>-97%</td></tr>
+<tr><td>PII 泄露事件</td><td>2 起/季度</td><td>0 起/季度</td><td>-100%</td></tr>
+<tr><td>Agent 操作追溯率</td><td>40%</td><td>100%</td><td>+60pp</td></tr>
+<tr><td>日均 Token 成本</td><td>$8,500</td><td>$3,200</td><td>-62%</td></tr>
+</table>
+
+<h3>关键设计决策</h3>
+<ul>
+<li><strong>前置拦截优于事后审计</strong>：控制平面部署在 Agent 和 LLM 之间，所有请求必须经过</li>
+<li><strong>异步日志优于同步审计</strong>：审计日志异步写入，不影响请求延迟（增加 &lt;5ms）</li>
+<li><strong>渐进式熔断优于硬阈值</strong>：先限流（降低并发），再降级（只允许只读），最后熔断</li>
+<li><strong>PII 检测前置</strong>：在数据到达 LLM 之前完成脱敏，而非在输出端检测</li>
+</ul>
+
+<h3>建设顺序上的取舍</h3>
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>第一步先做全量 Trace，哪怕还没有任何拦截能力。没有链路数据，后面所有阈值都只能靠猜，而且出事时连复盘素材都没有。</li>
+<li>把身份贯穿到子 Agent：子 Agent 继承发起人身份并附带父 Agent ID，链路断在哪一层，追溯就止步在哪一层。</li>
+<li>成本熔断同时设单请求、单用户、全系统三个维度，前两个防个案失控，第三个防整体被拖垮。</li>
+<li>拦截规则先以观察模式上线，只记录不阻断，跑够一周看误伤率再切换成强制模式。</li>
+<li>审计日志异步落盘，把它从请求关键路径上摘出去，避免审计系统抖动直接变成业务不可用。</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要指望现有 API 网关改改配置就能顶上——它看不懂 Prompt 语义，也算不出 Token 成本，死循环在它眼里就是一串正常请求。</li>
+<li>不要把控制平面做成旁路审计，旁路只能事后告诉你出过事，拦不住正在发生的事。</li>
+<li>不要在输出端才做 PII 过滤，数据那时已经发出去了。</li>
+<li>不要用一刀切的高危名单管所有工具，同一个删除接口在测试库和生产库上的风险完全不同，要带上资源属性一起判。</li>
+<li>不要让控制平面自己成为单点：它挂了整个 Agent 体系就停摆，必须提前想清楚降级策略是全放行还是全拒绝，并且这个选择要按业务写死而不是临时决定。</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="section" id="qa">
+<h2>Q&A</h2>
+<div class="qa-section">
+
+<details>
+<summary>AI 控制平面和传统 API 网关有什么本质区别？</summary>
+<div class="answer">传统网关只看 HTTP 请求（URL/Header/Body），AI 控制平面需要理解 Prompt 语义。四个核心差异：(1) 语义理解 — 判断 Prompt 是否包含危险指令；(2) PII 识别 — 检测请求中的敏感信息；(3) Token 成本 — 执行前估算 + 实时熔断；(4) 递归检测 — 识别 Agent 死循环行为模式。传统网关看到的死循环只是"正常 HTTP 请求"。</div>
+</details>
+
+<details>
+<summary>成本治理的三级防线如何配合？</summary>
+<div class="answer">执行前估算 → 拦截明显超预算请求（如预估 $50 的复杂推理任务，单次预算上限 $0.50）；执行中监控 → 实时统计 Token 消耗，达到 80% 告警用户，达到 100% 强制中断；执行后审计 → 对比预估 vs 实际成本，优化估算模型。三级防线形成闭环：估算模型越准确，拦截越精准。</div>
+</details>
+
+<details>
+<summary>PII 检测为什么不能只靠正则？</summary>
+<div class="answer">正则只能匹配格式固定的 PII（手机号、身份证号），但无法识别：(1) "我的密码是 abc123" — 密码无固定格式；(2) "我的住址在 XX 小区 3 号楼" — 地址格式多变；(3) "帮我转账给张三" — 姓名需要 NER 模型识别。所以采用三层检测：正则（快，&lt;1ms）→ NER 模型（中，~5ms）→ 大模型辅助（慢，~50ms），平衡速度和覆盖率。</div>
+</details>
+
+<details>
+<summary>为什么治理理念要从"事后报告"转为"前置拦截"？</summary>
+<div class="answer">Agent 执行速度极快，一旦失控（如递归死循环），15 分钟内可能消耗 $10,000 Token。事后报告意味着损失已经发生。毫秒级前置拦截在每次执行前检查权限、估算成本、扫描 PII，超预算直接拒绝。生产数据：前置拦截后 Token 超支事故从 5 起/月降至 0，死循环发现时间从 15 分钟缩短至 30 秒。</div>
+</details>
+
+<details>
+<summary>多 Agent 协作时，身份链怎么保证不断？</summary>
+<div class="answer">主 Agent 携带 user_id + agent_id，派发子 Agent 时，子 Agent 继承 user_id + 自己的 agent_id + parent_agent_id。控制平面在每次工具调用时验证完整身份链。审计日志记录完整调用链：user → main_agent → sub_agent → tool。如果子 Agent 做了违规操作，可以追溯到：哪个用户 → 触发了哪个主 Agent → 派发了哪个子 Agent → 调用了哪个工具。</div>
+</details>
+
+<details>
+<summary>AI 控制平面会增加多少延迟？</summary>
+<div class="answer">设计良好的控制平面增加延迟 &lt;10ms：权限检查 ~1ms、PII 正则扫描 ~1ms、Token 预算检查 ~1ms、审计日志异步写入 ~0ms（不阻塞主路径）。只有 PII 的 NER 模型检测（~5ms）和大模型辅助判断（~50ms）会增加显著延迟，但这两层只在正则匹配不到时才触发。实际 P95 延迟增加 &lt;8ms。</div>
+</details>
+
+</div>
+</div>
+
+<footer class="doc-footer">
+  <p>AI Knowledge &middot; AI 控制平面 &middot; A67</p>
+</footer>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</div>
+  </body>
+</html>

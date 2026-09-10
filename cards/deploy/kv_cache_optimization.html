@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP09 · KV Cache 显存优化</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、KV Cache 原理回顾</a>
+<a href="#s2">二、核心痛点：显存碎片化</a>
+<a href="#s3">三、核心方案：PagedAttention (vLLM)</a>
+<a href="#s4">四、优化策略一：GQA / MQA</a>
+<a href="#s5">五、优化策略二：KV 量化</a>
+<a href="#s6">六、优化策略三：窗口丢弃与选择性保留</a>
+<a href="#s7">七、系统级优势与策略组合</a>
+<a href="#s8">生产案例</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>DP09 · KV Cache 显存优化</h1>
+<p class="subtitle">KV Cache Memory Optimization — PagedAttention、GQA/MQA、KV 量化与窗口丢弃策略</p>
+
+<div class="intuition-box"><p>KV Cache 的本质：用空间换时间——缓存已计算的 Key/Value 向量，避免自回归生成时对相同 token 重复做矩阵乘法。</p></div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+
+
+<h2>一、KV Cache 原理回顾</h2>
+
+<h3>为什么需要 KV Cache？</h3>
+<p>Transformer 的自回归生成每产生一个新 token，都需要对之前所有 token 做 Attention 计算。如果不缓存，每步都要重新计算所有 Key 和 Value——<strong>计算量随序列长度二次方增长</strong>。</p>
+
+<div class="arch-diagram">
+无 KV Cache（每步重算）：
+  Step 1: 计算 token_1 的 K, V → 生成 token_2
+  Step 2: 重新计算 token_1, token_2 的 K, V → 生成 token_3
+  Step 3: 重新计算 token_1, token_2, token_3 的 K, V → 生成 token_4
+  ... → 大量重复计算
+
+有 KV Cache（增量追加）：
+  Step 1: 计算 token_1 的 K, V → 缓存 → 生成 token_2
+  Step 2: 复用缓存 + 只算 token_2 的 K, V → 追加缓存 → 生成 token_3
+  Step 3: 复用缓存 + 只算 token_3 的 K, V → 追加缓存 → 生成 token_4
+  ... → 每步只计算新增部分
+</div>
+
+<p class="highlight">KV Cache 的本质是<strong>"空间换时间"</strong>——用显存存储已计算的 Key/Value 矩阵，避免重复计算，将生成复杂度从 O(n²) 降到 O(n)。</p>
+
+<h3>KV Cache 的显存开销</h3>
+<table>
+<tr><th>模型规模</th><th>层数</th><th>Head 数</th><th>Head Dim</th><th>单 token 的 KV 大小</th><th>2K 上下文显存</th></tr>
+<tr><td>7B</td><td>32</td><td>32</td><td>128</td><td>~0.5 MB</td><td>~1 GB</td></tr>
+<tr><td>13B</td><td>40</td><td>40</td><td>128</td><td>~0.6 MB</td><td>~1.3 GB</td></tr>
+<tr><td>70B</td><td>80</td><td>64</td><td>128</td><td>~1.6 MB</td><td>~3.2 GB</td></tr>
+<tr><td>70B (32K ctx)</td><td>80</td><td>64</td><td>128</td><td>~1.6 MB</td><td>~51 GB</td></tr>
+</table>
+
+<p>注意：以上仅为<strong>单个请求</strong>的 KV Cache 大小。在并发推理场景下，需要同时维护多个请求的 KV Cache，显存压力成倍增加。</p>
+
+<div class="highlight">
+<ul>
+<li>KV Cache 是"空间换时间"的经典案例——这是理解 KV Cache 的核心思想</li>
+<li>显存开销公式：2 × 层数 × Head 数 × Head Dim × 序列长度 × 精度字节数</li>
+<li>长上下文（32K/128K）下 KV Cache 可能超过模型参数本身的显存占用</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、核心痛点：显存碎片化</h2>
+
+<h3>传统 KV Cache 分配方式的问题</h3>
+<p>传统方案为每个请求<strong>预分配连续显存块</strong>，按最大上下文长度预留空间。这导致严重的显存碎片化：</p>
+
+<div class="arch-diagram">
+传统连续分配（按最大长度预分配）：
+
+GPU 显存
+┌──────┬──────────┬──────┬──────────┬──────┐
+│ Req A│ 预分配    │ Req B│ 预分配    │ ...  │
+│ 实际用│ 浪费(空闲)│ 实际用│ 浪费(空闲)│      │
+│ ██   │ ░░░░░░░░ │ ███  │ ░░░░░░░░ │      │
+└──────┴──────────┴──────┴──────────┴──────┘
+
+问题：
+• 预分配空间按最大长度（如 2048），实际可能只用了 200 token
+• 内部碎片：已分配但未使用的空间无法给其他请求用
+• 外部碎片：请求结束后留下不连续的空洞
+• 多轮对话场景下显存浪费高达 60-80%
+</div>
+
+<h3>碎片化的具体表现</h3>
+<table>
+<tr><th>碎片类型</th><th>成因</th><th>影响</th></tr>
+<tr><td><strong>内部碎片</strong></td><td>预分配空间 &gt; 实际使用长度</td><td>单个请求浪费大量预留显存</td></tr>
+<tr><td><strong>外部碎片</strong></td><td>请求结束释放后留下不连续空洞</td><td>新请求无法利用分散的小块显存</td></tr>
+<tr><td><strong>预留浪费</strong></td><td>必须按最大可能长度预留</td><td>短请求占用长空间，利用率极低</td></tr>
+</table>
+
+<p class="highlight">核心矛盾：GPU 显存是稀缺资源，但传统 KV Cache 管理方式导致 60-80% 的显存被浪费。这直接限制了并发请求数和系统吞吐量。</p>
+
+<div class="highlight">
+<ul>
+<li>重点指出"碎片化"是核心痛点——不只是显存不够，而是分配方式不合理</li>
+<li>类比：就像停车场按最长车辆预留车位，小车也占大车位——空间利用率极低</li>
+<li>这个痛点直接引出 PagedAttention 的解决方案</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、核心方案：PagedAttention (vLLM)</h2>
+
+<h3>设计思想：借鉴操作系统虚拟内存</h3>
+<p>PagedAttention（Kwon et al., 2023, vLLM）的核心灵感来自操作系统的<strong>虚拟内存分页</strong>机制——不再要求 KV Cache 在物理显存中连续存储，而是切分为固定大小的 Block，通过映射表实现逻辑上的连续访问。</p>
+
+<div class="arch-diagram">
+PagedAttention 原理（类比 OS 虚拟内存）：
+
+操作系统虚拟内存                    PagedAttention
+───────────────────               ───────────────────
+虚拟页 (Virtual Page)       →     逻辑 Block（token 的逻辑顺序）
+物理页帧 (Physical Frame)   →     物理 Block（GPU 显存中的实际位置）
+页表 (Page Table)           →     Block Table（逻辑→物理映射表）
+按需调页 (Demand Paging)    →     按需分配 Block（生成新 token 时才分配）
+
+逻辑视图（连续）：           物理视图（分散）：
+┌───┬───┬───┬───┐           GPU 显存
+│ B0│ B1│ B2│ B3│           ┌───┬───┬───┬───┬───┬───┐
+└───┴───┴───┴───┘           │B2 │ X │B0 │ X │B1 │B3 │
+     ↓ Block Table           └───┴───┴───┴───┴───┴───┘
+  B0 → 物理 Block #2         (X = 其他请求的 Block)
+  B1 → 物理 Block #4
+  B2 → 物理 Block #0
+  B3 → 物理 Block #5
+</div>
+
+<h3>PagedAttention 的工作流程</h3>
+<table>
+<tr><th>步骤</th><th>操作</th><th>说明</th></tr>
+<tr><td>1</td><td>请求到达</td><td>不预分配整块显存，仅初始化 Block Table</td></tr>
+<tr><td>2</td><td>生成新 token</td><td>检查当前 Block 是否已满</td></tr>
+<tr><td>3</td><td>按需分配</td><td>Block 满时，从空闲池分配一个新的物理 Block</td></tr>
+<tr><td>4</td><td>更新映射</td><td>在 Block Table 中记录逻辑→物理的映射关系</td></tr>
+<tr><td>5</td><td>Attention 计算</td><td>通过 Block Table 收集所有物理 Block，拼接后计算 Attention</td></tr>
+<tr><td>6</td><td>请求结束</td><td>释放所有物理 Block 回空闲池</td></tr>
+</table>
+
+<h3>PagedAttention vs 传统方案</h3>
+<table>
+<tr><th>维度</th><th>传统连续分配</th><th><span class="term">PagedAttention</span></th></tr>
+<tr><td>分配方式</td><td>预分配连续显存块</td><td>按需分配非连续 Block</td></tr>
+<tr><td>内部碎片</td><td>严重（预留未用部分）</td><td>几乎为零（最后一个 Block 除外）</td></tr>
+<tr><td>外部碎片</td><td>严重（不连续空洞）</td><td>无（Block 固定大小，可复用）</td></tr>
+<tr><td>显存利用率</td><td>20-40%</td><td>接近 100%</td></tr>
+<tr><td>共享能力</td><td>不支持</td><td>支持跨请求 Block 共享（如 Beam Search）</td></tr>
+<tr><td>实现复杂度</td><td>低</td><td>中（需要 Block Table 管理）</td></tr>
+</table>
+
+<h3>Block 共享机制</h3>
+<p>PagedAttention 天然支持<strong>跨请求共享 KV Cache</strong>——多个请求可以指向同一个物理 Block：</p>
+<ul>
+<li><strong>Beam Search</strong>：多个候选序列共享前缀部分的 KV Cache，只需不同的最后一个 Block</li>
+<li><strong>Parallel Sampling</strong>：同一 prompt 的多个输出共享 prompt 部分的 KV Cache</li>
+<li><strong>Prefix Caching</strong>：相同 System Prompt 的请求共享前缀 Block</li>
+</ul>
+
+<div class="highlight">
+<ul>
+<li>PagedAttention 是 vLLM 的核心创新——必知"vLLM 为什么快？"</li>
+<li>关键类比：OS 虚拟内存分页 → 显存分页，这个类比能帮助快速理解</li>
+<li>显存利用率从 20-40% 提升到接近 100%——相当于 3-5 倍的吞吐量提升</li>
+<li>Block 共享是额外收益——Beam Search 场景下显存节省可达 N 倍（N = beam width）</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、优化策略一：GQA / MQA</h2>
+
+<h3>Multi-Head Attention 的 KV 冗余</h3>
+<p>标准 MHA（Multi-Head Attention）中，每个 Query Head 都有对应的 Key Head 和 Value Head。但实际上<strong>不同 Head 的 KV 存在大量冗余</strong>——多个 Query Head 可以共享同一组 KV。</p>
+
+<h3>三种注意力对比</h3>
+<table>
+<tr><th>方案</th><th>Query Heads</th><th>KV Heads</th><th>KV Cache 大小</th><th>质量影响</th></tr>
+<tr><td><strong>MHA</strong>（标准多头）</td><td>N</td><td>N（每个 Q 对应独立 KV）</td><td>基准</td><td>基准</td></tr>
+<tr><td><strong>MQA</strong>（Multi-Query）</td><td>N</td><td>1（所有 Q 共享一组 KV）</td><td>减少 N 倍</td><td>轻微下降</td></tr>
+<tr><td><strong>GQA</strong>（Grouped-Query）</td><td>N</td><td>G（每 G 个 Q 共享一组 KV）</td><td>减少 N/G 倍</td><td>接近 MHA</td></tr>
+</table>
+
+<div class="arch-diagram">
+MHA (N=8, KV Heads=8)      MQA (N=8, KV Heads=1)      GQA (N=8, KV Heads=2)
+
+Q1 Q2 Q3 Q4 Q5 Q6 Q7 Q8    Q1 Q2 Q3 Q4 Q5 Q6 Q7 Q8    Q1 Q2 Q3 Q4 Q5 Q6 Q7 Q8
+│  │  │  │  │  │  │  │      │  │  │  │  │  │  │  │      │  │  │  │  │  │  │  │
+K1 K2 K3 K4 K5 K6 K7 K8     └──┴──┴──┴──┴──┴──┴──┘     └──┴──┴──┘  └──┴──┴──┘
+V1 V2 V3 V4 V5 V6 V7 V8              K1                        K1        K2
+                                     V1                        V1        V2
+
+KV Cache: 100%              KV Cache: ~12.5%              KV Cache: ~25%
+</div>
+
+<h3>实际模型采用情况</h3>
+<table>
+<tr><th>模型</th><th>注意力类型</th><th>KV Heads</th><th>显存节省</th></tr>
+<tr><td>LLaMA 2 7B</td><td>MHA</td><td>32</td><td>—</td></tr>
+<tr><td>LLaMA 2 70B</td><td>GQA (8 groups)</td><td>8</td><td>8 倍</td></tr>
+<tr><td>Mistral 7B</td><td>GQA (8 groups)</td><td>8</td><td>4 倍</td></tr>
+<tr><td>Falcon 40B</td><td>MQA</td><td>1</td><td>71 倍</td></tr>
+<tr><td>Qwen 2.5 72B</td><td>GQA (8 groups)</td><td>8</td><td>8 倍</td></tr>
+</table>
+
+<div class="highlight">
+<ul>
+<li>GQA 是当前主流方案——在质量和效率之间取得最佳平衡</li>
+<li>MQA 显存节省最大但质量有损——适合资源极度受限场景</li>
+<li>GQA 的关键：分组数量 G 是超参数，需要在质量和效率之间调优</li>
+<li>可以画 MHA/MQA/GQA 的对比图——直观展示差异</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、优化策略二：KV 量化</h2>
+
+<h3>原理</h3>
+<p>KV Cache 通常以 FP16/BF16（16-bit）存储。量化将其压缩到 8-bit 甚至 4-bit，<strong>直接减少 50-75% 的显存占用</strong>。核心挑战是量化精度损失的控制。</p>
+
+<div class="intuition-box">
+<p>KV 量化省的是"存"，不是"算"。写进 Cache 之前压成 8 bit，读出来参与 Attention 时再还原回 FP16 —— 计算图一行不用改，显存直接对半砍，这是所有 KV 优化里改动面最小、见效最快的一招。</p>
+</div>
+
+<p>量化能不能用得住，几乎全押在<span class="term">离群值</span>上：KV 张量里少数几个 channel 的数值范围能比其他 channel 大一两个量级。如果整个张量共用一个 scale，这几个 channel 会把量化步长撑得极大，剩下的 channel 全被压进同一个格子里，等于白量化。所以生产实现普遍走<span class="term">per-channel 量化</span>或分组量化，让每组各自持有 scale 与 zero-point。</p>
+
+<h3>量化方案对比</h3>
+<table>
+<tr><th>精度</th><th>显存节省</th><th>质量影响</th><th>适用场景</th></tr>
+<tr><td>FP16 / BF16</td><td>基准</td><td>基准</td><td>高质量推理</td></tr>
+<tr><td>INT8</td><td>50%</td><td>极小（&lt;1%）</td><td>通用生产场景</td></tr>
+<tr><td>INT4</td><td>75%</td><td>可接受（1-3%）</td><td>资源受限 / 长上下文</td></tr>
+<tr><td>NF4 (NormalFloat)</td><td>75%</td><td>优于普通 INT4</td><td>分布不均匀的 KV 值</td></tr>
+</table>
+
+<h3>关键技术要点</h3>
+<ul>
+<li><strong>K 和 V 分开量化</strong>：Key 和 Value 的数值分布不同，独立量化效果更好</li>
+<li><strong>分组量化（Group Quantization）</strong>：将 KV 按 channel 或 token 分组，每组独立计算 scale/zero-point</li>
+<li><strong>离群值处理</strong>：KV 中存在少量极端值（outlier），需要特殊处理（如保留 FP16 或用更细粒度量化）</li>
+<li><strong>量化时机</strong>：可以在写入 KV Cache 时量化（存储 INT8，计算时反量化回 FP16），对计算流程改动最小</li>
+</ul>
+
+<h3>量化精度 vs 显存节省的权衡</h3>
+<table>
+<tr><th>场景</th><th>推荐精度</th><th>理由</th></tr>
+<tr><td>短文本生成（&lt;2K）</td><td>FP16</td><td>KV Cache 本身不大，无需量化</td></tr>
+<tr><td>中等长度（2K-8K）</td><td>INT8</td><td>显存节省 50%，质量几乎无损</td></tr>
+<tr><td>长上下文（8K-128K）</td><td>INT4 / NF4</td><td>显存压力极大，需要 75% 压缩</td></tr>
+<tr><td>超大批量</td><td>INT8 + GQA</td><td>两者叠加，显存节省可达 10 倍+</td></tr>
+</table>
+
+<div class="highlight">
+<ul>
+<li>KV 量化是最"立竿见影"的优化——INT8 几乎无损，显存直接减半</li>
+<li>与模型量化的区别：模型量化影响所有计算，KV 量化只影响 Attention 的缓存部分</li>
+<li>加分点：提到"离群值"问题——KV 中少量 channel 的值范围远大于其他 channel</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、优化策略三：窗口丢弃与选择性保留</h2>
+
+<h3>核心思想</h3>
+<p>并非所有历史 token 的 KV 都对当前生成有贡献。通过<strong>丢弃低重要性的 KV 条目</strong>，在保持生成质量的同时减少显存占用。</p>
+
+<div class="intuition-box">
+<p>窗口丢弃赌的是"注意力天然稀疏"：绝大多数历史 token 拿到的权重接近零，扔掉对输出几乎无感。难点从来不是怎么扔，而是判断哪些不能扔 —— 开头那几个 Sink Token 就属于看着没用、一扔就崩的。</p>
+</div>
+
+<p>这类策略和前两节有本质区别：它是<span class="term">有损</span>的。GQA 和量化改的是同一份信息的表示方式，窗口丢弃是真把信息删掉了。换来的好处是显存收益从"固定比例"变成了<span class="term">恒定上界</span> —— 不管请求跑到 10K 还是 1M token，占用都停在 (Sink 数 + 窗口宽度) 这个常数上，这也是流式场景唯一能长期跑下去的形态。</p>
+
+<h3>丢弃策略对比</h3>
+<table>
+<tr><th>策略</th><th>原理</th><th>显存优化</th><th>质量影响</th></tr>
+<tr><td><strong>滑动窗口</strong></td><td>只保留最近 W 个 token 的 KV</td><td>30-50%</td><td>丢失长距离依赖</td></tr>
+<tr><td><strong>Attention Sink</strong></td><td>保留最初几个 token + 滑动窗口</td><td>30-50%</td><td>保留"锚点"，质量更好</td></tr>
+<tr><td><strong>H2O (Heavy-Hitter)</strong></td><td>保留 Attention 权重最高的 top-K token</td><td>50-70%</td><td>自适应，质量较好</td></tr>
+<tr><td><strong>StreamingLLM</strong></td><td>Attention Sink + 滑动窗口，支持无限长度</td><td>固定窗口大小</td><td>适合流式场景</td></tr>
+</table>
+
+<h3>Attention Sink 的发现</h3>
+<p>研究发现一个有趣现象：LLM 在生成时，<strong>对序列最开始的几个 token（"Sink Token"）分配了异常高的 Attention 权重</strong>，即使这些 token 本身语义不重要。丢弃它们会导致生成质量急剧下降。</p>
+
+<div class="arch-diagram">
+StreamingLLM 策略：保留 Sink Token + 滑动窗口
+
+序列: [t0] [t1] [t2] ... [t95] [t96] [t97] [t98] [t99] [t100] ...
+       ████  ░░░ ░░░      ░░░   ████  ████  ████  ████   ████
+       保留   丢弃          丢弃   丢弃  保留  保留  保留   保留
+       Sink                          滑动窗口（最近 W 个）
+
+显存占用固定 = (Sink 数量 + 窗口大小) × KV 大小
+无论序列多长，显存都不增长
+</div>
+
+<div class="highlight">
+<ul>
+<li>Attention Sink 是亮点——"为什么最开始的 token 这么重要？"目前认为是模型将其作为"无信息默认关注点"</li>
+<li>滑动窗口 + Attention Sink = StreamingLLM，支持无限长度推理且显存恒定</li>
+<li>H2O 等自适应策略更智能，但实现复杂度更高——需要在 Attention 计算时追踪权重</li>
+<li>窗口丢弃与 PagedAttention 可以叠加使用——PagedAttention 管理物理分配，窗口策略管理逻辑淘汰</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、系统级优势与策略组合</h2>
+
+<h3>各策略的收益叠加</h3>
+<table>
+<tr><th>优化策略</th><th>显存节省</th><th>适用层</th><th>是否可叠加</th></tr>
+<tr><td><span class="term">PagedAttention</span></td><td>消除碎片化（利用率 →100%）</td><td>显存管理层</td><td>可叠加</td></tr>
+<tr><td>GQA / MQA</td><td>2-8 倍 KV 减少</td><td>模型架构层</td><td>可叠加</td></tr>
+<tr><td>KV 量化 (INT8)</td><td>50%</td><td>存储层</td><td>可叠加</td></tr>
+<tr><td>窗口丢弃</td><td>30-50%</td><td>逻辑层</td><td>可叠加</td></tr>
+</table>
+
+<h3>推荐组合方案</h3>
+<div class="arch-diagram">
+生产级 KV Cache 优化 = 四层策略叠加
+
+Layer 1: 模型层    → GQA (8 groups)          → KV Cache 减少 8 倍
+Layer 2: 存储层    → INT8 量化               → 再减少 2 倍
+Layer 3: 管理层    → PagedAttention          → 消除碎片化
+Layer 4: 逻辑层    → Attention Sink + 窗口    → 控制长序列增长
+
+综合效果（70B 模型，32K 上下文，并发 100 请求）：
+  未优化: ~51 GB/请求 × 100 = 5.1 TB（不可能）
+  优化后: ~0.8 GB/请求 × 100 = 80 GB（8×A100 可行）
+</div>
+
+<div class="intuition-box">
+<p>四层策略能相乘而不是相加，是因为它们各管一段互不重叠：GQA 决定每个 token 存几份 KV，量化决定每份存几个 bit，PagedAttention 决定这些块怎么摆进显存，窗口策略决定留多少个 token。四个乘数彼此独立，才有 51 GB 压到 0.8 GB 这种量级的落差。</p>
+</div>
+
+<h3>落地顺序与常见坑</h3>
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>按"改动成本从低到高"推进：先开 PagedAttention（换推理引擎即可，零质量损失），再上 INT8 量化，最后才碰窗口丢弃这类有损策略。</li>
+<li>GQA 是<span class="term">模型架构层</span>的决定，只能在选型或继续训练阶段定下来，别指望部署时临时加。</li>
+<li>把 KV Cache 算进容量规划：显存先扣掉权重和激活，剩下的除以单请求 KV 大小，才是真实并发上限。</li>
+<li>回归测试专挑长依赖任务（多轮引用、长文档定位），这类任务对丢弃策略最敏感，普通对话样本测不出问题。</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在没量过碎片率之前先上量化：碎片率还有 60% 的时候，把碎片消掉的收益远大于把每个数压掉一半。</li>
+<li>不要让 K 和 V 共用一套量化参数，两者数值分布不同，混用会白白吃掉一截精度。</li>
+<li>不要为了省显存把滑动窗口砍到 Sink Token 以内，那等于把模型的<span class="term">注意力锚点</span>一起丢掉，输出会迅速退化。</li>
+<li>不要只看显存和吞吐就宣布收工，有损策略的代价不会体现在吞吐曲线上，质量回归必须同批跑。</li>
+</ul>
+</div>
+</div>
+
+<h3>对推理系统的影响</h3>
+<table>
+<tr><th>指标</th><th>未优化</th><th>优化后</th><th>提升</th></tr>
+<tr><td><strong>显存利用率</strong></td><td>20-40%</td><td>95%+</td><td>3-5 倍</td></tr>
+<tr><td><strong>最大并发数</strong></td><td>N</td><td>3-5N</td><td>3-5 倍</td></tr>
+<tr><td><strong>吞吐量</strong></td><td>基准</td><td>3-5 倍</td><td>显著提升</td></tr>
+<tr><td><strong>首 token 延迟</strong></td><td>基准</td><td>基本不变</td><td>无负面影响</td></tr>
+<tr><td><strong>生成质量</strong></td><td>基准</td><td>轻微下降（&lt;2%）</td><td>可接受</td></tr>
+</table>
+
+<div class="highlight">
+<ul>
+<li>关键：强调"策略叠加"——单一策略效果有限，组合使用才有质变</li>
+<li>系统级优势不只是省显存——更高的并发 = 更低的单请求成本 = 商业可行性</li>
+<li>vLLM 的成功证明：推理系统优化 ≠ 模型优化，系统工程的创新同样关键</li>
+</ul>
+</div>
+</div>
+
+<div class="section" id="s8">
+<h2>生产案例</h2>
+<div class="intuition-box">
+<p><strong>生产验证：</strong>某 LLM 推理服务（Llama 3 70B，A100 80GB × 8）的 KV Cache 优化全记录：(1) 基线 — 预分配连续 KV Cache，单请求占用 512MB，最大并发 8 个，显存碎片率 <strong>65%</strong>；(2) +PagedAttention — 碎片率降至 <strong>4%</strong>，并发提升至 32 个（4x），吞吐从 120 tokens/s 提升至 <strong>480 tokens/s</strong>；(3) +GQA — KV Cache 大小降至 64MB/请求（-87.5%），并发进一步提升至 <strong>64 个</strong>；(4) +FP8 量化 — KV Cache 再降至 32MB/请求，总并发达 <strong>128 个</strong>。最终：单卡 A100 支撑 16 个并发请求（原 1 个），单位请求推理成本从 <strong>$0.08</strong> 降至 <strong>$0.005</strong>（降幅 94%）。</p>
+</div>
+</div>
+
+<!-- Q&A Section -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>请解释 KV Cache 的原理和它解决的问题。</summary>
+<p class="answer">KV Cache 是 Transformer 自回归生成中的"空间换时间"优化。生成每个新 token 时，需要对所有历史 token 做 Attention 计算。如果不缓存，每步都要重新计算所有 Key 和 Value，计算量随序列长度二次方增长。KV Cache 将已计算的 K/V 矩阵存入显存，每步只需追加计算新 token 的 K/V，将生成复杂度从 O(n²) 降到 O(n)。代价是显存占用随序列长度线性增长——这就是优化的出发点。</p>
+</details>
+
+<details>
+<summary>多轮对话场景下 KV Cache 有什么痛点？如何解决？</summary>
+<p class="answer">核心痛点是显存碎片化。传统方案为每个请求预分配连续显存块（按最大上下文长度），但实际使用长度远小于预分配长度，导致：①内部碎片——已分配但未使用的空间无法给其他请求；②外部碎片——请求结束后留下不连续空洞。多轮对话场景下显存浪费高达 60-80%。解决方案是 PagedAttention：借鉴 OS 虚拟内存分页，将显存切分为固定大小的 Block，按需分配非连续 Block，通过 Block Table 映射逻辑顺序。显存利用率从 20-40% 提升到接近 100%。</p>
+</details>
+
+<details>
+<summary>GQA 和 MQA 有什么区别？为什么主流模型选择 GQA？</summary>
+<p class="answer">MQA（Multi-Query Attention）让所有 Query Head 共享一组 KV，KV Cache 减少 N 倍（N = Head 数），但模型质量有明显下降。GQA（Grouped-Query Attention）是折中方案：将 Query Head 分为 G 组，每组共享一组 KV，KV Cache 减少 N/G 倍，质量接近 MHA。主流模型（LLaMA 2 70B、Mistral、Qwen 2.5）选择 GQA 因为它在质量和效率之间取得最佳平衡——8 组 GQA 可节省 8 倍 KV Cache，质量损失 &lt;1%。MQA 虽然节省更多但质量下降明显，只在资源极度受限时使用（如 Falcon 40B）。</p>
+</details>
+
+<details>
+<summary>KV 量化会影响生成质量吗？如何控制精度损失？</summary>
+<p class="answer">INT8 量化对生成质量影响极小（&lt;1%），是生产环境首选。INT4 影响稍大（1-3%）但显存节省 75%，适合长上下文场景。控制精度损失的关键技术：①K 和 V 独立量化——两者数值分布不同，分开处理效果更好；②分组量化——按 channel/token 分组，每组独立的 scale 和 zero-point；③离群值处理——KV 中少量 channel 的值范围远大于其他，需要保留高精度或更细粒度量化；④NF4（NormalFloat 4-bit）——针对正态分布数据优化的量化格式，比普通 INT4 更精准。实际建议：短文本（&lt;2K）用 FP16，中等长度用 INT8，长上下文用 INT4。</p>
+</details>
+
+<details>
+<summary>PagedAttention 和 KV 量化/窗口丢弃能同时使用吗？</summary>
+<p class="answer">可以，而且应该叠加使用——它们解决不同层面的问题。PagedAttention 在显存管理层消除碎片化；KV 量化在存储层压缩每个 Block 的大小；窗口丢弃在逻辑层控制 KV Cache 的增长上限。三者互不冲突：PagedAttention 管理物理 Block 的分配和回收，KV 量化决定每个 Block 内部的存储精度，窗口丢弃决定哪些逻辑 Block 可以被淘汰。组合效果：GQA (8x) + INT8 (2x) + PagedAttention (3x 利用率) → 综合 40+ 倍的显存效率提升，使 70B 模型在消费级 GPU 上长上下文推理成为可能。</p>
+</details>
+
+<details>
+<summary>vLLM 为什么比 HuggingFace 默认推理快这么多？</summary>
+<p class="answer">核心原因是 PagedAttention 带来的显存效率革命。HuggingFace 默认方案为每个请求预分配连续显存，碎片化导致显存利用率仅 20-40%，大量显存被浪费。vLLM 的 PagedAttention 将显存切分为 Block 按需分配，利用率接近 100%——同等 GPU 下可容纳 3-5 倍的并发请求。此外 vLLM 还有：①Continuous Batching——新请求可以随时插入正在运行的 batch，不必等整个 batch 完成；②高效的 CUDA Kernel——Attention 计算针对 Block 结构做了底层优化；③前缀共享——相同 System Prompt 的请求共享 KV Cache Block。综合效果：在相同硬件上，vLLM 的吞吐量比 HuggingFace 高 2-4 倍。</p>
+</details>
+
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});
+</script>
+  </body>
+</html>

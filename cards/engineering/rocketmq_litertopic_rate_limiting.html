@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST22 · RocketMQ LiteTopic 与 AI 网关限流</title>
+<style>
+/* 项目标准 CSS */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、LLM 限流为何不同</a>
+<a href="#s2">二、漏桶为何必须外置 MQ</a>
+<a href="#s3">三、传统 Topic 的三死穴</a>
+<a href="#s4">四、LiteTopic 三招优化</a>
+<a href="#s5">五、生产案例：百炼网关限流</a>
+<a href="#s6">六、生产案例：AI 生图平台分级调度</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>ST22 · RocketMQ LiteTopic 与 AI 网关限流</h1>
+<p class="subtitle">固定窗口 + 漏桶 / 外置 MQ 缓冲桶 / 传统 Topic 三死穴 / LiteTopic 三招优化 / 百炼网关实践 / AI 平台分级调度</p>
+
+<div class="intuition-box">
+<p>大模型限流的本质不是拒绝请求，而是缓冲请求：用漏桶把流量匀速喂给 GPU，再把漏桶搬进消息队列；RocketMQ 5.5 的 LiteTopic 给每个「用户 × 模型」一个随用随建、用完即收、物理隔离的专属缓冲桶，让百万租户级隔离变得廉价。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、LLM 限流为何不同</h2>
+
+<p>提到限流，大多数人脱口而出的是滑动窗口与令牌桶。但阿里云百炼网关最初的选型却朴素得惊人：<strong>固定窗口 + 漏桶</strong>。这不是保守，而是为大模型负载特点量身定制的结果。</p>
+
+<p>先看前端。大模型场景下流量突发是常态：用户提交一个复杂任务，上层的 Agent 瞬间就能拆出几十个并发请求，再叠加批量调用与失败重试，请求到达的曲线永远是锯齿状的。这种突发必须被<em>容忍</em>而不是被拒绝——滑动窗口算得太死，稍微一并发前端就大面积报错，体验直接崩掉。</p>
+
+<p>再看后端。后端是寸土寸金的 GPU，它最怕的不是任务多，而是 <span class="term">洪峰</span>（短时间内涌入的海量请求尖峰）瞬间打穿推理集群。同时大模型请求里有相当比例本身价值不高（用户随时可能放弃），所以限流是允许误判的——但送达 GPU 的速率必须平滑。</p>
+
+<div class="arch-diagram">
+突发前端流量（Agent 拆分 / 批量调用 / 重试叠加）
+        │   速率极不均匀，峰值可达均值 10 倍以上
+        ▼
+┌─────────────────────────────┐
+│  固定窗口闸门                 │  每窗口配额 N，超额直接拦截
+│  （如：每 5 分钟 ≤ N 个请求） │  ——粗粒度即可，容忍误判
+└──────────────┬──────────────┘
+               ▼  通过窗口的请求进入桶内排队
+┌─────────────────────────────┐
+│  漏桶（恒速出桶）             │  桶内积压，只按恒定速率漏出
+└──────────────┬──────────────┘
+               ▼  恒定速率，例如 200 req/s
+┌─────────────────────────────┐
+│  GPU 推理集群（昂贵算力）     │  永远看不到洪峰，只看到匀速流
+└─────────────────────────────┘
+</div>
+
+<p><span class="term">固定窗口</span>（按固定时间段统计配额、超额拦截）在这里够用，恰恰因为它粗：大模型请求允许误判，不需要滑动窗口那种精细到毫秒的统计。真正的重头戏是 <span class="term">漏桶</span>（请求先进桶排队，再以恒定速率流出）：不管前端怎么狂轰滥炸，漏给 GPU 的速度永远匀速。</p>
+
+<p>那 <span class="term">令牌桶</span>（按恒定速率发放令牌、令牌可积攒，攒够即可一次性放行）为什么不行？因为它天然鼓励客户端「攒大招」——令牌积攒后，客户端能在瞬间把一个窗口内的配额全部打过来，GPU 直接承受洪峰。这与保护算力的目标背道而驰。</p>
+
+<table>
+<tr><th>算法</th><th>判定/输出方式</th><th>对前端突发的态度</th><th>对 GPU 的影响</th><th>结论</th></tr>
+<tr><td>固定窗口</td><td>每窗口限额，超额拦截</td><td>窗口内容忍突发</td><td>配合漏桶后平滑</td><td>✅ 选用</td></tr>
+<tr><td>滑动窗口</td><td>窗口内细粒度滑动统计</td><td>算得太死，突发即报错</td><td>中性</td><td>❌ 体验差</td></tr>
+<tr><td>令牌桶</td><td>恒速发令牌，可积攒</td><td>客户端攒令牌放大突发</td><td>洪峰直击 GPU</td><td>❌ 放大洪峰</td></tr>
+<tr><td>漏桶</td><td>入桶排队，恒速出桶</td><td>突发被积压消化</td><td>永远匀速送达</td><td>✅ 选用</td></tr>
+</table>
+
+<table>
+<tr><th>特征维度</th><th>传统 Web 请求</th><th>大模型请求</th></tr>
+<tr><td>单请求资源成本</td><td>毫秒级 CPU/IO</td><td>秒级~分钟级 GPU 算力</td></tr>
+<tr><td>流量形态</td><td>相对平滑</td><td>Agent 拆分、批量重试，突发极端</td></tr>
+<tr><td>后端弹性</td><td>加机器即可水平扩容</td><td>GPU 稀缺，短期无法弹性扩容</td></tr>
+<tr><td>请求价值</td><td>基本都值得处理</td><td>部分低价值，容忍误判</td></tr>
+<tr><td>限流核心目标</td><td>保护服务可用性</td><td>保护 GPU 不被洪峰打死</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>GPU 不怕队列长，只怕瞬间洪峰；漏桶就是装在 GPU 前面的恒流阀——前端随便狂风暴雨，出口永远细水长流。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、漏桶为何必须外置 MQ</h2>
+
+<p>算法选型只是第一步，真正的坑在工程实现上。传统漏桶通常就是网关进程内存里的一个队列：平时流量小，随便进、随便漏，没有任何问题。但百炼面对的是超级大客户的突发流量——想象一个大客户瞬间砸过来几十万个请求，漏桶说「没问题，我先接住慢慢漏」，结果这几十万个请求直接把网关的内存堆满。</p>
+
+<div class="highlight">
+<strong>致命算术：</strong>假设 30 万请求突发涌入，单条消息体按 4~8KB 计（prompt 往往很长），内存积压瞬间达到 1.2~2.4GB——而网关 JVM 堆通常也就几个 GB。GPU 还没出问题，网关自己先 OOM 倒地了。
+</div>
+
+<div class="arch-diagram">
+【方案一：进程内漏桶 —— 崩】
+
+大客户突发 30 万请求
+        │
+        ▼
+┌────────────────────────────────────┐
+│  网关进程                            │
+│  ┌──────────────────────────────┐  │
+│  │  内存漏桶（内存队列）           │  │
+│  │  积压 30 万条 × 数 KB ≈ GB 级  │  │
+│  └──────────────────────────────┘  │
+│  堆内存耗尽 → OOM → 网关进程崩溃     │
+└────────────────────────────────────┘
+   排队请求全部丢失，网关重启才能恢复
+</div>
+
+<p>由此得出一个致命结论：<strong>漏桶绝对不能放在进程内，必须搬到进程外</strong>。我们需要一个容量近乎无限、能扛海量并发的外部存储来充当缓冲桶。这种削峰填谷的活儿，首选当然是消息队列——<span class="term">削峰填谷</span>（把突发流量暂存起来，按后端能力匀速消费）正是 MQ 的看家本领。</p>
+
+<div class="arch-diagram">
+【方案二：外置 MQ 缓冲桶 —— 稳】
+
+请求洪峰（瞬时数万/秒）
+        │
+        ▼
+┌──────────────┐     写入即落盘，网关无状态可水平扩容
+│  网关集群      │────────────────────┐
+└──────────────┘                      ▼
+                        ┌──────────────────────────┐
+                        │  RocketMQ（外部缓冲桶）    │
+                        │  · 容量上限 = 磁盘，可扩容  │
+                        │  · 消息持久化，重启不丢     │
+                        │  · 积压量可监控可度量       │
+                        └─────────────┬────────────┘
+                                      ▼  按 GPU 算力匀速拉取
+                        ┌──────────────────────────┐
+                        │  消费者 → GPU 推理集群     │
+                        └──────────────────────────┘
+</div>
+
+<p>把漏桶外置成 MQ 之后，三件事同时解决了：<strong>容量</strong>从「JVM 堆」变成「磁盘 + 水平扩展」；<strong>持久化</strong>让网关重启不再丢排队请求；<strong>隔离</strong>有了载体——每个租户可以拥有自己的队列（这一点在第四节展开）。MQ 在这里本质上就是一个无限大、不丢数据的漏桶。</p>
+
+<table>
+<tr><th>维度</th><th>进程内内存漏桶</th><th>外置 RocketMQ 缓冲桶</th></tr>
+<tr><td>容量上限</td><td>JVM 堆，GB 级</td><td>磁盘，可水平扩展</td></tr>
+<tr><td>数十万请求突发</td><td>堆满 OOM，网关先于 GPU 崩溃</td><td>落盘吸收，网关无恙</td></tr>
+<tr><td>网关重启</td><td>排队请求全部丢失</td><td>消息持久化，重启后继续消费</td></tr>
+<tr><td>按租户隔离</td><td>进程内数据结构难以隔离</td><td>每租户一个独立队列，物理隔离</td></tr>
+<tr><td>积压可观测性</td><td>进程内黑盒</td><td>堆积指标可监控、可告警</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>MQ 本身就是一个现成的漏桶：容量扩到磁盘级、消息落盘不丢、还能按租户切出独立队列——漏桶外置不是妥协，而是升级。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、传统 Topic 的三死穴</h2>
+
+<p>决定用 RocketMQ 之后，最自然的想法是：每个 User + Model 组合单独建一个 Topic 和对应的 <span class="term">Consumer Group</span>（共享消费进度的一组消费者实例）。百炼有百万级租户，为了保证大客户流量不影响小客户，这种隔离是必须的。但传统 Topic 模式根本扛不住这个量级，会撞上三个死穴。</p>
+
+<h3>死穴一：ConsumeQueue 存储爆炸</h3>
+<p>传统 Topic 是重量级资源：每个 Topic 都要在磁盘上建立独立的物理队列文件 <span class="term">ConsumeQueue</span>（存储消息消费索引的物理文件）。建一百万个 Topic，就意味着一百万套物理文件，磁盘 IO 直接被拖死，文件句柄也随之爆掉。更要命的是，新建一个 Topic 需要几十秒，根本来不及应对突发流量，机器成本也直接起飞。</p>
+
+<h3>死穴二：NameServer 元数据风暴</h3>
+<p>传统 Topic 的路由信息必须全局注册到 <span class="term">NameServer</span>（RocketMQ 集群的路由注册中心）。一百万个临时会话频繁地创建、销毁，注册中心的内存与网络分分钟被撑爆——这就是元数据风暴。</p>
+
+<h3>死穴三：Tag 共享 Offset 消费混乱</h3>
+<p>「不用一百万个 Topic，大家共用一个 Topic 加 Tag 过滤总行吧？」不行。Tag 只是消费时的逻辑过滤，所有消息仍然挤在同一套物理队列里，共享同一个 <span class="term">Offset</span>（消费进度游标，记录消费到哪条消息了）。一百万个客户端去抢同一个队列的 Offset，必然消息错乱、重复消费、漏消费。退一步，如果给每个用户建一百万个 Consumer Group，无休止的 <span class="term">Rebalance</span>（消费者组上下线时重新分配队列的过程）会让整个集群瞬间瘫痪。</p>
+
+<div class="arch-diagram">
+想为百万租户各建一个队列？传统 Topic 三条路全是死路：
+
+┌────────────────────────────────────────────────────────┐
+│ 死穴一  ConsumeQueue 存储爆炸                            │
+│   1 Topic = 1 套独立物理队列文件                         │
+│   100 万 Topic → 磁盘 IO 拖死、文件句柄爆、建一个要几十秒  │
+├────────────────────────────────────────────────────────┤
+│ 死穴二  NameServer 元数据风暴                            │
+│   路由信息全局注册到注册中心                              │
+│   百万临时会话频繁创建/销毁 → 注册中心内存 + 网络撑爆      │
+├────────────────────────────────────────────────────────┤
+│ 死穴三  Tag 共享 Offset 消费混乱                         │
+│   共用 Topic + Tag → 百万客户端抢同一 Offset → 消费错乱   │
+│   改用百万 Consumer Group → 无休止 Rebalance → 集群瘫痪  │
+└────────────────────────────────────────────────────────┘
+</div>
+
+<p>还有一条更隐蔽的死路：不做隔离，把所有人都塞进同一个 Topic。结果就是 <span class="term">猪链效应</span>（一个节点的异常拖死整条链路）——只要一个大哥流量突发，消费线程就全部被他占满，其他所有客户的消息全部被堵死。隔离不做是死，用传统 Topic 做隔离也是死。</p>
+
+<table>
+<tr><th>隔离方案</th><th>隔离强度</th><th>创建成本</th><th>元数据压力</th><th>消费进度</th><th>致命风险</th></tr>
+<tr><td>每用户一个传统 Topic</td><td>强（物理隔离）</td><td>每个几十秒</td><td>NameServer 爆炸</td><td>独立</td><td>ConsumeQueue 存储爆炸</td></tr>
+<tr><td>共用 Topic + Tag 过滤</td><td>无（逻辑过滤）</td><td>零</td><td>低</td><td>共享 Offset</td><td>消费错乱、互相抢占</td></tr>
+<tr><td>共用 Topic + 每用户一个 Group</td><td>强</td><td>海量订阅关系</td><td>中</td><td>独立</td><td>持续 Rebalance 瘫痪集群</td></tr>
+<tr><td>完全不隔离</td><td>无</td><td>零</td><td>低</td><td>共享</td><td>猪链效应，一家拖死全部</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>传统 Topic 在存储、元数据、消费进度三层都是重量级资源——「一个会话一个队列」在传统模式下不是技术问题，是成本问题；破局只能从底层重构队列的实现方式。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、LiteTopic 三招优化</h2>
+
+<p><span class="term">LiteTopic</span>（RocketMQ 5.5 推出的轻量级临时子通道，依附于一个普通父 Topic）就是专门来解这个局的。它的定位是海量端到端独立会话的隔离通道，最大特点可以概括为三个字：<strong>轻、快、独</strong>——轻在不占额外存储，快在随用随建、用完即销毁，独在每个通道有独立消费进度互不干涉。</p>
+
+<div class="arch-diagram">
+生产者 ──发送──▶ LiteTopic-A-X ──┐
+生产者 ──发送──▶ LiteTopic-B-Y ──┤   逻辑通道百万级
+生产者 ──发送──▶ LiteTopic-C-Z ──┘   发送时自动创建
+                 │
+                 ▼
+┌──────────────────────────────────────────────────────┐
+│  Broker                                               │
+│  ┌────────────────────────────────────────────────┐  │
+│  │  父 Topic 物理队列                                │  │
+│  │  所有 LiteTopic 的消息混合追加写 → 保持顺序写高吞吐 │  │
+│  └────────────────────────────────────────────────┘  │
+│  ┌──────────────────────┐  ┌──────────────────────┐  │
+│  │  RocksDB              │  │  RocksDB              │  │
+│  │  LiteTopic 元数据      │  │  每 LiteTopic 独立    │  │
+│  │  秒级创建，结束即清理   │  │  Offset 消费进度      │  │
+│  └──────────────────────┘  └──────────────────────┘  │
+│  内存逻辑索引：拉取时按 LiteTopic 过滤                   │
+└──────────────────────────────────────────────────────┘
+                 ▲
+                 │  LiteMode：点对点直接拉取，无 Rebalance
+                 │
+        消费者（可通配订阅全部 LiteTopic）
+</div>
+
+<h3>第一招：物理复用，逻辑隔离</h3>
+<p>LiteTopic 不再创建独立的物理文件，而是依附于一个父 Topic：发给百万个 LiteTopic 的消息，在底层混合追加写入父 Topic的物理队列，完美保留了顺序写的高吞吐。同时 Broker 在内存里为每个 LiteTopic 构建轻量级逻辑索引，拉取时按索引过滤。物理上是一套队列，逻辑上是百万条互不干扰的通道。</p>
+
+<h3>第二招：去 NameServer 化，引入 RocksDB</h3>
+<p>LiteTopic 是临时的，所以干脆不向 NameServer 注册。Broker 内部引入高性能本地 KV 存储引擎 <span class="term">RocksDB</span>（基于 LSM-Tree 的嵌入式键值存储，写入极快，广泛用于高并发中间件）：客户端连上来，Broker 直接在本地 RocksDB 里秒级创建元数据，会话结束自动清理，极致轻量。注册中心从此与百万级临时通道无关。</p>
+
+<h3>第三招：独立 Offset + LiteMode 免 Rebalance</h3>
+<p>这是最核心的一招。Broker 利用 RocksDB 为每一个 LiteTopic 单独记录消费进度——一百万个会话就是一百万个独立的 Offset 游标，物理隔离互不干扰。同时配合全新的 <span class="term">LiteMode</span>（LiteTopic 专用订阅模式，客户端点对点直接拉取）订阅模式，彻底废弃了笨重的 Rebalance 机制，客户端上下线零抖动。</p>
+
+<table>
+<tr><th>维度</th><th>传统 Topic</th><th>LiteTopic</th></tr>
+<tr><td>定位</td><td>重量级一等公民，人工创建运维</td><td>依附父 Topic 的轻量临时子通道</td></tr>
+<tr><td>物理存储</td><td>独立 ConsumeQueue 文件</td><td>复用父 Topic 混合顺序写</td></tr>
+<tr><td>元数据</td><td>NameServer 全局注册</td><td>Broker 本地 RocksDB，去中心化</td></tr>
+<tr><td>创建速度</td><td>几十秒级</td><td>秒级，随用随建</td></tr>
+<tr><td>消费进度</td><td>按 Consumer Group 维护</td><td>每 LiteTopic 独立 Offset</td></tr>
+<tr><td>订阅模式</td><td>集群消费 + Rebalance</td><td>LiteMode 点对点直拉，免 Rebalance</td></tr>
+<tr><td>生命周期</td><td>人工创建与删除</td><td>空闲一段时间自动回收</td></tr>
+<tr><td>可支撑数量级</td><td>数十~数百个</td><td>百万级</td></tr>
+</table>
+
+<p>值得强调的是应用层体验：LiteTopic 的消费逻辑与传统 Topic 几乎一样，业务代码几乎不需要改造。底层物理顺序写保吞吐、RocksDB 保轻量元数据、独立 Offset 保会话隔离，三招合力把「一个会话一个队列」的成本从不可能打到了廉价。</p>
+
+<div class="intuition-box">
+<p>LiteTopic 的哲学是「物理上共享、逻辑上隔离」：顺序写保住吞吐，RocksDB 保住轻量，独立 Offset 保住隔离——三者合力，百万通道才成为可能。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、生产案例：百炼网关限流</h2>
+
+<p>阿里云百炼是国内规模最大的大模型服务平台之一，百万级租户意味着：一个大客户的突发流量，绝不能影响任何一个小客户的正常调用。限流必须做到客户级物理隔离。基于第一节的固定窗口 + 漏桶算法、第二节的外置 MQ 缓冲、第四节的 LiteTopic 能力，百炼的落地方案如下。</p>
+
+<h3>发送侧：LiteTopic 名字 = User + Model</h3>
+<p>核心思路非常巧妙：把 LiteTopic 的名字直接设计成用户 + 模型两个维度。客户 A 调用模型 X，网关就自动把请求扔进名为 <code>LiteTopic-A-X</code> 的通道；客户 B 调用模型 Y，则进入 <code>LiteTopic-B-Y</code>。LiteTopic 发消息时自动创建、一段时间不用自动回收——这等于给每一个「用户 × 模型」维度发了一个物理隔离的专属漏桶，谁也别抢谁的。</p>
+
+<h3>消费侧：一组机器 + 通配符订阅</h3>
+<p>消费端不需要为每个通道部署资源，只需部署一组机器，用 <span class="term">通配符订阅</span>（订阅表达式匹配所有 LiteTopic，一条订阅覆盖现在与未来的全部通道）统管所有漏桶。限流的核心逻辑是：命中限流规则后，返回 <span class="term">ConsumerResult.Suspend</span>（消费者回执，通知 Broker 将该消息挂起一段时间后再投递）。</p>
+
+<div class="arch-diagram">
+客户 A 调模型 X            客户 B 调模型 Y          客户 C 调模型 X
+      │                          │                        │
+      ▼                          ▼                        ▼
+┌────────────────────────────────────────────────────────────┐
+│  百炼网关（固定窗口判定 + 限流规则引擎）                       │
+└──────┬───────────────────────┬───────────────────┬─────────┘
+       ▼                       ▼                   ▼
+ LiteTopic-A-X           LiteTopic-B-Y       LiteTopic-C-X
+ （自动创建 / 自动回收 / 物理隔离的专属漏桶）
+       │                       │                   │
+       └───────────┬───────────┴───────────────────┘
+                   ▼  一组消费者，通配符订阅全部通道
+       ┌─────────────────────────────┐
+       │  共享消费者集群                │
+       │  未命中限流 → 正常消费推 GPU    │
+       │  命中限流 → 返回 Suspend       │
+       │  线程立即释放，绝不 sleep       │
+       └──────────────┬──────────────┘
+                      ▼  匀速
+              GPU 推理集群
+</div>
+
+<h3>关键细节：为什么是 Suspend 而不是 Thread.sleep</h3>
+<p>对于超额请求，限流代码没有把消费线程用 <code>Thread.sleep</code> 休眠，而是返回 Suspend 给 Broker。原因是消费者的线程是给所有客户共享的：如果用 sleep 休眠线程，某个大客户瞬间提交大量任务触发限流后，会长期霸占这些线程不释放；其他正常小客户的请求拿不到线程，直接大面积报错——这就是 <span class="term">限流传染</span>（一个客户被限流，拖垮其他客户的服务能力）。而 Suspend 本质是把限流交给 Broker 做服务端行为，与客户端线程完全解耦：不管有多少个大哥正在被限流，正常用户永远有空闲线程可用。</p>
+
+<table>
+<tr><th>维度</th><th>Thread.sleep</th><th>ConsumerResult.Suspend</th></tr>
+<tr><td>挂起对象</td><td>消费者线程（全局共享资源）</td><td>单条消息（交还 Broker）</td></tr>
+<tr><td>线程占用</td><td>一直霸占，直到睡醒</td><td>立即释放，可服务其他客户</td></tr>
+<tr><td>大客户突发时</td><td>线程耗尽，小客户陪葬</td><td>正常客户永远有空闲线程</td></tr>
+<tr><td>限流实施位置</td><td>客户端睡眠</td><td>Broker 级服务端限流</td></tr>
+<tr><td>限流传染风险</td><td>严重</td><td>无</td></tr>
+</table>
+
+<div class="highlight">
+<strong>官方数据：</strong>在 RocketMQ 团队分享的《限流比降 10 倍：百炼网关如何用 RocketMQ LiteTopic 重构大模型限流》中，重构后的核心收益直接写在标题上——限流比降 10 倍。当每个租户拥有物理隔离的专属漏桶后，大客户突发不再挤占他人配额，被限流误伤的请求规模下降了一个数量级。
+</div>
+
+<div class="intuition-box">
+<p>限流要交给 Broker，消费线程必须保持清白——共享线程池一旦被任何一个客户的 sleep 绑架，限流就从保护机制变成了攻击武器。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、生产案例：AI 生图平台分级调度</h2>
+
+<p>第二个案例来自一个典型的 AI 生图/生视频平台，限流规则明显更复杂：<strong>① 充值 VIP 用户</strong>——只按后端模型处理能力限流，任务尽量马上处理，处理不过来才排队；<strong>② 免费普通用户</strong>——系统有空闲算力才给，否则排队；<strong>③ 恶意用户</strong>——脚本一秒提交一万个生成请求，必须快速处置。此外，生图与生视频的耗时和算力消耗差异巨大，限流规则必须分开。</p>
+
+<h3>方案淘汰赛：为什么最后是 RocketMQ</h3>
+<p>第一反应可能是 Guava RateLimiter 这类纯内存限流器，但必须第一时间淘汰：AI 任务一跑就是几分钟甚至几十分钟，纯内存方案没有持久化，服务器一重启，排队的任务全部丢失，业务绝对不能接受。剩下两个常见候选——Sentinel 与 Redis——在这个场景下同样是灾难：</p>
+
+<table>
+<tr><th>方案</th><th>优势</th><th>在本场景的致命伤</th><th>结论</th></tr>
+<tr><td>Guava RateLimiter</td><td>简单、零外部依赖</td><td>无持久化，重启即丢排队任务</td><td>❌ 最先淘汰</td></tr>
+<tr><td>Sentinel</td><td>成熟的限流治理组件</td><td>核心逻辑是「拒绝」并抛异常；异步任务不能丢，只能补写数据库 + 定时任务重试，系统复杂度爆炸</td><td>❌ 淘汰</td></tr>
+<tr><td>Redis list 队列</td><td>读写快</td><td>AI 任务报文很大（prompt + 参考图），几万任务堆内存即 OOM；且无 ACK 确认机制，任务处理到一半失败就彻底丢失</td><td>❌ 淘汰</td></tr>
+<tr><td>RocketMQ</td><td>消息落磁盘持久化、ACK 确认消费可靠、天然缓冲层</td><td>需要 LiteTopic 才能做用户级隔离</td><td>✅ 入选</td></tr>
+</table>
+
+<h3>队列设计：LiteTopic = userID + 任务类型</h3>
+<p>请求先进入 RocketMQ 缓冲，再由消费者推给后端。队列名字包含两个业务维度：<strong>userID</strong> 用于物理隔离——恶意用户的一万个任务只堆积在自己的队列里，不会阻塞正常用户，VIP 与普通用户的资源也天然分开；<strong>任务类型</strong>用于快速区分生图还是生视频，套用不同限流规则。这里必须且只能用 LiteTopic：几千个用户就是几千个队列，传统 Topic 会压垮 NameServer、撑爆文件句柄，用户任务跑完后残留的垃圾文件还会越积越多。LiteTopic 随用随建、空闲自动销毁，几千个通道共用一个父 Topic 元数据，毫无压力。</p>
+
+<div class="highlight">
+<strong>成本对比：</strong>建一个传统 Topic 需要几十秒并留下持久物理文件；LiteTopic 秒级随用随建、空闲自动回收，几千用户的队列共用一个父 Topic 的元数据——NameServer 压力约等于零，磁盘上没有留下任何垃圾文件。
+</div>
+
+<h3>消费侧：三级调度策略</h3>
+<div class="arch-diagram">
+                    ┌──────────────────────────────┐
+用户请求 ─────────▶ │  RocketMQ                     │
+                    │  LiteTopic = userID + 任务类型 │
+                    └──────────────┬───────────────┘
+                                   │  消费者按用户分级调度
+        ┌──────────────────────────┼──────────────────────────┐
+        ▼                          ▼                          ▼
+  ① VIP 用户                 ② 普通用户                  ③ 恶意用户
+  直接尝试提交模型             先查 GPU 全局负载            照常拉取消息
+        │                          │                          │
+   ┌────┴─────┐              ┌─────┴─────┐              不推 GPU，
+   ▼          ▼              ▼           ▼              代码内直接消费掉
+ GPU 接受  接受不了        负载低      负载高            （清空队列，
+   │          │              │           ▼              保护算力）
+ 提交执行   Suspend       提交执行    Suspend
+            挂起排队                  挂起等负载低
+</div>
+
+<p>三个分支各藏一个关键决策：VIP 的限流器只有「模型处理能力」这一个维度；普通用户多了一道全局 GPU 负载查询，负载高时一律挂起；恶意用户则完全相反——后台照常拉取他的消息，但根本不往 GPU 推，直接在代码里正常消费掉，既清空了队列又保护了宝贵的算力。所有「排队」动作都使用 Suspend 挂起消息而非 sleep 硬等，否则消费线程会被迅速耗尽。</p>
+
+<table>
+<tr><th>用户分级</th><th>调度动作</th><th>限流依据</th><th>处理不过来时</th></tr>
+<tr><td>VIP 用户</td><td>直接提交，来多少处理多少</td><td>模型处理能力</td><td>Suspend 挂起排队</td></tr>
+<tr><td>普通用户</td><td>查 GPU 全局负载后再决定</td><td>全局 GPU 负载</td><td>Suspend 挂起，等负载低</td></tr>
+<tr><td>恶意用户</td><td>消费但不提交 GPU</td><td>风控标记</td><td>永远不进入 GPU</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>LiteTopic 名字带上业务维度（用户 × 模型、用户 × 任务类型），天然物理隔离</li>
+<li>限流等待一律返回 Suspend，把阻塞交给 Broker，释放消费线程</li>
+<li>按任务类型拆分限流规则：生图与生视频的耗时和算力消耗完全不同</li>
+<li>恶意流量「消费但不供给」：清空队列的同时一个 GPU 周期都不给</li>
+<li>让 LiteTopic 空闲自动回收，生命周期交给系统</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>用 Thread.sleep 做限流等待，让一个大客户霸占全部共享线程</li>
+<li>把大报文的 AI 任务堆进 Redis 内存，几万个任务就是 OOM</li>
+<li>用 Sentinel 直接拒绝长耗时异步任务，拒绝等于丢任务</li>
+<li>用「共享 Topic + Tag」做用户级隔离，共享 Offset 必然消费错乱</li>
+<li>任务跑完后人工保留队列，垃圾通道越积越多</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>对异步任务来说，「快速拒绝」不是好限流，「照单全收但永不供给算力」才是——队列清空了，GPU 一个周期都没浪费。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+<details>
+<summary>大模型场景下，为什么漏桶比令牌桶更合适？</summary>
+<div class="answer">因为两者的控制目标不同。令牌桶控制的是平均速率，且允许客户端积攒令牌后一次性爆发——攒满令牌的客户端能在瞬间把整个窗口的配额全部打出去，直接给 GPU 制造洪峰。而 GPU 是最昂贵的资源，它不怕任务排队，只怕瞬时洪峰打崩推理。漏桶不管前端多狂暴，永远以恒定速率向 GPU 送达，把突发变成平滑的队列。大模型请求里有相当比例本身价值不高，允许误判，但送达速率必须平滑，这正是漏桶的特性。</div>
+</details>
+<details>
+<summary>为什么把漏桶放在网关进程内存里会出大事？</summary>
+<div class="answer">因为进程内漏桶的容量上限就是 JVM 堆。平时流量小没有问题，但超级大客户瞬间砸来几十万个请求时，漏桶想全部接住再慢慢漏，数 GB 的积压会瞬间堆满堆内存，网关直接 OOM——GPU 还没出问题，网关自己先崩了。而且内存队列不持久化，网关重启后所有排队请求丢失。正确做法是把漏桶外置：用 RocketMQ 做外部缓冲桶，消息落盘、容量以磁盘为上限、可水平扩展，重启也不丢消息。</div>
+</details>
+<details>
+<summary>共用一个 Topic 再用 Tag 过滤用户，会发生什么？</summary>
+<div class="answer">会掉进共享消费进度的陷阱。Tag 只是消费时的逻辑过滤，所有用户的消息仍然挤在同一套物理队列里，共享同一个 Offset 游标。百万客户端去抢同一个队列的 Offset，必然消息错乱、重复消费、漏消费，用户之间完全无法隔离。如果改成给每个用户建一个 Consumer Group 绕开，海量消费者组引发的持续 Rebalance 会让整个集群瞬间瘫痪。用户级隔离必须做到队列层面而不是过滤层面，这正是 LiteTopic 要解决的问题。</div>
+</details>
+<details>
+<summary>LiteTopic 是什么？它和传统 Topic 的本质区别在哪里？</summary>
+<div class="answer">LiteTopic 是 RocketMQ 5.5 推出的、依附于普通父 Topic 的轻量级临时子通道，特点是轻、快、独。轻：不建独立物理文件，消息混合追加写入父 Topic 的物理队列；快：不注册 NameServer，元数据存在 Broker 本地 RocksDB，秒级随用随建，空闲自动回收；独：每个 LiteTopic 在 RocksDB 里有独立 Offset，配合 LiteMode 点对点拉取，废弃 Rebalance。本质区别是：传统 Topic 是一份重量级持久资源，存储、元数据、消费进度三层都独占；LiteTopic 是共享物理资源之上的逻辑视图，所以能廉价地扩展到百万级。</div>
+</details>
+<details>
+<summary>LiteTopic 为什么能撑住百万级，而传统 Topic 不行？</summary>
+<div class="answer">传统 Topic 有三层重量级开销：每个 Topic 在磁盘上有独立的 ConsumeQueue 物理文件，百万个直接把磁盘 IO 拖死；路由信息全局注册在 NameServer，百万临时会话频繁创建销毁会撑爆注册中心的内存和网络；消费进度绑定 Consumer Group，百万个组带来无休止的 Rebalance。LiteTopic 三招逐一消除：物理复用父 Topic 保住顺序写吞吐，RocksDB 本地化元数据实现去中心化，独立 Offset 加 LiteMode 彻底免掉 Rebalance。通道的创建与销毁成本降到近乎为零，百万级才成为可能。</div>
+</details>
+<details>
+<summary>限流时为什么用 ConsumerResult.Suspend 而不是 Thread.sleep？什么是限流传染？</summary>
+<div class="answer">消费者线程是所有客户共享的资源。如果用 Thread.sleep，一个大客户突发触发限流后，睡眠中的线程被长期霸占，其他正常客户的消息拿不到线程，直接大面积报错——一个客户被限流，传染到全集群的服务能力，这就是限流传染。返回 ConsumerResult.Suspend 则只是把这条消息交还 Broker，标记为暂时阻塞、稍后再投递，线程立刻释放去服务其他客户。这样限流成为 Broker 级的服务端行为，与客户端线程完全解耦，无论多少客户正在被限流，正常用户永远有空闲线程可用。</div>
+</details>
+<details>
+<summary>Sentinel 和 Redis 为什么都不适合给 AI 生图/生视频任务做限流？</summary>
+<div class="answer">这类任务一跑就是几分钟到几十分钟，排队任务绝对不能丢。Sentinel 的核心逻辑是拒绝——超阈值直接抛异常，但异步任务不能被扔掉，为了不丢只好补写数据库加定时任务重试，系统复杂度立刻变得无法维护。Redis 有两个致命伤：生图任务报文带着 prompt 和参考图，体量很大，几万个任务堆在内存里分分钟 OOM；Redis 没有 ACK 确认机制，任务处理到一半失败就彻底丢失。RocketMQ 消息落磁盘持久化、ACK 保证消费可靠、天然提供缓冲层，是唯一站得住的方案。</div>
+</details>
+<details>
+<summary>对恶意用户，为什么平台不直接拒绝请求，而是「消费但不提交」？</summary>
+<div class="answer">在同步接口上，快速拒绝是对的；但当架构已经用 MQ 做缓冲层之后，请求已经进了队列，「拒绝」就失去了落点。此时目标从拒绝请求变成保护算力：后台照常拉取恶意用户的消息，直接在代码里正常消费掉，但绝不推给 GPU。效果是队列被持续清空、恶意流量不再占用积压与重试资源，同时一个 GPU 周期都没有浪费。再配合按用户的 LiteTopic 物理隔离，恶意用户每秒一万个请求只堆积在自己的专属队列里，其他用户完全无感。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

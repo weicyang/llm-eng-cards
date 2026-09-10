@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D08 · 知识图谱 + RAG + Agent 三重架构</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、三者的分工总览</a>
+<a href="#s2">二、滤网层：捞得出，理不清</a>
+<a href="#s3">三、骨架层：连得起，养不起</a>
+<a href="#s4">四、大脑层：调得动，管不住</a>
+<a href="#s5">五、调用时序与选型判断</a>
+<a href="#s6">六、落地三座大山与成本账</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>D08 · 知识图谱 + RAG + Agent 三重架构</h1>
+<p class="subtitle">滤网层 / 骨架层 / 大脑层 —— 三者的职责边界、调用时序、选型判断与落地难点</p>
+
+<div class="intuition-box">
+<p>RAG 负责把相关的内容<strong>捞出来</strong>，知识图谱负责把捞出来的东西<strong>连起来</strong>，Agent 负责决定<strong>什么时候用哪个</strong>。少一个都不致命，但三个的边界划不清，系统一定会乱。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、三者的分工总览</h2>
+
+<p>把知识图谱、RAG、Agent 叠在一起用，最常见的失败不是某个组件做得不好，而是<strong>没想清楚每个组件该负责什么</strong>——于是出现 Agent 去做召回排序、RAG 去回答需要多跳推理的问题、图谱被当成一个查得慢的数据库这类错配。</p>
+
+<p>要划清边界，先看三者各自处理的信息形态和擅长的问题类型。</p>
+
+<h3>三层的能力边界</h3>
+<table>
+<tr><th>层</th><th>核心组件</th><th>处理的信息形态</th><th>擅长回答</th><th>处理不了</th></tr>
+<tr><td><strong>滤网层</strong></td><td>RAG</td><td>非结构化文本（文档、网页、评论）</td><td>"哪里提到过 X"——语义相似检索</td><td>需要跨多个实体推理的问题</td></tr>
+<tr><td><strong>骨架层</strong></td><td>知识图谱</td><td>结构化的实体与关系</td><td>"X 和 Y 是什么关系""X 的上游有谁"</td><td>没有被建模成实体关系的长尾信息</td></tr>
+<tr><td><strong>大脑层</strong></td><td>Agent</td><td>任务与工具调用</td><td>"这件事该分几步做、每步用什么"</td><td>它自己不产生知识，只调度</td></tr>
+</table>
+
+<p>三者的关系不是并列的三个数据源，而是<strong>递进的三种能力</strong>：RAG 解决"有没有相关内容"，图谱解决"这些内容之间是什么逻辑"，Agent 解决"该按什么顺序去问这两者"。</p>
+
+<div class="arch-diagram">
+三重架构的整体分层：
+
+  ┌──────────────────────────────────────────────────────────┐
+  │                     用户任务（复杂、多步）                  │
+  └────────────────────────────┬─────────────────────────────┘
+                               ▼
+  ╔═══════════════════ 大脑层 · Agent ═══════════════════════╗
+  ║  意图理解 → 任务拆解 → 工具选择 → 执行 → 结果整合 → 反思   ║
+  ║  产出：一条调用计划，而不是知识本身                        ║
+  ╚══════════════┬────────────────────────────┬══════════════╝
+                 │                            │
+        "帮我找相关材料"              "帮我理清它们的关系"
+                 │                            │
+                 ▼                            ▼
+  ╔══════════════════════╗      ╔══════════════════════════╗
+  ║   滤网层 · RAG        ║      ║   骨架层 · 知识图谱        ║
+  ║  向量/混合检索         ║      ║  实体 · 关系 · 多跳查询    ║
+  ║  ┌────────────────┐  ║      ║  ┌────────────────────┐  ║
+  ║  │ 海量非结构化文本 │  ║ ───→ ║  │ 实体抽取后沉淀为节点 │  ║
+  ║  └────────────────┘  ║      ║  └────────────────────┘  ║
+  ║  输出：相关片段        ║      ║  输出：结构化关系子图      ║
+  ╚══════════════════════╝      ╚══════════════════════════╝
+         ↑ 广而浅                        ↑ 窄而深
+         ↑ 覆盖长尾，但逻辑是散的          ↑ 逻辑严密，但覆盖有限
+</div>
+
+<div class="intuition-box">
+<p>RAG 是广度优先，图谱是深度优先。前者告诉你"哪些地方提到了这件事"，后者告诉你"这件事牵连着谁"。</p>
+</div>
+
+<h3>三者不是替代关系</h3>
+
+<p>常见的一个误解是"上了图谱就不需要 RAG 了"。实际上两者的覆盖面差异极大：图谱里只有被显式建模的实体和关系，任何没进 schema 的信息在图谱里根本不存在；而 RAG 能覆盖全部原始文本，包括那些还没被结构化的长尾内容。</p>
+
+<p>反过来，"RAG 检索质量够好就不需要图谱"同样站不住。RAG 的召回单位是片段，片段之间是<strong>并列</strong>的、没有关系的。当问题需要"A 投资了 B，B 是 C 的供应商，所以 A 的风险敞口包含 C"这种多跳推理时，让模型从一堆并列片段里自己拼出这条链路，成功率很低且不可控。</p>
+
+<p>本文讲的是这三者组合成一套系统时的<strong>架构分工与落地难点</strong>。图谱本身的技术细节——三元组表示、图数据库选型、图嵌入、推理规则——见 <a href="../data/knowledge_graph.html">《D02 · 知识图谱》</a>；把图谱和检索融合成一套检索范式的具体做法（社区摘要、层级索引、局部与全局查询）见 <a href="../rag/graphrag_guide.html">《G21 · GraphRAG》</a>。三张卡的分工是：D02 讲图谱怎么建，G21 讲图谱怎么用于检索，本文讲三个组件放在一起时谁调用谁、边界在哪、代价是什么。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、滤网层：捞得出，理不清</h2>
+
+<p>RAG 在三重架构里的定位是<span class="term">滤网</span>——从海量非结构化信息里筛出与当前问题相关的部分。它的价值在于覆盖面：任何进了知识库的文本，无论有没有被结构化，都能被召回。</p>
+
+<p>但滤网有个固有属性：<strong>它按"相似"筛，不按"有用"筛</strong>。这两者在干净的语料上高度重合，在脏语料上则完全脱节。</p>
+
+<div class="highlight"><strong>案例：</strong>一个舆情分析项目里，RAG 从社交平台抓来的语料中召回内容，结果混进了大量广告和无关评论——这些内容在向量空间里和查询确实相似（它们本来就在讨论同一个品牌），但对分析毫无价值。模型被这些内容"喂毒"，输出了一堆看起来有理有据、实则完全站不住的结论。问题不在检索算法，在于滤网只能过滤"不相关"，过滤不了"相关但无用"。</div>
+
+<h3>RAG 在三重架构里的四类典型失效</h3>
+<table>
+<tr><th>失效类型</th><th>表现</th><th>成因</th><th>该由谁兜</th></tr>
+<tr><td><strong>噪声召回</strong></td><td>广告、模板文本、重复内容被召回</td><td>语义相似但信息量为零</td><td>入库清洗 + 重排过滤</td></tr>
+<tr><td><strong>片段孤立</strong></td><td>召回的片段彼此无关联，模型只能并列罗列</td><td>召回单位是片段，没有关系信息</td><td>骨架层（图谱）</td></tr>
+<tr><td><strong>多跳失败</strong></td><td>需要 A→B→C 推理的问题答不上来</td><td>一次向量检索只能覆盖一跳</td><td>骨架层 + 大脑层多轮检索</td></tr>
+<tr><td><strong>时效错配</strong></td><td>召回了过期内容且不自知</td><td>相似度不含时间维度</td><td>元数据过滤 + 时间衰减重排</td></tr>
+</table>
+
+<p>这张表里第二、三行的"该由谁兜"都指向了骨架层，这正是三重架构存在的理由：<strong>不是 RAG 不够好，是这两类问题在结构上就不属于它的能力范围</strong>。试图靠调 chunk size、换 embedding 模型、加 rerank 来解决多跳推理，投入产出比极低。</p>
+
+<div class="arch-diagram">
+同一个问题，两种召回形态的差别：
+
+  问题："这家公司的供应链风险主要来自哪里？"
+
+  【纯 RAG】召回 5 个片段，彼此并列
+  ┌────────────┐ ┌────────────┐ ┌────────────┐
+  │ 片段1：年报 │ │ 片段2：新闻 │ │ 片段3：公告 │  ... 
+  │ 提到主要供 │ │ 提到某地区 │ │ 提到原材料 │
+  │ 应商 A、B  │ │ 停产       │ │ 涨价       │
+  └────────────┘ └────────────┘ └────────────┘
+        ↑ 模型需要自己发现"停产的那个地区正好是 A 的产地"
+        ↑ 这层关联不在任何一个片段里 → 大概率漏掉
+
+  【加了图谱】召回一个关系子图
+        [本公司] ──采购──→ [供应商A] ──产地──→ [某地区]
+             │                                    │
+             └──采购──→ [供应商B] ──原材料──→ [某金属]
+                                                  │
+                                            [近期涨价事件]
+        ↑ 关联是显式的，模型只需沿着边读，不需要自己发现
+</div>
+
+<div class="intuition-box">
+<p>滤网能滤掉明显的沙子，滤不掉"看起来像金子的黄铜"。而它更根本的局限是：筛出来的东西是一堆散件，滤网本身不负责组装。</p>
+</div>
+
+<h3>滤网层该做到什么程度</h3>
+<table>
+<tr><th>优化动作</th><th>解决的失效</th><th>投入</th><th>在三重架构里的必要性</th></tr>
+<tr><td>入库清洗（去广告、去模板、去重）</td><td>噪声召回</td><td>低</td><td><strong>必做</strong>，性价比最高的一步</td></tr>
+<tr><td>混合检索（向量 + 关键词）</td><td>专有名词召回不准</td><td>低</td><td>必做</td></tr>
+<tr><td>重排模型</td><td>相关性排序</td><td>中</td><td>建议做</td></tr>
+<tr><td>Query 改写与拆解</td><td>复杂问题召回不全</td><td>中</td><td>可由大脑层承担，不必在滤网层重复实现</td></tr>
+<tr><td>多跳检索链路</td><td>多跳推理</td><td>高</td><td><strong>不建议</strong>，交给骨架层更划算</td></tr>
+</table>
+
+<p>最后两行是三重架构下的重要取舍：在单独用 RAG 的系统里，Query 拆解和多跳检索通常要在检索侧自己实现；而在三重架构里，前者天然属于 Agent 的规划能力，后者天然属于图谱的多跳查询能力。<strong>重复实现是三重架构最常见的浪费</strong>。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、骨架层：连得起，养不起</h2>
+
+<p>知识图谱的作用是给碎片化的知识建立<span class="term">实体关系</span>——把散落在不同文档里的同一个实体识别成同一个节点，并把它们之间的关系显式地表达出来。它解决的正是滤网层留下的那个缺口：片段之间的逻辑。</p>
+
+<div class="highlight"><strong>案例：</strong>一个金融分析项目里，RAG 能准确找到各家公司的财报内容，但这些财报是彼此孤立的——每份文档只讲自己。引入知识图谱、用股权关系、供应链关系、竞争关系把这些公司连起来之后，整个行业的脉络才第一次变得可见：谁控股谁、谁是谁的上游、谁在抢同一块市场。这个差别不是"检索更准了"，而是"多了一类原本根本回答不了的问题"。</div>
+
+<h3>图谱补上的三类能力</h3>
+<table>
+<tr><th>能力</th><th>典型问法</th><th>纯 RAG 的表现</th><th>图谱的做法</th></tr>
+<tr><td><strong>多跳推理</strong></td><td>"A 的间接持股方有哪些"</td><td>需要模型自己串联，成功率低</td><td>沿边遍历，结果确定</td></tr>
+<tr><td><strong>全局聚合</strong></td><td>"整个行业有几个主要阵营"</td><td>召回窗口装不下全量文档</td><td>社区发现 / 子图聚合</td></tr>
+<tr><td><strong>关系约束</strong></td><td>"排除关联方之后的供应商名单"</td><td>无法表达"排除关联方"</td><td>图查询里直接写成条件</td></tr>
+<tr><td><strong>一致性校验</strong></td><td>"两份文档说法矛盾，以哪个为准"</td><td>并列呈现，交给模型猜</td><td>实体属性冲突可被显式检出</td></tr>
+</table>
+
+<p>代价也同样明确，而且比 RAG 大一个量级。图谱的成本不在查询侧，在<strong>构建和维护</strong>侧：schema 设计、实体抽取、实体对齐（同一个实体在不同文档里的不同写法要归一）、关系抽取、冲突消解、增量更新——每一步都需要人工介入，而且需要懂业务的人介入。</p>
+
+<div class="highlight"><strong>案例：</strong>同一个金融分析场景后来出过一次严重事故：图谱里某家公司的法人信息还是<strong>半年前</strong>的，基于这条陈旧关系推导出来的整份分析报告全错了。这暴露了图谱最危险的属性——它的输出看起来是"结构化的、确定的、可信的"，正因为看起来可信，错误不会被质疑，会被一路传导到最终结论。RAG 召回一段过时内容，模型可能还会因为上下文冲突而犹豫；图谱给出一条错误的边，下游完全没有察觉的机会。</div>
+
+<div class="intuition-box">
+<p>图谱的风险不在于它会出错，而在于它出错时看起来仍然很确定。一条陈旧的边比一段陈旧的文本危险得多。</p>
+</div>
+
+<h3>图谱的时效性保障</h3>
+
+<p>既然陈旧数据是主要风险源，时效性就必须被当成一等公民来设计，而不是"以后再说的运维问题"。核心是三件事：<strong>增量更新、时间标注、可信度衰减</strong>。</p>
+
+<div class="arch-diagram">
+图谱的增量更新链路：
+
+  新文档 / 变更事件
+      │
+      ▼
+  ┌──────────────┐
+  │ 实体与关系抽取 │
+  └───────┬──────┘
+          ▼
+  ┌────────────────────────────────────┐
+  │  与现有图谱比对，分成三类：            │
+  │   ├ 新增：直接入图，标注 valid_from   │
+  │   ├ 一致：更新 last_seen，提升置信度   │
+  │   └ 冲突：进入冲突队列 ← 关键在这里    │
+  └───────┬────────────────────────────┘
+          ▼
+  ┌────────────────────────────────────┐
+  │  冲突消解（按来源权威度 + 时间新旧）   │
+  │   ├ 高权威新数据 → 旧边置为失效       │
+  │   ├ 同权威冲突   → 人工复核队列       │
+  │   └ 低权威数据   → 仅记录，不改主图    │
+  └───────┬────────────────────────────┘
+          ▼
+  ┌────────────────────────────────────┐
+  │  未被任何新数据确认的边，置信度随时间衰减 │
+  │  低于阈值时：查询结果中标注"待核实"     │
+  └────────────────────────────────────┘
+</div>
+
+<p>最后一步的<span class="term">置信度衰减</span>是个便宜且有效的机制：一条边如果长期没有被任何新证据确认，它的可信度自动下降，查询时被标注为待核实。这样即使更新链路有遗漏，下游也能知道"这条信息可能已经过时"，而不是把它当成确定事实。</p>
+
+<h3>什么信息该进图谱，什么不该</h3>
+<table>
+<tr><th>信息特征</th><th>该进图谱吗</th><th>理由</th></tr>
+<tr><td>实体明确、关系稳定（股权、组织架构、产品谱系）</td><td>✅ 该进</td><td>结构化收益高，维护成本可控</td></tr>
+<tr><td>关系是查询的核心（供应链、传导路径、依赖关系）</td><td>✅ 该进</td><td>正是 RAG 答不了的那类问题</td></tr>
+<tr><td>高频变动的数值（股价、库存、实时指标）</td><td>❌ 不进</td><td>用专门的时序库，图谱只存"存在这个指标"</td></tr>
+<tr><td>长尾描述性内容（分析观点、会议纪要、评论）</td><td>❌ 不进</td><td>结构化成本极高，交给 RAG 覆盖</td></tr>
+<tr><td>一次性、不会被复用的信息</td><td>❌ 不进</td><td>建模成本永远收不回来</td></tr>
+</table>
+
+<p>划这条线的原则很朴素：<strong>只有会被反复查询、且查询方式依赖关系的信息，才值得付图谱的建模成本</strong>。把什么都往图谱里塞，是这类项目最常见的死法——schema 越来越复杂，维护成本失控，最终整个图谱变成没人敢动的历史包袱。</p>
+</div>
+
+<div class="section" id="s4">
+<h2>四、大脑层：调得动，管不住</h2>
+
+<p>Agent 在三重架构里的职责非常明确：<strong>理解意图、制定计划、调用前两层执行、整合结果</strong>。它自己不产生任何知识，它产出的是一条调用计划。</p>
+
+<p>把这件事讲透很重要，因为大量项目里 Agent 被赋予了它不该承担的职责——让它去做召回排序、让它凭记忆回答本该查询的事实、让它决定图谱里某条关系对不对。这些都是把调度器当成知识源用，必然出问题。</p>
+
+<h3>Agent 该做与不该做</h3>
+<table>
+<tr><th>职责</th><th>归属</th><th>说明</th></tr>
+<tr><td>把复杂问题拆成子问题</td><td>✅ Agent</td><td>这是它的核心价值</td></tr>
+<tr><td>判断某个子问题该查 RAG 还是查图谱</td><td>✅ Agent</td><td>路由决策</td></tr>
+<tr><td>根据前一步结果决定下一步</td><td>✅ Agent</td><td>动态规划，静态流水线做不到</td></tr>
+<tr><td>整合多源结果并组织成答案</td><td>✅ Agent</td><td>需要处理来源冲突</td></tr>
+<tr><td>对召回结果做相关性排序</td><td>❌ 交给重排模型</td><td>用大模型做排序又贵又不稳定</td></tr>
+<tr><td>凭参数记忆回答事实性问题</td><td>❌ 必须走检索</td><td>这是幻觉的主要入口</td></tr>
+<tr><td>判断图谱里某条关系是否正确</td><td>❌ 交给数据治理</td><td>Agent 没有判断依据</td></tr>
+</table>
+
+<p>Agent 的最大风险是<strong>决策路径不可见</strong>。它的规划过程发生在模型内部，外部只能看到最终发出的工具调用序列。这带来两类典型故障。</p>
+
+<div class="highlight"><strong>案例：</strong>一个 Agent 为了完成任务陷入了失控的调用循环——它反复调用同一批接口，几乎把服务器拖垮。这类故障的特征是：单看每一次调用都合法，参数也没错，只有把整个序列连起来看才发现它在原地打转。而 Agent 的执行往往是异步的、后台的，等到有人发现服务器负载异常，已经跑了很久了。</div>
+
+<div class="arch-diagram">
+Agent 执行失控的两种形态与对应护栏：
+
+  【形态一：死循环】
+    调用 → 结果不满意 → 换个参数再调 → 还是不满意 → 再调 ...
+    特征：连续多轮调用同一工具，参数微调，结果高度相似
+    护栏：单任务工具调用轮次上限 + 相似调用检测 + 强制中断
+
+  【形态二：扇出爆炸】
+    拆出 10 个子任务 → 每个子任务又拆出 10 个 → 100 次调用
+    特征：调用量随规划深度指数增长
+    护栏：递归深度上限 + 单任务总调用预算 + 并发上限
+
+  ┌──────────────────── 通用护栏清单 ────────────────────┐
+  │  ① 轮次上限：超过 N 轮强制终止并返回已有结果          │
+  │  ② 预算上限：单任务 token / 调用次数 / 费用三重封顶    │
+  │  ③ 超时中断：墙钟时间上限，防止长时间挂起              │
+  │  ④ 幂等与去重：相同调用直接返回缓存，不重复执行        │
+  │  ⑤ 高危操作二次确认：写操作、外部通知需显式批准        │
+  │  ⑥ 全链路 trace：每一步的输入输出都可回放             │
+  └──────────────────────────────────────────────────┘
+</div>
+
+<div class="intuition-box">
+<p>Agent 是唯一一个"能自己决定花多少钱"的组件。所有其他组件的成本都由调用方决定，只有它的成本由它自己决定——所以它必须被上预算。</p>
+</div>
+
+<h3>三层的可观测性诉求不同</h3>
+<table>
+<tr><th>层</th><th>最该盯的指标</th><th>典型异常信号</th></tr>
+<tr><td>滤网层 RAG</td><td>召回相关性、噪声比例、命中率</td><td>召回结果中低质内容占比上升</td></tr>
+<tr><td>骨架层 图谱</td><td>边的新鲜度、冲突队列长度、覆盖率</td><td>长期未确认的边占比上升</td></tr>
+<tr><td>大脑层 Agent</td><td>单任务调用轮次、预算消耗、重复调用率</td><td>轮次分布出现长尾、同参数重复调用</td></tr>
+<tr><td>端到端</td><td>任务完成率、答案可溯源率</td><td>答案里出现无法回溯到任何来源的断言</td></tr>
+</table>
+
+<p>最后一行的<span class="term">可溯源率</span>是三重架构里最有价值的一个综合指标：答案中的每个具体断言，是否都能指回某个 RAG 片段或某条图谱边。溯源不到的部分，要么是模型幻觉，要么是隐式推理——两者都需要人工确认。</p>
+</div>
+
+<div class="section" id="s5">
+<h2>五、调用时序与选型判断</h2>
+
+<p>三层之间不是固定的流水线，而是由 Agent 按问题类型选择路径。理解典型时序，才能判断某个场景是不是真的需要三层全上。</p>
+
+<div class="arch-diagram">
+一次复合问题的完整调用时序：
+
+  用户: "分析一下 X 公司近期的供应链风险"
+    │
+  ┌─┴─ Agent: 意图理解 → 这是一个需要关系推理 + 事实佐证的复合问题
+  │
+  │  ① 先查骨架，拿到结构
+  ├──────→ [图谱] 查询 X 的一跳/二跳供应商与产地
+  │  ←──── 返回子图：供应商 A/B/C，产地 P1/P2
+  │
+  │  ② 再用滤网，为每个实体找事实材料
+  ├──────→ [RAG] 以 A/B/C/P1/P2 为检索词，召回近期文本
+  │  ←──── 返回片段：P1 地区停产公告、某原材料涨价新闻
+  │
+  │  ③ 判断是否需要补一跳
+  ├──────→ [图谱] P1 还关联了哪些实体？是否存在其他传导路径
+  │  ←──── 返回扩展子图
+  │
+  │  ④ 整合：把子图作为骨架，把片段作为佐证，组织成答案
+  └──────→ 输出：带溯源标注的风险分析
+
+  关键顺序：先图谱后 RAG。图谱给出"该关注谁"，
+  RAG 才知道"检索什么"——反过来做，检索词无从确定。
+</div>
+
+<p>这个顺序值得强调：<strong>结构先行，事实补充</strong>。先用图谱确定问题涉及哪些实体和关系，再用这些实体作为检索词去 RAG 里找具体材料。如果反过来，先做一次泛化的语义检索，召回的内容会很发散，而且不知道该往哪个方向深挖。</p>
+
+<p>但这只是复合问题的时序。大量问题并不需要走完三层。</p>
+
+<h3>四种典型问题的最短路径</h3>
+<table>
+<tr><th>问题类型</th><th>示例</th><th>最短路径</th><th>上全三层的额外收益</th></tr>
+<tr><td><strong>单点事实</strong></td><td>"退货政策是几天"</td><td>纯 RAG，一次检索</td><td>几乎为零，纯浪费延迟</td></tr>
+<tr><td><strong>关系查询</strong></td><td>"A 的控股股东是谁"</td><td>纯图谱，一次查询</td><td>零</td></tr>
+<tr><td><strong>关系 + 事实</strong></td><td>"A 的供应商最近有什么负面新闻"</td><td>图谱定位 → RAG 检索</td><td>需要，但不需要复杂规划</td></tr>
+<tr><td><strong>开放分析</strong></td><td>"评估 A 的供应链风险"</td><td>Agent 编排多轮图谱与 RAG</td><td>三层全上的价值在这里</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>三重架构不是给所有问题准备的，是给最难的那一类问题准备的。用它去回答"退货政策几天"，等于用货轮送外卖。</p>
+</div>
+
+<h3>什么场景只用 RAG 就够</h3>
+
+<p>判断标准可以收敛成三个问题：<strong>问题需不需要跨实体推理？知识的关系结构稳不稳定？关系查询的频次高不高？</strong>三个都是"否"，那就不该上图谱。</p>
+
+<div class="formula">
+图谱值得建 ⟺ 关系型问题占比 × 查询频次 × 关系稳定性 &gt; 建模与维护的持续投入
+</div>
+
+<h3>三类场景的选型对照</h3>
+<table>
+<tr><th>场景</th><th>知识特征</th><th>建议架构</th><th>理由</th></tr>
+<tr><td>企业内部文档问答</td><td>大量长尾文本，实体关系弱</td><td>RAG（+ 轻量元数据）</td><td>关系型问题占比低，图谱收不回成本</td></tr>
+<tr><td>客服知识库</td><td>问答对为主，结构简单</td><td>RAG + 规则路由</td><td>连 Agent 都未必需要，静态流程更稳</td></tr>
+<tr><td>金融风险分析</td><td>实体关系密集且是分析核心</td><td>三层全上</td><td>多跳推理和传导路径是刚需</td></tr>
+<tr><td>供应链管理</td><td>依赖关系稳定、查询频繁</td><td>图谱为主 + RAG 补事实</td><td>关系稳定，建模成本一次性摊销</td></tr>
+<tr><td>科研文献分析</td><td>实体多但关系抽取难度大</td><td>RAG 起步，逐步沉淀图谱</td><td>先用起来，让真实查询决定该建什么关系</td></tr>
+</table>
+
+<p>最后一行的策略值得推广：<strong>不要一上来就设计完美的 schema</strong>。先用 RAG 把系统跑起来，观察真实用户问的问题里有多少是关系型的、集中在哪些实体上，再针对性地建那一小块图谱。用真实需求驱动建模，比闭门设计一个大而全的本体靠谱得多。</p>
+</div>
+
+<div class="section" id="s6">
+<h2>六、落地三座大山与成本账</h2>
+
+<p>三重架构的技术方案不难理解，难的是落地。真实项目里挡在前面的是三件事：技术集成、数据治理、团队技能。</p>
+
+<h3>三座大山</h3>
+<table>
+<tr><th>难点</th><th>具体表现</th><th>根本原因</th><th>缓解手段</th></tr>
+<tr><td><strong>技术集成</strong></td><td>工作流像多米诺骨牌，一步错步步错，而且极难调试</td><td>链路长、每一环的输出都是下一环的输入，误差逐级放大</td><td>全链路 trace、每环独立评测、分段回归</td></tr>
+<tr><td><strong>数据治理</strong></td><td>企业数据脏乱，实体重名、格式不一、口径冲突</td><td>数据从来不是为了 AI 而积累的</td><td>先做数据盘点与清洗，把治理当成项目的第一阶段而非附属</td></tr>
+<tr><td><strong>团队技能</strong></td><td>需要同时懂 AI、懂图谱、懂工程的复合型人才</td><td>三个领域的知识体系差异大，单人覆盖难</td><td>按层分工 + 明确接口契约，让三类人各守一层</td></tr>
+</table>
+
+<p>第一座山的核心痛点是<strong>误差传导</strong>。链路上任何一环的输出质量下降，都会被下游放大，而且从最终结果看不出是哪一环出的问题。</p>
+
+<div class="arch-diagram">
+误差如何在三层之间放大：
+
+  实体抽取准确率 90%
+        ↓
+  图谱关系正确率 90% × 85%(关系抽取) ≈ 77%
+        ↓
+  Agent 基于图谱的路由正确率 77% × 90%(规划) ≈ 69%
+        ↓
+  RAG 召回相关性 69% × 80% ≈ 55%
+        ↓
+  最终答案可用率 ≈ 55% × 生成质量
+
+  ← 每一环看起来都"还行"，串起来就不能看了。
+  ← 所以必须给每一环单独设评测集和准入线，
+     不能只看端到端指标——端到端跌了，你不知道该修哪一环。
+</div>
+
+<p>应对办法是<span class="term">分段评测</span>：为每一环单独建评测集和准入线（实体抽取的 F1、图谱关系的抽样准确率、路由的正确率、召回的相关性），任何一环跌破准入线就单独修那一环。只看端到端指标，等于把四个变量塞进一个数字里，指标一跌完全不知道该动哪里。</p>
+
+<p>第二座山最容易被低估。企业数据从来不是为 AI 准备的：同一家公司在三个系统里有三种写法，同一个指标在两个部门有两套口径，历史文档格式五花八门。这些问题在传统 BI 里可以靠人工对齐糊过去，在自动化的三重架构里会直接变成错误的实体和错误的边。</p>
+
+<div class="intuition-box">
+<p>数据治理不是三重架构的前置条件，它就是三重架构的一部分。跳过它直接搭系统，搭出来的是一台把脏数据加工成"看起来很专业的错误结论"的机器。</p>
+</div>
+
+<h3>成本与收益权衡</h3>
+<table>
+<tr><th>组件</th><th>一次性投入</th><th>持续投入</th><th>收益形态</th><th>收益出现时间</th></tr>
+<tr><td><strong>RAG</strong></td><td>低（数周）</td><td>低（语料更新）</td><td>覆盖面立刻可见</td><td>数周</td></tr>
+<tr><td><strong>知识图谱</strong></td><td>高（数月，含 schema 与抽取）</td><td><strong>高</strong>（持续维护与冲突消解）</td><td>解锁一整类新问题</td><td>数月</td></tr>
+<tr><td><strong>Agent</strong></td><td>中（编排与护栏）</td><td>中（prompt 与策略调优）</td><td>处理复杂任务的能力</td><td>数周到数月</td></tr>
+<tr><td><strong>数据治理</strong></td><td>高</td><td>高</td><td>不直接产生功能，但决定上面三层的天花板</td><td>贯穿始终</td></tr>
+</table>
+
+<p>这张表最该注意的是"持续投入"那一列。RAG 的边际维护成本很低——加文档就行；图谱的边际维护成本很高——每一批新数据都要走抽取、对齐、冲突消解。很多项目在立项时只算了建设成本，没算维护成本，结果图谱建成半年后就没人维护了，然后开始输出陈旧关系。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先用 RAG 把系统跑起来，用<strong>真实查询分布</strong>决定该建哪一块图谱</li>
+<li>只把"会被反复查询、且查询依赖关系"的信息建进图谱</li>
+<li>调用时序上<strong>结构先行、事实补充</strong>：先图谱定实体，再 RAG 找材料</li>
+<li>给图谱的每条边标注来源、时间和置信度，长期未确认的自动衰减</li>
+<li>给 Agent 上硬护栏：轮次上限、预算上限、超时中断、调用去重</li>
+<li>为每一环单独设评测集和准入线，不要只看端到端指标</li>
+<li>把数据治理排进项目第一阶段，而不是当成后续优化</li>
+<li>用可溯源率衡量最终质量：每个断言都能指回某个片段或某条边</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>一上来就设计大而全的本体和 schema，闭门造车几个月</li>
+<li>把什么信息都往图谱里塞，包括高频变动的数值和长尾描述文本</li>
+<li>让 Agent 去做召回排序，或者凭参数记忆回答事实问题</li>
+<li>在 RAG 侧重复实现多跳检索——那是图谱的活</li>
+<li>Agent 不设调用预算，任由它自己决定花多少钱</li>
+<li>只算图谱的建设成本，不算持续维护成本</li>
+<li>简单的单点事实问题也走完整三层链路</li>
+<li>端到端指标一跌就整体调 prompt，不做分段定位</li>
+</ul>
+</div>
+</div>
+
+<h3>与相邻卡片的分工</h3>
+<table>
+<tr><th>卡片</th><th>回答的问题</th><th>不涉及</th></tr>
+<tr><td><a href="../data/knowledge_graph.html">D02 · 知识图谱</a></td><td>图谱本身怎么建：三元组表示、图数据库、图嵌入、推理规则</td><td>与检索和 Agent 的组合</td></tr>
+<tr><td><a href="../rag/graphrag_guide.html">G21 · GraphRAG</a></td><td>图谱怎么用于检索：社区摘要、层级索引、局部与全局查询</td><td>Agent 层的编排与护栏</td></tr>
+<tr><td><strong>本文（D08）</strong></td><td>三者组合成一套系统时的职责边界、调用时序、选型判断与落地难点</td><td>图谱构建与图检索算法的实现细节</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>三重架构的难点从来不在"怎么把三个组件接起来"，而在"想清楚每个组件不该做什么"。边界划不清，三个好组件也能拼出一个烂系统。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details><summary>RAG、知识图谱、Agent 三者到底怎么分工？</summary><div class="answer">它们不是三个并列的数据源，而是三种递进的能力。RAG 是滤网层，从海量非结构化文本里捞出与问题相关的片段，优势是覆盖面广、长尾内容都能碰到，短板是召回的片段彼此并列、没有关系信息。知识图谱是骨架层，把碎片化知识里的实体识别出来并显式表达它们之间的关系，补的正是 RAG 留下的那个缺口，能回答多跳推理、全局聚合、关系约束这类问题。Agent 是大脑层，它自己不产生任何知识，产出的是一条调用计划：理解意图、拆解任务、决定每一步该查图谱还是查 RAG、整合结果。三者的边界一句话概括就是：RAG 管有没有，图谱管什么关系，Agent 管什么顺序。</div></details>
+
+<details><summary>为什么说 RAG 解决不了逻辑问题？加 rerank、换 embedding 也不行吗？</summary><div class="answer">不行，因为这是结构性的限制而不是效果好坏的问题。RAG 的召回单位是片段，片段之间没有任何关系信息，模型拿到的是一堆并列的材料。当问题需要"A 投资了 B，B 是 C 的供应商，所以 A 的风险敞口包含 C"这种多跳推理时，那条关联链本身不存在于任何一个片段里，需要模型自己发现，成功率低且不可控。调 chunk size、换 embedding、加重排能提升的是"相关片段有没有被召回"，提升不了"片段之间的关系有没有被表达"。想靠检索侧硬解多跳，投入产出比远不如把这类问题交给图谱。</div></details>
+
+<details><summary>知识图谱最大的坑是什么？</summary><div class="answer">是数据陈旧，而且危险的不是它会过时，是它过时的时候看起来仍然很确定。图谱的输出是结构化的、明确的关系，下游天然会当成可信事实使用，一条错误的边会被一路传导到最终结论，中间没有任何环节会质疑它。相比之下 RAG 召回一段过时文本，模型至少可能因为上下文冲突而表现出犹豫。真实事故里出现过图谱中某公司法人信息还是半年前的，导致基于这条关系推导的整份分析报告全错。应对办法是把时效性当成一等公民设计：增量更新链路要有冲突消解队列，每条边标注来源、时间和置信度，长期未被新证据确认的边自动衰减置信度，查询时标注为待核实。</div></details>
+
+<details><summary>什么场景只用 RAG 就够，什么场景非上图谱不可？</summary><div class="answer">判断收敛成三个问题：问题需不需要跨实体推理、知识的关系结构稳不稳定、关系型查询的频次高不高。三个都是否，就不该上图谱。企业内部文档问答、客服知识库属于典型的只用 RAG 就够的场景——知识以长尾文本为主，实体关系弱，关系型问题占比低，图谱的建模和维护成本收不回来。金融风险分析、供应链管理则是非上不可的场景：实体关系密集且本身就是分析的核心，多跳推理和传导路径查询是刚需，而且这类关系相对稳定，建模成本可以一次性摊销。中间地带的推荐策略是先用 RAG 跑起来，观察真实用户问的问题里有多少是关系型的、集中在哪些实体上，再针对性地建那一小块图谱。</div></details>
+
+<details><summary>三层的调用顺序是什么？为什么强调先图谱后 RAG？</summary><div class="answer">对于复合型问题，推荐的时序是结构先行、事实补充：Agent 先查图谱确定问题涉及哪些实体和关系，拿到一个关系子图，再以这些实体为检索词去 RAG 里找具体材料，必要时回到图谱补一跳，最后把子图当骨架、把片段当佐证整合成答案。之所以不能反过来，是因为先做泛化的语义检索时根本不知道该检索什么——用户问"分析 X 公司的供应链风险"，直接拿这句话去检索会召回一堆发散内容，而且不知道该往哪个方向深挖。图谱先给出"该关注哪几个实体"，RAG 才有明确的检索目标。当然这只是复合问题的路径，单点事实问题走一次 RAG 就够，关系查询走一次图谱就够，不必每个问题都跑完整链路。</div></details>
+
+<details><summary>Agent 疯狂调用把服务器拖垮，这类失控怎么防？</summary><div class="answer">Agent 是整个架构里唯一一个能自己决定花多少钱的组件，所以必须被上硬护栏。失控主要有两种形态：一是死循环，反复调用同一工具、参数微调、结果高度相似，特征是单看每次调用都合法，只有把序列连起来看才发现在原地打转；二是扇出爆炸，拆出的子任务又各自拆出子任务，调用量随规划深度指数增长。对应的护栏是一套组合：单任务工具调用轮次上限、递归深度上限、token 与费用的预算封顶、墙钟超时中断、相同调用的幂等去重、高危写操作二次确认，以及全链路 trace 保证每一步可回放。要特别注意 Agent 执行往往是异步后台的，等人发现负载异常时已经跑了很久，所以护栏必须是自动强制的，不能只靠告警。</div></details>
+
+<details><summary>三层串起来之后误差会不会放大？怎么定位是哪一环出的问题？</summary><div class="answer">会，而且放大得很快。假设实体抽取准确率九成、关系抽取八成五、Agent 路由九成、RAG 召回相关性八成，乘下来端到端可用率只剩五成多——每一环单看都"还行"，串起来就不能看了。这就是技术集成这座大山的核心痛点：链路长，每一环的输出都是下一环的输入，误差逐级放大，而从最终结果完全看不出是哪一环出的问题。唯一有效的办法是分段评测：为每一环单独建评测集和准入线，实体抽取看 F1，图谱关系看抽样准确率，路由看正确率，召回看相关性，任何一环跌破准入线就单独修那一环。只看端到端指标等于把四个变量塞进一个数字，指标一跌根本不知道该动哪里。</div></details>
+
+<details><summary>这张卡和《D02 · 知识图谱》《G21 · GraphRAG》怎么分工？</summary><div class="answer">D02 讲图谱本身怎么建：三元组表示、图数据库选型、图嵌入、推理规则，是图谱这项技术的基本盘。G21 讲图谱怎么用于检索，也就是 GraphRAG 这套范式的具体做法：社区摘要、层级索引、局部查询与全局查询的差别。本文讲的是把知识图谱、RAG、Agent 三个组件组合成一套系统时的架构问题——谁负责什么、谁调用谁、调用顺序怎么排、什么场景不需要全上、落地时会撞上哪几座山。想了解图谱技术本身读 D02，想了解图增强检索的算法读 G21，想判断自己的项目该不该上三重架构、该怎么划边界读本文。</div></details>
+
+<details><summary>三重架构的成本主要花在哪里？</summary><div class="answer">最容易被低估的是知识图谱的持续维护成本。RAG 的边际成本很低，加文档就行；图谱的边际成本很高，每一批新数据都要走实体抽取、实体对齐、关系抽取、冲突消解，而且这些环节都需要懂业务的人介入。很多项目立项时只算了建设成本，结果图谱建成半年后没人维护，开始持续输出陈旧关系，反而比不建更危险。另一笔常被忽略的是数据治理：企业数据从来不是为 AI 准备的，同一家公司在三个系统里有三种写法，同一个指标在两个部门有两套口径，这些在传统流程里靠人工对齐能糊过去的问题，在自动化链路里会直接变成错误的实体和错误的边。数据治理不是三重架构的前置条件，它本身就是架构的一部分，应该排进项目第一阶段。</div></details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

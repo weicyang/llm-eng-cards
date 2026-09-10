@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G04 · 向量数据库与 ANN 索引原理：关系型数据库的向量检索局限</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section h2{color:var(--accent);margin:0 0 1rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、问题出发：百万 chunk 里找 Top-5</a>
+<a href="#s2">二、为什么 MySQL 做不了向量检索</a>
+<a href="#s3">三、HNSW：分层导航的小世界图</a>
+<a href="#s4">四、IVF：聚类分桶的倒排索引</a>
+<a href="#s5">五、三种检索方式对比与混合检索</a>
+<a href="#s6">六、生产选型分档与四大误区</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>G04 · 向量数据库与 ANN 索引原理：关系型数据库的向量检索局限</h1>
+<p class="subtitle">Vector Database &amp; ANN Index — 百万 chunk 检索场景 / B-Tree vs 高维几何 / HNSW 分层图 / IVF 聚类 / 混合检索 RRF / 选型分档</p>
+
+<div class="intuition-box">
+<p>向量数据库解决的是一个传统数据库从未设计来解决的问题：在海量高维向量里快速找到"最像的那几个"。MySQL 的 B-Tree 擅长回答"等于谁"，而向量检索要回答的是"离谁最近"——这是一个几何问题，需要全新的索引结构（ANN）来回答。</p>
+</div>
+
+<!-- ===================== Section 1 ===================== -->
+<div class="section" id="s1">
+<h2>一、问题出发：百万 chunk 里找 Top-5</h2>
+
+<p>先看一个 RAG 系统的真实工作场景：知识库有 <strong>100 万个文档 chunk</strong>，每个 chunk 经过 Embedding 模型变成 768 维向量并入库。用户提问后，问题同样被向量化，系统必须在 100 万个向量中找到与 Query 向量最相似的 Top-5，交给 LLM 生成回答。整个检索环节通常只被分配 20~50ms 的延迟预算——因为它只是 RAG 全链路中的一环，后面还有重排和生成在等着。</p>
+
+<div class="arch-diagram">
+RAG 在线检索链路（检索环节的延迟预算通常只有 20~50ms）
+
+  用户 Query ──▶ Embedding 编码（~5ms）
+                    │
+                    ▼
+         ┌──────────────────────────┐
+         │   向量数据库：ANN 检索      │  ← 本卡聚焦的环节
+         │   100万向量中找 Top-K      │     预算：≤10ms
+         └──────────────────────────┘
+                    │
+                    ▼
+         元数据过滤 + 混合检索（BM25 路）
+                    │
+                    ▼
+         RRF 融合 ──▶ Rerank ──▶ Top-5 送入 LLM
+</div>
+
+<p>最朴素的做法是<span class="term">暴力检索</span>（Flat / Brute-Force）：把 Query 向量和全部 100 万个向量逐一计算余弦相似度，排序取 Top-5。每次查询都要做 100 万次 768 维点积，在一台普通服务器上耗时约几百毫秒到数秒——对实时对话完全不可接受；而且耗时随数据量<strong>线性增长</strong>，涨到 1000 万、1 亿时直接失去可用性。向量数据库的核心使命，就是用预构建的索引结构把"全量扫描"变成"只访问一小部分向量"。</p>
+
+<table>
+<tr><th>维度</th><th>暴力检索（Flat）</th><th>ANN 索引检索</th></tr>
+<tr><td>检索方式</td><td>逐一计算全部向量的相似度</td><td>沿索引结构只访问少量候选</td></tr>
+<tr><td>复杂度</td><td>O(N)，随数据量线性增长</td><td>近似 O(log N)</td></tr>
+<tr><td>百万级典型延迟</td><td>数百毫秒～秒级</td><td>个位数毫秒</td></tr>
+<tr><td>结果</td><td>绝对精确（真 Top-K）</td><td>近似（Recall@K 通常 95%+）</td></tr>
+<tr><td>适用场景</td><td>小规模数据 / 离线评测基准</td><td>生产在线检索</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>ANN（Approximate Nearest Neighbor，近似最近邻）的"近似"是主动的工程交换：放弃 100% 找到数学意义上的绝对最近邻，换取几个数量级的速度提升——实践中 95%~99% 的召回精度对 RAG 完全够用。</p>
+</div>
+
+<p>这里引入贯穿全文的度量：<span class="term">Recall@K</span>（K 召回率），即 ANN 返回的 Top-K 结果中，有多大比例落在暴力检索算出的真实 Top-K 里。Recall@10 = 0.98 意味着返回的 10 条里有 9.8 条与精确结果一致。所有索引参数调优，本质都是在 Recall、延迟、内存三者之间找平衡点。</p>
+</div>
+
+<!-- ===================== Section 2 ===================== -->
+<div class="section" id="s2">
+<h2>二、为什么 MySQL 做不了向量检索</h2>
+
+<p>"为什么不直接在 MySQL 里存向量、查向量？"答案不只是"它不支持"，而是两类查询在数学本质上不同。传统关系型数据库的查询是<strong>精确匹配与范围扫描</strong>：<code>WHERE age &gt; 25 AND city = '北京'</code> 这类条件，依赖 <span class="term">B-Tree</span> 索引把数据按某个维度排序后快速定位——B-Tree 的前提是存在一个可排序的一维键。</p>
+
+<p>而向量相似度搜索问的是另一个问题："哪些向量和我的 Query 向量<strong>最接近</strong>？"这是在 768 维连续空间里的几何邻近性问题。高维空间没有单一的排序键可以保留"邻近"关系——两个在某一维上相邻的向量，语义可能毫无关系；语义极近的向量，在任意单一维度的投影上都可能相距很远。B-Tree、Hash Index 这类为一维有序性设计的结构，面对"高维几何相似度"完全失效，这是设计初衷层面的不匹配，不是加个插件就能补上的。</p>
+
+<table>
+<tr><th>维度</th><th>传统数据库查询</th><th>向量相似度检索</th></tr>
+<tr><td>问题本质</td><td>精确匹配 / 范围扫描</td><td>高维空间的几何邻近</td></tr>
+<tr><td>典型语句</td><td>WHERE city='北京' AND age&gt;25</td><td>找与 q 余弦相似度最高的 Top-K</td></tr>
+<tr><td>索引结构</td><td>B-Tree（一维有序）</td><td>HNSW 图 / IVF 聚类（高维结构）</td></tr>
+<tr><td>匹配语义</td><td>等于 / 区间，非黑即白</td><td>连续相似度，只有"更近/更远"</td></tr>
+<tr><td>复杂度</td><td>O(log N)</td><td>无索引时 O(N)，ANN 近似 O(log N)</td></tr>
+</table>
+
+<p>那给传统数据库加个向量扩展行不行？PostgreSQL 的 <span class="term">pgvector</span> 证明了这条路可行但有天花板：小规模（百万以内）场景它完全够用，还能白捡 SQL 生态与事务能力；但向量规模上到千万级、过滤条件复杂时，其性能与专用向量数据库差距明显。结论：<strong>不是 MySQL 不够好，而是"高维几何检索"这个问题根本不在关系型数据库的问题域里。</strong></p>
+
+<div class="intuition-box">
+<p>B-Tree 回答"等于谁、在哪个区间"，靠的是一维排序；向量检索回答"离谁最近"，靠的是高维几何。问题不同，索引结构就必须不同——这就是向量数据库作为独立品类存在的原因。</p>
+</div>
+</div>
+
+<!-- ===================== Section 3 ===================== -->
+<div class="section" id="s3">
+<h2>三、HNSW：分层导航的小世界图</h2>
+
+<p><span class="term">HNSW</span>（Hierarchical Navigable Small World，分层可导航小世界图）是当前最主流的向量索引，Milvus、Qdrant、Weaviate 的默认索引都是它。理解 HNSW 只需要一个类比：<strong>高速公路网</strong>——从北京到上海某条巷子，你不会逐米走，而是先上高速跨城移动，下了高速走城市主干道，最后进小区找到门牌。HNSW 就是把这种"先粗后细"的分层导航搬进了向量空间。</p>
+
+<div class="arch-diagram">
+HNSW 分层结构（层数越高节点越稀疏，充当"高速公路"）
+
+  Layer 2（极稀疏，少数节点）    ●━━━━━━━━━━━━━●
+                                  ┃               ┃
+  Layer 1（中等密度）       ●━━━●━━━●━━━━━●━━━●━━━●
+                            ┃   ┃   ┃     ┃   ┃   ┃
+  Layer 0（全部节点，街道网） ●─●─●─●─●─●─●─●─●─●─●─●─★Query 落点
+                            ╰─逐层下降：大步跳跃 → 精细逼近─╯
+
+  查询路径：顶层入口 ──▶ 贪心跳到局部最近 ──▶ 下降一层 ──▶ 继续逼近
+           （访问节点数极少，通常几十～几百个，而非全量百万）
+</div>
+
+<h3>建图与查询两个过程</h3>
+
+<p><strong>建图过程：</strong>每插入一个新向量，先随机抽取它的最高层数（指数衰减，多数节点只落在第 0 层，极少数进入高层）；然后从顶层入口开始逐层贪心搜索，在每一层找到当前最近的节点群，把新向量与该层最近的 M 个节点连边。高层节点少、边长，负责跨区域"瞬移"；底层包含全部节点、边短，负责精细逼近。</p>
+
+<p><strong>查询过程：</strong>从顶层的入口节点出发，在当前层贪心地跳到"离 Query 更近"的邻居，走到本层的局部最近点后下降一层，以该点为起点继续逼近，直到第 0 层用候选池（大小为 efSearch）精细搜索出 Top-K。整个过程像 GPS 导航：先走高速再走小路，只访问全图极小一部分节点，复杂度近似 O(log N)。</p>
+
+<table>
+<tr><th>参数</th><th>作用</th><th>调大的收益</th><th>调大的代价</th><th>典型起点</th></tr>
+<tr><td>M</td><td>每个节点的最大连边数（图密度）</td><td>连通性更好、召回更高</td><td>内存与建图时间显著增加</td><td>16（通用）～32（高召回）</td></tr>
+<tr><td>efConstruction</td><td>建图时的搜索深度</td><td>图质量更高，可用更低 efSearch 达标</td><td>一次性建图变慢</td><td>100～256</td></tr>
+<tr><td>efSearch</td><td>查询时候选池大小</td><td>召回率提升</td><td>查询延迟近似线性增加</td><td>40～512，按 SLA 扫描取值</td></tr>
+</table>
+
+<p>内存是 HNSW 的主要代价：索引需要常驻内存，粗算为<strong>向量本体（N × 维度 × 4 字节）+ 图开销（N × M × 8~16 字节）</strong>。以 1000 万条 768 维向量、M=32 为例，向量本体约 30GB，图开销约 3~6GB——这也是为什么超大规模场景要考虑量化（int8/二值化可把内存压缩 4~32 倍）或转向 IVF 系索引。</p>
+
+<div class="highlight">
+<strong>生产案例（公开基准）：</strong>ScyllaDB 在 5 节点紧凑集群上对 1000 万条 768 维 Cohere 向量做 HNSW 基准测试：M=64 / efConstruction=384 / efSearch=192 的高质量配置下实现近满分召回；把参数降到 M=20 / efSearch=48 后吞吐升至 <strong>12,840 QPS、P99 延迟 5.5ms</strong>。同一份数据、同一套硬件，仅调参数就能在"召回"与"吞吐"两个极端之间切换——这就是 efSearch 作为在线旋钮的价值。
+</div>
+
+<div class="intuition-box">
+<p>HNSW 的精髓是"用空间换时间"：提前把向量组织成一张分层近邻图，查询时沿图跳跃，只访问几十个节点就能逼近最近邻。代价是内存——图必须常驻内存，这是选型时第一个要算的账。</p>
+</div>
+</div>
+
+<!-- ===================== Section 4 ===================== -->
+<div class="section" id="s4">
+<h2>四、IVF：聚类分桶的倒排索引</h2>
+
+<p><span class="term">IVF</span>（Inverted File Index，倒排文件索引）走的是另一条路：不建图，而是<strong>先把空间分区</strong>。想象一个巨型图书馆把书按主题分到不同货架——找书时先判断主题，直奔对应的几个货架，而不是逐本翻遍全馆。</p>
+
+<div class="arch-diagram">
+IVF 的两阶段：建索引 = 聚类分桶，查询 = 只搜最近的几个桶
+
+  建索引：对全部向量跑 K-Means，得到 nlist 个聚类中心
+     ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐
+     │桶1    │ │桶2    │ │桶3 ★  │ │桶4    │   ← 每个桶 = 一个"货架"
+     │····· │ │····· │ │····· │ │····· │     （相似向量聚在一起）
+     └──────┘ └──────┘ └──▲───┘ └──────┘
+                          │ Query 先比 nlist 个中心，
+  查询：                    │ 选最近的 nprobe 个桶
+     Query ● ──────────────┘ 只在桶内做精细比较
+                            （桶外的相似向量会被漏掉 → 边界效应）
+</div>
+
+<p><strong>建索引：</strong>对全量向量执行 K-Means 聚类，得到 <code>nlist</code> 个聚类中心（桶），每个向量被分配到最近的桶。<strong>查询：</strong>第一步只比较 Query 与 nlist 个聚类中心的距离（这一步很便宜），选出最近的 <code>nprobe</code> 个桶；第二步只在这 nprobe 个桶内部逐一比较，返回 Top-K。搜索范围从"全部 N 个向量"缩小到"约 N × nprobe/nlist 个向量"。</p>
+
+<table>
+<tr><th>参数</th><th>作用</th><th>调优逻辑</th><th>典型配置</th></tr>
+<tr><td>nlist</td><td>聚类中心数（桶数量）</td><td>桶越多每桶越小、单桶扫描越快，但建索引越慢；过碎则需更大 nprobe 补偿</td><td>经验值约 √N～4√N；百万级常用 1024～4096</td></tr>
+<tr><td>nprobe</td><td>查询时探查的桶数</td><td>在线旋钮：nprobe↑ 召回↑ 延迟↑；一般取 nlist 的 1/16～1/2</td><td>百万级：nlist=4096 配 nprobe=32~128</td></tr>
+</table>
+
+<p>IVF 的先天弱点是<strong>边界效应</strong>：聚类是按中心点硬划分的，如果 Query 恰好落在两个桶的边界，真正的最近邻可能位于"隔壁桶"里而被漏掉。缓解办法就是调大 nprobe（多探几个邻近桶），代价是延迟上升。另一个工程事实：IVF 对数据更新更友好（新向量只需分配到最近的桶），而 HNSW 频繁增删会造成图碎片化、召回缓慢退化，高更新频率的知识库要格外注意重建策略。</p>
+
+<div class="highlight">
+<strong>生产案例（调参实测）：</strong>某 RAG 知识库 100 万条向量使用 IVF_FLAT，初始配置 nlist=512、nprobe=8，Recall@10 只有 83%，客服场景的"答非所问"投诉集中在跨主题边界问题。按"先固定 nlist 调 nprobe，再回调 nlist"的顺序网格搜索后，改为 nlist=4096、nprobe=32，Recall@10 提升到 92%，单次检索延迟仅从 6ms 增至 9ms；再配合 SQ8 量化，内存占用下降约 75%，索引从 3.1GB 压到 0.8GB，单机即可承载。
+</div>
+
+<div class="intuition-box">
+<p>IVF 用"先分区再搜查"换内存效率：查询只碰 nprobe/nlist 这一小部分数据，内存占用远低于 HNSW，适合超大规模与预算敏感场景；代价是边界效应带来的召回损失，需要 nprobe 来补。</p>
+</div>
+</div>
+
+<!-- ===================== Section 5 ===================== -->
+<div class="section" id="s5">
+<h2>五、三种检索方式对比与混合检索</h2>
+
+<table>
+<tr><th>维度</th><th>暴力检索（Flat）</th><th>HNSW</th><th>IVF</th></tr>
+<tr><td>召回率</td><td>100%（基准真值）</td><td>高（95%~99%+，efSearch 可调）</td><td>中高（90%~97%，nprobe 可调）</td></tr>
+<tr><td>百万级查询延迟</td><td>数百毫秒～秒级</td><td>个位数毫秒</td><td>个位数～十几毫秒</td></tr>
+<tr><td>内存占用</td><td>仅向量本体</td><td>向量 + 图开销，最高</td><td>向量 + 少量中心点，较低（配量化可再降 4~32 倍）</td></tr>
+<tr><td>建索引成本</td><td>无</td><td>建图慢、占资源</td><td>K-Means 聚类，中等</td></tr>
+<tr><td>增删改适应性</td><td>天然支持</td><td>频繁增删导致图退化，需定期重建</td><td>较好，新向量只需入桶</td></tr>
+<tr><td>适用规模</td><td>＜10 万 / 离线评测</td><td>10 万～数千万，延迟敏感</td><td>千万～亿级，内存/成本敏感</td></tr>
+</table>
+
+<p>选型直觉：<strong>默认 HNSW</strong>（多数生产 RAG 的第一选择），内存撑不住或数据到亿级时转 IVF 系（IVF_SQ8 / IVF_PQ），数据量小或需要绝对精确基准时用 Flat。</p>
+
+<h3>元数据过滤：语义相关 × 业务约束</h3>
+
+<p>真实的 RAG 检索几乎从不是纯向量问题。每个向量通常附带结构化<span class="term">元数据</span>——文档来源、创建时间、部门归属、权限级别。检索时往往要同时满足"语义相似"与"业务过滤"：只在最近三个月的文档里搜、只搜当前用户有权限的部门。这里有一个关键的性能陷阱：<strong>先向量检索再过滤（post-filter）会在高选择性过滤下召回崩塌</strong>——如果 Top-100 里只有 2 条符合过滤条件，结果就只剩 2 条。成熟引擎的做法是 pre-filter（过滤条件直接参与索引遍历，如 Qdrant 的可过滤 HNSW）或迭代式扫描（pgvector 的 iterative scan），选型时务必验证"带过滤的检索"而不是只测纯 ANN。</p>
+
+<h3>混合检索与 RRF 融合</h3>
+
+<p>纯向量检索有一个盲区：<strong>专有名词、编号、缩写的语义信号很弱</strong>。用户搜"XPS-9320 报错"，向量检索可能返回一堆"笔记本故障"的泛语义文档，而关键词路（BM25）能精确命中含该编号的工单。因此主流做法是<span class="term">混合检索</span>（Hybrid Search）：向量路与关键词路各自召回，再用融合算法合并。</p>
+
+<div class="formula">RRF 分数(d) = Σ 1 / (k + rank_i(d))，k 通常取 60</div>
+
+<p><span class="term">RRF</span>（Reciprocal Rank Fusion，倒数排名融合）是最常用的融合算法：只看每条结果在每路里的<strong>排名</strong>而不看分数，天然规避了 BM25 分数（无界正数）与余弦相似度（[-1,1]）量纲不可比的问题。中文专业术语密集的企业语料上，混合检索相比纯向量检索的 Recall@10 通常能提升 10~15 个百分点。RRF 的公式推导与加权方案的取舍，详见 <a href="hybrid_retrieval_guide.html">G07 · RAG 混合检索避坑指南</a>。</p>
+
+<div class="intuition-box">
+<p>向量数据库三件套：ANN 索引解决"快"，元数据过滤解决"准的业务边界"，混合检索解决"语义与字面的互补"。RAG 检索质量 = 三者共同作用，只盯 ANN 参数是典型的单维优化。</p>
+</div>
+</div>
+
+<!-- ===================== Section 6 ===================== -->
+<div class="section" id="s6">
+<h2>六、生产选型分档与四大误区</h2>
+
+<p>选型的第一原则是<strong>按规模分档，不为不存在的规模付费</strong>。向量数据库的能力与运维成本差异巨大，用千万级的方案承载十万级的数据是浪费，反过来则是事故。</p>
+
+<table>
+<tr><th>分档</th><th>典型方案</th><th>适用场景</th><th>优势与代价</th></tr>
+<tr><td>原型 / ＜100 万向量</td><td>Chroma、pgvector、SQLite-vec</td><td>开发调试、内部工具、已有 PG 基础设施</td><td>上手最快、零新组件；千万级后性能明显落后专用方案</td></tr>
+<tr><td>生产 / 百万～千万级</td><td>Milvus、Qdrant、Weaviate</td><td>对外产品、需要元数据过滤与混合检索、自托管可控</td><td>功能最全、性能最强；需要独立的运维投入（集群、备份、监控）</td></tr>
+<tr><td>托管 / 免运维优先</td><td>Pinecone、Zilliz Cloud</td><td>团队无专职运维、业务波动大、要求 SLA 稳定</td><td>开箱即用、延迟可预期；成本随量增长快、存在供应商锁定</td></tr>
+</table>
+
+<div class="arch-diagram">
+选型决策树（先问规模，再问运维，最后问功能）
+
+  向量规模？
+   ├─ ＜100万 & 已有 Postgres ──▶ pgvector / Chroma（先跑起来）
+   ├─ 100万～数千万
+   │    ├─ 有运维能力 & 要成本可控 ──▶ Milvus / Qdrant（自托管）
+   │    └─ 无运维 & 要稳定 SLA ──▶ Pinecone / Zilliz Cloud（托管）
+   └─ 亿级以上 ──▶ Milvus 分布式集群 + 量化（SQ8/PQ）+ 分片
+                    （此档位必须做带过滤检索的压测）
+</div>
+
+<div class="highlight">
+<strong>生产案例（迁移复盘）：</strong>某电商推荐团队起初用托管服务承载 4.2 亿条 128 维商品向量，月账单约 $42,000，高峰期 p99 延迟一度冲到 3.8 秒。迁移到自建 Milvus 2.4 分布式集群（IVF 系索引 + 分片）后，月成本降至 $21,420（<strong>-49%</strong>），p99 延迟稳定在 112ms，且获得了按业务线分片的隔离能力。反向教训同样成立：另一个 20 万向量的内部知识库项目曾直接上分布式集群，运维成本远超检索收益，最终退回 pgvector 单实例——<strong>选型错误的两个方向都要付学费。</strong>
+</div>
+
+<h3>四个高频误区</h3>
+
+<table>
+<tr><th>误区</th><th>真相</th></tr>
+<tr><td>"ANN 是近似的，所以结果不可靠"</td><td>"近似"只是不保证数学上的绝对最近邻，生产 Recall@K 通常 95%~99%，对 RAG 足够；换来的是数量级的速度收益。真正该担心的是没有 Recall 监控。</td></tr>
+<tr><td>"索引参数越大越好"</td><td>M、efConstruction、nlist 调大都会同步推高内存、建图时间和延迟。正确做法是用评测集做召回-延迟扫描，找到满足 SLA 的最小参数组合。</td></tr>
+<tr><td>"向量相似度高 = 语义相关"</td><td>相似度是 Embedding 模型"学出来"的，受训练质量与领域覆盖限制。模型对某专业领域支持不足时，0.9 的相似度也可能语义无关——检索质量的天花板在 Embedding 模型，向量库只是放大器。</td></tr>
+<tr><td>"用了 FAISS 就是用了向量数据库"</td><td>FAISS 是纯索引库：没有持久化、没有元数据管理、没有 CRUD 与权限，只负责建索引和搜索。生产上要么在它之上自建一整套，要么直接用把这些能力封装好的向量数据库。</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>上线前用自己的数据 + 真实 Query 分布测 Recall@K 和带过滤检索</li>
+<li>先小后大：pgvector/Chroma 起步，跨过百万级再迁移专用方案</li>
+<li>为 Recall 和 p99 延迟建监控告警，索引退化要能被发现</li>
+<li>高频更新的知识库评估 IVF 系或制定 HNSW 定期重建计划</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>拿开发环境 5 万条的召回分数推断千万级生产表现</li>
+<li>只测纯 ANN 不测"过滤 + 检索"组合，上线后召回崩塌</li>
+<li>把 M / efSearch 无脑拉满，内存账单和延迟一起爆炸</li>
+<li>忽视向量与元数据的一致性删除（文档删了向量还在）</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>向量数据库选型的完整心智模型：规模决定档位（轻量库 → 专用库 → 托管服务），索引决定权衡（HNSW 要召回选它、IVF 要内存选它），参数决定落点（Recall / 延迟 / 内存的三角扫描），而 Embedding 模型决定天花板。</p>
+</div>
+</div>
+
+<!-- ===================== Q&A ===================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么不能用 MySQL 做相似检索？</summary>
+<div class="answer">分两层回答。功能层面：关系型数据库的查询模型是精确匹配与范围扫描，依赖 B-Tree 这类按一维键排序的索引；而向量检索是"在 768 维连续空间里找几何上最近的点"，高维空间不存在能保留邻近关系的单一排序键，B-Tree/Hash Index 从设计上就无法回答这类问题。性能层面：即便通过 pgvector 等扩展支持向量存储与距离计算，不建专用索引时仍是 O(N) 全量扫描，百万级向量需要数百毫秒到秒级，无法满足毫秒级 SLA。向量数据库通过 HNSW、IVF 等 ANN 索引把检索复杂度降到近似 O(log N)，这是品类差异而非产品差异。</div>
+</details>
+
+<details>
+<summary>HNSW 是如何加速召回的？查询过程发生了什么？</summary>
+<div class="answer">HNSW 预先构建一张分层近邻图：高层节点稀疏、边长，像高速公路负责跨区域快速移动；底层包含全部节点、边短，像街道网负责精细逼近。查询时从顶层入口出发，在每层贪心跳到离 Query 更近的邻居，到达局部最近点后下降一层继续逼近，最终在第 0 层用大小为 efSearch 的候选池精细搜索出 Top-K。整个过程只访问几十到几百个节点而非全量百万，复杂度近似 O(log N)，百万级数据做到个位数毫秒。代价有二：一是"近似"，不保证绝对最近邻，但 Recall@10 通常 95%~99%，对 RAG 足够；二是图必须常驻内存，内存 = 向量本体 + N×M 的图开销。</div>
+</details>
+
+<details>
+<summary>HNSW 的 M、efConstruction、efSearch 分别怎么调？</summary>
+<div class="answer">三个参数分工明确。M 是每个节点的最大连边数，决定图的连通密度：调大召回更好，但内存和建图时间显著增加，通用场景 16 起步，高召回需求 32。efConstruction 是建图时的搜索深度，决定图的质量：是一次性成本，调大后可以用更低的 efSearch 达到同样召回，典型 100~256。efSearch 是查询时的候选池大小，是唯一的在线旋钮：调大召回提升但延迟近似线性增长，生产上从 40~128 起步，用评测集做召回-延迟扫描，取满足 SLA 的最小值。切忌把三个参数无脑拉满——那是用内存和延迟换未必需要的召回。</div>
+</details>
+
+<details>
+<summary>IVF 和 HNSW 怎么选？各自适合什么场景？</summary>
+<div class="answer">核心权衡是"内存与更新 vs 召回与延迟"。HNSW 召回上限更高、查询延迟更低，是延迟敏感场景的默认选择，但索引必须全量驻留内存，且频繁增删会让图碎片化、召回缓慢退化，需要定期重建。IVF 通过聚类分桶只探查部分数据，内存占用低得多（配合 SQ8/PQ 量化可再降 4~32 倍），新向量只需分配到最近桶、对更新友好，适合亿级规模、内存预算紧张或高更新频率的场景；代价是边界效应导致召回上限略低，需要调大 nprobe 补偿。经验法则：千万以内、延迟优先选 HNSW；亿级或内存优先选 IVF 系；小数据量直接用 Flat。</div>
+</details>
+
+<details>
+<summary>什么是混合检索？为什么 RAG 系统几乎都需要它？</summary>
+<div class="answer">混合检索是向量检索与关键词检索（BM25）双路召回、再融合排序的方案。必要性来自两者的互补性：向量检索擅长语义匹配（"汽车保险"能匹配"车险"），但对专有名词、产品编号、缩写的信号很弱——搜"XPS-9320"时向量路可能返回泛泛的笔记本故障文档，BM25 却能精确命中含该编号的工单。企业语料中这类精确匹配需求大量存在，纯向量检索的 Recall 会比混合检索低 10~15 个百分点甚至更多。融合通常用 RRF：score(d)=Σ1/(60+rank)，只看排名不看分数，天然规避两路量纲不可比的问题。Weaviate、Milvus、Elasticsearch 等都原生支持双路 + RRF。</div>
+</details>
+
+<details>
+<summary>带元数据过滤的向量检索为什么容易出问题？怎么避免？</summary>
+<div class="answer">问题出在执行顺序。最朴素的实现是 post-filter：先按向量相似度取 Top-K，再对结果做 WHERE 过滤。当过滤条件选择性高时（比如"只看最近 7 天"只占全库 1%），Top-100 里可能只有零星几条符合条件，召回直接崩塌，甚至返回空结果。正确做法有两类：pre-filter，让过滤条件参与索引遍历过程（如 Qdrant 的可过滤 HNSW，在图遍历时只走符合 payload 条件的节点）；迭代式扫描，边扫描边补充候选直到凑够 K 条符合过滤的结果（如 pgvector 0.8 的 iterative scan）。选型验证时务必用真实的选择性过滤条件压测"过滤 + 检索"组合，而不是只测纯 ANN 延迟。</div>
+</details>
+
+<details>
+<summary>FAISS、Chroma、Milvus、Pinecone 是什么关系？怎么选？</summary>
+<div class="answer">它们分属三个层次。FAISS 是纯向量索引库（Meta 开源），只负责建索引和搜索计算，没有持久化、元数据管理、CRUD 和权限，适合嵌入应用做原型或作为底层引擎被封装。Chroma 是轻量级向量数据库，内嵌式部署、API 简单，适合开发调试和十万级以下的小应用。Milvus 是开源的分布式专用向量数据库，索引类型最全（HNSW/IVF 系/DiskANN/GPU 索引）、支持混合检索与企业级特性，适合百万到亿级的自托管生产系统。Pinecone 是全托管云服务，免运维、延迟可预期，适合没有专职运维、愿意用成本换省心的团队。选型口诀：原型用 Chroma，生产自托管用 Milvus/Qdrant，免运维用 Pinecone，FAISS 只在需要深度定制索引时直接碰。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

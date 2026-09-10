@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E05 · 大模型提示词范式迁移：结果优先 Prompt 方法论</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.warning-box{background:rgba(255,123,114,.06);border:1px solid var(--red);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.warning-box::before{content:"⚠️ 时效提示";display:block;font-weight:700;color:var(--red);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、范式变化：从过程遥控到结果优先</a>
+<a href="#s2">二、精简 Prompt ≠ 删需求：每句话都要改变行为</a>
+<a href="#s3">三、自治边界一次讲清</a>
+<a href="#s4">四、工具路由条件化</a>
+<a href="#s5">五、详略与推理强度的分层控制</a>
+<a href="#s6">六、可复用的八段 Prompt 骨架</a>
+<a href="#s7">七、评测驱动的迁移流程</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>E05 · 大模型提示词范式迁移：结果优先 Prompt 方法论</h1>
+<p class="subtitle">Outcome-first Prompting — 过程遥控的失效 / 精简判据 / 自治边界 / 工具路由条件化 / 评测驱动迁移</p>
+
+<div class="intuition-box">
+<p>旧范式在教模型"每一步怎么走"，新范式在定义"要到哪里、不能越过什么、怎样才算真的到了"——Prompt 从步骤清单变成目的地、护栏与验收标准的合同。</p>
+</div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、范式变化：从过程遥控到结果优先</h2>
+
+<p>新一代模型的意图理解、自主规划和多步执行能力显著增强后，一个反直觉的现象出现了：Prompt 写得越细，效果反而越差。很多团队换模型后一个字没改，继续往上叠加"请一步一步思考""一定要全面""每一步都先向我确认"，结果是模型更容易啰嗦、频繁停下来请示，或者被互相打架的规则困住。这不是模型不够强，而是<span class="term">过程遥控</span>（process-first，把一条可能的执行路径写成模型必须服从的唯一流程）这种旧写法，困住了一个更擅长自己找路的模型。</p>
+
+<p>旧写法的典型形态是一份七步清单：先阅读所有文件→列出目录结构→逐个分析模块→写详细计划→等我确认后再修改→每改一个文件都解释原因→最后运行测试。问题不在步骤本身错，而在真实任务一变，焊死的流程就会以四种方式失效：</p>
+
+<table>
+<tr><th>失效模式</th><th>具体表现</th><th>代价</th></tr>
+<tr><td>过度扫描</td><td>读两个文件就能定位的问题，被流程逼着扫全仓库</td><td>浪费 Token 与时间</td></tr>
+<tr><td>顺序错配</td><td>有些修改必须先跑测试复现，流程却规定最后才测试</td><td>返工、结论不可靠</td></tr>
+<tr><td>无谓打断</td><td>"每一步等确认"把安全的本地操作也拦下来</td><td>交互轮次膨胀</td></tr>
+<tr><td>目标失焦</td><td>模型只顾完成列出的步骤，忘了最终结果是否达标</td><td>步骤全绿、结果不合格</td></tr>
+</table>
+
+<div class="arch-diagram">
+两种 Prompt 范式的结构对比
+
+过程遥控（旧）                     结果优先（新）
+┌──────────────────┐           ┌──────────────────┐
+│ 步骤1 → 步骤2 → … │           │  目标（要交付什么）  │
+│ 每步等确认         │           │  成功标准（何时算完） │
+│ 最后才验证         │           │  约束（护栏在哪）    │
+└────────┬─────────┘           │  输出（交付格式）    │
+         │                     └────────┬─────────┘
+         ▼                              ▼
+  模型被锁在路径里               模型自选路径，按标准验收
+  任务一变就失效                 任务变化只影响路径选择
+</div>
+
+<p><span class="term">结果优先</span>（outcome-first）的写法把篇幅花在四件事上：目标、成功标准、约束、输出。以修复 Bug 为例：</p>
+
+<pre><code>目标：修复支付回调重复记账问题，保持现有接口行为不变。
+成功标准：
+- 能用现有测试或最小复现证明问题原因；
+- 重复回调不再重复记账，正常支付退款不受影响；
+- 测试、类型检查和构建全部通过。</code></pre>
+
+<pre><code>约束：
+- 可读写当前仓库、运行非破坏性测试；
+- 不改无关模块，不删行为换测试通过；
+- 外部写入、破坏性操作、扩大范围前先确认。
+输出：先给结论，再列改动文件、验证证据、遗留风险。</code></pre>
+
+<p>注意这段 Prompt 并不短到只剩一句"帮我修 Bug"。它只是把字数花在了目标、验收、边界和证据上，而不是替模型预演每一个动作。</p>
+
+<div class="intuition-box">
+<p>结果优先不是"少写字"，而是"换地方写字"：从描述路径改成定义目的地、护栏和验收标准。</p>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、精简 Prompt ≠ 删需求：每句话都要改变行为</h2>
+
+<div class="highlight">
+<p><strong>官方评测快照（谨慎外推）：</strong>OpenAI 在内部编码 Agent 评测中观察到，更精简的系统 Prompt 让评测分数提升约 <strong>10%—15%</strong>，同时减少 <strong>41%—66%</strong> 的总 Token 和 <strong>33%—67%</strong> 的成本。官方同时提醒：这些数字只代表那组内部样本的方向，你的业务必须用自己的代表性任务验证。本节引用仅作量级参考。</p>
+</div>
+
+<p>看到"精简"两个字，很多团队的第一反应是把 Prompt 砍成"你是一个专业的编程助手，帮我把任务做好"。这不叫精简，这叫把需求删没了。精简的对象有明确清单——真正该删的是五类内容，真正要留的也是五类：</p>
+
+<table>
+<tr><th>该删（冗余脚手架）</th><th>要留（行为合同）</th></tr>
+<tr><td>同一条规则换三种说法重复强调</td><td>用户最终看得见的结果</td></tr>
+<tr><td>模型已稳定做到、且不影响产品要求的过程指令</td><td>成功标准和停止条件</td></tr>
+<tr><td>从未改变模型行为的示例</td><td>安全、业务、权限和证据约束</td></tr>
+<tr><td>当前任务根本用不到的工具和工具说明</td><td>影响工具选择的路由规则</td></tr>
+<tr><td>"务必认真""深度思考""尽可能全面"等无法验收的形容词</td><td>必需的输出结构和验证要求</td></tr>
+</table>
+
+<p>判据只有一条：<strong>每句话都要改变行为</strong>。删掉一句话之后跑同一组评测，如果指标完全没有变化，这句话才有资格被删；反之，哪怕只有 1 个百分点的格式通过率差异，它就该留下。这个判据把"精简"从主观审美变成了可验证操作——Prompt 的每一行都在接受 A/B 检验，而不是凭感觉取舍。</p>
+
+<div class="intuition-box">
+<p>精简的标准不是字数少，而是信息密度高且无内部冲突：删掉任何一句都会让某个评测指标变差，才算精简到位。</p>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、自治边界一次讲清</h2>
+
+<p>模型越强，越能主动、持续地推进多步任务，随之而来的问题是：它可以自主推进到哪一步？Prompt 里不写边界，模型就会两头出错——该继续时停下来问，该停时反而扩大范围。正确做法是用一段紧凑的<span class="term">自治策略</span>，把请求类型和授权范围一次讲清，而不是在 Prompt 各处重复十遍"先问我"。</p>
+
+<table>
+<tr><th>请求类型</th><th>授权范围</th><th>理由</th></tr>
+<tr><td>回答 / 解释 / 评审 / 诊断 / 规划</td><td>可读取相关材料并报告，不自动实施修改</td><td>只读请求没有副作用，但实施超出预期</td></tr>
+<tr><td>修改 / 构建 / 修复</td><td>可直接完成范围内的本地改动 + 非破坏性验证</td><td>频繁确认会打断正常开发节奏</td></tr>
+<tr><td>外部写入 / 破坏性操作 / 付费 / 扩大范围</td><td>必须先人工确认</td><td>不可逆或影响面超出当前任务</td></tr>
+</table>
+
+<div class="arch-diagram">
+自治边界的三道闸门
+
+   读文件 / 本地修改 / 跑测试         外部写入 / 删除 / 付费 / 扩范围
+   ─────────────────────              ─────────────────────
+              │                                  │
+              ▼                                  ▼
+      ┌──────────────┐                  ┌──────────────┐
+      │ 绿灯区：连续推进 │                  │ 红色闸门：人工放行 │
+      │ 不打断、不请示   │                  │ 未确认不得执行    │
+      └──────────────┘                  └──────────────┘
+   重复写十遍"先问我" = 把绿灯也刷成红色
+   集中写一段自治策略 = 只有真正的危险动作被拦
+</div>
+
+<p>边界集中写一次的好处是语义稳定：模型不会被散落各处的互相矛盾的"请确认"困扰，安全的本地工作也不会被误拦。判断一条动作该进哪个闸门的依据不是"看起来危险"，而是两条硬标准——是否可逆、影响面是否超出当前任务。</p>
+
+<div class="intuition-box">
+<p>自治不等于没有边界：护栏内的读、改、测连续推进，真正走到外部写入和破坏性操作的红色闸门时，再由人明确放行。</p>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、工具路由条件化</h2>
+
+<p>给 Agent 挂了搜索、数据库、浏览器、代码执行几十个工具，不代表它就会自动选对。工具能力的正确打开方式不是"多挂"，而是把<span class="term">工具路由</span>（按任务条件决定何时调用哪个工具的规则体系）写清楚：只暴露当前任务相关的工具，工具描述写清用途、使用时机、返回字段和错误行为，并且用"条件 → 动作 → 停止证据"的句式替代空泛指令。</p>
+
+<table>
+<tr><th>空泛写法（低效）</th><th>条件化写法（有效）</th></tr>
+<tr><td>"高效使用工具完成调研"</td><td>"涉及当前价格、版本、政策、发布时间时，先查官方来源"</td></tr>
+<tr><td>"多搜索几遍确保准确"</td><td>"普通问答先做一次范围合适的检索；只有缺核心事实或直接证据时才追加"</td></tr>
+<tr><td>"引用相关资料"</td><td>"引用必须贴在它支持的结论后；证据冲突时明确指出，不要猜"</td></tr>
+<tr><td>"出错就重试"</td><td>"结果为空时尝试一两个有意义的备选，再判断没有结果；重试上限 2 次"</td></tr>
+</table>
+
+<p>这不是把过程写死，而是告诉模型：什么条件触发什么工具，拿到什么证据可以停——后者就是<span class="term">停止条件</span>（明确定义"证据已足够、可以结束检索或执行"的判据）。另外两点工程细节值得注意：独立读取可以并行，有依赖关系的步骤必须保持顺序；正确性依赖查询结果时，要明确"必须先查再做"，堵住模型凭记忆作答的捷径。</p>
+
+<div class="arch-diagram">
+工具路由的触发-停止闭环
+
+任务条件 ──▶ 匹配路由规则 ──▶ 调用对应工具
+   │                              │
+   │  例：涉及价格/版本/政策        │ 返回结果
+   │      → 官方来源检索           ▼
+   │                        证据是否够用？
+   │                         ／        ＼
+   │                       够           不够
+   │                       ▼            ▼
+   └──────────────────  产出结论    追加一次有意义的备选
+                        （停止）    仍无 → 明确说"无结果"
+</div>
+
+<div class="intuition-box">
+<p>工具路由写的是三件事：什么条件触发、调哪个工具、拿到什么证据算完。缺了停止条件，模型就会无限检索下去。</p>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、详略与推理强度的分层控制</h2>
+
+<p>"保持简洁"这类一句话风格控制，在新模型上是危险的。新模型默认输出就比前代更简，再叠加满屏的"Be concise"，会把必要的证据、风险和下一步也一起压没。稳定的做法是分两层控制详略：第一层用 API 参数设默认详细程度，第二层在 Prompt 里写清这次任务必须保留什么。</p>
+
+<pre><code>{
+  "model": "gpt-5.6-sol",
+  "text": { "verbosity": "medium" }
+}</code></pre>
+
+<pre><code>Prompt 侧补充（示例）：
+先给结论。
+必须保留支持结论的证据、重要限制和下一步动作。
+优先删掉开场白、重复解释、泛泛安慰和非必要背景。</code></pre>
+
+<p>推理强度的管理原则相同：不要在迁移当天就把推理档位拉满。正确顺序是先保留旧模型当前使用的档位建立基线，再测试同一档和低一档——新模型的 Token 效率更高，完全可能在更低档位保持甚至提升质量。如果 Prompt 缺的是成功标准、工具依赖或验证闭环，把推理强度拉到最高只会让模型更努力地执行一个没说清楚的任务。语气控制也一样：把"友好""有同理心"翻译成可观察的写作选择——直接回答还是先承认问题、要不要结束语。</p>
+
+<div class="warning-box">
+<p><strong>版本特性集中说明：</strong>本节涉及的 <code>text.verbosity</code> 参数、none/low/medium/high/xhigh/max 推理档位、Pro 执行模式、Programmatic Tool Calling 均为 GPT-5.6 一代的特定接口，内容以 2026-07 官方指南为准，版本演进后需复核。迁移方法论（基线先行、逐档测试、按需升档）不依赖具体参数名，属长效内容。Programmatic Tool Calling 适合过滤、去重、排序、聚合这类边界明确的批处理；一次工具调用就够、每步结果都改变下一步判断、或需要保留原生引用的场景，直接工具调用反而更合适。</p>
+</div>
+
+<div class="intuition-box">
+<p>推理强度不是"越努力越好"，而是按任务定价的资源：日常任务背着全套登山装备，只会增加负担，不会自动让结果更好。</p>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、可复用的八段 Prompt 骨架</h2>
+
+<p>把官方建议的复杂 Prompt 结构整理成八段骨架，可以作为团队模板沉淀。判断每一段要不要写的标准始终只有一个：这段信息会不会改变模型的行为或验收结果？不会就别为了"看起来专业"硬塞。</p>
+
+<table>
+<tr><th>段</th><th>内容</th><th>简单任务</th><th>复杂 Agent 任务</th></tr>
+<tr><td>① 角色</td><td>模型在当前业务里的职责和上下文</td><td>可选</td><td>必写</td></tr>
+<tr><td>② 协作方式</td><td>语气；何时主动推进、何时提问；如何处理不确定性</td><td>可省</td><td>必写</td></tr>
+<tr><td>③ 目标</td><td>用户最终要拿到的结果</td><td>必写</td><td>必写</td></tr>
+<tr><td>④ 成功标准</td><td>必须满足的结果 + 完成前必须验证的证据</td><td>必写</td><td>必写</td></tr>
+<tr><td>⑤ 约束</td><td>业务、安全、权限、副作用边界；必须保留的行为</td><td>按需</td><td>必写</td></tr>
+<tr><td>⑥ 工具</td><td>什么条件用哪个工具；不可跳过的前置查询；重试上限</td><td>可省</td><td>必写</td></tr>
+<tr><td>⑦ 输出</td><td>结构、长度、语言、必须包含的字段</td><td>按需</td><td>必写</td></tr>
+<tr><td>⑧ 停止条件</td><td>何时完成、何时继续、何时提问、何时承认证据不足</td><td>可省</td><td>必写</td></tr>
+</table>
+
+<p>简单任务三四段就够（目标 + 成功标准 + 输出），复杂 Agent 任务再把工具、自治和停止条件补齐。八段骨架的价值不在于每次都写满，而在于给团队一个统一的检查清单——漏掉任何一段，都能在评审时被明确指出来。</p>
+
+<div class="intuition-box">
+<p>骨架是检查清单，不是作文模板：八段都在手上，按任务复杂度取用，宁缺毋滥。</p>
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、评测驱动的迁移流程</h2>
+
+<p>最容易翻车的迁移方式是换模型、改 Prompt、调推理档位、加新工具、改输出格式一次全做——结果变好了不知道哪项生效，变差了不知道该回滚哪项。正确的做法是小步迁移，每次只动一个变量：</p>
+
+<ol>
+<li>只切换模型，保留当前推理档位和 Prompt 不动；</li>
+<li>跑代表性评测，记录任务成功率、格式通过率、工具选择正确率、Token、延迟、成本，作为<span class="term">评测基线</span>（后续所有改动的对照参照，指标集一旦定下不再变动）；</li>
+<li>一次删一组冗余（重复规则、无效示例、无关工具），重跑同一组任务；</li>
+<li>只针对真实失败补一句话，不凭想象重写整个 Prompt 栈；</li>
+<li>每改一次重跑同一组任务，对比基线；</li>
+<li>新增高级模式、持久化推理、显式缓存等特性时单独实验，不混进基础迁移。</li>
+</ol>
+
+<div class="arch-diagram">
+评测驱动迁移闭环
+
+切模型（不动 Prompt）──▶ 跑基线评测 ──▶ 记录六项指标
+                                          │
+              ┌───────────────────────────┘
+              ▼
+      一次删一组冗余 ──▶ 重跑 ──▶ 指标回升/持平？──是──▶ 保留
+              ▲                            │否
+              │                            ▼
+      针对真实失败补一句话 ◀── 定位失败模式（目标不清？
+                               指令矛盾？停止条件太早？）
+</div>
+
+<p>出现<span class="term">回归</span>（切换或修改后质量指标跌破基线）时，拿几条真实失败记录逐一归因：是目标没说清、两条指令互相矛盾、工具返回字段没定义、停止条件太早、输出格式缺必填项，还是推理档位真的不够？先定位失败模式再做最小修改，这比重新写一份"史上最强 Prompt"靠谱得多。</p>
+
+<div class="highlight">
+<p><strong>生产案例（代码审查 Agent 迁移）：</strong>某团队把代码审查 Agent 从旧模型切到新一代后首周回归明显：格式通过率从 96% 掉到 84%，平均交互轮次从 2.1 涨到 3.8（模型频繁停下请示）。按小步流程排查发现根因是旧 Prompt 里 11 处分散的"先确认"指令与新模型的主动执行倾向冲突。改为集中一段自治策略 + 删除 6 条重复规则后：系统 Prompt 从 2,800 Token 降到 1,050（<strong>-62%</strong>），格式通过率回到 97%，交互轮次降到 1.6，单任务成本下降 41%，全程用同一组 200 条历史审查任务做回归验证。</p>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>迁移前先建基线：同一组代表性任务 + 六项指标</li>
+<li>一次只动一个变量，每改一次重跑同一组评测</li>
+<li>删冗余按组删，补指令只针对真实失败案例</li>
+<li>把自治边界、停止条件集中写成一段稳定策略</li>
+<li>版本特性相关的参数集中管理，便于换代时复核</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>换模型当天同时改 Prompt、档位、工具和输出格式</li>
+<li>把"精简"理解成删需求，砍到只剩一句角色设定</li>
+<li>用"务必认真""尽可能全面"这类无法验收的形容词</li>
+<li>上来就全局拉满推理强度或常开高消耗执行模式</li>
+<li>看单条 Demo 顺不顺眼就宣布优化成功</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>Prompt 迁移是实验科学：基线、单变量、可回滚。凭手感重写一版"更好的 Prompt"，等于放弃所有归因能力。</p>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>新模型能力更强，是不是 Prompt 越短越好？</summary>
+<div class="answer">不是。官方建议的是更精简（leaner）的 Prompt，即删掉重复和无效脚手架，而不是删需求。目标、成功标准、安全边界、证据要求、输出格式这些行为合同不能为了短而删。短不是目的，信息密度高、内部无冲突才是目的。检验方法是删掉一句话后跑同一组评测：指标没变化才说明这句话是冗余，否则它就是需求本身。</div>
+</details>
+
+<details>
+<summary>结果优先范式下还需要 Few-shot 示例吗？</summary>
+<div class="answer">需要，但保留标准变严了。只有当示例确实编码了产品要求，或修复了某个可测量的偏差时才保留：输出格式特殊、标签边界模糊、品牌语气严格时，少量高质量示例仍然有价值。反之，那些"从未改变模型行为"的示例属于精简对象。判断依据仍然是评测数据——去掉示例后格式通过率或标签准确率下降，才说明它有存在价值。</div>
+</details>
+
+<details>
+<summary>"请一步一步思考"这类指令还要写吗？</summary>
+<div class="answer">不要把它当万能开关。对新一代模型，推理强度应该用 API 参数（推理档位）控制，而不是靠自然语言咒语。复杂任务更该给的是成功标准、可验证的中间结果和真实的检查工具，让模型按标准验收。用户真正需要的是证据和正确结果，不是一大段看起来很努力的思考过程。保留逐步指令的唯一场景，是你明确要求模型输出步骤本身作为交付物。</div>
+</details>
+
+<details>
+<summary>什么时候应该让模型停下来提问？</summary>
+<div class="answer">判据是"缺失信息是否会实质改变结果"。当缺失的信息无法从现有上下文、文件、工具或安全默认值中得到，且会显著改变交付物时，要求模型提问，并且只问最小的缺失字段。无关紧要的偏好（如格式细节）应允许模型做合理假设并明确说明，避免交互轮次膨胀。写进 Prompt 的形式是停止条件段：何时完成、何时继续、何时提问、何时承认证据不足。</div>
+</details>
+
+<details>
+<summary>怎么判断一次 Prompt 优化是真的有效？</summary>
+<div class="answer">不看单条 Demo 顺不顺眼，至少比较六项指标：任务成功率、关键字段完整率、工具选对率、验证通过率、总 Token、端到端延迟，外加单次成功任务的成本。注意资源消耗下降本身不算优化——只有在最终结果仍然过线的前提下，省资源才算真优化。建议固定一组覆盖真实分布的代表性任务做回归集，每次改动都重跑，用基线对比说话。</div>
+</details>
+
+<details>
+<summary>迁移后出现质量回归，应该从哪几个方向排查？</summary>
+<div class="answer">拿几条真实失败记录逐一归因，常见失败模式有六类：目标没说清导致模型自由发挥；两条指令互相矛盾让模型无所适从；工具返回字段没定义导致解析错误；停止条件太早导致证据不足就收尾；输出格式缺必填项；推理档位确实不够。定位到具体模式后做最小修改并单独验证，而不是整体重写。如果一次改了多个变量，先回滚到最近一个通过基线的版本再逐步重放。</div>
+</details>
+
+<details>
+<summary>自治边界写在 Prompt 里就够了吗，还需要工程侧配合吗？</summary>
+<div class="answer">Prompt 里的自治策略是第一道闸，但不能是唯一一道。模型可能误判动作类型，也可能被输入内容诱导越过边界，因此工程侧应同步落实：高危操作（外部写入、删除、付费）走代码层白名单和人工审批，不依赖模型自觉；所有工具调用留审计日志；沙箱隔离限制文件系统和网络访问范围。Prompt 定义"应然"，工程机制保证"实然"，两层叠加才是完整的自治边界。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

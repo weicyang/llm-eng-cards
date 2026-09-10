@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T14 · Tiny Transformer：从零构建完整模型</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d2c0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+h4{color:var(--cyan);margin:1.2rem 0 .4rem;font-size:1rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+td{background:rgba(22,27,34,.6)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.formula{background:rgba(88,166,255,.06);border-left:3px solid var(--accent);padding:.8rem 1.2rem;margin:1rem 0;border-radius:0 6px 6px 0;font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:.92rem;overflow-x:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、整体结构：一条端到端数据流</a>
+<a href="#s2">二、Embedding 查表：Token ID 变向量</a>
+<a href="#s3">三、正弦位置编码：注入顺序信息</a>
+<a href="#s4">四、Block 内部：Attention+残差+LN+FFN</a>
+<a href="#s5">五、多层堆叠与输出层权重共享</a>
+<a href="#s6">六、最小可运行 Demo 与刻意简化</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>T14 · Tiny Transformer：从零构建完整模型</h1>
+<p class="subtitle">Tiny Transformer — 端到端数据流 / Embedding查表 / 正弦位置编码 / Block堆叠 / 权重共享 / logits→argmax</p>
+
+<div class="intuition-box">
+<p>Transformer 最核心的秘密只有一条数据流：<strong>ID → 向量 → 加位置 → 多层加工 → 词表打分</strong>。理解这条线，再看 GPT、BERT、Llama 就不再是黑盒。</p>
+</div>
+
+<!-- Section 1: 整体结构 -->
+<div class="section" id="s1">
+<h2>一、整体结构：一条端到端数据流</h2>
+
+<p>前面我们分别实现了 Attention、Multi-Head Attention、LayerNorm、残差连接、FFN 和一个 Transformer Block，但它们始终只是零件。这一步要做的是把零件装成整机：一个最小可运行的 Tiny Transformer。整台机器拆开看只有四个模块——Embedding、位置编码、多层 Block、输出层，串成一条单向流水线。</p>
+
+<div class="arch-diagram">
+图 1：Tiny Transformer 端到端数据流（L=4, d_model=8, vocab_size=10）
+
+ input_ids [3, 8, 2, 6]              shape: (4,)      整数编号，无语义
+        │  Embedding 查表
+        ▼
+     x                                shape: (4, 8)    编号 → 向量
+        │  + 正弦位置编码               shape: (4, 8)    逐元素相加，shape 不变
+        ▼
+ ┌───────────────┐
+ │   Block #1    │  Attention + 残差 + LayerNorm + FFN
+ └───────────────┘
+        │                             shape: (4, 8)
+ ┌───────────────┐
+ │   Block #2    │  结构相同，参数独立
+ └───────────────┘
+        │                             shape: (4, 8)
+        ▼
+  输出层 Linear (8 → 10)
+        ▼
+     logits                           shape: (4, 10)   每个位置对 10 个词的打分
+        │  argmax / 采样
+        ▼
+ 预测 Token ID                        shape: (4,)      又变回编号
+</div>
+
+<p>整条流水线里最关键的质变只发生一次：一开始输入是整数 <span class="term">Token ID</span>——分词器给每个词分配的编号，本身没有任何语义，编号 3 并不比编号 8 "更小"或"更简单"；经过 Embedding 之后，整数变成了浮点向量，此后所有模块都在处理 <code>(L, d_model)</code> 这个矩阵，直到最后一层再映射回词表大小。换句话说，Transformer 的中间层从头到尾没见过一个"字"，它们操作的只是向量。</p>
+
+<table>
+<tr><th>阶段</th><th>输入 shape</th><th>输出 shape</th><th>shape 变化来源</th></tr>
+<tr><td>Embedding 查表</td><td>(4,) 整数</td><td>(4, 8)</td><td>每个 ID 换成一行 d_model 维向量</td></tr>
+<tr><td>+ 位置编码</td><td>(4, 8)</td><td>(4, 8)</td><td>逐元素相加，维度不变</td></tr>
+<tr><td>Block × 2</td><td>(4, 8)</td><td>(4, 8)</td><td>内部线性变换首尾维度一致</td></tr>
+<tr><td>输出层 Linear</td><td>(4, 8)</td><td>(4, 10)</td><td>d_model → vocab_size</td></tr>
+<tr><td>argmax</td><td>(4, 10)</td><td>(4,)</td><td>每行取最大值的下标</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>把 Transformer 想象成一条翻译流水线：进门时是"词编号"，先查字典翻成向量语言，中间所有车间只加工向量，出门前再翻回词编号。shape 表就是这条流水线的工艺卡片——每一步进出什么尺寸，写得清清楚楚。</p>
+</div>
+</div>
+
+<!-- Section 2: Embedding -->
+<div class="section" id="s2">
+<h2>二、Embedding 查表：Token ID 变向量</h2>
+
+<p>模型不能直接理解文字，也不能理解 Token ID。<code>input_ids = [3, 8, 2, 6]</code> 这些数字只是编号，3 和 8 之间的距离没有任何语义含义。<span class="term">Embedding</span> 要做的事，就是把每个编号查表变成一个向量——这张表叫 <span class="term">Embedding 表</span>，本质是一个 <code>(vocab_size, d_model)</code> 的大矩阵，每一行对应一个词的向量表示。查表操作在代码里就是一次下标索引，没有任何乘加计算。</p>
+
+<pre><code>import numpy as np
+np.random.seed(42)
+
+vocab_size, L, d_model = 10, 4, 8
+input_ids = np.array([3, 8, 2, 6])
+embedding_table = np.random.randn(vocab_size, d_model)
+
+x = embedding_table[input_ids]
+print(x.shape)  # (4, 8)
+</code></pre>
+
+<p>执行完这一步，4 个 Token 各自变成了 8 维向量。注意这里用的是随机初始化——真实模型中这张表是训练出来的，语义相近的词（如"猫"和"狗"）对应的行向量会在空间中靠得近。</p>
+
+<table>
+<tr><th>概念</th><th>本 Demo 中的取值</th><th>类比</th></tr>
+<tr><td>词表大小 vocab_size</td><td>10</td><td>词典的总页数</td></tr>
+<tr><td>Token ID</td><td>3</td><td>页码，只是编号</td></tr>
+<tr><td>d_model 维向量</td><td>表的第 3 行，长度 8</td><td>该页的词条内容</td></tr>
+<tr><td>查表操作</td><td><code>embedding_table[3]</code></td><td>按页码翻开词典，不改动内容</td></tr>
+</table>
+
+<div class="highlight">
+<strong>真实模型的 Embedding 表有多大？</strong>Llama-2-7B 的词表是 32000，d_model 是 4096，一张 Embedding 表就是 32000 × 4096 ≈ 1.31 亿个参数，约占 6.7B 总参数的 2%。而 GPT-2 small 的词表高达 50257，Embedding 表 50257 × 768 ≈ 3860 万参数，占 124M 总参数的 31%——词表越大，这张表在总参数中的占比越可观，这也是后面"权重共享"值得做的原因。
+</div>
+
+<div class="intuition-box">
+<p>Embedding 表就是一本"编号 → 坐标"的词典：训练之前每一页都是乱码，训练之后语义相近的词自动排到相邻的坐标上。查表本身不费算力，值钱的是表里训练出来的内容。</p>
+</div>
+</div>
+
+<!-- Section 3: Positional Encoding -->
+<div class="section" id="s3">
+<h2>三、正弦位置编码：注入顺序信息</h2>
+
+<p>Self-Attention 天生不关心顺序——对它来说"我喜欢你"和"你喜欢我"如果只是打乱 Token 集合，注意力权重的计算方式完全一样。顺序信息必须从外部注入，这就是<span class="term">位置编码（Positional Encoding）</span>的职责。原始 Transformer 采用正弦/余弦函数：每个位置 pos 生成一个 d_model 维向量，偶数维用 sin、奇数维用 cos，频率随维度指数衰减。</p>
+
+<div class="formula">
+PE(pos, 2i)   = sin(pos / 10000^(2i / d_model))
+PE(pos, 2i+1) = cos(pos / 10000^(2i / d_model))
+</div>
+
+<pre><code>def positional_encoding(L, d_model):
+    pe = np.zeros((L, d_model))
+    for pos in range(L):
+        for i in range(0, d_model, 2):
+            pe[pos, i] = np.sin(pos / (10000 ** (i / d_model)))
+            if i + 1 &lt; d_model:
+                pe[pos, i + 1] = np.cos(pos / (10000 ** (i / d_model)))
+    return pe
+
+x = x + positional_encoding(L, d_model)  # shape 仍是 (4, 8)
+</code></pre>
+
+<p>这里有一个容易被忽略的细节：<strong>位置编码不是拼接，而是相加</strong>。相加意味着 shape 不变，仍然是 <code>(L, d_model)</code>，后面所有模块的维度约定都不用改；也意味着位置信息和语义信息被"揉"进了同一个向量，靠注意力自己去分离。</p>
+
+<table>
+<tr><th>注入方式</th><th>输出 shape</th><th>额外参数</th><th>后果</th></tr>
+<tr><td>逐元素相加（标准做法）</td><td>(L, d_model) 不变</td><td>0（公式固定生成）</td><td>下游模块零改动，位置与语义共用一条通路</td></tr>
+<tr><td>向量拼接</td><td>(L, 2×d_model)</td><td>后续所有权重维度翻倍</td><td>信息分离更干净，但参数量与计算量全链路膨胀</td></tr>
+<tr><td>不加位置编码</td><td>(L, d_model)</td><td>0</td><td>打乱输入顺序，输出集合不变，模型无法区分词序</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>位置编码相当于给每个向量盖了一个"座位号"印章：印章不改座位的大小（shape 不变），但从此每个 Token 都知道自己坐在第几排。正弦函数的好处是任意两个位置的相对关系都能用线性变换表达，天然携带相对位置信息。</p>
+</div>
+</div>
+
+<!-- Section 4: Block 内部 -->
+<div class="section" id="s4">
+<h2>四、Block 内部：Attention+残差+LN+FFN</h2>
+
+<p>一个 <span class="term">Transformer Block</span> 里只有两件事：<strong>Attention 让 Token 之间交换信息，FFN 让每个 Token 独立加工信息</strong>。这两件事各配一条残差连接和一次 LayerNorm，就构成了最小的完整 Block。下面这段实现刻意保留了最核心的数据流——单头、无 mask、无训练。</p>
+
+<div class="arch-diagram">
+图 2：单个 Block 内部的四步装配线
+
+    x (L, d_model)
+    │
+    ├──────────────┐  残差：先复印一份原始 x
+    ▼              │
+ Attention(x)      │  Token 互相交换信息
+    │              │
+    + ◀────────────┘  复印版加回来
+    │
+ LayerNorm         稳定数值分布
+    │
+    ├──────────────┐  残差：再复印一份
+    ▼              │
+   FFN(x)          │  每个 Token 独立加工 d_model→d_ff→d_model
+    │              │
+    + ◀────────────┘
+    │
+ LayerNorm
+    ▼
+ 输出 (L, d_model)   输入输出 shape 完全一致 → 可无限堆叠
+</div>
+
+<h3>Attention 子层：一次 Q·K·V 全流程</h3>
+
+<pre><code>def attention(self, x):
+    Q, K, V = x @ self.Wq, x @ self.Wk, x @ self.Wv
+    scores = Q @ K.T / np.sqrt(x.shape[-1])
+    weights = np.exp(scores) / np.exp(scores).sum(axis=-1, keepdims=True)
+    return weights @ V
+</code></pre>
+
+<p>除以 <code>√d_model</code> 是为了防止点积过大导致 softmax 饱和、梯度消失；softmax 把打分归一化成每行和为 1 的权重；最后用权重对 V 加权求和。这段实现没有多头拆分，也没有 mask，因此每个 Token 能看到包括"未来"在内的所有 Token。</p>
+
+<h3>FFN 子层与 forward 组装</h3>
+
+<pre><code>def ffn(self, x):
+    hidden = np.maximum(0, x @ self.W1 + self.b1)  # ReLU 升维
+    return hidden @ self.W2 + self.b2              # 降回 d_model
+
+def forward(self, x):
+    x = self.layer_norm(x + self.attention(x))     # 子层1：注意力+残差+LN
+    x = self.layer_norm(x + self.ffn(x))           # 子层2：FFN+残差+LN
+    return x
+</code></pre>
+
+<table>
+<tr><th>组件</th><th>职责</th><th>如果去掉会发生什么</th></tr>
+<tr><td>Attention</td><td>Token 之间交换信息，建立上下文联系</td><td>每个 Token 变成孤岛，无法理解"它"指代谁</td></tr>
+<tr><td>残差连接</td><td>让原始输入绕过子层直达下一层</td><td>层数一深梯度就消失，堆 12 层以上几乎训不动</td></tr>
+<tr><td>LayerNorm</td><td>把每个向量的均值/方差拉回标准范围</td><td>激活值逐层漂移，训练发散或停滞</td></tr>
+<tr><td>FFN</td><td>对每个 Token 独立做非线性变换，存储知识</td><td>模型只剩线性加权平均，表达能力断崖式下降</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Block 就像一次小组讨论加一次个人消化：Attention 是开会（大家交换观点），FFN 是会后各自整理笔记（独立加工），残差保证"开会前的原始想法"不会在讨论中丢失，LayerNorm 则负责控制会场音量别爆表。</p>
+</div>
+</div>
+
+<!-- Section 5: 多层堆叠与输出层 -->
+<div class="section" id="s5">
+<h2>五、多层堆叠与输出层权重共享</h2>
+
+<p>Transformer 的"深度"来自重复堆叠 Block。堆 2 层、12 层还是 32 层，本质都是重复同一个结构——前提是<strong>每层的输入输出 shape 一致</strong>，都是 <code>(L, d_model)</code>，这样任何一层的输出都可以无缝喂给下一层。</p>
+
+<pre><code>blocks = [TinyBlock(d_model=8, d_ff=32) for _ in range(2)]
+
+for block in blocks:
+    x = block.forward(x)
+
+print(x.shape)  # (4, 8)，层数改变不了 shape
+</code></pre>
+
+<div class="arch-diagram">
+图 3：多层堆叠的 shape 流转——中间永远是 (L, d_model)
+
+ (4,8) ──▶ Block1 ──▶ (4,8) ──▶ Block2 ──▶ (4,8) ──▶ W_out ──▶ (4,10)
+             ▲                                     ▲
+             │ 2 层 / 12 层 / 32 层                 │ 只有最后一步
+             │ 结构完全相同，参数各自独立              │ 把维度升到词表大小
+             └── 深度是"加工次数"，不是"尺寸变化" ──────┘
+</div>
+
+<p>堆叠的工程意义在于：每过一层，每个 Token 的向量就把上下文信息"揉"得更深一层。低层捕获的多是局部搭配（哪些词常挨在一起），高层逐渐形成抽象语义（指代、句法、情感）。层数就是信息被反复加工的次数，这也是"深度模型"中"深度"二字的真实含义。</p>
+
+<table>
+<tr><th>模型</th><th>层数</th><th>d_model</th><th>词表</th><th>总参数量</th></tr>
+<tr><td>本文 Tiny Demo</td><td>2</td><td>8</td><td>10</td><td>约 2 千</td></tr>
+<tr><td>GPT-2 small</td><td>12</td><td>768</td><td>50257</td><td>124M</td></tr>
+<tr><td>Llama-2-7B</td><td>32</td><td>4096</td><td>32000</td><td>6.7B</td></tr>
+<tr><td>GPT-3</td><td>96</td><td>12288</td><td>50257</td><td>175B</td></tr>
+</table>
+
+<h3>输出层与权重共享</h3>
+
+<p>最后一步把每个 Token 的隐藏向量映射回词表大小，得到 <span class="term">logits</span>——每个位置对词表中每个词的原始打分，打分最高的词就是模型当前最想输出的结果。</p>
+
+<pre><code>W_out = np.random.randn(d_model, vocab_size) * 0.01
+b_out = np.zeros(vocab_size)
+
+logits = x @ W_out + b_out        # (4, 10)
+print(logits.argmax(axis=-1))     # 每个位置预测的 Token ID
+</code></pre>
+
+<p>注意一个结构上的巧合：输入 Embedding 表是 <code>(vocab_size, d_model)</code>，输出层权重是 <code>(d_model, vocab_size)</code>——两者恰好互为转置。主流模型（GPT-2、Llama 等）干脆让二者<strong>共享同一份参数</strong>，即 <code>W_out = embedding_table.T</code>，这叫<span class="term">权重共享（Weight Tying）</span>。</p>
+
+<div class="highlight">
+<strong>生产案例：权重共享省下的参数相当可观。</strong>GPT-2 small 总参数 124M，词表 50257 × d_model 768 ≈ 3860 万。若输入 Embedding 与输出层各存一份，就是 7720 万；共享后只存一份，直接省下约 3860 万参数，相当于总参数量的 31%。Llama-2-7B 同样采用该设计，共享的 32000 × 4096 ≈ 1.31 亿参数避免了翻倍。参数变少不仅省显存，还让"词的输入表示"与"词的输出处方"被同一组梯度更新，输入输出语义天然对齐，小数据集上甚至有轻微的效果增益。
+</div>
+
+<div class="intuition-box">
+<p>输入是"编号 → 向量"，输出是"向量 → 编号"，本来就是一对互逆操作。让同一本词典既负责查词又负责收词，既省了一半的词典印刷费（参数），又保证查出来的意思和收进去的意思用的是同一套标准。</p>
+</div>
+</div>
+
+<!-- Section 6: 最小 Demo 与刻意简化 -->
+<div class="section" id="s6">
+<h2>六、最小可运行 Demo 与刻意简化</h2>
+
+<p>把前五节的代码按顺序连起来——Embedding 查表、位置编码相加、两层 Block 循环、输出层投影——就是一个完整可运行的 Tiny Transformer。由于权重全部随机初始化且没有训练，输出没有任何语义，但结构已经完整：</p>
+
+<pre><code># 运行输出示例（随机权重，结果无语义）
+print("最终输出 logits shape:", logits.shape)
+print("每个位置预测的 token:", logits.argmax(axis=-1))
+
+# 最终输出 logits shape: (4, 10)
+# 每个位置预测的 token: [5 5 4 3]
+</code></pre>
+
+<p><code>logits[0]</code> 表示第 1 个位置对词表中 10 个 Token 的打分，<code>argmax</code> 取出最高分对应的 ID。它现在还不会写文章也不会聊天——因为没训练——但 Embedding 负责把 ID 变向量、位置编码负责告诉模型顺序、Block 负责反复加工、输出层负责变回词表打分，四个环节一个不少。</p>
+
+<table>
+<tr><th>简化点</th><th>本 Demo</th><th>生产级 GPT/Transformer</th><th>简化的代价</th></tr>
+<tr><td>注意力头数</td><td>单头</td><td>多头（GPT-2 为 12 头，Llama-2 为 32 头）</td><td>只能学一种关注模式</td></tr>
+<tr><td>mask</td><td>无，全可见</td><td>causal mask 遮住未来位置</td><td>不能安全地自回归生成</td></tr>
+<tr><td>训练</td><td>无，纯随机权重</td><td>海量语料 next-token 预测</td><td>输出是随机噪声，无语义</td></tr>
+<tr><td>LayerNorm 位置</td><td>残差相加后（post-norm）</td><td>现代大模型多用 pre-norm，训练更稳</td><td>深层收敛更难</td></tr>
+<tr><td>实现与缩放</td><td>numpy 标量级</td><td>PyTorch + GPU + KV Cache 推理优化</td><td>无法处理真实长度与吞吐</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例：300 行代码足以训出一个真 GPT。</strong>Karpathy 的开源项目 nanoGPT 把上述完整数据流（多头注意力、causal mask、权重共享、学习率调度全部算上）压缩在约 300 行核心模型代码里，单张消费级 GPU（约 8GB 显存量级）就能在莎士比亚语料上训练一个字符级小 GPT，几百个训练 step 后就能生成语法通顺的仿莎翁台词。它印证了本文的主线：Transformer 的骨架本身极其简洁，复杂的是规模与训练，而不是结构。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先定死三个超参（vocab_size、L、d_model），每一步都打印 shape 验证</li>
+<li>用小词表（10）和小维度（8），手算都能对上，错了立刻能发现</li>
+<li>先跑通单 Block 再堆层，堆层后确认 shape 不变</li>
+<li>对照真实模型参数表（GPT-2/Llama）理解每个超参放大的后果</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要一上来就写多头注意力 + mask，变量太多根本调不通</li>
+<li>不要忘记 scores 除以 √d_model，否则 softmax 直接饱和</li>
+<li>不要期待随机权重输出有意义的结果，没训练就没有语义</li>
+<li>不要在没对齐 shape 时就拼接输出层，(4,8)@(8,10) 错一位整个链路崩</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>这个 Demo 搭的是骨架，训练才是灵魂。骨架的意义在于：从此你看任何大模型的架构图，都能在一秒内定位"现在讲的是流水线上哪一站"。</p>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么输入 Embedding 和输出层可以共享同一份权重？</summary>
+<div class="answer">两者的形状恰好互为转置：输入 Embedding 表是 (vocab_size, d_model)，负责把词编号映射成向量；输出层是 (d_model, vocab_size)，负责把向量映射回词表上的打分。让 W_out = embedding_table.T 后，一个词的"输入表示"和"输出打分依据"来自同一组参数，语义天然一致。工程上它直接省掉一份词表大小的参数——GPT-2 small 因此省下约 3860 万参数（总参数的 31%）。实践中该设计几乎不损失效果，GPT-2、Llama 等主流模型都默认开启。</div>
+</details>
+
+<details>
+<summary>不加位置编码，"我喜欢你"和"你喜欢我"的输出会一样吗？</summary>
+<div class="answer">在集合意义上会高度趋同。Self-Attention 的计算只依赖 Token 之间的内容相似度，与位置无关：打乱输入顺序后，每个 Token 能看到的邻居集合没变，注意力权重的模式基本不变，输出的向量集合也随之"置换"而非"改变"。也就是说模型无法区分谁是主语谁是宾语。加上位置编码后，同一个词在不同位置会叠加不同的位置向量，注意力的打分随之改变，词序信息才被纳入计算。</div>
+</details>
+
+<details>
+<summary>位置编码为什么用相加而不用拼接？</summary>
+<div class="answer">相加能保持 shape 仍为 (L, d_model)，后续所有模块的维度约定完全不用改，且不引入任何可学习参数；拼接会把维度扩成 (L, 2×d_model)，后面每一层的权重矩阵都要跟着翻倍，参数量和计算量全链路膨胀。代价是位置信息和语义信息混在同一个向量里，但实践证明注意力机制足以自行分离这两类信息，因此原始论文选择了相加，后续绝大多数模型沿用。</div>
+</details>
+
+<details>
+<summary>全部权重随机初始化、不做训练，argmax 出来的结果有什么意义？</summary>
+<div class="answer">没有任何语义意义，它只是随机打分里的最大值，不同随机种子会得到完全不同的预测。但它的工程意义很大：第一，验证了整条数据流的 shape 链路正确，(4,) → (4,8) → (4,10) → (4,) 每一步都能跑通；第二，确认了前向传播无 NaN、无维度错误，为后续接入训练循环打好基础；第三，可以直观看到 logits 就是"每个位置对词表的打分"这一抽象概念的具体数值。可以把随机权重的输出理解为"骨架的体检报告"。</div>
+</details>
+
+<details>
+<summary>为什么可以一直往下堆 Block？堆很多层 shape 不会失控吗？</summary>
+<div class="answer">不会，因为每个 Block 的输入输出 shape 完全一致，都是 (L, d_model)：Attention 内部 Q/K/V 投影是 d_model→d_model，FFN 是先升到 d_ff 再降回 d_model，一进一出相互抵消。所以任意一层的输出都能无缝作为下一层的输入，堆 2 层、32 层还是 96 层只是循环次数的差别，代码不需要任何修改。真正随层数增长的是参数量（每层独立参数）和每个 Token 被加工的深度，而不是张量尺寸。这也是 Transformer 能通过简单重复结构扩展到千亿参数的根本原因。</div>
+</details>
+
+<details>
+<summary>注意力打分为什么要除以 √d_model？</summary>
+<div class="answer">Q 和 K 的点积随维度增大而增大：维度为 d 时，点积的方差大致正比于 d。d_model=8 时还好，一旦达到 4096，打分数值会变得非常大，送进 softmax 后输出趋近 one-hot——最大项接近 1，其余接近 0，梯度几乎为零，训练直接卡死。除以 √d_model 把打分方差拉回 1 附近，让 softmax 工作在梯度敏感的区域。这是"缩放点积注意力（Scaled Dot-Product Attention）"名称的由来。</div>
+</details>
+
+<details>
+<summary>这个 Demo 距离一个真正的 GPT 还差哪些部件？</summary>
+<div class="answer">主要差五样：一是多头注意力，把 d_model 拆成多个子空间并行计算不同的关注模式；二是 causal mask，遮住未来位置，保证自回归生成时不偷看答案；三是训练循环，用海量语料做 next-token 预测并反向传播更新权重；四是更稳的归一化位置与初始化（现代模型多用 pre-norm）；五是推理优化，如 KV Cache 缓存历史 K/V 避免重复计算。把这些逐个补上，这份 100 行左右的骨架就能长成 nanoGPT 那样 300 行可训练的实现，再放大超参就是真实大模型的结构。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

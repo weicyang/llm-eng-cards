@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P04 · Redis 缓存一致性实战</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、缓存一致性本质</a>
+<a href="#s2">二、三种缓存更新模式</a>
+<a href="#s3">三、延时双删方案</a>
+<a href="#s4">四、分布式锁与消息队列</a>
+<a href="#s5">五、进阶方案与生产实践</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>P04 · Redis 缓存一致性实战</h1>
+<p class="subtitle">两大不一致根因 / 三种更新模式 / 延时双删 / 分布式锁与消息队列 / Binlog 订阅</p>
+
+<div class="intuition-box">
+<p>缓存一致性问题的全部本质是一句话：同一份业务数据同时存在两个副本——数据库是权威，缓存是派生——而所有方案（延时双删、分布式锁、Binlog 订阅）做的同一件事，就是把两份副本不一致的时间窗口压缩到业务能接受的范围。绝对强一致做不到也不值得做，真正的工程答案是带着窗口做取舍。</p>
+</div>
+
+<!-- ==================== 一、缓存一致性本质 ==================== -->
+<div class="section" id="s1">
+<h2>一、缓存一致性本质</h2>
+
+<p>引入 Redis 之后，同一份业务数据就有了两个副本：一份落在 MySQL 的磁盘上，是唯一的权威数据源（Source of Truth）；另一份放在 Redis 的内存里，是为了用空间换时间、把高频读请求挡在数据库之前。缓存带来的是读延迟从几十毫秒降到 1 毫秒的收益，代价则是两份数据必须被同步维护——这就是<span class="term">双写一致性</span>问题，即更新其中一份数据时，另一份如何跟着变化。</p>
+
+<p>这个问题无法被彻底消灭，原因在于缓存与数据库是两个独立的存储组件，任何一次"更新数据库 + 操作缓存"的动作都是两步，而这两步无法包进同一个本地事务。两步之间只要存在时间缝隙，并发请求就可能钻进来读到旧数据、写回脏数据，或者某一步执行失败后留下不一致的残局。工程上要做的不是消灭缝隙，而是给这个缝隙命名并管理它——这个缝隙就是<span class="term">一致性窗口</span>，即数据库已经是新值、缓存却仍是旧值的那段时间。</p>
+
+<div class="arch-diagram">
+  双数据源模型 —— 一致性窗口从何而来
+
+     写请求                          读请求
+       │                              │
+       ▼                              ▼
+ ┌────────────┐   命中直接返回   ┌────────────┐
+ │  业务服务    │◄───────────────►│ Redis 缓存   │  派生副本
+ └─────┬──────┘   (约 1ms)       └─────┬──────┘  快 / 易失 / 需同步
+       │ 唯一写入口                      │ 未命中才回源
+       ▼                               │
+ ┌────────────┐                        │
+ │   MySQL     │◄──────────────────────┘
+ └─────┬──────┘   权威数据源(慢 / 持久)
+       │ binlog(变更事件)
+       ▼
+    异步同步链路(Canal / MQ)
+
+ 一致性窗口 = DB 已更新 ─────────────► 缓存跟上
+                │◄──── 这段时间读到旧值 ────►│
+ 方案目标：窗口从"依赖 TTL(分钟级)" 压到 "秒级 → 毫秒级"
+</div>
+
+<p>按照窗口大小和保障强度，可以把一致性分成三个级别。<strong>强一致</strong>要求任何一次写完成后，下一次读必然读到新值，代价是把读写串行化、牺牲吞吐；<strong>最终一致</strong>允许窗口存在，但承诺窗口有限且必然收敛，是绝大多数互联网业务的选择；<strong>仅靠 TTL 兜底</strong>则等于不主动管理，全靠缓存过期自愈，窗口可能长达整个 TTL 周期。用一句话概括：一致性级别越高，吞吐和复杂度越难看，所以选型的第一步永远是先问业务到底能容忍多长的窗口。</p>
+
+<div class="highlight">
+<strong>一组数字直觉：</strong>一次 MySQL 查询通常要 10~100ms，其中真正传输数据只占几毫秒，大头是磁盘 I/O 与连接开销；Redis 命中仅约 1ms。对一个读占 80% 的商品详情页，缓存命中率从 0 提升到 95%，数据库 QPS 会直接下降九成以上，接口 P99 从 60ms 量级跌到 5ms 量级。这正是"宁可花大力气管理一致性，也要保住缓存层"的原因——缓存带来的性能收益，远大于一致性治理的成本。
+</div>
+
+<table>
+<tr><th>一致性级别</th><th>一致性窗口</th><th>实现手段</th><th>吞吐影响</th><th>典型适用场景</th></tr>
+<tr><td><strong>强一致</strong></td><td>0（写后读必为新值）</td><td>分布式读写锁串行化</td><td>明显下降（写阻塞读）</td><td>余额、库存、优惠券核销</td></tr>
+<tr><td><strong>最终一致</strong></td><td>秒级 → 毫秒级</td><td>Cache Aside + 延时双删 / MQ / Binlog</td><td>几乎无感</td><td>商品详情、用户资料、内容流</td></tr>
+<tr><td><strong>TTL 兜底</strong></td><td>可达整个 TTL（分钟级）</td><td>只设过期时间，不主动失效</td><td>无</td><td>可容忍长延迟的统计数据、配置</td></tr>
+</table>
+
+<h3>1.1 不一致的两大根因</h3>
+
+<p>缓存与数据库的不一致现象千变万化，但追根溯源只会落到两类根因上。第一类是<span class="term">部分失败</span>（Partial Failure）："更新数据库 + 操作缓存"是两次独立的网络调用，Redis 与 MySQL 之间不存在跨组件事务，第一步成功而第二步失败，就会留下不一致残局——最典型的是数据库已更新为新值，删除缓存却因网络抖动失败，旧值在缓存里一直存活到 TTL 过期，期间每个命中缓存的请求读到的都是过期数据。第二类是<span class="term">竞态条件</span>（Race Condition）：并发场景下读写请求的时序交错，让旧操作覆盖了新操作的结果——可能是并发读把刚失效的旧值回填进缓存，也可能是两个并发写以颠倒的顺序完成了缓存更新，最终留下旧值。</p>
+
+<div class="arch-diagram">
+ 两大根因与方案作用点
+
+ 【根因一：部分失败】                【根因二：竞态条件】
+  步骤1 更新DB成功                    读/写并发时序交错
+  步骤2 删缓存失败 ──► 旧值残留        旧值回填/乱序覆盖 ──► 脏数据
+        │                                   │
+        ▼ 解法：让第二步"必然执行"            ▼ 解法：管住操作顺序与并发
+  MQ重试(失败即重投)                   正确顺序(先更DB再删缓存)
+  binlog订阅(可靠事件源)                延时双删(第二刀补空窗)
+  本地任务表补偿                        分布式锁(读写串行化)
+        │                                   │
+        └────────────┬──────────────────────┘
+                     ▼
+          TTL 过期：两类根因的最后兜底
+</div>
+
+<table>
+<tr><th>根因</th><th>典型场景</th><th>不一致表现</th><th>对应解法</th></tr>
+<tr><td><strong>部分失败</strong></td><td>更新 DB 成功、删缓存失败</td><td>旧值存活到 TTL 过期</td><td>MQ 重试 / binlog 订阅 / 本地任务表补偿</td></tr>
+<tr><td><strong>竞态条件</strong></td><td>并发读回填旧值；双写乱序覆盖</td><td>旧值占据缓存或新旧倒挂</td><td>正确操作顺序 + 延时双删 / 分布式锁</td></tr>
+<tr><td>两者叠加</td><td>删除失败的同时又有读回填</td><td>长期脏数据</td><td>组合手段 + TTL 兜底</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>任何一次不一致事故，最终都能归因到"步骤没做完"或"顺序没排对"——排查问题时先分清属于哪类根因，再决定是补重试机制还是补并发控制，药才能下对地方。</p>
+</div>
+
+<h3>1.2 方案演进路线图</h3>
+
+<p>业界的方案不是一开始就发明出来的，而是每一步都在回答上一步遗留的问题。理解这条演进路径，也就理解了缓存一致性知识的全貌。</p>
+
+<div class="arch-diagram">
+ 方案演进路线图
+
+ ① 直接更新缓存（更新 DB + SET 新值到缓存）
+     │ 遗留问题：并发写交错，旧值覆盖新值且无法自愈
+     ▼
+ ② 改"更新"为"删除"（Cache Aside：先更新 DB 再 DEL）
+     │ 遗留问题：第二步（删缓存）万一失败怎么办？
+     ▼
+ ③ 保证删除必然成功
+     │   · 延时双删：第二刀补掉并发读回填的空窗
+     │   · MQ 重试：删除失败就重投，直到成功
+     │   · 分布式锁：读写串行化，直接消灭竞态
+     │ 遗留问题：删除逻辑耦合在业务代码里，进程崩溃就执行不到
+     ▼
+ ④ 删除动作与业务解耦（Canal 订阅 binlog + MQ）
+     业务只管写库，变更事件驱动缓存失效
+</div>
+
+<table>
+<tr><th>演进阶段</th><th>解决了什么</th><th>遗留了什么</th><th>工程成本</th></tr>
+<tr><td>① 更新缓存</td><td>基础双写</td><td>并发覆盖错乱</td><td>低</td></tr>
+<tr><td>② Cache Aside 删除</td><td>惰性失效，避免无效计算</td><td>第二步失败</td><td>低</td></tr>
+<tr><td>③ 重试 / 锁 / 双删</td><td>失败收敛、竞态消除</td><td>代码耦合、运维成本</td><td>中</td></tr>
+<tr><td>④ binlog 订阅</td><td>业务零侵入、可靠事件源</td><td>几乎无（TTL 兜底）</td><td>高</td></tr>
+</table>
+
+<p>在此之上，本文所有方案都用同一把"四把尺子"来衡量，这就是<strong>四维度分析框架</strong>：<strong>一致性</strong>（窗口多大、是否必然收敛）、<strong>性能</strong>（读写延迟与吞吐损耗）、<strong>复杂度</strong>（需要引入多少组件、业务代码侵入多深）、<strong>适用场景</strong>（什么样的业务能接受它的代价）。后面每介绍一种方案，都回到这四个维度做对比，避免陷入"背方案、不看场景"的误区。</p>
+
+<table>
+<tr><th>维度</th><th>要问的问题</th><th>常见量化指标</th></tr>
+<tr><td>一致性</td><td>脏数据窗口多长？失败后能否收敛？</td><td>窗口毫秒数、不一致工单数</td></tr>
+<tr><td>性能</td><td>读写延迟抬升多少？吞吐降多少？</td><td>P99 延迟、QPS、命中率</td></tr>
+<tr><td>复杂度</td><td>引入几个组件？代码侵入多深？</td><td>新增中间件数、改动行数</td></tr>
+<tr><td>适用场景</td><td>业务能容忍多长窗口？能否容忍丢数据？</td><td>数据敏感度分级</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>选型不是选"最强"的方案，而是选"刚好够用且代价最小"的方案——先定业务能容忍的一致性窗口，再反推该用哪一档手段。</p>
+</div>
+</div>
+
+<!-- ==================== 二、三种缓存更新模式 ==================== -->
+<div class="section" id="s2">
+<h2>二、三种缓存更新模式</h2>
+
+<p>一切具体方案都建立在三种基础更新模式之上：<span class="term">Cache Aside</span>（旁路缓存）、Read/Write Through（读写穿透）和 Write Behind（异步写回）。三者的差别只在两件事上——读未命中时由谁去回源数据库，以及写操作先动谁、何时告诉调用方写完了。把这两条轴想清楚，整个缓存更新空间就一目了然。</p>
+
+<h3>2.1 Cache Aside：应用自己管缓存的旁路模式</h3>
+
+<p>Cache Aside 是最主流的模式，应用程序直接同时与缓存和数据库打交道，缓存只是一个被动的"快速字典"。读路径是：先查缓存，命中直接返回；未命中则查数据库，把结果回写缓存并设置 TTL。写路径是：<strong>先更新数据库，再删除缓存</strong>。下面是完整的读写路径时序。</p>
+
+<div class="arch-diagram">
+ 【读路径】                         【写路径 Cache Aside】
+ App ──1.查缓存──► Redis            App ──1.更新DB──► MySQL
+      ◄──命中── 返回(≈1ms)               (事务提交)
+   未命中 ↓                         App ──2.删除缓存──► Redis(DEL key)
+ App ──2.查DB──► MySQL                    ↑
+      ◄──查询结果──                    不是 SET 新值，而是删除
+ App ──3.回写缓存(设TTL)──► Redis      下次读未命中 → 回源加载最新值
+</div>
+
+<p>写路径的关键决策是"删除缓存"而非"更新缓存"。原因有二：其一，并发写场景下两个请求各自更新缓存，线程调度一旦交错，后写的库值可能对应先写的缓存值，产生无法自愈的错乱；其二，写多读少的数据如果每次都更新缓存，很多写入根本不会被读到，属于无效计算。删除是<span class="term">幂等</span>操作——删一个不存在的 key 也无害，且天然把"加载最新值"推迟到真正被读的那一刻。</p>
+
+<p>那么是先删缓存还是先更新库？先删缓存有一个明显漏洞：删完缓存、库还没更新的间隙，一个并发读请求未命中、查到旧值并把旧值回填缓存，之后库更新完成，缓存里却长期留着旧数据。先更新库再删缓存虽然理论上也有一个"读未命中拿旧值、写删缓存、读把旧值回填"的窗口，但它要求读请求的数据库查询恰好横跨整个写事务，条件苛刻、概率极低，且有 TTL 兜底。所以工程标准是<strong>先更新数据库，再删除缓存</strong>。</p>
+
+<table>
+<tr><th>顺序</th><th>并发风险</th><th>触发条件</th><th>发生概率</th><th>结论</th></tr>
+<tr><td>先删缓存 → 再更新库</td><td>读回填旧值，长期不一致</td><td>删缓存与更新库之间有并发读</td><td>高</td><td>不推荐</td></tr>
+<tr><td>先更新库 → 再删缓存</td><td>读回填旧值的极短窗口</td><td>读查询横跨写事务全程</td><td>极低</td><td>标准做法</td></tr>
+<tr><td>先更新缓存 → 再更新库</td><td>缓存库值归属不同请求</td><td>线程调度交错</td><td>中</td><td>禁用</td></tr>
+<tr><td>先更新库 → 再更新缓存</td><td>旧值覆盖新值</td><td>并发写顺序错乱</td><td>中</td><td>禁用</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Cache Aside 的精髓是把缓存当"用完即弃的副本"——写的时候只负责让它失效，把重建的成本推迟到真正需要它的那次读。</p>
+</div>
+
+<h3>2.2 Read/Write Through：缓存作为读写代理</h3>
+
+<p>Read Through 与 Write Through 把回源逻辑从应用代码下沉到缓存层，缓存成为数据访问的唯一入口（<span class="term">读写穿透</span>）。读时应用只问缓存，未命中由缓存自己去查库并回填；写时应用也只写缓存，由缓存同步把数据写入数据库。好处是应用逻辑大幅简化、不再关心数据库；代价是写操作要等缓存和库两步都完成才返回，写延迟翻倍，且强依赖缓存中间件的稳定性——缓存一挂，整条数据访问链就断了。</p>
+
+<h3>2.3 Write Behind：异步批量写回的性能赌注</h3>
+
+<p>Write Behind（也叫 Write Back）走向了另一个极端：写请求只更新缓存就立即返回成功，缓存把变更攒在内存里，异步、批量地刷回数据库。收益是写延迟极低、还能把高频写合并成少量批量写，大幅削减数据库压力；风险是缓存宕机时，尚未刷回的数据会永久丢失。因此它只适合写极密集、且能容忍少量丢失或本身配有持久化写缓冲的场景（如日志计数、点赞数、监控指标），绝不能用于资金、库存这类数据。</p>
+
+<h3>2.4 两种补充手段：Refresh Ahead 与 Singleflight</h3>
+
+<p>三大主干模式之外，工程上还有两种常用的补充手段，它们都围绕"缓存失效的那一刻"做文章。<span class="term">Refresh Ahead</span>（预刷新）不等缓存过期后由读请求被动回源，而是根据访问频率或固定周期，在过期时间点之前主动把缓存刷新为新值，把"恰好过期时被读到"的延迟抖动变成提前完成的主动刷新，同时也天然错开了大量 key 同时过期的雪崩风险；代价是对无人问津的冷数据做无用刷新，因此只适合热点可预判的数据。<span class="term">Singleflight</span>（请求合并）针对的是另一个问题：热点 key 失效的瞬间，成千上万个并发读同时未命中、一起涌向数据库。Singleflight 保证同一时刻、同一 key 只有第一个请求真正回源查库，其余请求挂起等待并共享它的结果，把 N 次回源压缩成 1 次。Go 生态的 singleflight 库、Java 生态的"SETNX 互斥锁 + 双重检查"都是这个思路——它既是击穿防护手段，也避免了并发重建时旧值回填的竞态，与一致性方案天然互补。</p>
+
+<table>
+<tr><th>补充手段</th><th>解决的问题</th><th>代价</th><th>适用场景</th></tr>
+<tr><td>Refresh Ahead 预刷新</td><td>过期瞬间的读延迟抖动、集中过期雪崩</td><td>冷数据无用刷新、周期难定</td><td>热点可预判的稳定数据</td></tr>
+<tr><td>Singleflight 请求合并</td><td>过期后并发回源压垮数据库</td><td>等待者的延迟与首请求绑定</td><td>任何高并发热点 key 重建</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Refresh Ahead 用主动计算换读取平稳，Singleflight 用等待换数据库安全——两者一个把失效"提前消化"，一个把失效"集中处理"，分别以不同姿态补丁了缓存过期这个最危险的瞬间。</p>
+</div>
+
+<table>
+<tr><th>模式</th><th>一致性模型</th><th>读性能</th><th>写性能</th><th>复杂度</th><th>丢数据风险</th><th>适用场景</th></tr>
+<tr><td><strong>Cache Aside</strong></td><td>最终一致</td><td>高（命中时）</td><td>高（只写库 + 删缓存）</td><td>低</td><td>无</td><td>读多写少的通用业务</td></tr>
+<tr><td><strong>Read/Write Through</strong></td><td>较强一致</td><td>高</td><td>低（同步双写）</td><td>中（需实现 Loader）</td><td>无</td><td>写后立即读要正确</td></tr>
+<tr><td><strong>Write Behind</strong></td><td>弱一致</td><td>极高</td><td>极高（异步批量）</td><td>高（需可靠刷盘）</td><td>有（宕机丢失）</td><td>写密集、可容忍丢失</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>三种模式是一条"一致性 ↔ 性能"的滑杆：Cache Aside 居中是默认解，Write Through 往一致偏，Write Behind 往性能偏，选哪档取决于业务站在滑杆的哪一端。</p>
+</div>
+</div>
+
+<!-- ==================== 三、延时双删方案 ==================== -->
+<div class="section" id="s3">
+<h2>三、延时双删方案</h2>
+
+<p>Cache Aside 的"先更新库再删缓存"已足够多数场景，但在主从架构或必须采用"先删缓存"的流程里，仍存在并发读把旧值回填的窗口。<span class="term">延时双删</span>（Delayed Double Delete）就是为这个窗口打的补丁：写路径变成"删缓存 → 更新数据库 → 延时 N 毫秒 → 再次删除缓存"。第一次删除是为了让后续读请求读不到旧缓存，第二次延迟删除则是兜住"并发读刚好把旧值回填进缓存"的情况。</p>
+
+<div class="arch-diagram">
+ 延时双删并发时序（写线程 A vs 并发读线程 B）
+
+ 写线程A              MySQL             Redis             读线程B
+   │ 1.DEL 缓存         │                 │                  │
+   │───────────────────┼────────────────►│ 删除旧值          │
+   │ 2.UPDATE 库        │                 │                  │
+   │──────────────────►│ 写新值(提交中)    │                  │
+   │                   │                 │ 3.读未命中 ◄───────│
+   │                   │◄────────────────┼──────────────────│ 查库
+   │                   │ 返回旧值(未提交/主从延迟)            │
+   │                   │────────────────►│ 4.回填旧值 ◄───────│  ← 脏数据!
+   │ 5.延时 N ms        │                 │                  │
+   │ ~~~ 等待 ~~~       │                 │                  │
+   │ 6.再次 DEL 缓存     │                 │                  │
+   │───────────────────┼────────────────►│ 清除脏值 ✔         │
+   │                   │                 │ 下次读回源取新值    │
+</div>
+
+<p>延时时长是这套方案的生命线，必须大于"并发读完成一次查库 + 回写缓存"的最大耗时，并额外覆盖主从同步延迟，否则第二次删除会落在脏值回填之前而失效。工程上通常把它设为几百毫秒量级，例如 500ms，并依据真实读写耗时与主从延迟做压测校准。下表拆解了延时需要覆盖的组成部分。</p>
+
+<table>
+<tr><th>延时构成</th><th>说明</th><th>典型量级</th></tr>
+<tr><td>读请求回源耗时</td><td>并发读从查库到拿到旧值的时间</td><td>几十毫秒</td></tr>
+<tr><td>读请求回写缓存耗时</td><td>把旧值写回 Redis 的时间</td><td>1~5 毫秒</td></tr>
+<tr><td>主从同步延迟</td><td>写主库后从库读到旧值的窗口</td><td>几十~几百毫秒</td></tr>
+<tr><td>安全余量</td><td>网络抖动、GC 停顿预留</td><td>上百毫秒</td></tr>
+<tr><td><strong>合计延时</strong></td><td>四者之和取上界</td><td>约 300~800 毫秒</td></tr>
+</table>
+
+<p>延时双删有两个先天缺陷。第一，若用 <code>Thread.sleep</code> 同步等待，会白白占用写线程几百毫秒，把接口延迟整体抬高；正确做法是用延时消息（如 RocketMQ 的延迟级别）或调度线程池把第二次删除异步化，让写请求立即返回。第二，第二次删除本身可能失败（Redis 抖动、进程崩溃），此时脏缓存会残留到 TTL 过期，因此必须配兜底重试——常见手段是本地任务表记录失败删除 + 定时补偿，或直接把删除动作丢进 MQ 靠重投保证。</p>
+
+<table>
+<tr><th>兜底手段</th><th>原理</th><th>优点</th><th>缺点</th></tr>
+<tr><td>本地任务表 + 定时补偿</td><td>失败删除落库，定时扫描重试</td><td>不依赖额外中间件</td><td>有扫描延迟、需清表</td></tr>
+<tr><td>MQ 重试</td><td>删除失败不 ACK，MQ 自动重投</td><td>实时性好、天然重试</td><td>依赖 MQ 可靠性</td></tr>
+<tr><td>Binlog 订阅</td><td>从源头感知变更，彻底兜底</td><td>最彻底、业务无感</td><td>引入 Canal，复杂度最高</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例（营销大促）：</strong>某电商促销页最初用同步 <code>sleep(500ms)</code> 实现延时双删，大促压测时写接口 P99 延迟从 45ms 飙升到 620ms，线程池被 sleep 占满、出现拒绝请求。改造为 RocketMQ 延迟消息异步执行第二次删除后，写接口 P99 回落到 52ms，脏数据窗口被压缩到 1 秒以内，大促全程零脏数据工单。结论：延时双删的"延时"绝不能阻塞主线程。
+</div>
+
+<div class="intuition-box">
+<p>延时双删是用"再补一刀"换一致性，刀要补在旧值回填之后——延时太短补了个寂寞，同步 sleep 则会拖垮整个写链路。</p>
+</div>
+</div>
+
+<!-- ==================== 四、分布式锁与消息队列 ==================== -->
+<div class="section" id="s4">
+<h2>四、分布式锁与消息队列</h2>
+
+<p>当业务对一致性要求高、又不想接受最终一致的窗口时，可以用分布式锁把同一 key 的读写串行化；当业务能接受短暂不一致、但要求最终必然收敛时，则用消息队列把"删缓存"变成可靠重试的异步动作。这一节分别拆解 Redisson 分布式锁与 RocketMQ 重试，它们正好对应 CAP 权衡里的 CP 与 AP 两条路。</p>
+
+<h3>4.1 Redisson 分布式锁：把读写串行化</h3>
+
+<p>Redisson 的<span class="term">可重入锁</span>用 Lua 脚本保证"判断 + 加锁"原子执行，用 Hash 结构记录持有者和重入次数，抢锁失败时通过 Redis 的 Pub/Sub 订阅锁释放事件、阻塞等待被唤醒，而不是忙轮询空转 CPU——这在高并发下极为关键。写操作持写锁、读操作持读锁，写期间阻塞一切读，从根本上消除并发读写竞态，换取强一致，代价是吞吐下降。</p>
+
+<p>真正让 Redisson 可靠的是<span class="term">看门狗</span>（Watchdog）续期机制。分布式锁的超时时间是静态的，业务执行时间却是动态的——锁设 10 秒、业务跑了 15 秒，锁提前释放，第二个请求趁虚而入，锁形同虚设。看门狗的解法是：不指定 leaseTime 加锁时（leaseTime = -1），默认 30 秒过期，后台定时任务每 10 秒（过期时间的 1/3）用 Lua 脚本校验"锁仍是当前线程持有"后把 TTL 重置回 30 秒。业务没跑完锁就永不过期；一旦客户端宕机，看门狗随进程消失、停止续期，锁在 30 秒后自动释放，不会死锁。</p>
+
+<div class="arch-diagram">
+ Redisson 看门狗续期时间线
+
+ t=0s   lock() 成功, TTL=30s ──► 启动看门狗定时任务
+ t=10s  看门狗: Lua 校验持有者 ──► pexpire 重置 TTL=30s
+ t=20s  看门狗: 续期成功 ──► TTL=30s (业务未完成, 锁不过期)
+ t=30s  继续续期 ……  只要进程活着, 锁永不过期
+ ────────────────────────────────────────────────
+ unlock()   取消看门狗 + 删除锁 + publish 释放消息(唤醒等待者)
+ 客户端宕机  看门狗随之消失 ──► 锁 30s 后自动释放(防死锁)
+</div>
+
+<table>
+<tr><th>加锁方式</th><th>看门狗</th><th>锁过期行为</th><th>适用场景</th></tr>
+<tr><td><code>tryLock(waitTime)</code>（不带 leaseTime）</td><td>启用，每 10s 续期</td><td>业务不完成不过期，宕机 30s 后释放</td><td>业务耗时不可预估</td></tr>
+<tr><td><code>tryLock(waitTime, leaseTime)</code></td><td>禁用</td><td>到 leaseTime 强制过期</td><td>业务耗时可精确预估</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例（库存超卖）：</strong>某秒杀服务用固定 TTL=10 秒的自研分布式锁扣库存，一次数据库慢查询让业务执行到 15 秒，锁提前过期，两个请求并发扣减，一夜产生 37 笔超卖订单。切换到 Redisson 看门狗（不指定 leaseTime）并在 finally 中用 <code>isHeldByCurrentThread()</code> 判断后才 unlock，此后锁不再提前失效，超卖订单归零，慢查询期间的并发也被正确串行化。
+</div>
+
+<h3>4.2 RocketMQ：用可靠重试逼近最终一致</h3>
+
+<p>对于能接受短暂不一致的业务，更优雅的做法是把"删缓存"从主流程剥离：写库成功后投递一条消息到 RocketMQ，消费者收到消息去删缓存。关键在于可靠性闭环——消费者删除成功后才回 ACK，删除失败则不 ACK，MQ 按阶梯间隔自动重投（默认最多 16 次），重试耗尽仍失败的消息进入死信队列并触发告警，人工或补偿任务介入。这个顺序绝不能反过来：如果消费者先回 ACK 再执行删除，一旦删除失败，消息已被确认、再无机会重投，等于把这条删除指令真的弄丢了。配合本地消息表或事务消息保证"写库与发消息"不脱节，就能让缓存删除最终必然发生。</p>
+
+<table>
+<tr><th>保障环节</th><th>机制</th><th>作用</th></tr>
+<tr><td>生产端</td><td>本地消息表 / 事务消息</td><td>保证写库成功则消息必达</td></tr>
+<tr><td>消费端</td><td>删除成功才 ACK</td><td>失败即触发重投</td></tr>
+<tr><td>重试</td><td>阶梯间隔重投（最多 16 次）</td><td>覆盖 Redis 抖动、瞬时故障</td></tr>
+<tr><td>兜底</td><td>死信队列 + 告警</td><td>极端失败可追溯、可人工补偿</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>锁和 MQ 是同一条一致性光谱的两端：锁用"串行化"买强一致、牺牲吞吐；MQ 用"可靠重试"买最终一致、保住吞吐——前者适合余额库存，后者适合详情内容。</p>
+</div>
+
+<table>
+<tr><th>方案</th><th>CAP 倾向</th><th>一致性</th><th>吞吐</th><th>复杂度</th><th>适用</th></tr>
+<tr><td>Redisson 读写锁</td><td>CP</td><td>强一致</td><td>低（写阻塞读）</td><td>中</td><td>余额、库存、核销</td></tr>
+<tr><td>RocketMQ 异步重试</td><td>AP</td><td>最终一致（秒级收敛）</td><td>高</td><td>中</td><td>商品详情、内容流</td></tr>
+</table>
+
+<p>需要强调的是，锁不是银弹，它有明确的使用边界。其一，锁的粒度必须落在单个 key 上（如 <code>lock:product:{id}</code>），绝不能对整张表或整个服务加一把大锁，否则所有请求被串行化，吞吐会断崖式下跌。其二，写锁会阻塞读，因此它只适合"写少、读的值极其关键"的场景；对于高频读的详情页，加锁会把缓存的性能优势消耗殆尽，得不偿失。其三，务必在 finally 中释放锁，且释放前用 <code>isHeldByCurrentThread()</code> 校验持有者，避免误删别人的锁。实践中更常见的组合是：用锁保护少数强一致关键路径，用 MQ/Canal 覆盖绝大多数最终一致路径，两者各司其职。</p>
+
+<div class="intuition-box">
+<p>锁的价值不在"加得多"，而在"加得准"——只对真正怕脏读的那几个 key 上锁，其余交给异步收敛，才能在一致性和吞吐之间各取所需。</p>
+</div>
+</div>
+
+<!-- ==================== 五、进阶方案与生产实践 ==================== -->
+<div class="section" id="s5">
+<h2>五、进阶方案与生产实践</h2>
+
+<p>前面所有方案都有一个共同软肋：删缓存的动作写在业务代码里，进程崩溃、网络闪断都可能让它执行不到。Binlog 订阅的思路是釜底抽薪——把"缓存失效"从业务代码中剥离，挂靠到 MySQL 自己的 binlog 这条最可靠的事件源上。</p>
+
+<h3>5.1 Canal 订阅 Binlog：业务零侵入的最终一致</h3>
+
+<p>MySQL 的 binlog 在事务<strong>提交之后</strong>才写入，绝不会把未提交的数据同步出去；同一行的变更在 binlog 中<strong>全局有序</strong>，不会乱序。<span class="term">Canal</span> 伪装成 MySQL 的从节点，通过 dump 协议实时拉取并解析 binlog，提取出表名、主键和变更内容，投递到 RocketMQ/Kafka，再由缓存消费者执行删除。业务服务只负责写数据库，完全不触碰缓存，从根源上消除了双写错乱。</p>
+
+<div class="arch-diagram">
+ Canal + MQ 订阅链路
+
+ 业务服务 ──只写──► MySQL (事务提交后写 binlog, ROW 格式)
+                       │ binlog(变更事件)
+                       ▼
+                 ┌──────────┐
+                 │  Canal    │ 伪装 MySQL 从节点, 拉取/解析 binlog
+                 └────┬─────┘ 提取 表名/主键/变更
+                      ▼
+                 ┌──────────┐
+                 │ RocketMQ  │ 削峰 + 可靠重试
+                 └────┬─────┘
+                      ▼
+               缓存消费者(只做 DEL key)
+                 ├─ 删除成功 → ACK
+                 └─ 删除失败 → MQ 重投 → 死信告警
+                      ▼
+                    Redis
+</div>
+
+<p>一个容易被忽视的细节：Canal 侧一律执行 <code>DEL key</code>（失效）而不是 <code>SET</code> 新值。因为一旦 SET，万一网络乱序让旧事件覆盖新事件，反而会造脏数据；而 DEL 是幂等的，删完让下一次读走 Cache Aside 自然回源加载最新值，永远安全。</p>
+
+<h3>5.2 缓存预热与降级</h3>
+
+<p>一致性方案还需要两个配套设施。<strong>预热</strong>：服务上线或缓存清空后，提前把热点数据批量灌入缓存，避免冷启动时大量未命中同时砸向数据库（这本质是把"雪崩"风险前置化解）。<strong>降级</strong>：Redis 整体故障时，Cache Aside 的优势显现——应用可以直接降级为查数据库，配合限流保护数据库不被打垮，等缓存恢复再回切。这种"缓存挂了系统还活着"的韧性，是 Write Through/Write Behind 所不具备的。</p>
+
+<h3>5.3 穿透 / 击穿 / 雪崩与一致性的交叉</h3>
+
+<p>三大缓存故障与一致性方案会相互影响，设计时必须一起考虑。缓存击穿的互斥锁重建若发生在写事务期间，可能把旧值重建回缓存，与一致性窗口叠加；缓存穿透的空值缓存要设短 TTL，否则一次错误的空值会长时间挡住正确数据；缓存雪崩用随机 TTL 防止集中过期，而 TTL 本身正是一致性的最后兜底——它决定了"最坏情况下脏数据能存活多久"。</p>
+
+<table>
+<tr><th>故障</th><th>与一致性的交互</th><th>协调要点</th></tr>
+<tr><td>缓存击穿</td><td>互斥重建可能回填旧值</td><td>重建前先检查版本 / 缩短重建窗口</td></tr>
+<tr><td>缓存穿透</td><td>空值缓存挡住正确数据</td><td>空值设短 TTL（如 30~60s）</td></tr>
+<tr><td>缓存雪崩</td><td>TTL 是一致性最后兜底</td><td>随机 TTL ±10% 防集中过期</td></tr>
+</table>
+
+<h3>5.4 生产案例横向对比</h3>
+
+<div class="highlight">
+<strong>生产案例（商品详情页）：</strong>某电商商品详情页最初只用 Cache Aside + 30 分钟 TTL，脏数据依赖过期自愈，每月产生 40+ 起"价格/库存显示错误"工单。改造为 Cache Aside + Canal 订阅 binlog + RocketMQ 重试删除后，一致性窗口从最长 30 分钟压缩到 500 毫秒以内，脏数据工单归零；同时命中率从 92% 提升到 97%，数据库峰值 QPS 从 8000 降到 600。代价是引入 Canal 与 MQ 两套组件，属于"用复杂度换确定性"的典型交易。
+</div>
+
+<table>
+<tr><th>案例</th><th>原方案</th><th>改造后</th><th>关键指标变化</th></tr>
+<tr><td>营销大促写接口</td><td>同步 sleep 延时双删</td><td>MQ 延迟消息异步双删</td><td>P99 620ms → 52ms，脏窗口 &lt;1s</td></tr>
+<tr><td>秒杀库存</td><td>固定 TTL 自研锁</td><td>Redisson 看门狗锁</td><td>超卖 37 单/夜 → 0</td></tr>
+<tr><td>商品详情页</td><td>Cache Aside + 30min TTL</td><td>Canal + RocketMQ</td><td>脏工单 40+/月 → 0，窗口 30min → 500ms</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<p>写路径统一"先更新库，再删缓存"，删除用 DEL 而非 SET</p>
+<p>每个缓存 key 都设 TTL，作为一致性的最后兜底</p>
+<p>延时双删的第二次删除走异步（延迟消息 / 调度池）</p>
+<p>删除失败接入 MQ 重试或本地任务表补偿，保证收敛</p>
+<p>强一致诉求（余额/库存）用 Redisson 锁并启用看门狗</p>
+<p>unlock 放在 finally 且先判断 isHeldByCurrentThread</p>
+</div>
+<div class="dont">
+<p>不要在主线程里 sleep 等待第二次删除</p>
+<p>不要更新缓存（SET 新值）来代替删除缓存</p>
+<p>不要给强一致关键数据用 Write Behind（会丢数据）</p>
+<p>不要只靠 TTL 兜底而不做任何主动失效</p>
+<p>不要给锁设死 leaseTime 去硬扛不可预估的业务耗时</p>
+<p>不要忽略删除失败，默认"删不掉就算了"</p>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>生产级一致性的终局形态是"数据库是唯一事实源、缓存只是事件驱动的被动影子"——业务只管写库，binlog 负责通知，MQ 负责重试，缓存负责被删除。</p>
+</div>
+
+<p>最后把全文收敛成一张选型速查表，按业务能容忍的一致性窗口从宽到严排列：</p>
+
+<table>
+<tr><th>业务容忍窗口</th><th>推荐方案</th><th>引入组件</th><th>代码侵入</th><th>典型场景</th></tr>
+<tr><td>分钟级（可自愈即可）</td><td>Cache Aside + TTL</td><td>无</td><td>低</td><td>统计报表、低敏配置</td></tr>
+<tr><td>秒级</td><td>Cache Aside + 异步延时双删</td><td>延迟消息 / 调度池</td><td>中</td><td>营销活动、用户资料</td></tr>
+<tr><td>亚秒级且要必然收敛</td><td>Cache Aside + MQ 重试删除</td><td>RocketMQ</td><td>中</td><td>商品详情、内容流</td></tr>
+<tr><td>亚秒级且业务零侵入</td><td>Canal + MQ</td><td>Canal + RocketMQ</td><td>无（业务只写库）</td><td>多服务共享缓存、核心商品</td></tr>
+<tr><td>0（强一致）</td><td>Redisson 读写锁</td><td>Redisson</td><td>中</td><td>余额、库存、券核销</td></tr>
+</table>
+
+<p>这张表的使用方式只有一句话：先定业务能容忍的一致性窗口，再顺着窗口找到代价最小的那一档。数据不敏感就用 Cache Aside + TTL；需要秒级收敛且写不频繁，用异步延时双删或 MQ 重试；要求业务零侵入、确定性收敛，上 Canal + MQ；涉及资金库存、必须强一致，才动用 Redisson 读写锁。没有最优方案，只有与业务一致性窗口匹配的方案——这也正是全文四维度分析框架的最终落点。</p>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么写路径要"删除缓存"而不是"更新缓存"？</summary>
+<div class="answer">两个原因。第一是并发正确性：两个写请求各自更新缓存时，一旦线程调度交错，可能出现"库里是后写的值、缓存里是先写的值"的错乱，且这种脏数据无法自愈；删除缓存则不存在覆盖问题。第二是效率：写多读少的数据每次都更新缓存，很多写入根本不会被读到，属于无效计算。删除是幂等操作，删一个不存在的 key 也无害，并把"加载最新值"推迟到真正被读的那一刻，天然契合懒加载。所以业界标准是更新数据库后执行 DEL，而非 SET 新值。</div>
+</details>
+
+<details>
+<summary>"先更新库再删缓存"在什么情况下仍会不一致？这个窗口要不要紧？</summary>
+<div class="answer">理论窗口是：一个读请求缓存未命中、查到旧值但还没回写，此时写请求更新了库并删了缓存，随后读请求把旧值回填缓存，形成短暂脏数据。但它要求读请求的数据库查询恰好横跨写事务的完整生命周期，条件极其苛刻、发生概率极低。而且这个窗口有 TTL 兜底，脏数据最多存活一个 TTL 周期就会自愈。对绝大多数读多写少业务，这个概率和时长都可接受；只有极端敏感数据才需要用锁或 Binlog 方案进一步收紧。</div>
+</details>
+
+<details>
+<summary>延时双删的延时时长怎么定？第二次删除失败怎么办？</summary>
+<div class="answer">延时必须大于"并发读完成一次查库 + 回写缓存"的最大耗时，并额外覆盖主从同步延迟和安全余量，工程上常取几百毫秒（如 500ms），并依据真实读写耗时做压测校准——太短会在脏值回填前删除而失效，太长则拉长不一致窗口。第二次删除可能因 Redis 抖动或进程崩溃失败，必须配兜底：要么用本地任务表记录失败删除 + 定时补偿，要么把删除动作丢进 MQ 靠不 ACK 触发重投。另外延时本身绝不能阻塞主线程，要用延迟消息或调度线程池异步执行。</div>
+</details>
+
+<details>
+<summary>Redisson 看门狗是怎么防止锁提前过期和死锁的？</summary>
+<div class="answer">分布式锁的超时是静态的而业务耗时是动态的，固定 TTL 要么太短导致锁提前释放、要么太长导致宕机后长期占用。看门狗的解法是客户端主动续期：不指定 leaseTime 加锁时默认 30 秒过期，后台定时任务每 10 秒（TTL 的 1/3）用 Lua 脚本校验"锁仍是当前线程持有"后把 TTL 重置回 30 秒，业务没跑完锁就永不过期。一旦发生客户端宕机，续期任务随进程消失，锁在 30 秒后自动释放，不会死锁。指定了 leaseTime 则会禁用看门狗，所以业务耗时不可预估时应避免传 leaseTime。</div>
+</details>
+
+<details>
+<summary>Canal 方案为什么执行 DEL 而不是 SET 新值？</summary>
+<div class="answer">如果 Canal 去 SET 缓存值，万一网络乱序或重投导致旧事件覆盖新事件，反而会主动造出脏数据。而 DEL 是幂等操作，删一个 key 无论执行多少次结果都一样，且不存在"旧值覆盖新值"的问题。删完之后，下一次读请求走 Cache Aside 自然回源数据库加载最新值，永远安全。本质上这是把"主动同步数据"降级为"被动让缓存失效"，把构建最新值的责任交还给读路径，从而规避乱序风险。</div>
+</details>
+
+<details>
+<summary>什么样的业务能用最终一致，什么业务必须强一致？</summary>
+<div class="answer">判断标准是"读到短暂旧值的业务代价"。商品详情、内容流、用户资料、首页推荐这类数据，读错一两秒价格或点赞数不会有资损，适合最终一致（Cache Aside + MQ / Canal），用高吞吐换毫秒到秒级的收敛窗口。但余额、库存、优惠券核销、订单状态这类数据，一次脏读就可能造成超卖或资损，必须强一致——用 Redisson 读写锁把读写串行化，接受写阻塞读带来的吞吐下降。选型时先给数据做敏感度分级，再决定落在光谱的哪一端。</div>
+</details>
+
+<details>
+<summary>Write Behind 性能最高，为什么不能用于资金、库存类数据？</summary>
+<div class="answer">Write Behind 只更新缓存就立即返回成功，数据真正落库是缓存异步、批量刷回的。这带来一个致命风险：如果缓存在刷盘前宕机，那些还没写回数据库的数据就永久丢失了。对点赞数、监控指标这类丢一点无伤大雅的数据可以接受，但对资金和库存，任何一笔丢失都意味着账实不符或直接资损。因此 Write Behind 只适合写极密集且能容忍丢失、或本身配有持久化写缓冲的场景；资金库存类必须走 Cache Aside 或强一致方案，确保每次写都真实落到数据库。</div>
+</details>
+
+<details>
+<summary>缓存击穿、穿透、雪崩和一致性方案会互相影响吗？</summary>
+<div class="answer">会，设计时要一起考虑。缓存击穿的互斥锁重建若恰好发生在写事务期间，可能把旧值重建回缓存，与一致性窗口叠加，需要缩短重建窗口或校验版本；缓存穿透的空值缓存必须设短 TTL（如 30~60 秒），否则一次错误的空值会长时间挡住正确数据；缓存雪崩用随机 TTL 防止大量 key 同时过期，而 TTL 本身就是一致性的最后兜底——它决定了最坏情况下脏数据能存活多久。所以 TTL、互斥锁、空值缓存这些防故障手段，同时也是整体一致性设计的一部分。</div>
+</details>
+
+<details>
+<summary>被问"如何分析缓存不一致问题"时，应该用什么框架展开？</summary>
+<div class="answer">把所有不一致归因到两类根因来展开。第一类是部分失败（Partial Failure）："更新数据库 + 操作缓存"是两次独立的网络调用，没有跨组件事务保证，第二步失败就会留下不一致残局，解法方向是让第二步必然执行——MQ 失败重试、订阅 binlog 拿可靠事件源、本地任务表补偿。第二类是竞态条件（Race Condition）：并发读写时序交错，读回填了刚失效的旧值，或两个写乱序覆盖，解法方向是管住顺序与并发——坚持先更新数据库再删缓存、延时双删补空窗、分布式锁串行化。最后补一句 TTL 兜底：它是两类根因的最后防线，决定了脏数据的存活上限。先定位根因再选解法，比罗列方案更能体现分析能力。</div>
+</details>
+
+<details>
+<summary>为什么"先更新数据库再删缓存"在实际生产中几乎不会出问题？给出量化直觉。</summary>
+<div class="answer">产生不一致的理论窗口是：读请求未命中缓存、查到旧值但尚未回写，写请求完成更新数据库并删除缓存，随后读请求把旧值回填。要让脏数据真的产生，读请求"查库 + 写缓存"的总耗时必须长于写请求"更新库 + 删缓存"的总耗时。但缓存写入（约 1ms）通常比数据库写入（几十毫秒）快一两个数量级，读请求耗时的查库动作又发生在写请求开始之前，写请求的两步几乎不可能恰好插进读请求的回写间隙。也就是说这个窗口要求一个与真实读写速度几乎相反的时序条件，发生概率极低，再叠加 TTL 兜底，所以它成为行业标准做法。对比之下，"先删缓存再更新数据库"的窗口不需要这么苛刻的条件，发生概率高得多，因此不被推荐。</div>
+</details>
+
+<details>
+<summary>延时双删为什么不被推荐作为主方案？</summary>
+<div class="answer">三个原因。第一，睡眠时长是玄学：它必须大于并发读"查库 + 回写缓存"的耗时并覆盖主从同步延迟，而这两者在生产中很难精确评估，设短了第二刀落在脏值回填之前等于白删，设长了只是无谓拉长不一致窗口。第二，实现有代价：同步 sleep 会直接抬高写接口延迟、占满线程池，异步化又要引入延迟消息或调度池，复杂度并不低。第三，它只补竞态不补失败：第二次删除本身仍可能失败，还得叠加重试兜底。所以业界主流仍是"先更新数据库再删缓存"，延时双删只是"必须先删缓存"或读写分离主从延迟场景下的补丁。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

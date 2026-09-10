@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A51 · Agent Teams / Swarm 多 Agent 协同</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、从单 Agent 到多 Agent 的演进</a>
+<a href="#s2">二、Sub Agent — 自动拆分与汇总</a>
+<a href="#s3">三、Agent Teams — 共享任务清单的紧密协作</a>
+<a href="#s4">四、Kimi Agent Swarm — PARL 驱动的弹性并行</a>
+<a href="#s5">五、选型决策与生产实践</a>
+<a href="#s6">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>A51 · Agent Teams / Swarm 多 Agent 协同</h1>
+<p class="subtitle">单Agent局限 → Sub Agent → Agent Teams → 两大缺陷 → Kimi Agent Swarm 解决方案 → PARL 动态并行</p>
+
+
+<div class="intuition-box">
+<p>多 Agent 协同的全部矛盾可以浓缩成一句话：协作越紧密，Token 越爆炸。Agent Teams 选择了"全员共享上下文"的紧密协作，结果被 Token 成本反噬；Kimi 的 Agent Swarm 用"上下文物理隔离 + PARL 动态裂变"同时解决了省钱和弹性两个问题。</p>
+</div>
+
+<!-- ==================== 1. 演进路径 ==================== -->
+<div class="section">
+<h2 id="s1">一、从单 Agent 到多 Agent 的演进</h2>
+
+<p>2025 年，<span class="term">Agent</span>（智能体，能够自主规划、拆解任务并调用工具完成目标的 AI 系统）已成为 AI 的主流形态。但单体 Agent 有能力上限：一个复杂项目（调研、写作、配图、开发）塞给一个 Agent，上下文会越滚越长，注意力被稀释，错误率随之上升。出路和人类文明一样——<strong>分工协作</strong>。</p>
+
+<p>以 Claude Code 为代表的工具，走过了一条清晰的四阶段演进路径：</p>
+
+<table>
+<tr><th>阶段</th><th>模式</th><th>特点</th><th>局限</th></tr>
+<tr><td>① 单窗口</td><td>单 Agent 串行</td><td>一个窗口一个 Agent</td><td>上下文过长，只能串行</td></tr>
+<tr><td>② 多窗口</td><td>手动并行</td><td>自己开多个窗口并行</td><td>冲突需手动合并</td></tr>
+<tr><td>③ Sub Agent</td><td>主 Agent 控制子 Agent</td><td>自动拆分并行，自动汇总</td><td>子 Agent 之间不能直接交流</td></tr>
+<tr><td>④ Agent Teams</td><td>共享任务清单协作</td><td>子 Agent 可互相通信</td><td>Token 爆炸、缺乏弹性并行</td></tr>
+</table>
+
+<div class="arch-diagram">
+┌─ ① 单窗口 ────┐   ┌─ ② 多窗口 ────┐   ┌─ ③ Sub Agent ──┐   ┌─ ④ Agent Teams ──┐
+│ 1 个 Agent     │   │ 人工开 N 个窗口 │   │   主 Agent      │   │   主 Agent        │
+│ 串行执行       │ → │ 各自为战        │ → │    ├─ 子A ─┐    │ → │    ├─ 子A ⇄ 子B   │
+│ 上下文越来越长  │   │ 冲突手动合并    │   │    ├─ 子B ─┼→汇总│   │    ├─ 子B ⇄ 子C   │
+└───────────────┘   └───────────────┘   │    └─ 子C ─┘    │   │    └─ 共享任务清单  │
+                                         └─ 子Agent互不通信 ┘   └─ 上下文全员共享 ───┘
+                                                    ↓
+                                  ⑤ Agent Swarm：隔离 + 动态裂变（见第 4 节）
+</div>
+
+<div class="intuition-box">
+<p>这条演进史本质上是一部"上下文管理史"：从一个人硬扛全部上下文，到把上下文切碎分发给多人，再到思考"谁该看哪一段"。</p>
+</div>
+
+</div>
+
+<!-- ==================== 2. Sub Agent ==================== -->
+<div class="section">
+<h2 id="s2">二、Sub Agent — 自动拆分与汇总</h2>
+
+<p><span class="term">Sub Agent</span>（子智能体）是由主 Agent 在运行时派生出来、独立持有自己上下文、完成任务后把结果摘要交回的"分身"。主 Agent 负责拆任务和验收，子 Agent 负责执行，彼此之间像"发包方与外包方"的关系。</p>
+
+<p>相比人工开多窗口，Sub Agent 把两件最烦人的事自动化了：任务拆分不再靠人想，结果汇总不再靠人复制粘贴。更重要的是，每个子 Agent 的上下文是<strong>隔离</strong>的——它只看到自己那部分任务，不会被其他子任务的噪音干扰，主 Agent 也只接收压缩后的摘要，上下文长度始终可控。</p>
+
+<table>
+<tr><th>维度</th><th>手动多窗口</th><th>Sub Agent</th></tr>
+<tr><td>任务拆分</td><td>人工</td><td>主 Agent 自动</td></tr>
+<tr><td>结果汇总</td><td>人工复制粘贴</td><td>自动摘要回传</td></tr>
+<tr><td>上下文</td><td>各自独立</td><td>各自独立（物理隔离）</td></tr>
+<tr><td>子任务间通信</td><td>靠人传话</td><td>不支持</td></tr>
+</table>
+
+<div class="warn-box">
+Sub Agent 的"不能互相交流"是刻意的设计取舍：隔离换来了 Token 可控和注意力聚焦，代价是子任务之间无法实时协调。大多数"改动相互独立"的场景（比如分别修复三个互不依赖的模块）完全不需要通信，这个代价是划算的。
+</div>
+
+<div class="intuition-box">
+<p>Sub Agent 像外包团队：交代清楚需求、验收最终成果，过程互不打扰——这恰恰是它省钱又稳定的原因。</p>
+</div>
+
+</div>
+
+<!-- ==================== 3. Agent Teams ==================== -->
+<div class="section">
+<h2 id="s3">三、Agent Teams — 共享任务清单的紧密协作</h2>
+
+<p><span class="term">Agent Teams</span>（智能体团队）在 Sub Agent 的基础上补上了"通信"短板：所有成员共享一份<span class="term">共享任务清单</span>（全体可见、可认领、可更新的公共任务列表），子 Agent 之间还能直接互发消息。前后端需要联调、设计与开发需要反复对齐的场景，靠它才能转得动。</p>
+
+<div class="arch-diagram">
+            ┌───────────────┐
+            │   主 Agent     │
+            └───────┬───────┘
+                    ↓ 发布任务
+        ┌───────────────────────┐
+        │    共享任务清单         │  ← 所有成员可见、可申领
+        └───┬───────┬───────┬───┘
+            ↓       ↓       ↓
+         ┌────┐  ┌────┐  ┌────┐
+         │子A │⇄ │子B │⇄ │子C │     ⇄ = 互相通信
+         └────┘  └────┘  └────┘
+            └───────┴───────┘
+         共享上下文：每轮提示词 = 全员历史消息
+</div>
+
+<h3>3.1 缺陷一：Token 量爆炸</h3>
+
+<p>共享是把双刃剑。Sub Agent 方案里，子 Agent 干完活只把摘要（几百 Token）交回主 Agent；而 Agent Teams 让所有成员共享上下文，意味着<strong>每个 Agent 的每一轮提示词，都要带上所有 Agent 的全部历史消息</strong>。任务越往后，开销越夸张。</p>
+
+<table>
+<tr><th>轮次</th><th>Sub Agent（隔离）单次调用输入</th><th>Agent Teams（5 成员共享）单次调用输入</th></tr>
+<tr><td>第 1 轮</td><td>约 2,000 Token</td><td>约 10,000 Token（5 × 2,000）</td></tr>
+<tr><td>第 5 轮</td><td>约 2,000 Token</td><td>约 50,000 Token</td></tr>
+<tr><td>第 10 轮</td><td>约 2,000 Token</td><td>约 100,000 Token</td></tr>
+</table>
+
+<p>按每人每轮产出 2,000 Token 估算，5 个成员跑到第 10 轮，任何一次模型调用的输入都逼近 100,000 Token——不仅烧钱，还会逼近上下文窗口上限，触发截断。</p>
+
+<h3>3.2 缺陷二：缺乏弹性并行</h3>
+
+<p>Agent Teams 的成员在任务开始时按角色固定下来，之后无法根据工作量动态扩容。比如"生成 100 张配图"这种天然可并行的任务，仍然只能由 1 个图片 Agent 串行处理，不会临时裂变出 5 个分身一起干。成员编制是"开会时定的"，不是"按活儿摇的"。</p>
+
+<div class="intuition-box">
+<p>共享上下文就像把全员拉进同一个微信群：信息同步了，但每个人都要爬完所有楼，群越大越爬不动。</p>
+</div>
+
+</div>
+
+<!-- ==================== 4. Agent Swarm ==================== -->
+<div class="section">
+<h2 id="s4">四、Kimi Agent Swarm — PARL 驱动的弹性并行</h2>
+
+<p>国内 Kimi 推出的 <span class="term">Agent Swarm</span>（智能体集群，可随工作量动态创建和销毁大量子 Agent 的协同架构）方案，正面解决了 Agent Teams 的两个核心缺陷：上下文做物理隔离（Sub Agent 的增强版），并行能力靠 <span class="term">PARL</span>（Parallel Agent Reinforcement Learning，并行代理强化学习——在训练阶段就把"动态编排多个子 Agent"的能力练进模型）获得。</p>
+
+<div class="arch-diagram">
+Kimi K2.5 主 Agent（项目经理）
+        ↓ 把复杂任务拆成阶段性子任务
+┌───────┴───────────────────────────────────┐
+│ ① 收集事件 → 研究员 ×1（多轮搜索）          │
+│ ② 筛选事件 → 审核员 ×1（138 个淘汰到 100）  │
+│ ③ 生成图片 → 发现工作量大 → 现场裂变：      │
+│      ┌─ 图片Agent① ─┐                      │
+│      ├─ 图片Agent② ─┤   5 路并行            │
+│      └─ 图片Agent⑤ ─┘                      │
+│ ④ 审核风格 → 图片审核员 ×1                  │
+│ ⑤ UI 设计  → 设计师 ×1                      │
+│ ⑥ 开发网页 → 程序员 ×1                      │
+└───────────────────────────────────────────┘
+每个子 Agent 只带局部上下文，中间结果总结后返回主 Agent
+</div>
+
+<h3>4.1 实例："硅基文明简史"任务</h3>
+
+<table>
+<tr><th>阶段</th><th>Agent 角色</th><th>并行方式</th></tr>
+<tr><td>① 收集事件</td><td>研究员 Agent</td><td>单 Agent，多轮搜索</td></tr>
+<tr><td>② 筛选事件</td><td>审核员 Agent</td><td>单 Agent，淘汰 38 个留 100 个</td></tr>
+<tr><td>③ 生成图片</td><td>5 个图片生成 Agent</td><td><strong>动态裂变</strong>为 5 个并行</td></tr>
+<tr><td>④ 审核风格</td><td>图片审核员 Agent</td><td>单 Agent</td></tr>
+<tr><td>⑤ UI 设计</td><td>UI 设计师 Agent</td><td>单 Agent</td></tr>
+<tr><td>⑥ 开发网页</td><td>程序员 Agent</td><td>单 Agent</td></tr>
+</table>
+
+<h3>4.2 Agent Swarm vs Agent Teams 关键差异</h3>
+
+<table>
+<tr><th>维度</th><th>Agent Teams</th><th>Agent Swarm</th></tr>
+<tr><td>架构</td><td>共享上下文</td><td>上下文物理隔离（类 Sub Agent 增强版）</td></tr>
+<tr><td>Token 控制</td><td>每轮包含所有历史 → 爆炸</td><td>子 Agent 只含局部上下文 → 可控</td></tr>
+<tr><td>并行能力</td><td>固定成员，不能动态扩容</td><td>PARL 技术，根据工作量现场摇人</td></tr>
+<tr><td>容错性</td><td>一个出错可能影响全局</td><td>局部失败不影响全局，自动重试</td></tr>
+<tr><td>集成度</td><td>需自己配环境、装 Skill</td><td>自带虚拟机，开箱即用</td></tr>
+<tr><td>效率提升</td><td>有限</td><td>并行比串行提升 4 倍以上</td></tr>
+</table>
+
+<div class="highlight">
+<strong>案例 · "硅基文明简史"图文网页：</strong>
+背景：用户要求生成一份"硅基文明简史"——需要调研事件、筛选素材、生成 100 张配图、设计 UI 并开发成网页。
+问题：这类任务若交给单体 Agent 串行完成，上下文会滚到溢出，耗时以小时计，中途一旦出错就要从头再来。
+方案：Kimi K2.5 作为主 Agent 动态编排六个阶段，在图片生成阶段发现工作量大后自动裂变为 5 个并行 Agent，各子 Agent 只携带局部上下文。
+效果：并行阶段比串行提速 4 倍以上，138 个候选事件筛至 100 个，全程无需人工介入，局部返工不牵连其他阶段。
+</div>
+
+<div class="intuition-box">
+<p>PARL 的精髓在于"摇人"是练出来的本能：训练时就让模型学会根据工作量决定开几个分身，运行时才能像老练的项目经理一样现场调度。</p>
+</div>
+
+</div>
+
+<!-- ==================== 5. 选型与实践 ==================== -->
+<div class="section">
+<h2 id="s5">五、选型决策与生产实践</h2>
+
+<div class="arch-diagram">
+任务到手 → 子任务之间改动独立吗？
+   ├─ 是，且无需中途沟通 ──→ Sub Agent（隔离、省钱、稳定）
+   └─ 否，需要频繁互通 ──→ 成员数量固定吗？
+          ├─ 固定、规模小 ──→ Agent Teams（忍受 Token 成本）
+          └─ 随工作量波动 ──→ Agent Swarm（动态裂变）
+
+两条量化判据：
+  并行单元 > 10 个        → 必须弹性并行，固定编制扛不住
+  单轮上下文 > 50k Token  → 必须物理隔离，共享上下文会爆
+</div>
+
+<table>
+<tr><th>典型场景</th><th>推荐方案</th><th>关键理由</th></tr>
+<tr><td>多文件独立修 bug</td><td>Sub Agent</td><td>改动互不依赖，无需通信</td></tr>
+<tr><td>前后端联调一个功能</td><td>Agent Teams</td><td>需要实时互通接口细节</td></tr>
+<tr><td>100 张配图 / 百篇摘要</td><td>Agent Swarm</td><td>工作量触发动态裂变</td></tr>
+<tr><td>简单的单一任务</td><td>单 Agent</td><td>杀鸡不用牛刀</td></tr>
+</table>
+
+<div class="highlight">
+<strong>案例 · 60 篇商品文案的多 Agent 生成：</strong>
+背景：某内容团队用多 Agent 批量生成 60 篇商品文案，最初采用 Agent Teams 式的共享上下文方案，6 个成员（选题、写手、审校等）同群协作。
+问题：跑到第 8 轮，单次模型调用的输入逼近 96,000 Token（6 人 × 8 轮 × 约 2,000 Token），频繁触发截断导致风格漂移，返工率高达 30%，单篇成本约 ¥2.4。
+方案：切换为隔离式编排——每个写手 Agent 只携带自己的选题与风格指南，中间结果压缩成约 300 Token 的摘要回传主 Agent。
+效果：单次调用输入稳定在 6,000 Token 以内，返工率降到 5%，单篇成本降至 ¥0.4，总耗时缩短约 60%。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+  <li>改动独立的任务 → 用 Sub Agent</li>
+  <li>需要紧密协作 → 先评估 Agent Teams 的 Token 成本</li>
+  <li>大规模并行任务 → 用 Agent Swarm</li>
+  <li>关注容错性 → 选子 Agent 上下文隔离方案</li>
+  <li>普通用户 → 选开箱即用的方案</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+  <li>不要为简单任务使用多 Agent（杀鸡用牛刀）</li>
+  <li>不要忽视共享上下文的 Token 爆炸风险</li>
+  <li>不要在固定成员架构上跑大批量并行任务</li>
+  <li>不要忽略局部失败对全局的影响</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>选方案先问三个问题：子任务独不独立？并行规模大不大？Token 预算够不够？三个答案能把你直接送到正确的那一档。</p>
+</div>
+
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section">
+<h2 id="s6">Q&A</h2>
+
+<details>
+<summary>Agent Teams 和 Sub Agent 有什么区别？</summary>
+<div class="answer">Sub Agent 是主 Agent 控制多个子 Agent 独立并行执行的模式：子 Agent 之间不能直接交流，各自执行完后把结果摘要返回主 Agent，上下文长度始终可控。Agent Teams 在此基础上增加了两样东西——共享任务清单和子 Agent 间的互相通信，协作更紧密，适合需要实时对齐的场景。但紧密是有代价的：共享上下文意味着每个 Agent 每轮都要带上全员历史消息，Token 消耗随轮次线性膨胀。选择原则很简单：子任务间改动独立、耦合少就用 Sub Agent；必须频繁互通才用 Agent Teams，同时要盯住 Token 成本。</div>
+</details>
+
+<details>
+<summary>Agent Teams 的两大缺陷是什么？如何解决？</summary>
+<div class="answer">第一个缺陷是 Token 量爆炸：所有子 Agent 共享上下文，每轮提示词都包含全员历史消息，任务越往后开销越大，5 个成员跑 10 轮就能逼近 100,000 Token 的单次输入。第二个缺陷是缺乏弹性并行：成员在任务开始时按角色固定，无法根据工作量动态扩容，100 张图的任务仍由 1 个 Agent 串行处理。Kimi 的 Agent Swarm 针对性地解决了这两点：一是上下文物理隔离，子 Agent 只携带局部上下文，中间结果总结后才返回主 Agent；二是 PARL（并行代理强化学习）技术，让主 Agent 能在运行时根据工作量动态创建和销毁子 Agent，比如生成 100 张图时自动裂变为 5 个并行。</div>
+</details>
+
+<details>
+<summary>什么是 PARL？它在 Agent Swarm 中起什么作用？</summary>
+<div class="answer">PARL（Parallel Agent Reinforcement Learning，并行代理强化学习）是 Kimi K2.5 训练时引入的技术，目标是把"编排多个并行子 Agent"的能力直接练进模型。它让主 Agent 具备三种动态调度能力：根据任务复杂度决定需要多少个子 Agent；根据工作量现场裂变，比如生成 100 张图时自动创建 5 个并行 Agent；任务完成后动态回收资源。可以把 PARL 理解为给模型做了"项目经理特训"——不是运行时靠规则硬编码"开几个线程"，而是模型自己会看活儿摇人。官方实测中，这种动态并行比串行执行提速 4 倍以上。</div>
+</details>
+
+<details>
+<summary>多 Agent 协同中，子 Agent 上下文隔离为什么重要？</summary>
+<div class="answer">上下文隔离有三个核心价值。第一是 Token 可控：每个子 Agent 只加载自己负责的局部任务上下文，不被其他 Agent 的历史消息污染，消耗可以低一个数量级。第二是注意力聚焦：子 Agent 只看自己的子任务，无关信息不进上下文，幻觉和出错概率随之下降。第三是容错性：局部任务失败不会顺着共享上下文扩散到全局，子 Agent 可以内部重试，其他成员完全不受影响。对比 Agent Teams 的共享方案就能看出差距——共享模式下每轮输入随成员数和轮数相乘式膨胀，隔离模式则始终稳定在单任务规模。</div>
+</details>
+
+<details>
+<summary>从单体 Agent 到多 Agent 协同，架构演进的底层逻辑是什么？</summary>
+<div class="answer">这条演进路径几乎复刻了人类组织的协作史。单体智能是"一个人干所有事"，能力上限低；手动并行是"开多个窗口各干各的"，冲突要人工合并；Sub Agent 实现自动拆分与汇总，但子 Agent 之间不能交流；Agent Teams 加上共享任务清单和互相通信，协作紧密了，Token 却爆炸了；Agent Swarm 用上下文隔离加动态并行，重新找到平衡点。贯穿始终的核心矛盾只有一条：协作紧密度与 Token 成本的对立。每一代架构的本质，都是在"信息该共享到什么程度"这个问题上给出新的答案——Agent Swarm 的回答是"只共享结果摘要，不共享过程"。</div>
+</details>
+
+<details>
+<summary>什么时候根本不该用多 Agent？</summary>
+<div class="answer">多 Agent 不是越多越好，有三类情况应该坚决用单 Agent。第一，任务本身是线性的小任务，比如改一个函数、写一段摘要——引入多 Agent 只会徒增编排开销和通信成本，属于杀鸡用牛刀。第二，子任务之间高度耦合、无法清晰切分，强行拆分会导致子 Agent 之间需要反复同步，共享上下文的 Token 成本反而超过单 Agent 硬扛。第三，对延迟极其敏感的实时场景，多 Agent 的拆分、并行、汇总都需要额外的模型调用轮次。一个实用的判断标准：如果你无法用一句话说清"这个子任务独立完成、只交回什么结果"，那它就不适合被拆出去。</div>
+</details>
+
+<details>
+<summary>Agent Swarm 的"只共享结果摘要，不共享过程"具体怎么理解？</summary>
+<div class="answer">这是 Agent Swarm 对"信息该共享到什么程度"给出的核心答案。传统 Agent Teams 把每个成员每一轮的完整对话都塞进共享上下文，过程细节（中间推理、试错、工具原始返回）全员可见，Token 随成员数和轮数相乘式膨胀。Agent Swarm 反其道而行：子 Agent 在物理隔离的上下文里独立完成子任务，过程中产生的海量中间信息不外泄，只在任务收尾时把结论压缩成一段摘要回传主 Agent。主 Agent 拿到的是"做了什么、结果如何"，而不是"每一步怎么想的"。这样既保留了协同所需的信息对齐，又把通信成本从 O(成员数 × 轮数 × 过程长度) 压到 O(成员数 × 摘要长度)，是隔离与协作之间的工程平衡点。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1o3ADzZEmg" target="_blank">Agent Teams/Swarm 究竟是什么？7分钟看懂100个Agent团战的技术原理</a> · <span class="up-name">小白debug</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

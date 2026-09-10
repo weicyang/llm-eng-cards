@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G22 · 结构化 RAG 混合架构</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、结构化查询的三大痛点</a>
+<a href="#s2">二、双轨混合架构</a>
+<a href="#s3">三、Schema RAG 与 Few-shot 示例库</a>
+<a href="#s4">四、自纠错环与四重安全防线</a>
+<a href="#s5">五、实施边界与工程价值</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>G22 · 结构化 RAG 混合架构</h1>
+<p class="subtitle">双轨智能路由 / Schema RAG / Few-shot 示例库 / 自纠错环 / 四重安全防线</p>
+
+<div class="intuition-box">
+<p>企业数据问答的难点从来不是"让模型写出 SQL"，而是"让模型在几千张表、模糊的业务口径和不可控的执行风险中写出对的 SQL"——结构化 RAG 混合架构用路由、检索、纠错、安全四层工程化手段，把一件概率性的事变成可控的系统。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、结构化查询的三大痛点</h2>
+
+<p>企业里最有价值的数据几乎都躺在关系型数据库里：订单、支付、用户行为、库存。让业务人员用自然语言直接查询这些数据，是数据民主化的"最后一公里"。<span class="term">Text-to-SQL</span>（把自然语言问题翻译成可执行 SQL 的技术）看起来是天然答案——大模型写 SQL 的能力在演示中确实惊艳：四张干净的表、一句清晰的提问，一次生成就得到完美查询。</p>
+
+<p>但只要把它接进真实的企业数仓，演示就会当场失效。真实数仓有 400 张以上的表，一半列名是十年前 ETL 任务留下的缩写，<code>customer_id</code> 在三张表里是 VARCHAR、在另外两张表里是 INT，而"net_rev 是扣退货后的净收入、rev 是毛收入"这类领域知识只存在于几位资深分析师的脑子里。演示与生产之间的鸿沟，由三个具体痛点构成。</p>
+
+<h3>痛点一：上千张表难以记忆</h3>
+<p>学术基准里的数据库通常只有十几张表，而企业数仓动辄数百到数千张表、数千个列。没有任何提示词能装下完整 schema，就算装得下，海量无关表结构也会成为噪声，稀释模型注意力、推高 token 成本。更糟的是"表选错了"比"SQL 写错了"更致命——在错误的表上写出的 SQL 语法完美、执行成功，返回的数字却是错的。</p>
+
+<h3>痛点二：业务口径模糊</h3>
+<p>自然语言天生欠规范。"本季度活跃用户有多少"里的"活跃"是登录过、下过单还是打开过 App？"收入"在同一个仓库里可能有五种互相冲突的定义。"展示本月 top 客户"这一句话，根据"top"按收入、按单量还是按毛利排、"本月"是自然月还是滚动 30 天，至少对应五条不同的 SQL。同一个词在不同上下文映射到不同实体：产品分析场景的"用户"应指向用户表的 user_id，而收入场景的"用户"应指向订阅表的 customer_id——把任何一个词当全局同义词处理，都会让一半问题静默地答错。</p>
+
+<h3>痛点三：SQL 错误频发</h3>
+<p>错误分两类：语法错误会当场报错，容易被发现；而真正危险的是语义错误——查询执行成功、返回一个看起来合理的数字，但口径错了、join 扇出导致重复计数、聚合了不该聚合的空值。实测数据表明，<strong>95%~99% 的失败查询语法完全正确，问题出在逻辑上</strong>。连公开基准都无法幸免：对 BIRD 基准金标 SQL 的审计发现，其中一道题的金标查询因 join 笛卡尔积把答案放大了整整 8 倍。</p>
+
+<table>
+<tr><th>痛点</th><th>典型症状</th><th>根因</th><th>直接后果</th></tr>
+<tr><td>表结构复杂</td><td>查询命中废弃表、缩写列名无法对齐</td><td>schema 规模远超上下文与人类记忆</td><td>在错误对象上生成"正确"SQL</td></tr>
+<tr><td>业务口径模糊</td><td>"收入""活跃用户"每个部门定义不同</td><td>自然语言欠规范 + 口径知识未沉淀</td><td>数字看似合理，口径完全错误</td></tr>
+<tr><td>SQL 错误频发</td><td>执行成功但数字偏差数倍</td><td>语义错误不报错，缺乏验证环节</td><td>错误结论流入业务决策</td></tr>
+</table>
+
+<h3>基准分数为什么不能信</h3>
+<p>Text-to-SQL 领域最流行的基准 Spider 1.0 使用 200 个干净、命名规范的小型数据库，前沿模型在其上的<span class="term">执行准确率</span>（生成 SQL 的执行结果与金标 SQL 结果一致的比例）达到 85%~90%。但 BIRD 基准换用更大更脏的 schema 后，同一梯队模型跌到 52% 左右，而人类专家约 93%；到了模拟真实企业的 Spider 2.0（单库 1000+ 张表、命名晦涩、多源异构），标准方法直接跌到 0~6%，GPT-4o 的任务成功率也只有 10.1%。真实数仓（200+ 张表、口径未文档化）上的落地报告更一致：准确率在个位数到低两位数之间，大量企业项目长期卡在 40%~60% 无法上线。</p>
+
+<table>
+<tr><th>环境</th><th>典型准确率</th><th>与生产的差距来源</th></tr>
+<tr><td>Spider 1.0（200 个干净小 schema）</td><td>85%~90%</td><td>表少、命名规范、问题无歧义</td></tr>
+<tr><td>BIRD（95 个大库、33.4GB、含噪声）</td><td>约 52%（人类专家 93%）</td><td>出现口径缺失、命名不一致</td></tr>
+<tr><td>Spider 2.0（1000+ 表企业级 schema）</td><td>0~6%（GPT-4o 约 10.1%）</td><td>表选择本身就极难</td></tr>
+<tr><td>真实企业数仓落地</td><td>个位数 ~ 40%~60% 瓶颈</td><td>口径、权限、数据质量全部叠加</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例 · 某电商数据中台：</strong>数仓 247 张表，"收入"在财务、运营、投放三个部门有 5 套定义，3 个形似 <code>cust_id</code> 的列含义各不相同。供应商用标准 Text-to-SQL 方案试点：演示环境（4 张精选表）准确率 86%，接入真实数仓首周准确率仅 9%，其中七成错误是"执行成功但数字错误"。后续引入 Schema RAG + 业务术语表改造（见第三、四节），三个月后试点准确率回升到 61%，才达到可灰度开放的标准。这个 86% → 9% → 61% 的曲线，就是"纯 Text-to-SQL 不够、必须上工程架构"的最直接证据。
+</div>
+
+<div class="intuition-box">
+<p>86% 与 9% 之间隔着的不是模型能力，而是元数据与流程控制——模型是同一个，变量是你喂给它的上下文质量。</p>
+</div>
+
+<p>结论很明确：单次"问题 → SQL"的翻译存在结构性天花板，更好的模型也突破不了。出路是把问题拆开——先判断该走哪条数据通路，再用检索把正确的 schema 和示例喂给模型，生成后用执行结果反向纠错，全程套上安全约束。这正是双轨混合架构的由来。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、双轨混合架构</h2>
+
+<p>企业知识有两副面孔：一副是<span class="term">非结构化数据</span>（制度文档、产品手册、客服 FAQ），答案以文字段落形式存在某处，等待被检索出来；另一副是<span class="term">结构化数据</span>（数据库行），答案不存在于任何现成段落里，必须通过过滤、聚合、连接现场计算出来。"德国区上季度营收是多少"没有任何一段文字写着答案——它需要对几千行满足条件的订单求和。这两类问题需要完全不同的检索机制，硬塞进一条通路必然互相伤害。</p>
+
+<div class="intuition-box">
+<p>聚合没有最近邻：向量检索能找出"最像"的 k 行，但永远不会做 SUM、AVG、COUNT——数字是算出来的，不是检索出来的。</p>
+</div>
+
+<h3>为什么向量 RAG 答不了数字问题</h3>
+<table>
+<tr><th>需求</th><th>向量检索的表现</th><th>SQL 的表现</th></tr>
+<tr><td>聚合统计（总额/均值/计数）</td><td>无法计算，只能返回相似行</td><td>原生能力，精确</td></tr>
+<tr><td>精确过滤（金额 &gt; 500 且日期在某日之后）</td><td>按相似度排序，可能返回 480 的"近似"结果</td><td>WHERE 子句布尔精确</td></tr>
+<tr><td>跨表关联（会员中 90 天未下单者）</td><td>单行向量看不到外键关系</td><td>JOIN 专为此设计</td></tr>
+<tr><td>数据新鲜度</td><td>重新嵌入成本高、永远略滞后</td><td>查活表，读到的就是最新状态</td></tr>
+<tr><td>描述性/解释性问题（退货政策怎么说）</td><td>语义检索强项</td><td>无能为力</td></tr>
+</table>
+
+<h3>智能路由：先分诊，再处理</h3>
+<p><span class="term">双轨路由</span>指在流水线入口先做一次查询类型判别，再把问题分发到对应通路的路由机制。路由信号来自问题本身：出现"多少、总计、平均、排名、最新、哪个部门"等量化或时点信号词的，走结构化流；出现"为什么、流程、政策、怎么定义"等描述性信号词的，走向量流。工程上通常用一个小模型分类器或轻量 LLM 调用完成判别，成本远低于主生成环节。对于混合型问题（"上季度营收多少？下滑的原因可能是什么？"），两条通路并行执行，各自取回证据后在聚合层融合。</p>
+
+<div class="arch-diagram">
+                      用户自然语言问题
+                            │
+                            ▼
+              ┌──────────────────────────┐
+              │   智能路由（查询类型判别）   │
+              │  量化信号? 时点信号? 解释型? │
+              └───────┬──────────────┬───┘
+                      │              │
+        ┌─────────────┘              └──────────────┐
+        ▼ 非结构化流（政策/文档/口径解释）              ▼ 结构化流（指标/计数/最新状态）
+┌───────────────────┐                  ┌───────────────────────┐
+│ 向量库检索           │                  │ Schema RAG 检索 3-5 张表 │
+│ top-k 分块 + 重排序   │                  │ + Few-shot 示例匹配      │
+└─────────┬─────────┘                  └──────────┬────────────┘
+          │                                       ▼
+          │                          ┌───────────────────────┐
+          │                          │ LLM 生成 SQL             │
+          │                          └──────────┬────────────┘
+          │                                     ▼
+          │                          ┌───────────────────────┐
+          │                          │ 沙箱预执行 ──报错──┐      │
+          │                          └──────────┬────│──┘      │
+          │                                 成功 │    └─ 反馈重试(≤3次)
+          ▼                                     ▼
+   ┌────────────────────────────────────────────────┐
+   │        聚合层：数字结果 + 文本证据融合、口径标注        │
+   └───────────────────────┬────────────────────────┘
+                           ▼
+                 自然语言答案 + 数据来源引用
+</div>
+
+<h3>聚合输出：两条通路如何融合</h3>
+<p>聚合层不是简单拼接。它的职责有三：其一，把 SQL 返回的数字与文档检索到的背景材料组织成一段连贯回答，例如"营收 1.2 亿元，环比下降 12%；根据经营分析月报，下滑主要与华东渠道调整有关"；其二，标注口径与来源——数字来自哪条 SQL、引用段落来自哪份文档，让用户可核查；其三，处理冲突——当文档描述与数据库数字矛盾时，以结构化结果为准、文档仅作背景补充，并把冲突显式提示给用户，而不是静默选边。</p>
+
+<table>
+<tr><th>问题特征</th><th>路由去向</th><th>理由</th></tr>
+<tr><td>"上月华东区退货率"</td><td>结构化流</td><td>需要聚合计算 + 精确过滤</td></tr>
+<tr><td>"退货审批流程是怎样的"</td><td>非结构化流</td><td>答案在制度文档里</td></tr>
+<tr><td>"GMV 的口径是什么，本月多少"</td><td>双轨并行</td><td>口径解释走文档，数字走 SQL</td></tr>
+<tr><td>"订单号 20240517-8831 的状态"</td><td>结构化流</td><td>精确标识符查询，向量检索反而失效</td></tr>
+<tr><td>"为什么 Q2 客户流失变多"</td><td>非结构化流为主 + 数字佐证</td><td>归因分析依赖背景材料</td></tr>
+</table>
+
+<h3>路由失误的兜底</h3>
+<p>路由器不可能 100% 正确，设计上必须为误判留退路。其一，判别置信度低于阈值时默认走双轨并行，用计算冗余换答案完整性；其二，结构化流连续失败（如沙箱重试耗尽）时，降级返回向量检索到的口径说明，并明确告知用户"暂时无法给出精确数字"，而不是空手而归或返回一个不可信的估算；其三，把线上误判样本定期回流为路由分类器的训练数据，形成持续改进的闭环。路由准确率每提升一个百分点，省下的都是下游最昂贵的生成与纠错开销。</p>
+
+<div class="highlight">
+<strong>生产案例 · 某零售集团数据助手：</strong>双轨改造前，所有问题一律走向量检索，涉及数字的问题（占比约 44%）答案错误率高达 37%，最常见错误是把相似订单的明细当"总额"返回。上线规则 + 小模型两级路由后，路由判别准确率达到 96.5%，数字类问题错误率降至 4.2%；剩余错误几乎全部集中在多表 join 口径上，转入第三、四节的机制解决。
+</div>
+
+<div class="intuition-box">
+<p>路由的本质是承认"没有万能检索"：检索方式必须匹配数据的形状，文本用向量找，数字用 SQL 算。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、Schema RAG 与 Few-shot 示例库</h2>
+
+<p>结构化流的核心难题是：模型不认识你的数据库。它不知道 <code>t_ord_dtl_2</code> 是订单明细备份表还是主表，不知道"渠道"该关联 <code>dim_channel.name</code> 还是 JSON 字段。把整个 schema 塞进提示词既超出 token 预算又引入噪声，唯一的工程解法是检索——这就是 <span class="term">Schema RAG</span>：把表结构元数据向量化存储，查询时动态检索出最相关的少数表结构，只把这部分喂给生成模型。</p>
+
+<h3>Schema RAG 的构建与检索链路</h3>
+<p>离线侧依赖数据治理打底：把表名、列名、类型、主外键、注释整理成元数据文档，再叠加业务术语表（业务叫法与物理列名的映射）和已验证的参考 SQL。三类内容分别向量化入库，形成 schema 向量库。在线侧，每个用户问题被嵌入后做向量检索，经重排序取回 3-5 张最相关的表结构和 2-3 条相似的已验证示例，组装进提示词。检索 3-5 张是实践出来的平衡点：太少容易漏掉 join 路径上的中间表，太多则重新引入噪声和 token 成本——企业库动辄数百张表，而一个典型问题实际只涉及其中很小一部分。</p>
+
+<div class="arch-diagram">
+── 离线侧（数据治理驱动）───────────────────────────────────
+ 表结构元数据          业务术语表            已验证 SQL 示例
+ 表/列/类型/主外键      口径定义/业务别名       "问题 → SQL" 对
+      │                    │                    │
+      └────────── 向量化（Embedding）─────────────┘
+                          │
+                          ▼
+               ┌─────────────────────┐
+               │  Schema 向量库（三类索引）│
+               └─────────────────────┘
+
+── 在线侧（每次查询）─────────────────────────────────────
+ 用户问题 ──► 嵌入 ──► 向量检索 Top-K ──► 重排序过滤
+                                        │
+                        ┌───────────────┴───────────────┐
+                        ▼                               ▼
+                 3-5 张相关表结构                  2-3 条相似示例
+                        └───────────────┬───────────────┘
+                                        ▼
+                          提示词组装 → LLM 生成候选 SQL
+</div>
+
+<h3>Schema Linking：真正的准确率瓶颈</h3>
+<p><span class="term">Schema Linking</span>（模式链接）指把自然语言问题中的实体对齐到数据库里具体的表、列、连接键和过滤列的过程，它发生在 SQL 生成之前或之中，是 Text-to-SQL 公认的第一瓶颈——链接错了，模型会在错误的对象上写出流畅的 SQL：本该取 <code>fact_orders.net_revenue_usd</code>，却取了 <code>legacy_sales</code> 里的 revenue，语法完美、答案全错。它不是同义词匹配："上季度"可能要用财务日历表而不是普通日期列，"渠道"在不同指标下映射到完全不同的列。方法上经历了四代演进：</p>
+
+<table>
+<tr><th>方法</th><th>原理</th><th>代表性结果</th><th>局限</th></tr>
+<tr><td>字符串匹配</td><td>问题词与表列名精确/模糊匹配</td><td>早期基准可用</td><td>缩写、别名、派生指标全部失效</td></tr>
+<tr><td>向量检索</td><td>嵌入问题与列名取 top-k</td><td>通用基线</td><td>漏掉 join 中间表，语义近≠结构对</td></tr>
+<tr><td>双向检索</td><td>表→列与列→表两路检索取交集</td><td>BIRD 严格链接召回约 94%</td><td>6% 漏检在多表查询中≈整条 SQL 错误</td></tr>
+<tr><td>图路径搜索</td><td>外键图 + 最短路算法找 join 链</td><td>保证候选表连通、可 join</td><td>依赖外键声明完整性</td></tr>
+<tr><td>Agent 迭代探索</td><td>从小种子集出发按中间结果扩表</td><td>BIRD-Dev 严格召回约 97.4%</td><td>多轮调用，延迟与成本上升</td></tr>
+</table>
+
+<p>注意图路径搜索解决的独特问题：检索出的表必须能连成一条外键通路，否则模型只能做笛卡尔积——这几乎总是错的。语义检索告诉你哪些表"话题相关"，图搜索告诉你它们"怎么 join 才合法"，两者互补而非替代。消融实验还证明，没有任何检索时生成准确率趋近于 0，接入检索后执行准确率最高可到 79% 左右——Schema RAG 不是锦上添花，是系统成立的前提。</p>
+
+<h3>数据治理依赖：物理 schema 远远不够</h3>
+<p>Schema RAG 的上限由元数据质量决定。实践中必须补上三类治理资产：一是业务术语表，把"净收入（扣退货）"这类只存在于资深分析师头脑中的口径写进元数据；二是别名与废弃标注，标明哪些列是历史遗留、哪些表三年没有写入（死表看起来相关，join 上去只会返回空结果）；三是已验证参考 SQL。此外还要警惕数据体量层面的陷阱：基数异常（订单表 300 万个 customer_id、客户表只有 1.2 万）、哨兵值（用 -1 表示"未知"，会被模型当真数据聚合）、缺少时间分区过滤导致 5 亿行全表扫描超时——这些都应该编码进 schema 元数据，而不是指望模型每次重新发现。</p>
+
+<div class="intuition-box">
+<p>Schema RAG 的上限不取决于向量模型有多强，而取决于数据治理有多深：术语表每补一条口径，系统就多一分不答错的可能。</p>
+</div>
+
+<h3>Few-shot 示例库：已验证 SQL 的复用</h3>
+<p><span class="term">Few-shot 示例库</span>存储经过人工或执行验证的"问题 → SQL"对，查询时按语义相似度检索 2-3 条拼入提示词，让模型模仿已验证的口径与写法。它是提升准确率性价比最高的手段之一，但必须清醒：在复杂业务场景下，叠加了示例库的系统成功率仍常低于 70%。示例能教会模型"格式和惯例"，教不会它理解当前问题独有的口径变化。</p>
+
+<table>
+<tr><th>失败因素</th><th>表现</th><th>缓解手段</th></tr>
+<tr><td>口径漂移</td><td>示例用旧口径，业务定义已更新</td><td>示例库版本化管理 + 定期回测</td></tr>
+<tr><td>表面相似≠语义相同</td><td>检索到形似问题，但过滤条件不同</td><td>重排序时引入结构特征而非纯文本相似</td></tr>
+<tr><td>多表组合爆炸</td><td>三表以上 join 的问题难有现成示例</td><td>拆解子问题分别匹配示例</td></tr>
+<tr><td>示例污染</td><td>未验证示例混入库中教坏模型</td><td>入库必须通过执行 + 人工双校验</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例 · 某风控数据平台：</strong>库内 1200+ 张表，初期把全量 schema 摘要塞进长上下文模型，端到端执行准确率仅 34%，单次查询 token 成本约 0.9 元。改造为 Schema RAG（双向检索 + 外键图补全 join 链，稳定取回 3-5 张表）并沉淀 400 条已验证示例后，Top-5 表命中率从 58% 提升到 91%，端到端执行准确率提升到 67%，单次成本降到 0.2 元以下。剩下的三成错误中约八成是口径问题，全部回流业务术语表治理。
+</div>
+
+<div class="intuition-box">
+<p>Schema Linking 不是查字典，而是对数据库关系结构的推理——你找的不只是"相关的表"，而是"连得通的表"。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、自纠错环与四重安全防线</h2>
+
+<p>即便检索做到位，生成的 SQL 仍然会错。区别在于：语法类错误（列名拼错、方言不兼容、类型不匹配）会在执行时暴露，这部分完全可以用"执行—反馈—重试"的闭环自动修复。<span class="term">自纠错环</span>就是把数据库的报错信息回喂给模型、让其修正 SQL 并重新执行的循环机制，它是把"一次生成"变成"可收敛过程"的关键设计。</p>
+
+<h3>沙箱预执行：错误在见到用户之前被抓住</h3>
+<p><span class="term">沙箱预执行</span>指 SQL 先在隔离环境中试跑验证、通过后才允许触碰生产数据的机制。实现要点有四：其一，使用独立的只读账号连接只读副本，物理上杜绝写操作；其二，试跑时用 <code>EXPLAIN</code> 校验执行计划或注入 <code>LIMIT 1</code> 快速验证可执行性，避免为验证一条 SQL 付出全量扫描代价；其三，对报错信息做截断与清洗——数据库原始报错常常带多行堆栈，只取第一行关键信息回喂，防止模型被噪声带偏；其四，验证通过后仍走行数限制与超时管控在生产只读通道上正式执行。</p>
+
+<h3>错误反馈重试：为什么限 3 次</h3>
+<p>重试逻辑本身很直白：捕获执行异常，把"原始问题 + 失败 SQL + 清洗后的报错"一起交回模型，要求只输出修正后的 SQL。行业实践普遍把上限设为 2~3 次——第一次重试修复绝大多数可修复错误（列名、类型、方言），第二次以后收益急剧衰减，而且观察到模型会"发散"：越改越远离原意。因此重试提示词里必须反复锚定原始业务问题。</p>
+
+<pre><code>sql, retries = generate_sql(question, schema, examples), 0
+while retries &lt; 3:
+    try:
+        return sandbox_run(sql)              # 沙箱预执行
+    except DBError as e:
+        retries += 1
+        sql = fix_sql(question, sql, first_line(e))  # 报错截断回喂
+raise QueryFailed("3 次重试仍未通过，转人工处理")</code></pre>
+
+<div class="intuition-box">
+<p>自纠错环修的是"手误"，修不了"理解错误"——95%~99% 的执行失败语法完全正确，报错信息对逻辑错误几乎零指导，盲目重试只是烧 token。</p>
+</div>
+
+<p>这意味着纠错环的天花板取决于反馈的质量。朴素"报错回喂"的纠错失败率高达 70% 以上；而引入结构化错误分类（如按 9 大类 31 小类先诊断根因、再给修复计划、最后重写 SQL）的方案，可以把纠错成功率拉到 85% 以上，且重试从零开始不携带历史草稿，避免上下文漂移。另一个运维经验值：当某类查询的重试率持续高于 15% 时，问题不在重试机制，而在上游——该去补 schema 描述或加 few-shot 示例了，继续加重试次数是在为症状买单。</p>
+
+<div class="arch-diagram">
+  问题 + 3-5 张表 schema + few-shot 示例
+          │
+          ▼
+  ┌──────────────┐        ┌─────────────────┐
+  │  LLM 生成 SQL │───────►│  AST 解析安全检查  │
+  └──────────────┘        └────────┬────────┘
+          ▲                        │ 通过
+          │ 重新生成                  ▼
+          │ (≤3 次)          ┌─────────────────┐
+          │                 │    沙箱预执行      │
+          │                 │ 只读副本/隔离账号   │
+          │                 └────────┬────────┘
+          │                  ┌───────┴───────┐
+          │                  ▼               ▼
+          │               执行失败          执行成功
+          │                  │               │
+          │        报错截断 + 错误分类          │
+          └──────────────────┘               ▼
+                                   ┌─────────────────┐
+                                   │  生产只读正式执行   │
+                                   │ 行数限制 + 超时管控 │
+                                   └─────────────────┘
+</div>
+
+<h3>四重安全防线</h3>
+<p>让 LLM 生成的 SQL 接触生产数据库，安全不能依赖单点。四层防线各自拦截不同层面的威胁，任何一层被绕过都还有下一层兜底：</p>
+
+<table>
+<tr><th>防线</th><th>实现机制</th><th>拦截的威胁</th><th>典型参数</th></tr>
+<tr><td>① 只读权限</td><td>独立账号仅授 SELECT，连只读副本</td><td>一切写操作与 DDL</td><td>REVOKE INSERT/UPDATE/DELETE/DDL</td></tr>
+<tr><td>② AST 拦截</td><td><span class="term">AST 解析</span>（把 SQL 解析成语法树后逐节点审查）校验语句类型白名单</td><td>多语句、注释注入、危险函数、子查询写操作</td><td>仅放行单条 SELECT</td></tr>
+<tr><td>③ 行数限制</td><td>AST 改写强制注入 LIMIT；结果集超限截断</td><td>百万行结果撑爆上下文、大结果集拖垮传输</td><td>强制 LIMIT ≤ 50~1000 行</td></tr>
+<tr><td>④ 超时管控</td><td>会话级 statement_timeout + 慢查询主动 kill</td><td>全表扫描拖垮生产库、资源耗尽型攻击</td><td>5~10 秒硬超时</td></tr>
+</table>
+
+<p>一个常见误区是"只读账号就够了"。不够：只读权限挡不住 <code>SELECT * FROM 十亿行表</code> 这种把生产库 CPU 打满的查询（需要超时与行数限制兜底），挡不住把敏感列全量拖出喂给模型的合规风险（需要列级授权配合），也挡不住方言函数滥用。AST 层的价值在于"执行前"拒绝——正则过滤 <code>DROP</code> 字样这类做法可以被注释和编码轻松绕过，只有解析成语法树才能可靠地判定语句类型与结构。</p>
+
+<h3>AST 拦截的白名单实现</h3>
+<p>AST 层的核心思路是"白名单放行"而非"黑名单拦截"：解析失败、语句数不为 1、根节点不是 SELECT，一律拒绝。以 sqlglot 解析器为例，实现可以非常紧凑：</p>
+<pre><code>import sqlglot
+def ast_check(sql: str) -> bool:
+    stmts = sqlglot.parse(sql)
+    if len(stmts) != 1:            # 拒绝多语句
+        return False
+    root = stmts[0]
+    if root.key != "select":       # 只放行单条 SELECT
+        return False
+    return not any(root.find(t) for t in
+        (sqlglot.exp.Delete, sqlglot.exp.Drop, sqlglot.exp.Insert))</code></pre>
+<p>白名单思维的要点在于"解析不出来就拒绝"：黑名单永远在追赶新的绕过手法，而语法树的结构判定是封闭的、可穷举的，这正是一行正则与一次语法解析的本质差距。</p>
+
+<table>
+<tr><th>错误类型</th><th>占比特征</th><th>可见性</th><th>处理归属</th></tr>
+<tr><td>语法/方言错误</td><td>占执行失败的大头</td><td>当场报错，可自动修复</td><td>自纠错环（≤3 次）</td></tr>
+<tr><td>语义/口径错误</td><td>95%~99% 语法正确但逻辑错</td><td>执行成功、静默出错</td><td>Schema RAG + 术语表 + 人工抽检</td></tr>
+<tr><td>安全风险</td><td>低频高危</td><td>事前可判定</td><td>AST 拦截 + 只读账号</td></tr>
+<tr><td>性能风险</td><td>大表无过滤扫描</td><td>执行缓慢/超时</td><td>超时管控 + EXPLAIN 预检</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例 · 某物流企业数据问答：</strong>上线自纠错环前，SQL 首次执行通过率 62%，失败的查询直接以数据库原文报错抛给用户，周活跃使用率不足 8%。加入沙箱预执行 + 报错截断回喂（上限 3 次重试）后，最终执行通过率提升到 89%，其中第一次重试贡献了 21 个百分点的修复量，第三次重试仅贡献 1.5 个百分点——验证了"3 次"是收益拐点。随后引入 31 类错误分类引导纠错，语义类问题的纠错成功率从 28% 提升到 86%，用户周活跃率翻了三倍。
+</div>
+
+<div class="intuition-box">
+<p>安全防线的设计逻辑和机场安检一样：权限是门禁、AST 是 X 光机、行数限制是行李限重、超时是驱离机制——没人指望其中任何一道单独守住一切。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、实施边界与工程价值</h2>
+
+<p>这套架构能显著提升企业数据问答的可用性，但它不是"替代 BI"，而是有明确的适用半径。实施边界不是保守，而是由错误代价决定的：临时探索性查询错了，用户一笑而过；核心经营指标错了，就是决策事故。系统上线前必须把这条线画清楚。</p>
+
+<table>
+<tr><th>维度</th><th>适用（放开）</th><th>规避（收紧）</th></tr>
+<tr><td>查询类型</td><td>临时性简单查询、明细抽查、探索性分析</td><td>核心业务指标计算、财务级高精度口径</td></tr>
+<tr><td>复杂度</td><td>单表或 2-3 表常规 join</td><td>多层嵌套、跨库口径拼接的复杂逻辑</td></tr>
+<tr><td>使用方式</td><td>AI 查询作为初筛与灵感来源</td><td>未经人工校验直接进经营汇报</td></tr>
+<tr><td>替代关系</td><td>替代"提数工单"中 70% 的简单需求</td><td>替代已建模的 KPI 看板与预计算指标</td></tr>
+</table>
+
+<h3>AI 查询与预计算指标并存</h3>
+<p>2026 年行业共识是混合而非二选一：核心 KPI 走<span class="term">语义层</span>（预先定义指标、维度与口径，查询时确定性生成 SQL 的中间层）或<span class="term">预计算指标</span>（提前聚合好的物化结果），在其建模范围内准确率可接近 100%，且对未建模问题会明确回答"我不能回答"而不是瞎猜；长尾的临时性问题才交给 AI 查询通路。语义层的代价是每个新指标都要建模维护，问题变化快的团队会被建模积压拖死——所以让 AI 通路兜底长尾、让语义层守住核心，两者互补。复杂业务逻辑（分摊、递延、跨期调整）则无论哪条通路都应保留人工校验环节。</p>
+
+<h3>准确率提升与资源代价的权衡</h3>
+<p>完整混合架构的代价不小：路由、Schema 检索、生成、纠错重试、聚合，每个环节都是模型调用或基础设施开销。实测对比显示，相比"单次生成"的传统做法，完整架构可以把答案准确率提升约 90.2%，但资源消耗增加约 15 倍。资源主要花在三处：多轮 LLM 调用（路由 + 生成 + 纠错）、重试的重复计算、沙箱与只读副本的维护。因此要按问题价值分级投入：高频简单查询命中缓存或语义层直出（单次成本可低至几分钱量级），中价值问题走单轮生成，只有高价值复杂问题才启用完整纠错环。</p>
+
+<div class="highlight">
+<strong>生产案例 · 效果与成本实测对比：</strong>同一套企业数仓上的 A/B 实测：传统单次 Text-to-SQL（全量 schema + 一次生成）答案准确率 38%，单次查询成本约 0.06 元；完整混合架构（双轨路由 + Schema RAG + 3 次纠错 + 四重防线）准确率提升到 72.3%（相对提升约 90.2%），但单次平均成本升至约 0.9 元（约 15 倍），P95 延迟从 3 秒拉长到 17 秒。团队的最终策略：80% 的高频问题由语义层与缓存承接（成本趋近于零），AI 完整通路只服务长尾临时查询，整体月成本反而比全量直连模型低 40%。
+</div>
+
+<div class="intuition-box">
+<p>架构的价值公式：用 15 倍的计算换 90% 的准确率提升是否划算，取决于那个数字会被拿去做什么决策——所以先画边界，再谈优化。</p>
+</div>
+
+<h3>分阶段落地路径</h3>
+<p>这套架构不适合一步到位，可参考的推进节奏是：第一阶段只做双轨路由加只读账号与超时管控，让系统先做到"不闯祸"；第二阶段上线 Schema RAG 与示例库，把准确率从不可用拉到及格线；第三阶段补自纠错环与 AST 防线，开放给更大范围用户；最后把核心指标迁入语义层与预计算，形成稳态。每个阶段都应有独立可验证的指标——路由准确率、Top-K 表命中率、执行通过率、口径抽检合格率——避免"大爆炸式"上线后出了问题无从归因。</p>
+
+<div class="practice-grid">
+<div class="do">
+<p><strong>先把元数据治理做扎实</strong>：业务术语表、别名、废弃标注是 Schema RAG 的地基。</p>
+<p><strong>示例库只收已验证 SQL</strong>：执行通过 + 人工确认双校验后才入库。</p>
+<p><strong>给答案附口径和来源</strong>：展示 SQL、引用文档，让用户可核查。</p>
+<p><strong>监控重试率与漏检率</strong>：重试率 &gt;15% 回去补元数据，别加重试次数。</p>
+<p><strong>核心指标走语义层/预计算</strong>，AI 通路只兜长尾。</p>
+</div>
+<div class="dont">
+<p><strong>不要</strong>把全量 schema 塞进提示词：token 爆炸且噪声稀释注意力。</p>
+<p><strong>不要</strong>用正则过滤危险 SQL：注释与编码即可绕过，必须 AST 解析。</p>
+<p><strong>不要</strong>让重试超过 3 次：收益趋零且模型会越改越偏。</p>
+<p><strong>不要</strong>把执行成功当正确：语义错误不报错，需抽样人工核验。</p>
+<p><strong>不要</strong>让 AI 查询单独承担核心 KPI：错了就是决策事故。</p>
+</div>
+</div>
+
+<p>从工程视角总结，这套架构给出的最重要启示是：<strong>企业级数据问答拼的是流程控制，不是单一模型能力</strong>。路由决定走哪条通路，检索决定模型看到什么，纠错决定错误能否收敛，安全决定系统敢不敢上线——四个环节都是确定性的工程设计，模型只是其中一个可替换的零件。</p>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么不把整个数据库 schema 直接塞进长上下文模型？</summary>
+<div class="answer">三个原因。其一是成本与延迟：企业数仓数百上千张表，全量 schema 动辄几十万 token，每次查询都重复支付；其二是噪声：大量无关表会稀释模型注意力，实证表明接入检索只喂 3-5 张相关表后，执行准确率远高于全量塞入——模型在干净的小上下文里表现更好；其三是安全与治理：全量暴露 schema 等于把所有表结构（包括敏感表）无差别交给每个提问者。检索的本质是用一次廉价的向量搜索换掉每轮昂贵的全量上下文。</div>
+</details>
+
+<details>
+<summary>Schema Linking 是什么？为什么说它是 Text-to-SQL 的第一瓶颈？</summary>
+<div class="answer">Schema Linking 是把自然语言问题中的实体（"收入""上季度""华东区"）对齐到数据库里具体的表、列、连接键和过滤列的过程。它是第一瓶颈，因为链接错误会传导为整条 SQL 错误：模型会在错误的表上写出语法完美、执行成功的查询，返回一个看似合理的错误数字，且用户很难察觉。它不是同义词匹配——同一个词在不同业务上下文映射不同实体，"上季度"可能要关联财务日历表。实测中即使达到 94% 的严格链接召回率，剩余 6% 的漏检在多表查询中几乎必然导致 SQL 整体错误，所以链接质量的每一个百分点都直接换算成端到端准确率。</div>
+</details>
+
+<details>
+<summary>路由器如何判断一个问题该走 SQL 还是向量检索？</summary>
+<div class="answer">主要看问题中是否包含"需要现场计算"的信号：出现聚合词（多少、总计、平均、排名）、精确过滤（某个订单号、某日期之后）、时点状态（最新、当前）的走结构化流，因为这些需求向量检索原理上无法满足——聚合没有最近邻，相似度排序替代不了 WHERE 子句；出现解释性需求（为什么、流程、政策、怎么定义）的走向量流，因为答案以段落形式存在文档里。工程上通常用规则信号词 + 轻量分类模型两级判别，成本远低于主生成环节。混合型问题（既要数字又要解释）则双轨并行，在聚合层融合输出。</div>
+</details>
+
+<details>
+<summary>自纠错环为什么把重试上限设为 3 次？</summary>
+<div class="answer">因为重试收益曲线衰减极快。实测数据显示第一次重试能修复约两成的失败查询（列名拼错、类型不匹配、方言差异这类"手误"），第二次收益减半，第三次通常只贡献一两个百分点。与此同时重试有副作用：模型在多轮修改中会"发散"，逐渐偏离原始业务意图，越改越错。所以 3 次是收益与风险的交叉点，再多重试只是在为症状烧 token。更关键的是，如果某类查询的重试率持续超过 15%，说明问题在上游——应该去补 schema 描述或增加 few-shot 示例，而不是放大重试上限。</div>
+</details>
+
+<details>
+<summary>沙箱预执行与直接在生产库执行有什么区别？</summary>
+<div class="answer">沙箱预执行是在隔离环境（只读副本、独立只读账号）中先试跑 SQL，验证可执行性、拿到执行计划评估成本，通过后才允许正式执行；直接执行则是生成即上生产。沙箱的价值在于把三类风险挡在用户与生产库之前：语法与结构错误在预执行阶段就被捕获并回流纠错环，而不是抛给用户；危险或昂贵的执行计划（全表扫描、笛卡尔积）可以通过 EXPLAIN 提前发现并拒绝；隔离账号从物理上杜绝了写操作的可能。实现上试跑常用 EXPLAIN 或注入 LIMIT 1 的方式，避免为验证一条 SQL 付出全量扫描的代价。</div>
+</details>
+
+<details>
+<summary>四重安全防线里只读权限已经够保守了，为什么还需要另外三层？</summary>
+<div class="answer">因为只读权限只解决"不能写"，不解决"读也能造成破坏"。一条不带过滤条件的 <code>SELECT * FROM 十亿行大表</code> 完全合法且只读，但能把生产库 CPU 打满、拖垮所有业务查询——这需要超时管控（statement_timeout 硬切断）和行数限制（强制 LIMIT）来兜底。正则关键词过滤危险语句的做法可以被注释、大小写和编码轻松绕过，只有把 SQL 解析成 AST 语法树、逐节点校验语句类型，才能在执行前可靠拦截多语句、注释注入和危险函数。四层防线的关系是纵深防御：权限是底线，AST 是事前审查，行数与超时是资源闸门，各自拦截不同层面的威胁。</div>
+</details>
+
+<details>
+<summary>Few-shot 示例库已经存了验证过的 SQL，为什么复杂场景成功率还是不到 70%？</summary>
+<div class="answer">因为示例教会模型的是"格式与惯例"，而不是当前问题独有的业务口径。四类失败示例库无法覆盖：口径漂移——业务定义更新后旧示例反而教错；表面相似但语义不同——检索到的问题措辞相近，过滤条件却不一样；多表组合爆炸——三表以上 join 的问题几乎找不到现成示例；以及示例污染——未经验证的 SQL 混入库中。所以示例库的正确定位是"提升下限"的高效手段（让常见查询类型稳定命中），而口径正确性必须由 Schema RAG 携带的业务术语表和人工抽检来保证，两者是互补关系而不是替代关系。</div>
+</details>
+
+<details>
+<summary>Schema RAG 与企业已有的数据目录（Data Catalog）是什么关系？</summary>
+<div class="answer">两者是复用而非重建的关系。数据目录里已经沉淀的表描述、列注释、负责人、血缘关系，正是 Schema RAG 向量化元数据的原料，直接对接可以避免重复治理。但数据目录通常面向"人浏览"，字段粒度和更新频率未必满足"机器检索"：Schema RAG 还需要在其之上补充三类资产——面向语义检索的业务术语表与别名映射、面向 join 推理的主外键图、面向 few-shot 的已验证 SQL 库。实践上合理的做法是把 Schema RAG 作为数据目录的下游消费层：目录负责元数据的采集与维护，RAG 层负责面向查询的索引与检索，治理责任仍然留在数据团队。</div>
+</details>
+
+<details>
+<summary>为什么核心经营指标不建议交给 AI 查询通路，而要用预计算指标或语义层？</summary>
+<div class="answer">因为两类通路的错误代价完全不同。AI 查询是概率性的：即使执行准确率做到 70%+，仍意味着每十次有几次口径偏差，而语义错误不报错、难察觉——核心 KPI 一旦带着偏差进入经营会议，就是决策事故。语义层把指标、维度、口径预先建模，查询时确定性生成 SQL，在建模范围内准确率接近 100%，遇到未建模的问题会明确拒答而不是猜测；预计算指标更进一步，结果提前算好、完全可审计。合理分工是：核心 KPI 走语义层/预计算守住确定性，AI 通路兜底长尾临时查询，复杂口径保留人工校验——用确定性的系统承接高风险问题，用灵活的系统承接低风险问题。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

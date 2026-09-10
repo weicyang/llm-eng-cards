@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G16 · 万篇长文档 RAG 系统搭建 - AI Knowledge</title>
+<style>
+/* 项目标准 CSS */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.footer{text-align:center;padding:3rem 0 1rem;color:#484f58;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、万篇文档的工程化思维</a>
+<a href="#s2">二、数据清洗与 AI 精细归纳</a>
+<a href="#s3">三、智能切片与向量化</a>
+<a href="#s4">四、双架构存储与检索优化</a>
+<a href="#s5">五、量化评估与自动化运维</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>G16 · 万篇长文档 RAG 系统搭建</h1>
+<p class="subtitle">八步自动化流水线 / AI 聚类归纳 / 双架构混合存储 / Ragas 量化评估</p>
+
+<div class="intuition-box">
+<p>一万篇文档的 RAG 与十篇文档的 RAG，差别不在规模而在范式：前者不能靠"跑一遍看看效果"，必须构建一条标准化、可量化、可迭代的自动化流水线——数据质量有门槛、检索质量有数字、知识更新有闭环。</p>
+</div>
+
+<!-- ==================== Section 1 ==================== -->
+<div class="section" id="s1">
+<h2>一、万篇文档的工程化思维</h2>
+
+<p>先用一道算术题建立量级感：1 万篇长文档，平均每篇 40~50 页，合计约 50 万页原始内容；经过切片后通常产生 300 万~500 万个 <span class="term">chunk（文本块）</span>，即进入向量库的最小检索单元。在这个量级下，任何依赖人工检查、Notebook 手工执行的环节都会成为瓶颈，系统必须被设计成一条<span class="term">流水线（Pipeline）</span>——每个步骤有明确的输入输出契约、独立的质量门槛和可监控的运行指标，像工厂装配线一样可重复运转。</p>
+
+<p>工程上还要做一个关键切分：<strong>离线索引流水线</strong>与<strong>在线检索流水线</strong>分开部署、分开扩缩容。离线链路追求吞吐量（可以跑几十分钟甚至几小时），在线链路追求延迟（必须在数百毫秒内返回），两者的资源模型完全不同，混在一起会互相拖累。</p>
+
+<table>
+<tr><th>四可标准</th><th>含义</th><th>工程落地手段</th><th>缺失的后果</th></tr>
+<tr><td><strong>可拓展</strong></td><td>文档从 1 万涨到 10 万时架构不推倒</td><td>切片/向量化/写入各阶段独立并发，存储层水平扩展</td><td>每次扩量都要重构，成本指数上升</td></tr>
+<tr><td><strong>可溯源</strong></td><td>任何一个答案都能找回原始出处</td><td>chunk 绑定文档 ID、版本号、章节路径、页码</td><td>答案出错无法定位是数据问题还是模型问题</td></tr>
+<tr><td><strong>可量化</strong></td><td>检索与生成质量有数字而非感觉</td><td>Ragas 四指标 + 黄金评估集 + 回归测试</td><td>优化全凭直觉，改动无法验证是改进还是回退</td></tr>
+<tr><td><strong>可运维</strong></td><td>知识更新、故障恢复不依赖人肉</td><td>增量更新流水线 + 实时监控告警</td><td>知识库逐渐腐化，新旧版本内容混杂</td></tr>
+</table>
+
+<p>在这个思路下，整个系统可以展开为八步流水线：批量数据清洗 → AI 精细归纳 → 智能切片 → 高效向量化 → 双架构存储 → 检索优化 → 量化评估 → 自动化运维。前四步构成离线加工链路，后四步构成存储、服务与治理闭环：</p>
+
+<div class="arch-diagram">
+┌────────────────────────────── 八步流水线全景 ──────────────────────────────┐
+│                                                                            │
+│  离线加工链路（批量 / 增量，追求吞吐）                                      │
+│                                                                            │
+│  ①批量清洗        ②AI归纳         ③智能切片         ④向量化                │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐               │
+│  │PDF/Word/  │   │AI 摘要提炼 │   │标题/章节/ │   │多线程批量 │               │
+│  │扫描件 OCR │──▶│核心内容    │──▶│段落切割   │──▶│Embedding │               │
+│  │乱码/水印  │   │语义聚类   │   │重叠窗口   │   │元数据绑定 │               │
+│  │指纹去重   │   │归类收纳   │   │结构保留   │   │版本管理   │               │
+│  └──────────┘   └──────────┘   └──────────┘   └────┬─────┘               │
+│                                                     │                     │
+│  存储与服务闭环                                      ▼                     │
+│  ⑤双架构存储      ⑥检索优化        ⑦量化评估        ⑧自动化运维            │
+│  ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐               │
+│  │ES 关键词  │──▶│RRF 融合   │──▶│Ragas 四  │──▶│增量更新  │               │
+│  │向量库语义 │   │重排模型   │   │指标回归  │   │实时监控  │               │
+│  └──────────┘   └──────────┘   └──────────┘   └──────────┘               │
+│        ▲                                                    │             │
+│        └────────────── 增量批次回写索引 ◀───────────────────┘             │
+└────────────────────────────────────────────────────────────────────────────┘</div>
+
+<p>八步中每一步都对应一个独立的质量门槛：清洗不合格（乱码率超标）不进入归纳，归纳不合格（摘要与正文偏离）不进入切片，切片不合格（语义断裂）不进入向量化，评估不达标（召回率回退）不允许发布。这种"门禁式"设计让问题在最便宜的上游环节被拦截，而不是等用户在问答界面上发现错误答案。</p>
+
+<h3>并行流水线：让三个阶段重叠起来</h3>
+
+<p>万篇文档的首次灌库是最大的性能挑战。朴素做法是串行三阶段：先全部解析完，再全部向量化，最后全部写入——结果是昂贵的 GPU 在解析阶段空转，而解析器在向量化阶段闲置。生产级方案采用<strong>流式执行</strong>：解析、切片、向量化、写入四个阶段像管道一样重叠，第一批 chunk 还在解析时，前面解析完的 chunk 已经在生成向量，第一批向量已经在写库。</p>
+
+<div class="highlight">
+<p><strong>生产案例：</strong>某装备制造企业将 12,400 篇工艺文档（约 52 万页）灌入知识库，串行流水线全量处理需要 11.5 小时，期间 GPU 利用率仅 15%。改造为流式并行流水线后，同样的数据 92 分钟完成，GPU 利用率提升到 78%，单篇文档的平均处理成本下降约 87%。此后每周约 800 篇增量文档的更新批次，可以在 20 分钟窗口内完成。</p>
+</div>
+
+<div class="intuition-box">
+<p>判断一个 RAG 系统是否工程化，不看 Demo 的答案有多漂亮，而看它能否可重复地处理一万篇文档，并且每一步都有可测量的质量门槛。</p>
+</div>
+</div>
+
+<!-- ==================== Section 2 ==================== -->
+<div class="section" id="s2">
+<h2>二、数据清洗与 AI 精细归纳</h2>
+
+<p>企业文档库天然是异构的：PDF 有文本层 PDF 和扫描 PDF 两种，Word 里嵌着表格与修订痕迹，还有大量扫描件图片。清洗阶段的目标是把这堆异构数据还原成<strong>干净、结构化、去重</strong>的统一中间格式，供下游消费。</p>
+
+<h3>OCR 还原与噪声过滤</h3>
+
+<p>扫描件没有文本层，必须先经 <span class="term">OCR（光学字符识别）</span> + 版面分析还原文字与结构，再过滤三类噪声：乱码（异常 Unicode 占比超阈值的段落丢弃或人工复核）、水印与页眉页脚（跨页重复文本块）、文档尾部的广告页与法律声明——它们一旦切片入库，检索时会反复命中、挤占 Top-K 位置。水印/页眉页脚/乱码的完整检测规则与阈值设计见 <a href="../data/pdf_data_cleaning_rag.html">D06 · PDF 数据清洗（RAG 场景）</a>。</p>
+
+<h3>文本指纹去重：三层漏斗</h3>
+
+<p>万篇文档中重复内容的比例往往远超直觉——同一制度被多个部门转发存档、同一份报告换页眉重新提交、同一操作手册出了三个版本。<span class="term">文本指纹</span>技术把文本映射成紧凑的摘要标识，通过比对指纹发现重复。生产系统通常搭成三层漏斗，从便宜到昂贵依次执行：</p>
+
+<table>
+<tr><th>层级</th><th>算法</th><th>判定逻辑</th><th>能抓到什么</th><th>计算成本</th></tr>
+<tr><td>精确去重</td><td>SHA-256 内容哈希</td><td>规范化空白后哈希完全一致</td><td>字节级完全相同的副本</td><td>极低，O(n)</td></tr>
+<tr><td>近似去重</td><td><span class="term">MinHash</span> + LSH</td><td>估算 <span class="term">Jaccard 相似度</span>（两集合交集/并集），≥0.8 判重</td><td>换页眉、调格式、微调措辞的副本</td><td>中，近似线性</td></tr>
+<tr><td>语义去重</td><td>Embedding 余弦相似度</td><td>向量相似度 ≥0.92 判重，FAISS 近邻 + 并查集聚类</td><td>表述不同但含义相同的改写内容</td><td>高，需向量索引</td></tr>
+</table>
+
+<p>三个层级缺一不可：精确哈希抓不到改了一个标题的副本；<span class="term">MinHash</span> 是一种用固定长度签名近似 Jaccard 相似度的算法，配合 <span class="term">LSH（局部敏感哈希）</span>分桶把候选对从 O(n²) 压缩到近似线性，但它只比较词面重叠——"服务器返回 500 错误"和"遇到内部服务器错误"词面几乎无交集，MinHash 相似度接近 0，只有第三层语义去重能发现它们是同一件事。反过来也要注意规模边界：朴素的两两余弦比较在 10 万篇以上会吃掉几十 GB 内存，必须改用 ANN 近邻检索加并查集合并簇的方式。</p>
+
+<pre><code># 第一层：规范化 + SHA-256 精确指纹
+def fingerprint(text: str) -> str:
+    normalized = " ".join(text.strip().lower().split())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()</code></pre>
+
+<div class="arch-diagram">
+            三层去重漏斗（14,000 篇实测流量）
+
+   原始文档        14,000 篇
+      │
+      ▼  第一层 精确哈希
+   -6.2%  ──────▶  剔除字节级副本        剩 13,132
+      │
+      ▼  第二层 MinHash-LSH (Jaccard≥0.8)
+   -7.8%  ──────▶  剔除改版/换页眉副本    剩 12,108
+      │
+      ▼  第三层 语义向量 (cos≥0.92)
+   -4.1%  ──────▶  合并同义改写内容       剩 11,612
+      │
+      ▼
+   入库语料        11,612 篇（-18.1%）</div>
+
+<div class="highlight">
+<p><strong>生产案例：</strong>某金融机构对 14,000 篇合规文档执行三层去重：精确层剔除 6.2%（多为各部门重复转发），MinHash 层剔除 7.8%（版本迭代遗留），语义层合并 4.1%（同一规定的不同表述），合计缩减 18.1%。去重前检索 Top-5 经常返回同一份文件的三个副本，上下文精确率仅 0.61；去重后升至 0.74，同时向量化与存储成本同比例下降约六分之一。</p>
+</div>
+
+<h3>AI 精细归纳：摘要提炼与语义聚类</h3>
+
+<p>清洗后的文档还要经过一轮 AI 归纳，目的是把"文档"升级成"可治理的知识"。第一步是 <strong>AI 摘要</strong>：为每篇文档生成 200 字以内的核心摘要与章节标签，摘要本身也会参与检索——用户问题往往更接近"摘要式表达"而非原文细节，多一层摘要向量等于多一次召回机会。</p>
+
+<p>第二步是<span class="term">语义聚类</span>：把文档（或摘要）的向量做聚类（KMeans / HDBSCAN 均可），让同类型内容自动归类——所有"报销制度"归一簇、所有"设备巡检 SOP"归一簇。聚类带来三个直接收益：其一，检索时可用类别做过滤条件，把搜索空间从 300 万 chunk 缩小到某个类目内；其二，孤立的小簇会被暴露出来，提示内容缺失或归档错误；其三，模糊内容（跨类别的边缘文档）可以被合并收纳到最近的大簇，或标记人工复核，而不是散落在库里成为噪声。</p>
+
+<div class="intuition-box">
+<p>清洗与去重是减法运算：删掉 18% 的垃圾，等于让后续每一次检索的精确率免费上涨一截，这比调任何检索参数都划算。</p>
+</div>
+</div>
+
+<!-- ==================== Section 3 ==================== -->
+<div class="section" id="s3">
+<h2>三、智能切片与向量化</h2>
+
+<p>切片是流水线中对最终效果影响最大的环节：切得太小，完整规则被拦腰斩断；切得太大，多主题稀释向量表达。本流水线采用结构感知切分（先按标题/章节层级切块、块内按段落递归细分），相邻 chunk 保留 10%~15% 重叠窗口对冲边界风险，并叠加父子块（子块约 250 token 精确检索、父块约 1500 token 回传给 LLM）。四种切分策略的完整对比、重叠率实验数据与父子块机制详解见 <a href="chunking_semantic_solutions.html">G08 · RAG 文档切割技术方案</a>，此处只聚焦万篇规模的工程要点。</p>
+
+<div class="highlight">
+<p><strong>生产案例：</strong>某制药企业为工厂工程师构建制造助手，知识库含 15,000+ 页 FDA 法规与 5,000+ 份标准操作规程（SOP）。早期用朴素切分，提问"化合物 X 在二期包装阶段的储存温度上限与 QA 签核步骤"时，"储存要求"表格被从"二期包装"标题下切开，模型拿到没有上下文的表格后编造了温度值、漏掉了签核步骤——在制药行业这属于合规事故。改用结构感知切分 + 父子块（子块 250 token 检索、父块 1500 token 回传）后，表格与其章节标题被永久绑定，该类问题回答准确率恢复到可上线水平。</p>
+</div>
+
+<h3>多线程批量向量化与模型锁定</h3>
+
+<p>向量化阶段面对的是数百万 chunk，单线程逐条调用完全不可行。生产做法是<strong>多线程批量请求</strong>：以 32~128 条为一个 batch 并发调用 Embedding 服务，配合限流与失败重试，把 GPU/推理服务的吞吐吃满。两个容易踩的坑：一是索引与查询必须使用同一个 Embedding 模型，混用模型会让向量空间错位，检索结果随机劣化；二是<span class="term">模型锁定</span>问题——索引里每个向量都由特定模型产出，一旦更换模型，全部存量向量必须重算，因此模型版本必须显式记录在元数据里，换模型要当作一次重大迁移来排期。</p>
+
+<h3>元数据绑定：chunk 的身份证</h3>
+
+<table>
+<tr><th>元数据</th><th>作用</th><th>检索与运维价值</th></tr>
+<tr><td>文档版本</td><td>版本控制</td><td>增量更新时按版本删除旧 chunk，避免新旧内容并存</td></tr>
+<tr><td>章节标签</td><td>内容定位</td><td>支持按类目/章节过滤，答案可引用出处路径</td></tr>
+<tr><td>核心摘要</td><td>快速检索</td><td>摘要向量提供第二条召回通道，贴近用户问法</td></tr>
+<tr><td>来源 / 页码 / 内容哈希</td><td>溯源与幂等</td><td>答案引用可回跳原文；哈希用于增量变更检测</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每个 chunk 绑定版本、章节、来源、内容哈希</li>
+<li>Embedding 模型版本显式入库，换模型走迁移流程</li>
+<li>切分策略与重叠参数的选型直接复用 <a href="chunking_semantic_solutions.html">G08</a> 的结论</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>索引与查询使用不同的 Embedding 模型</li>
+<li>换模型只对新文档生效，不重算存量向量</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>切片不是把文本切碎，而是重新定义"检索粒度"与"上下文完整性"的平衡点——每个 chunk 都应该是一个离开原文也能被独立理解的知识单元。</p>
+</div>
+</div>
+
+<!-- ==================== Section 4 ==================== -->
+<div class="section" id="s4">
+<h2>四、双架构存储与检索优化</h2>
+
+<p>存储层采用<strong>双架构</strong>：<span class="term">ES（Elasticsearch）</span>负责关键词文本的精确匹配，<span class="term">向量库</span>负责语义向量的近义召回。这不是冗余设计，而是因为两类查询在真实流量中同时大量存在，任何单一通道都会系统性漏检。</p>
+
+<table>
+<tr><th>维度</th><th>ES 关键词通道（BM25）</th><th>向量库语义通道</th></tr>
+<tr><td>匹配原理</td><td>词频/逆文档频率的词面匹配</td><td>Embedding 余弦相似度的语义匹配</td></tr>
+<tr><td>擅长</td><td>错误码、产品编号、型号、罕见术语、精确短语</td><td>同义改写、口语化提问、跨语言、长问题</td></tr>
+<tr><td>短板</td><td>意义盲：同义词不匹配、改写即失效</td><td>对精确标识符笨拙，域外语料表现退化</td></tr>
+<tr><td>典型查询</td><td>"HTTP 429 retry-after"、"SKU-44819"</td><td>"怎么在不影响业务的情况下轮换密钥"</td></tr>
+<tr><td>依赖条件</td><td>无需模型，冷启动即可用</td><td>依赖与语料领域匹配的 Embedding 模型</td></tr>
+</table>
+
+<p>单一通道的失败模式都很典型：纯向量检索遇到 <code>ERR_CONN_RST</code> 这类错误码，会返回一堆语义相邻但从未包含该 token 的文档；纯 BM25 遇到"便宜的机票"与"低价航班"这种零词面重叠的同义表达则完全失手。研究侧的证据同样明确：BEIR 基准显示，在一个领域训练的稠密检索器零样本迁移到另一个领域时，经常整体跑不过 BM25——保留一条不依赖任何模型训练分布的关键词通道，是对 Embedding 域偏移的结构性对冲。</p>
+
+<h3>RRF 融合：为什么用排名而不用分数</h3>
+
+<p>两条通道各自返回一个候选列表后，需要融合成一个排序。直觉做法是加权求和，但这里有个致命问题：<strong>两边分数量纲完全不同</strong>——BM25 是无界的正数（取决于词频统计），余弦相似度被限制在 [-1, 1]。直接相加时 BM25 的分数天然碾压向量分数，任何权重调整都在和量纲搏斗。</p>
+
+<p><span class="term">RRF（Reciprocal Rank Fusion，倒数排名融合）</span>的解法是干脆放弃分数、只用排名：每个文档的最终得分等于它在各通道排名的倒数之和。这样无论各通道分数如何分布，融合结果都稳定可比，且几乎不需要调参（排名常数 k 取 60 是 Elasticsearch 的生产默认值）。融合的同时天然完成去重——同一 chunk 被两个通道同时召回时，其排名贡献会叠加，反而获得更高位次。</p>
+
+<div class="formula">RRF_score(d) = Σ 1 / (k + rank_i(d))  ，k = 60，rank 为文档在第 i 条通道中的排名</div>
+
+<table>
+<tr><th>融合方式</th><th>对分数的要求</th><th>调参成本</th><th>稳定性</th><th>适用</th></tr>
+<tr><td>归一化加权求和</td><td>需 min-max 归一到同一量纲</td><td>高：权重需按语料反复调</td><td>结果集大小变化时分数漂移</td><td>分数已良好校准的场景</td></tr>
+<tr><td>RRF 排名融合</td><td>不需要，只看排名</td><td>极低：k=60 即可</td><td>对结果集大小稳健</td><td>生产默认选择</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>基准数据：</strong>在 WANDS 电商相关性基准上，BM25 单通道 NDCG 为 0.6983，纯向量 KNN 为 0.6953——两者统计上难分高下；而调优后的混合检索达到 0.7497，相对任一单通道提升约 7.4%。多份独立基准的结论一致：RRF 混合排序在标准评测上通常比单通道高出 8%~15%（NDCG@10），混合的价值不在锦上添花，而在补上单通道各自的结构盲区。</p>
+</div>
+
+<h3>双架构检索全链路</h3>
+
+<div class="arch-diagram">
+                        用户问题
+                           │
+              ┌────────────┴────────────┐
+              ▼                         ▼
+      ┌────────────────┐        ┌────────────────┐
+      │  ES 关键词通道   │        │  向量库语义通道   │
+      │  BM25 精确匹配   │        │  Embedding ANN  │
+      │  错误码/编号/型号 │        │  同义改写/意图   │
+      └───────┬────────┘        └───────┬────────┘
+              │ Top-50 排名列表           │ Top-50 排名列表
+              └────────────┬────────────┘
+                           ▼
+                ┌─────────────────────┐
+                │  RRF 排名融合 (k=60)  │
+                │  分数=Σ1/(k+rank)     │
+                │  同 chunk 命中自动去重 │
+                └──────────┬──────────┘
+                           ▼  Top-100 候选
+                ┌─────────────────────┐
+                │  交叉编码器重排        │
+                │  query+chunk 逐对打分 │
+                └──────────┬──────────┘
+                           ▼  Top-5
+                      上下文组装 → LLM 生成答案</div>
+
+<h3>重排模型：把精度增益锁进 Top-5</h3>
+
+<p>RRF 之后的 Top-100 候选交给<span class="term">重排模型（Reranker）</span>做第二轮精筛。与双塔 Embedding 的"各自编码再算相似度"不同，交叉编码器把 query 和 chunk 拼在一起联合编码，能捕捉词级交互，相关性判断精度显著更高——代价是慢，只能用于少量候选。典型预算是：一级检索拉回 50~100 条，重排后只留 Top-5 进入 LLM 上下文。重排对最终答案质量的影响往往超过前面所有检索调参，因为 LLM 真正看到的只有这最后几条。</p>
+
+<table>
+<tr><th>一级召回量</th><th>重排延迟量级</th><th>精度收益</th><th>适用权衡</th></tr>
+<tr><td>Top-20</td><td>~10ms 级</td><td>有限，易漏召回</td><td>极低延迟场景</td></tr>
+<tr><td>Top-50</td><td>~25ms 级</td><td>收益/成本均衡</td><td>多数生产系统默认</td></tr>
+<tr><td>Top-100</td><td>~50ms 级</td><td>边际收益递减</td><td>高召回要求、可容忍延迟</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>关键词通道保证"漏不掉"，语义通道保证"看得懂"，RRF 用排名缝合两个不可比的世界，重排模型把最后的精度锁进 LLM 真正看到的五条上下文里。</p>
+</div>
+</div>
+
+<!-- ==================== Section 5 ==================== -->
+<div class="section" id="s5">
+<h2>五、量化评估与自动化运维</h2>
+
+<p>流水线跑通只是起点，系统会持续面对三类变化：文档在更新、用户问法在漂移、模型与参数在调整。没有量化评估，任何一次变更都无法回答"是变好了还是变坏了"。RAG 的失败又天然分成两种独立模式——<strong>检索错了</strong>（没拿到对的 chunk）和<strong>生成错了</strong>（拿到对的 chunk 却胡说），单一的端到端得分会把两者混在一起，无法指导修复。这正是 <span class="term">Ragas</span> 框架的设计出发点：用四个 0~1 的指标把责任拆开。</p>
+
+<h3>Ragas 四指标：各管一段责任</h3>
+
+<table>
+<tr><th>指标</th><th>衡量什么</th><th>计算方式</th><th>需要标准答案</th><th>生产参考线</th></tr>
+<tr><td><span class="term">忠实度 Faithfulness</span></td><td>答案是否只说了上下文里有的话（防幻觉）</td><td>LLM 把答案拆成原子论断，被上下文支持的论断数 / 总论断数</td><td>否</td><td>&gt;0.85，高风险领域 &gt;0.95</td></tr>
+<tr><td>答案相关性 Answer Relevancy</td><td>答案是否真正回答了问题</td><td>由答案反推若干合成问题，与原问题算语义相似度均值</td><td>否</td><td>&gt;0.80</td></tr>
+<tr><td><span class="term">上下文精确率 Context Precision</span></td><td>检索回来的 chunk 有多少是有用的（按排名加权）</td><td>逐条判断检索 chunk 与问题的相关性，有用的排得越前分越高</td><td>是</td><td>&gt;0.75</td></tr>
+<tr><td><span class="term">上下文召回率 Context Recall</span></td><td>回答所需的信息有多少被检索覆盖到了</td><td>标准答案拆成论断，能被检索上下文支持的论断数 / 总论断数</td><td>是（唯一强依赖）</td><td>&gt;0.80</td></tr>
+</table>
+
+<p>四个指标最有价值的用法不是看单个分数，而是看<strong>组合模式</strong>——它直接指向该修流水线的哪一段：</p>
+
+<table>
+<tr><th>低分信号</th><th>瓶颈定位</th><th>修复方向</th></tr>
+<tr><td>上下文召回率低</td><td>检索漏了关键内容</td><td>调整 chunk 大小与结构、增大 top-k、引入混合检索、优化查询改写</td></tr>
+<tr><td>上下文精确率低</td><td>检索噪声多、好内容被淹没</td><td>加 Reranker、提高相似度阈值、去重降噪</td></tr>
+<tr><td>忠实度低（召回率却高）</td><td>生成环节无视上下文编造</td><td>收紧提示词（仅依据引用内容作答）、降低温度、换指令遵循更强的模型</td></tr>
+<tr><td>答案相关性低</td><td>答非所问或含糊其辞</td><td>聚焦问题的提示词约束、裁剪无关上下文</td></tr>
+</table>
+
+<p>评估需要一个<span class="term">黄金评估集</span>：由人工标注的（问题、标准答案、期望来源 chunk）三元组。最小可行规模约 30 条，覆盖高频问法与边界情形，并且必须包含至少 5 条"知识库里没有答案"的负样本——系统对这类问题的正确行为是承认不知道，而不是编造。评估集要纳入版本管理，每次流水线变更触发回归评估，分数低于门槛则阻断发布。</p>
+
+<div class="highlight">
+<p><strong>生产案例：</strong>某企业客服知识库（约 12,000 篇文档）上线初期 Ragas 评估显示：上下文召回率 0.62、上下文精确率 0.58、忠实度 0.79。八周迭代路径：第一步把固定切分换成结构感知切分并开启 ES+向量混合检索，召回率升至 0.81；第二步加入 Top-50 重排，精确率升至 0.76；第三步在提示词中强制"仅依据引用内容作答并标注来源"，忠实度升至 0.93。最终人工抽检错误率从 9.4% 降至 2.1%，四个指标各自指向的修复动作与上表完全吻合。</p>
+</div>
+
+<h3>增量更新闭环：让知识库活着</h3>
+
+<p>万篇文档的知识库每天都在变化，全量重建一次要几十分钟到几小时，不可能为几篇新文档触发。<span class="term">增量更新</span>流水线的核心是用内容指纹做变更检测：每个文档的内容哈希与索引中已存版本比对，只对变化部分执行"重切片 → 重向量化 → 双写"，并按版本号删除旧 chunk，保证同一文档的旧内容不会与新内容并存于检索结果中。</p>
+
+<div class="arch-diagram">
+┌──────────────┐     ┌────────────────────┐     ┌──────────────────┐
+│ 新增 / 变更文档 │────▶│ ①指纹比对            │────▶│ ②只处理变更文档      │
+│ 文件系统事件 /  │     │ SHA-256 内容哈希     │     │ 重切片 + 重向量化     │
+│ CDC 变更流     │     │ vs 索引已有版本       │     │ （未变文档零开销）     │
+└──────────────┘     └────────────────────┘     └────────┬─────────┘
+                                                          ▼
+┌──────────────┐     ┌────────────────────┐     ┌──────────────────┐
+│ 发布 / 回滚    │◀────│ ④Ragas 回归抽样      │◀────│ ③ES + 向量库双写    │
+│ 低于阈值阻断    │     │ 四指标对比上一版本     │     │ 按版本号删除旧 chunk │
+└──────────────┘     └────────────────────┘     └──────────────────┘
+        │
+        └──────────────▶ 指标与日志进入实时监控大盘</div>
+
+<h3>实时监控：运维侧的五个仪表盘指标</h3>
+
+<table>
+<tr><th>监控项</th><th>含义</th><th>告警信号示例</th></tr>
+<tr><td>索引新鲜度</td><td>源文档变更到可检索的延迟（T+1 / 小时级 / 近实时）</td><td>增量批次积压超过阈值</td></tr>
+<tr><td>检索命中率</td><td>查询能召回高于相似度阈值 chunk 的比例</td><td>命中率骤降提示语料漂移或索引异常</td></tr>
+<tr><td>P95 检索延迟</td><td>双通道召回 + 融合 + 重排的端到端耗时</td><td>超过延迟预算（如 500ms）</td></tr>
+<tr><td>Ragas 抽样分</td><td>对线上流量抽样跑四指标</td><td>忠实度跌破 0.85 触发人工复核</td></tr>
+<tr><td>服务稳定性</td><td>Embedding/重排/LLM 各依赖的错误率与限流</td><td>任一依赖错误率超 1% 降级兜底</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>黄金评估集纳入版本管理，变更即回归</li>
+<li>增量更新后跑 Ragas 抽样，低于门槛阻断发布</li>
+<li>chunk 元数据带版本号，删旧立新原子化</li>
+<li>负样本（库里没答案的问题）常备于评估集</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>只看 Demo 效果就上线，没有回归基线</li>
+<li>用生成答案的同一个模型做评估裁判</li>
+<li>每次小改动都全量重建索引</li>
+<li>新旧版本 chunk 并存且无版本标记</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>没有量化就没有迭代——Ragas 的四个数字把"感觉效果变差了"拆解成检索与生成两段可定位、可修复的责任，这正是万篇级系统能持续演进的前提。</p>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>一万篇文档的规模下，为什么选择 ES + 向量库双架构，而不是只用一个支持向量的数据库？</summary>
+<div class="answer">因为两类失败模式必须同时防住：纯向量检索在错误码、产品编号、型号这类精确标识符查询上会系统性漏检，纯关键词检索在同义改写与口语化提问上完全失效。真实业务流量中两类查询都大量存在，基准测试也显示 BM25 与纯向量 KNN 互有胜负、难分高下，而混合检索能比任一单通道提升约 7%~15% 的 NDCG。此外 ES 的关键词通道不依赖任何 Embedding 模型，是对向量模型域偏移的结构性兜底，其成熟的过滤、权限与运维生态也是纯向量库短期难以替代的。</div>
+</details>
+
+<details>
+<summary>RRF 融合为什么用排名倒数而不是直接把两路分数加权求和？</summary>
+<div class="answer">根本原因是两路分数的量纲不可比：BM25 分数是无界正数且分布随语料变化，余弦相似度被限制在 [-1, 1]，直接加权时数值范围大的一方天然主导结果，权重怎么调都是在和量纲搏斗。RRF 只使用每个文档在各通道中的排名位置，计算 1/(k+rank) 的累加和（k 常取 60），完全绕开了分数归一化问题，对不同结果集大小也稳健。它还几乎免调参，k=60 作为生产默认值在大量场景下直接可用，且同一文档被双通道同时召回时贡献叠加，兼带完成了跨通道去重。</div>
+</details>
+
+<details>
+<summary>chunk 大小应该怎么定？为什么不能一刀切 500 token？</summary>
+<div class="answer">chunk 大小是检索精度与上下文完整性之间的权衡：太小会让完整规则被拦腰切断，命中了也答不全；太大会让多个主题混在一个向量里，表达被稀释、召回精度下降。一刀切按字数硬切还会破坏结构——表格被切开、问题与答案分离、代码断在函数中间。生产上更稳的做法是结构感知切分：以标题章节为边界、段落为单位递归细分到目标区间，并保留 10%~15% 的重叠对冲边界风险；再配合父子块策略，用约 250 token 的小块做检索、约 1500 token 的大块回传给 LLM，同时拿到精度与上下文。</div>
+</details>
+
+<details>
+<summary>重排模型是不是必需项？它增加的延迟值得吗？</summary>
+<div class="answer">对万篇级语料基本是必需项。一级混合检索负责"广召回"，但 RRF 输出的 Top-100 里仍混有不少主题相邻却无用的 chunk，直接塞进 LLM 会稀释上下文、推高幻觉风险。交叉编码器把 query 与 chunk 联合编码做逐对打分，相关性判断精度显著高于双塔向量，能把真正有用的内容锁进最终 Top-5。延迟代价可控：重排 50 条候选通常在几十毫秒级，相对 LLM 生成动辄数秒的耗时占比很小。实践中重排对最终答案质量的提升，常常超过前面所有检索参数的调优收益。</div>
+</details>
+
+<details>
+<summary>Ragas 分数低的时候，应该先看哪个指标来定位问题？</summary>
+<div class="answer">先看指标组合而不是单个分数。上下文召回率低说明检索漏了关键内容，去查 chunk 切分策略、top-k 大小、是否需要混合检索与查询改写；上下文精确率低说明检索噪声多，优先加重排、提高相似度阈值、做去重降噪；忠实度低但召回率高是最危险的组合——信息明明在上下文里，模型却编造了额外内容，这是生成问题，应收紧提示词强制仅依据引用内容作答、降低温度或换指令遵循更强的模型；答案相关性低则多为答非所问，需要聚焦问题的提示词约束并裁剪无关上下文。四个指标各管一段责任，组合起来就是诊断地图。</div>
+</details>
+
+<details>
+<summary>增量更新如何避免新旧内容混杂？为什么换 Embedding 模型要全量重建？</summary>
+<div class="answer">增量更新靠内容指纹做变更检测：每个文档计算 SHA-256 内容哈希并与索引中已存版本比对，只对变化文档重新切片、向量化，写入时按元数据中的版本号删除该文档的旧 chunk，保证同文档的新旧内容不会并存于检索结果。而 Embedding 模型一旦更换，索引里所有存量向量都出自旧模型的向量空间，与新模型产出的查询向量不在同一空间，余弦相似度失去意义，检索结果会随机劣化——因此不存在"只给新文档用新模型"的选项，必须全量重算向量，这也是为什么模型版本要显式记录在元数据中并当作重大迁移来管理。</div>
+</details>
+
+<details>
+<summary>语义去重的相似度阈值会不会误删"相似但不同"的内容？怎么控制风险？</summary>
+<div class="answer">会有这个风险，所以阈值不能拍脑袋定，且要配合流程控制。实践中阈值常落在 0.90~0.95 区间：过低会把同一主题下的不同规定误合并，过高则漏掉改写副本。控制手段有四条：其一，阈值用标注对校准——人工抽取一批"应合并/不应合并"的样本对，选择使误删率可接受的切点；其二，去重优先作用于文档级而非 chunk 级，文档是身份的原子单位，chunk 级去重更容易误伤；其三，被判重的内容不物理删除而是移入隔离区，保留可回溯窗口；其四，去重后跑一次 Ragas 回归，召回率若下降说明误删了有用内容，需要回调阈值。</div>
+</details>
+
+</div>
+
+<div class="footer">
+<p>G16 · 万篇长文档 RAG 系统搭建 | AI Knowledge Base</p>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

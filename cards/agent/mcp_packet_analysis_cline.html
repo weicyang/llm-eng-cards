@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A24 · MCP 抓包分析：Cline 与模型的交互协议</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、抓包思路：把 API 流量引到本地代理</a>
+<a href="#s2">二、代理服务器实现：流式透传是关键</a>
+<a href="#s3">三、Cline 系统提示词解剖</a>
+<a href="#s4">四、工具调用标签与 ReAct 循环</a>
+<a href="#s5">五、SSE 流式返回：为什么 Cline 能"边想边说"</a>
+<a href="#s6">六、XML vs Function Calling：Host↔模型的两种方言</a>
+<a href="#s7">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>A24 · MCP 抓包分析：Cline 与模型的交互协议</h1>
+<p class="subtitle">本地代理抓包 → Cline XML 协议解析 → ReAct 模式 → SSE 流式返回 → XML vs JSON 对比</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>Cline 和模型之间没有任何魔法——把 API 地址指到本地代理，你就能看到这个"AI 程序员"的完整内心戏：一大段 XML 系统提示词、一圈 Thought→Action→Observation 循环、以及逐 token 涌回的 SSE 流。</p>
+</div>
+
+<!-- ========== 1. 抓包思路 ========== -->
+<div class="section">
+<h2 id="s1">一、抓包思路：把 API 流量引到本地代理</h2>
+
+<p>MCP 规定了 Host↔Server 这一段，但 Host↔模型 这一段是协议空白区——想知道 Cline 到底对模型说了什么，最直接的办法是把流量截下来看。Cline 支持 <span class="term">OpenAI Compatible</span> 提供商选项，即任何兼容 OpenAI Chat Completions 接口格式（POST /chat/completions）的服务端点都能被当作模型 API，于是只要把 API 地址指向本地代理服务器，通信就全量落入日志。</p>
+
+<div class="arch-diagram">
+原流程:    Cline ────────────────────────────────► OpenRouter API
+
+抓包后:    Cline ──► 本地代理 (FastAPI, 127.0.0.1:8000) ──► OpenRouter API
+                        │
+                        ▼  请求体 / 响应体全量落盘
+                     LLM.log
+</div>
+
+<table>
+<tr><th>抓包方案</th><th>改动成本</th><th>能看到什么</th><th>门槛</th></tr>
+<tr><td>改 Base URL + 本地代理</td><td>只改 Cline 一个配置项</td><td>完整请求体与响应体</td><td>会写 FastAPI 即可</td></tr>
+<tr><td>mitmproxy HTTPS 中间人</td><td>安装根证书、配置系统代理</td><td>任意 HTTPS 流量</td><td>证书配置繁琐</td></tr>
+<tr><td>读源码 + 断点调试</td><td>克隆 Cline 仓库</td><td>代码级细节</td><td>TypeScript 阅读成本</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>抓 LLM 的包比抓传统 HTTP 简单——客户端本来就支持自定义 API 地址，一个代理服务器就能全量记录，不需要碰任何证书。</p>
+</div>
+
+<p>抓包的价值不止于好奇：系统提示词是 Agent 行为的总开关，看懂它的结构，才能解释 Cline 为什么有时"突然变笨"——模型的一切行为边界，都写在那段抓得到的 XML 里。</p>
+
+</div>
+
+<!-- ========== 2. 代理服务器实现 ========== -->
+<div class="section">
+<h2 id="s2">二、代理服务器实现：流式透传是关键</h2>
+
+<p>代理服务器的逻辑只有三步：记录请求、转发给真实 API、记录响应并原样返回。唯一的难点是模型 API 普遍使用流式返回，代理必须以 <span class="term">SSE</span>（Server-Sent Events，服务器向客户端单向推送的流式传输技术）原样透传，一旦在中间缓冲，Cline 那端就会表现为"卡死"。</p>
+
+<pre><code>@app.post("/chat/completions")
+async def proxy(request: Request):
+    body = await request.json()
+    app_log(f"REQUEST: {json.dumps(body, ensure_ascii=False)}")
+    async with httpx.AsyncClient(timeout=300) as client:
+        async with client.stream("POST", REAL_URL, json=body) as resp:
+            chunks = [c async for c in resp.aiter_bytes()]
+    app_log(f"RESPONSE: {b''.join(chunks)[:4000]}")
+    return Response(content=b"".join(chunks),
+                    media_type="text/event-stream")</code></pre>
+
+<table>
+<tr><th>实现要点</th><th>做法</th><th>不这样做的后果</th></tr>
+<tr><td>流式透传</td><td>media_type 设为 text/event-stream</td><td>Cline 无法实时渲染，体验崩坏</td></tr>
+<tr><td>长超时</td><td>httpx timeout 放到 300 秒</td><td>长任务生成到一半被代理掐断</td></tr>
+<tr><td>日志截断</td><td>响应只记录前 4KB</td><td>大文件写入场景日志爆炸</td></tr>
+<tr><td>全异步</td><td>FastAPI + httpx.AsyncClient</td><td>并发请求互相阻塞</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例：</strong>用这套代理调试时，发现 Cline 频繁"思考中卡死"。日志显示某中转商的 SSE 流在约 25 秒后静默中断，且没有发送 [DONE] 结束标记，Cline 只能一直等待。给代理加上空闲超时检测并更换线路后，卡死从每天 5~6 次降为 0，平均首 token 延迟从 3.2 秒降到 0.9 秒——没有日志，这类问题只能归玄学。
+</div>
+
+<div class="intuition-box">
+<p>代理的核心职责只有两个：原样转发、偷偷记录。一旦缓冲了 SSE 流，Cline 那边就会"卡死"。</p>
+</div>
+
+</div>
+
+<!-- ========== 3. 系统提示词解剖 ========== -->
+<div class="section">
+<h2 id="s3">三、Cline 系统提示词解剖</h2>
+
+<p>抓到的第一条 REQUEST 里，system 消息是一段结构清晰的 <span class="term">System Prompt</span>——对话开始时注入的角色与规则设定，决定模型的身份、可用工具和行为规范。Cline 用 XML 标签把它组织成若干功能块。</p>
+
+<table>
+<tr><th>XML 标签</th><th>内容</th><th>作用</th></tr>
+<tr><td><code>&lt;role&gt;</code></td><td>定义 Cline 的角色（全能软件工程师）</td><td>设定行为基调</td></tr>
+<tr><td><code>&lt;custom_instructions&gt;</code></td><td>用户在设置中填写的自定义指令</td><td>注入个性化约束</td></tr>
+<tr><td><code>&lt;mcp_servers&gt;</code></td><td>可用 MCP Server 列表及其工具</td><td>告诉模型有哪些外部能力</td></tr>
+<tr><td><code>&lt;tool_instructions&gt;</code></td><td>各内置工具的使用说明</td><td>规定每个工具的用法</td></tr>
+<tr><td><code>&lt;rule&gt;</code></td><td>交互规则（如每次只输出一个工具调用）</td><td>约束输出格式</td></tr>
+</table>
+
+<div class="arch-diagram">
+┌──────────────── Cline System Prompt ────────────────┐
+│ &lt;role&gt; 你是一名全能软件工程师… &lt;/role&gt;              │
+│ &lt;custom_instructions&gt; 用户自定义规则 &lt;/…&gt;           │
+│ &lt;mcp_servers&gt; weather: get_forecast… &lt;/…&gt;           │
+│ &lt;tool_instructions&gt; 每个工具的用法 &lt;/…&gt;             │
+│ &lt;rule&gt; 每次只输出一个工具调用 &lt;/…&gt;                  │
+└────────────────────────┬────────────────────────────┘
+                         ▼
+        ┌──── ReAct 循环（每轮一次 API 调用）────┐
+        │  Thought: 模型推理下一步该做什么        │
+        │     ↓                                   │
+        │  Action: 输出 &lt;execute_command&gt; 等标签  │
+        │     ↓                                   │
+        │  Observation: Cline 执行并回传结果      │
+        │     ↓ （任务未完成则回到 Thought）      │
+        └─────────────────────────────────────────┘
+</div>
+
+<p>注意 <code>&lt;mcp_servers&gt;</code> 段：MCP 协议在 tools/list 拿到的工具信息，被 Cline 翻译成 XML 塞进系统提示词——MCP 管"Server 怎么上报工具"，Cline 管"工具怎么讲给模型听"，两段协议在这里完成交接。</p>
+
+<div class="intuition-box">
+<p>系统提示词就是 Cline 的"员工手册"：模型扮演什么角色、有哪些工具、什么不能做，全部写在这几千 token 的 XML 里。</p>
+</div>
+
+</div>
+
+<!-- ========== 4. 工具调用标签与 ReAct ========== -->
+<div class="section">
+<h2 id="s4">四、工具调用标签与 ReAct 循环</h2>
+
+<p>模型想动手时，会在回复文本中输出约定的 XML 标签来请求调用工具。Cline 解析标签、执行操作，再以 <span class="term">tool_result</span> 标签把执行结果包装成模型能理解的观察反馈，追加进下一轮对话。</p>
+
+<table>
+<tr><th>标签</th><th>作用</th><th>示例</th></tr>
+<tr><td><code>&lt;execute_command&gt;</code></td><td>执行终端命令</td><td><code>&lt;command&gt;ls -la&lt;/command&gt;</code></td></tr>
+<tr><td><code>&lt;read_file&gt;</code></td><td>读取文件</td><td><code>&lt;path&gt;app.py&lt;/path&gt;</code></td></tr>
+<tr><td><code>&lt;write_to_file&gt;</code></td><td>写入文件</td><td><code>&lt;path&gt;…&lt;/path&gt;&lt;content&gt;…&lt;/content&gt;</code></td></tr>
+<tr><td><code>&lt;use_mcp_tool&gt;</code></td><td>调用 MCP 工具</td><td><code>&lt;server_name&gt;weather&lt;/server_name&gt;</code></td></tr>
+<tr><td><code>&lt;ask_followup_question&gt;</code></td><td>向用户提问</td><td><code>&lt;question&gt;…&lt;/question&gt;</code></td></tr>
+<tr><td><code>&lt;attempt_completion&gt;</code></td><td>宣告任务完成</td><td><code>&lt;result&gt;…&lt;/result&gt;</code></td></tr>
+</table>
+
+<p>这套一来一回正是 <span class="term">ReAct</span> 模式——Reasoning 与 Acting 的结合：模型先推理（Thought），再输出工具调用标签请求行动（Action），Cline 执行后把观察结果（Observation）喂回模型，循环往复直到输出最终答案。</p>
+
+<div class="highlight">
+<strong>生产案例：</strong>小参数模型跑 Cline 时频繁中途报"XML 解析失败"。抓包发现典型错误是未闭合的 &lt;write_to_file&gt; 标签、或把参数写到了标签外面，解析失败率约 8%。换用 XML 格式训练更充分的模型，并在 custom_instructions 中强调标签必须闭合后，失败率降到 0.4%，单个任务的平均对话轮次也从 9.3 轮降到 6.1 轮——格式遵循能力直接决定了 Agent 的可用性。
+</div>
+
+<div class="note-box">
+Cline 选择 XML 而非 Function Calling 有现实考量：XML 可以表达任意嵌套结构、人类可读、且不依赖 API 端对 tool_calls 字段的支持——任何能补全文本的模型都能被接入。
+</div>
+
+<div class="intuition-box">
+<p>Cline 不是一次性把活干完，而是"想一步、做一步、看一步"——ReAct 循环让模型在真实反馈中持续纠偏，而不是一路幻觉到底。</p>
+</div>
+
+</div>
+
+<!-- ========== 5. SSE 流式返回 ========== -->
+<div class="section">
+<h2 id="s5">五、SSE 流式返回：为什么 Cline 能"边想边说"</h2>
+
+<p>模型的响应不是一次性返回的完整 JSON，而是一串 SSE 事件：每个 <code>data:</code> 行携带一小段增量内容（delta），直到 <code>data: [DONE]</code> 标记结束。</p>
+
+<pre><code>data: {"choices":[{"delta":{"content":"&lt;execute"}}]}
+
+data: {"choices":[{"delta":{"content":"_command&gt;"}}]}
+
+data: [DONE]</code></pre>
+
+<table>
+<tr><th>返回类型</th><th>特点</th><th>适用场景</th></tr>
+<tr><td>普通返回</td><td>等全部生成完再一次性返回</td><td>短文本、后台批处理</td></tr>
+<tr><td>流式返回（SSE）</td><td>逐段推送增量内容</td><td>长文本生成、Agent 实时交互</td></tr>
+</table>
+
+<p>流式返回对 Cline 的意义不止"看着爽"：①用户体验——实时展示模型输出，无需长时间等待；②进度感知——用户能看到模型正在生成什么；③及时中断——模型方向跑偏时可以提前停止，省下后续 token；④提前执行——XML 标签一旦在流中闭合，Cline 就能立刻执行命令，不必等整段回复生成完毕。</p>
+
+<div class="intuition-box">
+<p>SSE 把"等 30 秒看全文"变成"每秒看一段"——对用户是体验，对 Cline 是能力：工具标签一流出来就能提前执行。</p>
+</div>
+
+</div>
+
+<!-- ========== 6. XML vs Function Calling ========== -->
+<div class="section">
+<h2 id="s6">六、XML vs Function Calling：Host↔模型的两种方言</h2>
+
+<p>同样是"让模型调用天气工具"，Cline 和 Cherry Studio 抓出来的报文长得完全不同——前者是文本里的 XML 标签，后者是结构化的 <span class="term">tool_calls</span> 字段，即模型 API 返回中承载工具选择结果的标准结构。</p>
+
+<table>
+<tr><th>维度</th><th>Cline（XML）</th><th>Cherry Studio（Function Calling）</th></tr>
+<tr><td>格式</td><td>XML 标签</td><td>JSON 结构</td></tr>
+<tr><td>工具调用</td><td>模型在文本中输出 XML 标签</td><td>模型在 tool_calls 字段输出 JSON</td></tr>
+<tr><td>结果返回</td><td>&lt;tool_result&gt; 标签</td><td>role: "tool" 消息</td></tr>
+<tr><td>协议标准化</td><td>Cline 自定义</td><td>OpenAI 标准协议</td></tr>
+<tr><td>灵活性</td><td>高（可自定义任意标签）</td><td>中（遵循固定 schema）</td></tr>
+<tr><td>通用性</td><td>低（依赖模型理解 XML 的能力）</td><td>高（大部分模型 API 原生支持）</td></tr>
+</table>
+
+<div class="arch-diagram">
+同一个任务："调用 weather 的 get_forecast 工具"
+
+┌─────────── Cline（XML 路线）───────────┐   ┌──────── Cherry Studio（FC 路线）────────┐
+│ assistant 文本:                        │   │ assistant.tool_calls:                   │
+│ &lt;use_mcp_tool&gt;                         │   │ [{"function": {                         │
+│   &lt;server_name&gt;weather&lt;/server_name&gt;   │   │    "name": "get_forecast",              │
+│   &lt;arguments&gt;{"lat":40}&lt;/arguments&gt;    │   │    "arguments": "{\"lat\":40}" }}]      │
+│ &lt;/use_mcp_tool&gt;                        │   │                                         │
+│ 结果回传: &lt;tool_result&gt; 标签           │   │ 结果回传: {"role":"tool"} 消息          │
+└────────────────────────────────────────┘   └─────────────────────────────────────────┘
+                  ↓                                        ↓
+        都交给 Host 解析执行 ──► 到了 Host↔MCP Server 这一段，协议完全相同
+</div>
+
+<div class="note-box">
+两种方式本质相同：都是让模型输出工具调用请求，Host 执行后返回结果，区别仅在传输格式。MCP 协议不规定这一环节的具体实现——这也解释了为什么同一个 MCP Server 既能被 Cline 用、也能被 Cherry Studio 用。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>调试 Agent 行为时，先抓包看系统提示词和实际报文</li>
+<li>代理服务器用异步 + 流式透传，超时放到分钟级</li>
+<li>给格式遵循能力弱的模型补充明确的 XML 规则约束</li>
+<li>关注 [DONE] 与异常中断，区分"模型慢"和"链路断"</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要以为换个 Host 对模型表现没有影响——提示词天差地别</li>
+<li>不要在代理里缓冲完整响应再转发，SSE 会被"憋死"</li>
+<li>不要忽视标签闭合问题，它是小模型跑 Agent 的头号杀手</li>
+<li>不要把 Host↔模型 的格式当成 MCP 协议的一部分</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>XML 和 Function Calling 是同一件事的两种方言：模型"说"出想调的工具，Host 负责"做"。MCP 站在更下游，根本不管这段对话用什么语言。</p>
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s7">Q&A</h2>
+
+<details>
+<summary>Cline 是如何与模型交互的？使用了什么协议格式？</summary>
+<div class="answer">Cline 使用自定义的 XML 格式与模型交互。系统提示词中用 XML 标签定义角色（role）、MCP 工具列表（mcp_servers）、工具使用说明（tool_instructions）和交互规则（rule）。模型通过在回复文本中输出 XML 标签来请求调用工具（如 execute_command、read_file、use_mcp_tool），Cline 解析标签后执行对应操作，再以 tool_result 标签将结果返回给模型。整个过程是典型的 ReAct 循环，且通常配合 SSE 流式返回实时展示。</div>
+</details>
+
+<details>
+<summary>Cline 的交互模式体现了什么 Agent 设计模式？</summary>
+<div class="answer">体现了 ReAct（Reasoning and Acting）模式：①Thought——模型根据当前上下文推理下一步；②Action——模型输出工具调用标签请求执行操作；③Observation——Cline 执行工具后以 tool_result 回传结果；④循环——模型根据观察继续思考，决定下一步行动或输出最终答案。Cline 的系统提示词天然构建了这个循环，使模型能够持续与真实环境交互、根据反馈纠偏，直到任务完成。这比一次性生成完整计划更抗幻觉。</div>
+</details>
+
+<details>
+<summary>如何通过抓包分析 MCP Host 与模型的交互？</summary>
+<div class="answer">方法是搭建本地代理服务器（如 FastAPI 实现），利用 Cline 的 OpenAI Compatible 选项把 API 地址指向本地代理。代理做三件事：①接收 Cline 的请求并记录到日志；②转发给真实模型 API；③记录模型返回并透传回 Cline。关键点是必须支持 SSE 流式透传（text/event-stream），因为模型普遍使用流式传输，缓冲会导致 Cline 卡死。通过日志可以看到完整的系统提示词结构、工具调用格式和结果返回方式。</div>
+</details>
+
+<details>
+<summary>SSE 流式返回是什么？为什么 Cline 需要它？</summary>
+<div class="answer">SSE（Server-Sent Events）是服务器向客户端单向推送实时数据的技术。在模型 API 中，流式返回把生成内容拆成多个小片段逐步发送，每个 data: 行携带一段增量内容，以 data: [DONE] 标记结束。Cline 需要它有四个原因：实时展示模型输出避免用户干等；让用户感知生成进度；方向错误时可提前中断省 token；XML 工具标签在流中闭合后就能提前执行，不必等整段回复生成完。</div>
+</details>
+
+<details>
+<summary>为什么 Cline 选择 XML 而不是 Function Calling？</summary>
+<div class="answer">主要有三个现实考量：①兼容性——Function Calling 要求 API 端支持 tool_calls 字段，而 XML 只要求模型能补全文本，任何兼容 OpenAI 文本接口的模型都能被接入；②表达力——XML 标签可以表达任意嵌套结构，适合 write_to_file 这种带大段内容的复杂参数；③可读性——XML 报文人类可直接阅读，方便调试。代价是模型需要经过较好的 XML 格式训练，否则容易出现标签未闭合等解析失败，小模型上这个问题尤其明显。</div>
+</details>
+
+<details>
+<summary>抓包代理为什么必须支持流式透传？直接缓冲会有什么问题？</summary>
+<div class="answer">模型 API 普遍以 SSE 流式返回，Cline 依赖逐段推送来实时渲染输出、识别工具标签并允许用户中途打断。如果代理把响应缓冲完整再返回，Cline 端会表现为长时间"思考中卡死"，用户既看不到进度也无法及时中断，长任务还可能因超时失败。正确做法是用 httpx 的 stream 模式边收边转发，Content-Type 保持 text/event-stream，同时把流经的数据异步写入日志。代理的超时也要放到分钟级，避免掐断正常的长生成。</div>
+</details>
+
+<details>
+<summary>tool_result 是如何回传给模型的？一轮完整循环经过是什么？</summary>
+<div class="answer">完整一轮循环：①Cline 把用户问题连同系统提示词发给模型；②模型输出含工具标签的文本（如 execute_command）；③Cline 解析标签、向用户请求确认并执行操作；④Cline 把执行结果包装成 tool_result 标签，作为新一轮的上下文消息追加进对话历史，再次调用模型 API；⑤模型根据观察结果决定继续调用工具或输出最终答案。注意工具结果不是"插回"原消息，而是作为新的对话轮次进入历史——这也是多轮任务 token 消耗快速膨胀的原因。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1v9V5zSEHA" target="_blank">MCP终极指南 - 番外篇：抓包分析 Cline 与模型的交互协议</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

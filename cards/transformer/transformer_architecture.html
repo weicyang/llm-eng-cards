@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T09 · Transformer Encoder-Decoder 结构与可扩展性</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent-blue: #58a6ff;
+  --accent-purple: #bc8cff;
+  --accent-green: #3fb950;
+  --accent-orange: #d29922;
+  --accent-red: #f85149;
+  --accent-cyan: #39d2c0;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  line-height: 1.8;
+  padding: 2rem 1rem 4rem;
+  padding-left: 300px;
+}
+.container { max-width: 960px; margin: 0 auto; }
+h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: .5rem;
+}
+.subtitle { color: var(--text-muted); font-size: 1rem; margin-bottom: 2.5rem; }
+h2 {
+  font-size: 1.5rem;
+  color: var(--accent-blue);
+  margin: 2.5rem 0 1rem;
+  padding-bottom: .4rem;
+  border-bottom: 1px solid var(--border);
+}
+h3 { font-size: 1.15rem; color: var(--accent-purple); margin: 1.5rem 0 .6rem; }
+h4 { font-size: 1rem; color: var(--accent-cyan); margin: 1.2rem 0 .4rem; }
+p, li { color: var(--text); margin-bottom: .6rem; }
+ul, ol { padding-left: 1.6rem; margin-bottom: 1rem; }
+a { color: var(--accent-blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: .15rem .4rem;
+  border-radius: 4px;
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: .9em;
+  color: var(--accent-cyan);
+}
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.2rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: .85rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.2rem 1.4rem;
+  margin: 1rem 0;
+}
+.interview-tip {
+  background: linear-gradient(135deg, rgba(88,166,255,.08), rgba(188,140,255,.08));
+  border: 1px solid var(--accent-purple);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  margin: 1.2rem 0;
+}
+.interview-tip::before {
+  content: '💡 知识要点';
+  display: block;
+  font-weight: 700;
+  color: var(--accent-purple);
+  margin-bottom: .4rem;
+}
+.formula {
+  background: rgba(88,166,255,.06);
+  border-left: 3px solid var(--accent-blue);
+  padding: .8rem 1.2rem;
+  margin: 1rem 0;
+  border-radius: 0 6px 6px 0;
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: .92rem;
+  overflow-x: auto;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: .92rem;
+}
+th, td {
+  border: 1px solid var(--border);
+  padding: .6rem .8rem;
+  text-align: left;
+}
+th {
+  background: var(--surface);
+  color: var(--accent-blue);
+  font-weight: 600;
+}
+td { background: rgba(22,27,34,.6); }
+details {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: .6rem 0;
+  padding: .8rem 1.2rem;
+}
+details[open] { padding-bottom: 1rem; }
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--accent-blue);
+  padding: .2rem 0;
+}
+summary:hover { color: var(--accent-purple); }
+details p, details ul { margin-top: .5rem; }
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.tag {
+  display: inline-block;
+  padding: .1rem .5rem;
+  border-radius: 4px;
+  font-size: .8rem;
+  font-weight: 600;
+}
+.tag-blue { background: rgba(88,166,255,.15); color: var(--accent-blue); }
+.tag-green { background: rgba(63,185,80,.15); color: var(--accent-green); }
+.tag-purple { background: rgba(188,140,255,.15); color: var(--accent-purple); }
+.tag-orange { background: rgba(210,153,34,.15); color: var(--accent-orange); }
+.comparison-row td:first-child { font-weight: 600; color: var(--accent-cyan); }
+.highlight { color: var(--accent-orange); font-weight: 600; }
+.section-num {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+  color: #fff;
+  width: 1.6rem; height: 1.6rem;
+  text-align: center;
+  line-height: 1.6rem;
+  border-radius: 50%;
+  font-size: .8rem;
+  font-weight: 700;
+  margin-right: .4rem;
+  vertical-align: middle;
+}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding-left:0}}
+
+/* 标准组件体系 */
+.section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.5rem 1.6rem;margin:1.6rem 0}
+.section>h2:first-child{margin-top:0}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+div.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9;font-weight:400}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、"Attention Is All You Need" 论文背景</a>
+<a href="#s2">二、整体架构</a>
+<a href="#s3">三、Encoder 层详解</a>
+<a href="#s4">四、Decoder 层详解</a>
+<a href="#s5">五、残差连接 (Residual Connection)</a>
+<a href="#s6">六、Feed-Forward Network (FFN)</a>
+<a href="#s7">七、Layer Normalization</a>
+<a href="#s8">八、Encoder-Only vs Decoder-Only vs Encoder-Decoder</a>
+<a href="#s9">九、为什么 Transformer 能 Scale</a>
+<a href="#s10">十、Transformer 的参数量计算</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>T09 · Transformer Encoder-Decoder 结构与可扩展性</h1>
+<p class="subtitle">Transformer Architecture Deep Dive — 从论文到工程实现的全面解析</p>
+
+<!-- ================================================================== -->
+<div class="section">
+<h2 id="s1"><span class="section-num">一、</span> "Attention Is All You Need" 论文背景</h2>
+
+<div class="intuition-box">
+<p>Transformer 的贡献不是发明了注意力，而是证明「去掉循环结构之后模型反而更强」——因为能并行，才拿得到通往规模化的门票。</p>
+</div>
+
+<h3>1.1 历史动机</h3>
+<p>2017 年，Google Brain 团队（Vaswani et al.）发表论文 <em>"Attention Is All You Need"</em>，正式提出 Transformer 架构。这篇论文的核心目标是<strong>完全摆脱循环结构（RNN/LSTM）</strong>，仅依靠注意力机制来建模序列关系。</p>
+
+<h3>1.2 为什么要摆脱 RNN？</h3>
+<table>
+<tr><th>问题</th><th>RNN/LSTM 的困境</th><th>Transformer 的方案</th></tr>
+<tr><td>并行性</td><td>时间步必须顺序计算，无法并行</td><td>所有位置同时计算 Attention</td></tr>
+<tr><td>长距离依赖</td><td>信息随步数衰减，梯度消失/爆炸</td><td>Attention 直接连接任意两个位置，路径长度 O(1)</td></tr>
+<tr><td>训练速度</td><td>受限于序列长度，训练慢</td><td>GPU 高度并行，训练速度大幅提升</td></tr>
+<tr><td>可扩展性</td><td>难以有效 scale up</td><td>参数和数据可按 Scaling Laws 持续扩展</td></tr>
+</table>
+
+<h3>1.3 论文核心贡献</h3>
+<ul>
+<li><strong><span class="term">Self-Attention</span> 机制</strong>：用缩放点积注意力替代循环计算</li>
+<li><strong>Multi-Head Attention</strong>：多个注意力头并行捕获不同子空间的信息</li>
+<li><strong><span class="term">Positional Encoding</span></strong>：用正弦/余弦函数为序列注入位置信息</li>
+<li><strong>Encoder-Decoder 架构</strong>：经典的序列到序列范式</li>
+<li>在 WMT 翻译任务上取得 SOTA，训练时间仅为此前最优模型的一小部分</li>
+</ul>
+
+<div class="interview-tip">
+<ul>
+<li>Transformer 并非「发明了 Attention」，而是<strong>证明了仅用 Attention 就够了</strong>（不需要 RNN/CNN）</li>
+<li>关键突破：<strong>可并行化</strong> → 可利用 GPU → 可 scale → 催生 GPT/BERT 等大模型</li>
+<li>论文标题就是核心观点：Attention is <strong>ALL</strong> you need</li>
+</ul>
+</div>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s2"><span class="section-num">二、</span> 整体架构</h2>
+
+<div class="intuition-box">
+<p>Encoder 把整句话压成一份"可查阅的资料"，Decoder 一边写一边回头查这份资料——Cross-Attention 就是那次查阅动作。</p>
+</div>
+
+<h3>2.1 Encoder-Decoder 结构全景</h3>
+<p>原始 Transformer 采用经典的 <strong>Encoder-Decoder</strong> 结构：</p>
+<ul>
+<li><strong>Encoder</strong>：将输入序列 (x₁, x₂, …, xₙ) 映射为连续表示 (z₁, z₂, …, zₙ)</li>
+<li><strong>Decoder</strong>：基于 Encoder 输出，自回归地生成目标序列 (y₁, y₂, …, yₘ)</li>
+<li>Encoder 和 Decoder 各堆叠 <strong>N=6</strong> 层（原始论文设定）</li>
+</ul>
+
+<h3>2.2 ASCII 架构图</h3>
+<pre>
+                          ┌─────────────────────────────────┐
+                          │        Output Probabilities      │
+                          │          (Softmax)               │
+                          └───────────────┬─────────────────┘
+                                          │
+                          ┌───────────────▼─────────────────┐
+                          │         Linear Layer             │
+                          └───────────────┬─────────────────┘
+                                          │
+                       ┌──────────────────▼──────────────────┐
+                       │          DECODER  (×6)               │
+                       │  ┌────────────────────────────────┐  │
+                       │  │  Masked Multi-Head Attention    │  │
+                       │  │         + Add & Norm            │  │
+                       │  └──────────────┬─────────────────┘  │
+                       │  ┌──────────────▼─────────────────┐  │
+                       │  │  Cross Multi-Head Attention     │◄─┼──── Encoder Output
+                       │  │         + Add & Norm            │  │
+                       │  └──────────────┬─────────────────┘  │
+                       │  ┌──────────────▼─────────────────┐  │
+                       │  │  Feed-Forward Network           │  │
+                       │  │         + Add & Norm            │  │
+                       │  └────────────────────────────────┘  │
+                       └──────────────────▲──────────────────┘
+                                          │
+                          ┌───────────────┴─────────────────┐
+                          │  Output Embedding + Pos Encoding │
+                          └───────────────┬─────────────────┘
+                                          │
+                                   Outputs (shifted)
+
+  ┌──────────────────────────────────┐
+  │          ENCODER  (×6)            │
+  │  ┌────────────────────────────┐   │
+  │  │  Multi-Head Self-Attention  │   │
+  │  │       + Add & Norm          │   │
+  │  └─────────────┬──────────────┘   │
+  │  ┌─────────────▼──────────────┐   │
+  │  │  Feed-Forward Network       │   │
+  │  │       + Add & Norm          │   │
+  │  └────────────────────────────┘   │
+  └──────────────────▲───────────────┘
+                     │
+  ┌──────────────────┴───────────────┐
+  │  Input Embedding + Pos Encoding   │
+  └──────────────────┬───────────────┘
+                     │
+                  Inputs
+</pre>
+
+<h3>2.2.1 张量形状的流转</h3>
+<p>把上面的方框图换成张量视角，更容易看清每一步到底在变什么（B = batch，n = 源长度，m = 目标长度，d = d_model，h = 头数，V = 词表大小）：</p>
+<div class="arch-diagram">  tokens                                   [B, n]
+     │  Token Embedding  (V x d)
+     ▼
+  X                                        [B, n, d]
+     │  + Positional Encoding (n x d，按 batch 广播相加)
+     ▼
+ ┌── Encoder Layer x 6 ───────────────────────────────────┐
+ │   Q,K,V = X·W_Q / X·W_K / X·W_V         [B, h, n, d/h] │
+ │   scores = Q·Kᵀ / sqrt(d_k)             [B, h, n, n]   │  ← O(n²) 的来源
+ │   ctx    = softmax(scores)·V            [B, h, n, d/h] │
+ │   concat(h 个头) · W_O                  [B, n, d]      │
+ │   FFN:  d → 4d → d                      [B, n, d]      │
+ └────────────────────────┬───────────────────────────────┘
+                          ▼
+  Z (memory，Encoder 最终输出)             [B, n, d]
+                          │  整个解码过程中不变，K/V 只投影一次
+ ┌── Decoder Layer x 6 ───┼───────────────────────────────┐
+ │   Masked Self-Attn     │                [B, h, m, m]   │  上三角填 -inf
+ │   Cross-Attn: Q←Decoder, K/V←Z ◄───────  [B, h, m, n]   │
+ │   FFN:  d → 4d → d                      [B, m, d]      │
+ └────────────────────────┬───────────────────────────────┘
+                          ▼
+  Linear (d x V) + Softmax                 [B, m, V]
+                          ▼
+                    next-token 概率分布</div>
+<p>值得注意的是 <code>[B, h, n, n]</code> 这一步——它是唯一一个和序列长度成平方关系的中间张量，长文本场景的显存与算力压力几乎全部来自这里。</p>
+
+
+<h3>2.3 数据流（以翻译任务为例）</h3>
+<div class="card">
+<ol>
+<li><strong>输入端</strong>：源语言 token → Input Embedding → 加 Positional Encoding</li>
+<li><strong>Encoder</strong>：经过 6 层 Encoder Layer，每层包含 Self-Attention + FFN，输出上下文表示 Z</li>
+<li><strong>Decoder 输入</strong>：目标语言 token（shifted right）→ Output Embedding → 加 Positional Encoding</li>
+<li><strong>Decoder</strong>：经过 6 层 Decoder Layer，每层包含 Masked Self-Attention + Cross-Attention + FFN</li>
+<li><strong>输出端</strong>：Linear 投影到词表大小 → Softmax 得到概率分布 → 选取 next token</li>
+</ol>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>Encoder 的每一层都能"看到"整个输入序列（双向 Attention）</li>
+<li>Decoder 的 Self-Attention 是 <strong>causal（因果的）</strong>，只能看到已生成的 token</li>
+<li>Cross-Attention 让 Decoder 的每个位置都能关注 Encoder 的完整输出</li>
+</ul>
+</div>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s3"><span class="section-num">三、</span> Encoder 层详解</h2>
+
+<div class="intuition-box">
+<p>Encoder 的一层只做两件事：先让所有词互相"交换情报"（Attention），再让每个词各自"消化情报"（FFN），剩下的残差与归一化都是为了让这两件事能安全地叠上几十层。</p>
+</div>
+
+<h3>3.1 Encoder 层结构</h3>
+<pre>
+Input x
+  │
+  ▼
+┌──────────────────────────────┐
+│  Multi-Head Self-Attention   │
+└──────────────┬───────────────┘
+  │            │
+  │    ┌───────┘ (残差连接)
+  ▼    ▼
+┌──────────────────────────────┐
+│     Add & Layer Norm         │
+└──────────────┬───────────────┘
+  │
+  ▼
+┌──────────────────────────────┐
+│  Feed-Forward Network (FFN)  │
+└──────────────┬───────────────┘
+  │            │
+  │    ┌───────┘ (残差连接)
+  ▼    ▼
+┌──────────────────────────────┐
+│     Add & Layer Norm         │
+└──────────────┬───────────────┘
+  │
+  ▼
+Output (送入下一层)
+</pre>
+
+<h3>3.2 各子层作用</h3>
+<table>
+<tr><th>子层</th><th>作用</th><th>核心机制</th></tr>
+<tr><td>Multi-Head Self-Attention</td><td>捕捉序列内部所有位置之间的依赖关系</td><td>每个 token 对所有其他 token 计算注意力权重</td></tr>
+<tr><td>Add & Norm（第一个）</td><td>残差连接 + 层归一化，稳定训练</td><td>output = LayerNorm(x + SubLayer(x))</td></tr>
+<tr><td>Feed-Forward Network</td><td>对每个位置独立做非线性变换，增加模型表达力</td><td>两层全连接网络，中间用 ReLU/GELU 激活</td></tr>
+<tr><td>Add & Norm（第二个）</td><td>同上，残差连接 + 层归一化</td><td>output = LayerNorm(x + FFN(x))</td></tr>
+</table>
+
+<h3>3.3 Self-Attention 计算过程</h3>
+<div class="formula">
+Attention(Q, K, V) = softmax(QKᵀ / √d_k) · V
+</div>
+<p>其中 Q、K、V 分别由输入 X 经过不同的线性投影得到：</p>
+<div class="formula">
+Q = XW_Q,  K = XW_K,  V = XW_V<br>
+W_Q, W_K ∈ ℝ^{d_model × d_k},  W_V ∈ ℝ^{d_model × d_v}
+</div>
+
+<h3>3.4 Multi-Head 机制</h3>
+<div class="formula">
+MultiHead(Q,K,V) = Concat(head₁, head₂, …, headₕ) · W_O<br>
+其中 headᵢ = Attention(QWᵢ_Q, KWᵢ_K, VWᵢ_V)<br>
+h = 8 (论文默认), d_k = d_v = d_model / h = 512/8 = 64
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>为什么要除以 √d_k？防止点积值过大导致 softmax 梯度消失（进入饱和区）</li>
+<li>Multi-Head 相当于在<strong>多个不同的表示子空间</strong>中并行执行 Attention</li>
+<li>Encoder 的 Self-Attention 是<strong>双向</strong>的，每个 token 可以看到整个输入序列</li>
+</ul>
+</div>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s4"><span class="section-num">四、</span> Decoder 层详解</h2>
+
+<div class="intuition-box">
+<p>Decoder 比 Encoder 多的那一层 Cross-Attention，本质是把"我现在想写什么"（Q）拿去和"原文说了什么"（K/V）做匹配。</p>
+</div>
+
+<h3>4.1 Decoder 层结构</h3>
+<pre>
+Input (previously generated tokens)
+  │
+  ▼
+┌───────────────────────────────────┐
+│  Masked Multi-Head Self-Attention │   ← 只能看到当前及之前的 token
+│         + Add & Norm              │
+└──────────────┬────────────────────┘
+  │
+  ▼
+┌───────────────────────────────────┐
+│  Multi-Head Cross-Attention       │   ← Q 来自 Decoder, K/V 来自 Encoder
+│         + Add & Norm              │
+└──────────────┬────────────────────┘
+  │
+  ▼
+┌───────────────────────────────────┐
+│  Feed-Forward Network             │
+│         + Add & Norm              │
+└──────────────┬────────────────────┘
+  │
+  ▼
+Output
+</pre>
+
+<h3>4.2 为什么需要 Masked Attention？</h3>
+<div class="card">
+<p><strong>训练阶段</strong>：Decoder 同时接收完整的目标序列（<span class="term">Teacher Forcing</span>），但每个位置 <em>i</em> 只能依赖 ≤ <em>i</em> 的位置信息，否则就是「偷看答案」。</p>
+<p><strong>实现方式</strong>：在 Attention Score 矩阵的上三角区域填充 <code>-∞</code>，经过 softmax 后这些位置的权重变为 0。</p>
+<pre>
+Mask 矩阵示例 (4×4):
+┌───┬───┬───┬───┐
+│ 0 │-∞ │-∞ │-∞ │   position 0 只看自己
+├───┼───┼───┼───┤
+│ 0 │ 0 │-∞ │-∞ │   position 1 看 0,1
+├───┼───┼───┼───┤
+│ 0 │ 0 │ 0 │-∞ │   position 2 看 0,1,2
+├───┼───┼───┼───┤
+│ 0 │ 0 │ 0 │ 0 │   position 3 看 0,1,2,3
+└───┴───┴───┴───┘
+</pre>
+</div>
+
+<h3>4.3 Cross-Attention</h3>
+<p>Cross-Attention 是 Decoder 与 Encoder 交互的桥梁：</p>
+<ul>
+<li><strong>Q</strong>：来自 Decoder 当前层的输出（代表「我想查询什么」）</li>
+<li><strong>K, V</strong>：来自 Encoder 最后一层的输出（代表「源序列的信息」）</li>
+<li>每个 Decoder 位置都能关注整个源序列，实现源→目标的信息传递</li>
+</ul>
+
+<h3>4.4 自回归生成过程</h3>
+<div class="card">
+<ol>
+<li>输入起始符 <code>&lt;BOS&gt;</code></li>
+<li>Decoder 生成第一个 token y₁</li>
+<li>将 y₁ 拼接到输入，生成 y₂</li>
+<li>重复，直到生成 <code>&lt;EOS&gt;</code> 或达到最大长度</li>
+</ol>
+<p>这就是为什么叫「自回归」——每一步的输出成为下一步的输入。</p>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>Masked Attention 保证训练时的因果性，和推理时的行为一致</li>
+<li>Cross-Attention 的 K、V 来自 Encoder，在整个 Decoder 生成过程中保持不变（只需计算一次）</li>
+<li>自回归生成是串行的 → 这是 GPT 类模型推理慢的根本原因</li>
+</ul>
+</div>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s5"><span class="section-num">五、</span> 残差连接 (Residual Connection)</h2>
+
+<div class="intuition-box">
+<p>残差连接的价值不在于"加了一条边"，而在于给梯度留了一条不经过任何变换的直达通道——层数越深，这条通道越值钱。</p>
+</div>
+
+<p><strong>作用</strong>：借鉴自 ResNet，为堆叠数十上百层的网络提供「梯度高速公路」（梯度路径长度 O(L)→O(1)，缓解梯度消失），并保证最坏情况下网络退化为恒等映射而不失效。写法分两种：<code>output = x + SubLayer(x)</code>（Post-Norm）与 <code>output = x + SubLayer(Norm(x))</code>（<span class="term">Pre-Norm</span>）。</p>
+<p><strong>关键结论</strong>：Post-Norm（原始 Transformer/BERT）调参到位时最终性能可能略好，但对学习率敏感、深层（&gt;24 层）需精心 warm-up；Pre-Norm 训练更稳定、可用更大学习率，是 GPT-2 以后所有现代 LLM（LLaMA、DeepSeek）的标配，代价是最后一层需额外加 Final LayerNorm。</p>
+<div class="arch-diagram">        Post-Norm（原始 Transformer / BERT）        Pre-Norm（GPT-2 之后 / LLaMA / DeepSeek）
+
+            x ──────────────┐                          x ──────────────┐
+            │               │ 残差                     │               │ 残差
+            ▼               │                          ▼               │
+       [ SubLayer ]         │                     [ LayerNorm ]        │
+            │               │                          │               │
+            ▼               │                          ▼               │
+           (+)◄─────────────┘                     [ SubLayer ]         │
+            │                                          │               │
+            ▼                                          ▼               │
+       [ LayerNorm ]                                   (+)◄────────────┘
+            │                                          │
+            ▼                                          ▼
+          输出                                        输出
+                                                  （末尾另需 Final LayerNorm）
+
+  梯度回传路径：每退一层都要穿过 LN        梯度回传路径：沿残差直达底层，不被 LN 缩放
+  深层（&gt;24 层）需精心 warm-up            可用更大学习率，深到上百层仍稳定</div>
+
+<p>Pre-Norm/Post-Norm 的完整对比与 Block 内组合方式，详见 <a href="./decoder_only_transformer.html">T16 · Decoder-Only Transformer 全貌</a>。</p>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s6"><span class="section-num">六、</span> Feed-Forward Network (FFN)</h2>
+
+<p><strong>作用</strong>：FFN 对每个 token 独立执行两层全连接非线性变换 <code>FFN(x) = W₂·σ(W₁x + b₁) + b₂</code>。Attention 负责「位置间信息交换」（近似线性），FFN 负责「位置内特征变换」，提供关键的非线性能力，并充当「键值记忆网络」存储事实知识——参数量约占总参数的 2/3。</p>
+<p><strong>关键结论</strong>：标准设定 d_ff = 4×d_model（Transformer-Base 512→2048，GPT-3 12288→49152）；现代 LLM 普遍用 SwiGLU 门控激活（有 W₁/W_gate/W₂ 三个矩阵，多 50% 参数），因此 d_ff 缩小到 ≈2.68×d_model 保持参数量平衡（LLaMA-7B：4096→11008）。</p>
+<p>SwiGLU/GeGLU 等 GLU 变体公式与 FFN 在 Block 中的角色细节，详见 <a href="./decoder_only_transformer.html">T16 · Decoder-Only Transformer 全貌</a>。</p>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s7"><span class="section-num">七、</span> Layer Normalization</h2>
+
+<p><strong>作用</strong>：沿 feature 维度做归一化 <code>LayerNorm(x) = γ·(x-μ)/√(σ²+ε) + β</code>，稳定深层网络训练。相比 BatchNorm，它不依赖 batch 统计量、天然支持变长序列、训练与推理行为一致，因此成为 NLP 标配（BatchNorm 的痛点正是变长序列 + 小 batch）。</p>
+<p><strong>关键结论</strong>：RMSNorm 是 LayerNorm 的简化版——去掉均值中心化与偏置项（<code>RMSNorm(x) = γ·x/RMS(x)</code>），归一化开销减少约 10-15% 且效果相当，是当前主流 LLM 标配（LLaMA/DeepSeek/Gemma 均为 RMSNorm + Pre-Norm；GPT-2/3 为 LayerNorm + Pre-Norm）。</p>
+<p>归一化方案在 Block 中的位置与完整演进对比，详见 <a href="./decoder_only_transformer.html">T16 · Decoder-Only Transformer 全貌</a>。</p>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s8"><span class="section-num">八、</span> Encoder-Only vs Decoder-Only vs Encoder-Decoder</h2>
+
+<div class="intuition-box">
+<p>三种架构的差别归根到底只有一件事：谁能看见谁。把注意力掩码画出来，剩下的训练目标、擅长任务、推理方式都是这张图的推论。</p>
+</div>
+<div class="arch-diagram">  Encoder-Only（BERT）        Decoder-Only（GPT）         Encoder-Decoder（T5）
+  双向 Self-Attention        因果 Self-Attention          Enc 双向 + Dec 因果 + Cross
+
+       k→ 1  2  3  4              k→ 1  2  3  4          Encoder 内部    Decoder 内部
+   q 1  ■  ■  ■  ■           q 1  ■  □  □  □             ■ ■ ■           ■ □ □
+   q 2  ■  ■  ■  ■           q 2  ■  ■  □  □             ■ ■ ■           ■ ■ □
+   q 3  ■  ■  ■  ■           q 3  ■  ■  ■  □             ■ ■ ■           ■ ■ ■
+   q 4  ■  ■  ■  ■           q 4  ■  ■  ■  ■               │
+                                                            └─ Cross-Attention ─┐
+   ■ 可见   □ 掩掉（-inf）                                Q 来自 Decoder，K/V 来自 Encoder
+
+  训练目标  MLM 完形填空      Next-Token 续写              Span Corruption
+  生成能力  弱               强（一套 KV Cache）           强（自身 + Cross 两套 Cache）
+  典型规模  百 M ~ 数 B       数 B ~ 数百 B                十 M ~ 数十 B</div>
+
+<h3>8.1 三种架构变体对比</h3>
+<table>
+<tr>
+<th>特性</th>
+<th><span class="tag tag-blue">Encoder-Only</span></th>
+<th><span class="tag tag-purple">Decoder-Only</span></th>
+<th><span class="tag tag-green">Encoder-Decoder</span></th>
+</tr>
+<tr class="comparison-row"><td>代表模型</td><td>BERT, RoBERTa, DeBERTa</td><td>GPT 系列, LLaMA, DeepSeek</td><td>T5, BART, mT5</td></tr>
+<tr class="comparison-row"><td>Attention 类型</td><td>双向（Bidirectional）</td><td>单向因果（Causal）</td><td>Encoder 双向 + Decoder 因果</td></tr>
+<tr class="comparison-row"><td>预训练任务</td><td>MLM (Masked LM)</td><td>CLM (Causal LM / Next-Token)</td><td>Span Corruption / Seq2Seq</td></tr>
+<tr class="comparison-row"><td>典型用途</td><td>分类、NER、句向量</td><td>文本生成、对话、代码</td><td>翻译、摘要、问答</td></tr>
+<tr class="comparison-row"><td>生成能力</td><td>弱（需要额外解码策略）</td><td>强（天然自回归）</td><td>强</td></tr>
+<tr class="comparison-row"><td>理解能力</td><td>强（双向上下文）</td><td>适中（单向，但可通过规模弥补）</td><td>强</td></tr>
+<tr class="comparison-row"><td>扩展到 100B+</td><td>少见</td><td>主流</td><td>部分（如 PaLM 2 Encoder-Decoder 路线已转向 Decoder-Only）</td></tr>
+</table>
+
+<h3>8.2 为什么 LLM 主流走向 Decoder-Only？</h3>
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>做分类、NER、句向量这类判别任务时，仍优先考虑 Encoder-Only：同等效果下参数量可以小一到两个数量级</li>
+<li>需要生成时统一走 Decoder-Only，把"任务"编码进 prompt，而不是为每个任务改架构</li>
+<li>跨模态或明确的 seq2seq 场景（语音转写、OCR 后处理）保留 Encoder-Decoder，源端双向理解确实有收益</li>
+<li>先明确"输入是否固定、输出是否要生成"，再选架构；架构选型比后续调参影响大得多</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要因为"Decoder-Only 是主流"就用它做纯分类，白白付出自回归解码的推理成本</li>
+<li>不要指望给 BERT 接一个解码头就能得到好的生成模型，MLM 预训练没有教会它续写</li>
+<li>不要在 Encoder-Decoder 上盲目堆参数，两套 KV Cache 会让长上下文推理的显存翻倍</li>
+<li>不要把"双向注意力"当成理解能力的必要条件，规模上去之后单向的差距会被抹平</li>
+</ul>
+</div>
+</div>
+
+<div class="card">
+<ol>
+<li><strong>统一的训练目标</strong>：Next-Token Prediction 是最简单、最通用的训练目标，适用于各种任务</li>
+<li><strong>Zero-shot / Few-shot 能力</strong>：Decoder-Only 天然支持通过 prompt 进行 in-context learning</li>
+<li><strong>Scale 效率</strong>：同等参数量下，Decoder-Only 不需要分配参数给 Encoder 和 Decoder 两部分</li>
+<li><strong><span class="term">KV Cache</span> 友好</strong>：推理时可利用 KV Cache 实现增量解码，Encoder-Decoder 需要两套 Cache</li>
+<li><strong>工程简洁</strong>：只有一个统一的 Transformer block，代码更简单、更容易优化</li>
+<li><strong>实证结果</strong>：GPT-3 → ChatGPT → GPT-4 路线的巨大成功，形成了社区惯性</li>
+</ol>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>Encoder-Only 模型（BERT）不适合生成任务，但在 NLU 任务上仍有优势</li>
+<li>Decoder-Only 的「劣势」（单向 Attention）通过增大模型规模已经不明显</li>
+<li>高频问题：「为什么 GPT 不用 Encoder-Decoder？」→ 简单 + 通用 + scale 高效</li>
+</ul>
+</div>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s9"><span class="section-num">九、</span> 为什么 Transformer 能 Scale</h2>
+
+<div class="intuition-box">
+<p>Transformer 能 scale，不是因为它更聪明，而是因为它把序列建模改写成了矩阵乘法——而矩阵乘法正是 GPU 唯一真正擅长的事。</p>
+</div>
+
+<h3>9.1 并行化能力</h3>
+<table>
+<tr><th>模型</th><th>时间复杂度（每层）</th><th>可并行性</th><th>最长路径</th></tr>
+<tr><td>RNN</td><td>O(n · d²)</td><td>O(n) — 顺序</td><td>O(n)</td></tr>
+<tr><td>CNN</td><td>O(n · k · d²)</td><td>O(1) — 并行</td><td>O(log_k(n))</td></tr>
+<tr><td>Transformer</td><td>O(n² · d)</td><td>O(1) — 并行</td><td>O(1)</td></tr>
+</table>
+<p>其中 n = 序列长度，d = 模型维度，k = 卷积核大小。</p>
+
+<h3>9.2 Scaling Laws</h3>
+<p>Kaplan et al. (2020) 和 Chinchilla (Hoffmann et al., 2022) 发现 Transformer 的性能遵循幂律关系，这组经验规律通常被称为 <span class="term">Scaling Laws</span>：</p>
+<div class="formula">
+L(N, D) ≈ A/N^α + B/D^β + E<br><br>
+L = 损失, N = 参数量, D = 数据量<br>
+α ≈ 0.076, β ≈ 0.095 (Chinchilla 修正值)
+</div>
+<ul>
+<li><strong>可预测</strong>：给定预算可预测最优模型大小和数据量</li>
+<li><strong>无饱和</strong>：在目前观测范围内，增加 N 和 D 总能带来收益</li>
+<li><strong>计算最优</strong>：Chinchilla 最优比例 ≈ 20 tokens per parameter</li>
+</ul>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个团队原本用 12 层 BiLSTM 做文档分类，单卡训练一轮 8 小时，序列截断到 256 token 才勉强跑得动。</p>
+<p><strong>问题：</strong>时间步串行导致 GPU 利用率长期只有 20% 左右，加卡几乎没有收益——瓶颈不在算力而在依赖链。</p>
+<p><strong>方案：</strong>换成 6 层 Transformer Encoder，d=768、h=12，序列放宽到 512，batch 从 16 提到 96。</p>
+<p><strong>效果：</strong>GPU 利用率升到 85% 上下，单轮训练时间降到约 50 分钟（约 9.6 倍），验证集准确率还因为上下文变长提升了约 2 个百分点。这个提升里几乎没有"模型更聪明"的成分，全部来自可并行。</p>
+</div>
+
+<h3>9.3 与 RNN/CNN 的本质区别</h3>
+<div class="card">
+<table>
+<tr><th>维度</th><th>RNN</th><th>CNN</th><th>Transformer</th></tr>
+<tr><td>序列建模</td><td>隐状态递推</td><td>局部窗口卷积</td><td>全局注意力</td></tr>
+<tr><td>并行训练</td><td>✗（顺序依赖）</td><td>✓（层内并行）</td><td>✓（完全并行）</td></tr>
+<tr><td>长距离依赖</td><td>弱（梯度消失）</td><td>需多层堆叠</td><td>强（O(1) 路径）</td></tr>
+<tr><td>GPU 利用率</td><td>低（时间步串行）</td><td>中等</td><td>高（矩阵并行）</td></tr>
+<tr><td>Scaling 行为</td><td>收益递减明显</td><td>受限于感受野</td><td>可预测的幂律提升</td></tr>
+</table>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>Transformer 能 Scale 的关键：<strong>并行化 + 全局依赖 + 可预测的 Scaling Laws</strong></li>
+<li>O(n²) 的 Attention 复杂度是 Transformer 的主要瓶颈 → 催生了各种高效 Attention 变体</li>
+<li>高频问题：「Transformer 和 RNN 最大的区别？」→ 并行性 + 全局依赖建模 + 可扩展性</li>
+</ul>
+</div>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="s10"><span class="section-num">十、</span> Transformer 的参数量计算</h2>
+
+<div class="intuition-box">
+<p>记住一个数就够了：每层约 12d²。剩下的 Embedding、LayerNorm、bias 在大模型里都属于零头。</p>
+</div>
+
+<h3>10.1 各组件参数量公式</h3>
+<p>假设模型有 L 层，模型维度 d，FFN 隐层维度 d_ff，注意力头数 h，词表大小 V：</p>
+<table>
+<tr><th>组件</th><th>参数量</th><th>说明</th></tr>
+<tr><td>Token Embedding</td><td>V × d</td><td>词表大小 × 模型维度</td></tr>
+<tr><td>Position Embedding</td><td>max_len × d</td><td>最大长度 × 模型维度（可学习时）</td></tr>
+<tr><td>QKV 投影（每层）</td><td>3 × d × d</td><td>3 个 d×d 矩阵（= 3d²）</td></tr>
+<tr><td>Output 投影（每层）</td><td>d × d</td><td>Multi-Head 拼接后的投影（= d²）</td></tr>
+<tr><td>FFN W₁（每层）</td><td>d × d_ff</td><td>升维矩阵</td></tr>
+<tr><td>FFN W₂（每层）</td><td>d_ff × d</td><td>降维矩阵</td></tr>
+<tr><td>LayerNorm（每层）</td><td>2 × 2d = 4d</td><td>每层 2 个 LN，每个 LN 有 γ 和 β</td></tr>
+<tr><td>Final LN</td><td>2d</td><td>Pre-Norm 时需要额外的 Final LN</td></tr>
+<tr><td>LM Head</td><td>V × d</td><td>通常与 Embedding 共享权重</td></tr>
+</table>
+
+<div class="formula">
+每层参数 ≈ 4d² (Attention) + 2 × d × d_ff (FFN) + 4d (LayerNorm)<br>
+当 d_ff = 4d 时：每层参数 ≈ 4d² + 8d² = 12d²<br>
+总参数 ≈ L × 12d² + V × d (Embedding)<br><br>
+简化估算（忽略 bias 和 LN）：<br>
+<strong>P ≈ 12 × L × d²</strong>  (不含 Embedding)
+</div>
+
+<h3>10.2 GPT-2 参数计算实例</h3>
+<div class="card">
+<p><strong>GPT-2 Medium</strong>: L=24, d=1024, d_ff=4096, h=16, V=50257</p>
+<table>
+<tr><th>组件</th><th>计算</th><th>参数量</th></tr>
+<tr><td>Token Embedding</td><td>50257 × 1024</td><td>51.5M</td></tr>
+<tr><td>Position Embedding</td><td>1024 × 1024</td><td>1.0M</td></tr>
+<tr><td>Attention (每层)</td><td>4 × 1024²</td><td>4.2M</td></tr>
+<tr><td>FFN (每层)</td><td>2 × 1024 × 4096</td><td>8.4M</td></tr>
+<tr><td>LayerNorm (每层)</td><td>4 × 1024</td><td>4.1K</td></tr>
+<tr><td>24 层 Transformer</td><td>24 × (4.2M + 8.4M + 4.1K)</td><td>302M</td></tr>
+<tr><td>Final LN + LM Head</td><td>2 × 1024 + (共享)</td><td>2K</td></tr>
+<tr><td><strong>总计</strong></td><td></td><td><strong>≈ 354M</strong></td></tr>
+</table>
+</div>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>要在一张 24GB 显存的卡上做全参数微调，先得判断多大的模型放得下。</p>
+<p><strong>问题：</strong>只按"参数量 × 2 字节"估算，觉得 7B 模型占 14GB、还剩 10GB 富余，实际一跑就 OOM。</p>
+<p><strong>方案：</strong>按训练态完整口径重算——bf16 权重 2 字节 + bf16 梯度 2 字节 + Adam 的一阶/二阶动量各 4 字节（fp32），合计每个参数约 12 字节，再加上激活值。</p>
+<p><strong>效果：</strong>7B 模型光是权重加优化器状态就要约 84GB，24GB 卡上全参微调根本不成立；换成 LoRA 只训练约 0.1% 的参数，优化器状态降到不足 100MB，24GB 卡轻松容纳。用 <strong>P ≈ 12Ld²</strong> 先估参数量、再乘上"每参数字节数"，是选型时最省事的一次心算。</p>
+</div>
+
+<h3>10.3 LLaMA-7B 参数计算实例</h3>
+<div class="card">
+<p><strong>LLaMA-7B</strong>: L=32, d=4096, d_ff=11008 (SwiGLU), h=32, V=32000</p>
+<table>
+<tr><th>组件</th><th>计算</th><th>参数量</th></tr>
+<tr><td>Token Embedding</td><td>32000 × 4096</td><td>131M</td></tr>
+<tr><td>Attention QKV (每层)</td><td>3 × 4096²</td><td>50.3M</td></tr>
+<tr><td>Attention Output (每层)</td><td>4096²</td><td>16.8M</td></tr>
+<tr><td>SwiGLU FFN (每层)</td><td>3 × 4096 × 11008</td><td>135.3M</td></tr>
+<tr><td>RMSNorm (每层)</td><td>3 × 4096</td><td>12.3K</td></tr>
+<tr><td>32 层 Transformer</td><td>32 × (67.1M + 135.3M + 12.3K)</td><td>6.47B</td></tr>
+<tr><td>Final RMSNorm</td><td>4096</td><td>4K</td></tr>
+<tr><td>LM Head</td><td>32000 × 4096</td><td>131M</td></tr>
+<tr><td><strong>总计</strong></td><td></td><td><strong>≈ 6.74B ≈ 7B</strong></td></tr>
+</table>
+<p>注意：SwiGLU FFN 有 3 个权重矩阵（W₁, W_gate, W₂），所以是 <code>3 × d × d_ff</code>。</p>
+</div>
+
+<div class="interview-tip">
+<ul>
+<li>快速估算：<strong>P ≈ 12Ld²</strong>（不含 Embedding 和 bias）</li>
+<li>FFN 参数占比最大（约 2/3），Attention 占约 1/3</li>
+<li>SwiGLU 的 FFN 参数：3 × d × d_ff（3 个矩阵），标准 FFN 是 2 × d × d_ff</li>
+<li>高频问题：「7B 模型的参数都分布在哪里？」→ 大部分在 FFN，其次是 Attention</li>
+</ul>
+</div>
+
+<!-- ================================================================== -->
+</div>
+
+<div class="section">
+<h2 id="qa" style="color:var(--accent-orange);border-bottom-color:var(--accent-orange);">🔥 Q&A Top 10</h2>
+
+<details>
+<summary>Q1: Transformer 为什么要用 Self-Attention 而不是 RNN？</summary>
+<p><strong>核心答案</strong>：三大优势——</p>
+<ul>
+<li><strong>并行化</strong>：Self-Attention 可以同时计算所有位置之间的关系，而 RNN 必须逐时间步串行计算</li>
+<li><strong>长距离依赖</strong>：Self-Attention 中任意两个位置的路径长度为 O(1)，RNN 为 O(n)，长距离信息容易丢失</li>
+<li><strong>可扩展性</strong>：并行化 + GPU → 更大模型 + 更多数据 → Scaling Laws 带来的可预测提升</li>
+</ul>
+<p>代价：Attention 的计算复杂度为 O(n²·d)，对长序列不友好。</p>
+</details>
+
+<details>
+<summary>Q2: 为什么 Attention 要除以 √d_k？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li>当 d_k 较大时，Q·Kᵀ 的点积结果方差为 d_k，量级较大</li>
+<li>大的点积值会使 softmax 进入梯度饱和区（接近 one-hot），梯度接近 0</li>
+<li>除以 √d_k 将方差缩放回 1，使 softmax 输出更平滑，梯度更稳定</li>
+</ul>
+<p>数学推导：假设 Q、K 各分量独立同分布，均值 0，方差 1，则 QKᵀ 的方差 = d_k，标准差 = √d_k。</p>
+</details>
+
+<details>
+<summary>Q3: Multi-Head Attention 的意义是什么？为什么不用单头？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li>不同的头可以关注<strong>不同的表示子空间</strong>，捕获不同类型的依赖（语法、语义、位置等）</li>
+<li>单头 Attention 会让所有信息被平均化，表达力不足</li>
+<li>Multi-Head 的计算量与同等维度的单头相当（因为每个头的维度 = d_model/h），但效果更好</li>
+<li>类比 CNN 的多通道/多 filter：同一层学习不同模式</li>
+</ul>
+</details>
+
+<details>
+<summary>Q4: Masked Attention 的作用和实现方式？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li><strong>作用</strong>：保证自回归性质，位置 i 只能看到 ≤i 的信息，防止训练时「偷看未来」</li>
+<li><strong>实现</strong>：在计算 Attention Score 后、softmax 之前，将上三角区域设为 -∞</li>
+<li>softmax(-∞) = 0，因此未来位置的权重为 0</li>
+<li>训练时用 mask 保证因果性；推理时因为是自回归生成，天然满足因果性</li>
+</ul>
+</details>
+
+<details>
+<summary>Q5: Pre-Norm 和 Post-Norm 的区别？为什么现代 LLM 都用 Pre-Norm？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li><strong>Post-Norm</strong>：LN(x + SubLayer(x)) — 原始 Transformer，理论上最终性能略好</li>
+<li><strong>Pre-Norm</strong>：x + SubLayer(LN(x)) — GPT-2 以后的主流</li>
+<li>Pre-Norm 训练更稳定的原因：残差分支的输入已归一化，梯度不会因层数增加而爆炸</li>
+<li>Post-Norm 深层时（>24 层）需精心设计 warm-up 和学习率，否则容易发散</li>
+<li>对 100B+ 规模的模型，训练稳定性 >> 理论性能微小差距</li>
+</ul>
+</details>
+
+<details>
+<summary>Q6: FFN 在 Transformer 中的角色？为什么不能去掉？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li><strong>功能分工</strong>：Attention 负责「位置间信息交换」，FFN 负责「位置内特征变换」</li>
+<li>Attention 本质上是加权平均（近似线性），FFN 提供关键的<strong>非线性变换能力</strong></li>
+<li>研究表明 FFN 充当<strong>键值记忆网络</strong>，存储了大量事实知识</li>
+<li>去掉 FFN 会导致模型退化为纯线性映射的叠加，表达力严重下降</li>
+<li>FFN 的参数量占总参数的约 2/3，是模型知识的主要「仓库」</li>
+</ul>
+</details>
+
+<details>
+<summary>Q7: 为什么 LLM 主流选择 Decoder-Only 而非 Encoder-Decoder？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li><strong>统一目标</strong>：Next-Token Prediction 一个训练目标覆盖所有任务</li>
+<li><strong>In-Context Learning</strong>：Decoder-Only 天然支持 few-shot prompt，不需要为每个下游任务微调</li>
+<li><strong>参数效率</strong>：同等参数量全部用于一个统一模型，不需要拆分给 Encoder 和 Decoder</li>
+<li><strong>工程简洁</strong>：一种 Block 堆叠，代码简单、优化方便、推理用 KV Cache</li>
+<li><strong>实证驱动</strong>：GPT-3/4 的巨大成功验证了这条路线</li>
+</ul>
+</details>
+
+<details>
+<summary>Q8: RMSNorm 相比 LayerNorm 的优势是什么？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li>RMSNorm 去掉了<strong>均值中心化</strong>（减均值）操作，只做缩放归一化</li>
+<li>计算更快（省去 mean 计算和减法），训练/推理速度提升约 10-15%</li>
+<li>研究表明 re-centering 对 Transformer 性能影响很小，归一化的核心是<strong>控制量级</strong></li>
+<li>LLaMA、DeepSeek、Gemma 等主流模型均采用 RMSNorm</li>
+</ul>
+</details>
+
+<details>
+<summary>Q9: Transformer 的参数量如何快速估算？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li>快速公式：<strong>P ≈ 12 × L × d²</strong>（不含 Embedding 和 bias，标准 FFN 即 d_ff=4d）</li>
+<li>Attention 每层：4d²（QKV + Output），FFN 每层：8d²（d×4d + 4d×d），LN 忽略不计</li>
+<li>SwiGLU FFN：改为 3 × d × d_ff（3 个权重矩阵）</li>
+<li>Embedding 参数：V × d（若不共享 LM Head，则还有 V × d）</li>
+<li>例：LLaMA-7B → 32 × 12 × 4096² ≈ 6.4B + Embedding ≈ 7B ✓</li>
+</ul>
+</details>
+
+<details>
+<summary>Q10: Transformer 的 O(n²) 复杂度有哪些解决方案？</summary>
+<p><strong>核心答案</strong>：</p>
+<ul>
+<li><strong>稀疏 Attention</strong>：只计算部分位置对的 Attention（如 Longformer 的局部+全局模式）</li>
+<li><strong>线性 Attention</strong>：用核函数近似 softmax，将复杂度降到 O(n)（如 Linear Transformer）</li>
+<li><strong>FlashAttention</strong>：算法不变但利用 GPU 内存层次结构优化 IO，实际速度大幅提升</li>
+<li><strong>分组查询注意力 (GQA)</strong>：减少 KV Head 数量（LLaMA-2 70B 使用）</li>
+<li><strong>Multi-Query Attention (MQA)</strong>：所有 Query Head 共享同一组 KV（PaLM 使用）</li>
+<li><strong>滑动窗口 Attention</strong>：只关注固定窗口内的 token（Mistral 使用）</li>
+<li><strong>状态空间模型 (SSM)</strong>：如 Mamba，从根本上用线性递推替代 Attention</li>
+</ul>
+<p>实践中 FlashAttention + GQA/MQA 是目前最主流的组合方案。</p>
+</details>
+
+<br>
+</div>
+
+<div class="card" style="text-align:center;color:var(--text-muted);font-size:.9rem;margin-top:2rem;">
+  T09 · Transformer 架构详解 — 知识体系<br>
+  涵盖：论文背景 · 完整架构 · Encoder/Decoder · 残差连接 · FFN · LayerNorm · 架构变体 · Scaling · 参数计算
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

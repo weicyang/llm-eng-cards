@@ -1,0 +1,660 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T16 · Decoder-Only Transformer 全貌</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+.source{text-align:center;color:#6e7681;margin-bottom:2rem;font-size:.9rem}
+.source a{color:var(--accent)}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、三种 Transformer 变体</a>
+<a href="#s2">二、Decoder Block：Transformer 的基本单元</a>
+<a href="#s3">三、残差连接：深度网络的"高速公路"</a>
+<a href="#s4">四、FFN：Attention 之后的"独立思考"</a>
+<a href="#s5">五、LayerNorm：稳定训练的魔法</a>
+<a href="#s6">六、输出层：从向量到概率</a>
+<a href="#s7">七、总结：Token 的完整旅程</a>
+<a href="#s8">生产案例</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>T16 · Decoder-Only Transformer 全貌</h1>
+<p class="subtitle">一个 Token 从输入到输出的完整旅程 — 逐层解剖 Decoder Block 四大组件</p>
+<p class="source">原文来源：<a href="https://mp.weixin.qq.com/s/6g4AnSUgyza2mwrlfXWveg" target="_blank">过拟合人生 · leelee · 2026-05-28</a></p>
+
+<!-- Section 1
+
+<div class="intuition-box"><p>Decoder-Only 架构的本质：去掉编码器，让每个 token 只能看到自己和前面的 token，用因果掩码实现自回归生成。</p></div> -->
+<div class="section" id="s1">
+
+
+<h2>一、三种 Transformer 变体</h2>
+
+<p>Transformer 不是单一模型，而是一个家族。2017 年 Google 发表《Attention Is All You Need》时，提出的是完整的 <strong>Encoder-Decoder</strong> 架构。但后来的发展出乎所有人意料——研究者把架构"拆开"，只保留一半，反而做出了更强大的模型。</p>
+
+<h3>三条路线</h3>
+<ul>
+  <li><strong>Encoder-Only（BERT 路线）</strong>：只保留 Encoder。每个词都能看到整句话，适合理解任务——情感分析、问答、语义搜索。致命缺陷：不会"说话"，只能"理解"。</li>
+  <li><strong>Decoder-Only（GPT 路线）</strong>：只保留 Decoder，去掉交叉 Attention。每个词只能看过去，天生适合生成文本。GPT-1（1.17亿）→ GPT-3（1750亿）→ GPT-4（~1.8万亿），以及 Llama、Claude、DeepSeek 全部是这个架构。</li>
+  <li><strong>Encoder-Decoder（T5 路线）</strong>：保留完整两边，用在对齐的序列任务——翻译、摘要。</li>
+</ul>
+
+<div class="arch-diagram">
+图 1：三种 Transformer 变体
+
+Encoder-Only (BERT)          Decoder-Only (GPT)         Encoder-Decoder (T5)
+┌──────────────┐            ┌──────────────┐          ┌───────┐ ┌───────┐
+│   Output     │            │   Output     │          │Output │ │Output │
+├──────────────┤            ├──────────────┤          ├───────┤ ├───────┤
+│   Enc ×N     │            │   Dec ×N     │          │ Dec×N │ │Cross  │
+│  (双向注意)  │            │ (因果注意)    │          │(因果) │ │ Attn  │
+├──────────────┤            ├──────────────┤          ├───────┤ ├───────┤
+│   Input      │            │   Input      │          │ Enc×N │ │       │
+│  [CLS] mask  │            │  (自回归)    │          │(双向) │ │       │
+└──────────────┘            └──────────────┘          └───────┘ └───────┘
+  理解任务专用                现代 LLM 标准             翻译/摘要专用
+
+三种变体的核心差异只有一个：注意力掩码。
+除此之外——Attention、FFN、残差连接、LayerNorm——所有组件完全相同。
+</div>
+
+<h3>架构对比</h3>
+<table>
+<tr><th>特性</th><th>Encoder-Only (BERT)</th><th>Decoder-Only (GPT)</th><th>Encoder-Decoder (T5)</th></tr>
+<tr><td><strong>注意力方向</strong></td><td>双向（看整句）</td><td>因果（只看过去）</td><td>双向 + 因果 + 交叉</td></tr>
+<tr><td><strong>预训练任务</strong></td><td>Masked LM（mask 15%）</td><td>Next Token Prediction（100%）</td><td>Span Corruption</td></tr>
+<tr><td><strong>数据利用率</strong></td><td>15% token 参与损失</td><td>100% token 参与损失</td><td>约 50%</td></tr>
+<tr><td><strong>生成能力</strong></td><td>❌ 不能生成</td><td>✅ 自回归生成</td><td>✅ 自回归生成</td></tr>
+<tr><td><strong>代表模型</strong></td><td>BERT, RoBERTa</td><td>GPT, Llama, Claude</td><td>T5, BART</td></tr>
+<tr><td><strong>当前地位</strong></td><td>理解任务专用</td><td>现代 LLM 标准</td><td>翻译/摘要专用</td></tr>
+</table>
+
+<h3>Decoder-Only 为什么赢了？</h3>
+<p>三个核心原因：</p>
+<ol>
+  <li><strong>简单性</strong>：单层堆栈比两层更容易扩展和优化。训练基础设施、分布式策略、推理引擎都只需针对一种 block。</li>
+  <li><strong>训练效率</strong>：BERT 的 MLM 每轮只 mask 15% token，85% 数据没有直接监督。Decoder-Only 的 Next Token Prediction 让每个 token 都参与损失计算，数据利用率高 6~7 倍。</li>
+  <li><strong>涌现能力</strong>：规模超过 100B 后，Decoder-Only 模型自发发展出 <strong>in-context learning</strong>（给几个例子就能学会新任务）和 <strong>chain-of-thought</strong> 推理能力。这些能力在其他架构中未被观察到。</li>
+</ol>
+
+<p class="highlight">Transformer 的通用性来自它的"无偏见"——除了位置编码外，对输入结构不做任何预设。这让它能被用于语言、图像、蛋白质、音频——几乎任何可以用"一组元素"描述的数据。</p>
+
+<p><strong>深层机制：为什么简单架构能涌现复杂能力？</strong>Decoder-Only 的 Next Token Prediction 看似简单，但正是这种"预测下一个词"的强制约束，迫使模型在训练过程中自发学习语法结构、逻辑推理、甚至代码编写。相比之下，BERT 的 Masked LM 任务过于简单（只需填空），模型没有动机发展更高层次的能力。</p>
+
+<table>
+<tr><th>涌现能力</th><th>触发规模</th><th>表现</th><th>其他架构是否有</th></tr>
+<tr><td><span class="term">In-context Learning</span></td><td>>10B</td><td>给几个例子就能学会新任务</td><td>❌ 未观察到</td></tr>
+<tr><td><span class="term">Chain-of-Thought</span></td><td>>100B</td><td>逐步推理复杂问题</td><td>❌ 未观察到</td></tr>
+<tr><td>代码生成</td><td>>6B</td><td>从自然语言生成可执行代码</td><td>有限</td></tr>
+</table>
+
+<p><strong>生产验证：</strong>OpenAI 在 GPT-3（175B）训练中首次观察到 in-context learning——这是没有任何人设计的，完全自发涌现。这一发现直接确立了"规模定律"（Scaling Law）：足够大的简单架构 + 足够多的数据 = 能力涌现。</p>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、Decoder Block：Transformer 的基本单元</h2>
+
+<p>想象一座现代化的信息加工厂。原料（token 向量）从一端进入，经过多个加工工位，最终变成成品（上下文表示）。每个 Decoder Block 就是这座工厂的一个"车间"。</p>
+
+<p>一个标准的 Decoder Block（Pre-Norm 版本）包含四个工位：</p>
+
+<div class="arch-diagram">
+图 2：标准 Decoder Block（Pre-Norm 版本）数据流
+
+输入 x: [batch, seq_len, d_model]
+    │
+    ├───┐
+    │   │  (残差连接 - Bypass 高速公路)
+    │   │
+    │   ▼
+    │  LayerNorm(x)       ← 质量校准仪 (Pre-Norm)
+    │   │
+    │   ▼
+    │  Masked Self-Attention  ← 分拣中心：token 间信息交流
+    │   │
+    │   ▼
+    ├── + ──→ x₁ = x + Attention(LN(x))    [残差连接]
+    │
+    ├───┐
+    │   │  (残差连接)
+    │   │
+    │   ▼
+    │  LayerNorm(x₁)
+    │   │
+    │   ▼
+    │  FFN (Feed-Forward Network)  ← 深度加工车间：独立思考
+    │   │
+    │   ▼
+    ├── + ──→ x₂ = x₁ + FFN(LN(x₁))       [残差连接]
+    │
+    ▼
+输出 x₂: [batch, seq_len, d_model]   ← 维度完全不变！
+
+关键设计：输入和输出维度完全相同 → 层间"即插即用"，可无限堆叠
+GPT-3: 96 层 | Llama 3: 126 层 | 每层接口完全一致 (USB-C 式)
+</div>
+
+<img src="../assets/640.jpg" alt="Transformer Block 结构图" style="width:100%;max-width:800px;border-radius:8px;margin-top:1rem;">
+
+<h3>四大工位详解</h3>
+<table>
+<tr><th>工位</th><th>组件</th><th>作用</th><th>类比</th></tr>
+<tr><td><strong>1</strong></td><td>Masked Self-Attention</td><td>每个 token 向所有其他 token 发问"你跟我有什么关系？"，根据答案重组表示</td><td>智能分拣系统 / 会议室讨论</td></tr>
+<tr><td><strong>2</strong></td><td>残差连接</td><td><code>output = input + F(input)</code>，梯度高速公路</td><td>Bypass 高速公路 / 直达专线</td></tr>
+<tr><td><strong>3</strong></td><td>FFN</td><td>对每个 token 做独立的非线性变换——交流完独自深入思考</td><td>深度加工车间 / 独立思考</td></tr>
+<tr><td><strong>4</strong></td><td>LayerNorm</td><td>把每层输出"拉回到合理范围"，让训练稳定</td><td>质量校准仪 / 自动增益控制</td></tr>
+</table>
+
+<img src="../assets/641.jpg" alt="多头注意力（Multi-Head Attention）结构图" style="width:100%;max-width:800px;border-radius:8px;margin-top:1rem;">
+
+<h3>张量形状的稳定性</h3>
+<p>Decoder Block 的设计有一个绝妙之处：<strong>输入和输出维度完全相同</strong>。无论内部经过多么复杂的变换，一个 block 的输入是 <code>[batch, seq_len, d_model]</code>，输出也是 <code>[batch, seq_len, d_model]</code>。</p>
+<p>这意味着层与层之间不需要任何适配——就像 USB-C 接口，所有设备接口一样，可以随意插拔、任意堆叠。如果没有这个设计，深度堆叠将是噩梦：第 5 层输出 <code>[2, 10, 768]</code>，第 6 层期望 <code>[2, 10, 512]</code>——就需要额外投影矩阵。</p>
+
+<div class="intuition-box">
+<p>Decoder Block 只有一条接口约定：进去什么形状，出来还是什么形状。正因为 <code>[batch, seq_len, d_model]</code> 恒定，96 层才能是同一段代码跑 96 遍，而不是 96 套互相适配的结构。</p>
+</div>
+
+<p>这条约定还牵出两个工程细节。一是<span class="term">残差分支</span>必须与主干同形，任何改动 d_model 的操作都只能发生在 block 内部并在出口处还原回去，FFN 的 d → 4d → d 正是这个约束下的产物。二是<span class="term">流水线并行</span>可以直接按层切分放到不同设备上，因为每层的输入输出契约完全一致，切点上不需要额外插投影层做形状转换。</p>
+
+<h3>Pre-Norm vs Post-Norm</h3>
+<table>
+<tr><th>配置</th><th>公式</th><th>时代</th></tr>
+<tr><td><strong>Post-Norm</strong>（原始 Transformer, 2017）</td><td><code>x = LN(x + Attn(x))</code></td><td>早期</td></tr>
+<tr><td><strong>Pre-Norm</strong>（GPT-2+, 现代标准）</td><td><code>x = x + Attn(LN(x))</code></td><td>2019 至今</td></tr>
+</table>
+<p>Pre-Norm 把归一化放在子层输入端，让残差连接保持"干净"——梯度可以直接通过相加操作回传，不受 LayerNorm 缩放影响。这让训练深度模型（96+ 层）成为可能。</p>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、残差连接：深度网络的"高速公路"</h2>
+
+<p>2015 年，何恺明团队发现了 <strong>degradation 问题</strong>：在 ImageNet 上，56 层网络训练误差反而比 20 层更高——不是过拟合，是训练本身失败了。直觉上，更深网络至少能"复制浅层网络"（大不了新增层什么都不做），但实际训练连这种"保底"都做不到。</p>
+
+<h3>ResNet 的洞察</h3>
+<p>不让网络学习"从零开始"，让它学习"改多少"：</p>
+<ul>
+  <li>标准网络：<code>output = F(input)</code></li>
+  <li>残差网络：<code>output = input + F(input)</code> —— F(input) 是"残差"，即需要修改的量</li>
+</ul>
+<p>如果这层什么都不需要做，只需让 F(input) → 0，output 就等于 input。这比学习完整映射容易得多。</p>
+
+<div class="intuition-box">
+<p>残差连接把"学一个映射"换成了"学一个修正量"。默认行为从"随机变换"变成"原样透传"，网络越深这个默认值越值钱 —— 多加的层最差也只是不干活，不会把前面已经学好的表示搅乱。</p>
+</div>
+
+<p>换到反向传播的角度看，<code>output = input + F(input)</code> 相当于给梯度多开了一条系数恒为 1 的通路，深层堆叠时的<span class="term">梯度消失</span>被这条通路直接绕过；换到表示学习的角度看，每层只需要学<span class="term">增量更新</span>而不是完整映射。这两点合起来，才让 96 层、126 层这种深度真正训得动。</p>
+
+<div class="arch-diagram">
+图 3：残差连接与梯度高速公路
+
+没有残差连接:                    有残差连接:
+
+Layer 1 → Layer 2 → Layer 3      Layer 1 ──────→ Layer 2 ──────→ Layer 3
+                                     │    ↑          │    ↑          │    ↑
+                                     └─F──┘          └─F──┘          └─F──┘
+                                     │    │          │    │          │    │
+                                     └──+──┘          └──+──┘          └──+──┘
+
+反向传播梯度:                     反向传播梯度:
+∂L/∂x = ∂L/∂y · ∂F/∂x            ∂L/∂x = ∂L/∂y · (∂F/∂x + 1)
+                                       ↑ 注意这个 +1
+     梯度逐层衰减                       即使 ∂F/∂x 很小
+     深层 → 梯度消失                    +1 保证梯度不消失
+                                       = 梯度高速公路
+
+类比: 多层官僚机构
+  无残差: 决策逐级传达，每传一层信息损失一点
+  有残差: 开通"直达专线"，顶层可直接送指令到任何一层
+</div>
+
+<h3>在 Transformer 中的应用</h3>
+<pre><code># Transformer 中每个子层都包裹在残差连接中
+x = x + Attention(LayerNorm(x))   # Attention 子层
+x = x + FFN(LayerNorm(x))         # FFN 子层</code></pre>
+<p>每个子层只需要做"微改造"。如果 Attention 或 FFN 没有帮助，网络可以轻易让它们"归零"，让信息直接流过。</p>
+
+<p class="highlight">没有残差连接，GPT-3 的 96 层和 Llama 3 的 126 层根本不可能训练。残差连接不是锦上添花，而是深度学习的基石。</p>
+
+<p><strong>残差连接的实际效果量化：</strong>在 Transformer 训练中，残差连接使得梯度能够穿越 96+ 层而不衰减。具体数据：</p>
+
+<table>
+<tr><th>网络深度</th><th>无残差连接</th><th>有残差连接</th></tr>
+<tr><td>20 层</td><td>可训练</td><td>可训练，收敛更快</td></tr>
+<tr><td>56 层</td><td>训练失败（degradation）</td><td>可训练，质量提升</td></tr>
+<tr><td>96 层（GPT-3）</td><td>不可能</td><td>标准配置</td></tr>
+<tr><td>126 层（Llama 3）</td><td>不可能</td><td>标准配置</td></tr>
+</table>
+
+<p><strong>工程经验：</strong>在实际训练中，如果没有残差连接，GPT-2（1.5B）在 20 层左右就会出现 loss spike。加上残差连接后，同样的模型可以稳定训练到 48 层。核心机制就是反向传播时的那个 <code>+1</code>——它保证梯度至少有一条"直达通道"，不会因为某一层梯度为 0 而完全阻断。</p>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、FFN：Attention 之后的"独立思考"</h2>
+
+<h3>为什么还需要 FFN？</h3>
+<p>Attention 的核心操作是加权平均（线性组合）。无论多少层 Attention 堆叠，只要中间没有非线性操作，整体仍是线性变换——等价于一个单层大矩阵。</p>
+<p>线性变换能做什么？旋转、缩放、平移。但它<strong>不能</strong>：</p>
+<ul>
+  <li>区分 "bank"（金融机构）和 "bank"（河岸）——需要非线性决策边界</li>
+  <li>理解 "not bad" 实际上是正面评价——需要弯曲的特征交互</li>
+  <li>判断 "the cat sat on the cat" 为什么奇怪——需要条件关系</li>
+</ul>
+
+<h3>FFN 结构：极简但有效</h3>
+<pre><code>FFN(x) = W₂ · activation(W₁ · x + b₁) + b₂
+
+# W₁: d_model → 4×d_model  (扩展到高维空间)
+# activation: 引入非线性
+# W₂: 4×d_model → d_model  (压缩回原维度)</code></pre>
+
+<h3>激活函数演进</h3>
+<table>
+<tr><th>激活函数</th><th>公式</th><th>特点</th><th>代表模型</th></tr>
+<tr><td><strong>ReLU</strong></td><td><code>max(0, x)</code></td><td>负值完全截断 → 神经元死亡</td><td>原始 Transformer</td></tr>
+<tr><td><strong>GeLU</strong></td><td><code>x · Φ(x)</code></td><td>概率"软过渡"，训练更稳定</td><td>GPT-2, BERT</td></tr>
+<tr><td><strong>SwiGLU</strong></td><td><code>Swish(xW) ⊗ xV</code></td><td>门控结构，学习"何时激活/静默"</td><td>Llama 2+, Mistral, Qwen 2.5</td></tr>
+</table>
+
+<p>SwiGLU 把 FFN 变成"门控"结构——一个分支做非线性变换，另一个分支做线性传递，两者逐元素相乘。已成为 2024-2025 的事实标准。</p>
+
+<div class="arch-diagram">
+图 4：FFN "扩展-变换-压缩" 结构
+
+输入 x: [d_model = 4096]
+    │
+    ▼
+┌──────────────────────────────┐
+│  W₁: 4096 → 16384 (4× 扩展)  │   ← 投影到高维空间
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│  Activation (SwiGLU/GeLU)     │   ← 引入非线性
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│  W₂: 16384 → 4096 (压缩)     │   ← 投影回原维度
+└──────────────┬───────────────┘
+               │
+               ▼
+输出: [d_model = 4096]
+
+
+FFN 的 Key-Value 记忆机制 (Geva et al., 2021):
+┌──────────────────────────────────────────────┐
+│  W₁ 的每行 = Key (匹配输入中的特定模式)        │
+│  W₂ 的每列 = Value (存储对应的知识)            │
+│                                              │
+│  "巴黎" → 匹配 Key₁ → 激活 Value₁ → "法国首都" │
+│  "水"   → 匹配 Key₂ → 激活 Value₂ → "100°C"   │
+│                                              │
+│  Attention 负责"路由"(决定查哪本书)              │
+│  FFN 负责"内容"(书里的知识)                     │
+└──────────────────────────────────────────────┘
+</div>
+
+<h3>FFN 是"知识存储"</h3>
+<p>2021 年 Geva 等人的研究揭示：FFN 层本质上是一个巨大的<strong>关联记忆</strong>。Transformer 的大部分事实知识——"巴黎是法国首都"、"水在 100°C 沸腾"——不是存储在 Attention 矩阵里，而是存储在 FFN 的权重中。</p>
+<p>这解释了：增大 FFN 维度能提升知识容量；某些 FFN 神经元被屏蔽后模型对特定事实回答变差；MoE 的核心思路就是让多个"专家 FFN"分工存储不同领域知识。</p>
+
+<h3>参数量分布</h3>
+<table>
+<tr><th>组件</th><th>Llama 3 8B 参数量</th><th>占比</th></tr>
+<tr><td>Token Embedding</td><td>~1.3B</td><td>~16%</td></tr>
+<tr><td>Attention（32层）</td><td>~1.6B</td><td>~20%</td></tr>
+<tr><td><strong>FFN（32层）</strong></td><td><strong>~6.4B</strong></td><td><strong>~80%</strong></td></tr>
+<tr><td>LayerNorm</td><td>~0.001B</td><td>&lt;0.1%</td></tr>
+</table>
+<p>当你听说一个模型有 70B 参数时，约 <strong>56B 都在 FFN 里</strong>。</p>
+
+<p><strong>FFN 的"知识编辑"实验：</strong>Geva 等人的研究还发现了一个惊人的事实：通过修改 FFN 中特定的神经元，可以直接改变模型对特定事实的"认知"。例如，将存储"巴黎是法国首都"的神经元修改后，模型在被问"法国首都是哪里"时会给出不同的答案——而其他知识完全不受影响。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>增大 FFN 维度来提升知识容量</li>
+<li>使用 SwiGLU 替代 GeLU（2024-2026 标准）</li>
+<li>考虑 MoE 架构让多个专家 FFN 分工</li>
+<li>4× 扩展是计算效率和知识容量的甜点</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>试图用更多 Attention 层替代 FFN</li>
+<li>忽略激活函数的选择（ReLU 已过时）</li>
+<li>过度扩展 FFN 维度（>8× 收益递减）</li>
+<li>忘记 FFN 才是参数大户（~80%）</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、LayerNorm：稳定训练的魔法</h2>
+
+<h3>问题：激活值漂移</h3>
+<p>深层网络中，每层输出分布逐层变化——有的层输出越来越大，有的越来越小。这让后面的层无所适从，梯度不稳定，导致 loss = NaN 或卡住。</p>
+
+<h3>LayerNorm 做什么</h3>
+<pre><code>LayerNorm(x) = γ · (x - μ) / σ + β
+
+# 1. 计算均值 μ 和标准差 σ（沿特征维度）
+# 2. 标准化：(x - μ) / σ → 标准正态分布
+# 3. 可学习缩放 γ 和偏移 β
+
+# 相当于"自动增益控制"——无论输入多乱，输出在合理范围内</code></pre>
+
+<h3>为什么不用 BatchNorm？</h3>
+<ul>
+  <li>BatchNorm 沿"批次"维度归一化——NLP 中序列长度变化大，batch 统计不稳定</li>
+  <li>推理时 batch size 可能为 1，统计量不可靠</li>
+  <li>LayerNorm 沿"特征"维度归一化——对每个样本独立计算，不依赖 batch size</li>
+</ul>
+
+<h3>Pre-Norm vs Post-Norm 对比</h3>
+<table>
+<tr><th>配置</th><th>梯度路径</th><th>训练稳定性</th><th>需要 warmup？</th><th>代表模型</th></tr>
+<tr><td><strong>Post-Norm</strong></td><td>梯度必须穿过 LayerNorm</td><td>容易发散</td><td>必须</td><td>原始 Transformer (2017)</td></tr>
+<tr><td><strong>Pre-Norm</strong></td><td>梯度直接通过残差连接</td><td>稳定</td><td>不需要</td><td>GPT-2~4, Llama 1/2</td></tr>
+</table>
+
+<div class="arch-diagram">
+图 5：Post-Norm vs Pre-Norm 梯度路径
+
+Post-Norm (原始 Transformer):        Pre-Norm (现代标准):
+
+    ┌──────┐                            ┌──────┐
+    │  LN  │ ← 梯度必须穿过               │SubLyr│
+    └──┬───┘                            └──┬───┘
+       │                                   │
+    ┌──┴───┐                            ┌──┴───┐
+    │  +   │ ← 残差                      │  LN  │
+    └──┬───┘                            └──┬───┘
+       │                                   │
+    ┌──┴───┐                            ┌──┴───┐
+    │SubLyr│                            │  +   │ ← 残差(干净!)
+    └──┬───┘                            └──┬───┘
+       │                                   │
+    梯度被 LN 缩放                        梯度直接 bypass
+    深层 → 不稳定                         深层 → 稳定
+
+Pre-Norm 让残差连接保持"干净"
+→ 梯度可以直接 bypass 子层
+→ 训练 96+ 层成为可能
+</div>
+
+<h3>RMSNorm：去繁就简</h3>
+<pre><code># 现代 LLM 用 RMSNorm 替代 LayerNorm
+RMSNorm(x) = x / √(mean(x²)) · γ
+
+# 去掉"减均值"步骤，只做缩放
+# 快约 20%（少一次 reduce 操作）
+# 所有现代 LLM 都用它：Llama, Mistral, DeepSeek, Qwen</code></pre>
+
+<h3>最新趋势：Post-Norm 回归</h3>
+<table>
+<tr><th>配置</th><th>训练稳定性</th><th>最终质量</th><th>代表模型</th></tr>
+<tr><td>Pre-Norm</td><td>高</td><td>良好</td><td>GPT-2~4, Llama 1/2</td></tr>
+<tr><td>Post-Norm + QK-Norm</td><td>高</td><td>略好</td><td>OLMo 2</td></tr>
+<tr><td>Pre+Post-Norm</td><td>很高</td><td>良好</td><td>Gemma 3</td></tr>
+</table>
+<p>OLMo 2 和 Gemma 3 发现：用 QK-Norm（在 Attention 的 Q 和 K 上额外归一化）配合 Post-Norm，可以兼顾质量和稳定性。这个 pendulum 还在摆动。</p>
+
+<p><strong>RMSNorm vs LayerNorm 的实际性能对比：</strong>在 Llama 2（7B）的消融实验中，将 LayerNorm 替换为 RMSNorm 后：</p>
+
+<table>
+<tr><th>指标</th><th>LayerNorm</th><th>RMSNorm</th><th>变化</th></tr>
+<tr><td>训练速度</td><td>基线</td><td>+18%</td><td>少一次 reduce 操作</td></tr>
+<tr><td>最终 perplexity</td><td>5.47</td><td>5.46</td><td>几乎无差异</td></tr>
+<tr><td>显存占用</td><td>基线</td><td>-2%</td><td>无需存储均值</td></tr>
+</table>
+
+<p><strong>工程选型建议：</strong>对于新项目，直接使用 Pre-Norm + RMSNorm 方案。这是 2024-2026 年的事实标准，Llama 3、Mistral、Qwen 2.5 都在用。只有在追求极致质量（如科研场景）时，才考虑 Post-Norm + QK-Norm 方案。</p>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、输出层：从向量到概率</h2>
+
+<p>经过 N 个 Decoder Block 的层层加工，token 已从原始整数索引变成了丰富的上下文向量。最终需要输出人类可理解的结果——下一个词是什么？</p>
+
+<h3>LM Head：最后的投影</h3>
+<pre><code># LM Head (Language Model Head) = 线性层
+logits = W_lm_head · h_final    # [d_model] → [vocab_size]
+
+# h_final: 最后一个 Decoder Block 输出 (经 Final LayerNorm)
+# W_lm_head: [vocab_size, d_model] 的投影矩阵
+# logits: 词汇表上每个 token 的未归一化分数</code></pre>
+
+<h3>从 logits 到概率</h3>
+<pre><code># Softmax: logits → 概率分布
+probs = softmax(logits / temperature)
+
+# temperature 控制生成多样性:
+# T → 0: 接近 argmax (确定性，贪婪解码)
+# T = 1: 标准分布
+# T > 1: 更平坦 (更随机/创造性)
+# T → ∞: 均匀分布 (完全随机)</code></pre>
+
+<h3>Weight Tying（权重绑定）</h3>
+<p>许多模型让 LM Head 的权重与 Token Embedding 共享：</p>
+<pre><code>W_lm_head = Token_Embedding.T    # 权重绑定
+
+# 好处：
+# 1. 减少参数量（省掉一个 vocab_size × d_model 矩阵）
+# 2. 语义一致性：embedding 空间中相近的词，预测概率也相近
+# 3. GPT-2, Llama 等都使用 weight tying</code></pre>
+
+<div class="arch-diagram">
+Token 完整旅程：从输入到输出
+
+"Hello" → token_id = 15496
+              │
+              ▼
+     ┌──────────────────┐
+     │ Token Embedding  │   [1] → [d_model = 4096]
+     │ + 位置编码        │   + Positional Encoding
+     └────────┬─────────┘
+              │
+     ┌────────┴─────────┐
+     │  Decoder Block ×N │   × 32 (Llama 3 8B)
+     │  ┌──────────────┐ │   或 × 96 (GPT-3)
+     │  │ LN → Attn → +│ │   或 × 126 (Llama 3 405B)
+     │  │ LN → FFN  → +│ │
+     │  └──────────────┘ │
+     └────────┬─────────┘
+              │
+     ┌────────┴─────────┐
+     │ Final LayerNorm   │   最后一次归一化
+     └────────┬─────────┘
+              │
+     ┌────────┴─────────┐
+     │ LM Head           │   [d_model] → [vocab_size]
+     │ (线性投影)         │   logits = W · h_final
+     └────────┬─────────┘
+              │
+     ┌────────┴─────────┐
+     │ Softmax / 采样    │   logits → 概率分布 → 采样
+     └────────┬─────────┘
+              │
+              ▼
+     "world" (概率 0.23)    → 输出下一个 token
+     "!"     (概率 0.15)
+     " there"(概率 0.12)
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、总结：Token 的完整旅程</h2>
+
+<table>
+<tr><th>阶段</th><th>操作</th><th>张量变化</th></tr>
+<tr><td><strong>1. 分词</strong></td><td>文本 → token IDs</td><td>"Hello world" → [15496, 2210]</td></tr>
+<tr><td><strong>2. Embedding</strong></td><td>整数 → 向量 + 位置编码</td><td>[seq_len] → [seq_len, d_model]</td></tr>
+<tr><td><strong>3. Attention</strong></td><td>token 间信息交流（因果掩码）</td><td>[seq_len, d_model] → [seq_len, d_model]</td></tr>
+<tr><td><strong>4. 残差连接</strong></td><td>梯度高速公路</td><td>x + Attn(LN(x))</td></tr>
+<tr><td><strong>5. FFN</strong></td><td>独立思考 + 知识检索</td><td>[seq_len, d_model] → [seq_len, d_model]</td></tr>
+<tr><td><strong>6. 残差连接</strong></td><td>梯度高速公路</td><td>x + FFN(LN(x))</td></tr>
+<tr><td><strong>7. 重复 3-6</strong></td><td>N 次堆叠（N=32~126）</td><td>维度始终不变</td></tr>
+<tr><td><strong>8. Final LN</strong></td><td>最后一次归一化</td><td>[seq_len, d_model]</td></tr>
+<tr><td><strong>9. LM Head</strong></td><td>向量 → logits</td><td>[d_model] → [vocab_size]</td></tr>
+<tr><td><strong>10. Softmax</strong></td><td>logits → 概率分布</td><td>[vocab_size] 概率</td></tr>
+<tr><td><strong>11. 采样</strong></td><td>概率 → 下一个 token</td><td>"world" (P=0.23)</td></tr>
+</table>
+
+<div class="arch-diagram">
+现代 LLM 架构全景 (Decoder-Only):
+
+Token Embedding ──→ Positional Encoding ──→ [Decoder Block ×N] ──→ Final LN ──→ LM Head ──→ Softmax ──→ Sample
+
+Decoder Block 内部:
+  ┌────────────────────────────────────┐
+  │  x ──→ LN ──→ Masked Self-Attn ──→ + ──→ LN ──→ FFN ──→ + ──→ x'  │
+  │        ↑                          │        ↑              │       │
+  │        └──── 残差连接 ─────────────┘        └── 残差连接 ──┘       │
+  └────────────────────────────────────┘
+
+参数量分布 (Llama 3 8B):
+  Token Embedding:  ████░░░░░░░░░░░░░░░░  ~16%  (~1.3B)
+  Attention (32层): █████░░░░░░░░░░░░░░░  ~20%  (~1.6B)
+  FFN (32层):       ████████████████████  ~80%  (~6.4B)  ← 知识存储
+  LayerNorm:        ░░░░░░░░░░░░░░░░░░░░  <0.1%
+</div>
+
+<h3>常见误区</h3>
+<ul>
+<li>以为 Self-Attention 是非线性的（其实是线性的加权组合）</li>
+<li>忽略 FFN 的作用（非线性全靠它）</li>
+<li>混淆 Post-LN 和 Pre-LN 的顺序</li>
+<li>以为残差连接只是为了"保留信息"（更重要的是梯度通路）</li>
+</ul>
+</div>
+
+<div class="section" id="s8">
+<h2>生产案例</h2>
+<div class="intuition-box">
+<p><strong>生产验证：</strong>GPT-4（推测 1.8T 参数，MoE 架构）采用纯 Decoder-Only 设计，在 MMLU 基准上达到 <strong>86.4%</strong>（超越人类平均水平 87% 的 98%）。对比实验数据：同等参数规模下，Encoder-Decoder（如 T5-XXL）在生成任务上吞吐量仅为 Decoder-Only 的 <strong>60%</strong>（编码器浪费算力在双向理解上），但在 NER/分类等理解任务上准确率仍高 3-5 个百分点。In-Context Learning 是 GPT-3（175B）的涌现能力 — 仅用 4 个示例就能让模型在未见过的任务上达到 <strong>43%</strong> 准确率（随机猜测约 25%）。Scaling Law 验证：模型参数从 1B 增至 175B，cross-entropy loss 从 3.4 降至 <strong>2.0</strong>，呈幂律下降。</p>
+</div>
+<div class="intuition-box">
+<p><strong>生产验证（Llama 3 405B）：</strong>采用 Pre-LN + RMSNorm + SwiGLU FFN 配置，堆叠 <strong>126 层</strong> Transformer Block，训练稳定性良好（无梯度爆炸/消失）。对比实验：同参数规模下，Post-LN 在第 35 层时 loss 开始震荡（标准差从 0.02 飙升至 <strong>0.8</strong>），Pre-LN 全程标准差 &lt;0.05。SwiGLU 相比 ReLU 在 MMLU 基准上提升 <strong>2.1 个百分点</strong>（78.3 → 80.4），代价是 FFN 参数量增加 50%（多一个门控矩阵）。残差连接的消融实验：去掉残差连接后，126 层模型在第 8 层就出现梯度消失（梯度范数 &lt;10⁻⁷），训练完全失败。</p>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>为什么 Decoder-Only 架构赢了 Encoder-Only 和 Encoder-Decoder？</summary>
+<p class="answer">三个核心原因：①训练效率——Next Token Prediction 让 100% token 参与损失计算，而 BERT 的 MLM 只有 15% token 参与，数据利用率低 6~7 倍；②简单性——单层堆叠比两层更容易扩展，训练基础设施、分布式策略、推理引擎都只需针对一种 block；③涌现能力——规模超过 100B 后自发出现 in-context learning 和 chain-of-thought 推理，这在其他架构中未被观察到。关键洞察：架构简单性是可扩展性的前提。</p>
+</details>
+
+<details>
+<summary>残差连接为什么对深度 Transformer 至关重要？</summary>
+<p class="answer">残差连接解决深层网络的 degradation 问题（56层比20层训练误差更高）。核心数学：反向传播时 ∂L/∂x = ∂L/∂y · (∂F/∂x + 1)，那个 +1 创建了"梯度高速公路"——即使 ∂F/∂x 很小（深层网络常见），梯度也不会消失。在 Transformer 中，每个子层（Attention 和 FFN）都包裹在残差连接中，这意味着每个子层只需做"微改造"——如果没帮助，F(input)→0，信息直接流过。没有残差连接，GPT-3 的 96 层和 Llama 3 的 126 层根本不可能训练。</p>
+</details>
+
+<details>
+<summary>FFN 在 Transformer 中的作用是什么？为什么说它是"知识存储"？</summary>
+<p class="answer">FFN 的作用：①引入非线性——Attention 是线性的（加权平均），FFN 通过激活函数（GeLU/SwiGLU）引入非线性变换能力；②知识存储——Geva 等人 (2021) 发现 FFN 本质是关联记忆：W₁ 的每行是 Key（匹配输入模式），W₂ 的每列是 Value（存储知识）。Transformer 的事实知识（"巴黎是法国首都"）存在 FFN 权重中，而非 Attention 矩阵中。Attention 负责"路由"，FFN 负责"内容"。FFN 占模型 ~80% 参数（Llama 3 8B 中约 6.4B/8B），这也印证了它是知识的主要载体。</p>
+</details>
+
+<details>
+<summary>Pre-Norm 和 Post-Norm 有什么区别？现代 LLM 用哪个？</summary>
+<p class="answer">Post-Norm: x = LN(x + Attn(x))，归一化在残差之后——梯度必须穿过 LayerNorm，深层训练不稳定，需要 warmup。Pre-Norm: x = x + Attn(LN(x))，归一化在子层之前——残差连接保持"干净"，梯度可直接 bypass，训练 96+ 层稳定。现代标准是 Pre-Norm + RMSNorm（去掉减均值，快约 20%）。最新趋势：Post-Norm 正回归——OLMo 2 用 QK-Norm + Post-Norm 获得略好质量，Gemma 3 用 Pre+Post-Norm 混合方案。但对普通工程师，Pre-Norm + RMSNorm 仍是 2026 年最稳妥选择。</p>
+</details>
+
+<details>
+<summary>描述一个 token 从输入到输出的完整旅程。</summary>
+<p class="answer">完整旅程 11 步：①分词——文本通过 BPE/SentencePiece 转为 token IDs；②Embedding——整数查表得到 d_model 维向量，加上位置编码（RoPE/绝对位置）；③Attention——token 间通过 Q/K/V 交流信息（因果掩码只看过去）；④残差连接——input + Attention 输出；⑤FFN——每个 token 独立做非线性变换 + 知识检索；⑥残差连接——再次 bypass；⑦重复③-⑥共 N 次（32~126 层），维度始终 [batch, seq_len, d_model]；⑧Final LayerNorm——最后一次归一化；⑨LM Head——线性投影到 [vocab_size] 得到 logits；⑩Softmax——logits 转概率分布；⑪采样——根据策略（greedy/top-k/top-p/temperature）选下一个 token。关键设计：中间所有步骤维度不变，这让层间堆叠像 USB-C 一样即插即用。</p>
+</details>
+
+<details>
+<summary>一层 Transformer Block 的结构是什么？</summary>
+<p class="answer">两个子层串联：(1) Self-Attention 子层——让 token 之间互相交流，聚合全局信息；(2) FFN 子层——对每个 token 独立做深层非线性变换。每个子层外面都包裹着残差连接和层归一化两件"外套"。关键特性：输入和输出维度完全一致（L × d_model），所以可以无限堆叠。</p>
+</details>
+
+<details>
+<summary>为什么要用多头注意力而不是单头？</summary>
+<p class="answer">一个词和其他词的关系往往不止一种维度。比如"苹果"和"树"可能既有语义关系（苹果长在树上），又有结构关系（位置相邻）。单头注意力每次只能学一种关系模式，多头注意力同时派出多个"分析员"从不同角度看词与词的关系，最后拼接结果做线性映射。总计算量不增加，因为每个头的维度 d_k = d_model / h。</p>
+</details>
+
+<details>
+<summary>Transformer 能堆到很深的原因是什么？</summary>
+<p class="answer">两个根本原因：(1) 维度一致性——每个 Block 的输入输出维度完全相同（L × d_model），所以可以无缝串联；(2) 残差连接——提供梯度直通通道，防止深层网络的梯度消失。GPT-3 堆了 96 层，GPT-4 推测 120+ 层。没有残差连接，堆到 10 层以上就基本训不动了。</p>
+</details>
+
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A55 · 多 Agent 工具调用冲突仲裁</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、四类冲突，锁只管得住一类</a>
+<a href="#s2">二、先防：入口幂等与语义指纹</a>
+<a href="#s3">三、中控：分布式锁的实现谱系</a>
+<a href="#s4">四、锁的粒度、续期与致命竞态</a>
+<a href="#s5">五、去锁化：状态机、池化与分区串行</a>
+<a href="#s6">六、后兜底：限流、熔断与冲突可观测</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>A55 · 多 Agent 工具调用冲突仲裁</h1>
+<p class="subtitle">四类冲突的辨识 / 语义指纹幂等 / 分布式锁谱系与栅栏令牌 / 续期竞态与死锁铁律 / 分区串行化与冲突可观测</p>
+
+<div class="intuition-box">
+<p>"加个锁"这个答案的问题不是锁没用，而是它只对付了四类冲突中的一类——而且在异步网络里，任何分布式锁都只能降低冲突概率，最终正确性必须由资源侧的幂等和栅栏令牌来兜住。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、四类冲突，锁只管得住一类</h2>
+
+<p>Agent A 跑在机器一上，Agent B 跑在机器二上，两者要操作同一张库存表。机器一的进程内锁（<code>synchronized</code>、<code>ReentrantLock</code>、Python 的 <code>threading.Lock</code>）作用域只有一个进程的地址空间，对机器二完全不可见——这是"加个锁"最表面的问题，也是最容易补的一刀：换成分布式锁。</p>
+
+<p>但真正的坑在更深一层：<strong>多 Agent 系统里的"工具调用冲突"不是一种问题，而是四种问题被同一个词包住了</strong>。它们的成因不同，正确的手段也不同，其中只有第一种是锁的主场。</p>
+
+<table>
+<tr><th>冲突类型</th><th>典型表现</th><th>加锁能解决吗</th><th>正确手段</th></tr>
+<tr><td>互斥冲突</td><td>两个 Agent 同时改同一条库存记录，一方的写被覆盖</td><td>能，这是锁的主场</td><td>分布式锁 / CAS 版本号</td></tr>
+<tr><td>重复执行</td><td>同一个意图被执行了两次（模型重试、两个 Agent 各做一遍）</td><td>不能，它们可能根本不并发</td><td>幂等键去重 + 结果缓存</td></tr>
+<tr><td>顺序冲突</td><td>扣款先于订单创建执行，依赖关系被打乱</td><td>不能，锁只保互斥不保顺序</td><td>依赖编排 / 状态机前置条件</td></tr>
+<tr><td>资源拥塞</td><td>五个 Agent 抢三个浏览器实例，或打满上游 API 配额</td><td>反而更糟，大家一起排队等死</td><td>资源池化 / 限流 / 排队+降级</td></tr>
+</table>
+
+<p>最容易被误诊的是第二类。<strong>重复执行往往不是并发问题</strong>——第一次调用其实成功了，只是响应在网络上丢了，模型没收到结果，于是重新发起一次工具调用。这两次调用在时间上完全不重叠，任何锁都拦不住，因为锁只保证"同一时刻只有一个"，不保证"整个生命周期只执行一次"。</p>
+
+<h3>1.1 Agent 场景把这四类冲突同时放大</h3>
+
+<ul>
+<li><strong>模型自带重试倾向</strong>：工具返回超时或格式不符预期时，模型经常自己决定"再调一次"，且这个决定不受调用方的重试策略管辖。</li>
+<li><strong>一次输出多个工具调用</strong>：现代模型在单轮里可以并发发出多个 <code>tool_call</code>，其中两个操作同一资源的情况完全可能出现，且是同一个 Agent 内部的并发。</li>
+<li><strong>同一目标触发多个 Agent</strong>：编排层把"处理这个退款"拆给了核对 Agent 和执行 Agent，两者都可能去调退款接口。</li>
+<li><strong>参数漂移</strong>：两次调用意图相同但参数表述不同（<code>{"qty":1}</code> 与 <code>{"quantity":1}</code>），按字面去重会失效。</li>
+</ul>
+
+<h3>1.2 锁的三笔账</h3>
+
+<p>即使确实是互斥冲突，锁也不是免费的。第一笔是<strong>吞吐塌陷</strong>：粒度选错时（比如锁整个工具名），系统吞吐直接被压到"1 / 单次调用耗时"，而 Agent 的单次工具调用动辄几百毫秒到数秒。第二笔是<strong>死锁</strong>：多个 Agent 以不同顺序申请多把锁，就会互相等待。第三笔是<strong>新增故障域</strong>：锁服务本身成了关键路径上的强依赖，它抖一下，所有工具调用一起抖。</p>
+
+<div class="intuition-box">
+<p>锁回答的是"此刻谁能进"，幂等回答的是"这件事到底做过没有"。把重复执行当成互斥问题去加锁，就像用门禁卡去防止同一个人刷两次——门是锁住了，事已经做了两遍。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、先防：入口幂等与语义指纹</h2>
+
+<p>生产链路的第一道关卡不是锁，而是在工具调用入口做<span class="term">幂等去重</span>——为每次调用确定一个唯一标识，用它判断"这件事是不是已经在做或已经做完了"。这一步能把大量根本不需要仲裁的重复请求挡在门外，让后面的锁只处理真正的并发。</p>
+
+<h3>2.1 幂等键不能随手生成</h3>
+
+<p>最常见的错误是拿一个新生成的 UUID 或者模型给出的 <code>tool_call_id</code> 当幂等键。这两个值在每次重试时都会变——模型重新发起工具调用时会生成一个全新的 <code>tool_call_id</code>，用它做去重等于每次都是"首次请求"，幂等完全失效。</p>
+
+<table>
+<tr><th>幂等键构造方式</th><th>能拦住什么</th><th>拦不住什么</th><th>适用场景</th></tr>
+<tr><td>随机 UUID（每次新生成）</td><td>什么都拦不住</td><td>全部重复</td><td>无（常见错误）</td></tr>
+<tr><td>模型的 <code>tool_call_id</code></td><td>同一次响应内的重复投递</td><td>模型自主重试（ID 会变）</td><td>仅作为追踪标识</td></tr>
+<tr><td>调用方传入的请求 ID</td><td>网络层重传、框架层重试</td><td>模型层面的语义重复</td><td>SDK / 网关重试</td></tr>
+<tr><td>语义指纹（推荐）</td><td>参数等价的语义重复</td><td>参数被模型改写后的重复</td><td>Agent 工具调用主力方案</td></tr>
+<tr><td>业务唯一键（订单号等）</td><td>业务层面的绝对重复</td><td>无业务键的只读/查询类调用</td><td>写操作的最终防线</td></tr>
+</table>
+
+<p><span class="term">语义指纹</span>指的是把调用的语义内容归一化后取哈希：工具名 + 规范化参数（键排序、数值与单位标准化、去掉时间戳等易变字段）+ 任务或会话标识。这样"同一个任务里对同一个工具带同样参数的调用"就有了稳定的身份，无论模型重试多少次，指纹都不变。</p>
+
+<div class="formula">
+指纹 = hash( 工具名 ‖ 规范化(参数) ‖ 任务ID )
+</div>
+
+<h3>2.2 命中重复之后，不要一律拒绝</h3>
+
+<p>"重复请求直接拒绝"是个太粗糙的处理。真正的幂等要求<strong>重复请求返回与首次相同的结果</strong>，而不是返回一个错误——因为调用方之所以重试，往往正是因为它没拿到第一次的结果。所以去重记录必须带状态，按状态分别处理：</p>
+
+<div class="arch-diagram">
+  工具调用请求
+       │
+       ▼
+ ┌──────────────────────────────────────────┐
+ │ 计算语义指纹 → SETNX fp:xxx (TTL 30min)   │
+ └────────────┬─────────────────────────────┘
+              │
+     ┌────────┴────────┐
+   成功(首次)         失败(已存在)
+     │                  │
+     ▼                  ▼
+ ┌────────┐    ┌────────────────────────────┐
+ │ 进入中控 │    │ 读取记录状态                 │
+ │ 抢锁执行 │    ├────────────────────────────┤
+ └───┬────┘    │ 进行中 → 短轮询等待 / 返回处理中│
+     │         │ 已成功 → 直接返回缓存的结果    │◀── 真幂等
+     │         │ 已失败 → 删除记录，允许重新执行 │
+     ▼         └────────────────────────────┘
+ 写回状态与结果
+</div>
+
+<p>去重记录的 TTL 是个需要权衡的参数。30 分钟左右适合覆盖"技术性重试"的时间窗（网络重传、模型重试、任务重放），而<strong>业务层面的防重不能靠 TTL</strong>——用户在两小时后真的想再转一次同样金额的账，这是合法操作，必须由业务唯一键（订单号、申请单号）来区分，而不是由一个通用的时间窗决定。混淆这两者会导致既拦不住重复又挡住合法操作。</p>
+
+<div class="highlight">
+<strong>示例场景 · 幂等命中率暴露的模型循环：</strong>一个客服 Agent 系统上线语义指纹去重后，稳态的幂等命中率约为 <strong>3%~5%</strong>（主要来自网络重传）。某次上线后该指标在 20 分钟内涨到 <strong>41%</strong>，而错误率、时延面板全部正常，通用监控毫无反应。排查发现新版提示词把工具返回的空数组描述成了"查询未完成"，模型据此对同一个查询反复重发，最多的一个会话对同一工具调用了 <strong>17 次</strong>。去重挡住了下游的实际压力，所以没有任何服务报警，但每次重复调用仍然消耗了完整的一轮推理 Token——单会话成本上涨约 <strong>6 倍</strong>。这个案例说明幂等命中率必须单独出图：它是唯一能在"系统看起来完全健康"时暴露模型行为异常的指标。
+</div>
+
+<p>幂等键的设计、状态持久化和异常路径处理本身就是一个大话题，更完整的讨论见 <a href="../agent/agent_idempotency.html">《A59 · AI Agent 幂等性设计》</a>——<strong>A59 讲单次操作怎么做到"只生效一次"，本文把它当作跨 Agent 仲裁链路的第一道闸门来用。</strong></p>
+
+<div class="intuition-box">
+<p>幂等键的价值全在"稳定"这两个字上。每次重试都会变的 ID 不是幂等键，是一次性门票。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、中控：分布式锁的实现谱系</h2>
+
+<p>过了幂等这道闸，剩下的就是真正的并发互斥。分布式锁有若干实现路线，它们在<strong>正确性模型</strong>上的差异远比在 API 上的差异重要。</p>
+
+<table>
+<tr><th>实现</th><th>正确性依赖</th><th>获取时延</th><th>故障切换行为</th><th>适用场景</th></tr>
+<tr><td>Redis 单实例 SETNX</td><td>单点不挂 + TTL 正确</td><td>亚毫秒</td><td>主挂即丢锁，可能双持</td><td>冲突代价可接受的性能优化</td></tr>
+<tr><td>Redis 主从 + Redisson</td><td>异步复制不丢数据（无保证）</td><td>亚毫秒</td><td>主从切换窗口内可双持</td><td>绝大多数业务场景的默认选择</td></tr>
+<tr><td>Redlock（多独立实例）</td><td>时钟不跳变 + 无长停顿</td><td>毫秒级（需多数派）</td><td>降低单点风险，安全性仍有争议</td><td>不推荐作为唯一正确性保障</td></tr>
+<tr><td>ZooKeeper 临时顺序节点</td><td>ZAB 共识 + 会话租约</td><td>数毫秒~十毫秒</td><td>会话过期自动释放，语义清晰</td><td>需要强一致与公平排队</td></tr>
+<tr><td>etcd Lease + Revision</td><td>Raft 共识 + 单调 revision</td><td>数毫秒~十毫秒</td><td>租约到期自动释放</td><td>天然提供栅栏令牌</td></tr>
+<tr><td>数据库唯一约束 / 行锁</td><td>数据库事务</td><td>毫秒级</td><td>与业务数据同源，最可靠</td><td>低频关键写操作的最终防线</td></tr>
+</table>
+
+<h3>3.1 一条必须接受的底线</h3>
+
+<p>在异步网络里，<strong>没有任何分布式锁能同时保证 100% 互斥和高可用</strong>。原因不在实现质量，而在物理约束：锁的持有必须有过期时间（否则持有者崩溃就永久死锁），而"过期"是按时间判断的，锁服务无法知道原持有者是真的死了、还是只是网络断了 30 秒后又活过来了。Redis 主从的异步复制、Redlock 依赖的时钟假设（这一点在业界有长期争论，核心质疑是进程停顿和时钟跳变足以破坏其安全性）、乃至基于共识的方案里客户端与服务端之间的会话判定，都逃不过这一点。</p>
+
+<p>由此得到一条应当写进设计文档的原则：<strong>对"绝对不能重复"的操作，分布式锁只是性能优化，最终正确性必须由资源侧兜住。</strong>兜住的方式有两种，通常二选一即可：</p>
+
+<ul>
+<li><span class="term">栅栏令牌（Fencing Token）</span>：锁服务在授予锁时附带一个单调递增的编号（etcd 的 revision、ZooKeeper 的 zxid 天然可用）。写资源时必须带上这个编号，资源侧记住见过的最大编号并<strong>拒绝任何编号更小的写入</strong>。这样即使一个"以为自己还持锁"的旧持有者杀回来，它手里的编号已经过期，写入会被硬性拒绝。</li>
+<li><span class="term">条件更新（CAS）</span>：写入时带上读到的版本号，用 <code>UPDATE ... WHERE version = N</code> 的形式让存储层的原子性做最终裁决，版本不匹配就失败重试。</li>
+</ul>
+
+<div class="arch-diagram">
+  时间 ──────────────────────────────────────────────────────▶
+
+  Agent-A   [获锁 token=33]──[STW 停顿 35s ……]──[恢复]──写(33) ✗拒绝
+                  │                                      ▲
+                  │  锁 TTL=30s 到期，锁被释放             │ 资源侧已见过 34
+                  ▼                                      │ 33 < 34 → 拒绝
+  锁服务    ───────┴──────[授予 Agent-B token=34]──────────┤
+                                    │                     │
+  Agent-B                     [获锁 token=34]───写(34) ✓───┘
+
+  没有栅栏令牌时：A 恢复后的写入会覆盖 B 的写入 → 静默数据错乱
+</div>
+
+<h3>3.2 等待参数怎么定</h3>
+
+<p>获取锁的两个关键参数是<strong>等待时长</strong>和<strong>持有时长</strong>。等待时长应该短（数百毫秒量级），因为等待期间调用方的线程、上游的超时预算、用户的耐心都在被消耗；更重要的是，Agent 的工具调用通常嵌在一个有整体时延预算的任务里，锁等待要从这份预算里扣，等太久等于把超时的锅从"资源忙"换成"我们自己排队"。持有时长（租约）则要覆盖临界区的最坏耗时，但也不能太长——它同时是崩溃后其他人的最长等待时间。</p>
+
+<div class="intuition-box">
+<p>分布式锁的作用是把冲突概率从"经常"降到"罕见"，不是降到"不可能"。真正保证正确性的是资源侧那句"你的编号过期了，不收"。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、锁的粒度、续期与致命竞态</h2>
+
+<h3>4.1 粒度决定了系统的吞吐上限</h3>
+
+<p>锁粒度是最容易做错、代价最直接的一个设计。锁在"工具"这个级别上，意味着全局只有一个 Agent 能用这个工具，吞吐上限就是单次调用耗时的倒数；锁在"工具 + 资源实例"级别，不同资源的操作就能完全并行。</p>
+
+<table>
+<tr><th>锁粒度</th><th>锁键示例</th><th>并发度</th><th>风险</th></tr>
+<tr><td>工具级</td><td><code>lock:inventory_tool</code></td><td>1</td><td>吞吐塌陷，几乎必然成为瓶颈</td></tr>
+<tr><td>租户 / 会话级</td><td><code>lock:inventory:tenant_42</code></td><td>租户数</td><td>大租户内部仍然串行</td></tr>
+<tr><td>资源实例级（推荐）</td><td><code>lock:inventory:sku_88231</code></td><td>资源数</td><td>热点资源仍会排队</td></tr>
+<tr><td>字段 / 分段级</td><td><code>lock:inventory:sku_88231:shard_3</code></td><td>资源数 × 分段数</td><td>合并逻辑复杂，易出错</td></tr>
+</table>
+
+<p>遇到热点资源（比如一件爆款商品的库存）时，进一步的手段是<strong>分段</strong>：把一份库存拆成若干段，每段独立加锁扣减，段内不足才去借调其他段。这是用复杂度换并发度，只在确认存在热点瓶颈后才值得做。</p>
+
+<h3>4.2 看门狗续期与它掩盖的竞态</h3>
+
+<p>持有时长太短会导致临界区还没跑完锁就过期了，所以主流客户端提供<span class="term">看门狗续期</span>：后台线程在锁快到期时自动延长租约。以 Redisson 为例，官方配置文档写明 <code>lockWatchdogTimeout</code> 默认 <strong>30000 毫秒</strong>，且续期任务按租约的三分之一间隔触发，即默认每 <strong>10 秒</strong>把锁的过期时间重新推回 30 秒；这个机制只在获取锁时<strong>没有</strong>显式指定租约时长的情况下生效。</p>
+
+<p>看门狗降低了"临界区超时丢锁"的概率，但它不能消除上一节那张时序图里的竞态：如果持有者进程遭遇长时间垃圾回收停顿、容器被冻结、或者与锁服务的网络中断超过一个完整租约周期，续期线程也发不出续期请求，锁照样会过期。<strong>看门狗把这个窗口从"经常发生"压到"偶尔发生"，而偶尔发生的静默数据错乱恰恰是最难排查的一类故障</strong>——所以它是栅栏令牌的补充，不是替代。</p>
+
+<h3>4.3 三条死锁与竞态铁律</h3>
+
+<table>
+<tr><th>场景</th><th>为什么出事</th><th>对策</th></tr>
+<tr><td>多锁交叉申请</td><td>A 持锁1求锁2，B 持锁2求锁1</td><td>全局固定申请顺序（如按锁键字典序排序后依次申请）</td></tr>
+<tr><td>持锁期间调用大模型</td><td>一次推理可能耗时数十秒，远超租约</td><td>严禁在临界区内做模型调用，先决策后加锁</td></tr>
+<tr><td>持锁期间调不可控外部服务</td><td>外部超时不可预测，租约被拖穿</td><td>临界区内所有调用必须设硬超时，且总和 &lt; 租约</td></tr>
+<tr><td>释放了别人的锁</td><td><code>DEL</code> 时不校验持有者，误删已被他人获取的锁</td><td>锁值存唯一持有者标识，用 Lua 脚本做"比对后删除"的原子操作</td></tr>
+<tr><td>重入导致自锁</td><td>同一调用链二次申请同一把锁</td><td>使用支持重入计数的锁实现</td></tr>
+</table>
+
+<p>中间那条对 Agent 系统尤其重要，值得单独强调：<strong>临界区里绝对不要有大模型调用</strong>。传统业务的临界区是几毫秒的内存计算或一次数据库写入，而 Agent 的一次推理从数百毫秒到近百秒都有可能，把它放进临界区等于让租约必然被拖穿。正确的顺序是"先让模型想清楚要做什么，再用一把短命的锁把决策落地"——模型推理在锁外，只有那个确定性的写操作在锁内。</p>
+
+<div class="intuition-box">
+<p>临界区应该像过马路：想好走哪条路是在人行道上做的事，进了斑马线只管快走。把思考塞进斑马线里，红灯一定会亮在你头顶。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、去锁化：状态机、池化与分区串行</h2>
+
+<p>拿不到锁怎么办？"直接失败"太粗暴，"无限等待"更糟。生产上的答案有一整条阶梯，而且越往后越倾向于<strong>根本不用锁</strong>。</p>
+
+<table>
+<tr><th>方案</th><th>互斥强度</th><th>吞吐特征</th><th>实现复杂度</th><th>适用条件</th></tr>
+<tr><td>悲观分布式锁</td><td>强（仍需栅栏兜底）</td><td>随冲突率下降</td><td>中</td><td>冲突频繁、临界区短</td></tr>
+<tr><td>乐观锁 / CAS 版本号</td><td>由存储层保证</td><td>冲突率低时最优</td><td>低</td><td>冲突罕见、操作可安全重试</td></tr>
+<tr><td>状态机条件更新</td><td>强（存储原子性）</td><td>好</td><td>中</td><td>资源有明确状态与合法迁移</td></tr>
+<tr><td>资源池化</td><td>不需要互斥</td><td>受池大小限制</td><td>中</td><td>资源可复制（多实例、多凭证）</td></tr>
+<tr><td>分区串行化</td><td>结构上不可能冲突</td><td>随分区数线性扩展</td><td>较高</td><td>操作可按资源键路由</td></tr>
+</table>
+
+<h3>5.1 状态机：把互斥下沉给存储</h3>
+
+<p>与其在业务代码外面套一把锁，不如把资源的状态显式建模，用带前置条件的原子更新做状态迁移。比如工具执行记录有 <code>idle → running → done</code> 三态，抢占执行权就是一条 <code>UPDATE ... SET status='running' WHERE id=? AND status='idle'</code>——受影响行数为 1 就是抢到了，为 0 就是别人先抢到了。互斥由数据库的行级原子性保证，不需要额外的锁服务，而且这条记录本身就是审计痕迹。<strong>顺序冲突也顺手解决了</strong>：只要把"必须先创建订单才能扣款"编码成状态迁移的前置条件，乱序的调用会因为前置状态不满足而自然失败。</p>
+
+<h3>5.2 资源池化：把互斥问题换成排队问题</h3>
+
+<p>当争抢的对象是可复制的（五个浏览器沙箱实例、三把上游 API 凭证、一组数据库连接），根本不该用互斥的思路，而应该做成池：Agent 借用、使用、归还，借不到就按超时排队。这时问题从"谁能进"变成"要等多久"，而排队问题有成熟的处理手段——队列长度上限、等待超时、以及超过上限时的降级返回。这也是第一节里"资源拥塞类冲突"的标准解法：<strong>用锁去处理拥塞只会让所有人一起等死，用池去处理才能把等待变成可度量、可降级的东西。</strong></p>
+
+<h3>5.3 分区串行化：最优雅的那一层</h3>
+
+<p>最彻底的方案是<span class="term">分区串行化</span>——不再让多方争抢，而是让同一资源的所有操作都排进同一条队列，由单一执行者依次处理。按资源键哈希路由到固定的执行单元（消息队列的分区、Actor 模型里的一个 actor、或一致性哈希选出的固定 worker），同一个资源的操作天生就是串行的，<strong>并发冲突在结构上就不可能发生</strong>，而不同资源之间完全并行，吞吐随分区数线性扩展。代价是必须接受异步语义（调用方拿到的是"已受理"而不是"已完成"），且需要处理分区迁移和单分区热点。</p>
+
+<div class="arch-diagram">
+        争抢的资源可以复制吗？
+                │
+        ┌───────┴───────┐
+       是                否
+        │                │
+        ▼                ▼
+  ┌──────────┐    操作可按资源键路由吗？
+  │  资源池化  │           │
+  │ 借用/归还  │   ┌───────┴───────┐
+  │ 排队+降级  │  是                否
+  └──────────┘   │                │
+                 ▼                ▼
+          ┌────────────┐    资源有明确状态机吗？
+          │  分区串行化  │          │
+          │ 结构上无冲突 │  ┌───────┴───────┐
+          └────────────┘ 是                否
+                          │                │
+                          ▼                ▼
+                  ┌──────────────┐  冲突频繁吗？
+                  │ 状态机条件更新 │      │
+                  │ UPDATE..WHERE │ ┌────┴────┐
+                  └──────────────┘ 是         否
+                                    │          │
+                                    ▼          ▼
+                              ┌──────────┐ ┌────────┐
+                              │分布式锁    │ │乐观锁CAS│
+                              │+栅栏令牌   │ │版本号   │
+                              └──────────┘ └────────┘
+</div>
+
+<div class="highlight">
+<strong>示例场景 · 从全局锁改为分区串行：</strong>一个订单履约系统有 6 个 Agent 共用一个库存工具，最初的实现是对工具名加一把全局分布式锁，单次库存操作耗时约 180 毫秒，于是系统吞吐被硬性钉在约 <strong>5.5 次/秒</strong>，锁等待 P99 达到 <strong>4.2 秒</strong>，超时失败率 <strong>11%</strong>。第一轮改造把锁粒度降到 SKU 级（<code>lock:inventory:sku_x</code>），吞吐随并行 SKU 数上升到 <strong>约 90 次/秒</strong>，但爆款 SKU 仍有 <strong>1.8 秒</strong>的锁等待。第二轮改造改为按 SKU 哈希路由到 32 个串行分区，同 SKU 操作天然排队、跨 SKU 完全并行，吞吐达到 <strong>约 400 次/秒</strong>，锁服务从关键路径上彻底移除，代价是接口语义从同步改为"受理 + 回调"。三步的教训是同一个：<strong>先修粒度，再考虑要不要还用锁。</strong>
+</div>
+
+<div class="intuition-box">
+<p>抢锁是让所有人挤在一个门口比谁手快；分区串行是提前给每个人分好队伍，谁也不用抢。能改结构的时候，不要靠抢。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、后兜底：限流、熔断与冲突可观测</h2>
+
+<p>前面几节都在防冲突发生，这一节处理"冲突还是发生了"和"我们自己成了下游的灾难"这两件事。</p>
+
+<h3>6.1 两个方向的保护</h3>
+
+<p>限流要分清方向。<strong>出向限流</strong>保护的是下游工具：给每个工具设置调用速率上限，通常用<span class="term">令牌桶</span>实现——桶按固定速率补充令牌，每次调用消耗一个，桶空即拒绝或排队，这样既限住了平均速率又允许一定的突发。这确保即使 Agent 池突然扩容或模型陷入循环调用，也不会把一个脆弱的内部接口打垮。<strong>入向限流</strong>保护的是自己：当下游工具劣化时，限制在途的调用数，避免所有 Agent 的线程都堵在等待上。两者叠加熔断，就构成了完整的隔离——熔断的状态机细节、最小请求数门槛与半开探测的并发限制，见 <a href="../agent/multi_agent_load_balancing.html">《A54 · 多 Agent 负载均衡与任务调度》</a>第五节。</p>
+
+<table>
+<tr><th>保护手段</th><th>触发信号</th><th>动作</th><th>放行策略</th></tr>
+<tr><td>出向限流</td><td>工具调用速率超配额</td><td>排队或快速失败</td><td>令牌桶按秒恢复</td></tr>
+<tr><td>并发度上限</td><td>在途调用数超阈值</td><td>拒绝新调用</td><td>有调用完成即放行一个</td></tr>
+<tr><td>锁等待队列上限</td><td>等锁队列超长度阈值</td><td>降级返回"稍后重试"</td><td>队列回落到阈值以下</td></tr>
+<tr><td>熔断</td><td>失败率超阈值且样本量足够</td><td>快速失败，不占超时预算</td><td>冷却后半开限量探测</td></tr>
+</table>
+
+<h3>6.2 冲突必须可观测</h3>
+
+<p>冲突问题最麻烦的特征是<strong>它往往不报错</strong>：双写覆盖、重复扣款、乱序执行都不会抛异常，只会留下一份错误的数据，等对账或用户投诉的时候才被发现。所以观测指标要专门为冲突设计，而不是复用通用的成功率面板。</p>
+
+<table>
+<tr><th>指标</th><th>它在回答什么</th><th>异常时的含义</th></tr>
+<tr><td>幂等命中率</td><td>有多少调用是重复的</td><td>突增说明上游在疯狂重试或模型陷入循环</td></tr>
+<tr><td>锁等待时长 P99</td><td>竞争有多激烈</td><td>持续上升说明粒度太粗或临界区太长</td></tr>
+<tr><td>锁获取失败率</td><td>有多少请求被挡在门外</td><td>高企说明需要改用池化或分区方案</td></tr>
+<tr><td>租约超时次数</td><td>临界区是否超出预期</td><td>大于零就意味着存在双写风险窗口</td></tr>
+<tr><td>栅栏令牌拒绝次数</td><td>真的发生了几次旧持有者回魂</td><td>非零即证明锁不可靠，兜底救了你</td></tr>
+<tr><td>对账差异条数</td><td>有多少冲突漏过了所有防线</td><td>这是最终的正确性刻度</td></tr>
+</table>
+
+<p>其中<strong>栅栏令牌拒绝次数</strong>是最有价值的一个：它把"理论上存在的竞态"变成了可计数的事实，让你知道锁到底失效过几次。链路上还要保证每次工具调用都携带贯穿全链的追踪标识，把"哪个 Agent 在哪个任务里对哪个资源做了什么"串成一条可回放的时间线——否则冲突排查就只能靠猜。</p>
+
+<h3>6.3 补偿是最后一环</h3>
+
+<p>检测到重复执行或乱序执行之后需要有补偿动作：写操作要能<strong>冲正</strong>（记录逆向操作而不是删除历史）；跨多个工具的操作要有对账任务定期扫描不一致并自动修复或挂起人工；自动重试只应用于<strong>已确认可安全重放</strong>的失败类型（网络超时、限流拒绝），对"结果未知"的失败必须先查询状态再决定，绝不能盲目重发。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先分清冲突属于<strong>四类中的哪一类</strong>，再选手段</li>
+<li>幂等键用<strong>语义指纹</strong>：工具名 + 规范化参数 + 任务 ID</li>
+<li>重复请求<strong>返回首次结果</strong>，而不是返回错误</li>
+<li>锁粒度下沉到<strong>资源实例级</strong>，热点再做分段</li>
+<li>关键写操作配<strong>栅栏令牌或 CAS 版本号</strong>兜底</li>
+<li>模型推理在锁外，锁内<strong>只放确定性的写操作</strong></li>
+<li>多锁按<strong>固定字典序</strong>申请，全部设租约</li>
+<li>专门监控<strong>租约超时与栅栏拒绝次数</strong></li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>用进程内锁去管跨机器的 Agent</li>
+<li>拿每次都会变的 <code>tool_call_id</code> 或新 UUID 当幂等键</li>
+<li>锁在<strong>工具名</strong>上，把吞吐钉死在单次耗时的倒数</li>
+<li>在临界区里<strong>调用大模型</strong>或无超时的外部服务</li>
+<li>用 <code>DEL</code> 释放锁而不校验持有者身份</li>
+<li>把分布式锁当作正确性的<strong>唯一</strong>保障</li>
+<li>用锁去解决<strong>资源拥塞</strong>，让所有 Agent 一起排队等死</li>
+<li>对"结果未知"的失败盲目自动重发</li>
+</ul>
+</div>
+</div>
+
+<div class="highlight">
+<strong>💡 知识要点：</strong>本文的边界是<strong>跨 Agent、跨进程争抢同一个工具或资源时怎么仲裁</strong>——幂等去重、互斥控制、去锁化改造、兜底与观测。单个 Agent 内部的多个工具调用怎么做依赖分析、怎么并行编排、结果怎么合并，是另一个话题，见 <a href="../agent/multi_tool_parallel_execution.html">《A16 · Agent 多工具并行执行》</a>：<strong>A16 关心的是"一个 Agent 的多把工具怎么同时开工更快"，本文关心的是"多个 Agent 抢同一把工具时谁先谁后、会不会做重"。</strong>幂等键本身的设计见 <a href="../agent/agent_idempotency.html">《A59 · AI Agent 幂等性设计》</a>，任务该派给哪个 Agent 见 <a href="../agent/multi_agent_load_balancing.html">《A54 · 多 Agent 负载均衡与任务调度》</a>。
+</div>
+
+<div class="intuition-box">
+<p>冲突最可怕的地方是它不报错。所以除了防，你必须有一个能数出"漏过去了几次"的刻度——没有这个刻度，你以为的稳定只是还没被发现的错乱。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么"用分布式锁替换进程内锁"还不算合格答案？</summary>
+<div class="answer">因为把进程内锁换成分布式锁只修好了"作用域"这一个缺陷，而多 Agent 系统里被统称为"工具调用冲突"的其实是四类不同的问题：互斥冲突（同时写同一资源）、重复执行（同一意图被做了两次）、顺序冲突（依赖关系被打乱）、资源拥塞（抢有限的实例或配额）。锁只是第一类的主场。重复执行常常根本不并发——第一次其实成功了，只是响应丢了，模型重新调了一次，锁拦不住这种跨时间的重复；顺序冲突需要状态机前置条件；资源拥塞用锁处理只会让所有 Agent 一起排队等死，正确解法是池化和限流。诊断错类型，工具再好也没用。</div>
+</details>
+
+<details>
+<summary>幂等键为什么不能用模型给出的 tool_call_id？该用什么？</summary>
+<div class="answer">因为 <code>tool_call_id</code> 在模型每次重新发起工具调用时都会变成一个新值，用它做去重等于每次都被判定为"首次请求"，幂等完全失效——而模型自主重试恰恰是 Agent 场景最主要的重复来源。应该用语义指纹：把工具名、规范化后的参数（键排序、数值与单位标准化、剔除时间戳这类易变字段）和任务或会话标识拼起来取哈希。这样只要意图相同，指纹就稳定不变，重试多少次都能被认出来。<code>tool_call_id</code> 仍然有用，但它的角色是链路追踪标识，不是幂等键。</div>
+</details>
+
+<details>
+<summary>识别出重复请求后直接拒绝，有什么问题？</summary>
+<div class="answer">问题在于调用方之所以重试，通常正是因为它没拿到第一次的结果，你返回一个错误并没有帮它解决任何问题，还可能让它继续重试。真正的幂等语义是"重复请求返回与首次相同的结果"，所以去重记录必须带状态并分情况处理：首次执行中的，让调用方短轮询等待或明确返回"处理中"；已成功的，直接返回缓存的首次结果，这才是幂等该有的样子；已失败的，清掉记录允许重新执行。另外要注意去重窗口（典型 30 分钟）只覆盖技术性重试，业务层面"用户两小时后真的想再操作一次"是合法请求，必须靠业务唯一键区分，不能由通用时间窗决定。</div>
+</details>
+
+<details>
+<summary>既然有了分布式锁，为什么还需要栅栏令牌？</summary>
+<div class="answer">因为锁必须有过期时间（否则持有者崩溃就永久死锁），而"过期"是按时间判断的，锁服务无法区分原持有者是真的死了还是只是网络断了 30 秒又活了过来。于是存在这样一条时序：A 拿到锁，进程遭遇 35 秒的长停顿，锁在第 30 秒过期并被授予 B，B 开始写；A 恢复后毫不知情继续写，覆盖了 B 的结果，且整个过程不报任何错。栅栏令牌的做法是锁服务授予锁时附带一个单调递增编号，资源侧记住见过的最大编号并拒绝任何更小的写入，这样 A 的迟到写入会被硬性挡住。看门狗续期只能降低这个窗口出现的频率，无法消除它——所以栅栏令牌（或等价的 CAS 版本号）是必需的兜底，不是可选优化。</div>
+</details>
+
+<details>
+<summary>看门狗自动续期是怎么工作的，它解决和不解决什么？</summary>
+<div class="answer">以 Redisson 为例，官方配置中 <code>lockWatchdogTimeout</code> 默认 30000 毫秒，后台任务按租约的三分之一间隔（默认 10 秒）把锁的过期时间重新推回 30 秒，且这个机制仅在获取锁时没有显式指定租约时长的情况下生效。它解决的是"临界区实际耗时超出预设租约导致中途丢锁"，让开发者不必精确预估临界区时长。它不解决的是持有者与锁服务失联的情况：长时间垃圾回收停顿、容器被冻结、网络中断超过一个租约周期时，续期请求本身也发不出去，锁照样过期。所以它把双写窗口从"经常"压到"偶尔"，而偶尔发生的静默数据错乱是最难排查的故障，必须再叠一层栅栏令牌或版本号。</div>
+</details>
+
+<details>
+<summary>为什么 Agent 系统里绝对不能在持锁期间调用大模型？</summary>
+<div class="answer">因为租约时长必须覆盖临界区的最坏耗时，而大模型调用的耗时分布极不可控——同一个提示词在不同负载下可能几百毫秒返回，也可能因为开了深度思考或串了多轮工具调用而耗时接近一分钟。把它放进临界区，等于让租约必然被拖穿：要么你把租约设得极长（那么持有者崩溃后其他 Agent 要等极长时间），要么锁在推理途中过期（那么就出现了双持锁）。正确的做法是把顺序倒过来：先在锁外让模型完成推理和决策，得到一个确定的、耗时可预估的写操作，然后再用一把短命的锁把它落地。临界区里只应该有确定性的操作，且所有外部调用都设硬超时，超时总和小于租约。</div>
+</details>
+
+<details>
+<summary>锁粒度该怎么选？热点资源怎么办？</summary>
+<div class="answer">粒度直接决定吞吐上限。锁在工具名这一级意味着全局只有一个 Agent 能用这个工具，吞吐上限就是单次调用耗时的倒数——单次 180 毫秒就是每秒 5 次左右，几乎必然成为瓶颈。应该把锁键下沉到资源实例级，比如 <code>lock:inventory:sku_88231</code>，这样不同 SKU 的操作完全并行，并发度等于活跃资源数。如果仍有热点（爆款商品的库存），再往下做分段：把一份库存拆成若干段各自加锁扣减，段内不足才去借调其他段，用实现复杂度换并发度。但分段之前应该先问一个更根本的问题：这个资源能不能改成按键哈希路由的分区串行处理？那样同一资源的操作天然排队、跨资源完全并行，锁可以整个从关键路径上移除。</div>
+</details>
+
+<details>
+<summary>冲突问题为什么特别难发现，该监控什么？</summary>
+<div class="answer">因为它往往不报错。双写覆盖、重复扣款、乱序执行都不会抛异常，只会静静留下一份错误数据，等对账或用户投诉时才暴露，此时距离事发可能已经过去几小时。所以要有专门为冲突设计的指标，而不是复用通用成功率面板：幂等命中率（突增说明上游在疯狂重试或模型陷入循环）、锁等待 P99（持续上升说明粒度太粗或临界区太长）、锁获取失败率（高企说明该换池化或分区方案）、租约超时次数（大于零就存在双写风险窗口）、栅栏令牌拒绝次数（非零即证明锁真的失效过、兜底救了你）、对账差异条数（漏过所有防线的最终刻度）。其中栅栏拒绝次数最有价值，它把理论上的竞态变成了可计数的事实。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

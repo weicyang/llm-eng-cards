@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A44 · Context Engineering 概念与实现</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、Context 与 Context Window</a>
+<a href="#s2">二、为什么不能把所有资料都塞进去</a>
+<a href="#s3">三、四大技术策略</a>
+<a href="#s4">四、Agent 为什么带火了这个话题</a>
+<a href="#s5">五、生产实践案例</a>
+<a href="#s6">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>A44 · Context Engineering 概念与实现</h1>
+<p class="subtitle">Context 定义 → Context Window 限制 → 四大问题 → 四类技术策略 → 保存/选择/压缩/隔离</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>Context Engineering 是给模型做"信息供给侧改革"：不改模型结构，只改模型看到什么——用保存、选择、压缩、隔离四板斧，让有限窗口里的每个 Token 都花在刀刃上。</p>
+</div>
+
+<!-- ========== 1. Context 与 Context Window ========== -->
+<div class="section">
+<h2 id="s1">一、Context 与 Context Window</h2>
+
+<p><span class="term">Context（上下文）</span>指模型的输入内容，包括用户问题、背景信息、相关资料、工具列表、工具执行结果和历史对话——模型看不到你的数据库、看不到你的文档库，它只能看到这一次请求里被"端上桌"的所有文字。</p>
+
+<p><span class="term">Context Window（上下文窗口）</span>指模型单次最多能处理的 Token 数量，是上下文的物理上限。</p>
+
+<table>
+<tr><th>模型</th><th>Context Window</th></tr>
+<tr><td>Gemini 2.5 Pro</td><td>100 万 tokens</td></tr>
+<tr><td>GPT-5</td><td>40 万 tokens</td></tr>
+<tr><td>Claude 4</td><td>20 万 tokens</td></tr>
+<tr><td>DeepSeek V3</td><td>12.8 万 tokens</td></tr>
+</table>
+
+<div class="arch-diagram">
+┌────────────── Context Window（如 20 万 Token）──────────────┐
+│                                                            │
+│  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐   │
+│  │系统提示词│ │历史对话 │ │RAG 资料│ │工具结果 │ │用户问题 │   │
+│  │ 2,000  │ │ 12,000 │ │ 6,000  │ │ 3,500  │ │  300   │   │
+│  └────────┘ └────────┘ └────────┘ └────────┘ └────────┘   │
+│      ▲          ▲          ▲          ▲         ▲         │
+│      └──────────┴────┬─────┴──────────┴─────────┘         │
+│                      ▼                                     │
+│     放什么、放多少、按什么顺序放 —— 全是 Context Engineering │
+└────────────────────────────────────────────────────────────┘
+</div>
+
+<h3>上下文的六大组成部分</h3>
+<table>
+<tr><th>组成</th><th>来源</th><th>特点</th></tr>
+<tr><td>系统提示词</td><td>开发者预设</td><td>稳定、每次重复</td></tr>
+<tr><td>历史对话</td><td>会话累积</td><td>随轮次线性增长</td></tr>
+<tr><td>检索资料（RAG）</td><td>外部知识库</td><td>按需动态注入</td></tr>
+<tr><td>工具列表与结果</td><td>Agent 运行时</td><td>结果体可能很大</td></tr>
+<tr><td>记忆（Memory）</td><td>长期记忆库</td><td>跨会话持久化</td></tr>
+<tr><td>用户当前问题</td><td>用户输入</td><td>通常最短</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>上下文窗口是模型的"工作台"，不是"仓库"：摊在台面上的材料模型才看得见，堆在仓库里的再多也与它无关——工程的核心就是决定台面上摆什么。</p>
+</div>
+
+</div>
+
+<!-- ========== 2. 为什么不能全塞进去 ========== -->
+<div class="section">
+<h2 id="s2">二、为什么不能把所有资料都塞进去</h2>
+
+<p>即使 Context Window 很大，直接塞入所有资料也有问题：</p>
+
+<table>
+<tr><th>问题</th><th>说明</th></tr>
+<tr><td>① 大部分模型窗口有限</td><td>许多小模型只有几万 Token，装不下长文档</td></tr>
+<tr><td>② 输入太杂乱影响理解</td><td>模型可能混淆重点，输出含糊其辞</td></tr>
+<tr><td>③ 输入越多成本越高</td><td>API 按 Token 计费，优化输入就是优化成本</td></tr>
+</table>
+
+<p>问题②在业界有一个著名现象叫<span class="term">迷失中间（Lost in the Middle）</span>——当关键信息位于超长输入的开头或结尾时，模型的召回率明显高于位于中间时。也就是说，塞得越多，中间的信息越容易被"视而不见"，长上下文并不等于好上下文。</p>
+
+<h3>输入长度的连锁代价</h3>
+<table>
+<tr><th>单次输入规模</th><th>相对成本</th><th>首字延迟（典型值）</th><th>注意力质量</th></tr>
+<tr><td>2,000 Token</td><td>1 倍</td><td>约 0.3~0.5 秒</td><td>高</td></tr>
+<tr><td>20,000 Token</td><td>10 倍</td><td>约 1~2 秒</td><td>中（中段易被忽略）</td></tr>
+<tr><td>100,000 Token</td><td>50 倍</td><td>约 5~10 秒</td><td>低（需配合检索定位）</td></tr>
+</table>
+
+<div class="highlight">
+<span class="term">Context Engineering（上下文工程）</span> 的核心思想：不改变模型结构，只改变模型看到什么。精心设计给模型的输入内容，让模型在有限窗口中理解得更准、答得更好、花得更少。
+</div>
+
+<div class="intuition-box">
+<p>上下文不是"冰箱"——塞得越满越安心；它是"工作台"——摆得越精越高效。多塞一份无关资料，就多一份干扰、多一笔账单、多一段延迟。</p>
+</div>
+
+</div>
+
+<!-- ========== 3. 四大技术策略 ========== -->
+<div class="section">
+<h2 id="s3">三、四大技术策略</h2>
+
+<div class="arch-diagram">
+        原始信息池（文档 / 历史 / 工具结果 / 用户偏好）
+                          │
+      ┌──────────┬────────┴────────┬──────────┐
+      ▼          ▼                 ▼          ▼
+  ① 保存      ② 选择            ③ 压缩      ④ 隔离
+  写入记忆库   静态规则 / RAG     摘要替换     Sub Agent
+  按需召回     动态检索           原始历史     独立窗口
+      │          │                 │          │
+      └──────────┴────────┬────────┴──────────┘
+                          ▼
+        精炼后的 Context ──→ 送入模型窗口
+        （更少 Token，更高信噪比）
+</div>
+
+<h3>① 保存 Context</h3>
+<p>将信息筛选总结后存入<span class="term">记忆库（Memory）</span>——独立于会话之外、可跨对话持久化的信息存储——在模型需要时再发送。例：ChatGPT 的记忆功能，记住用户偏好和历史，下次对话自动带入相关条目。</p>
+
+<h3>② 选择 Context</h3>
+<p>从海量信息中选择与用户问题最相关的内容放入上下文，是最常用的一类策略。</p>
+<table>
+<tr><th>类型</th><th>说明</th><th>示例</th></tr>
+<tr><td>静态选择</td><td>每次请求都全部放入（永远重要的信息）</td><td>.cursorrules、CLAUDE.md 文件</td></tr>
+<tr><td>动态选择</td><td>按需选择与问题最相关的内容</td><td><span class="term">RAG</span>（检索增强生成，先从知识库检索相关片段再注入上下文的技术）、工具筛选、记忆库匹配</td></tr>
+</table>
+
+<h3>③ 压缩 Context</h3>
+<p>对历史消息做总结压缩，释放上下文空间。例：Claude Code 在上下文使用超过 95% 时自动运行 <span class="term">auto compact（自动压缩）</span>——把冗长的历史对话总结成简短摘要、丢弃原始内容的机制，用几千 Token 的摘要替代十几万 Token 的原始历史。</p>
+
+<h3>④ 隔离 Context</h3>
+<p>不同模块之间的上下文互相隔离，互不干扰。常见于多 Agent 系统：每个 <span class="term">Sub Agent（子智能体）</span>——只负责单一子任务、拥有独立上下文的专职 Agent——有独立的上下文、独立的工具、独立的记忆体系，主 Agent 只接收它的最终结论。</p>
+
+<h3>策略与问题的对应关系</h3>
+<table>
+<tr><th>策略</th><th>解决的问题</th><th>典型手段</th></tr>
+<tr><td>保存</td><td>信息需要跨会话持久化</td><td>Memory、用户画像</td></tr>
+<tr><td>选择</td><td>信息池太大，只需相关部分</td><td>RAG、规则文件、工具筛选</td></tr>
+<tr><td>压缩</td><td>历史累积占满窗口</td><td>摘要总结、auto compact</td></tr>
+<tr><td>隔离</td><td>多任务互相污染上下文</td><td>多 Agent、子任务独立窗口</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>四板斧各管一摊：保存管"记住"，选择管"挑选"，压缩管"瘦身"，隔离管"分桌"——实际系统往往是四招组合使用。</p>
+</div>
+
+</div>
+
+<!-- ========== 4. Agent 为什么带火了这个话题 ========== -->
+<div class="section">
+<h2 id="s4">四、Agent 为什么带火了这个话题</h2>
+
+<ul>
+  <li><strong>模型足够强大</strong> — 只要给到足够精细的要求和完整的相关资料，模型就能给出准确回答，"喂什么"成了效果的决定因素</li>
+  <li><strong>Agent 兴起</strong> — 工具执行结果会累积占满 Context Window，必须管理上下文</li>
+</ul>
+
+<p>聊天机器人一轮对话只有几百 Token，而 Agent 每调用一次工具，就会把工具的完整返回结果塞回上下文：读一个文件几千 Token，跑一次搜索上万 Token，几十轮下来窗口就被工具结果吃光了。</p>
+
+<h3>Agent 运行时的上下文增长估算</h3>
+<table>
+<tr><th>运行轮次</th><th>累计上下文（典型编程 Agent）</th><th>占 20 万窗口比例</th></tr>
+<tr><td>5 轮</td><td>约 1.5 万 Token</td><td>约 8%</td></tr>
+<tr><td>20 轮</td><td>约 6 万 Token</td><td>约 30%</td></tr>
+<tr><td>50 轮</td><td>约 16 万 Token</td><td>约 80%</td></tr>
+<tr><td>60+ 轮</td><td>逼近 20 万 Token</td><td>触发压缩或截断</td></tr>
+</table>
+
+<div class="arch-diagram">
+上下文吃紧？先诊断症状，再开药方：
+
+  症状：历史对话越来越长，窗口被旧消息占满
+     └→ ③ 压缩（摘要替换原文，如 auto compact）
+
+  症状：每次都携带一大段固定资料
+     └→ ② 静态选择（确认是否真的每次都需要）
+
+  症状：资料库很大，问题只涉及其中一小部分
+     └→ ② 动态选择（RAG 按需检索 Top-K 片段）
+
+  症状：用户偏好、长期事实被反复询问
+     └→ ① 保存（写入记忆库，按需召回）
+
+  症状：多任务互相干扰，工具结果刷屏
+     └→ ④ 隔离（拆成多个 Sub Agent 独立作战）
+</div>
+
+<div class="intuition-box">
+<p>Agent 是"上下文粉碎机"：它越能干，产生的工具结果越多，窗口塌得越快——Context Engineering 从"锦上添花"变成了 Agent 能否长时间稳定运行的"生命线"。</p>
+</div>
+
+</div>
+
+<!-- ========== 5. 生产实践案例 ========== -->
+<div class="section">
+<h2 id="s5">五、生产实践案例</h2>
+
+<div class="highlight">
+<strong>案例一 · Claude Code 的 auto compact：</strong>背景：编程 Agent 单次任务动辄几十轮工具调用，上下文以每轮数千 Token 的速度累积。问题：20 万窗口在长任务中必然被撑满，若直接截断旧消息，模型会遗忘原始任务目标，后续推理质量断崖式下降。方案：Claude Code 内置 auto compact——上下文使用超过 95%（约 19 万 Token）时自动触发，把历史总结成约 8,000 Token 的摘要并丢弃原始内容，同时保留任务目标和关键决策。效果：压缩后窗口占用从 95% 回落到约 5%，任务可以无缝继续，长任务（50+ 轮）的完成率显著提升。
+</div>
+
+<div class="highlight">
+<strong>案例二 · 企业客服 Agent 的上下文瘦身：</strong>背景：某客服 Agent 每轮都携带全量产品手册（约 1.8 万 Token）和全部历史对话。问题：单次输入平均 2.4 万 Token，首字延迟 3.8 秒，月成本超 3 万元，且手册无关章节经常干扰回答。方案：三招组合——产品手册改 RAG 动态检索 Top-3 片段（选择）、超过 10 轮的历史自动摘要（压缩）、用户偏好写入记忆库按需召回（保存）。效果：单次输入降到平均 6,800 Token（-72%），首字延迟降到 1.2 秒，人工评测准确率从 78% 升到 89%，月度成本降到约 9,000 元。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>把上下文当稀缺资源管理，为每类内容设置 Token 预算</li>
+<li>长文档一律先切块检索，再注入最相关片段</li>
+<li>为长会话设置压缩阈值，摘要时保留任务目标</li>
+<li>多任务场景拆 Sub Agent，让每个子任务轻装上阵</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要以为窗口够大就全量塞入（中段信息会被忽略）</li>
+<li>不要无脑截断旧消息，先做摘要保住关键决策</li>
+<li>不要把工具返回的原始大 JSON 原封不动塞回上下文</li>
+<li>不要等窗口爆了才治理，要在架构设计时就规划</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>判断 Context Engineering 做得好不好的标准很朴素：模型回答更准了、账单更薄了、Agent 跑得更久了——三者都指向同一件事，窗口里的信噪比变高了。</p>
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s6">Q&A</h2>
+
+<details>
+<summary>什么是 Context Engineering？它解决了什么问题？</summary>
+<div class="answer">Context Engineering 是精心设计给模型的输入内容，核心思想是"不改变模型结构，只改变模型看到什么"。它解决三个问题：①大部分模型的 Context Window 有限（几万到百万 Token）；②输入太杂乱会影响模型理解（混淆重点、输出含糊，还存在"迷失中间"现象）；③输入越多成本越高（API 按 Token 计费）。通过四类策略（保存/选择/压缩/隔离 Context）让模型在有限窗口中理解得更准、答得更好、花得更少。</div>
+</details>
+
+<details>
+<summary>Context Engineering 的四大策略是什么？各有什么作用？</summary>
+<div class="answer">①保存 Context——将信息筛选总结后存入记忆库（如 ChatGPT Memory），解决跨会话的信息持久化问题；②选择 Context——从海量信息中选出与问题最相关的内容，分静态选择（每次全量放入，如 .cursorrules、CLAUDE.md）和动态选择（按需匹配，如 RAG 检索）；③压缩 Context——对历史消息做总结压缩释放空间（如 Claude Code 上下文超 95% 时触发 auto compact）；④隔离 Context——不同模块各自独立上下文互不干扰（如多 Agent 架构中每个 Sub Agent 有独立窗口）。实际系统通常组合使用。</div>
+</details>
+
+<details>
+<summary>为什么 Agent 的兴起带动了 Context Engineering 的话题？</summary>
+<div class="answer">Agent 运行时需要将工具列表、工具执行结果、思考过程等信息都放入模型的上下文中，而工具结果往往体量很大——读一个文件几千 Token，跑一次搜索上万 Token。Agent 运行时间越长，累积的结果越多，会快速占满整个 Context Window，导致：①早期信息被丢弃（上下文截断）；②模型遗忘原始任务目标；③后续推理质量下降。因此必须通过 Context Engineering（尤其是压缩和隔离策略）来管理上下文，确保 Agent 长时间稳定运行。这也是 Claude Code 等编程 Agent 都内置 auto compact 机制的原因。</div>
+</details>
+
+<details>
+<summary>Context Window 越大越好吗？为什么有了百万窗口还要做压缩？</summary>
+<div class="answer">不是越大越好，原因有三：①成本——输入 Token 按量计费，10 万 Token 的输入成本是 2,000 Token 的 50 倍；②质量——"迷失中间"现象表明，关键信息在超长输入的中段时召回率明显下降，长上下文不等于好上下文；③延迟——Prefill 阶段虽可并行，但输入越长首字延迟越高，10 万 Token 级别的首字延迟可达数秒。所以即使 Gemini 有百万窗口，工程上仍然要用压缩和检索把真正进入窗口的内容控制在"少而精"，窗口大小是兜底能力，不是使用方式。</div>
+</details>
+
+<details>
+<summary>RAG 和长上下文直接塞文档，应该怎么选？</summary>
+<div class="answer">两者适用场景不同：长上下文直接塞适合"文档不大、每次都要通读全文"的场景，如分析一份 30 页合同，实现简单、不丢细节；RAG 适合"资料库很大、单次问题只涉及局部"的场景，如几千篇产品手册的客服系统。选型看三个指标：资料总量是否远超窗口（是→RAG）、单次问题是否只需要局部信息（是→RAG）、成本是否敏感（敏感→RAG，可省 70%+ 输入 Token）。实践中常见组合是"RAG 粗筛 + 长上下文精读"：先检索出候选文档，再把最相关的 1~2 篇全文塞入窗口。</div>
+</details>
+
+<details>
+<summary>压缩历史上下文时，哪些信息容易丢？怎么避免？</summary>
+<div class="answer">摘要压缩是有损的，最容易丢三类信息：①原始任务目标和约束（被后续大量对话淹没）；②关键决策及其理由（"为什么选了方案 A"）；③精确数值、文件路径、错误堆栈等细节（摘要倾向于概括而非保留原文）。避免方法：压缩时采用"结构化摘要"——固定保留"任务目标 / 已完成事项 / 关键决策 / 待办"四个板块；对精确细节（如文件路径、报错信息）单独提取成清单附加在摘要后；Claude Code 的 auto compact 就是这样设计的，压缩后仍保留任务目标，让长任务能无缝继续。</div>
+</details>
+
+<details>
+<summary>静态选择和动态选择有什么区别？分别什么时候用？</summary>
+<div class="answer">静态选择是"每次都全量放入"，适合永远重要、体量又小的信息，如编码规范、项目结构说明（.cursorrules、CLAUDE.md 就是典型代表），优点是实现简单、永不遗漏，缺点是持续占用窗口和费用。动态选择是"按需匹配最相关的片段"，适合体量大、只有部分相关的信息，如知识库文档、历史记忆，典型实现是 RAG 检索和记忆库召回，优点是省 Token、信噪比高，缺点是需要检索系统且可能漏召回。经验法则：单条信息小于几千 Token 且每次必用→静态；资料库庞大或命中率低→动态。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV11zbPzVEUe" target="_blank">Context Engineering：概念与技术实现深度解析</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

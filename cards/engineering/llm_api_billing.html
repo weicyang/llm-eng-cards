@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST05 · 大模型 API 计费与 Token 成本核算</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.warning-box{background:rgba(255,123,114,.06);border:1px solid var(--red);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.warning-box::before{content:"⚠️ 时效提示";display:block;font-weight:700;color:var(--red);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:var(--ink-3,#8b949e);}
+.data-asof strong{color:var(--amber,#d29922);}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、Token 与汉字：tokenizer 切分与快速估算</a>
+<a href="#s2">二、输入便宜输出贵：自回归生成与 KV Cache</a>
+<a href="#s3">三、长上下文为什么贵：O(n²) 计算与跳价</a>
+<a href="#s4">四、缓存命中：能省多少钱，怎么算</a>
+<a href="#s5">五、四种标价里看不到的隐性成本</a>
+<a href="#s6">六、真实成本公式：token × 单价 ÷ 成功率</a>
+<a href="#s7">七、模型分档与路由建议</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>ST05 · 大模型 API 计费与 Token 成本核算</h1>
+<p class="subtitle">LLM API Billing — token 换算 / 输入输出分价 / 长上下文 O(n²) / 缓存命中 / 隐性成本 / 真实成本公式</p>
+
+<div class="intuition-box">
+<p>大模型账单由三层决定：标价只是第一层，tokenizer 与计费机制是第二层，成功率才是隐藏的第三层——真实成本 = token 数 × 单价 ÷ 成功率，只盯标价的人永远算不准账。</p>
+</div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、Token 与汉字：tokenizer 切分与快速估算</h2>
+
+<p>大模型 API 的计费单位不是字、不是行，而是 <span class="term">token</span>（模型词表中的最小处理单元，由 tokenizer 切分产生）。你发一段 500 字的中文到底花多少钱，取决于 <span class="term">tokenizer</span>（把原始文本切成 token 序列的分词器）怎么切——而不同厂商的 tokenizer 切法并不一样，这是后面"隐性成本"的第一个伏笔。</p>
+
+<p>中文不是按"字"机械切分的，而是按词频和组合切分：常见字通常 1 字 = 1 token，生僻字或特殊组合可能 1 字 = 2-3 个 token；高频专有名词反而可能被合并。标点通常 1 个 = 1 token，但连续符号行为不一（如英文省略号可能合并为 1 token，中文句号逐个计算）。代码则更碎：缩进、括号、关键字、引号每个都算。</p>
+
+<table>
+<tr><th>内容示例</th><th>字数</th><th>约 Token 数</th><th>比例</th></tr>
+<tr><td>"你好世界"</td><td>4 字</td><td>~4</td><td>~1 token/字</td></tr>
+<tr><td>"今天天气不错，适合出去散步"</td><td>12 字（含标点）</td><td>~12</td><td>~1 token/字</td></tr>
+<tr><td>"RAG系统中的混合检索策略"</td><td>12 字</td><td>~14</td><td>~1.2 token/字（中英混合）</td></tr>
+<tr><td>"中华人民共和国国务院"</td><td>9 字</td><td>~5</td><td>专有名词合并</td></tr>
+<tr><td>两行 Python 函数定义</td><td>—</td><td>10-12</td><td>符号逐个计</td></tr>
+</table>
+
+<div class="formula">快速估算：中文 1 字 ≈ 1~1.5 token（日常文本按 1:1，中英混合/术语多按 1:1.5）</div>
+
+<p>记住这个量级就够日常估算：1000 个汉字大概 1000-1500 个 token。精确核算时用厂商提供的 tokenizer 工具实测，因为同一文本在不同模型上的 token 数可能相差 20% 以上——同样的内容换一个模型，账单直接变。</p>
+
+<div class="intuition-box">
+<p>token 不是字符也不是单词，而是厂商词表里的编号——换算比例由 tokenizer 决定，跨模型比较价格前必须先对齐 token 口径。</p>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、输入便宜输出贵：自回归生成与 KV Cache</h2>
+
+<p>几乎所有厂商的输出单价都是输入单价的 3-5 倍。这不是定价策略上的"坑"，而是算力成本的真实反映：输入是"读"，输出是"写"，两者的计算量根本不是一个量级。</p>
+
+<p>输入阶段，模型把你的 prompt 完整过一遍前向传播，计算出每一层的表示，一次完成。输出阶段则是<span class="term">自回归生成</span>（每生成一个新 token，都要基于之前所有内容计算下一个 token 的概率分布）：生成 1000 个输出 token，相当于在整个上下文上做了 1000 步计算。</p>
+
+<div class="arch-diagram">
+输入 vs 输出的计算量差异
+
+输入（读）：  prompt 一次前向传播
+              [1000 tokens] ──过一遍网络──▶ 完成（1 遍）
+
+输出（写）：  逐 token 生成，每步都要看全部前文
+              t1: 基于 1000 tokens 算
+              t2: 基于 1001 tokens 算
+              ……
+              t1000: 基于 1999 tokens 算   （约 1000 步）
+
+KV Cache：把每步算过的前文中间结果缓存复用
+          → 输出不必从头重算，但仍是逐步生成
+          → 所以输出贵 3~5 倍，而不是 1000 倍
+</div>
+
+<p>如果没有优化，输出 1000 token 的成本会是输入的约 1000 倍。实际只贵 3-5 倍，靠的是 <span class="term">KV Cache</span>（把每一步计算过的前文键值对缓存起来，后续步骤直接复用，避免从头重算）。但缓存只解决"重复计算"，解决不了"逐步生成"本身——输出仍然是一个 token 一个 token 串行算出来的，算力消耗远大于输入，价格自然更高。</p>
+
+<table>
+<tr><th>维度</th><th>输入</th><th>输出</th></tr>
+<tr><td>计算模式</td><td>一次前向传播（并行）</td><td>自回归逐 token 生成（串行）</td></tr>
+<tr><td>计算遍数</td><td>1 遍</td><td>≈ 输出 token 数 步</td></tr>
+<tr><td>KV Cache 作用</td><td>—</td><td>复用前文中间结果，避免重算</td></tr>
+<tr><td>典型单价关系</td><td>基准</td><td>输入的 3-5 倍</td></tr>
+<tr><td>省钱抓手</td><td>压缩 prompt、命中缓存</td><td>控制输出长度、减少无效重试</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>看到输出单价是输入的 4 倍不必惊讶——那正是"写 1000 步"对"读 1 遍"的算力比价，KV Cache 已经帮你压掉两个数量级了。</p>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、长上下文为什么贵：O(n²) 计算与跳价</h2>
+
+<p>厂商普遍对长上下文单独定一档更高的价格。原因在 Transformer 的注意力机制：每个 token 都要和其他所有 token 计算注意力，计算量随序列长度呈平方增长。输入 1K tokens 的注意力计算量约为 100 万级，32K 约为 10.24 亿级，128K 约为 1.64 万亿级——从 1K 到 32K，长度变 32 倍，计算量变约 1024 倍。</p>
+
+<div class="formula">注意力计算量 ∝ n²：1K → 32K 是 1024 倍，不是 32 倍</div>
+
+<p>长上下文档位的高单价，本质是在覆盖这部分超线性增长的算力成本。这不是某一家厂商的做法，而是行业通行定价逻辑。以 GLM-5.1 的定价结构为例（2026-08 快照）：</p>
+
+<div class="warning-box">
+<p>本节及下文所有具体价格均为 <strong>2026-08 快照</strong>，仅用于讲解计费结构，引用前须重核当期官方价格。计费原理（输入输出分价、长上下文分档、缓存折扣）为长效内容，不随价格变动失效。</p>
+</div>
+
+<table>
+<tr><th>GLM-5.1 计费项（2026-08 快照）</th><th>0~32K 档</th><th>32K 及以上档</th></tr>
+<tr><td>输入单价（每百万 tokens）</td><td>¥6</td><td>¥8</td></tr>
+<tr><td>输出单价（每百万 tokens）</td><td>¥24</td><td>¥28</td></tr>
+<tr><td>缓存命中（每百万 tokens）</td><td>¥1.3</td><td>¥2</td></tr>
+<tr><td>缓存存储（每百万 tokens/小时）</td><td colspan="2">限时免费</td></tr>
+</table>
+
+<p>注意两个细节：输出是输入的 4 倍（第二节原理的直接体现）；跨过 32K 分界点后输入输出同时涨价约 33%。不同厂商的分界点差别很大（有的高达 272K，有的干脆不分档），但"越长越贵"的方向一致。分界点附近还藏着跳价风险，见第五节。</p>
+
+<div class="intuition-box">
+<p>长上下文涨价不是商业套路，是 O(n²) 注意力计算的账单转嫁——上下文翻倍，成本远不止翻倍。</p>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、缓存命中：能省多少钱，怎么算</h2>
+
+<p>缓存是定价表里最容易让人懵的两行：缓存存储和<span class="term">缓存命中</span>（新请求的输入前缀与已缓存内容一致时，该部分按大幅折扣价计费）。先说结论：这是正规计费项里最大的省钱杠杆，折扣普遍在 75% 以上。</p>
+
+<p>最典型的受益场景是 RAG 系统，每次请求的 prompt 结构高度重复：</p>
+
+<pre><code>[系统提示词 1000 tok（每次相同）]
++ [检索文档 8000 tok（大部分时候相同）]
++ [用户问题 200 tok（每次不同）]</code></pre>
+
+<p>不开缓存，每次都把 9200 个不变的部分从头算一遍、按全价付一遍。开了缓存，模型把前缀的 <span class="term">KV Cache</span> 结果存下来，下次请求前缀一致就直接复用，这部分按缓存命中价计费。以 GLM-5.1 短上下文档为例：正常输入 ¥6/百万 tokens，缓存命中 ¥1.3/百万 tokens，折扣 78%。</p>
+
+<div class="arch-diagram">
+RAG 请求的缓存命中流程
+
+第 1 次请求：
+  [系统提示词 + 文档](9000) ──全价计算──▶ KV Cache 存档
+  [用户问题](200) ──全价──▶  输出 1000
+
+第 N 次请求（前缀一致）：
+  [系统提示词 + 文档](9000) ──命中！按 ¥1.3 计费，免重算
+  [用户问题](200) ──全价 ¥6──▶  输出 1000（全价 ¥24）
+</div>
+
+<p>完整算一笔账（输入 9200 + 输出 1000，短上下文档）：</p>
+
+<table>
+<tr><th>计费项</th><th>不用缓存</th><th>用缓存（命中 9000）</th></tr>
+<tr><td>输入费用</td><td>9200 × ¥6/百万 = ¥0.0552</td><td>9000 × ¥1.3/百万 = ¥0.0117 + 200 × ¥6/百万 = ¥0.0012</td></tr>
+<tr><td>输出费用</td><td>1000 × ¥24/百万 = ¥0.024</td><td>¥0.024（不受缓存影响）</td></tr>
+<tr><td>单次总费用</td><td>¥0.0792</td><td>¥0.0369</td></tr>
+<tr><td colspan="3"><strong>单次省 53%</strong>；一天 10 万次请求，一个月可省数千元</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>生产案例（RAG 知识库问答）：</strong>某企业知识库日均 10 万次问答，单请求约 1 万 tokens 固定前缀（系统提示词 + 高频文档）。开启缓存后命中率稳定在 88%-92%，输入侧成本下降约 78%，整单费用从约 ¥9.6/千次降到 ¥5.4/千次（<strong>-44%</strong>），月账单节省约 ¥12,600，且因省去前缀重算，首 token 延迟同步下降。缓存收益与"固定前缀占比 × 请求量"成正比，是 RAG 场景的第一优先优化项。</p>
+</div>
+
+<div class="intuition-box">
+<p>缓存的本质是"为算过的结果付一次钱"：prompt 里不变的前缀占比越高、请求量越大，省得越狠——RAG 场景天然吃满这个红利。</p>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、四种标价里看不到的隐性成本</h2>
+
+<p>标价对比只是起点。真实账单里潜伏着四类隐性成本，每一类都能让"看起来便宜"的模型变贵，或让"看起来贵"的模型反而划算。</p>
+
+<h3>隐性成本一：长上下文整单跳价</h3>
+
+<p>某些模型的上下文分界点不是"超出部分按高价"，而是<strong>整条请求全部按高价</strong>。以 GPT-5.4 的 272K 分界点为例：一条 271K tokens 的请求按低档价，一条 273K 的请求整单按高档价，成本可能差一倍。做 Agent 系统时上下文很容易滚过分界点，账单会毫无征兆地暴涨。</p>
+
+<h3>隐性成本二：tokenizer 膨胀 20%-35%</h3>
+
+<p>同一段文本在不同 tokenizer 下产生的 token 数不同。实测中，某些模型对中文和代码的切分更碎，同样内容比切分粗的模型多 20%-35% 的 token：一段 10 万字中文，一边约 10 万 tokens，另一边约 12-13.5 万 tokens。token 数多 20%-35%，实际费用就贵 20%-35%——标价 $5/百万 tokens，等效单价变成 $6-6.75。跨模型比价不对齐 tokenizer，结论必然失真。</p>
+
+<h3>隐性成本三：thinking tokens</h3>
+
+<p>带推理能力的模型在输出最终答案前会生成大量内部推理 token（<span class="term">thinking tokens</span>），这些内容在回答里看不到，但按输出价计费。一个复杂问题，模型可能内部"想"了 5000 tokens，只输出 500 tokens——你看到 500，账单是 5500。只按可见输出估算成本，会系统性低估。</p>
+
+<h3>隐性成本四：失败重试成本</h3>
+
+<p>便宜模型一次做对的概率更低。做不对就要重试，重试一次成本翻倍：如果旗舰模型一次成功、便宜模型三次才成功，便宜模型的实际成本就不是标价的 1/7，而是 3/7。这条在 Agent 多步任务里被放大——中间某一步失败，前面所有步骤的 token 可能全部白付。</p>
+
+<div class="arch-diagram">
+真实账单的冰山结构
+
+        标价（输入/输出单价）
+─────────────────────────────────── 水面
+    tokenizer 膨胀（+20%~35% token）
+    thinking tokens（看不见的输出）
+    整单跳价（跨分界点成本翻倍）
+    失败重试（×2、×3 的乘数）
+    ── 水面之下才是账单主体 ──
+</div>
+
+<table>
+<tr><th>隐性成本</th><th>作用机制</th><th>典型放大倍数</th><th>高发场景</th><th>防御手段</th></tr>
+<tr><td>整单跳价</td><td>跨分界点整单升档</td><td>≈2 倍</td><td>Agent 长上下文滚动</td><td>监控上下文长度，分界点前截断/摘要</td></tr>
+<tr><td>tokenizer 膨胀</td><td>同文本 token 更多</td><td>+20%~35%</td><td>中文、代码密集型</td><td>用目标模型 tokenizer 实测再比价</td></tr>
+<tr><td>thinking tokens</td><td>隐藏推理输出计费</td><td>数倍可见输出</td><td>复杂推理、数学</td><td>按档位设推理预算，读 usage 明细</td></tr>
+<tr><td>失败重试</td><td>成功率低的乘数效应</td><td>×1.5~×3</td><td>Agent 多步任务</td><td>用"÷成功率"核算真实单价</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>比价只比标价，等于只看冰山露出水面的那一角——tokenizer、thinking、跳价、重试这四个乘数，任何一个都能改写结论。</p>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、真实成本公式：token × 单价 ÷ 成功率</h2>
+
+<p>把第五节的四个乘数收拢成一个可执行的公式：</p>
+
+<div class="formula">真实成本 = token 数 × 单价 ÷ 成功率</div>
+
+<p>以 Agent 复杂任务场景（多轮累计输入 300K tokens、输出 10K tokens，2026-08 快照价格）为例，标价对比与真实对比完全是两个故事：</p>
+
+<p class="data-asof"><strong>数据截止 2026-05</strong> · 模型定价与榜单分数变动频繁，本表是当期快照；用于选型或算账前请核对官方定价页与最新榜单。</p>
+<table>
+<tr><th>Agent 复杂任务（300K 输入 / 10K 输出）</th><th>GLM-5.1</th><th>GPT-5.4（触发跳价）</th><th>Opus 4.7</th></tr>
+<tr><td>输入费用</td><td>$0.33</td><td>$0.75</td><td>$1.5</td></tr>
+<tr><td>输出费用</td><td>$0.04</td><td>$0.15</td><td>$0.25</td></tr>
+<tr><td>标价口径合计</td><td>$0.37</td><td>$0.90</td><td>$1.75（含膨胀/thinking 实际 $2-2.5）</td></tr>
+<tr><td>一次成功率（假设）</td><td>60%</td><td>85%</td><td>95%</td></tr>
+<tr><td>真实成本（÷成功率）</td><td>≈ $0.62</td><td>≈ $1.06</td><td>≈ $2.1</td></tr>
+</table>
+
+<p>结论变了但没完全变：便宜模型与旗舰的真实差距从 4.7 倍收窄到约 3.4 倍，而且这还没算人工排查失败的时间成本。任务越复杂、失败代价越高，成功率项的权重越大——这就是"Agent 场景下成功率比单价重要得多"的数学解释。</p>
+
+<div class="highlight">
+<p><strong>生产案例（编码助手成本对照）：</strong>某团队用编码 Agent 做一次约 30K tokens 的多文件代码修改：走旗舰模型单次费用约 ¥2.7，一次通过；走便宜模型单次约 ¥0.3，但此类多文件重构约两次才成功一次，真实成本约 ¥0.6，还搭上约 20 分钟人工复核。团队最终的策略是"日常小改用便宜模型、多文件重构直连旗舰"，月度总费用比全量旗舰下降约 65%，返工率没有上升。记住两个粗估数：旗舰模型 1K 总 tokens ≈ ¥0.09，便宜模型 1K ≈ ¥0.01，差约 10 倍——但下单前永远先问成功率。</p>
+</div>
+
+<p>另一个实用技巧：很多 CLI 工具只显示总 token 数、不拆分输入输出。可用混合单价估算：典型编码交互约 60% 输入 + 40% 输出（含 thinking），混合单价 = 0.6 × 输入价 + 0.4 × 输出价。估个位足够做预算决策，精确核算再去读 API 返回的 usage 明细。</p>
+
+<div class="intuition-box">
+<p>单价是厂商定的，token 数是 tokenizer 定的，只有成功率是你自己的工程质量——它是真实成本公式里唯一能被你的系统直接优化的变量。</p>
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、模型分档与路由建议</h2>
+
+<p>把前面的计费知识落到选型上，原则是"按场景分档，混合使用"，而不是押注单一模型：</p>
+
+<table>
+<tr><th>场景</th><th>推荐档位</th><th>理由</th><th>注意事项</th></tr>
+<tr><td>短对话、简单问答、分类</td><td>低价档模型</td><td>单价最低，简单任务质量足够</td><td>用 tokenizer 实测中文占比高的流量</td></tr>
+<tr><td>中等复杂度、要求稳定</td><td>中间档模型</td><td>性价比平衡</td><td>盯住上下文分界点，防整单跳价</td></tr>
+<tr><td>复杂推理、Agent、代码生成</td><td>旗舰模型</td><td>成功率最高，重试成本最低</td><td>为 thinking tokens 预留预算</td></tr>
+<tr><td>RAG 高频重复前缀</td><td>任意档 + 开缓存</td><td>输入侧省 75%+</td><td>保持前缀稳定，别频繁改提示词</td></tr>
+</table>
+
+<p>这就是"模型路由"的计费视角（路由的工程实现见 A63 混合路由卡片）：先判断任务难度，再分派给合适档位，简单问题用便宜的、复杂问题才上贵的，总成本最低。预算有限时的优先级排序也很明确：先开缓存（收益最确定），再上路由（收益最大），最后才考虑压 prompt 长度（收益最小且容易伤质量）。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>用目标模型的 tokenizer 实测 token 数，再比价</li>
+<li>读 API usage 明细，单独监控 thinking tokens</li>
+<li>给 Agent 上下文设长度监控，分界点前做摘要压缩</li>
+<li>按"token × 单价 ÷ 成功率"给每个任务类型建成本档案</li>
+<li>RAG / 固定前缀场景第一天就开缓存</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>只拿标价表做跨模型比价</li>
+<li>用可见输出长度估算带推理模型的成本</li>
+<li>让 Agent 上下文无管控地滚过上下文分界点</li>
+<li>在复杂多步任务上为省单价容忍低成功率</li>
+<li>频繁修改系统提示词导致缓存集体失效</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>计费知识的正确用法是建立三层直觉：量级感（一次调用几分到几毛）、结构感（输入输出分价、长档跳价、缓存折扣）、真实感（除以成功率之后的成本）——三层都过一遍，账单才没有意外。</p>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>一个汉字到底算几个 token？为什么没有固定答案？</summary>
+<div class="answer">常见汉字通常 1 字 ≈ 1 token，但这是统计规律而非固定换算。tokenizer 按词频和组合切分：生僻字可能 1 字拆成 2-3 个 token，高频专有名词反而多个字合并成 1 个；中英混合文本约 1.2 token/字，代码则连括号和缩进都单独计数。日常估算按 1 字 = 1-1.5 token 足够，精确核算必须用目标厂商的 tokenizer 实测，因为同一段文本在不同模型上的 token 数能差 20% 以上。</div>
+</details>
+
+<details>
+<summary>为什么输出单价是输入的 3-5 倍，而不是反过来？</summary>
+<div class="answer">因为两者的计算模式完全不同。输入是一次前向传播，整个 prompt 并行过一遍网络就算完；输出是自回归生成，每产出一个 token 都要基于全部前文计算一次，生成 1000 个 token 就是约 1000 步。如果没有 KV Cache 缓存前文中间结果，输出成本会是输入的约 1000 倍；正是 KV Cache 的复用把差距压到了 3-5 倍。所以这个价差反映的是真实算力差距，不是定价套路。</div>
+</details>
+
+<details>
+<summary>长上下文为什么不是线性涨价，而是分档跳价？</summary>
+<div class="answer">根源是注意力机制的 O(n²) 复杂度：每个 token 要与所有其他 token 计算注意力，序列长度变 32 倍，计算量变约 1024 倍。线性涨价无法覆盖这种超线性成本增长，所以厂商用分档定价来对齐成本曲线。更隐蔽的是部分厂商的跳价机制——上下文一旦越过分界点，整条请求全部按高档计费，而不是只有超出部分。Agent 系统的上下文会持续滚动增长，必须在分界点前设置监控和摘要压缩。</div>
+</details>
+
+<details>
+<summary>缓存命中能省多少？什么场景值得开？</summary>
+<div class="answer">缓存命中价通常是正常输入价的 20%-25%，即折扣 75%-78%。收益公式大致是"固定前缀占比 × 命中率 × 输入费占比"，所以最值得开的场景是 RAG 和带长系统提示词的高频服务：prompt 里 90% 是不变的提示词和文档，命中率稳定在 90% 左右时，整单费用可以省 40%-55%。注意两个前提：前缀必须逐字节稳定，改一个字符缓存就失效；输出部分不享受缓存折扣。日均请求量越大，回收越快。</div>
+</details>
+
+<details>
+<summary>thinking tokens 是什么，为什么看不见也要付钱？</summary>
+<div class="answer">带推理能力的模型在给出最终答案前，会先生成一段内部推理 token，即 thinking tokens。它们属于模型输出的一部分，占用真实算力，因此按输出单价计费，但通常不展示给最终用户。典型情况是模型内部推理 5000 tokens、只输出 500 tokens，账单却按 5500 计。防御手段有两个：从 API 返回的 usage 明细里单独读出推理 token 数做监控；给不同任务设置推理档位，避免简单任务也触发长篇内部推理。</div>
+</details>
+
+<details>
+<summary>为什么"真实成本 = token × 单价 ÷ 成功率"比标价更重要？</summary>
+<div class="answer">因为失败重试是成本的乘数。便宜模型单价是旗舰的 1/7，但如果它一次做对的概率只有 60%、平均要 1.7 次才成功，真实成本就变成约 1.7/7 ≈ 24% 的旗舰价，而不是 14%；在 Agent 多步任务里，中途失败还可能让前面所有步骤的 token 白付，乘数更大。更隐蔽的是人工排查失败的时间成本，往往比 token 本身更贵。所以选型时必须按任务类型分别测成功率，再用这个公式算真实单价，任务越复杂、失败代价越高，成功率权重越大。</div>
+</details>
+
+<details>
+<summary>CLI 工具只显示总 token 数，不拆分输入输出，怎么估钱？</summary>
+<div class="answer">用混合单价估算即可。典型编码交互的 token 构成约为 60% 输入 + 40% 输出（含 thinking tokens），混合单价 = 0.6 × 输入单价 + 0.4 × 输出单价。按此估算，旗舰模型约 ¥0.09/千 tokens，便宜模型约 ¥0.01/千 tokens，相差约 10 倍——一次 30K tokens 的修改分别约 ¥2.7 和 ¥0.3。这种估法精度足够支撑预算决策；需要精确核算时再读 API 响应里的 usage 字段，那里有输入、输出、推理 token 的完整拆分。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

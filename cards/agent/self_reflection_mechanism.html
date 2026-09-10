@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A71 · Agent 自我反思机制四层设计</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、反思不是"再检查一遍"</a>
+<a href="#s2">二、硬性熔断：不交给模型判断</a>
+<a href="#s3">三、策略降级：跑通了但没解决</a>
+<a href="#s4">四、目标反思：该不该做这件事</a>
+<a href="#s5">五、反思范式与反思本身的可信度</a>
+<a href="#s6">六、经验沉淀：写入、检索与淘汰</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>A71 · Agent 自我反思机制四层设计</h1>
+<p class="subtitle">Self-Reflection Mechanism — 硬性熔断 / 策略降级 / 目标反思 / 经验沉淀 / Reflexion 与 Self-Refine 的边界</p>
+
+<div class="intuition-box">
+<p>自我反思不是在提示词末尾加一句"请检查一遍"。它是一组按后果严重度分层的机制：致命动作靠硬规则拦、无效动作靠效果指标换策略、错误方向靠目标断言掉头、有效经验靠外部记忆留存。四层的可信度从下到上递减，成本从下到上递增。</p>
+</div>
+
+<!-- ==================== 1 ==================== -->
+<div class="section" id="s1">
+<h2>一、反思不是"再检查一遍"</h2>
+
+<div class="intuition-box">
+<p>让模型自己检查自己，本质上是让同一个出错的大脑复核自己的错误。它对格式和表达有效，对推理正确性经常无效——真正的反思必须站在某个模型伪造不了的外部信号上。</p>
+</div>
+
+<p>"给 Agent 加自我反思"最常见的实现是：调完模型后再发一轮请求，提示词大意是"以上回答有没有问题，请修正"。这个做法在改写润色类任务上确实有效，但一旦用在需要判断对错的场景，效果就变得非常不稳定，有时甚至是负向的。</p>
+
+<p>原因不难理解。如果模型有能力判断第一次答案错在哪，它大概率第一次就不会那么答。学术界对这一点有相当明确的结论：CRITIC（Gou et al., ICLR 2024）的立论前提就是"大模型在缺乏外部反馈时难以自我验证"，因此它不让模型给自己打分，而是让模型去调工具——搜索引擎核对事实、代码解释器跑一遍代码，用工具的输出而不是模型的意见充当评判者。ACL 2025 的长文《Understanding the Dark Side of LLMs' Intrinsic Self-Correction》则从反面给出了证据：纯内生的自我纠正在部分任务上会让模型开始怀疑原本正确的答案，越改越差。</p>
+
+<p>所以工程上的第一条原则是：<strong>反思的可信度取决于反馈信号的来源，而不是反思提示词写得多认真。</strong>能拿到确定性外部信号的地方（单元测试是否通过、接口是否返回预期字段、业务指标是否改善），就绝不用模型的主观判断；实在拿不到外部信号，就要清楚这一层反思是低置信的，不能让它拥有否决权。</p>
+
+<h3>与失败处理的分工</h3>
+
+<p>自我反思和失败处理容易被混为一谈，但它们回答的是两个不同的问题。<a href="../agent/failure_handling_strategies.html">《A60 · Agent 系统失败处理策略》</a> 讲的是<strong>失败已经发生之后怎么办</strong>——显性失败与隐性失败的区分、错误翻译、检查点回滚、恢复成本过高时的缝合交付。本文讲的是<strong>怎么让 Agent 自己意识到出问题了并主动纠正</strong>——在没有人告诉它失败的情况下，靠什么信号发现"这条路不对"，以及发现之后按什么层级去改。</p>
+
+<p>一个直观的分界：A60 处理的输入是一个已经确定的失败事件，本文处理的输入是一个"看起来成功"的执行结果。前者的难点在恢复，后者的难点在识别。两者在生产系统里是接在一起的——反思层识别出问题，失败处理层负责把系统恢复到可用状态。</p>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────────┐
+│                 自我反思四层结构                               │
+│              （越往上越智能，也越不可靠）                       │
+│                                                             │
+│    ┌───────────────────────────────────────┐                │
+│ L4 │ 经验沉淀    把有效策略写进外部经验库      │  跨任务生效     │
+│    │ 信号：任务成功/失败的最终结论            │  成本：检索开销 │
+│    └───────────────────────────────────────┘                │
+│    ┌───────────────────────────────────────┐                │
+│ L3 │ 目标反思    "这事该不该做"               │  改目标        │
+│    │ 信号：全链路指标 vs 原始诉求             │  成本：高      │
+│    └───────────────────────────────────────┘                │
+│    ┌───────────────────────────────────────┐                │
+│ L2 │ 策略降级    "这招管不管用"               │  改方法        │
+│    │ 信号：业务指标是否改善                   │  成本：中      │
+│    └───────────────────────────────────────┘                │
+│    ┌───────────────────────────────────────┐                │
+│ L1 │ 硬性熔断    "这事绝对不能做"             │  直接拦截       │
+│    │ 信号：黑名单/权限/影响面（硬规则）        │  成本：极低    │
+│    └───────────────────────────────────────┘                │
+│                                                             │
+│  规则：下层不通过，上层没有机会执行                             │
+│        下层判定是确定性的，上层判定是概率性的                    │
+└─────────────────────────────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>层</th><th>回答的问题</th><th>反馈信号来源</th><th>可信度</th><th>决策权</th></tr>
+<tr><td>L1 硬性熔断</td><td>这个动作允不允许执行</td><td>硬规则：黑名单、权限、影响面阈值</td><td>确定性</td><td>可直接否决，不可被模型推翻</td></tr>
+<tr><td>L2 策略降级</td><td>当前方法有没有产生效果</td><td>外部业务指标（延迟、成功率、库存）</td><td>高，取决于指标质量</td><td>可切换策略，不可改目标</td></tr>
+<tr><td>L3 目标反思</td><td>当前目标是不是本来就选错了</td><td>全链路指标 + 原始诉求比对</td><td>中，含模型判断</td><td>可改目标，但需留痕并可回滚</td></tr>
+<tr><td>L4 经验沉淀</td><td>这次的教训下次还用得上吗</td><td>任务终态标签 + 场景特征</td><td>中低，需时效管理</td><td>只提供建议，不具否决权</td></tr>
+</table>
+
+</div>
+
+<!-- ==================== 2 ==================== -->
+<div class="section" id="s2">
+<h2>二、硬性熔断：不交给模型判断</h2>
+
+<div class="intuition-box">
+<p>熔断层的设计原则只有一条：这一层的任何判断，都不能出现"模型认为"。保险丝不需要理解电路，它只需要在电流超过阈值时断开。</p>
+</div>
+
+<p><span class="term">硬性熔断</span>指的是用确定性规则在动作执行前直接拦截高危操作，判定过程完全不经过模型推理。它拦的不是"效果不好"的动作，而是"一旦做错就无法挽回"的动作——删除数据库、修改生产配置、批量对外发送通知、资金划转、权限变更。</p>
+
+<p>这类操作的共同特征是<strong>错误代价与执行速度不对称</strong>：执行只要几百毫秒，恢复可能要几小时甚至不可恢复。对于这种不对称性，任何基于概率的判断都是不够的——即便模型判断准确率有 99.9%，在每天上万次操作的规模下，剩下的 0.1% 也足以造成一次严重事故。</p>
+
+<h3>高危操作的分级与拦截方式</h3>
+
+<table>
+<tr><th>风险等级</th><th>典型操作</th><th>判定依据</th><th>拦截方式</th><th>是否可被模型绕过</th></tr>
+<tr><td>禁止级</td><td>删库、清表、删除生产集群</td><td>命令黑名单 + 资源标签</td><td>直接拒绝，不提供确认通道</td><td>否</td></tr>
+<tr><td>人工确认级</td><td>改生产配置、扩缩容、回滚发布</td><td>资源环境标签 = prod</td><td>挂起，等待人工审批后放行</td><td>否</td></tr>
+<tr><td>影响面阈值级</td><td>批量通知、批量改数据</td><td>影响行数 / 收件人数超阈值</td><td>超阈值转人工，未超自动放行</td><td>否</td></tr>
+<tr><td>限频级</td><td>调用付费接口、发送短信</td><td>单位时间调用次数 + 累计花费</td><td>超限熔断，本轮任务终止</td><td>否</td></tr>
+<tr><td>可自动执行</td><td>只读查询、沙箱内计算</td><td>不匹配以上任何规则</td><td>放行</td><td>不适用</td></tr>
+</table>
+
+<p>影响面阈值级是最容易被忽略的一类。一条"给未支付用户发提醒"的指令，影响 50 人和影响 50 万人在技术实现上完全一样，但后果天差地别。所以熔断规则不能只看操作类型，还要看<span class="term">影响面</span>——即这次操作会改动多少条数据、触达多少个用户、花掉多少钱。写操作在真正执行前先做一次 dry-run 计数，是成本很低但收益很高的一道闸门。</p>
+
+<div class="arch-diagram">
+┌───────────────────────────────────────────────────────────┐
+│               熔断层的判定链路（全程无模型参与）              │
+│                                                           │
+│   模型提议的动作 {tool, args}                              │
+│         │                                                 │
+│         ▼                                                 │
+│   ① 黑名单匹配（命令模式 / 资源标签）                        │
+│         ├── 命中禁止级 ──→ 拒绝 + 告警 + 记入轨迹            │
+│         ▼                                                 │
+│   ② 身份与权限校验（当前会话的实际权限，非模型声称的权限）      │
+│         ├── 越权 ──→ 拒绝                                  │
+│         ▼                                                 │
+│   ③ 环境标签检查（prod / staging / sandbox）               │
+│         ├── prod + 写操作 ──→ 挂起等人工审批                 │
+│         ▼                                                 │
+│   ④ 影响面预估（dry-run 计数：行数 / 人数 / 金额）           │
+│         ├── 超阈值 ──→ 转人工                               │
+│         ▼                                                 │
+│   ⑤ 速率与预算闸门（本轮任务累计调用数、花费）                 │
+│         ├── 超限 ──→ 熔断，终止任务                         │
+│         ▼                                                 │
+│      放行执行（附幂等键，保证重放不产生第二次副作用）           │
+└───────────────────────────────────────────────────────────┘
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>某团队的运维 Agent 在自动扩容时触发了连环调用——扩容后监控指标短时抖动，Agent 判定"还不够"于是继续扩容，三分钟内连续发起了十余次扩容，把集群资源池拖垮。事后复盘发现，单看每一次调用都是"合理"的：参数合法、权限具备、模型的推理链条也说得通。缺的不是判断力，而是一条"单任务内同类写操作不得超过 3 次、且两次之间必须间隔一个完整的指标观测窗口"的硬规则。加上这条规则后，同类连环调用在灰度期间被拦下 4 次，全部确认为误判扩容。
+</div>
+
+<div class="intuition-box">
+<p>熔断规则要拦的不是"模型判断错了"，而是"模型判断对不对都不该由它一个人说了算"。这两者的差别决定了这一层能不能真的兜住底。</p>
+</div>
+
+</div>
+
+<!-- ==================== 3 ==================== -->
+<div class="section" id="s3">
+<h2>三、策略降级：跑通了但没解决</h2>
+
+<div class="intuition-box">
+<p>子任务全部成功，不等于问题被解决了。判断"这招管不管用"的唯一可靠依据是外部业务指标，不是执行日志里那一串绿色对勾。</p>
+</div>
+
+<p><span class="term">策略降级</span>处理的是一类特别隐蔽的失败：所有动作都执行成功，返回码全是 200，但用户的原始问题纹丝不动。这类失败在日志里完全看不出来，因为日志记录的是"动作是否完成"，而问题出在"完成的动作是否有效"。</p>
+
+<p><strong>示例场景：</strong>服务响应变慢，Agent 按预案扩容计算资源。扩容成功，实例数从 8 台加到 16 台，任务状态标记为完成。但响应时间没有任何改善，因为真正的瓶颈是一条没走索引的数据库慢查询——算力从来就不是短板。如果没有策略降级层，Agent 会在下一个告警周期再扩一次，反复五六轮，每一轮都"成功"，每一轮都无效，唯一在增长的是账单。</p>
+
+<h3>效果断言：把"有没有用"变成可判定的</h3>
+
+<p>策略降级的核心是给每个策略配一个<span class="term">效果断言</span>——在执行前就声明"这个策略如果有效，某个可观测指标应该在多长时间内出现什么样的变化"。断言必须在执行前定义，不能在执行后由模型现场解释，否则模型会倾向于把任何结果都解释成有效。</p>
+
+<table>
+<tr><th>策略</th><th>效果断言（执行前声明）</th><th>观测窗口</th><th>断言失败后的降级动作</th></tr>
+<tr><td>扩容计算资源</td><td>P95 响应时间下降 ≥ 20%</td><td>5 分钟</td><td>转查数据库慢查询与外部依赖</td></tr>
+<tr><td>清理缓存</td><td>缓存命中率回升至基线 90% 以上</td><td>3 分钟</td><td>检查缓存键设计与回源策略</td></tr>
+<tr><td>重启异常实例</td><td>该实例错误率归零且不再复发</td><td>10 分钟</td><td>判定为代码级问题，停止重启并升级</td></tr>
+<tr><td>改写检索查询</td><td>召回结果与原问题实体命中数上升</td><td>本轮内</td><td>换检索通道或改用结构化查询</td></tr>
+<tr><td>换用更强模型</td><td>输出通过下游 Schema 校验</td><td>本轮内</td><td>判定为任务描述问题，回到任务分解</td></tr>
+</table>
+
+<h3>降级的路径要预先定义</h3>
+
+<p>断言失败后换什么策略，同样应该预先定义成一张<strong>策略降级表</strong>，而不是让模型临场发挥。原因有二：一是模型临场想出来的替代策略经常是原策略的变体（扩容 8 台不行就扩 16 台），并没有跳出原有思路；二是预定义的降级路径可以显式声明"这两个策略针对的是不同根因"，从而保证每次降级都在真正切换假设，而不是在同一个假设里加大力度。</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────┐
+│              策略降级的执行循环                             │
+│                                                          │
+│   问题信号（如 P95 延迟超阈值）                             │
+│        │                                                 │
+│        ▼                                                 │
+│   选择策略 S1（假设：算力不足）                             │
+│        │                                                 │
+│        ├──→ 执行前声明断言 A1: P95 降幅 ≥ 20% / 5min       │
+│        ▼                                                 │
+│   执行 S1 ──→ 动作成功 ✓（注意：这里还不能判定有效）          │
+│        │                                                 │
+│        ▼                                                 │
+│   等待观测窗口 ──→ 采集指标 ──→ 断言 A1 成立？               │
+│        ├── 成立 ──→ 结束，记录 (场景, S1, 有效) 到经验库     │
+│        └── 不成立 ──→ 假设被证伪                            │
+│                 │                                        │
+│                 ▼                                        │
+│         查降级表：S1 失败 ──→ S2（假设：慢查询）             │
+│                 │        不是 S1'（同假设加大力度）          │
+│                 ▼                                        │
+│         执行 S2 ... 最多 N 轮                              │
+│                 │                                        │
+│                 └── N 轮全部证伪 ──→ 升级到 L3 目标反思      │
+│                     （所有"怎么做"的假设都错了，              │
+│                       该怀疑"要做什么"了）                   │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<p>图中最后一步是四层之间的关键衔接：<strong>当所有备选策略的效果断言都不成立时，问题往往不在策略选择，而在目标本身</strong>。这时候继续在策略层换招是徒劳的，必须把控制权交给上一层。</p>
+
+<table>
+<tr><th>现象</th><th>误判为</th><th>实际所属层</th><th>正确动作</th></tr>
+<tr><td>工具调用报错</td><td>策略无效</td><td>失败处理（见 A60）</td><td>归因后重试或回滚</td></tr>
+<tr><td>动作成功但指标没变</td><td>需要加大力度</td><td>L2 策略降级</td><td>换一个针对不同根因的策略</td></tr>
+<tr><td>换了三种策略指标都没变</td><td>模型能力不行</td><td>L3 目标反思</td><td>怀疑目标选错，重新定位问题</td></tr>
+<tr><td>指标变好但用户仍不满意</td><td>指标不准</td><td>L3 目标反思</td><td>检查优化的指标是不是用户真正在意的</td></tr>
+</table>
+
+</div>
+
+<!-- ==================== 4 ==================== -->
+<div class="section" id="s4">
+<h2>四、目标反思：该不该做这件事</h2>
+
+<div class="intuition-box">
+<p>前两层都在"怎么把事做对"里打转，这一层跳出来问"这事该不该做"。方向错了，执行力越强，偏离得越远。</p>
+</div>
+
+<p><span class="term">目标反思</span>是让 Agent 定期检查当前正在优化的目标，是否真的对应用户的原始诉求。它和策略降级的区别是作用对象不同：策略降级换的是方法，目标反思换的是目标本身。</p>
+
+<p><strong>示例场景：</strong>大促流量突增，预案指令是"扩容计算资源保住可用性"。Agent 按指令扩容，但全链路指标显示：应用层 CPU 使用率只有 30%，真正异常的是 CDN 回源率从 2% 飙到 60%——缓存策略失效导致所有请求都打到了源站。这时候扩容不但无效，还会因为源站连接数增加而让情况更糟。具备目标反思能力的 Agent 会中止扩容，把目标从"增加算力"修正为"恢复 CDN 缓存命中"。</p>
+
+<p>这个能力是自动化运维和自治运维的分水岭：前者忠实执行预设动作，后者会质疑预设动作是否针对了正确的问题。质疑本身需要一个前提——Agent 能看到<strong>目标之外的信息</strong>。只给它 CPU 指标，它永远发现不了 CDN 的问题。所以目标反思在工程上首先是个数据问题：反思模块的可观测数据面必须比执行模块宽。</p>
+
+<h3>目标反思的三个触发条件</h3>
+
+<table>
+<tr><th>触发条件</th><th>具体判据</th><th>误触发风险</th><th>建议频率</th></tr>
+<tr><td>策略连续证伪</td><td>L2 降级表已穷尽，断言全部不成立</td><td>低</td><td>触发即执行</td></tr>
+<tr><td>指标背离</td><td>目标指标改善但用户侧核心指标未改善</td><td>中，需排除指标延迟</td><td>每个观测窗口一次</td></tr>
+<tr><td>预算里程碑</td><td>消耗过半预算但完成度未过半</td><td>中，长尾任务易误触</td><td>每任务一到两次</td></tr>
+</table>
+
+<p>触发频率需要克制。目标反思是四层里最贵的一层：它要拉取全链路数据、要重新推理目标合理性、还可能推翻已完成的工作。把它设成每步都跑，成本会成倍上升，而且会引入新的风险——模型频繁质疑目标，任务反而收敛不了。工程上更稳妥的做法是把它挂在上述三个明确的触发点上，而不是当作常驻循环。</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────┐
+│           目标反思：反思模块的数据面必须更宽                  │
+│                                                          │
+│  ┌────────────────┐        ┌──────────────────────────┐  │
+│  │ 执行模块        │        │ 目标反思模块              │  │
+│  │ 看到的数据面    │        │ 看到的数据面              │  │
+│  ├────────────────┤        ├──────────────────────────┤  │
+│  │ 当前目标        │        │ 用户原始诉求（未经改写）   │  │
+│  │ 当前指标 (CPU)  │  ⊂     │ 全链路指标                │  │
+│  │ 可用工具        │        │  ├ 应用层 CPU / 内存      │  │
+│  │ 本轮执行轨迹    │        │  ├ 数据库慢查询           │  │
+│  └────────────────┘        │  ├ CDN 回源率             │  │
+│                            │  └ 下游依赖健康度          │  │
+│                            │ 历史同类事件与处置结论      │  │
+│                            └──────────────────────────┘  │
+│                                                          │
+│  判定：当前目标能否解释"用户原始诉求"中的异常？               │
+│    ├── 能 ──→ 维持目标，交还执行模块                        │
+│    └── 不能 ──→ 提出新目标 ──→ 需二次确认                   │
+│                    │                                     │
+│                    ├─ 新目标属高危 ──→ 走 L1 熔断人工审批    │
+│                    └─ 新目标属常规 ──→ 记录旧目标快照后切换   │
+│                        （保留回滚点：新目标若也证伪可回退）    │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>一个内部数据分析 Agent 上线三个月的复盘显示，被用户标记为"没解决我的问题"的会话中，约 45% 属于执行无误但方向跑偏——用户问的是"这个月转化率为什么降了"，Agent 精确地算出了转化率下降幅度，却始终没去看流量来源结构的变化。加入目标反思后（触发条件为"用户追问同一问题超过两轮"），这类会话的二次追问率下降了约一半。关键改动不是让模型更聪明，而是给反思模块开放了执行模块看不到的那部分数据表。
+</div>
+
+<div class="intuition-box">
+<p>目标反思模块如果和执行模块看到的是同一份数据，它得出的结论必然和执行模块一致。让它有用的前提是让它看得更宽，而不是让它想得更久。</p>
+</div>
+
+</div>
+
+<!-- ==================== 5 ==================== -->
+<div class="section" id="s5">
+<h2>五、反思范式与反思本身的可信度</h2>
+
+<div class="intuition-box">
+<p>选反思范式其实就是在选"谁来当裁判"。裁判是模型自己，成本最低也最不可靠；裁判是工具或环境，成本更高但结论可信。</p>
+</div>
+
+<p>学术界围绕自我反思提出过若干范式，它们看起来都是"生成—批评—修正"的循环，真正的差别在于<strong>批评信号从哪来</strong>，以及<strong>反思结果存不存</strong>。理解这两个维度，就能判断某个范式适不适合自己的场景。</p>
+
+<table>
+<tr><th>范式</th><th>批评信号来源</th><th>循环范围</th><th>是否持久化</th><th>公开报告的效果</th></tr>
+<tr><td>Self-Refine（Madaan et al., NeurIPS 2023）</td><td>同一模型自评，无外部信号</td><td>单次任务内</td><td>否</td><td>7 项任务平均提升约 20%</td></tr>
+<tr><td>Reflexion（Shinn et al., NeurIPS 2023）</td><td>环境反馈（失败的单元测试、任务奖励）转成语言教训</td><td>跨多次尝试</td><td>是，写入情景记忆</td><td>HumanEval pass@1 达 91%（其设定下 GPT-4 基线为 80%）</td></tr>
+<tr><td>CRITIC（Gou et al., ICLR 2024）</td><td>外部工具：搜索引擎核事实、解释器跑代码</td><td>单次任务内多轮</td><td>否</td><td>其立论前提为"无外部反馈时难以自我验证"</td></tr>
+<tr><td>LATS（Zhou et al., ICML 2024）</td><td>环境奖励 + 蒙特卡洛树搜索</td><td>跨分支搜索</td><td>搜索树内</td><td>HumanEval 报告最高约 94.4%</td></tr>
+</table>
+
+<p>这张表里最有工程价值的一条是 Self-Refine 与 Reflexion 的对照：<strong>前者的循环闭合在一次任务内且不留痕，后者把失败教训写进情景记忆供下次尝试使用。</strong>这正好对应本文四层里 L2/L3（当次纠正）与 L4（跨任务沉淀）的分工。而 CRITIC 强调的外部工具验证，对应的则是本文反复强调的"反馈信号必须来自模型伪造不了的地方"。</p>
+
+<h3>反思本身出错怎么办</h3>
+
+<p>反思模块也是模型驱动的，它同样会出错，而且它的错误比普通推理错误更危险——因为它有推翻正确结论的权力。ACL 2025 的研究记录了这一现象：内生自我纠正在部分场景下会让模型放弃原本正确的答案。工程上有几种控制手段。</p>
+
+<table>
+<tr><th>失效模式</th><th>表现</th><th>控制手段</th><th>代价</th></tr>
+<tr><td>过度纠正</td><td>把正确答案改错</td><td>要求反思给出具体证据，无证据不允许改动</td><td>低</td></tr>
+<tr><td>反思循环</td><td>反复反思却不收敛</td><td>限定反思轮数上限，每轮必须产生可观测变化</td><td>低</td></tr>
+<tr><td>迎合式反思</td><td>无论对错都说"确实有问题"</td><td>让反思输出结构化判定而非自由文本，允许输出"无需修改"</td><td>低</td></tr>
+<tr><td>反思成本失控</td><td>反思 Token 超过主任务</td><td>按触发条件调用，不做常驻循环；用更小模型做反思</td><td>中</td></tr>
+<tr><td>反思结论本身错误</td><td>归因归错了方向</td><td>反思结论只作为建议进入下一轮，不得直接改写已有结论</td><td>中</td></tr>
+</table>
+
+<p>"反思的反思"这个思路听起来自然，实践中却收益很小：再加一层同源的模型判断，并不能带来独立的信息增量，只是把不确定性又叠了一层，还翻倍了成本。更有效的做法是<strong>横向引入独立信号</strong>——让反思结论去撞一次外部验证（跑测试、查第二个数据源、比对业务指标），用外部结果决定这条反思采不采纳。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>优先用确定性外部信号做批评者：测试结果、Schema 校验、业务指标</li>
+<li>反思输出结构化判定（是否需要修改、依据、具体改动点），而不是一段自由评论</li>
+<li>明确允许反思输出"无需修改"，并统计这个比例是否合理</li>
+<li>反思用比主任务更小更便宜的模型，成本能降一个量级且效果通常不差</li>
+<li>反思结论进轨迹留痕，事后能审计"这次改动是谁提出的、依据是什么"</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在能拿到外部信号的场景里用纯自评反思，那是主动放弃可靠性</li>
+<li>不要给反思模块直接改写最终结论的权力，它只应提出建议</li>
+<li>不要用"反思的反思"来解决反思出错，同源判断叠加不产生新信息</li>
+<li>不要让反思常驻在每一步，绝大多数步骤根本不需要反思</li>
+<li>不要只统计反思触发次数，要统计反思触发后结果是否真的变好</li>
+</ul>
+</div>
+</div>
+
+</div>
+
+<!-- ==================== 6 ==================== -->
+<div class="section" id="s6">
+<h2>六、经验沉淀：写入、检索与淘汰</h2>
+
+<div class="intuition-box">
+<p>没有沉淀的反思，等于每天从头再来。但经验库真正的难点不是"怎么存"，而是"怎么保证下次检索出来的那条经验，现在还是对的"。</p>
+</div>
+
+<p><span class="term">经验沉淀</span>是把每次反思得出的有效策略连同它的适用场景一起写入外部存储，供后续同类任务检索复用。它是四层里唯一跨任务生效的一层，也是让系统"越用越准"的来源。但它同时是最容易做成技术债的一层——一个只增不删、没有时效管理的经验库，用不了多久就会开始输出过时的错误建议。</p>
+
+<h3>一条经验该记什么</h3>
+
+<p>只记"做了什么"是不够的，因为无法判断下次该不该用。一条可复用的经验至少要包含触发场景、动作、结果、以及它的有效边界。</p>
+
+<pre><code>{"scene": {"symptom":"P95延迟上升", "cpu":"正常", "db_slow_qps":"上升"},
+ "action": "定位慢查询并加索引",
+ "outcome": "P95 5分钟内下降 62%",
+ "scope": "MySQL 8.x / 单表千万级",
+ "hits": 7, "last_hit": "2026-08-30", "confidence": 0.86}</code></pre>
+
+<table>
+<tr><th>字段</th><th>作用</th><th>缺失后果</th></tr>
+<tr><td>场景特征</td><td>作为检索键，决定什么时候召回这条经验</td><td>无法判断是否适用，容易张冠李戴</td></tr>
+<tr><td>动作</td><td>具体做了什么</td><td>经验不可执行</td></tr>
+<tr><td>结果与指标变化</td><td>证明它确实有效，且有效到什么程度</td><td>无法区分"碰巧成功"和"真的有效"</td></tr>
+<tr><td>有效边界</td><td>声明在什么条件外不适用</td><td>跨场景误用，且难以排查</td></tr>
+<tr><td>命中次数与最近命中时间</td><td>支撑置信度计算与淘汰决策</td><td>无法做时效管理，库只增不减</td></tr>
+</table>
+
+<h3>检索与淘汰</h3>
+
+<p>经验库的检索不能只做语义相似度匹配。两个描述相似的故障，根因可能完全不同；反过来，描述差异很大的两个问题，可能适用同一条经验。工程上通常用<strong>结构化特征过滤 + 语义召回</strong>的两段式：先用环境、组件、指标形态等结构化字段把候选集缩小到确实同类的范围，再在候选集内做语义排序。</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────┐
+│               经验库的读写与淘汰                            │
+│                                                          │
+│  【写入】任务终结                                          │
+│     │                                                    │
+│     ├─ 成功且策略有效 ──→ 抽取(场景,动作,结果,边界)          │
+│     │                      │                             │
+│     │                      ▼                             │
+│     │                 已有相似经验？                       │
+│     │                   ├─ 有 ──→ hits+1，更新置信度       │
+│     │                   └─ 无 ──→ 新建，初始置信度低        │
+│     │                                                    │
+│     └─ 失败 ──→ 也要记：记为负例（此场景下该动作无效）        │
+│                                                          │
+│  【检索】新任务到达                                        │
+│     场景特征 ──→ ① 结构化过滤（环境/组件/指标形态）          │
+│                  ──→ ② 语义召回 Top-K                     │
+│                  ──→ ③ 按置信度 × 新鲜度重排               │
+│                  ──→ ④ 作为"建议"注入，不作为指令            │
+│                                                          │
+│  【淘汰】定期任务                                          │
+│     ├─ 长期未命中（如 90 天）──→ 降权，再无命中则归档        │
+│     ├─ 命中后效果断言失败 ──→ 置信度下调，连续两次则失效      │
+│     └─ 关联组件已下线 / 版本已升级 ──→ 直接失效             │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<p>三个容易踩的坑值得单独说明。第一，<strong>负例和正例一样值钱</strong>：记录"这个场景下试过扩容，无效"能直接砍掉下次的一整轮无效尝试，但绝大多数实现只记成功案例。第二，<strong>经验必须以建议形式注入</strong>，不能作为强制指令——一旦某条经验因环境变化而失效，强制指令会让系统固执地重复一个已经不对的动作。第三，<strong>淘汰机制要在建库的第一天就做</strong>，而不是等库大了再补：等到几千条经验混杂着过期条目时，人工梳理的成本会远高于当初把 <code>last_hit</code> 和置信度字段加上的成本。</p>
+
+<table>
+<tr><th>库的规模</th><th>主要矛盾</th><th>该做的事</th><th>不该做的事</th></tr>
+<tr><td>0–50 条</td><td>样本太少，检索经常空</td><td>放宽召回，人工审核每一条</td><td>过早引入复杂的置信度模型</td></tr>
+<tr><td>50–500 条</td><td>开始出现误召回</td><td>加结构化特征过滤，补有效边界字段</td><td>只靠语义相似度检索</td></tr>
+<tr><td>500 条以上</td><td>过期经验开始产生负面影响</td><td>启用淘汰任务，命中后回写效果反馈</td><td>无限累积，只增不删</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>经验库的价值不由条目数量决定，而由"命中后确实有效"的比例决定。一个 200 条、命中有效率 80% 的库，远胜过一个 2000 条、命中有效率 30% 的库。</p>
+</div>
+
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details><summary>为什么在提示词里加一句"请检查一遍"不算自我反思机制？</summary><div class="answer">因为它没有引入任何新的信息。让同一个模型复核自己的输出，批评信号仍然来自那个刚刚犯错的大脑——如果它有能力判断错在哪，第一次通常就不会那么答。学术上对此有明确证据：CRITIC（ICLR 2024）的立论前提就是大模型在缺乏外部反馈时难以自我验证，ACL 2025 关于内生自我纠正负面效应的研究还发现，这类反思有时会让模型放弃原本正确的答案。有效的反思必须站在模型伪造不了的外部信号上——单元测试是否通过、接口是否返回预期字段、业务指标是否改善。纯自评反思不是完全没用，它在格式、措辞、结构这类不涉及事实判断的维度上确实有效，但不能拿它当可靠性保障。</div></details>
+
+<details><summary>四层为什么要按这个顺序，能不能只做上面两层？</summary><div class="answer">顺序的依据是可信度和后果严重度，不是智能程度。硬性熔断在最底层，因为它拦的是不可挽回的操作，判定必须是确定性的，而且下层不通过时上层根本没有执行机会。往上每一层的判定都更依赖模型推理，可信度递减、成本递增。所以只做上面两层是最危险的组合：目标反思和经验沉淀都建立在"模型判断"之上，一旦它们判断错误而底下没有熔断兜着，错误会直接落到生产环境。合理的建设顺序恰恰相反——先把熔断做扎实，再往上做策略降级，最后才是目标反思和经验沉淀。前者是保命的，后者是提效的。</div></details>
+
+<details><summary>策略降级和失败处理有什么区别？</summary><div class="answer">两者的输入不同。失败处理的输入是一个已经确定的失败事件——调用超时了、接口返回 500、写入被拒绝，系统知道自己失败了，问题是怎么恢复，这部分内容在《A60 · Agent 系统失败处理策略》里展开。策略降级的输入则是一个看起来完全成功的结果：所有动作返回 200，任务状态是完成，但用户的问题没有得到解决。这类情况在日志里看不出任何异常，因为日志记录的是动作是否完成，而问题出在完成的动作是否有效。识别它的唯一办法是给每个策略预先配一个效果断言，声明"如果这个策略有效，某个外部业务指标应该在多长时间内出现什么变化"，然后用真实指标去验。</div></details>
+
+<details><summary>效果断言为什么必须在执行前定义？</summary><div class="answer">因为执行后再让模型解释结果，它会倾向于把任何结果都解释成有效。这是自然语言推理的固有倾向——给定一个结果和一个动作，模型总能编织出一条把两者联系起来的解释链。执行前定义断言则把判定变成了一次确定性比较：说好了 P95 要降 20%，五分钟后实测降了 3%，那就是没降，没有解释空间。另一个好处是断言本身构成了假设的显式声明——"扩容有效"背后的假设是"瓶颈在算力"，断言不成立就等于这个假设被证伪，接下来该换的是假设而不是加大力度。这也是为什么降级路径要预先定义：模型临场想的替代方案往往还是原假设的变体。</div></details>
+
+<details><summary>目标反思会不会让 Agent 频繁改目标，导致任务收敛不了？</summary><div class="answer">会，所以触发频率必须严格控制。目标反思是四层里最贵的一层：要拉全链路数据、要重新推理目标合理性、还可能推翻已完成的工作。把它设成常驻循环，成本会成倍上升，还会引入模型反复质疑目标、任务永远不收敛的新风险。稳妥的做法是挂在三个明确的触发点上：策略降级表已经穷尽且断言全部不成立、目标指标改善但用户侧核心指标没改善、消耗过半预算但完成度未过半。此外每次改目标都要留旧目标快照作为回滚点，新目标如果同样被证伪可以退回来，而不是一路漂移下去。如果新目标涉及高危操作，还要走熔断层的人工审批。</div></details>
+
+<details><summary>Reflexion 和 Self-Refine 的差别对工程实现意味着什么？</summary><div class="answer">意味着你要先决定反思的产物存不存、跨不跨任务。Self-Refine（Madaan et al., NeurIPS 2023）的循环闭合在一次任务内，同一模型生成、批评、修正，不留下任何东西，其论文报告 7 项任务平均约 20% 的提升，适合改写润色这类单次生成任务。Reflexion（Shinn et al., NeurIPS 2023）则把环境反馈——比如失败的单元测试——转成一条自然语言教训写进情景记忆，下次尝试时作为上下文重新读入，论文在 HumanEval 上报告 pass@1 达到 91%，其设定下的 GPT-4 基线为 80%。对应到本文的四层结构：Self-Refine 那种当次纠正对应策略降级和目标反思，Reflexion 那种跨任务留痕对应经验沉淀。两者不冲突，成熟系统通常都要有。</div></details>
+
+<details><summary>反思模块自己出错了怎么办，需要做"反思的反思"吗？</summary><div class="answer">不建议。再加一层同源的模型判断不会带来独立的信息增量，只是把不确定性又叠了一层，成本却翻倍了。更有效的方向是横向引入独立信号：让反思结论去撞一次外部验证——跑一遍测试、查第二个数据源、比对真实业务指标，由外部结果决定这条反思采不采纳。除此之外还有几条低成本的控制手段：要求反思必须给出具体证据，无证据不允许改动；限定反思轮数上限，每轮必须产生可观测变化；让反思输出结构化判定并明确允许"无需修改"这个选项，避免模型迎合式地无论对错都说有问题；最重要的是不给反思模块直接改写最终结论的权力，它只提建议。</div></details>
+
+<details><summary>经验库怎么避免变成越用越差的技术债？</summary><div class="answer">关键是在建库第一天就把时效管理做进去，而不是等库大了再补。每条经验除了场景、动作、结果，还必须带有效边界、命中次数和最近命中时间这几个字段，它们是后续淘汰决策的唯一依据。淘汰规则可以很简单：长期未命中的降权后归档；命中后效果断言失败的下调置信度，连续两次即失效；关联组件已下线或版本已升级的直接失效。检索侧也要注意，不能只做语义相似度——两个描述相似的故障根因可能完全不同，应该先用环境、组件、指标形态这类结构化字段把候选集缩到确实同类的范围，再在候选集内做语义排序。最后，经验必须以建议形式注入而不是强制指令，否则一条已经失效的经验会让系统固执地重复错误动作。</div></details>
+
+<details><summary>失败的经验要不要记进经验库？</summary><div class="answer">要，而且价值经常被低估。大多数实现只记成功案例，但负例——"这个场景下试过扩容，无效"——能直接砍掉下次的一整轮无效尝试，节省的时间和 Token 往往比正例带来的收益更直接。负例在策略降级层尤其有用：降级表决定了备选策略的顺序，而负例可以按具体场景动态调整这个顺序，把历史上在同类场景中被证伪过的策略往后排甚至直接跳过。记录负例的字段结构和正例一致，只是结果字段记的是"断言未成立"以及当时的实际指标变化。需要注意的是负例同样要做时效管理：一次失效不代表永久失效，环境变了之后老负例可能已经不成立，所以负例也要带上有效边界和记录时间。</div></details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

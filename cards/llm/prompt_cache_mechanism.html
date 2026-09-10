@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L11 · Prompt Cache 核心机制</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、Transformer 推理两阶段</a>
+<a href="#s2">二、KV Cache：单次对话内的加速引擎</a>
+<a href="#s3">三、Prompt Cache：跨请求的 Prefill 优化</a>
+<a href="#s4">四、KV Cache vs Prompt Cache 深度对比</a>
+<a href="#s5">五、进阶：CrossPoint Cache 与 PromptCash</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>L11 · Prompt Cache 核心机制</h1>
+<p class="subtitle">KV Cache 单次加速 → Prompt Cache 跨请求复用 → 推理成本指数级降低</p>
+
+<!-- ============ 1. Transformer 推理流程 ============ -->
+<div class="section" id="s1">
+<h2>一、Transformer 推理两阶段</h2>
+
+<h3>Prefill 与 Decode 的性质对比</h3>
+<table>
+<tr><th>维度</th><th>Prefill（处理输入）</th><th>Decode（生成输出）</th></tr>
+<tr><td>处理方式</td><td>全部输入 token 一次并行前向</td><td>每次只前进一个 token，必须串行</td></tr>
+<tr><td>主要瓶颈</td><td>算力（矩阵乘密集）</td><td>显存带宽（每步都要把权重读一遍）</td></tr>
+<tr><td>耗时随什么增长</td><td>输入长度（注意力部分按平方）</td><td>输出长度（线性）</td></tr>
+<tr><td>对应的延迟指标</td><td>首字延迟 TTFT</td><td>每秒输出 token 数 TPS</td></tr>
+<tr><td>增大批量的效果</td><td>算力已接近饱和，收益有限</td><td>权重读取被多请求摊薄，总吞吐显著提升</td></tr>
+<tr><td>能否被缓存跳过</td><td>可以，相同前缀的 KV 可直接复用</td><td>不可以，每个 token 都必须真算</td></tr>
+<tr><td>典型优化手段</td><td>前缀缓存、分块预填充、更高效的注意力实现</td><td>连续批处理、投机解码、量化、压缩 KV cache</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>LLM 推理本质上是"一次性读懂题目（Prefill）+ 一个字一个字写答案（Decode）"，两个阶段的计算瓶颈完全不同。</p>
+</div>
+
+<p><span class="term">Prefill（预填充）</span>和<span class="term">Decode（解码）</span>是 Transformer 自回归推理的两个核心步骤，它们的计算模式决定了所有缓存优化的切入点。</p>
+
+<h3>Prefill：并行处理全部输入</h3>
+<p>将整段提示词的所有 token 并行送入模型，一次性计算每层的 Q / K / V 矩阵。输入 token 之间没有依赖关系，GPU 可以充分利用并行计算能力，N 个 token 同时处理。如果逐个计算，首 token 延迟（TTFT）将增加 N 倍。</p>
+
+<div class="formula">Prefill 计算复杂度：O(N² × d) &nbsp;&nbsp;（N = 输入长度，d = 隐藏维度）</div>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────┐
+│                  Prefill 阶段                 │
+│                                              │
+│  输入 Tokens: [t₁, t₂, t₃, ..., tₙ]        │
+│       ↓         ↓         ↓            ↓     │
+│  ┌───────────────────────────────────────┐   │
+│  │   并行计算所有层的 Q / K / V 矩阵      │   │
+│  │   Attention: softmax(QKᵀ/√d)V         │   │
+│  └───────────────────────────────────────┘   │
+│       ↓                                      │
+│  输出: 所有 token 的 K/V 矩阵 + 首个输出token │
+│  复杂度: O(N²)                               │
+└──────────────────────────────────────────────┘</div>
+
+<h3>Decode：自回归逐 token 生成</h3>
+<p>每次生成 1 个新 token，新 token 的 Q 需要与之前所有 token 的 K 做注意力计算。因为自回归特性，每个新 token 都依赖前面所有 token，无法并行。没有 KV Cache 的话，生成 N 个 token 的总计算量将从 O(N²) 膨胀到 O(N³)。</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────┐
+│                  Decode 阶段                  │
+│                                              │
+│  Step 1: 新 token tₙ₊₁                       │
+│    Q_new × [K₁...Kₙ]ᵀ → attention scores    │
+│    scores × [V₁...Vₙ] → output              │
+│                                              │
+│  Step 2: 新 token tₙ₊₂                       │
+│    Q_new × [K₁...Kₙ₊₁]ᵀ → 需要前面所有 K！  │
+│                                              │
+│  关键：每个新 token 都要"回看"所有历史 K/V    │
+│  → 这就是 KV Cache 存在的意义                │
+└──────────────────────────────────────────────┘</div>
+
+</div>
+
+<!-- ============ 2. KV Cache ============ -->
+<div class="section" id="s2">
+<h2>二、KV Cache：单次对话内的加速引擎</h2>
+
+<div class="intuition-box">
+<p>KV Cache 的本质是"空间换时间"——把已经算过的 K/V 矩阵存起来，让 Decode 阶段每步复杂度从 O(N²) 降到 O(N)。</p>
+</div>
+
+<h3>只存 K 和 V，不存 Q</h3>
+<p>KV Cache 存储每一层 Transformer 中已处理 token 的 Key 和 Value 矩阵。Query 不需要缓存，因为 Decode 阶段每次只有 1 个新 token 的 Q。K/V 是"被查询的索引"和"被查到的值"，是静态的；Q 是"查询请求"，用完即弃。</p>
+
+<div class="highlight">
+<strong>核心加速公式：</strong>无 KV Cache 时，生成第 N 个 token 需要计算 N 次完整注意力 → O(N²)。有 KV Cache 时，只需 1 次 Q × K<sub>cached</sub><sup>T</sup> → O(N)。对于 8K token 上下文，加速约 <strong>8000 倍</strong>。
+</div>
+
+<h3>显存开销</h3>
+<p>KV Cache 虽快，但代价是显存占用。算式的关键是<strong>用 KV head 数而不是隐藏维度</strong>：现代 70B 模型普遍上了 GQA，KV 的宽度是 <code>num_kv_heads × head_dim</code>，远小于 <code>hidden_dim</code>。以 LLaMA-3-70B（80 层，64 个 Q head、8 个 KV head、head_dim 128）为例：</p>
+
+<div class="formula">
+每 token KV = 2（K+V）× num_layers × num_kv_heads × head_dim × dtype_bytes
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;= 2 × 80 × 8 × 128 × 2 B = 320 KB
+</div>
+
+<table>
+<tr><th>参数</th><th>值</th><th>说明</th></tr>
+<tr><td>每 token 每层 KV 大小</td><td>2 × (8 × 128) × 2 bytes (FP16)</td><td>K + V，各 1024 维（GQA 后的 KV 宽度）</td></tr>
+<tr><td>80 层总计</td><td>80 × 4KB = 320 KB / token</td><td>所有层的 KV Cache</td></tr>
+<tr><td>4K 上下文</td><td>~1.3 GB</td><td>单个请求的 KV Cache</td></tr>
+<tr><td>32K 上下文</td><td>~10 GB</td><td>约占 A100 80GB 的八分之一</td></tr>
+<tr><td>128K 上下文</td><td>~42 GB</td><td>长上下文下单请求就吃掉半张卡</td></tr>
+</table>
+
+<div class="intuition-box">
+<strong>为什么别用 hidden_dim 估算：</strong>若按 MHA 口径 <code>2 × 80 × 8192 × 2 B</code> 算，会得到 2.5 MB/token，比真实值高 8 倍——那正是 GQA 省下来的倍数（64 个 Q head 共享 8 组 KV）。拿这个数去做容量规划，会把可承载并发数低估一个数量级。全站 KV 显存口径统一按 GQA 计算，与 <a href="../deploy/kv_cache_inference.html">DP08 · KV Cache 与推理优化</a> 一致。
+</div>
+
+<p>长上下文场景的优化手段：<span class="term">GQA/MQA</span> 减少 KV head 数量（LLaMA-2-70B 的 GQA 将 KV head 从 64 减到 8，省 87.5%）；<span class="term">MLA</span> 低秩压缩再进一步（DeepSeek-V3 每 token 约 50 KB）；KV Cache 量化（FP16→FP8/INT8 再省 50%）；<span class="term">PagedAttention</span> 减少显存碎片；分层卸载——热页留 GPU，冷页卸载到 CPU 内存。</p>
+
+<div class="interview-box">
+<strong>常见疑问：</strong>"KV Cache 为什么不缓存 Q？"
+<br>答：Decode 阶段每次只生成 1 个 token，只有 1 个 Q 向量，不需要缓存。Q 是"查询请求"，用完即弃；K/V 是"知识库"，后续所有 token 都要查询，必须缓存。
+</div>
+</div>
+
+<!-- ============ 3. Prompt Cache ============ -->
+<div class="section" id="s3">
+<h2>三、Prompt Cache：跨请求的 Prefill 优化</h2>
+
+<h3>什么样的请求能命中前缀缓存</h3>
+<table>
+<tr><th>请求构造方式</th><th>能否命中</th><th>原因</th><th>改法</th></tr>
+<tr><td>系统提示完全固定，放在最前面</td><td>能，且命中长度最大</td><td>前缀逐 token 一致，KV 可整段复用</td><td>已是最佳实践</td></tr>
+<tr><td>系统提示里插入了当前时间戳</td><td>几乎不能</td><td>时间戳一变，其后全部 token 的 KV 全部失效</td><td>把易变字段移到提示末尾</td></tr>
+<tr><td>把用户 ID、会话 ID 拼在提示开头</td><td>不能</td><td>每个用户的前缀都不同，缓存无法共享</td><td>改放到提示尾部或作为独立字段</td></tr>
+<tr><td>多轮对话按"系统提示 ＋ 历史 ＋ 新问题"顺序拼</td><td>能，命中到历史结尾</td><td>历史是只追加的，已有前缀始终不变</td><td>保持只追加，不要重排或摘要化改写历史</td></tr>
+<tr><td>每轮把历史压缩重写一遍</td><td>不能</td><td>重写改变了前缀内容，缓存整体失效</td><td>压缩后作为新的稳定前缀，接受一次性重算</td></tr>
+<tr><td>检索到的文档放在系统提示之前</td><td>不能</td><td>文档每次都不同，把固定前缀挡在了后面</td><td>调整顺序：固定提示在前，检索结果在后</td></tr>
+<tr><td>相同前缀但间隔很久才再次请求</td><td>不确定</td><td>缓存有存活时间，过期即被回收</td><td>对高频前缀考虑常驻或定期预热</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Prompt Cache 的核心思想：多个请求共享相同的系统提示词前缀，每次都重新做 Prefill 计算是巨大的浪费，把前缀的 K/V 缓存下来直接复用。</p>
+</div>
+
+<h3>重复 Prefill 的浪费</h3>
+<p>在生产环境中，大量请求共享相同的系统提示词（System Prompt）、角色设定、Few-shot 示例等前缀。典型场景：一个 AI 客服系统，系统提示词 2000 tokens，日均 10 万次请求 → 每天对同样的 2000 tokens 做 10 万次 Prefill 计算。</p>
+
+<div class="highlight">
+<strong>Prompt Cache 核心思路：</strong>将高频复用的前缀文本（如系统提示词）的 K/V 矩阵持久化到显存中。后续请求命中缓存时，直接复用已计算的 K/V，跳过 Prefill。命中部分的计算量从 O(N²) 降至 O(1)。
+</div>
+
+<h3>工作流程</h3>
+<div class="arch-diagram">
+请求 1（冷启动）:
+┌──────────────────────────────────────────────────┐
+│ System Prompt (2K tokens) + User Query (500)     │
+│     ↓                                            │
+│ 全量 Prefill: 计算所有 2500 tokens 的 K/V        │
+│     ↓                                            │
+│ 缓存 System Prompt 部分的 K/V (2K tokens)        │
+│     ↓                                            │
+│ Decode: 正常自回归生成                            │
+└──────────────────────────────────────────────────┘
+
+请求 2（命中缓存）:
+┌──────────────────────────────────────────────────┐
+│ System Prompt (2K tokens) + New Query (300)      │
+│     ↓                                            │
+│ ✅ 命中缓存！直接加载 System Prompt 的 K/V       │
+│     ↓                                            │
+│ 仅 Prefill 新增的 User Query (300 tokens)        │
+│     ↓                                            │
+│ Decode: 拼接缓存 K/V + 新 K/V → 生成            │
+│ 节省: 2000 tokens 的 O(N²) 计算                  │
+└──────────────────────────────────────────────────┘</div>
+
+<h3>缓存匹配策略</h3>
+<p><strong>最长前缀匹配：</strong>从请求开头开始，逐 token 与缓存中的前缀比对，找到最长的匹配子序列。不能做模糊匹配，因为 K/V 矩阵是位置敏感的——第 5 个 token 的 K 向量编码了"我在第 5 个位置"的信息，位置不同则 K/V 不同。</p>
+<p><strong>LRU 淘汰：</strong>显存有限时，使用最近最少使用（Least Recently Used）策略淘汰长时间未命中的缓存条目。</p>
+
+<h3>生产案例：某 AI 编程助手</h3>
+<p>日均 50 万次 API 调用，系统提示词（角色设定 + 代码规范 + Few-shot 示例）共 3000 tokens。改造前每次请求全量 Prefill，首 token 延迟（TTFT）约 800ms。</p>
+<p><strong>启用 Prompt Cache 后：</strong></p>
+<ul>
+<li>缓存命中率：<strong>92%</strong>（46 万次/天命中缓存）</li>
+<li>命中请求 TTFT：从 800ms 降至 <strong>120ms</strong>（仅 Prefill 用户输入部分）</li>
+<li>日均 GPU 算力节省：<strong>~65%</strong>（Prefill 阶段）</li>
+<li>年化成本降低：约 <strong>$180K</strong>（按 A100 $2/hr 计算）</li>
+</ul>
+</div>
+
+<!-- ============ 4. 技术对比 ============ -->
+<div class="section" id="s4">
+<h2>四、KV Cache vs Prompt Cache 深度对比</h2>
+
+<div class="intuition-box">
+<p>KV Cache 和 Prompt Cache 不是竞争关系，而是互补——一个优化 Decode，一个优化 Prefill，联合使用实现推理全链路加速。</p>
+</div>
+
+<table>
+<tr><th>维度</th><th>KV Cache</th><th>Prompt Cache</th></tr>
+<tr><td>存储目标</td><td>单次对话内的动态 K/V</td><td>跨请求共享的静态 K/V</td></tr>
+<tr><td>优化阶段</td><td>Decode 阶段</td><td>Prefill 阶段</td></tr>
+<tr><td>复杂度降级</td><td>O(N²) → O(N)</td><td>O(N²) → O(1)（命中部分）</td></tr>
+<tr><td>生命周期</td><td>对话结束销毁</td><td>长期驻留显存（LRU 淘汰）</td></tr>
+<tr><td>匹配方式</td><td>无需匹配（顺序追加）</td><td>精确前缀匹配</td></tr>
+<tr><td>显存占用</td><td>与并发数 × 上下文长度成正比</td><td>与缓存条目数 × 前缀长度成正比</td></tr>
+<tr><td>实现复杂度</td><td>低（框架内置）</td><td>中（需缓存管理 + 匹配逻辑）</td></tr>
+</table>
+
+<h3>联合效果：半线性缓存特性</h3>
+<p>当 KV Cache + Prompt Cache 同时工作时，推理性能呈现"半线性"特征：</p>
+<ul>
+<li><strong>冷启动（首次请求）：</strong>全量 Prefill + 全量 Decode，无加速</li>
+<li><strong>热路径（缓存命中）：</strong>跳过前缀 Prefill → 仅 Prefill 增量 → KV Cache 加速 Decode</li>
+<li><strong>效果叠加：</strong>Prefill 节省 O(N²)，Decode 每步节省 O(N)，总加速可达 <strong>数十到数千倍</strong></li>
+</ul>
+
+<div class="formula">总推理时间 ≈ Prefill(增量部分) + Decode(N步) ≈ O(M²) + N × O(K)
+<br>其中 M = 未缓存的增量 token 数，N = 生成长度，K = 上下文总长度</div>
+
+<div class="interview-box">
+<strong>常见疑问：</strong>"为什么 Prompt Cache 不能替代 KV Cache？"
+<br>答：两者优化不同阶段。Prompt Cache 只加速 Prefill（一次性计算），不影响 Decode（逐 token 生成）。即使 Prefill 被完全跳过，Decode 阶段仍需要 KV Cache 来避免重复计算历史 K/V。它们是推理流水线上两个独立的优化点。
+</div>
+</div>
+
+<!-- ============ 5. 进阶优化 ============ -->
+<div class="section" id="s5">
+<h2>五、进阶：CrossPoint Cache 与 PromptCash</h2>
+
+<div class="intuition-box">
+<p>各种进阶缓存方案都在放宽同一个限制：基础的前缀缓存要求"从第一个 token 起逐字相同"，一旦中间插入了变动内容，后面全部作废。进阶方案的思路是让缓存能在非前缀位置复用，代价是要额外记账、还要接受一点近似——所以它们的收益高度依赖你的提示到底有多"可分段"。</p>
+</div>
+
+<h3>CrossPoint Cache：中间结果复用</h3>
+<p><span class="term">CrossPoint Cache</span> 是一种更激进的缓存策略，不仅缓存 K/V 矩阵，还缓存模型推理过程中的<strong>中间激活值</strong>（如 FFN 输出、LayerNorm 结果），进一步减少重复计算。代价是显存占用倍增，适用于前缀高度一致且显存充裕的场景（如单一 System Prompt 的客服系统）。</p>
+
+<h3>PromptCash 优化方案</h3>
+<p>针对 Prompt Cache 实际部署中的三个核心问题：</p>
+
+<table>
+<tr><th>问题</th><th>根因</th><th>PromptCash 方案</th></tr>
+<tr><td>重复请求浪费</td><td>相同 query 的重复 Prefill</td><td>语义级缓存（embedding 匹配）</td></tr>
+<tr><td>对话长度瓶颈</td><td>KV Cache 随上下文线性增长</td><td>分层缓存 + 冷页卸载到 CPU</td></tr>
+<tr><td>缓存碎片化</td><td>不同长度前缀导致显存碎片</td><td>PagedAttention 式分页管理</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>系统提示词放在请求最前面（确保前缀匹配）</li>
+<li>监控缓存命中率，低于 70% 时排查前缀一致性</li>
+<li>对高频前缀设置"常驻缓存"，避免被 LRU 淘汰</li>
+<li>KV Cache + Prompt Cache 联合部署，覆盖推理全链路</li>
+<li>使用 PagedAttention（vLLM）减少显存碎片</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在系统提示词中插入动态内容（时间戳、随机 ID）</li>
+<li>频繁修改系统提示词（每次修改都使缓存失效）</li>
+<li>将用户特有内容放在前缀位置（破坏共享性）</li>
+<li>忽视显存监控（Prompt Cache 可能挤占 KV Cache 空间）</li>
+<li>对低并发场景启用 Prompt Cache（管理开销大于收益）</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ============ 高频问答 ============ -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>KV Cache 和 Prompt Cache 的区别是什么？分别优化推理的哪个阶段？</summary>
+<div class="answer">KV Cache 优化 Decode 阶段——存储单次对话中已生成 token 的 K/V 矩阵，避免每生成一个 token 都重新计算所有历史 token 的 K/V，将单步复杂度从 O(N²) 降到 O(N)。Prompt Cache 优化 Prefill 阶段——存储跨请求共享的前缀（如系统提示词）的 K/V 矩阵，后续请求命中缓存时跳过 Prefill 计算，命中部分复杂度从 O(N²) 降到 O(1)。两者互补：KV Cache 是"单次对话内的加速"，Prompt Cache 是"跨请求的加速"。</div>
+</details>
+
+<details>
+<summary>Prompt Cache 为什么只能做前缀匹配，不能做任意子串匹配？</summary>
+<div class="answer">因为 Transformer 的 K/V 矩阵是位置编码敏感的。第 i 个 token 的 K 向量不仅编码了 token 本身的信息，还编码了"我在第 i 个位置"的信息。即使两段文本完全相同，如果它们在不同位置出现，对应的 K/V 矩阵是不同的。因此只有从位置 0 开始的连续前缀才能直接复用 K/V。如果要支持任意子串匹配，需要引入相对位置编码（如 RoPE）并设计位置无关的缓存索引，这在工程上复杂度很高。</div>
+</details>
+
+<details>
+<summary>KV Cache 的显存占用如何计算？长上下文场景下如何优化？</summary>
+<div class="answer">KV Cache 显存 = 2(K+V) × 层数 × <strong>num_kv_heads × head_dim</strong> × 数据类型字节数 × 上下文长度 × 并发请求数。注意宽度取的是 GQA 之后的 KV 宽度，不是隐藏维度——用 hidden_dim 会高估 8 倍。以 LLaMA-3-70B（80 层，8 个 KV head × 128 head_dim，FP16）为例，每 token 约 320 KB，32K 上下文单请求约 10 GB，128K 约 42 GB。优化方案：(1) GQA/MQA 减少 KV head 数量（LLaMA-2-70B 的 GQA 把 KV head 从 64 减到 8，省 87.5%）；(2) MLA 低秩压缩（DeepSeek-V3 每 token 约 50 KB）；(3) KV Cache 量化（FP16→FP8/INT8 再省 50%）；(4) PagedAttention 减少碎片；(5) 分层卸载——热页留 GPU，冷页卸载到 CPU 内存。</div>
+</details>
+
+<details>
+<summary>什么场景下 Prompt Cache 收益最大？什么场景下不适合？</summary>
+<div class="answer">收益最大的场景：(1) 高并发 + 长固定前缀（如 AI 客服系统，系统提示词 2K+ tokens，日均 10 万+ 请求）；(2) 前缀稳定不频繁修改；(3) 首 token 延迟（TTFT）敏感的应用。不适合的场景：(1) 低并发（缓存管理开销 > 节省的计算）；(2) 每个请求的前缀差异大（如 RAG 场景下每次检索结果不同导致前缀不一致）；(3) 显存紧张，KV Cache 已经占满 GPU 内存。</div>
+</details>
+
+<details>
+<summary>如何设计一个生产级的 Prompt Cache 系统？需要考虑哪些工程问题？</summary>
+<div class="answer">核心设计：(1) 缓存索引——用前缀 token 序列的哈希做快速查找，支持最长前缀匹配；(2) 淘汰策略——LRU 或 LFU，根据命中率动态调整缓存容量；(3) 显存管理——与 KV Cache 共享显存池，设置 Prompt Cache 的显存上限（如不超过总显存的 30%）；(4) 一致性——系统提示词更新时主动失效相关缓存条目；(5) 监控——追踪缓存命中率、命中延迟、未命中时的回源延迟。关键工程挑战：缓存条目大小不一（不同长度前缀）导致显存碎片，可借鉴 vLLM 的 PagedAttention 做分页管理。</div>
+</details>
+
+<details>
+<summary>为什么 Decode 阶段的计算瓶颈是 memory-bound 而不是 compute-bound？</summary>
+<div class="answer">Decode 阶段每次只处理 1 个新 token，计算量是 O(K)（K 为上下文长度），但需要从显存中读取所有缓存的 K/V 矩阵（大小也是 O(K)）。这意味着每次计算的"数据搬运量"与"实际计算量"处于同一量级，GPU 大量时间在等待数据从显存搬到计算单元，而不是在做矩阵乘法。这就是 memory-bound。工程启示：Decode 阶段的优化重点不是增加算力，而是减少显存带宽瓶颈——GQA 减少 KV 大小、KV Cache 量化减少搬运数据量、Speculative Decoding 每次生成多个 token 来分摊读取开销。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

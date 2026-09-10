@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP16 · 推理服务压测方法论 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.arch-diagram{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(63,185,80,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#484f58;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、为什么 LLM 压测不能照搬 QPS 压测</a>
+<a href="#s2">二、核心指标体系：TTFT、TPOT 与 ITL</a>
+<a href="#s3">三、压测数据集设计：长度分布决定结论</a>
+<a href="#s4">四、吞吐-延迟曲线与饱和点判定</a>
+<a href="#s5">五、压测工具选型与实操参数</a>
+<a href="#s6">六、容量规划与压测陷阱自检</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>DP16 · 推理服务压测方法论</h1>
+<p class="subtitle">TTFT / TPOT / ITL 指标口径 / ISL-OSL 数据集设计 / 吞吐-延迟曲线 / 饱和点判定 / 工具选型 / 容量规划 / 压测陷阱</p>
+
+<div class="intuition-box">
+传统 Web 压测里，一次请求的工作量基本是常数，所以 QPS 就够用了。LLM 打破了这个前提：同一个接口，一个请求吐 20 个 token，另一个吐 2000 个，工作量差 100 倍。压测 LLM 的本质，是把"每秒多少请求"换成"每秒多少 token，并且第一个字多久出来、后面吐字有多稳"。
+</div>
+
+<!-- ==================== 一、为什么不能照搬 ==================== -->
+<div class="section" id="s1">
+<h2>一、为什么 LLM 压测不能照搬 QPS 压测</h2>
+
+<p>做过 Web 服务压测的工程师第一次压 LLM 服务，几乎都会掉进同一个坑：拿 JMeter 或 k6 打一轮，看到 QPS 数字很好看就下结论"这台机器能扛 200 并发"，上线当天尾延迟就炸了。原因不是工具不好，而是<strong>QPS 这个指标在 LLM 场景下不再是充分统计量</strong>。传统压测建立在三个隐含假设上：单请求工作量近似恒定、响应是一次性返回的、请求之间互不干扰。LLM 推理把这三条全部推翻了。</p>
+
+<h3>差异一：单请求工作量可变，且变化幅度是量级级别</h3>
+
+<p>一个电商搜索接口，无论查什么关键词，返回的都是 20 条结果，服务端做的功基本一样，所以"每秒处理 200 个请求"是一句有意义的话。LLM 不是：用户问"今天几号"可能只生成 8 个 token，问"帮我写一份季度复盘"可能生成 1500 个 token。生成阶段是逐 token 串行的，工作量与输出长度近似成正比，两个请求之间可以差近 200 倍。这意味着<strong>相同的 QPS 可以对应完全不同的实际负载</strong>，QPS 达标不代表系统不过载。所以 LLM 压测的第一指标是 <span class="term">token 吞吐</span>（每秒生成多少个 token），QPS 只能作为业务侧的辅助口径。</p>
+
+<h3>差异二：流式输出让"单一延迟"失去意义</h3>
+
+<p>绝大多数 LLM 应用都开着流式返回，用户体验被拆成了两段完全不同的感受：<strong>等待感</strong>（点了发送之后要盯着光标闪多久）和<strong>阅读感</strong>（开始出字之后，吐字速度跟不跟得上眼睛）。这两段由不同的系统机制决定——前者取决于排队和 <span class="term">Prefill</span>（预填充，一次性并行处理全部输入 token），后者取决于 <span class="term">Decode</span>（逐 token 生成，受显存带宽约束）。用一个"平均响应时间"把两者揉在一起，等于把两个独立的故障域压成一个数字，出问题时根本定位不到是排队慢还是解码慢。</p>
+
+<h3>差异三：请求在 GPU 上互相"抢座位"</h3>
+
+<p>现代推理引擎用<span class="term">连续批处理</span>（Continuous Batching，每个解码步都允许完成的请求退出、新请求插入）把多个请求塞进同一个 batch 一起前向。好处是吞吐大涨，代价是<strong>请求之间不再隔离</strong>：你这条请求的 TPOT，取决于同一 batch 里还有多少个"邻居"以及它们要吐多久。一个 4000 token 的长文生成请求会占住 batch slot 和 KV Cache 好几十秒，期间所有和它同批的短请求都被拖慢。传统压测里"单请求延迟"是个体属性，LLM 压测里它是群体属性——这就是为什么 LLM 服务的 P99 对流量成分极度敏感。</p>
+
+<div class="arch-diagram">          一次流式 LLM 请求的时间线（压测指标的测量点）
+
+  客户端发出                                                客户端收到
+  请求 t0        首 token t1        中间 token           最后 token t2
+    │              │              │    │    │    │           │
+    ▼              ▼              ▼    ▼    ▼    ▼           ▼
+    ├──排队──┼──Prefill──┼──────────── Decode ─────────────┤
+    │                     │      │    │    │    │           │
+    │◄─────  TTFT  ──────►│      │◄ITL►│◄ITL►│               │
+    │                                                        │
+    │◄──────────── 端到端延迟 e2e = TTFT + 生成时间 ────────►│
+
+  · TTFT  = t1 - t0     含排队 + Prefill + 网络，受输入长度(ISL)影响
+  · ITL   = 相邻两次流式响应的间隔，逐 gap 采样
+  · TPOT  = (e2e - TTFT) / (输出 token 数 - 1)，每请求一个值
+  · 吞吐  = 全部请求的输出 token 总数 / 压测窗口时长</div>
+
+<table>
+<tr><th>对比维度</th><th>传统 Web 服务压测</th><th>LLM 推理服务压测</th></tr>
+<tr><td>工作量单位</td><td>请求（近似恒定）</td><td>token（单请求可差 100 倍以上）</td></tr>
+<tr><td>主吞吐指标</td><td>QPS / RPS</td><td>输出 token/s，QPS 仅作辅助</td></tr>
+<tr><td>延迟指标</td><td>单一响应时间 P95</td><td>必须拆成 TTFT + TPOT/ITL + e2e</td></tr>
+<tr><td>瓶颈资源</td><td>CPU、DB 连接、网络</td><td>显存容量（KV Cache）与显存带宽</td></tr>
+<tr><td>请求隔离性</td><td>基本隔离</td><td>同 batch 请求互相影响尾延迟</td></tr>
+<tr><td>缓存影响</td><td>可关闭或易识别</td><td>前缀缓存跨请求命中，极易造成虚高</td></tr>
+<tr><td>加压方式</td><td>固定 QPS 打流量</td><td>优先固定并发数（避免排队无界增长）</td></tr>
+<tr><td>结论形态</td><td>"能扛 N QPS"</td><td>"在 SLA 内能扛 N 并发 / M token/s"</td></tr>
+</table>
+
+<div class="intuition-box">
+传统压测测的是"这条流水线每分钟过多少个箱子"，箱子大小一样；LLM 压测测的是"这条流水线每分钟过多少公斤货"，而每个箱子的重量事先不知道。只数箱子不称重，产能估算必然出错。
+</div>
+
+<p>推理侧的底层瓶颈机制（Prefill 算力密集 vs Decode 带宽密集、KV Cache 显存占用如何随并发和上下文增长）在 <a href="./inference_performance_bottleneck.html">DP10 · 大模型推理性能瓶颈分析</a> 里有完整推导，本文默认这些结论成立，只讨论"怎么把它们量出来"。</p>
+</div>
+
+<!-- ==================== 二、核心指标体系 ==================== -->
+<div class="section" id="s2">
+<h2>二、核心指标体系：TTFT、TPOT 与 ITL</h2>
+
+<p>指标定义是整个压测方法论的地基，也是最容易被含糊带过的部分。NVIDIA 在其 LLM 压测指南里给出了一句非常关键的提醒：<strong>各家工具对同名指标的实现口径并不一致，只有当定义对齐时结果才可比</strong>。所以下面每个指标都给出测量点和公式，而不只是中文名字。</p>
+
+<h3>TTFT：首 token 延迟</h3>
+
+<p><span class="term">TTFT</span>（Time To First Token）指从客户端发出请求，到收到第一个非空 token 的时间。它不是纯粹的模型指标——它包含了<strong>排队等待、Prefill 计算、网络往返</strong>三部分。输入越长，注意力机制要为整段输入构建 KV Cache，TTFT 就越大；系统越拥挤，排队分量就越大。这也是 TTFT 作为告警指标特别灵敏的原因：它同时反映模型效率和调度压力。工程上有个细节容易踩坑——有些服务会先返回一个空 chunk 或角色标记，NVIDIA AIPerf 会显式丢弃无内容的首个响应，否则 TTFT 会被记成一个毫无意义的极小值。</p>
+
+<h3>ITL 与 TPOT：看起来一样，其实不是同一个东西</h3>
+
+<p><span class="term">ITL</span>（Inter-Token Latency）是<strong>相邻两次流式响应之间的时间间隔</strong>，一个请求会产生很多个 ITL 采样点，最后跨请求聚合。<span class="term">TPOT</span>（Time Per Output Token）则是<strong>每个请求算一个值</strong>，公式是把首 token 之后的全部时间摊到剩余 token 上：</p>
+
+<div class="formula">TPOT = (端到端延迟 − TTFT) / (输出 token 数 − 1)</div>
+
+<p>分母减一，是为了让这个指标只刻画解码阶段，不把 Prefill 混进来。在标准逐 token 解码下，一次流式响应通常只含一个 token，此时 ITL 和 TPOT 数值非常接近——这就是很多人误以为它们是同义词的原因。<strong>一旦引入投机解码（Speculative Decoding），两者立刻分道扬镳</strong>：投机解码一个引擎步可以一次性吐出多个被接受的草稿 token，打包在同一个流式响应里。ITL 只记录响应与响应之间的间隔，不会为同一响应内的多个 token 补上"零间隔"采样；TPOT 则把解码总时间平摊到每一个 token 上。</p>
+
+<p>vLLM 官方文档给了一个极清晰的例子：某请求观测到两个 40ms 的 ITL 采样，其中第二次响应一口气带回了 3 个 token。此时平均 ITL 是 40ms，而 TPOT = (180ms − 100ms) / (5 − 1) = <strong>20ms/token</strong>。两个指标差了整整一倍。如果只看 ITL，你会得出"开了投机解码反而变慢"的错误结论；只有 TPOT 才如实反映用户实际感受到的吐字速度。</p>
+
+<table>
+<tr><th>对比项</th><th>ITL（Inter-Token Latency）</th><th>TPOT（Time Per Output Token）</th></tr>
+<tr><td>采样粒度</td><td>每个流式响应间隔一个采样</td><td>每个请求一个值</td></tr>
+<tr><td>计算方式</td><td>直接测相邻响应时间差</td><td>(e2e − TTFT) / (OSL − 1)</td></tr>
+<tr><td>标准解码下</td><td>与 TPOT 基本一致</td><td>与 ITL 基本一致</td></tr>
+<tr><td>投机解码下</td><td>偏大（同响应内多 token 不产生采样）</td><td>如实摊薄，反映真实收益</td></tr>
+<tr><td>适合回答</td><td>吐字是否卡顿、抖动大不大</td><td>整体解码效率、是否达成 SLA</td></tr>
+<tr><td>是否含 TTFT</td><td>否（AIPerf、vLLM 均排除）</td><td>否（公式显式扣除）</td></tr>
+</table>
+
+<h3>三种吞吐口径不要混用</h3>
+
+<p>"吞吐"这个词在 LLM 压测里至少指三样东西，报告里不写清楚就没法比较。<span class="term">输出 token 吞吐</span>只统计生成的 token，是衡量 Decode 阶段产能的核心指标；<span class="term">总 token 吞吐</span>把输入 token 也算进去，能反映 Prefill 侧的压力，在长输入短输出的 RAG/摘要场景下这个数会显著高于前者；<span class="term">请求吞吐</span>（RPS）则是业务侧最关心的口径。还有一个常被忽略的第四类：<strong>单用户 TPS</strong>，等于该请求的输出长度除以端到端延迟，随着输出变长会渐近于 1/ITL。</p>
+
+<table>
+<tr><th>吞吐口径</th><th>定义</th><th>随并发上升的走向</th><th>主要用途</th></tr>
+<tr><td>输出 token 吞吐（系统级）</td><td>全部输出 token / 压测窗口时长</td><td>上升 → 饱和 → 可能回落</td><td>产能核算、成本折算</td></tr>
+<tr><td>总 token 吞吐</td><td>(输入 + 输出) token / 窗口时长</td><td>同上，长输入场景数值更高</td><td>评估 Prefill 压力</td></tr>
+<tr><td>请求吞吐 RPS</td><td>成功完成请求数 / 窗口时长</td><td>受平均输出长度强烈影响</td><td>对接业务 QPS 目标</td></tr>
+<tr><td>单用户 TPS</td><td>该请求 OSL / 该请求 e2e</td><td><strong>下降</strong>（并发越高个体越慢）</td><td>体验评估，渐近 1/ITL</td></tr>
+</table>
+
+<div class="highlight">
+💡 知识要点：系统总吞吐和单用户体验是<strong>反向</strong>的。并发从 1 加到 64，总 token/s 一路涨，但每个用户感受到的吐字速度一路降。压测报告只报总吞吐等于只讲了一半故事——必须同时给出该并发档位下的 P95 TTFT 与 P95 TPOT，读者才知道这个吞吐是在什么体验代价下取得的。
+</div>
+
+<h3>成功率与错误分类同样是压测指标</h3>
+
+<p>高并发下推理服务会以几种不同方式"失败"，而它们的含义完全不同，报一个笼统的成功率会掩盖问题。请求被引擎队列拒绝（如返回 503）说明并发超过了配置上限，属于容量问题；请求超时说明系统已经过饱和，排队时间超过了客户端耐心；输出被截断（达到 max_tokens 而非自然 EOS）会让 token 统计失真；而 OOM 类错误则直接指向 KV Cache 配置不当。压测报告里应当分类统计这四类，而不是合并成一个百分比。</p>
+
+<div class="intuition-box">
+把三个核心指标对应到用户的三种抱怨就记住了：TTFT 对应"点了半天没反应"，TPOT/ITL 对应"字一个一个往外蹦"，吞吐对应"这套系统每个月要烧多少钱"。前两个是体验，第三个是成本，压测就是在这两者之间找那条能同时接受的线。
+</div>
+</div>
+
+<!-- ==================== 三、数据集设计 ==================== -->
+<div class="section" id="s3">
+<h2>三、压测数据集设计：长度分布决定结论</h2>
+
+<p>在 LLM 压测里，<strong>数据集不是配角，它和被测系统同等重要</strong>。同一个服务，换一套输入输出长度分布，测出来的吞吐可以差好几倍，饱和点也完全不同。原因在第一节已经埋下：工作量与序列长度直接挂钩。所以压测的第一步不是敲命令，而是先把生产流量的长度分布统计出来。</p>
+
+<h3>ISL 与 OSL：两个决定一切的变量</h3>
+
+<p><span class="term">ISL</span>（Input Sequence Length，输入序列长度）包括系统指令、对话历史、思维链内容和 RAG 检索到的上下文；<span class="term">OSL</span>（Output Sequence Length，输出序列长度）是模型实际生成的 token 数。ISL 主导 Prefill 的显存与算力开销，进而主导 TTFT；OSL 主导 Decode 期间 KV Cache 的增长和总解码时间，进而主导 ITL 与 e2e。NVIDIA 的压测指南按典型业务给出了这两个量的经验区间，可以作为设计压测集时的起点参照：</p>
+
+<table>
+<tr><th>业务类型</th><th>典型 ISL</th><th>典型 OSL</th><th>压力偏向</th><th>最敏感的指标</th></tr>
+<tr><td>翻译（含代码翻译）</td><td>500 ~ 2000</td><td>500 ~ 2000</td><td>Prefill 与 Decode 均衡</td><td>e2e 端到端延迟</td></tr>
+<tr><td>内容生成（代码/邮件/文案）</td><td>约 100</td><td>约 1000</td><td>Decode 为主</td><td>TPOT、输出吞吐</td></tr>
+<tr><td>摘要 / RAG / 多轮对话</td><td>约 1000</td><td>约 100</td><td>Prefill 为主</td><td>TTFT、总 token 吞吐</td></tr>
+<tr><td>Agent 工具循环</td><td>数千（累积上下文）</td><td>数十 ~ 数百</td><td>Prefill 极重，前缀高度重复</td><td>TTFT、前缀缓存命中率</td></tr>
+</table>
+
+<p>注意这四行的"压力偏向"列——它解释了为什么<strong>不能用一套压测集给所有业务下结论</strong>。摘要类流量把 Prefill 打满时，Decode 单元其实很闲；生成类流量正好相反。一个在生成类负载上表现优异的配置，换到 RAG 负载上可能因为 Prefill 排队而 TTFT 翻倍。</p>
+
+<h3>为什么固定长度压测会给出误导性结论</h3>
+
+<p>最常见的错误做法是把 ISL 和 OSL 都钉死成一个数（比如统一 512/512）。这样做确实让结果"干净可复现"，但它制造了一个真实世界不存在的理想工况：<strong>batch 里所有请求同时开始、同时结束、工作量完全一致</strong>。连续批处理调度器在这种负载下几乎不需要做任何困难的决策，KV Cache 占用平稳可预测，没有任何请求会长期霸占 slot。测出来的数字是调度器的"最好一天"。</p>
+
+<p>真实流量的 OSL 是<strong>长尾分布</strong>：大量 50~200 token 的短回答，加上少量数千 token 的长文。长尾请求会连续几十秒占住一个 batch 槽位并让 KV Cache 持续增长，把同批短请求的 TPOT 一起拖慢，P99 由此被抬起来。固定长度压测完全看不到这个效应，于是产生了经典的"压测很好、上线就崩"。</p>
+
+<div class="arch-diagram">     固定长度 vs 长尾分布：同样的并发，调度压力完全不同
+
+  【固定 OSL=512】所有请求整齐进出，KV 占用平稳
+    slot1 ████████████ ████████████ ████████████
+    slot2 ████████████ ████████████ ████████████
+    slot3 ████████████ ████████████ ████████████
+          └─ 每轮同时退出，新请求整批灌入，调度无压力
+
+  【真实长尾】短请求快速轮转，长请求长期霸占槽位
+    slot1 ██ ██ █ ███ ██ █ ██ ███ █ ██ ██ █ ███ ██
+    slot2 ███ █ ██ ███ █ ██ █ ███ ██ █ ███ █ ██ █
+    slot3 ██████████████████████████████████████  ← 4000 tok 长文
+          └─ 有效并发被长请求吃掉，KV 持续膨胀，短请求 P99 被拖高
+
+  结论：固定长度测出的是吞吐上限，长尾分布测出的才是可交付产能</div>
+
+<h3>前缀重复率是数据集的第三个属性</h3>
+
+<p>除了 ISL/OSL，还有一个经常被漏掉的维度：<strong>请求之间的前缀重复率</strong>。生产流量里几乎所有请求都共享同一段 System Prompt，多轮对话还共享逐轮累积的历史。开启前缀缓存的引擎在这类流量上 TTFT 会大幅下降。如果压测数据集用了完全随机、互不重复的 prompt，就等于人为关掉了这项优化，结论会低估真实性能；反过来，如果压测集的重复率远高于生产（比如反复发同一条 prompt），结论又会严重高估。<strong>压测集的前缀重复率必须与生产对齐</strong>，这一点和长度分布同等重要。</p>
+
+<table>
+<tr><th>数据集来源</th><th>真实性</th><th>可复现性</th><th>获取成本</th><th>适用阶段</th></tr>
+<tr><td>生产流量回放（脱敏采样）</td><td>最高</td><td>中（需固定采样批次）</td><td>高（需日志与合规）</td><td>容量规划、上线前验收</td></tr>
+<tr><td>公开对话数据集（ShareGPT、MT-Bench）</td><td>较高，长度天然长尾</td><td>高</td><td>低</td><td>框架选型、横向对比</td></tr>
+<tr><td>真实到达模式数据集（BurstGPT）</td><td>到达时序真实</td><td>高</td><td>低</td><td>突发流量与排队研究</td></tr>
+<tr><td>合成随机（指定均值与标准差）</td><td>可控但需调参</td><td>最高</td><td>最低</td><td>回归测试、参数扫描</td></tr>
+<tr><td>固定长度合成（stddev = 0）</td><td>低</td><td>最高</td><td>最低</td><td>仅用于引擎内部对比，不可用于容量规划</td></tr>
+</table>
+
+<p>工具层面有两个默认值特别值得警惕。genai-perf 的 <code>--synthetic-input-tokens-mean</code> 默认 550，而 <code>--synthetic-input-tokens-stddev</code> <strong>默认是 0</strong>——也就是说不显式设置标准差，你拿到的就是一份固定长度数据集。vLLM 的 random 数据集在固定 <code>--seed</code>（默认 0）下完全可复现，这对回归测试是优点，对容量规划是陷阱。另一个必调项是 <code>ignore_eos</code>：压测时应设为 true，让模型一直生成到 <code>max_tokens</code> 而不是提前遇到 EOS 停止，否则实际 OSL 会远小于设定值，吞吐被高估、TPOT 采样也不足。</p>
+
+<div class="highlight">
+<strong>典型场景推演：固定长度压测导致的容量误判。</strong>某团队为内部文档助手做容量规划，用统一 ISL=512 / OSL=512 的合成集压测，得到"单副本 64 并发下输出吞吐约 2200 token/s、P95 TTFT 约 420ms"，据此按峰值 QPS 折算出 4 个副本即可。上线后实际流量的 OSL 中位数只有 90，但 P95 达到 1400、P99 超过 3500（用户经常让它"完整写一份周报"）。结果是：请求吞吐远高于预期（短答居多），但少量长文请求长期占住槽位，有效并发从 64 掉到约 40，P95 TTFT 涨到 1.3 秒以上，触发前端超时重试，进一步放大负载。改用生产日志回放重测后，同一副本在 SLA 内的可用并发只有 38，需要 7 个副本——比原计划多 75%。这里的教训不是某个数字，而是<strong>容量规划必须建立在真实长度分布上，压测集选错，后面所有推导都是错的</strong>。具体数值随模型、卡型与引擎版本变化很大，方法论才是可迁移的部分。
+</div>
+
+<div class="intuition-box">
+压测集就是你对生产流量的一个假设。固定长度等于假设"所有用户问的问题一样长、要的答案一样长"——这个假设一旦写进压测脚本，后面所有漂亮的曲线都只是在验证这个假设，而不是在验证你的系统。
+</div>
+</div>
+
+<!-- ==================== 四、吞吐-延迟曲线 ==================== -->
+<div class="section" id="s4">
+<h2>四、吞吐-延迟曲线与饱和点判定</h2>
+
+<p>单次压测只能给出一个点，而选型和容量规划需要的是一条<strong>曲线</strong>：随着负载增加，吞吐怎么涨、延迟怎么恶化、在哪里开始崩。这条曲线怎么跑出来，取决于你用哪种方式加压。</p>
+
+<h3>并发数加压 vs 请求速率加压</h3>
+
+<p>两种加压模型的行为差别很大。<span class="term">并发数</span>（Concurrency）模型下有 N 个虚拟客户端，每个客户端手上永远有且只有一个在途请求，收到完整响应后立刻发下一个——系统里始终维持 N 个活跃请求，这是一个<strong>闭环负载</strong>。<span class="term">请求速率</span>（Request Rate）模型下按固定间隔或泊松过程发请求，不管前一个有没有回来，这是<strong>开环负载</strong>。</p>
+
+<p>NVIDIA 明确建议大多数基准测试优先用并发数模型，理由很实在：在请求速率模型下，一旦到达率超过系统吞吐能力，<strong>在途请求数会无界增长</strong>，队列越堆越长，你测到的"延迟"主要是排队时间，曲线会直接垂直起飞，得不到任何关于系统能力的信息。并发模型天然自带背压，永远不会把系统压进这种发散状态。</p>
+
+<p>vLLM 的压测脚本把这两种模型组合成了几种实用模式，其中最贴近生产架构的是 <code>--request-rate=inf</code> 配合 <code>--max-concurrency=N</code>：用户侧无限速发送（模拟真实用户不会互相谦让），由网关/负载均衡侧限制最大并发连接——这正是绝大多数线上部署的形态。另外 <code>--burstiness</code> 参数用 Gamma 分布控制到达的抖动程度：1.0 是自然泊松流量，0.1~0.5 制造突发尖峰用于韧性测试，2.0~5.0 制造均匀间隔用于稳定的延迟画像。</p>
+
+<table>
+<tr><th>压测模式</th><th>参数组合</th><th>模拟的现实场景</th><th>主要用途</th></tr>
+<tr><td>最大吞吐</td><td><code>--request-rate=inf</code> + 限并发</td><td>用户全速发送、网关限连接数</td><td>产能上限、饱和点扫描</td></tr>
+<tr><td>真实流量</td><td>有限速率 + <code>--burstiness=1.0</code></td><td>自然泊松到达</td><td>基线性能画像</td></tr>
+<tr><td>突发压力</td><td>高并发 + <code>--burstiness=0.1~0.5</code></td><td>秒杀、推送、热点事件</td><td>韧性与排队行为</td></tr>
+<tr><td>延迟画像</td><td>低并发 + <code>--burstiness=2.0~5.0</code></td><td>均匀低负载</td><td>纯模型效率、最优延迟</td></tr>
+<tr><td>SLA 验证</td><td>目标速率 + 并发上限设为 SLA 限值</td><td>生产约束下的合规检查</td><td>上线前验收</td></tr>
+</table>
+
+<h3>阶梯加压：怎么把曲线跑出来</h3>
+
+<p>标准做法是<strong>并发数阶梯扫描</strong>：从 1 开始，按 1 → 2 → 4 → 8 → 16 → 32 → 64 → 128 的方式倍增（接近拐点时改用更细的步长），每一档跑满足统计量的请求数并记录全套指标。扫描上界应<strong>略大于引擎的最大 batch size</strong>——超过这个点后多出来的请求只能排队，吞吐不再增长而延迟线性上升，正好把饱和之后的形态也画出来。</p>
+
+<p>上界怎么定不用猜。vLLM 在启动时会打印 KV Cache 的容量信息，形如 <code>GPU KV cache size: 15,728,640 tokens</code> 和 <code>Maximum concurrency for 8,192 tokens per request: 1920</code>。这两行直接告诉你显存能容纳多少并发：容量规划时把 <code>--max-concurrency</code> 设到这个上限的 80~90% 做压测，就是在测"贴近资源约束但不撞墙"的真实状态。</p>
+
+<div class="arch-diagram">              吞吐-延迟曲线与三个关键位置
+
+  输出吞吐                                         P95 TTFT
+  (tok/s)                                          (ms)
+     ▲                                                ▲
+     │                    ┌─────●─────●──── 饱和平台   │           ╱
+     │              ╱─────┘  C       D               │          ╱  D
+     │          ╱──┘ B                               │        ╱
+     │      ╱──┘                                     │    ╱─● C
+     │   ╱─┘ A                                       │──●───┘  B
+     │ ╱                                             │ A
+     └──────────────────────────────────────►        └──────────────►
+       1   4   8   16   32   64  128  并发             1  8  32 128
+
+   A 线性区：并发翻倍吞吐近似翻倍，延迟几乎不变 —— 资源没用满
+   B 收益递减区：吞吐增速放缓，TTFT 开始明显爬升
+   C 【SLA 拐点】仍满足 P95 SLA 的最大并发 → 这里的吞吐才是"可用产能"
+   D 【饱和点】吞吐不再增长（甚至回落），延迟线性发散 —— 已过载
+
+   判定规则：并发翻倍后吞吐增益 &lt; 10% 且 P95 TTFT 涨幅 &gt; 30% ⇒ 已过 C 点</div>
+
+<h3>饱和点与 SLA 拐点是两个不同的点</h3>
+
+<p>这是压测报告里最容易混淆的一处。<span class="term">饱和点</span>是纯粹的系统属性：GPU 算力或显存带宽被打满，再加并发吞吐也不涨了。<span class="term">SLA 拐点</span>则是业务属性：在满足"P95 TTFT ≤ 800ms 且 P95 TPOT ≤ 50ms"这类约束的前提下，能承受的最大并发。<strong>SLA 拐点几乎总是出现在饱和点之前</strong>，往往早很多——因为吞吐曲线快压平的时候，延迟早就翻了几倍。</p>
+
+<p>容量规划必须用 SLA 拐点处的吞吐，而不是饱和点的峰值吞吐。用峰值吞吐推副本数，等于默认允许系统长期运行在体验已经崩坏的状态。下面是一次阶梯扫描应当记录的表格骨架（数值为示意，实际结果强烈依赖模型规模、卡型、量化方式与引擎版本）：</p>
+
+<table>
+<tr><th>并发档位</th><th>输出吞吐</th><th>P95 TTFT</th><th>P95 TPOT</th><th>单用户 TPS</th><th>满足 SLA</th><th>区间判定</th></tr>
+<tr><td>1</td><td>基线 1×</td><td>最低</td><td>最低</td><td>最高</td><td>✅</td><td>线性区（资源闲置）</td></tr>
+<tr><td>8</td><td>约 6~7×</td><td>小幅上升</td><td>基本持平</td><td>略降</td><td>✅</td><td>线性区</td></tr>
+<tr><td>32</td><td>约 15~20×</td><td>明显上升</td><td>上升</td><td>下降</td><td>✅</td><td>收益递减区</td></tr>
+<tr><td>64</td><td>接近平台</td><td>逼近 SLA 上限</td><td>逼近上限</td><td>继续下降</td><td>⚠️ 临界</td><td><strong>SLA 拐点附近</strong></td></tr>
+<tr><td>128</td><td>增益 &lt; 10%</td><td>超限</td><td>超限</td><td>大幅下降</td><td>❌</td><td>已过拐点</td></tr>
+<tr><td>256</td><td>持平或回落</td><td>发散</td><td>发散</td><td>极低</td><td>❌</td><td>饱和 / 过载</td></tr>
+</table>
+
+<div class="intuition-box">
+峰值吞吐是营销数字，SLA 内吞吐才是产能。厂商基准里那个漂亮的 tok/s，通常取在延迟已经无法接受的并发档位上；你要找的是曲线上"再往右一步用户就开始骂人"的那个点，然后按它做规划。
+</div>
+</div>
+
+<!-- ==================== 五、工具选型 ==================== -->
+<div class="section" id="s5">
+<h2>五、压测工具选型与实操参数</h2>
+
+<p>工具选型的关键分野不是"哪个更强"，而是<strong>性能基准测试和负载测试是两件不同的事</strong>。NVIDIA 在指南里把这个区分讲得很清楚：负载测试（如 k6）模拟并发流量，用来检验扩缩容、网关、网络与资源上限；性能基准测试（如 AIPerf/genai-perf）在受控条件下测量模型级的吞吐、延迟与 token 级行为。要理解端到端的部署行为，两者必须结合，而不是二选一。</p>
+
+<div class="arch-diagram">        压测链路：每一环都可能成为"被测出来的瓶颈"
+
+  ┌──────────────┐   ┌──────────┐   ┌───────────┐   ┌──────────────┐
+  │ 压测客户端    │──►│ 网关/LB  │──►│ 推理副本   │──►│  GPU + KV    │
+  │ (多进程/多机) │   │ 限流·鉴权│   │ 调度·批处理│   │  Cache       │
+  └──────────────┘   └──────────┘   └───────────┘   └──────────────┘
+        ▲                  ▲               ▲                ▲
+        │                  │               │                │
+   SSE 解析吃满 CPU    连接数上限      max_num_seqs      显存/带宽
+   tokenize 阻塞       超时配置        队列深度          真正的瓶颈
+   本机网卡打满        转发不均                          ← 你想测的是这里
+
+  经验法则：先确认前三环都不是瓶颈，测出的数字才归属于推理引擎。
+  典型自检 —— 压测机 CPU &lt; 70%、网卡 &lt; 50%、直连引擎与走网关的
+  TTFT 差值 &lt; 20ms；任一条不满足，先修压测环境再谈调优。</div>
+
+<h3>五类工具的分工</h3>
+
+<table>
+<tr><th>工具</th><th>是否理解 token</th><th>指标口径</th><th>数据集能力</th><th>业务链路编排</th><th>最适合的任务</th></tr>
+<tr><td>vLLM <code>bench serve</code></td><td>✅ 原生</td><td>TTFT / TPOT / ITL 分离，与引擎一致</td><td>最强（ShareGPT、BurstGPT、HF 系列、随机、前缀重复、自定义 jsonl）</td><td>❌</td><td>引擎特性评估、回归测试、数据集敏感性分析</td></tr>
+<tr><td>NVIDIA genai-perf / AIPerf</td><td>✅ 原生</td><td>定义规范、文档化程度最高</td><td>合成为主，支持均值/标准差与文件输入</td><td>❌</td><td>跨引擎横向对比、标准化基准报告</td></tr>
+<tr><td>GuideLLM</td><td>✅ 原生</td><td>与 vLLM 生态对齐</td><td>灵活（vLLM 官方推荐用于生产服务器压测）</td><td>部分</td><td>生产服务的性能基准与自动报告</td></tr>
+<tr><td>Locust</td><td>❌ 需自行解析 SSE</td><td>自定义</td><td>自写</td><td>✅ Python 脚本，表达力强</td><td>含鉴权/RAG 检索/多轮状态的整链路压测</td></tr>
+<tr><td>k6</td><td>❌ 需自行埋点</td><td>自定义（可用计时事件取 TTFT）</td><td>自写</td><td>✅ JS 脚本 + 分布式</td><td>CI 集成、SLA 门禁、自动扩缩容验证</td></tr>
+</table>
+
+<p>实践中一个成熟团队通常同时用两条线：<strong>引擎线</strong>用 vLLM bench serve 或 genai-perf 做参数扫描和版本回归，产出干净可比的 token 级指标；<strong>业务线</strong>用 k6 或 Locust 打完整链路（网关 → 鉴权 → 向量检索 → 推理 → 后处理），验证的是整个系统在真实调用路径下的 SLA。只做引擎线会漏掉网关和检索环节的瓶颈；只做业务线则无法定位"到底是哪一层慢"。</p>
+
+<h3>关键参数速查</h3>
+
+<table>
+<tr><th>意图</th><th>vLLM <code>bench serve</code></th><th>genai-perf</th><th>常见默认值陷阱</th></tr>
+<tr><td>控制并发</td><td><code>--max-concurrency</code></td><td><code>--concurrency</code></td><td>vLLM 不设即无限并发</td></tr>
+<tr><td>控制到达速率</td><td><code>--request-rate</code>（默认 <code>inf</code>）</td><td>支持速率模式</td><td>默认 inf 会瞬间灌入全部请求</td></tr>
+<tr><td>到达抖动</td><td><code>--burstiness</code>（默认 1.0）</td><td>—</td><td>仅在速率有限时生效</td></tr>
+<tr><td>请求总量</td><td><code>--num-prompts</code></td><td><code>--request-count</code></td><td>genai-perf <strong>默认仅 10</strong>，统计量严重不足</td></tr>
+<tr><td>预热</td><td>需手动跑一轮丢弃</td><td><code>--warmup-request-count</code></td><td><strong>默认 0</strong>，等于不预热</td></tr>
+<tr><td>输入长度分布</td><td><code>--random-input-len</code> 等</td><td><code>--synthetic-input-tokens-mean/-stddev</code></td><td>stddev <strong>默认 0</strong> = 固定长度</td></tr>
+<tr><td>可复现性</td><td><code>--seed</code>（默认 0）</td><td><code>--random-seed</code></td><td>固定 seed 会命中前缀缓存</td></tr>
+<tr><td>输出长度可控</td><td>配合 <code>ignore_eos</code></td><td>配合 <code>ignore_eos</code></td><td>不设会提前 EOS，OSL 失真</td></tr>
+<tr><td>分位数输出</td><td><code>--percentile-metrics</code></td><td>默认给 p90/p95/p99</td><td>只看 mean 会掩盖长尾</td></tr>
+</table>
+
+<pre><code># 引擎线：vLLM 官方压测，用真实长尾分布的公开对话数据集
+vllm bench serve --backend vllm --model &lt;MODEL&gt; \
+  --dataset-name sharegpt --dataset-path &lt;PATH&gt;/ShareGPT_V3.json \
+  --num-prompts 1000 --max-concurrency 64 --seed 42 --save-result</code></pre>
+
+<p>这条命令跑完会输出一份结构化报告，把成功请求数、压测时长、输入/输出 token 总量、请求吞吐、输出 token 吞吐、总 token 吞吐，以及 TTFT / TPOT / ITL 各自的 mean / median / P99 全部分栏列出。<strong>三个延迟指标分开报告</strong>这件事本身就是方法论的体现——它逼着你去区分"等待"和"吐字"，而不是把它们平均成一个没有物理意义的数。</p>
+
+<pre><code># 基准线：genai-perf 显式补上预热与长度分布，避免默认值陷阱
+genai-perf profile -m &lt;MODEL&gt; --endpoint-type chat --streaming \
+  --concurrency 32 --request-count 500 --warmup-request-count 50 \
+  --synthetic-input-tokens-mean 1000 --synthetic-input-tokens-stddev 300</code></pre>
+
+<div class="intuition-box">
+选工具就是选你要回答的问题。"这个引擎解码效率如何"用 genai-perf；"换个版本有没有退化"用 vLLM bench serve；"大促当天整条链路扛不扛得住、自动扩容来不来得及"只能用 k6 或 Locust。拿 k6 测引擎效率，或拿 genai-perf 测网关扩容，都是问错了工具。
+</div>
+
+<p>关于该给哪个引擎做压测、各引擎的架构差异如何影响这些指标，可以参考 <a href="./inference_framework_selection.html">DP05 · 大模型推理框架选型</a>；服务化部署形态与副本编排见 <a href="./model_serving.html">DP04 · 模型服务化部署</a>。</p>
+</div>
+
+<!-- ==================== 六、容量规划与陷阱 ==================== -->
+<div class="section" id="s6">
+<h2>六、容量规划与压测陷阱自检</h2>
+
+<p>压测的最终交付物不是一堆曲线，而是一句能写进预算表的话："为了在大促峰值下守住 P95 TTFT ≤ 800ms，我们需要 N 个副本、共 M 张卡。"这一节讲怎么从压测数据推到这句话，以及推的过程中最容易翻车的地方。</p>
+
+<h3>从 SLA 反推副本数与卡数</h3>
+
+<p>推导链路是逐层展开的，每一层都对应一个必须先测出来或先定下来的数：</p>
+
+<div class="arch-diagram">          从 SLA 到 GPU 数量的推导链路
+
+ ① 定 SLA        P95 TTFT ≤ 800ms，P95 TPOT ≤ 50ms，成功率 ≥ 99.9%
+                            │
+ ② 阶梯压测      ▼  在真实长度分布数据集上扫并发
+                找到 SLA 拐点并发 N_sla 与该档位平均 e2e 延迟 L
+                            │
+ ③ 单副本产能    ▼  闭环负载下的小定律（Little's Law）
+                单副本可用 QPS  =  N_sla / L
+                            │
+ ④ 峰值需求      ▼  取分钟级 P95 峰值，不是日均
+                所需副本数 = 峰值 QPS / 单副本 QPS × 冗余系数 R
+                            │
+ ⑤ 卡数换算      ▼
+                总卡数 = 副本数 × 单副本张量并行度 TP
+                            │
+ ⑥ 校验          ▼  显存是否装得下：权重 + KV Cache(N_sla × 平均上下文)
+                若装不下 → 降并发重算，或提高 TP / 量化 / 开 KV 量化
+
+  冗余系数 R 的构成：滚动发布期少 1 副本 + 单点故障容忍 + 扩容爬坡时间
+  常见取值 1.2 ~ 1.5；跨可用区高可用场景按 N+1 另算</div>
+
+<p>第 ③ 步用的是排队论里的<span class="term">小定律</span>（Little's Law）：稳态系统中，平均在途请求数 = 到达率 × 平均驻留时间。在闭环并发压测里在途请求数恒为 N_sla，所以吞吐就是 N_sla / L。这也解释了为什么<strong>延迟和吞吐不是两个独立指标</strong>——固定并发下，延迟涨一倍，吞吐就掉一半。</p>
+
+<table>
+<tr><th>规划参数</th><th>怎么取值</th><th>取错的后果</th></tr>
+<tr><td>峰值 QPS</td><td>取分钟级 P95 峰值，不用日均</td><td>用日均会在高峰期直接过载</td></tr>
+<tr><td>峰谷比</td><td>内部工具常见 3~5 倍，to C 应用可达 10 倍</td><td>按峰值固定配置会在低谷浪费 70%+ 资源</td></tr>
+<tr><td>冗余系数 R</td><td>1.2 ~ 1.5（发布 + 故障 + 爬坡）</td><td>不留冗余时滚动发布本身就会打穿 SLA</td></tr>
+<tr><td>稳态 GPU 利用率目标</td><td>60% ~ 70%</td><td>长期超过 85% 尾延迟迅速恶化</td></tr>
+<tr><td>弹性扩容时间</td><td>含模型加载与预热，通常分钟级</td><td>低估会让尖峰期扩容"赶不上趟"</td></tr>
+<tr><td>KV Cache 预算</td><td>N_sla × 平均上下文 × 每 token KV 字节数</td><td>低估会在长上下文流量下触发抢占或 OOM</td></tr>
+</table>
+
+<p>峰谷比这一行值得多说一句。按峰值配固定副本，低谷期利用率可能只有 15~20%，账单极不划算；按均值配则峰期必崩。实践中的折中是<strong>基线副本按 P95 分钟峰值的 60~70% 配置，尖峰交给弹性扩容兜底</strong>，同时把扩容的冷启动时间（拉镜像 + 加载权重 + 预热）算进 SLA 预算——这个时间在大模型上通常是分钟级，意味着弹性扩容能兜住持续几十分钟的高峰，但兜不住秒级尖刺，秒级尖刺只能靠基线冗余和排队。GPU 资源形态与成本模型的更多细节见 <a href="./gpu_infrastructure.html">DP14 · GPU 基础设施</a>。</p>
+
+<div class="highlight">
+<strong>典型场景推演：一次可复现的容量推导。</strong>某企业内部助手要求 P95 TTFT ≤ 800ms、P95 TPOT ≤ 50ms。用脱敏后的生产日志回放做阶梯扫描，SLA 拐点落在单副本并发 40，该档位平均端到端延迟约 4 秒，于是单副本可用产能 = 40 / 4 = <strong>10 QPS</strong>。业务侧统计分钟级 P95 峰值为 55 QPS（日均只有 12 QPS，峰谷比约 4.6 倍），取冗余系数 1.3，得到所需副本数 = 55 / 10 × 1.3 ≈ <strong>7.2 → 8 个副本</strong>；单副本用 TP=2，合计 <strong>16 张卡</strong>。再回头校验显存：40 并发 × 平均上下文长度对应的 KV Cache 必须能与权重共存于单副本显存内，若装不下就得下调并发重跑推导，或者通过 KV Cache 量化把这部分压下来（见 <a href="./kv_cache_optimization.html">DP09 · KV Cache 优化</a>）。最后按 60~70% 稳态利用率目标复核：8 副本在日均 12 QPS 下利用率过低，于是把基线定为 5 副本、峰段自动扩到 8——这套推导里唯一"测"出来的是 N_sla 和 L 两个数，其余全是算术，可以完整复现。请注意具体数值强依赖于模型规模、卡型、量化与引擎版本，方法链路才是可迁移的。
+</div>
+
+<h3>八个最常见的压测陷阱</h3>
+
+<p>下面这些坑几乎每个团队都会踩一遍，它们的共同点是<strong>都会让压测结果偏乐观</strong>——也就是说，你不会在压测阶段发现问题，只会在上线后发现。</p>
+
+<table>
+<tr><th>陷阱</th><th>为什么会让结果虚高</th><th>怎么规避</th></tr>
+<tr><td><strong>预热不足</strong></td><td>首批请求包含 CUDA Graph 捕获、权重换页、内核 JIT 编译、tokenizer 初始化，TTFT 可能是稳态的数倍，混进统计会污染均值和分位数</td><td>显式设 <code>--warmup-request-count</code>（默认是 0），或跑一轮丢弃后再正式测</td></tr>
+<tr><td><strong>前缀缓存命中虚高</strong></td><td>vLLM 官方明确警告：对同一 server 重复跑压测会复用留在前缀缓存里的 prompt，吞吐被抬高；随机数据集在固定 seed 下完全可复现，反而更容易全中</td><td>每轮换 <code>--seed</code>、重启服务、或用 <code>vllm bench sweep serve</code>（自动在轮次间重置缓存）；同时留意 run 内部的共享前缀</td></tr>
+<tr><td><strong>客户端成为瓶颈</strong></td><td>单进程客户端在数百并发下 SSE 解析与 tokenize 吃满 CPU，测出的"延迟"其实是客户端排队，服务端明明还有余量</td><td>监控压测机 CPU 与网卡；用多进程/多机分布式加压；压测机与服务端分离部署</td></tr>
+<tr><td><strong>只看均值</strong></td><td>LLM 延迟分布长尾极重，均值可能只有 P99 的几分之一，均值达标而大量用户体验崩坏</td><td>报告必须给出 P50 / P90 / P95 / P99，SLA 也按分位数定义</td></tr>
+<tr><td><strong>忽略 ignore_eos</strong></td><td>模型提前遇到 EOS 停止，实际 OSL 远小于设定，单请求变短使吞吐被高估、TPOT 采样点不足</td><td>压测时开 <code>ignore_eos</code>，让输出稳定到达 <code>max_tokens</code></td></tr>
+<tr><td><strong>跨工具直接比数字</strong></td><td>各工具对 ITL 是否含 TTFT、吞吐是否含输入 token、是否排除 warmup 的定义都不同</td><td>比公式和测量点，不比指标名；横向对比时统一用同一个工具重测</td></tr>
+<tr><td><strong>单副本结论直接乘副本数</strong></td><td>忽略负载均衡不均、共享存储与网络争用、网关连接数上限，实际线性度达不到</td><td>至少做一次多副本联合压测验证扩展效率</td></tr>
+<tr><td><strong>采样参数没固定</strong></td><td>贪心解码省去了概率归一化与排序，与带温度的采样速度不同；不同轮次参数不一致会让对比失去意义</td><td>同一组对比里锁死 temperature / top_p / top_k 与解码方式</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先统计生产流量的 ISL/OSL 分布和前缀重复率，再设计压测集</li>
+<li>TTFT、TPOT、ITL 三个延迟指标分开报告，全部给到 P95/P99</li>
+<li>用并发数阶梯扫描画出完整曲线，上界取到略大于 max batch size</li>
+<li>按 SLA 拐点的吞吐做容量规划，而不是饱和点峰值吞吐</li>
+<li>每轮压测显式预热，并换 seed 或重置服务端缓存</li>
+<li>记录完整环境快照：引擎版本、模型与量化、卡型、驱动、并发与数据集参数</li>
+<li>引擎基准与业务链路压测两条线都跑，各自回答不同的问题</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要只用 QPS 衡量 LLM 服务的产能</li>
+<li>不要用固定 ISL/OSL 的合成集做容量规划</li>
+<li>不要在开环速率模式下把系统压到排队发散，那测的是队列不是系统</li>
+<li>不要把厂商基准里的峰值吞吐直接当作自己的可用产能</li>
+<li>不要在没确认客户端和网关都不是瓶颈之前就调引擎参数</li>
+<li>不要跨工具直接对比同名指标，先核对公式</li>
+<li>不要在报告里只写均值，也不要省略成功率与错误分类</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+压测报告的价值不在于那个最大的数字，而在于它能不能被别人在另一台机器上复现出来。把环境、数据集、并发策略、预热方式、指标公式全部写进报告，这份报告才是资产；只有一个"我们跑到了 5000 tok/s"的结论，下个版本就作废了。
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>TPOT 和 ITL 到底差在哪，为什么两个都要报？</summary>
+<div class="answer">
+<p>ITL 是相邻两次流式响应之间的时间间隔，一个请求会产生很多个采样点；TPOT 是每个请求算一个值，公式为 (端到端延迟 − TTFT) / (输出 token 数 − 1)，分母减一是为了只刻画解码阶段。标准逐 token 解码下一次响应通常只带一个 token，两者数值基本一致，所以容易被当成同义词。差别在投机解码下暴露：一次响应可能带回多个被接受的草稿 token，ITL 只记录响应之间的间隔、不为同一响应内的 token 补零间隔，因此偏大；TPOT 则把解码时间摊到每个 token 上。vLLM 官方给的例子里，同一请求平均 ITL 是 40ms，而 TPOT 是 (180 − 100) / (5 − 1) = 20ms/token，相差一倍。两个都报的意义在于：TPOT 反映真实的吐字效率与 SLA 达成情况，ITL 反映吐字是否卡顿抖动，一个是平均速度，一个是节奏平滑度。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么不能只用 QPS 衡量 LLM 服务？</summary>
+<div class="answer">
+<p>因为 QPS 隐含"每个请求工作量相近"的假设，而 LLM 请求的工作量与输出长度近似成正比，同一接口上不同请求可以相差上百倍。一个用户问"今天几号"生成 8 个 token，另一个让它写季度复盘生成 1500 个 token，两者都记作 1 个请求，但对 GPU 的占用天差地别。因此相同的 QPS 可能对应完全不同的实际负载，QPS 达标不代表系统没过载。正确做法是把输出 token 吞吐作为主吞吐指标，QPS 作为对接业务目标的辅助口径，并且必须同时给出该负载下的 TTFT 与 TPOT 分位数，否则无法判断这个吞吐是在什么体验代价下取得的。</p>
+</div>
+</details>
+
+<details>
+<summary>压测应该固定并发数还是固定请求速率？</summary>
+<div class="answer">
+<p>大多数基准测试应优先用固定并发数。并发模型是闭环负载：N 个客户端各持一个在途请求，收到响应立刻补发，系统里始终维持 N 个活跃请求，天然自带背压，永远不会发散。固定请求速率是开环负载，一旦到达率超过系统吞吐能力，在途请求会无界增长，队列越堆越长，你测到的延迟主要是排队时间而非系统能力，曲线会直接垂直起飞。请求速率模式的价值在于模拟真实到达模式（泊松分布、突发流量）用于韧性测试。生产压测最常用的其实是组合模式：请求速率设为无限、同时限制最大并发，这正好对应"用户全速发送 + 网关限连接数"的真实线上架构。</p>
+</div>
+</details>
+
+<details>
+<summary>用固定输入输出长度做压测有什么问题？</summary>
+<div class="answer">
+<p>固定长度制造了一个真实世界不存在的理想工况：batch 里所有请求同时开始、同时结束、工作量一致，连续批处理调度器几乎不需要做困难决策，KV Cache 占用平稳，没有请求会长期霸占槽位。测出来的是调度器的最好状态。真实流量的输出长度是长尾分布，大量短回答加上少量数千 token 的长文，长尾请求会连续几十秒占住 batch 槽位并让 KV Cache 持续膨胀，把同批短请求的 TPOT 一起拖慢，P99 被显著抬高。固定长度压测完全看不到这个效应，于是出现"压测很好、上线就崩"。需要特别注意工具默认值：genai-perf 的输入长度标准差默认是 0，不显式设置拿到的就是固定长度数据集。</p>
+</div>
+</details>
+
+<details>
+<summary>怎么判断推理服务的饱和点？</summary>
+<div class="answer">
+<p>做并发数阶梯扫描，从 1 开始倍增到略大于引擎的最大 batch size，每档记录输出吞吐与延迟分位数。曲线会呈现三段：线性区（吞吐随并发近似线性增长，延迟几乎不变）、收益递减区（吞吐增速放缓，TTFT 明显爬升）、饱和平台（吞吐不再增长甚至回落，延迟线性发散）。实用的量化判据是：并发翻倍后吞吐增益不足 10% 而 P95 TTFT 涨幅超过 30%，说明已经越过收益递减区。但要区分两个不同的点——饱和点是系统属性（算力或带宽被打满），SLA 拐点是业务属性（仍满足 P95 延迟约束的最大并发），后者几乎总是出现在前者之前且往往早很多。容量规划要用 SLA 拐点处的吞吐。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么压测结果总是比线上表现好很多？</summary>
+<div class="answer">
+<p>最常见的原因有四个，且都会让结果偏乐观。一是预热不足反过来说的情况——多数团队会重复跑压测，前缀缓存里留着上一轮的 prompt，vLLM 官方明确警告过这会抬高吞吐，尤其随机数据集在固定 seed（默认 0）下完全可复现，更容易全部命中。二是压测集用了固定长度或前缀重复率与生产不符，掩盖了长尾请求对有效并发的侵蚀。三是只看均值不看 P95/P99，而 LLM 延迟分布长尾极重。四是单副本压测结论直接乘以副本数，忽略了负载均衡不均、共享存储争用和网关连接数上限。规避方法分别是：每轮换 seed 或重启服务重置缓存、用生产日志回放构造压测集、报告全分位数、以及至少做一次多副本联合压测验证扩展效率。</p>
+</div>
+</details>
+
+<details>
+<summary>从压测结果怎么反推需要几个副本、几张卡？</summary>
+<div class="answer">
+<p>推导分五步。先定 SLA（例如 P95 TTFT ≤ 800ms、P95 TPOT ≤ 50ms）；再在贴近真实分布的数据集上做阶梯压测，找到 SLA 拐点并发 N_sla 及该档位的平均端到端延迟 L；然后用小定律算单副本可用产能，即 QPS = N_sla / L（闭环并发下在途请求数恒定，所以吞吐就是并发除以驻留时间）；接着用分钟级 P95 峰值 QPS 除以单副本 QPS，再乘冗余系数（通常 1.2~1.5，覆盖滚动发布少一副本、单点故障与扩容爬坡）得到副本数；最后乘以单副本的张量并行度得到总卡数。算完还要回头校验显存：N_sla 并发对应的 KV Cache 加上模型权重必须装得进单副本显存，装不下就下调并发重算或用量化压缩。此外要按 60~70% 的稳态利用率目标复核，避免长期运行在 85% 以上导致尾延迟恶化。</p>
+</div>
+</details>
+
+<details>
+<summary>genai-perf、vLLM bench serve 和 k6 该怎么分工？</summary>
+<div class="answer">
+<p>它们回答的是不同问题，不是竞品关系。genai-perf（及其后继 AIPerf）指标定义最规范、文档化程度最高，适合做跨引擎的标准化横向对比与基准报告。vLLM 的 bench serve 与引擎指标口径完全一致，数据集生态最全（ShareGPT、BurstGPT、HuggingFace 系列、随机、前缀重复、自定义 jsonl 都支持），适合引擎特性评估、参数扫描和版本回归测试；vLLM 官方还推荐 GuideLLM 用于生产服务器的性能基准。k6 和 Locust 不理解 token，需要自己解析 SSE 才能算出 TTFT，但它们能编排完整业务链路（鉴权、向量检索、多轮会话状态）并做分布式加压和 CI 集成，适合验证自动扩缩容、网关限流和端到端 SLA。成熟团队通常两条线并行：引擎线定位"哪一层慢"，业务线验证"整体扛不扛得住"。</p>
+</div>
+</details>
+
+<details>
+<summary>压测时为什么要开 ignore_eos，这会不会让结果失真？</summary>
+<div class="answer">
+<p>开 ignore_eos 是为了让输出长度真正达到设定的 max_tokens，而不是模型提前生成 EOS 就停下。如果不开，实际输出长度会明显小于设计值，带来三个问题：单请求变短使系统吞吐被高估、TPOT 的采样点不足导致统计不稳定、以及不同轮次之间输出长度随机波动使结果不可比。所以在受控的性能基准测试里它是标准做法，NVIDIA 的压测指南也明确建议这样设。它确实让负载偏离了真实生成行为，但这正是"性能基准测试"与"业务链路负载测试"分工的意义所在：基准测试要的是可控可比，真实的 EOS 行为由业务链路压测（用生产日志回放、不改采样行为）来覆盖。两者结合才能既定位引擎效率，又验证真实体验。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; 推理服务压测方法论 &middot; DP30</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

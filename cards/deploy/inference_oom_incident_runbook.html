@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP03 · 显存 OOM 与高并发故障处置 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.arch-diagram{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(63,185,80,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#8b949e}
+.data-asof strong{color:#d29922}
+.checklist{background:rgba(188,140,255,.06);border:1px solid var(--purple);border-radius:8px;padding:1rem 1.4rem;margin:1.2rem 0}
+.checklist::before{content:"📋 应急预案 Checklist";display:block;font-weight:700;color:var(--purple);margin-bottom:.5rem}
+.checklist ul{list-style:none;margin-left:0}
+.checklist li{padding-left:1.5rem;position:relative}
+.checklist li::before{content:"☐";position:absolute;left:0;color:var(--purple)}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#484f58;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、故障现场：五类症状分别指向什么</a>
+<a href="#s2">二、六步处置流程：先止血，再验伤</a>
+<a href="#s3">三、三把止损闸刀与它们的代价</a>
+<a href="#s4">四、四类场景对照：从现象查到根因</a>
+<a href="#s5">五、参数速查：七个旋钮怎么调</a>
+<a href="#s6">六、预防：水位线、告警与预案</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>DP03 · 显存 OOM 与高并发故障处置</h1>
+<p class="subtitle">症状判别 / 六步应急流程 / 三把止损闸刀 / 四类场景对照表 / 参数速查 / 水位线与告警阈值 / 应急预案 Checklist</p>
+
+<div class="intuition-box">
+推理服务半夜炸了，你缺的往往不是"显存怎么算"这类知识——那个你早就会了。你缺的是一套在告警响起后的十分钟里，不需要思考也能照着做的动作序列：先拉闸止血，再看监控验伤，最后才谈根治。这张卡讲的就是那套动作序列，以及每个动作会付出什么代价。
+</div>
+
+<p>这张卡刻意不重讲机制。显存怎么分账看 <a href="./vram_estimation_hardware.html">DP02 显存估算与硬件配置</a>，KV Cache 与分页管理看 <a href="./kv_cache_inference.html">DP08</a> 与 <a href="./kv_cache_optimization.html">DP09</a>，调度器与批处理旋钮看 <a href="./continuous_batching_scheduling.html">DP11</a>，压测怎么找拐点看 <a href="./inference_benchmark_methodology.html">DP16</a>。这里只讲一件事：**线上已经出事了，接下来的每一分钟该做什么。**</p>
+
+<!-- ==================== 一、故障现场 ==================== -->
+<div class="section" id="s1">
+<h2>一、故障现场：五类症状分别指向什么</h2>
+
+<p>推理服务出问题时，用户侧的反馈几乎总是同一句"变慢了"或"报错了"，但底下的根因可能完全不同。把症状拆细，是整个处置流程里唯一能大幅缩短时间的环节——因为一旦症状认错，后面五步全都做在错误的方向上。</p>
+
+<h3>先看清请求在哪一段被卡住</h3>
+
+<p>一个请求从进网关到吐完最后一个 token，中间有四个可能积压的位置。观测点没铺到位，你就只能盯着 <code>nvidia-smi</code> 猜。</p>
+
+<div class="arch-diagram">
+  请求链路与四个积压点（括号内是对应的观测指标）
+
+  客户端
+    │
+    ▼
+  ┌──────────────┐   积压点 ①：网关队列
+  │  网关 / LB   │   → 网关侧 pending 连接数、5xx / 499 比例
+  │  限流 · 路由 │      这里堵，说明后端已经不接活了
+  └──────┬───────┘
+         ▼
+  ┌──────────────────────────────────────────────┐
+  │  推理服务（vLLM / SGLang / TGI）              │
+  │                                              │
+  │  ┌────────────┐  积压点 ②：等待队列          │
+  │  │  waiting   │  → vllm:num_requests_waiting │
+  │  │   队列     │     有等待 = KV 池已经排不下  │
+  │  └─────┬──────┘                              │
+  │        ▼                                     │
+  │  ┌────────────┐  积压点 ③：运行批次           │
+  │  │  running   │  → vllm:num_requests_running │
+  │  │   批次     │     批次大 = 每个请求变慢      │
+  │  └─────┬──────┘                              │
+  │        ▼                                     │
+  │  ┌────────────┐  积压点 ④：KV 池水位          │
+  │  │  KV Cache  │  → vllm:gpu_cache_usage_perc │
+  │  │    池      │     >0.95 = 抢占与 OOM 边缘   │
+  │  └─────┬──────┘                              │
+  │        │        抢占计数                      │
+  │        │        → vllm:num_preemptions_total │
+  └────────┼─────────────────────────────────────┘
+           ▼
+      ┌─────────┐
+      │   GPU   │  → DCGM_FI_DEV_FB_USED（真实显存占用）
+      │  显存   │     注意：这个数字被预分配撑满是正常的
+      └─────────┘
+</div>
+
+<p>指标名以 vLLM 官方 Production Metrics 文档为准（<code>vllm:</code> 前缀，从 <code>/metrics</code> 端点抓取）。用别的引擎时名字不同，但四个积压点的位置是一样的。</p>
+
+<h3>五类症状与它们的指纹</h3>
+
+<p>下面这张表是整张卡最该背下来的东西。<span class="term">症状指纹</span>指的是几个指标同时呈现的组合形态——单看一个指标几乎永远会误判，组合起来才有区分度。</p>
+
+<table>
+<tr><th>症状</th><th>指标指纹</th><th>最可能指向</th><th>最容易误判成</th></tr>
+<tr><td>进程直接崩溃，日志有 CUDA OOM</td><td>崩溃前 KV 使用率不一定高；显存曲线断崖</td><td>权重 + 激活就装不下，或有别的进程抢卡</td><td>并发太高（其实降并发没用）</td></tr>
+<tr><td>显存曲线持续上升不回落</td><td><code>DCGM_FI_DEV_FB_USED</code> 缓涨，但 KV 使用率平稳</td><td>Python 侧对象泄漏 / 指标标签爆炸，不是 KV</td><td>KV Cache 没释放</td></tr>
+<tr><td>请求大量排队</td><td><code>num_requests_waiting</code> 持续 &gt; 0，KV 使用率贴近 1.0</td><td>KV 池装不下更多并发，调度器在排队</td><td>GPU 算力不够</td></tr>
+<tr><td>首字变慢（TTFT 抬升）</td><td>TTFT P95 涨，<code>num_requests_waiting</code> 同步涨</td><td>排队时间被算进 TTFT，是准入问题</td><td>Prefill 变慢</td></tr>
+<tr><td>吐字变慢（TPOT 劣化）</td><td>TPOT 涨，<code>num_preemptions_total</code> 在增长</td><td>批次里请求太多，或发生抢占重算</td><td>模型本身慢</td></tr>
+</table>
+
+<div class="intuition-box">
+最反直觉的一条：<strong>显存被占满 90% 以上，在 vLLM 里是正常状态，不是故障。</strong>引擎启动时就按 <code>gpu_memory_utilization</code> 把 KV 池一次性预分配好了，<code>nvidia-smi</code> 从第一秒起就是满的。所以判断 KV 是否吃紧，要看 <code>vllm:gpu_cache_usage_perc</code>（池内用了多少），而不是看显卡占用率。盯错指标是这类故障里最常见的第一步错误。
+</div>
+
+<h3>TTFT 变长不等于 Prefill 变慢</h3>
+
+<p><span class="term">TTFT</span>（Time To First Token，首字延迟）是个复合指标，它同时包含了排队等待和 Prefill 计算两段。服务过载时，真正膨胀的几乎总是前者：请求在 waiting 队列里躺了两秒，Prefill 本身只花了 80 毫秒，但用户测到的 TTFT 是 2.08 秒。这个区分之所以关键，是因为两者的处置方向完全相反——排队问题要在准入侧解决（限流、缩短上下文、扩容），Prefill 变慢才需要动 chunked prefill 之类的计算侧参数。压测口径下 TTFT 与 TPOT 各自意味着什么，<a href="./inference_benchmark_methodology.html">DP16</a> 里拆得更细。</p>
+</div>
+
+<!-- ==================== 二、六步流程 ==================== -->
+<div class="section" id="s2">
+<h2>二、六步处置流程：先止血，再验伤</h2>
+
+<p>线上事故处置最容易犯的错误，是一上来就想弄明白"到底为什么炸"。这个冲动在工程上是对的，在事故现场是错的——因为诊断需要时间，而故障期间每一秒都在产生用户损失。成熟的处置流程把<span class="term">止损</span>和<span class="term">定位</span>严格分成两个阶段，并且规定止损优先。</p>
+
+<div class="arch-diagram">
+  六步处置时间轴（括号内是该步的目标耗时上限）
+
+  T+0min          T+2min           T+10min          T+30min      T+1d        T+3d
+    │               │                 │                │            │           │
+    ▼               ▼                 ▼                ▼            ▼           ▼
+  ┌─────┐        ┌─────┐          ┌─────┐         ┌─────┐      ┌─────┐    ┌─────┐
+  │Step1│───────▶│Step2│─────────▶│Step3│────────▶│Step4│─────▶│Step5│───▶│Step6│
+  │发现 │        │止损 │          │定位 │         │根因 │      │固化 │    │验证 │
+  └─────┘        └─────┘          └─────┘         └─────┘      └─────┘    └─────┘
+   告警           拉闸             看监控           读日志        改配置      压测
+   触发           降载             查指纹           复现          加防护      回归
+
+  ├──── 用户still在受损 ────┤├──────── 服务已恢复，从容排查 ────────────────────┤
+
+  关键分界线在 Step2 之后：闸拉下去的那一刻，事故从
+  "P0 止血" 降级为 "P2 排查"。之前争分夺秒，之后按流程走。
+</div>
+
+<table>
+<tr><th>步骤</th><th>目标</th><th>动作</th><th>产出</th><th>时限</th></tr>
+<tr><td>1 发现</td><td>确认故障范围</td><td>看告警、错误率、日志里是否有 OOM 栈；确认是单实例还是全集群</td><td>受影响实例清单</td><td>2 分钟</td></tr>
+<tr><td>2 止损</td><td>让服务先活过来</td><td>拉三把闸刀之一（见第三节），不追求优雅</td><td>错误率回落</td><td>2 分钟</td></tr>
+<tr><td>3 定位</td><td>锁定症状类别</td><td>对照第一节的指纹表，读监控曲线与引擎日志</td><td>症状归类结论</td><td>10 分钟</td></tr>
+<tr><td>4 根因</td><td>解释为什么现在炸</td><td>查流量结构变化、上下文长度分布、近期发布记录</td><td>可复述的因果链</td><td>当天</td></tr>
+<tr><td>5 固化</td><td>让同样的事不再发生</td><td>改启动参数、加限流规则、补告警、扩容</td><td>配置变更 + 告警规则</td><td>次日</td></tr>
+<tr><td>6 验证</td><td>证明修复真的有效</td><td>按 DP30 的阶梯压测重跑，确认新的拐点位置</td><td>压测报告</td><td>三天内</td></tr>
+</table>
+
+<h3>为什么必须先止损</h3>
+
+<p>把 MTTR（平均恢复时间）拆开看就清楚了：<span class="term">MTTR</span> = 发现耗时 + 定位耗时 + 修复耗时。定位耗时是三者里方差最大的一项——运气好五分钟，运气差两小时。如果坚持"先搞清楚再动手"，用户受损时长就等于这个高方差的量。而止损动作是低方差的：降 QPS 这个操作永远在一分钟内生效，无论根因是什么。把止损提到定位前面，等于把用户受损时长从"取决于诊断难度"变成"取决于操作速度"。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>某内部代码助手服务跑在单张 A100 80G 上，某天上午十点推广邮件群发后并发从 8 涨到 40，服务开始大面积超时。值班同学第一反应是登机器排查，花了 25 分钟才发现是长上下文请求把 KV 池挤爆。复盘后团队把流程改成"告警响起两分钟内先把网关并发上限压到 12"，下一次同类事件的用户受损时长从 25 分钟降到 3 分钟——根因排查还是花了 20 多分钟，但那 20 分钟里服务是可用的。
+</div>
+
+<div class="intuition-box">
+止损和修复是两件事，混在一起做会两件都做不好。止损的标准是"用户不再报错"，可以很粗暴，可以牺牲吞吐，可以临时拒掉一部分流量；修复的标准是"同样的输入不再触发问题"，必须讲道理、可验证。事故现场只谈第一个标准。
+</div>
+
+<h3>Step 3 该看什么日志</h3>
+
+<p>引擎日志里最有价值的不是那行 <code>CUDA out of memory</code>，而是它前面几十行的调度记录。vLLM 在 KV 吃紧时会打印抢占相关的告警，明确告诉你是因为空间不够而把某些序列踢回队列重算。看到这类记录，说明问题在 KV 容量而非模型加载；反之，如果崩溃发生在启动阶段或第一批请求上，那就是权重加上激活根本装不下，跟并发无关。</p>
+</div>
+
+<!-- ==================== 三、三把闸刀 ==================== -->
+<div class="section" id="s3">
+<h2>三、三把止损闸刀与它们的代价</h2>
+
+<p>止损阶段可用的手段只有三类，按对用户的伤害从小到大排列。选哪一把不取决于根因（那时候还不知道根因），而取决于你能在多少秒内把它执行完。</p>
+
+<table>
+<tr><th>闸刀</th><th>怎么执行</th><th>生效速度</th><th>代价</th><th>什么时候别用</th></tr>
+<tr><td>降并发</td><td>网关侧把最大并发或 QPS 上限调低，多余请求排队或快速失败</td><td>秒级，无需重启</td><td>部分用户排队变长或收到 429</td><td>几乎总是先用这个</td></tr>
+<tr><td>压生成长度</td><td>网关强制覆盖 <code>max_tokens</code>，比如压到 512</td><td>秒级，只影响新请求</td><td>长回答被截断，体验受损但服务可用</td><td>业务本身就是长文生成时慎用</td></tr>
+<tr><td>隔离重启</td><td>把异常实例摘出负载均衡，重启后再放回</td><td>分钟级</td><td>冷启动期间容量下降，且丢掉全部前缀缓存</td><td>只剩一个实例时（会造成全站中断）</td></tr>
+</table>
+
+<div class="intuition-box">
+三把闸刀的共同点是<strong>都不需要改引擎启动参数</strong>。这不是巧合——改启动参数意味着重启，重启意味着几十秒到几分钟的容量真空，在事故现场这个代价常常比故障本身还大。所以止损阶段的原则是：能在网关解决的，绝不动推理服务。
+</div>
+
+<h3>为什么重启是最后一招</h3>
+
+<p>重启一个推理实例的成本远高于重启一个普通 Web 服务。权重要重新从磁盘或对象存储加载到显存，几十 GB 的模型这一步就要几十秒；接着引擎要做显存探测和 KV 池预分配；如果没关 CUDA Graph，还要走一遍图捕获（capture）预热。这几步加起来，一个中等规模模型的冷启动通常在一到三分钟量级。更隐蔽的代价是<span class="term">前缀缓存</span>（prefix cache）——那些被多个请求共享的系统提示词 KV 块全部清零，重启后的头几分钟里，本来能命中缓存的请求都要重新 Prefill，实际吞吐比稳态还低。所以重启只在两种情况下值得：怀疑进程内状态已经损坏，或者必须改启动参数才能恢复。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>某问答服务在事故中连续重启了四次实例，每次重启后两分钟内又被流量打挂，形成"重启—打挂—重启"的循环，累计中断 18 分钟。事后发现如果第一次就把网关并发从 64 压到 16，服务在 30 秒内就能稳住。教训是：重启解决的是进程状态问题，解决不了流量与容量不匹配的问题——后者不先按住，重启多少次都会再炸一次。
+</div>
+
+<h3>拉闸之后立刻要做的一件事</h3>
+
+<p>闸拉下去、错误率回落之后，不要马上开始排查，先把当前的现场快照存下来：监控面板截图（覆盖故障前 30 分钟到恢复后 5 分钟）、引擎日志片段、当时的启动参数、当时的流量结构（请求速率、上下文长度分布）。原因很实际——止损动作本身会改变现场，降了并发之后所有指标都会回到正常区间，等你半小时后回头排查时，最有诊断价值的那段曲线可能已经被监控系统按低精度归档了。</p>
+</div>
+
+<!-- ==================== 四、场景对照 ==================== -->
+<div class="section" id="s4">
+<h2>四、四类场景对照：从现象查到根因</h2>
+
+<p>把线上遇到的显存与并发问题归拢，基本跑不出四类。这一节按"判别特征 → 常见根因 → 止损 → 根治"的顺序给出对照，事故中可以直接当查询表用。</p>
+
+<div class="arch-diagram">
+  故障分类决策树
+
+                    服务出现异常
+                         │
+            ┌────────────┴────────────┐
+            │                         │
+      进程崩溃/报 OOM            进程活着但慢
+            │                         │
+     ┌──────┴──────┐          ┌───────┴───────┐
+     │             │          │               │
+  启动阶段      运行阶段    显存平稳        显存缓涨
+     │             │          │               │
+     ▼             ▼          ▼               ▼
+  【场景一】   【场景二】  【场景三】      【场景四】
+  装不下       并发挤爆    排队/抢占        真泄漏
+     │             │          │               │
+  改精度        降并发      降批次          抓对象
+  改TP          降上限      查上下文        查指标标签
+  换卡          开量化      扩容            重启兜底
+</div>
+
+<h3>场景一：启动就 OOM，还没接流量就崩</h3>
+
+<p>这一类跟并发完全无关，纯粹是账算错了。判别特征很干脆：服务起不来，或者刚接第一批请求就崩，日志里的 OOM 发生在模型加载或引擎初始化阶段。</p>
+
+<table>
+<tr><th>常见根因</th><th>怎么确认</th><th>处置</th></tr>
+<tr><td>权重精度选错，FP16 加载了本该量化的模型</td><td>算一遍参数量 × 精度字节，和卡的显存比</td><td>换 AWQ/GPTQ 量化权重，或加卡做张量并行</td></tr>
+<tr><td><code>max_model_len</code> 设得比实际需要大得多</td><td>看引擎启动日志里报的 KV 池可容纳 token 数</td><td>按业务真实的上下文分布调小</td></tr>
+<tr><td><code>gpu_memory_utilization</code> 设太高，没给运行时留余量</td><td>值是否 &gt; 0.95</td><td>回调到 0.85~0.90</td></tr>
+<tr><td>卡上还有别的进程（上一次没退干净、其他容器共卡）</td><td><code>nvidia-smi</code> 看进程列表</td><td>清理残留进程，或用 MIG / 独占调度隔离</td></tr>
+</table>
+
+<p>显存到底该怎么分账、每一项占多少，<a href="./vram_estimation_hardware.html">DP02</a> 有完整的公式和卡型对照表，这里不重复。</p>
+
+<h3>场景二：并发升高后 OOM 或大面积超时</h3>
+
+<p>这是最典型的一类。服务平时好好的，流量一涨就出问题。判别特征是故障与流量曲线高度相关，且 <code>vllm:gpu_cache_usage_perc</code> 在故障前贴近 1.0，<code>num_requests_waiting</code> 和 <code>num_preemptions_total</code> 同步飙升。</p>
+
+<table>
+<tr><th>常见根因</th><th>指标特征</th><th>止损</th><th>根治</th></tr>
+<tr><td>并发数超过 KV 池能承载的序列数</td><td>KV 使用率贴顶 + 等待队列非空</td><td>网关降并发</td><td>调 <code>max_num_seqs</code>，或扩容实例</td></tr>
+<tr><td>少数超长上下文请求吃掉大半个池子</td><td>KV 使用率跳变而非缓涨</td><td>网关按 token 数拒绝超长请求</td><td>设 <code>max_model_len</code> 上限 + 长请求走独立实例</td></tr>
+<tr><td>生成长度失控（模型不停不下来）</td><td>单请求占用时间远超均值</td><td>强制覆盖 <code>max_tokens</code></td><td>补停止条件与超时中断</td></tr>
+<tr><td>抢占风暴：请求被踢回队列重算，加剧拥塞</td><td><code>num_preemptions_total</code> 快速增长</td><td>降并发打破循环</td><td>见 <a href="./continuous_batching_scheduling.html">DP11</a> 的调度调参</td></tr>
+</table>
+
+<div class="intuition-box">
+场景二里最容易被忽略的是"少数超长请求"这一条。假设 KV 池能装 40 个 2K 上下文的请求，那么只需要 5 个 16K 的请求进来，池子就满了——从池子的角度看，占用量是按 token 数算的，不是按请求数算的。这解释了一个常见现象：QPS 明明没怎么涨，服务却突然扛不住了，因为涨的是<strong>单请求的上下文长度</strong>，不是请求数。
+</div>
+
+<h3>场景三：不 OOM，但就是慢</h3>
+
+<p>服务稳定运行，没有报错，但 P95 延迟明显劣化。这类问题的处置反而最需要耐心，因为它不紧急，容易被拖着不解决，最后演变成场景二。</p>
+
+<table>
+<tr><th>现象</th><th>区分方法</th><th>指向</th></tr>
+<tr><td>TTFT 涨、TPOT 正常</td><td>看等待队列长度</td><td>准入侧排队，需要限流或扩容</td></tr>
+<tr><td>TPOT 涨、TTFT 正常</td><td>看批次内请求数</td><td>批次过大，单请求分到的算力变少</td></tr>
+<tr><td>两者都涨且抖动大</td><td>看抢占计数</td><td>抢占重算在浪费算力</td></tr>
+<tr><td>两者都涨但很平稳</td><td>看 GPU 利用率与显存带宽</td><td>可能真的到了硬件上限，需要扩容或换卡</td></tr>
+</table>
+
+<h3>场景四：显存或内存逐渐上涨</h3>
+
+<p>这一类最容易被误诊，因为"缓慢上涨"这个形态天然让人联想到内存泄漏。但在 vLLM 这类采用<span class="term">分页 KV 管理</span>的引擎里，<strong>KV Cache 本身几乎不可能"泄漏"</strong>——它是池化的，请求结束时块就归还池子，池子的总大小在启动时就固定了。所以看到显存缓涨，要分两种情况处理。</p>
+
+<table>
+<tr><th>涨的是什么</th><th>怎么看</th><th>常见原因</th><th>处置</th></tr>
+<tr><td>GPU 显存（池外部分）</td><td><code>DCGM_FI_DEV_FB_USED</code> 涨但 KV 使用率平稳</td><td>某些自定义算子或多模态预处理没释放中间张量</td><td>定位算子，或定期滚动重启兜底</td></tr>
+<tr><td>CPU 内存 RSS</td><td>容器内存曲线涨，显存不涨</td><td>请求对象堆积、日志缓冲、tokenizer 缓存、Prometheus 标签基数爆炸</td><td>查标签基数与对象引用，见 <a href="../engineering/ai_memory_troubleshooting.html">ST12</a></td></tr>
+<tr><td>看起来涨其实没涨</td><td>KV 使用率随流量波动，显存总量不变</td><td>把 KV 池水位当成了泄漏</td><td>不处置，改告警口径</td></tr>
+</table>
+
+<div class="intuition-box">
+判断是不是真泄漏有个便宜的办法：把流量停掉五分钟再看。真泄漏不会因为没有请求就回落，而池水位一定会掉回基线。这个动作花的时间比读代码找引用短得多，值得在排查早期就做一次。
+</div>
+</div>
+
+<!-- ==================== 五、参数速查 ==================== -->
+<div class="section" id="s5">
+<h2>五、参数速查：七个旋钮怎么调</h2>
+
+<p class="data-asof"><strong>参数口径以 vLLM 为准，数据截止 2026-09</strong> · 不同引擎（SGLang / TGI）的参数名不同但作用类似；具体默认值随版本变动，落地前核对当前版本文档。</p>
+
+<p>下面这张表按"出事时最先该动"的顺序排列。每个参数都给了作用、调整方向和代价——代价那一栏是重点，因为大多数调参失误不是调错方向，而是没意识到副作用。</p>
+
+<table>
+<tr><th>参数</th><th>作用</th><th>OOM 时怎么调</th><th>代价 / 常见误用</th></tr>
+<tr><td><code>gpu_memory_utilization</code></td><td>引擎可预分配的显存比例，直接决定 KV 池大小</td><td>每次下调 5~10 个百分点，常见安全起点 0.85~0.90</td><td>调低即缩小 KV 池，并发能力同步下降；设到 0.98 会挤掉运行时余量，反而更易崩</td></tr>
+<tr><td><code>max_model_len</code></td><td>单请求最大上下文长度，决定单序列 KV 上限</td><td>按业务真实分布调小，而不是照抄模型标称长度</td><td>调小会直接拒掉长请求；照抄模型的 128K 标称值是启动期 OOM 的头号原因</td></tr>
+<tr><td><code>max_num_seqs</code></td><td>同时在批次里运行的最大序列数</td><td>调小以降低并发内存压力</td><td>调太小会浪费 GPU 算力，吞吐塌方；它是并发上限不是队列上限，超出的请求会排队而非报错</td></tr>
+<tr><td><code>max_num_batched_tokens</code></td><td>单次迭代最多处理的 token 数，主要约束 Prefill</td><td>调小可缓解长 prompt 造成的显存尖峰</td><td>调太小会让长 prompt 被切成很多块，TTFT 变长；与 chunked prefill 配合使用</td></tr>
+<tr><td><code>swap_space</code></td><td>预留多少 CPU 内存用于把 KV 块换出显存</td><td>适当调大（GB 为单位），给抢占时的换出留空间</td><td><strong>是 CPU 内存不是磁盘 swap</strong>；换入换出走 PCIe，命中时延迟明显抖动；设太大会挤爆容器内存限额</td></tr>
+<tr><td><code>kv_cache_dtype</code></td><td>KV Cache 的存储精度，可设为 FP8</td><td>转 FP8 可近似把 KV 显存占用减半</td><td>需要硬件支持（Hopper 及以后较稳妥），老卡上开可能反而变慢或精度受损</td></tr>
+<tr><td><code>tensor_parallel_size</code></td><td>把模型权重切到几张卡上</td><td>加卡切分，让单卡权重占用下降、KV 池变大</td><td>引入卡间通信开销，没有 NVLink 时收益会被通信吃掉；一般设为单机 GPU 数</td></tr>
+</table>
+
+<h3>三个二线旋钮</h3>
+
+<table>
+<tr><th>参数</th><th>什么时候才用</th><th>为什么不该常用</th></tr>
+<tr><td><code>cpu_offload_gb</code></td><td>显存实在装不下权重，且能接受大幅降速</td><td>权重走 PCIe 反复搬运，吞吐损失通常是数量级的，只适合离线或调试</td></tr>
+<tr><td><code>block_size</code></td><td>极端碎片场景下想提高块粒度利用率</td><td>调小省内存但增加调度开销，默认值在绝大多数场景已经够好</td></tr>
+<tr><td><code>enforce_eager</code></td><td>排查阶段想拿到干净的错误栈，或显存紧到连图捕获都做不了</td><td>关掉 CUDA Graph 会牺牲吞吐，排查完必须改回去</td></tr>
+</table>
+
+<div class="intuition-box">
+这些旋钮里只有一个是"免费"的：<code>kv_cache_dtype</code> 转 FP8 在支持的硬件上几乎是纯赚（显存减半、精度损失通常可接受）。其余每一个都在同一条守恒线上——<strong>你省下来的显存，一定是从并发能力、上下文长度或吞吐里扣的</strong>。所以调参前先想清楚要牺牲哪一项，而不是挨个试到不报错为止。
+</div>
+
+<h3>调参顺序</h3>
+
+<p>事故后要改启动参数时，按下面的顺序试，代价从低到高：</p>
+
+<div class="arch-diagram">
+  调参决策顺序（每一步先问"能不能不改"）
+
+  ① 业务侧能不能收窄需求？
+     └─ 上下文真的需要 32K 吗 → 调小 max_model_len（代价最低）
+        │ 不能
+        ▼
+  ② 精度侧还有空间吗？
+     └─ KV 能不能走 FP8 → kv_cache_dtype=fp8（硬件支持时几乎白赚）
+        └─ 权重能不能量化 → AWQ / GPTQ
+        │ 不能
+        ▼
+  ③ 并发侧退一步？
+     └─ 降 max_num_seqs / gpu_memory_utilization（牺牲吞吐换稳定）
+        │ 还不够
+        ▼
+  ④ 加硬件
+     └─ 张量并行加卡 → 加实例 → 换更大显存的卡（代价最高但最彻底）
+</div>
+
+<h3>关于 PagedAttention 的一条版本提醒</h3>
+
+<p>vLLM v0.25.0（2026 年 7 月 11 日发布）的 release notes 里明确写了两件事：Model Runner V2 成为所有 dense 模型的默认执行路径，以及 PagedAttention 被移除（PR #47361）。这条容易引起误解，需要说清楚：<strong>被删掉的是那段独立的旧实现代码，不是分页管理 KV 这个技术本身</strong>。块式 KV 分页现在已经融进 FlashAttention、FlashInfer 这些现代 attention 后端和 V1 引擎里，是所有部署都在走的标准路径。所以排查显存问题时，"KV 按块分页管理"这个心智模型依然成立；但如果你在读较老的资料或按老版本参数配置，遇到与 attention 后端相关的报错，先确认自己的版本落在哪一侧。原理层面的分页机制拆解见 <a href="./kv_cache_optimization.html">DP09</a>。</p>
+</div>
+
+<!-- ==================== 六、预防 ==================== -->
+<div class="section" id="s6">
+<h2>六、预防：水位线、告警与预案</h2>
+
+<p>做完前五节，你已经能把事故处理干净。这一节讲的是怎么让下一次的告警在故障发生<em>之前</em>响起——核心是把"KV 池水位"当成容量管理的第一指标，像看数据库连接池一样看它。</p>
+
+<h3>水位线分档</h3>
+
+<table>
+<tr><th>KV 使用率</th><th>状态</th><th>含义</th><th>该做什么</th></tr>
+<tr><td>&lt; 0.70</td><td>健康</td><td>有充足余量应对流量尖峰</td><td>无需动作；长期低于 0.4 说明资源浪费，可考虑缩容或提高并发上限</td></tr>
+<tr><td>0.70 ~ 0.85</td><td>观察</td><td>正常繁忙区间</td><td>确认扩容预案就绪</td></tr>
+<tr><td>0.85 ~ 0.95</td><td>预警</td><td>已接近调度器开始排队的边界</td><td>触发扩容或收紧准入</td></tr>
+<tr><td>&gt; 0.95</td><td>危险</td><td>抢占与超时随时可能出现</td><td>立即限流；持续 5 分钟以上应告警到人</td></tr>
+</table>
+
+<h3>四条最低限度的告警</h3>
+
+<table>
+<tr><th>告警</th><th>触发条件</th><th>为什么需要它</th></tr>
+<tr><td>KV 水位持续高</td><td><code>vllm:gpu_cache_usage_perc</code> &gt; 0.95 持续 5 分钟</td><td>这是所有并发类故障的共同前兆，比错误率早几分钟</td></tr>
+<tr><td>等待队列非空</td><td><code>vllm:num_requests_waiting</code> &gt; 0 持续 2 分钟</td><td>说明容量已经不够，用户正在排队但还没报错</td></tr>
+<tr><td>抢占在增长</td><td><code>vllm:num_preemptions_total</code> 增速非零</td><td>抢占意味着算力在做重复计算，是拥塞的明确信号</td></tr>
+<tr><td>尾延迟劣化</td><td>TTFT P95 超过 SLA 阈值</td><td>直接对齐用户体验，兜住前三条漏掉的情况</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景：</strong>某团队在补上"KV 水位 &gt; 0.95 持续 5 分钟"这条告警之前，全年四次推理服务事故都是由用户投诉先发现的，平均从故障开始到值班介入间隔 11 分钟。补上告警后的两次容量不足事件，都在水位预警阶段就完成了扩容，没有升级成用户可见故障。这条告警的价值不在于它多精确，而在于它比错误率提前——错误率涨起来的时候，用户已经受损了。
+</div>
+
+<h3>Do / Don't</h3>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>在网关层就限制上下文长度和 <code>max_tokens</code>，别把治理责任交给推理引擎</li>
+<li>把 <code>gpu_memory_utilization</code> 留 10~15 个百分点余量，给运行时和碎片留空间</li>
+<li>长上下文请求路由到独立实例，避免它们和短请求抢同一个 KV 池</li>
+<li>按 <a href="./inference_benchmark_methodology.html">DP16</a> 的阶梯压测定期跑，把拐点位置写进容量文档</li>
+<li>告警配在 KV 水位和等待队列上，它们比错误率早</li>
+<li>每次改启动参数都记录变更时间，事故排查时这是最有用的线索</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>别把 <code>gpu_memory_utilization</code> 拉到 0.98 去榨最后一点显存</li>
+<li>别照抄模型标称的最大上下文长度当 <code>max_model_len</code></li>
+<li>别用重启当常规手段，它掩盖问题还清空前缀缓存</li>
+<li>别把 <code>nvidia-smi</code> 的显存占用率当成 KV 水位来看</li>
+<li>别在没有独立压测环境的情况下直接在生产调参</li>
+<li>别只配错误率告警——它响的时候用户已经在受损了</li>
+</ul>
+</div>
+</div>
+
+<div class="checklist">
+<ul>
+<li>网关限流开关在哪里、谁有权限改，值班同学是否演练过</li>
+<li>强制覆盖 <code>max_tokens</code> 的配置项是否存在且可热更新</li>
+<li>实例摘流与恢复的操作步骤是否成文，冷启动耗时是否实测过</li>
+<li>备用容量在哪里，扩容需要多久，是否有预热好的实例</li>
+<li>降级路径是什么：切小模型、返回缓存答案，还是直接返回友好提示</li>
+<li>监控面板是否覆盖四个积压点，故障期间的高精度数据保留多久</li>
+<li>事故现场快照的采集清单是否明确（监控截图、日志、启动参数、流量结构）</li>
+<li>复盘模板是否包含"这次的告警为什么没有提前响"这一栏</li>
+</ul>
+</div>
+
+<div class="intuition-box">
+容量规划的本质是承认一件事：<strong>你不可能让服务扛住任意流量，只能让它在超载时以可预期的方式退化。</strong>可预期的退化是有人排队、有人收到 429、长请求被拒；不可预期的退化是进程崩溃、全量请求超时。这两者之间的差别，几乎全部来自准入侧有没有闸门。
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>nvidia-smi 显示显存占用 95%，是不是快 OOM 了？</summary>
+<div class="answer">大概率不是。vLLM 这类引擎在启动时就按 <code>gpu_memory_utilization</code> 把 KV Cache 池一次性预分配好，所以从服务起来的第一秒起，显卡占用率就会稳定在设定值附近，这是设计如此而不是压力信号。判断 KV 是否真的吃紧，要看池内水位指标 <code>vllm:gpu_cache_usage_perc</code>——它表示预分配的池子里实际用掉了多少。举个例子：<code>gpu_memory_utilization=0.9</code> 时 nvidia-smi 恒显示 90%，但如果池水位只有 0.3，说明并发还有很大余量。把这两个数字搞混，是显存类故障排查中最常见的第一步错误。</div>
+</details>
+
+<details>
+<summary>为什么要先止损再定位？直接找到根因不是更彻底吗？</summary>
+<div class="answer">因为定位耗时的方差极大而止损耗时的方差极小。把 MTTR 拆成"发现 + 定位 + 修复"，其中定位这一项可能是五分钟也可能是两小时，取决于问题的隐蔽程度；而降并发这个动作无论根因是什么都能在一分钟内生效。先止损，等于把用户受损时长从"取决于诊断难度"变成"取决于操作速度"。止损之后服务已经可用，事故等级从 P0 降到 P2，你可以从容地花两小时把根因搞透，这时候的排查质量反而比在压力下更高。需要注意的是止损前要留好现场快照，否则降载后指标回归正常，最有价值的曲线就丢了。</div>
+</details>
+
+<details>
+<summary>显存缓慢上涨，是不是 KV Cache 泄漏了？</summary>
+<div class="answer">在采用分页 KV 管理的引擎里几乎不可能。KV 池是启动时一次性预分配的固定大小空间，请求结束时占用的块归还池子，池子总量不会增长，所以"KV 泄漏"这个说法本身就和它的内存模型矛盾。真正在涨的通常是三者之一：池外的 GPU 显存（某些自定义算子或多模态预处理没释放中间张量）、CPU 侧 RSS（请求对象堆积、日志缓冲、Prometheus 指标标签基数爆炸），或者根本没在涨——你看的是池水位随流量的正常波动。区分方法很便宜：把流量停掉五分钟，真泄漏不会回落，池水位一定掉回基线。</div>
+</details>
+
+<details>
+<summary>swap_space 调大能不能彻底解决 OOM？</summary>
+<div class="answer">不能，它是个缓冲垫不是扩容手段，而且这个参数最容易被误解。首先它指的是预留多少 <strong>CPU 内存</strong>（GB 为单位）用于把 KV 块换出显存，跟操作系统的磁盘 swap 完全无关，设太大会挤爆容器的内存限额。其次它的作用发生在抢占时刻：调度器决定把某个序列踢出显存，与其丢弃后重算，不如先换到 CPU 内存里，之后再换回来。但换入换出走 PCIe，一旦频繁触发，延迟抖动会非常明显，TPOT 曲线会出现毛刺。所以它适合用来削平偶发的容量尖峰，如果稳态就要靠它撑着，说明容量本身不够，该做的是降并发或扩容。</div>
+</details>
+
+<details>
+<summary>并发升高后 OOM，为什么降 max_num_seqs 有时候没用？</summary>
+<div class="answer">因为 KV 池的占用是按 token 数算的，不是按请求数算的。<code>max_num_seqs</code> 限制的是同时在批次里的序列条数，但如果进来的是超长上下文请求，少数几条就能吃掉大半个池子。假设池子能装 40 个 2K 上下文的请求，那么 5 个 16K 的请求进来池子就满了——这时候把 <code>max_num_seqs</code> 从 64 降到 32 完全不解决问题，因为瓶颈根本不在条数上。正确做法是同时约束长度维度：在网关按 token 数拒绝超长请求，或调小 <code>max_model_len</code>，或者把长上下文流量路由到独立实例，让它不和短请求抢同一个池子。这也解释了为什么 QPS 没涨服务却挂了——涨的是单请求的上下文长度。</div>
+</details>
+
+<details>
+<summary>TTFT 变长，是不是 Prefill 计算慢了？</summary>
+<div class="answer">多数情况下不是。TTFT 是个复合指标，包含排队等待和 Prefill 计算两段，服务过载时膨胀的几乎总是前者。典型形态是：Prefill 本身只花 80 毫秒，但请求在 waiting 队列里躺了 2 秒，用户测到的 TTFT 就是 2.08 秒。区分方法是看 <code>vllm:num_requests_waiting</code>——如果 TTFT 抬升的同时等待队列也在涨，那就是准入侧排队。这个区分之所以重要，是因为两者的处置方向相反：排队问题要在准入侧解决（限流、缩短上下文、扩容），而真正的 Prefill 变慢才需要动 chunked prefill、<code>max_num_batched_tokens</code> 这类计算侧参数。方向搞反了会越调越糟。</div>
+</details>
+
+<details>
+<summary>重启实例为什么不算好的止损手段？</summary>
+<div class="answer">推理实例的重启成本远高于普通 Web 服务。权重要从磁盘或对象存储重新加载进显存，几十 GB 的模型这一步就要几十秒；接着引擎做显存探测和 KV 池预分配；没关 CUDA Graph 的话还要走一遍图捕获预热。合计通常在一到三分钟量级，这段时间容量是真空的。更隐蔽的代价是前缀缓存被清空——那些被大量请求共享的系统提示词 KV 块全没了，重启后头几分钟本该命中缓存的请求都要重新 Prefill，实际吞吐比稳态还低，很容易一放回流量就再次被打挂，形成重启循环。重启只在两种情况下值得：怀疑进程内状态已损坏，或者必须改启动参数才能恢复。</div>
+</details>
+
+<details>
+<summary>应该配哪些告警才能在故障前就发现问题？</summary>
+<div class="answer">最低限度四条，按提前量排序。第一条是 KV 水位：<code>vllm:gpu_cache_usage_perc</code> 超过 0.95 持续 5 分钟，这是所有并发类故障的共同前兆。第二条是等待队列：<code>vllm:num_requests_waiting</code> 大于 0 持续 2 分钟，说明容量已经不够、用户在排队但还没报错。第三条是抢占计数 <code>vllm:num_preemptions_total</code> 的增速非零，抢占意味着算力在做重复计算，是拥塞的明确信号。第四条是 TTFT P95 超 SLA，直接对齐用户体验，兜住前三条漏掉的情况。关键在于前三条都是<strong>前兆指标</strong>——等错误率涨起来再告警，用户已经受损了，那时候能做的只有止损而不是预防。</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; 显存 OOM 与高并发故障处置 &middot; DP03</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

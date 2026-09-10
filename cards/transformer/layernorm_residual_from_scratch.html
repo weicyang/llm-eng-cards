@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T13 · LayerNorm 与残差连接：梯度传播与训练稳定性</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、残差连接：一行加法修出梯度高速公路</a>
+<a href="#s2">二、LayerNorm：把每个 Token 拉回均值 0 方差 1</a>
+<a href="#s3">三、Add &amp; Norm：每个子层的标准组合</a>
+<a href="#s4">四、Pre-Norm vs Post-Norm：一行代码的稳定性鸿沟</a>
+<a href="#s5">五、LayerNorm vs BatchNorm：为什么 NLP 选了前者</a>
+<a href="#s6">六、实现汇总与工程要点</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>T13 · LayerNorm 与残差连接：梯度传播与训练稳定性</h1>
+<p class="subtitle">残差 F(x)+x / 梯度消失与高速公路 / LayerNorm 四步实现 / Add &amp; Norm / Pre-Norm vs Post-Norm / LN vs BN</p>
+
+<div class="intuition-box">
+<p>残差连接和 LayerNorm 是 Transformer 里最容易被轻视的一对"配角"：代码加起来不到 20 行，但一个负责让梯度能活着流回浅层，一个负责让数值别在深层滚雪球式失控。缺了任何一个，Transformer 都堆不深、训不稳。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、残差连接：一行加法修出梯度高速公路</h2>
+
+<p><span class="term">残差连接（Residual Connection）</span>的公式只有一行：输出 = F(x) + x。F(x) 是子层（Attention 或 FFN）的计算结果，x 是子层的输入，两者直接相加。这个设计最早来自 ResNet，它解决的是深层网络的根本顽疾——<span class="term">梯度消失</span>。</p>
+
+<p>反向传播时，梯度要从损失函数一路流回第一层，每穿过一层就要乘一次该层的局部导数。如果这些导数普遍小于 1（比如 Sigmoid 激活区、初始化过小的权重），链式相乘下来梯度呈指数级缩小：0.9 的 50 次方约等于 0.005，前几层几乎收不到训练信号，参数原地踏步。网络越深，这个问题越致命。</p>
+
+<div class="arch-diagram">
+残差连接 = 给梯度修一条绕行高速公路
+
+前向：                       反向（梯度流向）：
+
+   x ─────────┐                 ∂L/∂x ◄─────── ∂L/∂输出
+   │          │ 恒等路径          │              │
+   ▼          │ (原样加回)        │  +  直达通道 ─┘
+  F(x)        │                  │  (绕过 F 的导数)
+   │          │                  ▼
+   ▼          │              梯度 = ∂L/∂输出·F'(x) + ∂L/∂输出
+  F(x) ──► ⊕ ─┘                        ↑
+        输出 = F(x) + x          第二项不乘任何层内导数，
+                                 保证梯度至少能"全额直达"浅层
+</div>
+
+<p>残差连接妙在反向传播的那一刻：对 x + F(x) 求导，梯度分成两路，一路经过 F 的导数，另一路<strong>恒等于 1</strong>，直接绕过子层流向浅层。无论 F 的导数多小，梯度总和里永远有这条"全额直达"的分量。深层网络的梯度不再依赖层层相乘的好运气，训练 100 多层才成为可能。</p>
+
+<p>代码实现直接到令人发指：</p>
+
+<pre><code>import numpy as np
+
+def residual_connection(x, sublayer_output):
+    """x: 子层输入 (L, d_model)；sublayer_output: 子层输出 (L, d_model)"""
+    return x + sublayer_output</code></pre>
+
+<pre><code>L, d_model = 7, 8
+np.random.seed(42)
+x = np.random.randn(L, d_model)
+sublayer_out = np.random.randn(L, d_model)
+
+output = residual_connection(x, sublayer_out)
+print(f"输入: {x.shape}, 残差输出: {output.shape}")  # 均为 (7, 8)</code></pre>
+
+<p>就是一个加法，形状完全不变。但正是这个加法，把"深度"从训练的敌人变成了朋友。</p>
+
+<div class="intuition-box">
+<p>残差连接让每一层的学习目标从"算出完整答案"降级为"在输入基础上修正一点点"——学不会新东西时，F(x) 趋近 0 即可无损放行原信息。深层网络因此可以"只添不乱"。</p>
+</div>
+
+<table>
+<tr><th>情形</th><th>梯度到达浅层的强度</th><th>可训练深度</th><th>典型表现</th></tr>
+<tr><td>无残差连接</td><td>逐层相乘，指数衰减</td><td>十几层即困难</td><td>浅层参数几乎不更新，损失平台期</td></tr>
+<tr><td>有残差连接</td><td>恒等路径保底，至少全额直达</td><td>上百层可行</td><td>GPT-3 96 层、Llama-2 80 层稳定训练</td></tr>
+</table>
+</div>
+
+<div class="section" id="s2">
+<h2>二、LayerNorm：把每个 Token 拉回均值 0 方差 1</h2>
+
+<p>残差相加之后，新的隐患浮现：两路数值叠加，向量各维度的范围可能变得很大或极不均匀——有的维度飙到几十，有的贴近 0。这种数值漂移会顺着残差流逐层累积，让后续层的输入分布飘忽不定，训练难以收敛。<span class="term">LayerNorm（层归一化）</span>就是为此而生：对每个 Token 的向量单独做归一化，把均值拉回 0、方差拉回 1。</p>
+
+<div class="formula">LayerNorm(x) = (x − μ) / (σ + ε) · γ + β</div>
+
+<p>拆开是四步：先算这个向量的均值 μ，再算标准差 σ，然后用 (x−μ)/(σ+ε) 标准化，最后乘 γ、加 β 做可学习的缩放与平移。其中 <span class="term">ε</span> 是一个很小的常数（如 1e-5），作用是防止分母为 0——当某个向量所有维度恰好相同时 σ=0，除法会直接产生 NaN。</p>
+
+<div class="arch-diagram">
+LayerNorm 四步流水线（对单个 Token 的 d_model 维向量）
+
+ x = [x₁, x₂, ..., x_d]
+   │
+   ├─ ① 求均值     μ = mean(x)              沿 axis=-1（特征维）
+   ├─ ② 求标准差   σ = std(x)               每个 Token 独立计算
+   ├─ ③ 标准化     (x − μ) / (σ + ε)        → 均值 0、方差 1
+   └─ ④ 仿射变换   · γ + β                  γ, β 是可学习参数
+                                            形状 (d_model,)，逐维广播
+ 输出形状不变：(L, d_model) → (L, d_model)
+</div>
+
+<p>γ 和 β 的存在常被初学者忽略：强制均值 0 方差 1 是一种"一刀切"，模型可能需要某些维度保持大数值、某些维度带偏移。γ（缩放）和 β（偏移）让模型自己决定"归一化到什么程度"——需要时它甚至能学回恒等变换，归一化因此不会损失表达能力。</p>
+
+<p>类实现分两段。初始化时 γ 全 1、β 全 0，等价于一开始就是"纯标准化"：</p>
+
+<pre><code>class LayerNorm:
+    def __init__(self, d_model, eps=1e-5):
+        self.gamma = np.ones(d_model)   # 可学习缩放，初始为 1
+        self.beta = np.zeros(d_model)   # 可学习偏移，初始为 0
+        self.eps = eps</code></pre>
+
+<p>前向传播的关键在 <code>axis=-1</code> 和 <code>keepdims=True</code>：沿最后一维（特征维）统计，并保持维度以便广播：</p>
+
+<pre><code>    def forward(self, x):             # x: (L, d_model)
+        mu = x.mean(axis=-1, keepdims=True)      # (L, 1)
+        sigma = x.std(axis=-1, keepdims=True)    # (L, 1)
+        x_norm = (x - mu) / (sigma + self.eps)   # (L, d_model)
+        return self.gamma * x_norm + self.beta   # (L, d_model)</code></pre>
+
+<p>效果验证——故意把输入放大 10 倍模拟数值漂移：</p>
+
+<pre><code>x = np.random.randn(7, 8) * 10   # 标准差约 9.87 的"失控"输入
+ln = LayerNorm(d_model=8)
+out = ln.forward(x)
+print(f"归一化前 - 均值: {x.mean():.2f}, 标准差: {x.std():.2f}")
+print(f"归一化后 - 均值: {out.mean():.4f}, 标准差: {out.std():.4f}")
+# 归一化前 - 均值: -0.37, 标准差: 9.87
+# 归一化后 - 均值: 0.0000, 标准差: 1.0000</code></pre>
+
+<p>标准差从 9.87 被拉回 1.00，数值回到合理区间，形状不变。</p>
+
+<div class="intuition-box">
+<p>LayerNorm 像每一层楼入口的"稳压器"：不管上一层输出的电压波动多大，先稳压成标准值再进屋。深层网络因此不会被前几层的数值漂移逐级放大拖垮。</p>
+</div>
+
+<div class="highlight">
+<strong>生产案例 · eps 取值不当引爆混合精度训练：</strong>某推荐团队把一个 12 层 Transformer 排序模型切到 FP16 混合精度训练，第 12,400 步突然 loss 变 NaN。排查发现复用的 LayerNorm 沿用了 ε=1e-12 的默认值，而 FP16 最小正规数约 6e-5——当个别样本的向量方差极小时，σ+ε 在 FP16 下被舍入成 σ，除法结果冲出数值范围。把 ε 改为 1e-5 并全程开启梯度裁剪后，连续 3 个完整训练周期未再出现 NaN。教训：ε 不是装饰参数，它的取值必须与训练精度匹配。
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、Add &amp; Norm：每个子层的标准组合</h2>
+
+<p>在 Transformer 里，残差连接和 LayerNorm 从来不分家，标准写法叫 <span class="term">Add &amp; Norm</span>：先加（残差），再归一化。每个子模块——无论 Attention 还是 FFN——后面都挂一个这样的结构，一层 Block 因此包含两个 Add &amp; Norm。</p>
+
+<div class="formula">Add &amp; Norm(x, F(x)) = LayerNorm(x + F(x))</div>
+
+<pre><code>def add_and_norm(x, sublayer_output, layer_norm):
+    """x: 子层输入；sublayer_output: 子层输出；layer_norm: LayerNorm 实例"""
+    return layer_norm.forward(x + sublayer_output)</code></pre>
+
+<p>串起来看一层 Block 的完整数据流：</p>
+
+<pre><code>ln1, ln2 = LayerNorm(d_model), LayerNorm(d_model)
+
+after_attn = add_and_norm(x, attn_output, ln1)     # Attention → Add &amp; Norm
+after_ffn = add_and_norm(after_attn, ffn_output, ln2)  # FFN → Add &amp; Norm
+print(f"输入: {x.shape} → 输出: {after_ffn.shape}")  # (7, 8) → (7, 8)</code></pre>
+
+<p>注意两个 LayerNorm 是<strong>独立实例</strong>，各有一组 γ/β——Attention 子层和 FFN 子层的数值特性不同，归一化后的缩放偏移也应当独立学习。</p>
+
+<div class="intuition-box">
+<p>残差与归一化是互补的一对：残差保证信息"通"（梯度直达、信息不丢），归一化保证信号"稳"（数值不漂、分布不乱）。一通一稳，深层网络才有立足之地。</p>
+</div>
+
+<table>
+<tr><th>组件</th><th>公式</th><th>核心作用</th><th>缺了会怎样</th></tr>
+<tr><td>残差连接</td><td>F(x) + x</td><td>梯度高速公路，防消失</td><td>深层网络梯度指数衰减，浅层学不动</td></tr>
+<tr><td>LayerNorm</td><td>(x−μ)/(σ+ε)·γ+β</td><td>逐 Token 稳定数值分布</td><td>数值漂移逐层累积，loss 震荡难收敛</td></tr>
+<tr><td>Add &amp; Norm</td><td>LayerNorm(x + F(x))</td><td>两者捆绑，每子层标配</td><td>Block 无法稳定堆叠</td></tr>
+</table>
+</div>
+
+<div class="section" id="s4">
+<h2>四、Pre-Norm vs Post-Norm：一行代码的稳定性鸿沟</h2>
+
+<p>上一节写的是 <span class="term">Post-Norm</span>（也叫 Post-LN）：先算子层、相加、再归一化，这是原始论文的做法。但现代大模型（GPT-3、Llama、Mistral）几乎都改成了 <span class="term">Pre-Norm</span>：先归一化、再算子层、残差加的是<strong>未归一化的原始输入</strong>。</p>
+
+<div class="arch-diagram">
+Post-Norm（原始 Transformer）          Pre-Norm（现代大模型）
+
+    x ────────┐                          x ──┬────────────┐
+    │         │                            │ │            │
+    ▼         │                            │ ▼            │
+  F(·)        │                          LayerNorm        │
+    │         │                            │              │
+    ▼         │                            ▼              │
+   ⊕ ◄────────┘                          F(·)             │
+    │                                      │              │
+    ▼                                      ▼              │
+ LayerNorm                                ⊕ ◄─────────────┘
+    │                                      │
+    ▼                                      ▼
+  x' = LN(x + F(x))                     x' = x + F(LN(x))
+
+归一化在残差"之后"                     归一化在残差"之内"
+</div>
+
+<pre><code># Post-Norm（原始 Transformer）
+def post_norm(x, sublayer_fn, layer_norm):
+    return layer_norm.forward(x + sublayer_fn(x))
+
+# Pre-Norm（现代大模型）
+def pre_norm(x, sublayer_fn, layer_norm):
+    return x + sublayer_fn(layer_norm.forward(x))</code></pre>
+
+<p>两者只差一行代码，训练行为却大不相同。Xiong 等人 2020 年的理论分析（《On Layer Normalization in the Transformer Architecture》）给出了关键解释：<strong>Post-Norm 在初始化时，靠近输出层的参数期望梯度很大</strong>，大学习率一上来就猛冲，训练极不稳定，必须靠学习率 warm-up 先小步走；而 <strong>Pre-Norm 的梯度在初始化时行为良好</strong>，甚至可以完全去掉 warm-up。</p>
+
+<p>根因在梯度路径：Post-Norm 里每层残差流的梯度都要再过一次 LayerNorm 的雅可比矩阵，深度越深、靠近输入的层梯度衰减越严重；Pre-Norm 的残差主干完全不被归一化拦截，梯度可以无损直达底层——这与第一节讲的"高速公路"是同一件事，Pre-Norm 把高速公路修得更彻底。</p>
+
+<div class="intuition-box">
+<p>Post-Norm 是"先干活再量体温"，每层出口都被归一化卡一道，梯度层层衰减；Pre-Norm 是"先量体温再干活"，残差主干畅通无阻，深层训练自然稳。</p>
+</div>
+
+<table>
+<tr><th>维度</th><th>Post-Norm</th><th>Pre-Norm</th></tr>
+<tr><td>归一化位置</td><td>残差相加之后</td><td>子层计算之前</td></tr>
+<tr><td>残差主干</td><td>每层被 LayerNorm 截断</td><td>全程畅通无阻</td></tr>
+<tr><td>训练稳定性</td><td>依赖 warm-up，深层易爆 loss</td><td>初始化即稳定，可免 warm-up</td></tr>
+<tr><td>深层表现</td><td>收敛后上限可能略高，但难以到达</td><td>深层可训练性好，是几十层以上模型的默认</td></tr>
+<tr><td>代表模型</td><td>原始 Transformer、早期 BERT</td><td>GPT-3、Llama、Mistral</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例 · 模型加深 4 倍，Post-Norm 翻车、Pre-Norm 救场：</strong>某团队把 1.3B 语言模型从 12 层加深到 48 层。Post-Norm 版本即便配了 4000 步 warm-up，仍在第 8k–12k 步区间出现 3 次 loss 尖峰，梯度范数峰值冲到 137，两次实验被迫回滚检查点；切换为 Pre-Norm 后完全去掉 warm-up，全程梯度范数稳定在 4.8 以内，一次跑通 300B token 训练，因取消 warm-up 和减少重启节省了约 9% 的总训练时长，下游评测与 Post-Norm 成功跑通的对照组持平。层数越深，这行代码的差距越大。
+</div>
+
+<p>补充一点公允性：Pre-Norm 并非没有代价。研究发现它的残差流允许隐藏状态随层数增长（"massive activations" 现象），且同深度下最终性能有时略逊于精心调好的 Post-Norm。后续工作如 DeepNorm 用 α·x + F(x) 的缩放残差折中两者，DeepScaleLM 等初始化方案则让上百层的 Pre/Post 模型都能稳定训练。但对绝大多数实践场景，"深层选 Pre-Norm"仍是可靠默认。</p>
+</div>
+
+<div class="section" id="s5">
+<h2>五、LayerNorm vs BatchNorm：为什么 NLP 选了前者</h2>
+
+<p>归一化不是只有 LayerNorm 一种。CV 领域的主力是 <span class="term">BatchNorm（批归一化）</span>，它沿 batch 维度统计：对同一个特征，把一批样本的取值拉回均值 0 方差 1。这个设计搬到 NLP 会水土不服，原因有三。</p>
+
+<div class="arch-diagram">
+统计维度的差异（输入张量 shape = (B, L, d_model)）
+
+BatchNorm：沿 batch 维统计           LayerNorm：沿特征维统计
+        ┌──────► 样本1  [■ ■ ■ ■]            样本1 [■ ■ ■ ■] ◄─┐
+统计同一  │       样本2  [■ ■ ■ ■]      统计一个 Token 的
+特征在不  │       样本3  [■ ■ ■ ■]      全部特征，逐 Token 独立
+同样本间  ▼       ...                   与 batch 中其他样本无关
+的分布                                 B、L 都不影响统计结果
+依赖 batch 大小与序列长度               天然兼容变长序列、batch=1
+</div>
+
+<p>第一，<strong>序列长度可变</strong>。NLP 的输入长短不一，padding 位置会污染 batch 统计量；LayerNorm 只看单个 Token 自己的特征维，与序列长度无关。第二，<strong>batch 统计不稳定</strong>。BatchNorm 的均值方差依赖 batch 内样本，batch 变小（大模型训练常见）统计噪声就变大，推理时还得维护 running mean/var；LayerNorm 的统计完全由样本自身决定，训练推理行为一致。第三，<strong>自回归生成的约束</strong>。逐 token 解码时 batch 往往只有 1，BatchNorm 的 batch 统计无从谈起，LayerNorm 则照常工作。</p>
+
+<div class="intuition-box">
+<p>BatchNorm 是"横向对齐"——让不同样本的同一特征看齐；LayerNorm 是"自我校准"——让每个 Token 的向量自己与自己看齐。语言序列长短不一、生成时逐条进行，只有自我校准不挑环境。</p>
+</div>
+
+<table>
+<tr><th>维度</th><th>BatchNorm</th><th>LayerNorm</th><th>RMSNorm（Llama 变体）</th></tr>
+<tr><td>统计轴</td><td>batch 维（跨样本）</td><td>特征维（单 Token 内）</td><td>特征维（单 Token 内）</td></tr>
+<tr><td>统计量</td><td>均值 + 方差</td><td>均值 + 方差</td><td>只用均方根，省去均值</td></tr>
+<tr><td>对 batch 大小的敏感性</td><td>高，小 batch 噪声大</td><td>无依赖</td><td>无依赖</td></tr>
+<tr><td>变长序列 / 推理行为</td><td>受 padding 污染，需 running stats</td><td>训练推理一致</td><td>训练推理一致</td></tr>
+<tr><td>主场</td><td>CNN / 视觉任务</td><td>Transformer 全系</td><td>Llama、Mistral 等现代 LLM</td></tr>
+</table>
+
+<p>再进一步：Llama 系列使用的 <span class="term">RMSNorm</span> 是 LayerNorm 的减法版——去掉"减均值"和偏置 β，只用均方根做缩放，少算一遍均值、少一组参数，效果几乎不变而计算更省。</p>
+
+<div class="highlight">
+<strong>生产案例 · RMSNorm 替换的免费加速：</strong>某团队训练 32 层 7B 模型时把 LayerNorm 替换为 RMSNorm：每个 Norm 算子省去均值计算与 β 加法，单层归一化耗时下降约 8%。由于归一化在每层出现 2 次且处于显存带宽敏感路径，端到端训练吞吐提升 6.4%，单 token 推理延迟减少约 0.5ms；在相同 token 预算下，困惑度与 LayerNorm 对照组相差 0.02，统计上不可区分。这就是"少即是多"：归一化做得更精简，反而更快更稳。
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、实现汇总与工程要点</h2>
+
+<p>把全文的实现收拢成一张全景图——这就是每个 Transformer Block 骨架的真实写照：</p>
+
+<div class="arch-diagram">
+Pre-Norm 风格的一层 Block（现代写法）
+
+ 输入 x (L, d_model)
+   │
+   ├─────────────┐ 残差主干（不经过任何归一化）
+   ▼             │
+ LayerNorm₁      │
+   ▼             │
+ Attention       │
+   ▼             │
+   ⊕ ◄───────────┘   x₁ = x + Attn(LN₁(x))
+   │
+   ├─────────────┐ 残差主干
+   ▼             │
+ LayerNorm₂      │
+   ▼             │
+    FFN          │
+   ▼             │
+   ⊕ ◄───────────┘   x₂ = x₁ + FFN(LN₂(x₁))
+   │
+   ▼
+ 输出 (L, d_model) —— 形状始终不变，可无限堆叠
+</div>
+
+<div class="intuition-box">
+<p>读任何开源 Transformer 源码，第一眼先找两个东西：残差加在归一化之前还是之后（Pre/Post），归一化是 LayerNorm 还是 RMSNorm。这两处决定了模型的"体质"，其余 Attention、FFN 细节都是在这副骨架上做文章。</p>
+</div>
+
+<h3>工程要点速查</h3>
+<table>
+<tr><th>要点</th><th>说明</th></tr>
+<tr><td>统计轴 axis=-1</td><td>LayerNorm 沿最后一维（特征维）统计，keepdims=True 保证广播</td></tr>
+<tr><td>eps 与精度匹配</td><td>FP32 常用 1e-5；FP16/BF16 下不要用 1e-12 之类的过小值</td></tr>
+<tr><td>γ/β 初始化</td><td>γ=1、β=0，起始等价纯标准化，训练中按需学习</td></tr>
+<tr><td>每个子层独立实例</td><td>Attention 与 FFN 各用一组 γ/β，不要共享</td></tr>
+<tr><td>深层优先 Pre-Norm</td><td>几十层以上的模型默认 Pre-Norm，可免 warm-up 试跑验证稳定性</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>监控训练中的梯度范数与 loss 曲线方差，它们是归一化位置选择的直接反馈</li>
+<li>加深模型前先做 200–500 步的稳定性试跑，再烧全量算力</li>
+<li>混合精度训练时把 eps、梯度裁剪一起检查一遍</li>
+<li>读源码时先定位 Pre/Post-Norm 与 Norm 类型，再读其余细节</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在 NLP 序列模型里直接用 BatchNorm 而不做变长适配</li>
+<li>不要去掉残差连接去"省计算"——它省下的加法换来的是训练崩溃</li>
+<li>不要在 Pre/Post-Norm 之间混用子层，一致性比局部最优重要</li>
+<li>不要默认 ε 越小越好，它与数值精度强相关</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>残差连接为什么能缓解梯度消失？</summary>
+<div class="answer">反向传播时，残差结构 x + F(x) 对输入 x 的导数包含一个恒等于 1 的项，梯度因此拥有一条绕过子层内部运算的直达通道。无论 F 的局部导数多小，浅层至少能收到这条"全额分量"的训练信号，梯度不再依赖层层导数相乘的好运气。这使得上百层的网络也能有效训练，同时前向上它让每层只需学习"在输入基础上的残差修正"，学不好时 F(x) 趋近 0 即可无损放行，降低了深层网络的优化难度。</div>
+</details>
+
+<details>
+<summary>LayerNorm 里的 γ 和 β 为什么必须存在？</summary>
+<div class="answer">标准化强制每个向量均值 0 方差 1，这是一种统一约束，但模型可能希望某些维度保留较大的幅值或特定偏移才能表达好特征。γ（逐维缩放）和 β（逐维偏移）是可学习参数，给模型留出了"撤销或调整归一化"的自由度：若某个维度确实需要原始尺度，网络可以把对应的 γ 学大、β 学到合适位置，理论上甚至能恢复恒等映射。因此归一化带来了稳定性，却没有牺牲表达能力。初始化时 γ=1、β=0，等价于纯标准化，随后由训练逐步调整。</div>
+</details>
+
+<details>
+<summary>Pre-Norm 和 Post-Norm 该怎么选？</summary>
+<div class="answer">层数较深（几十层以上）或从零开始预训练时，优先选 Pre-Norm：它的残差主干不被归一化截断，初始化时梯度行为良好，训练稳定，甚至可以去掉学习率 warm-up，GPT-3、Llama 等现代大模型都这么做。Post-Norm 在精心调参（尤其充分 warm-up）的情况下，同深度的最终性能上限可能略高，但对超参数敏感，深层容易 loss 爆炸，更常见于浅层模型或复现原始论文的场景。折中方案如 DeepNorm 通过缩放残差兼顾两者，适合冲击上百层深度的实验。</div>
+</details>
+
+<details>
+<summary>为什么 Transformer 用 LayerNorm 而不是 BatchNorm？</summary>
+<div class="answer">核心原因是统计轴的适配性。BatchNorm 沿 batch 维统计同一特征在不同样本间的分布，它依赖稳定的 batch 大小，小 batch 下统计噪声大，推理时还要维护 running mean/var；NLP 的序列长短不一，padding 会污染统计量，自回归解码时 batch 常常为 1，BatchNorm 难以工作。LayerNorm 沿单个 Token 的特征维统计，与 batch 大小、序列长度完全解耦，训练和推理行为一致，天然适配变长文本与逐 token 生成。因此在 Transformer 全系（包括 ViT）中 LayerNorm 及其变体 RMSNorm 是标准配置。</div>
+</details>
+
+<details>
+<summary>eps 到底取多少？为什么不是越小越好？</summary>
+<div class="answer">eps 的作用是在方差趋近 0 时保护除法不产生 NaN 或无穷大，它会被直接加进分母，因此必须大于训练精度下的有效分辨率。FP32 下 1e-5 是常见默认值，足够小不扭曲结果、又足够大提供保护。FP16 的最小正规数约 6e-5，若沿用 1e-12 这类"看起来更精确"的值，加进分母后会被直接舍入丢弃，保护失效，遇到方差极小的样本就会除出超大数乃至 NaN。BF16 精度更低，同理需要 1e-5 量级。结论是 eps 与数值精度绑定，混合精度训练时必须专项检查。</div>
+</details>
+
+<details>
+<summary>RMSNorm 相比 LayerNorm 简化了什么，为什么效果几乎不变？</summary>
+<div class="answer">RMSNorm 去掉了"减均值"步骤和偏置参数 β，只用均方根对向量做缩放：x / RMS(x) · γ。其动机是实证发现归一化的收益主要来自"缩放不变性"（把向量拉回统一幅值），而"平移不变性"（减均值）贡献甚微。省掉均值计算后，每个归一化算子少一遍遍历、少一组参数，在显存带宽敏感的路径上能带来可观加速——有实现报告 7% 以上的端到端训练提速，Llama 等模型采用后困惑度与 LayerNorm 基本持平。它是"用可证明无害的简化换工程效率"的典范。</div>
+</details>
+
+<details>
+<summary>一层 Block 里两个 Add &amp; Norm 可以共享 LayerNorm 参数吗？</summary>
+<div class="answer">技术上可行，实践中不推荐。Attention 子层与 FFN 子层的输出数值特性差异明显——前者是加权求和、幅值受 softmax 约束，后者经过激活函数、稀疏性更强，二者相加后的分布也不同。各自独立的 γ/β 能让两个位置学到针对性的缩放与偏移，参数量代价却极小（每组仅 2×d_model 个）。共享属于"省了芝麻丢了西瓜"的优化：参数省不了多少，却可能迫使网络用子层内部的权重去补偿归一化的错位，得不偿失。主流实现无一例外地使用独立实例。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

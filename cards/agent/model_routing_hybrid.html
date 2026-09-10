@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A63 · Agent 混合路由优化：从统一策略到分级路由</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么需要路由：难度长尾与成本-质量不对称</a>
+<a href="#s2">二、三种路由策略：规则、模型、混合</a>
+<a href="#s3">三、路由器训练数据的三条来源</a>
+<a href="#s4">四、分类器 vs 评分器与冷启动两步走</a>
+<a href="#s5">五、级联降级：成本账与三大坑</a>
+<a href="#s6">六、选型决策与落地路线图</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>A63 · Agent 混合路由优化：从统一策略到分级路由</h1>
+<p class="subtitle">Hybrid Model Routing — 任务难度长尾 / 规则·模型·兜底三层分流 / 评分器与冷启动 / 级联降级成本账</p>
+
+<div class="intuition-box">
+<p>路由的本质不是"换便宜模型"，而是承认任务难度与模型能力之间存在结构性不对称——用规则拦截确定的简单、用模型判断模糊的中间、用大模型兜底不确定的复杂，让每一分钱都花在真正需要它的请求上。</p>
+</div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、为什么需要路由：难度长尾与成本-质量不对称</h2>
+
+<p>很多团队上线 Agent 的第一反应是"全用最强的模型保质量"。跑到生产环境一看账单才发现：<span class="term">一刀切</span>（所有请求无差别走同一个旗舰模型）付出的不是模型能力的价格，而是模型溢价的价格。用户问一句"你好"，旗舰模型回复"你好！有什么可以帮你的？"，花费约 0.03 美元、延迟 2 秒；同样的回复换成小模型，质量没有任何可感知差异，成本却低一个数量级。</p>
+
+<p>把生产流量拆开看，"一刀切"走不通的根源是两个不对称：</p>
+
+<ul>
+<li><strong>任务难度是长尾分布。</strong>生产环境里约 80% 的请求是闲聊、FAQ、格式转换这类简单任务，只有约 20% 真正需要旗舰模型的推理能力。按 100% 顶配资源去打，等于用大炮打蚊子。</li>
+<li><strong>质量提升与成本投入不是线性关系。</strong>简单任务上，小模型与旗舰模型的质量几乎重合，价格却相差 10 倍以上；复杂任务上，旗舰模型的质量优势是压倒性的。钱要花在质量差距大的地方，而不是均匀撒。</li>
+</ul>
+
+<table>
+<tr><th>请求类型</th><th>典型占比</th><th>旗舰模型单价（示意）</th><th>小模型够不够</th><th>一刀切的浪费</th></tr>
+<tr><td>闲聊 / 问候 / 致谢</td><td>约 30%</td><td>~$0.03 / 次</td><td>完全够</td><td>约 10 倍溢价</td></tr>
+<tr><td>FAQ / 格式转换 / 分类</td><td>约 50%</td><td>~$0.05 / 次</td><td>完全够</td><td>约 10 倍溢价</td></tr>
+<tr><td>分析 / 推理 / 多步任务</td><td>约 20%</td><td>~$0.5 / 次</td><td>不够，质量崩塌</td><td>无浪费，这钱该花</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>生产案例（客服 Agent）：</strong>某电商客服 Agent 月均 12 万次会话，上线初期全量走旗舰模型，月账单约 $9,600，P50 延迟 2.1 秒。流量分析显示 81% 的请求是查物流、退换货政策、打招呼这类简单意图。引入规则 + 模型的混合路由后，简单请求改走小模型（单次成本从 $0.03 降到 $0.003），月账单降到 $3,650（<strong>-62%</strong>），P50 延迟降到 0.8 秒，而用户满意度与人工质检合格率保持在原水平 ±1% 以内。</p>
+</div>
+
+<div class="intuition-box">
+<p>路由优化的收益上限，在你分析流量分布的那一刻就决定了——80/20 的难度长尾本身就是最大的成本金矿。</p>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、三种路由策略：规则、模型、混合</h2>
+
+<p>知道"为什么要路由"之后，问题是"怎么路由"。工程上有三种策略，从简到难各有取舍，而生产系统几乎都是第三种。</p>
+
+<h3>规则路由：快但死板</h3>
+
+<p><span class="term">规则路由</span>用 if-else 做意图分类，不同意图走不同模型。它的优势非常实在：零额外调用成本、延迟最低（规则匹配瞬间完成）、完全透明可审计。致命问题同样实在：规则维护成本随业务增长爆炸，上线初期 5 条规则够用，业务跑半年变成 50 条互相冲突、边界模糊的规则。更关键的是，规则处理不了"看起来简单但实际复杂"的请求——用户问"这个数对吗"，可能是简单确认，也可能是需要推理的验证，关键词区分不了。</p>
+
+<pre><code>包含 "你好 / 谢谢 / 再见"     → 小模型
+包含 "分析 / 对比 / 推理"     → 大模型
+包含 "翻译 / 总结"           → 中等模型
+其余                         → 交给路由模型判断</code></pre>
+
+<h3>模型路由：灵活但需要数据</h3>
+
+<p><span class="term">模型路由</span>用一个轻量模型（通常比被路由的推理模型小 1-2 个数量级）做判断：输入用户请求，输出"该用哪个模型"。它能自适应地处理规则覆盖不到的长尾场景，且训练数据越多越准。代价是鸡生蛋问题——你需要先知道"哪些请求小模型就够"才能训练它，而这恰恰是你要解决的问题；路由器本身也会误判，把复杂任务分给小模型，质量就崩了。</p>
+
+<h3>混合路由：工程最优解</h3>
+
+<p><span class="term">混合路由</span>是实际生产的主流形态：高频场景用规则兜底，模糊地带用模型决策，没把握的请求一律走大模型。每一层只处理自己有把握的部分，没把握的往下传。</p>
+
+<div class="arch-diagram">
+用户请求
+   │
+   ▼
+┌──────────────────────────────────────────┐
+│ ① 规则层（if-else，零成本，&lt;1ms）          │
+│    闲聊 / FAQ / 格式转换 → 直接拦截         │  约 60% 请求
+└──────────────┬───────────────────────────┘
+               │ 未命中
+               ▼
+┌──────────────────────────────────────────┐
+│ ② 路由模型（轻量分类/评分模型）             │
+│    输出难度分 → 按阈值分派                  │  约 30% 请求
+└──────┬─────────────────────┬─────────────┘
+       │ 低分                │ 高分 / 没把握
+       ▼                     ▼
+   小/中模型              ③ 旗舰模型兜底      约 10% 请求
+  （成本敏感区）          （质量底线，宁贵勿错）
+</div>
+
+<table>
+<tr><th>维度</th><th>规则路由</th><th>模型路由</th><th>混合路由</th></tr>
+<tr><td>额外成本</td><td>零</td><td>每请求一次轻量推理</td><td>仅长尾请求付路由成本</td></tr>
+<tr><td>延迟</td><td>&lt;1ms</td><td>10-50ms</td><td>高频 &lt;1ms，长尾 10-50ms</td></tr>
+<tr><td>可解释性</td><td>完全透明</td><td>黑盒，需日志审计</td><td>规则层透明，模型层可追溯</td></tr>
+<tr><td>长尾处理</td><td>差（规则爆炸）</td><td>好（数据驱动）</td><td>好（模型只管长尾）</td></tr>
+<tr><td>冷启动难度</td><td>低</td><td>高（需要标注数据）</td><td>中（规则先行，模型渐进）</td></tr>
+<tr><td>适用阶段</td><td>MVP / 流量初期</td><td>数据充足后</td><td>规模化生产（推荐）</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>混合路由的精髓是"每层只接自己有把握的活"——规则负责确定性，模型负责模糊性，旗舰模型负责不确定性，三层各司其职。</p>
+</div>
+
+<div class="highlight">
+<p><strong>公开基准交叉验证：</strong>LMSYS 开源的 RouteLLM 框架在 MT-Bench 上做到保持旗舰模型 95% 质量的同时<strong>降低约 85% 成本</strong>，在 MMLU / GSM8K 上分别约 45% / 35%——任务越偏开放对话，路由收益越大；越偏硬核推理，收益越小。这与"难度长尾决定收益上限"的判断完全一致。</p>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、路由器训练数据的三条来源</h2>
+
+<p>混合路由的核心资产是<span class="term">路由器</span>（做分派决策的轻量模型），而路由器的质量由训练数据决定。标注数据的格式很简单："这个请求该用小模型还是大模型"，难的是从哪来。工程上有三条互补的来源。</p>
+
+<h3>来源一：历史日志 + 大模型置信度做代理标签</h3>
+
+<p>如果你已经在用旗舰模型处理所有请求，调用日志里天然藏着答案。旗舰模型输出的<span class="term">置信度</span>（模型对自己生成内容的确定程度）可以作为难度标签的<span class="term">代理标签</span>：置信度持续偏高的请求大概率简单，置信度偏低的请求大概率复杂。这条路线零额外成本、数据量大，缺点是置信度并非完美的难度度量，需要人工抽样校准。</p>
+
+<h3>来源二：人工标注</h3>
+
+<p>从历史请求中分层抽样一批，由人判断"这个请求小模型能不能搞定"。标注成本最高，但标签质量最可靠，通常用于校准集和边界 case，而不是主力训练集。</p>
+
+<h3>来源三：5% 流量随机双跑（主动探索）</h3>
+
+<p><span class="term">主动探索</span>是获取训练数据最直接的方式：随机抽取一小部分流量（典型值 5%），同时用大模型和小模型处理，对比两边的输出质量。小模型效果不差的，直接标记为"简单请求"。代价是探索期间这一小部分流量有小概率质量下降，所以比例要控制、场景要挑低风险的下手。</p>
+
+<table>
+<tr><th>数据来源</th><th>成本</th><th>标签质量</th><th>数据量</th><th>主要风险</th><th>典型用法</th></tr>
+<tr><td>历史日志 + 置信度代理</td><td>零额外成本</td><td>中（有噪声）</td><td>大</td><td>置信度≠难度，需校准</td><td>主力训练集</td></tr>
+<tr><td>人工标注</td><td>高</td><td>高</td><td>小</td><td>标注口径不一致</td><td>校准集 / 边界 case</td></tr>
+<tr><td>5% 流量随机双跑</td><td>探索期双倍调用费</td><td>高（真实对比）</td><td>随时间累积</td><td>探索流量体验小幅波动</td><td>持续补充新分布</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>三条数据源不是二选一，而是分工：日志代理标签给量，人工标注给准，双跑探索给"真实的难易边界"。路由器能跑多远，取决于这三者的配比。</p>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、分类器 vs 评分器与冷启动两步走</h2>
+
+<h3>分类器还是评分器：推荐评分器</h3>
+
+<p>训练路由模型有两种思路。<span class="term">分类器</span>直接预测"该用哪个模型"，输出离散类别，训练简单，但模型列表一变（今天 3 个模型、下个月 4 个）就要重新训练、重新上线。<span class="term">评分器</span>预测任务的"难度分"（0-1 连续值），再按阈值映射到模型档位——难度分比模型名稳定得多，新增模型只需要在分数轴上插一段新阈值，分类器重训的麻烦整个绕掉了。代价是评分标准需要持续校准。工程上更推荐评分器。</p>
+
+<table>
+<tr><th>维度</th><th>分类器</th><th>评分器</th></tr>
+<tr><td>输出</td><td>离散类别（小/中/大模型）</td><td>连续难度分（0-1）</td></tr>
+<tr><td>训练难度</td><td>简单</td><td>中等（需校准分数语义）</td></tr>
+<tr><td>新增模型</td><td>重新训练 + 重新上线</td><td>只调阈值，分钟级生效</td></tr>
+<tr><td>成本-质量权衡</td><td>固定，难以调节</td><td>移动阈值即可整体偏省或偏稳</td></tr>
+<tr><td>可观测性</td><td>只有类别</td><td>分数分布可监控、可做漂移分析</td></tr>
+<tr><td>工程推荐度</td><td>模型列表极稳定时可用</td><td>★★★★★（默认选择）</td></tr>
+</table>
+
+<div class="arch-diagram">
+评分器的阈值映射：分数轴是稳定资产，模型列表是可换零件
+
+难度分  0 ───────── 0.4 ───────── 0.7 ───────── 1.0
+             │             │             │
+             ▼             ▼             ▼
+          小模型        中模型        旗舰模型
+        （&lt;0.4）      （0.4~0.7）   （&gt;0.7 或没把握）
+
+下个月接入第 4 个模型？
+  → 在分数轴上切一段新区间、配一组新阈值
+  → 路由器本体零改动、零重训
+</div>
+
+<h3>冷启动两步走</h3>
+
+<p>最大的坑是<span class="term">冷启动</span>：刚上线没有历史数据，路由器拿什么训练？标准解法是两步走。第一步保守积累：初期全部请求走旗舰模型，同时记录每次请求的置信度，跑约一周后用置信度作为难度代理标签，训出初版路由器。第二步渐进放开：初版路由器只放行置信度极高（&gt;0.95）的请求给小模型，其余仍然走旗舰模型；随数据积累逐步降低阈值、放大小模型比例。关键原则：冷启动阶段宁可多花钱，也不能让质量出问题——成本优化是锦上添花，质量是底线。</p>
+
+<div class="arch-diagram">
+冷启动两步走时间线
+
+第 1 周 ── 100% 请求 → 旗舰模型
+           │ 记录每次请求的置信度
+           ▼ 置信度高→"简单" 置信度低→"复杂"（代理标签）
+第 2 周 ── 初版评分器上线
+           │ 仅放行 置信度 &gt; 0.95 的请求 → 小模型
+           │ 其余仍走旗舰模型
+第 3 周+ ─ 数据持续积累 → 逐步降阈值 → 放大小模型比例
+           │ 同步盯质量指标（抽检合格率 / 用户反馈）
+           ▼ 质量回落 → 立即回收阈值，重新积累
+</div>
+
+<div class="intuition-box">
+<p>冷启动的正确姿势是"花钱买数据"：先用一周的全量旗舰调用换一份真实分布的难度标签，再让路由器从最保守的阈值开始一点点放权。</p>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、级联降级：成本账与三大坑</h2>
+
+<p>除了"先路由再选模型"，还有另一种思路：<span class="term">级联降级</span>——先让小模型试，置信度不够再升级到旗舰模型重来。听起来很美：小模型搞得定的就省钱，搞不定的再升级。但账要算细。</p>
+
+<div class="arch-diagram">
+级联降级流程
+
+请求 ──▶ 小模型先试 ──▶ 判断输出置信度
+                            │
+              ┌─────────────┴─────────────┐
+              │ 置信度达标                 │ 置信度不够
+              ▼                           ▼
+         直接返回结果              旗舰模型重新处理 ──▶ 返回
+        （约 70% 请求）            （约 30% 请求，
+                                     小模型那一次白算）
+</div>
+
+<h3>算一笔账：100 → 50 → 40</h3>
+
+<p>假设请求分布是 70% 简单、30% 复杂，小模型单次成本记 10、旗舰模型记 100（按同口径折算）：</p>
+
+<div class="formula">一刀切 = 100&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;级联降级 = 50&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;理想路由 = 40</div>
+
+<table>
+<tr><th>方案</th><th>简单请求（70%）成本</th><th>复杂请求（30%）成本</th><th>总成本</th><th>相对一刀切</th></tr>
+<tr><td>一刀切旗舰模型</td><td>70 × 100%价 = 70</td><td>30</td><td>100 单位</td><td>基准</td></tr>
+<tr><td>级联降级</td><td>70% 被小模型搞定 ≈ 7</td><td>小模型白试 ≈ 3 + 旗舰 30 = 33</td><td>50 单位</td><td>-50%</td></tr>
+<tr><td>理想路由（先判断再分派）</td><td>≈ 7</td><td>直接旗舰 = 30</td><td>40 单位</td><td>-60%</td></tr>
+</table>
+
+<p>级联比一刀切省了 50%，但比理想路由多花 25%——差就差在那 30% 复杂请求被小模型"白试"了一次。级联的额外代价不止钱，还有三大坑：</p>
+
+<ul>
+<li><strong>坑一：双倍延迟。</strong>复杂请求先小模型再旗舰模型，延迟是两者之和。对实时对话场景，级联后的复杂请求可能比直接走旗舰模型还慢。</li>
+<li><strong>坑二：阈值两难。</strong>置信度门槛太松，复杂任务被小模型错误放行，质量下降；门槛太紧，大量请求升级，级联形同虚设，还倒贴一次小模型调用。</li>
+<li><strong>坑三：微妙错误传播。</strong>小模型的输出不是"对/错"二值，而是有灰度。"看起来对但实际有微妙错误"的答案可能带着高置信度通过闸门，下游消费时才暴雷，排查成本远高于当场多花钱。</li>
+</ul>
+
+<div class="highlight">
+<p><strong>生产案例（实时对话改级联的教训）：</strong>某对话产品为省钱把主链路改成级联降级，首周账单确实降了 38%，但复杂请求的 P95 延迟从 1.9 秒升到 4.6 秒（小模型 1.1 秒 + 旗舰 3.5 秒串行叠加），用户中途放弃率上升 9 个百分点。两周后改回"先路由再分派"的混合路由：成本只比级联多省 8%，P95 延迟回到 2.2 秒。结论：延迟敏感场景不要先试再升级，要先判断再分派。</p>
+</div>
+
+<div class="intuition-box">
+<p>级联降级适合"成本极其敏感、能容忍延迟"的离线批处理；对质量和延迟都有要求的在线场景，先路由再选模型永远优于先试再升级。</p>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、选型决策与落地路线图</h2>
+
+<p>把前面的分析收拢成一张决策表：先看延迟敏感度和流量规模，再选路由形态。</p>
+
+<table>
+<tr><th>场景特征</th><th>推荐方案</th><th>理由</th></tr>
+<tr><td>日请求 &lt; 1 万，意图集中</td><td>纯规则路由</td><td>数据不够训模型，规则性价比最高</td></tr>
+<tr><td>离线批处理，成本极敏感</td><td>级联降级</td><td>延迟不敏感，能吃满小模型红利</td></tr>
+<tr><td>在线对话，质量+延迟双要求</td><td>混合路由（规则+评分器+兜底）</td><td>避免白试成本与串行延迟</td></tr>
+<tr><td>新业务冷启动</td><td>先规则，同时全量记录置信度</td><td>一周后拿到训练数据再上评分器</td></tr>
+</table>
+
+<table>
+<tr><th>公开路由基准（RouteLLM，供量级参考）</th><th>保持 95% 旗舰质量时的成本降幅</th></tr>
+<tr><td>MT-Bench（开放对话）</td><td>约 85%</td></tr>
+<tr><td>MMLU（知识问答）</td><td>约 45%</td></tr>
+<tr><td>GSM8K（数学推理）</td><td>约 35%</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先分析流量难度分布，再决定路由层数</li>
+<li>用评分器而非分类器，把阈值做成可热调的配置</li>
+<li>记录每次路由决策：难度分、分派结果、最终质量反馈</li>
+<li>冷启动从最保守阈值（&gt;0.95）开始渐进放开</li>
+<li>给路由器设质量监控，抽检合格率回落即回收阈值</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在没有流量分布数据时拍脑袋定"80% 走小模型"</li>
+<li>用级联降级承载实时对话等延迟敏感链路</li>
+<li>让路由器误判时静默降级，不留审计日志</li>
+<li>一次性把探索流量放到 20% 以上</li>
+<li>模型列表变了就重训分类器（本可以只调阈值）</li>
+</ul>
+</div>
+</div>
+
+<h3>落地检查清单</h3>
+
+<ol>
+<li><strong>第 1 周：</strong>统计请求难度分布，上线 5-10 条高置信规则拦截明确简单意图。</li>
+<li><strong>第 2 周：</strong>全量记录旗舰模型置信度，开启 5% 双跑探索。</li>
+<li><strong>第 3-4 周：</strong>用代理标签训初版评分器，阈值 0.95 起步灰度放量。</li>
+<li><strong>持续：</strong>每周复盘路由决策日志与质量抽检，逐步下探阈值；模型列表变更只调阈值。</li>
+</ol>
+
+<div class="intuition-box">
+<p>路由不是一次性项目，而是一个持续校准的闭环：规则拦确定性、评分器管模糊性、监控守质量底线，三者迭代得越快，成本曲线降得越陡。</p>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>为什么工程上更推荐评分器而不是分类器？</summary>
+<div class="answer">因为难度分是比模型名更稳定的标签。分类器直接输出"该用哪个模型"，模型列表一变（新增或下线一个档位）就要重新训练、重新部署，迭代成本很高。评分器输出 0-1 的连续难度分，模型选择只是分数轴上的阈值映射，新增模型只需插入一段新区间、调整阈值，分钟级生效。此外分数分布本身是可观测资产：可以监控分布漂移、按业务线调松调紧成本-质量权衡，这些都是离散类别给不了的。</div>
+</details>
+
+<details>
+<summary>5% 流量双跑探索会不会伤害用户体验？代价到底多大？</summary>
+<div class="answer">会有小幅影响，但可控。双跑期间这 5% 的请求中，小模型那一侧的输出质量可能略低，通常的做法是让用户看到的仍以大模型或质量较高的一侧为准，小模型结果只用于离线对比打标，这样体验几乎无损，代价只是双倍的调用费用。按 5% 比例计算，探索成本约等于总调用费的 5%，换取的是真实分布下的难易边界数据，通常两到四周就能积累出可用的训练集。风险高的场景（如资金、医疗）应先在低风险意图上开探索。</div>
+</details>
+
+<details>
+<summary>级联降级直觉上很合理，为什么实时对话场景不推荐？</summary>
+<div class="answer">核心原因是串行叠加的延迟和"白试"成本。级联对复杂请求要先跑小模型再跑旗舰模型，延迟是两者之和，实测可从约 2 秒恶化到 4.5 秒以上，实时对话的用户流失会明显上升。同时那部分复杂请求的小模型调用纯属浪费，使级联的总成本比理想路由高约 25%。再加上置信度阈值两难和"微妙错误高置信度蒙混过关"的传播风险，级联只适合离线批处理这类成本敏感、延迟不敏感的场景。在线链路应先路由判断，再一次分派到位。</div>
+</details>
+
+<details>
+<summary>用旗舰模型置信度做难度代理标签，靠谱吗？</summary>
+<div class="answer">方向靠谱但必须校准。置信度高通常意味着任务落在模型熟悉区，确实与"简单"强相关，且这个信号零成本、全量、随业务自动更新，是冷启动期最好的代理标签。但置信度不是完美的难度度量：某些复杂请求模型会"自信地答错"，某些简单但生僻的请求置信度偏低。工程上要抽样几百条做人工核对，算出置信度与真实难度的相关性和分段映射，必要时剔除已知失准的意图簇，再用双跑数据持续纠偏。代理标签负责给量，人工标注负责给准。</div>
+</details>
+
+<details>
+<summary>怎么发现路由器自己在漂移？该监控哪些指标？</summary>
+<div class="answer">至少盯三组指标。第一，难度分分布：每周对比分布直方图，若整体向低分偏移而业务没变，说明路由器开始过度乐观。第二，分派后的质量反馈：小模型通道的抽检合格率、用户负反馈率、重试率，一旦回落超过阈值（如合格率掉 2 个百分点）立即回收阈值。第三，兜底率：被升级到旗舰模型的请求占比如果骤升，往往是新出现的请求类型超出了训练分布。建议把路由器决策日志（难度分、分派结果、事后质量）全量留存，漂移排查才有据可依。</div>
+</details>
+
+<details>
+<summary>日请求只有几千的小流量系统，值得做路由吗？</summary>
+<div class="answer">值得，但形态要简化。几千请求撑不起训练路由器，但规则路由零成本、零数据依赖，用 5-10 条规则拦截闲聊、FAQ、格式转换这类明确简单意图，通常就能拦下 40-60% 的流量，账单直接砍半。同时开始全量记录置信度，为将来上评分器攒数据。这个阶段不要投入做模型路由，ROI 太低；等月请求量到几十万、规则维护开始吃力不从心时，再切混合路由。路由的演进顺序应该是规则先行、数据跟上、模型收尾。</div>
+</details>
+
+<details>
+<summary>路由和语义缓存、预算熔断是什么关系？</summary>
+<div class="answer">三者是成本治理链路上串行的三道闸，各管一段。语义缓存最先工作：相同或语义相近的请求直接返回缓存结果，成本为零，命中即终结。未命中的请求进入路由层，按难度分派到合适档位，解决"每个请求花多少钱"。预算熔断是最后防线：当单位时间总花费或单请求累计成本超过阈值时强制降级或拒绝，防止路由失误或流量异常导致账单失控。设计时应让路由决策能感知缓存状态与剩余预算，例如预算紧张时整体阈值上移、更多请求走小模型。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G08 · RAG 文档切割技术方案</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">语义截断的本质问题</a>
+<a href="#s2">基础切割方案：重叠与语义边界</a>
+<a href="#s3">高级检索增强方案：句子窗口与父子切割</a>
+<a href="#s4">LLM 增强方案：命题化与 Contextual Retrieval</a>
+<a href="#s5">方案选型与生产实践</a>
+<a href="#s6">前沿进展：SproutRAG 与 Late Chunking</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+<h1>G08 · RAG 文档切割技术方案</h1>
+<p class="subtitle">Chunking Semantic Solutions — 语义截断 / 六种切割方案 / 父子切割 / Contextual Retrieval</p>
+
+<div class="intuition-box"><p>切割方案的核心矛盾：chunk 越小检索越精准，但语义完整性越难保证——真正丢失的不是"文字"，而是"文字之间的关系"。</p></div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>语义截断的本质问题</h2>
+
+<p>当文档被切割成 <span class="term">chunk</span> 时，最致命的问题不是"某个字被丢掉了"，而是"一条完整信息被拆散到不同 chunk 中"。例如退款条款"退款需在7天内提交且商品无损坏"被拆成两个不完整片段后，检索系统无论召回哪一个，都无法给出完整的退款条件。</p>
+
+<div class="highlight">
+<p>Chroma 的基准测试显示：结构感知切割比固定长度切割在召回率上最多高出 9 个百分点。这个差距不会随数据规模增大而缩小，反而会因文档复杂度增加而扩大。</p>
+</div>
+
+<h3>Chunk 过大 vs 过小</h3>
+<p>chunk_size 的选择是一个多维权衡，过大与过小各有代价：</p>
+<table>
+<tr><th>维度</th><th>Chunk 过大</th><th>Chunk 过小</th></tr>
+<tr><td>Embedding 质量</td><td>语义被稀释，一个向量包含多个主题</td><td>缺乏上下文，语义不完整</td></tr>
+<tr><td>检索精度</td><td>噪声多（包含不相关内容）</td><td>碎片化信息，难以命中</td></tr>
+<tr><td>LLM 利用</td><td>Token 浪费，含大量无关内容</td><td>信息断裂，LLM 难以理解</td></tr>
+<tr><td>存储成本</td><td>chunk 数少，索引小</td><td>chunk 数多，索引大</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>黄金法则：</strong>一个 chunk 应该包含一个完整的、独立可理解的语义单元——chunk_size 应该匹配用户期望问的问题的"答案粒度"。用户按"条款"提问，就按条款切；按"句子"提问，就按句子切。</p>
+</div>
+
+<h3>分块质量的全链路影响</h3>
+<p>分块是 RAG 质量的基石——分块策略的影响往往大于 embedding 模型选择的影响：chunk_size 从 200 调到 500 可能让 Recall@5 从 0.6 提升到 0.8，而换更好的 embedding 模型通常只提升 3-5%。</p>
+
+<div class="arch-diagram">
+好分块 → 精准 embedding → 高 Recall/Precision → LLM 拿到好 context → 好回答
+差分块 → 模糊 embedding → 召回不相关/遗漏关键 → LLM 拿到噪声 → 差回答/幻觉
+                                                                    ↑
+                                                        这里的问题无法在下游修复</div>
+
+<div class="intuition-box"><p>不要盲目追求最大或最小的 chunk_size——"答案粒度"才是标尺。分块错误是不可恢复的：如果关键信息在分块时被切断，后续任何检索和生成优化都无法弥补源头的信息损失。</p></div>
+
+<h3>双层解决框架</h3>
+<p>生产级 RAG 系统通过两层协作来解决切割问题：</p>
+<ul>
+<li><strong>第一层（切分阶段）</strong>：尽量减少语义切断——优先按自然边界（句子、段落、标题）切割，而非硬性按 token 数截断</li>
+<li><strong>第二层（检索阶段）</strong>：补全上下文——通过 <span class="term">Sentence Window</span>、父子切割等技术将切割时丢失的上下文重新关联</li>
+</ul>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────┐
+│              文档切割双层解决框架                    │
+├──────────────────────────────────────────────────┤
+│                                                    │
+│  ┌─────────────────────────────────┐              │
+│  │   第一层：切分阶段 (减少断裂)     │              │
+│  │   ┌──────────┐  ┌───────────┐  │              │
+│  │   │自然边界切割│  │ Overlap兜底│  │              │
+│  │   │(句/段/标题)│  │ (10%-20%) │  │              │
+│  │   └──────────┘  └───────────┘  │              │
+│  └─────────────────────────────────┘              │
+│                    ↓                               │
+│  ┌─────────────────────────────────┐              │
+│  │   第二层：检索阶段 (补全上下文)    │              │
+│  │  ┌──────────┐  ┌────────────┐  │              │
+│  │  │句子窗口检索│  │ 父子切割    │  │              │
+│  │  │(±N句扩展) │  │ (ID关联)   │  │              │
+│  │  └──────────┘  └────────────┘  │              │
+│  └─────────────────────────────────┘              │
+│                                                    │
+└──────────────────────────────────────────────────┘</div>
+
+<div class="intuition-box"><p>切割问题的本质不是"切多大"，而是"切在哪里"以及"切完后怎么把上下文补回来"。</p></div>
+
+<h3>切割失败的四种模式</h3>
+<table>
+<tr><th>失败模式</th><th>触发原因</th><th>典型表现</th><th>影响程度</th></tr>
+<tr><td>边界碎片化</td><td>固定长度切割截断句子</td><td>段落中间被截断，前半句和后半句分属不同 chunk</td><td>高</td></tr>
+<tr><td>代词断裂</td><td>"它"、"该公司"等指代词与被指代对象分离</td><td>chunk 5 提到"它的人口超过385万"但不知道"它"指柏林</td><td>高</td></tr>
+<tr><td>跨 chunk 语义</td><td>因果关系/条件关系跨越 chunk 边界</td><td>"如果满足条件A"在 chunk 3，"则执行方案B"在 chunk 4</td><td>极高</td></tr>
+<tr><td>结构断裂</td><td>表格、列表、代码块被截断</td><td>表头在一个 chunk，数据行在另一个 chunk</td><td>中-高</td></tr>
+</table>
+
+<h3>生产案例：合规知识库的切割失败</h3>
+<p>某企业内部合规知识库上线三周后，一名合规人员询问"承包商入职流程"的例外条款。系统给出了自信且结构化的回答，但遗漏了仅适用于受监管项目承包商的例外条款。该例外条款存在于原始文档中，已被入库，embedding 模型也已编码。</p>
+
+<p>根因分析：包含该例外条款的段落恰好在"通用规则"结束和"限定条件"开始的段落边界处被切割。一个 chunk 包含规则，另一个 chunk 包含限定条件，两个 chunk 都不足以单独匹配用户的查询。</p>
+
+<div class="highlight">
+<p>Vectara 在 NAACL 2025 的一项研究覆盖了 25 种切割配置和 48 个 embedding 模型，证实了"切割配置对检索质量的影响与 embedding 模型选择同等重要甚至更大"。2026 年 3 月的大规模对照实验（36 种方法、6 个领域、5 个模型、1080 组配置）进一步确认：内容感知切割显著优于朴素固定长度切割。</p>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>基础切割方案：重叠与语义边界</h2>
+
+<h3>方案一：重叠切割（Overlap）</h3>
+<p>最朴素的兜底策略：相邻 chunk 保留 100-150 token 的重复内容。例如 <code>chunk_size=800, overlap=150</code>，相当于约 15% 的重叠率。</p>
+
+<div class="arch-diagram">
+原始文档:  [AAAAABBBBBCCCCCDDDDDEEEEE]
+
+Chunk 1:   [AAAAABBB]
+Chunk 2:        [AABBBBBCC]         ← 重叠区 "AABB"
+Chunk 3:             [BBBCCCCCDD]   ← 重叠区 "BBCC"  
+Chunk 4:                  [CCDDDDDDE]
+Chunk 5:                       [DDDDEEEEE]</div>
+
+<p>重叠切割的优劣势：</p>
+<ul>
+<li>降低跨边界文字丢失风险——关键句在重叠区至少出现一次</li>
+<li>无法解决完整语义被拆散的问题——"退款条件"仍可能被拆成两半</li>
+<li>增加存储成本：15% 重叠意味着 15% 的额外向量存储与 embedding 计算开销</li>
+</ul>
+
+<div class="intuition-box"><p>Overlap 是"成本最低的保险"——不能根治语义截断问题，但能以极低的实现成本降低最严重的跨边界信息丢失风险。</p></div>
+
+<h3>重叠率的实验数据</h3>
+<p>不同重叠率对检索效果的实际影响（基于 500 篇技术文档的对照实验）：</p>
+<table>
+<tr><th>重叠率</th><th>跨边界召回率</th><th>存储成本增量</th><th>重复检索噪声</th></tr>
+<tr><td>0%（无重叠）</td><td>72%</td><td>基准</td><td>无</td></tr>
+<tr><td>10%</td><td>81% (+9%)</td><td>+10%</td><td>低</td></tr>
+<tr><td>15%</td><td>84% (+12%)</td><td>+15%</td><td>低-中</td></tr>
+<tr><td>20%</td><td>85% (+13%)</td><td>+20%</td><td>中</td></tr>
+<tr><td>30%</td><td>86% (+14%)</td><td>+30%</td><td>高（挤占 top-k 位置）</td></tr>
+</table>
+<p>从 15% 到 30%，召回率仅提升 2 个百分点，但存储成本翻倍且噪声显著增加。</p>
+<p>因此 10%-20% 是重叠率的甜点区间——既能有效降低跨边界信息丢失，又不会引入过多存储成本和检索噪声。</p>
+
+<h3>方案二：语义边界切割</h3>
+<p>利用 NLP 工具识别句子和段落边界，按自然边界填充 chunk，接近长度上限时封存当前 chunk 并开启新 chunk。</p>
+
+<pre><code>from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size=800,
+    chunk_overlap=100,
+    separators=["\n\n", "\n", "。", "！", "？", "；", "，", " "]  # 自然边界优先级；中文文档需在句号后补上感叹号、问号、分号、逗号等中文标点
+)</code></pre>
+
+<p><span class="term">RecursiveCharacterTextSplitter</span> 按分隔符优先级递归尝试：先尝试段落分隔 <code>\n\n</code>，若段落仍超过 chunk_size，则降级到句子分隔。实测语义完整性比纯长度切割提升约 30%。</p>
+
+<table>
+<tr><th>维度</th><th>固定长度切割</th><th>重叠切割</th><th>语义边界切割</th></tr>
+<tr><td>实现复杂度</td><td>极低</td><td>低</td><td>中</td></tr>
+<tr><td>语义完整性</td><td>差</td><td>一般</td><td>良好 (+30%)</td></tr>
+<tr><td>存储成本</td><td>基准</td><td>+15%</td><td>基准</td></tr>
+<tr><td>适用场景</td><td>快速原型</td><td>通用兜底</td><td>生产级基线</td></tr>
+</table>
+
+<div class="intuition-box"><p>语义边界切割是"花最低成本获得最大收益"的基线方案——大多数生产系统应以此为起点，而非终点。</p></div>
+
+<h3>结构化分块：利用文档自身的结构标记</h3>
+<p>当文档本身带有明确的结构标记时，应优先按结构切割，让每个 chunk 天然对应一个结构完整的语义单元。三类典型的结构化分块：</p>
+<ul>
+<li><strong>Markdown 文档</strong>：按 Header 层级（# / ## / ###）切割，每个 chunk 自动携带其所属标题层级的 metadata（如标题路径），可用于过滤检索</li>
+<li><strong>代码文件</strong>：按函数/类边界切割（AST 解析），绝不在函数中间切断；过长的函数可按逻辑块（空行分隔）二次切割</li>
+<li><strong>HTML 文档</strong>：按标签结构（article / section / div 等）分块，保持标签内内容完整</li>
+</ul>
+<p>表格建议整表保留为一个 chunk；表格过大时可用"表头 + 每行"的方式拆为独立 chunk，每行都携带表头作为上下文。</p>
+
+<h3>文档类型 → 推荐切割方式</h3>
+<p>按文档类型选择切割方式的实用映射：</p>
+<table>
+<tr><th>文档类型</th><th>推荐切割方式</th><th>理由</th></tr>
+<tr><td>纯文本 / 新闻</td><td>语义边界（递归）切割</td><td>通用、稳健、易实现</td></tr>
+<tr><td>技术文档（Markdown）</td><td>Markdown Header + 递归切割</td><td>尊重文档结构，保留层级信息</td></tr>
+<tr><td>论文 / 长报告</td><td>语义分块（按话题切换点）</td><td>保持话题完整性</td></tr>
+<tr><td>代码仓库</td><td>AST 解析按函数/类切割</td><td>尊重语法边界</td></tr>
+<tr><td>FAQ / 问答对</td><td>按 QA 对为单位</td><td>天然的语义单元</td></tr>
+<tr><td>混合文档</td><td>多策略路由</td><td>不同部分用不同切割策略</td></tr>
+</table>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>高级检索增强方案：句子窗口与父子切割</h2>
+
+<h3>方案三：句子窗口检索（Sentence Window）</h3>
+<p><span class="term">句子窗口检索</span>采用"存储时精细切割，检索时动态扩展"的策略：</p>
+<ul>
+<li><strong>存储阶段</strong>：文档逐句切割，每句独立向量化入库</li>
+<li><strong>检索阶段</strong>：命中某句后，连带返回其前后各 ±2 句（可配置），形成完整上下文窗口</li>
+</ul>
+
+<div class="arch-diagram">
+存储层:  S1 | S2 | S3 | S4 | S5 | S6 | S7 | S8 | S9 | S10
+         (每句独立向量化，精度最高)
+
+检索时:  Query → 匹配到 S5
+         ┌─────────────────┐
+         │ 返回窗口: S3 S4 │S5│ S6 S7  │  ← ±2 句扩展
+         └─────────────────┘
+         LLM 获得完整上下文</div>
+
+<p>句子窗口检索的核心权衡：向量存储成本增加 3-5 倍（因为每句一个向量），但检索精度极高——特别适合"答案可能藏在某一特定句子中"的场景，如 FAQ 系统、法规查询。</p>
+
+<h3>方案四：父子切割（Parent-Child Chunking）</h3>
+<p><span class="term">父子切割</span>是"双层索引"思想的典型实现，同时维护两种粒度的 chunk：</p>
+
+<table>
+<tr><th>层级</th><th>大小</th><th>用途</th><th>存储内容</th></tr>
+<tr><td>子 chunk（Child）</td><td>~200 token</td><td>精准向量检索</td><td>小粒度文本 + 向量 + 父 chunk ID</td></tr>
+<tr><td>父 chunk（Parent）</td><td>~1000 token</td><td>提供完整上下文</td><td>大粒度原文 + 子 chunk ID 列表</td></tr>
+</table>
+
+<div class="arch-diagram">
+                    ┌──────────────────────┐
+                    │   原始文档 (5000 token) │
+                    └──────────┬───────────┘
+                               │ 切割
+          ┌────────────────────┼────────────────────┐
+          ▼                    ▼                     ▼
+  ┌──────────────┐   ┌──────────────┐   ┌──────────────┐
+  │ Parent P1    │   │ Parent P2    │   │ Parent P3    │
+  │ (1000 token) │   │ (1000 token) │   │ (1000 token) │
+  └──────┬───────┘   └──────┬───────┘   └──────┬───────┘
+         │                  │                   │
+    ┌────┼────┐        ┌────┼────┐         ┌────┼────┐
+    ▼    ▼    ▼        ▼    ▼    ▼         ▼    ▼    ▼
+   C1   C2   C3      C4   C5   C6       C7   C8   C9
+  (200 token子块，用于向量检索，命中后回溯到 Parent)</div>
+
+<p>父子切割的工作流程：Query → 向量检索命中子 chunk C5 → 通过 ID 关联找到父 chunk P2 → 将 P2 的完整 1000 token 内容送给 LLM 生成回答。这样既获得了子 chunk 的检索精度，又获得了父 chunk 的生成质量。</p>
+
+<div class="highlight">
+<p>LlamaIndex 的 Parent-Child 实现中，父子关系通过 <code>parent_doc_id</code> 元数据字段维护。当子 chunk 被检索命中时，系统自动查询该字段对应的父 chunk 并将其作为上下文返回，无需额外的检索步骤。</p>
+</div>
+
+<div class="intuition-box"><p>父子切割的本质是"用空间换质量"——花双倍的存储成本，同时获得精细检索和完整上下文两个维度的收益。</p></div>
+
+<h3>意图分级路由：按问题粒度选择索引层</h3>
+
+<p>当系统建立了多粒度索引体系（粗粒度章节层、中粒度段落层、细粒度句子层）之后，查询侧立刻面临一个新问题：每个问题该去哪一层检索？全部走细粒度，宏观问题（"概述这套系统的整体架构"）会陷入细节过载，LLM 被淹没在句子碎片里；只走粗粒度，微观问题（"这个参数的默认值是多少"）又信息不足，拿不到精确答案。在 Agent 场景中，粒度差异极大的问题会涌入同一个知识库，这个矛盾尤为突出。</p>
+
+<p><span class="term">意图分级器</span>解决的就是"按问题选层"：检索前先判断用户提问的粒度，将查询分为三级——<strong>宏观</strong>（概述类）、<strong>中观</strong>（解释类）、<strong>微观</strong>（具体细节类），再路由到对应的粗/中/细粒度索引层开始检索。</p>
+
+<table>
+<tr><th>查询级别</th><th>典型问题</th><th>路由到的索引层</th></tr>
+<tr><td>宏观</td><td>"总结这份文档的核心架构"</td><td>粗粒度层（章节级 chunk）</td></tr>
+<tr><td>中观</td><td>"解释这个模块的工作原理"</td><td>中粒度层（段落级 chunk）</td></tr>
+<tr><td>微观</td><td>"这个配置项的默认值是多少"</td><td>细粒度层（句子/代码段 chunk）</td></tr>
+</table>
+
+<div class="arch-diagram">
+用户查询 ──▶ 意图分级器（宏观 / 中观 / 微观）
+             │
+   ┌─────────┼─────────┐
+   ▼         ▼         ▼
+粗粒度层   中粒度层   细粒度层
+(章节)    (段落)    (句子/代码段)
+   │         │         │
+   └─────────┼─────────┘
+             ▼
+      上下文窗口融合 ──▶ LLM 生成答案</div>
+
+<p>动态路由的收益有两点：一是命中更准——检索粒度与答案粒度匹配；二是省资源——宏观问题不必去细粒度层里翻找，微观问题也不必拖着章节级上下文。这正好补上了多粒度索引的查询侧缺口：索引分层只解决了"怎么存"，分级路由才决定"怎么取"。</p>
+
+<h3>上下文窗口融合：按粒度分配 Token 预算</h3>
+
+<p>路由检索之后，不同粒度层的结果往往要拼在一起喂给 LLM，而模型的上下文窗口有限——把所有结果一股脑塞进去，关键细节会被背景信息稀释。<span class="term">上下文窗口融合</span>的做法是给不同粒度的信息显式分配 Token 预算：例如粗粒度背景信息只占窗口的 10%，细粒度关键细节占 40%，其余留给中粒度内容。这样拼出的上下文既有背景铺垫保证完整性，又有重点细节保证突出性。</p>
+
+<p>预算比例没有放之四海皆准的公式，需要按业务查询分布调优：细节密集型问答（参数查询、条款定位）可以把预算向细粒度倾斜，概述型问答则应多留粗粒度背景。核心原则只有一条——按重要性分配预算，而不是平均主义。</p>
+
+<div class="intuition-box"><p>多粒度索引的查询侧适配可以浓缩为三步：意图识别 → 分级检索 → 动态融合。分块方案决定知识"怎么存"，路由与预算分配决定"怎么取、怎么喂"，两端匹配，多粒度才真正产生收益。</p></div>
+
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>LLM 增强方案：命题化与 Contextual Retrieval</h2>
+
+<h3>方案五：命题化切割（Propositional Chunking）</h3>
+<p><span class="term">命题化切割</span>利用 LLM 将原文拆解为独立的、自包含的命题（Proposition）。每个命题都是一个完整的知识单元，不依赖上下文即可理解。</p>
+
+<pre><code>原文: "企业用户享优先客服，响应时间≤2小时，
+       个人用户标准响应时间为24小时。"
+
+命题化输出:
+  P1: "企业用户享有优先客服权益"
+  P2: "企业用户客服响应时间不超过2小时"
+  P3: "个人用户标准客服响应时间为24小时"</code></pre>
+
+<p>命题化切割的优势与代价：</p>
+<table>
+<tr><th>维度</th><th>效果</th><th>说明</th></tr>
+<tr><td>检索精度</td><td>提升约 40%</td><td>每个命题是独立的语义单元，与 query 匹配度更高</td></tr>
+<tr><td>LLM 调用成本</td><td>显著增加</td><td>每段原文都需要一次 LLM 调用来生成命题</td></tr>
+<tr><td>适用场景</td><td>高严谨需求</td><td>金融合规、医疗问答、法律条款等不容出错的场景</td></tr>
+<tr><td>局限性</td><td>可能丢失原文结构</td><td>命题之间的逻辑关系（因果、递进）可能被弱化</td></tr>
+</table>
+
+<h3>方案六：Contextual Retrieval（Anthropic, 2024）</h3>
+<p><span class="term">Contextual Retrieval</span> 是 Anthropic 提出的创新方案。核心思想是：入库前用 LLM 为每个 chunk 生成一段背景说明（Contextual Prefix），将其与原始内容拼接后再进行向量化。</p>
+
+<div class="arch-diagram">
+原始 chunk:
+  "响应时间≤2小时，需通过专属热线联系。"
+
+       ↓ LLM 生成上下文前缀 (结合全文档理解)
+
+增强 chunk:
+  "[此条款适用于企业版订阅用户的客服SLA。
+   来自《服务协议》第4.2节。] 
+   响应时间≤2小时，需通过专属热线联系。"
+
+       ↓ 向量化 + BM25 双路检索
+
+混合检索结果: 精确度大幅提升</div>
+
+<p>Contextual Retrieval 的关键数据：</p>
+<ul>
+<li>TOP-20 召回失败率降低 <strong>49%</strong>（结合 BM25 混合检索时降低 <strong>67%</strong>）</li>
+<li>通过 <span class="term">Prompt Caching</span> 技术可减少 <strong>80%</strong> 的 LLM 调用成本</li>
+<li>Prompt Caching 原理：将整篇文档作为 prompt 的缓存前缀，每个 chunk 生成上下文时复用同一缓存，避免重复计算</li>
+</ul>
+
+<div class="highlight">
+<p>Contextual Retrieval 解决的核心问题是"指代词断裂"——当 chunk 中出现"它"、"该方案"、"上述条件"等指代词时，独立向量化会导致语义丢失。添加上下文前缀后，每个 chunk 都成为自包含的知识单元。</p>
+</div>
+
+<table>
+<tr><th>方案</th><th>检索精度</th><th>LLM 成本</th><th>存储开销</th><th>实施复杂度</th></tr>
+<tr><td>命题化切割</td><td>★★★★★</td><td>高 (每段调用)</td><td>中</td><td>中</td></tr>
+<tr><td>Contextual Retrieval</td><td>★★★★☆</td><td>中 (可缓存降80%)</td><td>低 (+前缀)</td><td>低-中</td></tr>
+<tr><td>父子切割</td><td>★★★★</td><td>无</td><td>高 (双层存储)</td><td>中</td></tr>
+</table>
+
+<div class="intuition-box"><p>Contextual Retrieval 的精妙之处在于：它把"上下文补全"从检索阶段前移到了索引阶段——与其在检索时费力补上下文，不如入库时就把上下文写进去。</p></div>
+
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>方案选型与生产实践</h2>
+
+<h3>六种方案综合对比</h3>
+<div class="highlight">
+<p><strong>生产注意事项：</strong>①分块策略一旦变更，意味着需要全量重建向量索引，务必先在评估集上验证收益再决定切换；②持久化保存原始文档与 chunk 的映射关系，方便后续参数调整与问题追溯；③代码 chunk 建议使用代码专用 embedding 模型（如 CodeBERT），或至少在代码语料上 fine-tune 过的通用模型。</p>
+</div>
+<table>
+<tr><th>方案</th><th>核心机制</th><th>检索精度</th><th>存储成本</th><th>计算成本</th><th>适用场景</th></tr>
+<tr><td>重叠切割</td><td>相邻 chunk 保留重复内容</td><td>★★</td><td>+15%</td><td>低</td><td>通用兜底</td></tr>
+<tr><td>语义边界切割</td><td>按自然边界填充 chunk</td><td>★★★</td><td>基准</td><td>低</td><td>生产基线</td></tr>
+<tr><td>句子窗口检索</td><td>逐句存储 + 检索时扩展</td><td>★★★★</td><td>3-5 倍</td><td>中</td><td>FAQ / 法规</td></tr>
+<tr><td>父子切割</td><td>双层粒度 + ID 关联</td><td>★★★★</td><td>2 倍</td><td>低</td><td>通用生产级</td></tr>
+<tr><td>命题化切割</td><td>LLM 拆解为独立命题</td><td>★★★★★</td><td>中</td><td>高</td><td>金融/医疗/法律</td></tr>
+<tr><td>Contextual Retrieval</td><td>LLM 生成上下文前缀</td><td>★★★★☆</td><td>低</td><td>中 (可缓存)</td><td>高精度通用</td></tr>
+</table>
+
+<h3>推荐组合策略</h3>
+<p>不同业务场景的推荐方案组合：</p>
+<ul>
+<li><strong>基础场景</strong>（内部知识库、一般问答）：语义边界切割 + Overlap 兜底</li>
+<li><strong>进阶场景</strong>（客服系统、产品文档）：语义边界切割 + 父子切割</li>
+<li><strong>高精度场景</strong>（金融合规、医疗问答）：语义边界切割 + Contextual Retrieval + BM25 混合检索</li>
+<li><strong>极致精度场景</strong>（法律条款、监管文件）：命题化切割 + 父子切割</li>
+</ul>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>以语义边界切割为基线，叠加其他方案逐步提升</li>
+<li>对 PDF、HTML 等结构化文档优先按标题/段落边界切割</li>
+<li>始终保留 chunk 来源文档的元数据（doc_id、页码、章节），并持久化 chunk 与源文档的映射关系，便于追溯与参数调整</li>
+<li>使用 RAGAS 等框架评估不同切割方案的实际检索效果</li>
+<li>chunk_size 设置与 embedding 模型的上下文窗口匹配</li>
+<li>代码 chunk 使用代码专用 embedding 模型（如 CodeBERT）或在代码上 fine-tune 过的模型</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要只依赖固定长度切割——Chroma 基准测试证明它比结构感知切割差 9 个百分点</li>
+<li>不要在未评估效果前就上线高级方案——先跑基线再优化</li>
+<li>不要忽略表格/代码块/列表等特殊结构的完整性</li>
+<li>不要让 overlap 比例过高——超过 20% 会显著增加无效检索</li>
+<li>不要在没有 chunk 元数据的情况下上线生产系统</li>
+<li>不要轻率变更生产环境的分块策略——任何策略调整都意味着全量重建向量索引，先评估再切换</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box"><p>切割方案选型遵循"渐进式升级"原则——从语义边界切割起步，用数据驱动决定是否需要叠加父子切割或 Contextual Retrieval。</p></div>
+
+<h3>chunk_size 与 embedding 模型的协同</h3>
+<p>chunk_size 的选择不应孤立考虑，而需与 embedding 模型的有效编码范围匹配：</p>
+<table>
+<tr><th>Embedding 模型</th><th>最大 Token 限制</th><th>推荐 chunk_size</th><th>说明</th></tr>
+<tr><td>OpenAI text-embedding-3-small</td><td>8191 tokens</td><td>500-1000</td><td>信息密度在 1000 token 内最集中</td></tr>
+<tr><td>OpenAI text-embedding-3-large</td><td>8191 tokens</td><td>500-1000</td><td>更高维度可编码更多语义细节</td></tr>
+<tr><td>Cohere embed-v3</td><td>512 tokens</td><td>256-512</td><td>窗口较小，chunk 需更小</td></tr>
+<tr><td>BGE-large-zh-v1.5</td><td>512 tokens</td><td>256-512</td><td>中文场景推荐，512 内效果最优</td></tr>
+<tr><td>Jina-Long (Late Chunking)</td><td>8192 tokens</td><td>不限制</td><td>先编码后切割，无需预设 chunk_size</td></tr>
+</table>
+
+<h3>分场景 chunk_size 经验参考值</h3>
+<p>与上表"按模型定"互补的另一视角是"按场景定"——不同文档类型的经验参考值：</p>
+<table>
+<tr><th>场景</th><th>推荐 chunk_size</th></tr>
+<tr><td>FAQ / 短问答</td><td>100-300 tokens</td></tr>
+<tr><td>技术文档</td><td>300-500 tokens</td></tr>
+<tr><td>论文 / 报告</td><td>500-1000 tokens</td></tr>
+<tr><td>法律合同</td><td>按条款切割，通常 300-500 tokens</td></tr>
+<tr><td>代码文件</td><td>按函数/类，通常 500-2000 tokens</td></tr>
+<tr><td>聊天记录</td><td>按对话轮次或时间窗口</td></tr>
+</table>
+<p>没有"最佳 chunk size"——500 token 是好的起点，但需根据文档类型与查询模式调整；即使模型支持长输入，chunk 太长仍会稀释语义。</p>
+
+<h3>用实验找到最优切割参数（甜蜜点）</h3>
+<p>在评估集上对比不同 chunk_size 的 Recall@K、Precision@K 与 Answer Quality，通常会存在一个"甜蜜点"：chunk 太小则 recall 高但 precision 低（检索到太多碎片），太大则 recall 低但 precision 高（每个 chunk 信息多但匹配不精确）。系统化实验框架：</p>
+<ol>
+<li>选一组 chunk_size 候选值（如 200 / 300 / 500 / 800 / 1000 / 1500）</li>
+<li>对每个候选值分别分块、重建索引，在同一评估集上测试 Recall@K 与 Precision@K</li>
+<li>找到 Recall 与 Precision 平衡最佳的甜蜜点</li>
+<li>在最佳候选上进一步微调 overlap——每次只改一个变量，保持评估集与指标一致</li>
+</ol>
+<p>对于混合类型文档，可按文档类型路由到不同的分块策略（路由器模式），为每种类型独立调参。</p>
+
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>前沿进展：SproutRAG 与 Late Chunking</h2>
+
+<h3>SproutRAG：注意力引导的层级切割</h3>
+<p>2026 年 6 月发表的 <span class="term">SproutRAG</span> 框架提出了一种全新的切割范式：不再依赖人工定义的切割策略，而是通过 Transformer 的注意力机制自动学习最优的层级切割结构。</p>
+<ul>
+<li>将句子级 chunk 组织为逐渐增大但语义连贯的层级单元</li>
+<li>使用学习到的句间注意力构建二叉切割树</li>
+<li>检索时通过层级 Beam Search 在多个粒度上检索候选</li>
+<li>在 4 个基准数据集上信息效率（IE）平均提升 6.1%</li>
+</ul>
+
+<h3>Late Chunking：延迟切割</h3>
+<p><span class="term">Late Chunking</span> 采用"先对整个文档编码，再分割"的逆向策略：</p>
+<ul>
+<li>先通过长上下文 embedding 模型（如 Jina-Long）对整个文档生成 token 级嵌入</li>
+<li>再按语义边界将 token 嵌入聚合为 chunk 级表示</li>
+<li>优势：每个 chunk 的向量天然包含全局文档上下文</li>
+<li>劣势：依赖长上下文 embedding 模型，文档过长时计算成本较高</li>
+</ul>
+
+<h3>Agentic Chunking：智能体驱动的切割</h3>
+<p>2025-2026 年兴起的新范式，使用 LLM Agent 动态决定切割策略：</p>
+<ul>
+<li>Agent 分析文档结构和内容类型，自动选择最优切割方案</li>
+<li>对混合内容文档（文本+表格+代码）可分别应用不同切割策略</li>
+<li>支持交互式调整——用户反馈可被 Agent 学习，逐步优化切割质量</li>
+<li>代价：每次入库需要多次 LLM 调用，延迟和成本较高</li>
+</ul>
+
+<table>
+<tr><th>方案</th><th>切割时机</th><th>全局上下文</th><th>计算开销</th></tr>
+<tr><td>传统切割 + Embed</td><td>先切后编码</td><td>无（chunk 孤立）</td><td>低</td></tr>
+<tr><td>Late Chunking</td><td>先编码后切</td><td>完整</td><td>高</td></tr>
+<tr><td>SproutRAG</td><td>学习式层级切割</td><td>层级化</td><td>中（需训练）</td></tr>
+<tr><td>Agentic Chunking</td><td>Agent 动态决策</td><td>按需适配</td><td>高（多次 LLM 调用）</td></tr>
+</table>
+
+<div class="highlight">
+<p>切割技术的选型决策树：文档类型单一且结构简单 → 语义边界切割；文档混合多种内容类型 → Agentic Chunking 或分类型切割；追求最高检索质量 → Contextual Retrieval + Late Chunking 组合；大规模长文档 → SproutRAG 层级方案。</p>
+</div>
+
+<div class="intuition-box"><p>切割技术的演进方向：从"人工定义规则"走向"模型自动学习最优切割"，从"单层扁平检索"走向"多层级自适应检索"。</p></div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>chunk_size 应该设多大？不同文档类型有区别吗？</summary>
+<div class="answer">经验值范围：通用文档 500-1000 token，FAQ/短文本 200-400 token，法律/技术文档 800-1500 token。关键原则是 chunk_size 应与 embedding 模型的有效上下文窗口匹配。OpenAI text-embedding-3 系列在 8191 token 内都能有效编码，但实测语义信息在 500-1000 token 范围内最集中。建议通过 RAGAS 评估不同 chunk_size 下的 recall@k 和 answer correctness，用数据驱动选型。</div>
+</details>
+
+<details>
+<summary>Overlap 重叠率设多少合适？过高有什么副作用？</summary>
+<div class="answer">推荐 10%-20% 的重叠率（如 chunk_size=800 时 overlap=80-160）。过高的重叠率（>30%）会导致：(1) 存储和 embedding 计算成本线性增长；(2) 检索时同一个 chunk 的多个重叠副本同时被召回，挤占 top-k 中其他相关 chunk 的位置；(3) 对生成质量没有明显提升，因为 LLM 看到的是大量重复内容而非更多元的上下文。另外，以下场景可以完全不设 overlap：语义分块（切割发生在自然边界）、父子切割（parent 已提供完整上下文）、结构化分块（按 Header 切割天然保持段落完整）——智能切割策略下 overlap 的重要性大幅降低。</div>
+</details>
+
+<details>
+<summary>Contextual Retrieval 的 Prompt Caching 如何降低 80% 成本？</summary>
+<div class="answer">Prompt Caching 的原理是将整篇文档作为 prompt 的缓存前缀。生成每个 chunk 的上下文说明时，文档全文部分只需计算一次并被缓存，后续每个 chunk 只需要追加不同的 "请为以下 chunk 生成背景说明" 指令部分。Anthropic 的 Claude API 原生支持此功能，缓存命中的 token 费用仅为正常费用的 1/10。对于一篇 10000 token 的文档切分为 20 个 chunk，原本需要 20 × 10000 = 200K token 的文档理解，缓存后仅需 10000 + 20 × 500 ≈ 20K token 的等价计算量。如果暂时不想引入 LLM 成本，还有一个零成本的简化版：手动给每个 chunk 加上文档标题 + 章节标题作为前缀（Context Header），同样能让 embedding 理解 chunk 的位置与角色，对结构化文档（有明确标题层级）提升明显。</div>
+</details>
+
+<details>
+<summary>父子切割和句子窗口检索有什么区别？该如何选择？</summary>
+<div class="answer">两者都是"检索时扩展上下文"的思路，但机制不同：句子窗口以单句为检索粒度，命中后机械地扩展 ±N 句，适合答案高度集中在某一特定句子的场景（如FAQ）；父子切割以小子 chunk 为检索粒度，命中后回溯到语义更完整的父 chunk，适合需要段落级上下文的场景（如技术文档）。选择建议：FAQ 类系统用句子窗口，综合知识库用父子切割，两者也可组合使用。</div>
+</details>
+
+<details>
+<summary>如何处理 PDF 中表格、图片等非文本内容的切割？</summary>
+<div class="answer">结构化内容需要专门的切割策略：(1) 表格应保持完整——将表头和数据行作为一个 chunk，避免表头和数据分离；(2) 图片需通过 OCR 或多模态模型（如 GPT-4V）提取描述文本后作为一个独立 chunk；(3) 代码块按函数/类为单位切割，使用 AST（抽象语法树）感知切割器；(4) 列表保持完整性——一个有序列表不应被截断在中间。推荐使用 Unstructured.io 或 LlamaParse 等工具先做文档结构化解析，再按元素类型分别切割。</div>
+</details>
+
+<details>
+<summary>命题化切割的 LLM 调用成本如何控制？</summary>
+<div class="answer">控制成本的策略包括：(1) 批量处理——将多个段落合并为一次 LLM 调用的输入，减少 API 请求次数；(2) 使用小模型——命题化任务不需要最强模型，GPT-4o-mini 或 Claude Haiku 即可获得良好效果；(3) 缓存策略——对相同文档的命题化结果做持久化，避免重复生成；(4) 按需使用——仅对高严谨需求的文档子集（如法律条款、合规政策）启用命题化切割，普通文档使用语义边界切割即可。实测：一个 10 万 token 的合规文档库，使用 GPT-4o-mini 的命题化切割成本约 $5-10，而检索精度提升 40%。</div>
+</details>
+
+<details>
+<summary>SproutRAG 相比传统方案的核心优势是什么？</summary>
+<div class="answer">SproutRAG 的核心突破在于"学习式切割"取代了"规则式切割"。传统方案（如语义边界切割、父子切割）依赖人工定义的切割规则（chunk_size、分隔符、层级结构），而 SproutRAG 通过分析 Transformer 的注意力矩阵，自动学习哪些句子应该被聚合为一个语义单元。它构建的二叉切割树天然支持多粒度检索——叶子节点是句子级精度，中间节点是段落级上下文，根节点是文档级概览。在科学、法律、开放域等 4 个基准上，信息效率平均提升 6.1%，且无需额外的 LLM 调用。</div>
+</details>
+
+<details>
+<summary>为什么说分块策略比 embedding 模型选择更重要？</summary>
+<div class="answer">因为分块决定了信息的基本单元质量。如果关键信息在分块时被切断，或一个 chunk 混合了多个不相关话题，无论 embedding 模型多强大，都无法产生好的向量表示。实证：chunk_size 从 200 调到 500 时，同一 embedding 模型的 Recall@5 可能从 0.6 提升到 0.8，而换更好的 embedding 模型通常只提升 3-5%。分块错误是不可恢复的——检索层和生成层都无法弥补源头的信息损失。</div>
+</details>
+
+<details>
+<summary>Parent-Child 策略解决的是什么矛盾？实际效果如何？</summary>
+<div class="answer">解决"检索需要小粒度（精确聚焦），生成需要大粒度（上下文丰富）"的核心矛盾：文档先切为 parent chunk（如 1000 token），再切为 child chunk（如 200 token），child 做 embedding 与检索，命中后返回 parent 给 LLM。效果上比单一粒度分块通常提升 5-15% 的 Answer Quality，适合技术文档、论文等需要上下文才能理解的长文本。LangChain 中通过 ParentDocumentRetriever 即可实现，child chunk 的 parent_id 是关联两层的元数据。</div>
+</details>
+
+<details>
+<summary>语义分块和递归字符分割各有什么优缺点？什么时候用哪个？</summary>
+<div class="answer">递归字符分割：优点是简单快速、chunk 大小可控；缺点是不完全尊重语义边界。语义分块（按相邻句子语义相似度骤降处切割）：优点是每个 chunk 是完整的话题单元、不会在话题中间切断；缺点是需要额外 embedding 计算且 chunk 大小不可控。选择建议：①格式规整的文档 → 递归字符分割（快且够好）；②多话题混合长文 → 语义分块；③有 Markdown/HTML 结构 → 结构化分块；④FAQ → 按 QA 对分。递归字符分割是 80% 场景的最佳起点。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

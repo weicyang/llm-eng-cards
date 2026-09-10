@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S01 · LLM 后端设计</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、LLM 后端架构全景</a>
+<a href="#s2">二、API Gateway</a>
+<a href="#s3">三、流式输出 (SSE / WebSocket)</a>
+<a href="#s4">四、多模型路由</a>
+<a href="#s5">五、限流与熔断</a>
+<a href="#s6">六、幂等性设计</a>
+<a href="#s7">七、会话管理</a>
+<a href="#s8">八、负载均衡</a>
+<a href="#s9">九、成本控制</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>S01 · LLM 后端设计</h1>
+<p class="subtitle">大语言模型后端架构 — 流式输出、多模型路由、限流熔断、幂等性与成本控制</p>
+
+<!-- 开篇直觉 -->
+<div class="intuition-box">
+<p>LLM 后端不是"在模型前面套个 Web 服务器"——它需要感知 GPU 状态、管理 Token 配额、处理流式输出、实现智能路由。每个请求的资源消耗可能差 1000 倍，这让传统 Web 架构的经验几乎失效。</p>
+</div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、LLM 后端架构全景</h2>
+
+<div class="intuition-box">
+<p>五层架构，每层职责清晰、可独立扩展——接入层接请求，网关层守门，调度层分流，推理层算模型，模型层跑 GPU。</p>
+</div>
+
+<h3>分层架构</h3>
+<table>
+<tr><th>层级</th><th>组件</th><th>核心职责</th></tr>
+<tr><td><span class="term">接入层</span></td><td>客户端 / SDK</td><td>请求构建、鉴权 Header 注入、流式解析</td></tr>
+<tr><td><span class="term">网关层</span></td><td>API Gateway (Kong/Nginx)</td><td>认证、限流、路由分发、协议转换</td></tr>
+<tr><td><span class="term">调度层</span></td><td>Router / 调度器</td><td>模型选择、负载均衡、队列管理</td></tr>
+<tr><td><span class="term">推理层</span></td><td>vLLM / TGI / TRT-LLM</td><td>模型加载、KV Cache、Batch 推理</td></tr>
+<tr><td><span class="term">模型层</span></td><td>GPU 集群 (A100/H100)</td><td>Transformer 前向计算、量化推理</td></tr>
+</table>
+
+<div class="arch-diagram">
+LLM 后端全景架构:
+
+┌──────────────┐
+│   客户端/SDK   │  ← REST / gRPC / WebSocket
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  API Gateway  │  ← 认证 · 限流 · 日志 · 协议转换
+│ (Kong/Nginx)  │
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐     ┌──────────────┐
+│  路由 / 调度器  │────▶│  Prompt 缓存   │
+│ (Router Svc)  │     │ (Redis/语义)   │
+└──┬───┬───┬───┘     └──────────────┘
+   │   │   │
+   ▼   ▼   ▼
+┌────┐┌────┐┌────┐
+│ 7B ││ 72B││ API │  ← 多模型实例 / 第三方 API
+│vLLM││TGI ││GPT-4│
+└──┬─┘└──┬─┘└──┬─┘
+   │     │     │
+   ▼     ▼     ▼
+┌──────────────────┐
+│   GPU 集群 / 云 GPU  │
+│  (A100/H100/L40S)  │
+└──────────────────┘
+</div>
+
+<h3>核心设计原则</h3>
+<table>
+<tr><th>原则</th><th>说明</th></tr>
+<tr><td><strong>无状态服务</strong></td><td>推理节点无状态，会话状态外存 Redis/DB，便于水平扩展</td></tr>
+<tr><td><strong>异步解耦</strong></td><td>请求入队列（Kafka），推理服务消费，避免直接耦合</td></tr>
+<tr><td><strong>可观测性</strong></td><td>每层集成 Prometheus 指标、OpenTelemetry 链路追踪和日志</td></tr>
+<tr><td><strong>优雅降级</strong></td><td>大模型不可用时自动降级至小模型或缓存兜底</td></tr>
+</table>
+
+<div class="highlight">
+推理层必须无状态设计——因为 GPU 节点随时可能 OOM 崩溃或被扩缩容替换。有状态数据（会话历史、Token 配额）全部外存到 Redis/DB，推理节点只负责"拿 Prompt 跑模型返回结果"。
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、API Gateway</h2>
+
+<div class="intuition-box">
+<p>API Gateway 是 LLM 后端的"守门人"——挡住不合法的请求，限制每个用户的用量，把合法请求转发给后面的推理集群。</p>
+</div>
+
+<h3>认证鉴权</h3>
+<table>
+<tr><th>方式</th><th>场景</th><th>实现</th></tr>
+<tr><td><strong>API Key</strong></td><td>服务端调用、第三方集成</td><td>Header <code>Authorization: Bearer sk-xxx</code>，网关校验后透传</td></tr>
+<tr><td><strong>OAuth 2.0</strong></td><td>用户端应用、多租户平台</td><td>JWT 验签，从 Claims 提取 tenant_id、quota</td></tr>
+<tr><td><strong>mTLS</strong></td><td>内部微服务互调</td><td>双向证书校验，零信任网络内认证</td></tr>
+</table>
+
+<h3>限流策略</h3>
+<p>LLM 场景的限流比传统 API 复杂得多——一个 10 token 的请求和一个 10000 token 的请求消耗差 1000 倍。需要<strong>多维度限流</strong>：</p>
+<table>
+<tr><th>维度</th><th>说明</th><th>实现方式</th></tr>
+<tr><td><span class="term">RPM</span></td><td>请求/分钟</td><td>Token Bucket 算法</td></tr>
+<tr><td><span class="term">TPM</span></td><td>Token/分钟</td><td>Redis <code>INCRBY</code> + <code>EXPIREAT</code> 滑动窗口</td></tr>
+<tr><td><strong>日/月额度</strong></td><td>总预算控制</td><td>Redis 持久化计数器</td></tr>
+</table>
+
+<h3>配额管理</h3>
+<table>
+<tr><th>机制</th><th>说明</th></tr>
+<tr><td><strong>租户隔离</strong></td><td>每个 API Key 绑定独立配额，互不影响</td></tr>
+<tr><td><strong>预扣 + 修正</strong></td><td>请求前预估 max_tokens 扣减，完成后按实际 Token 退还差额</td></tr>
+<tr><td><strong>超额策略</strong></td><td>软限制（告警）→ 硬限制（拒绝）→ 降级（切小模型）</td></tr>
+</table>
+
+<div class="highlight">
+LLM 限流的核心是 <strong>Token 级限流</strong>而非 QPS 限流。分布式限流用 Redis + Lua 脚本保证原子性——<code>INCRBY</code> 增加消耗量，<code>EXPIREAT</code> 设置窗口过期，一条 Lua 脚本完成判断+扣减的原子操作。
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、流式输出 (SSE / WebSocket)</h2>
+
+<div class="intuition-box">
+<p>LLM 每生成一个 Token 就立即推送给客户端——用户 ~100ms 就能看到第一个字，而不是等数秒后才一次性返回全部。这就是流式输出的核心价值。</p>
+</div>
+
+<h3>SSE vs WebSocket</h3>
+<table>
+<tr><th>维度</th><th>SSE</th><th>WebSocket</th></tr>
+<tr><td>通信方向</td><td>单向（服务端 → 客户端）</td><td>双向</td></tr>
+<tr><td>协议</td><td>基于 HTTP，天然穿透代理/CDN</td><td>独立协议，需额外配置</td></tr>
+<tr><td>自动重连</td><td>原生支持</td><td>需自行实现</td></tr>
+<tr><td>适合场景</td><td>LLM 输出（绝大多数场景）</td><td>中途修改方向、音频流</td></tr>
+</table>
+
+<h3>流式 vs 非流式对比</h3>
+<table>
+<tr><th>维度</th><th>流式 (stream=true)</th><th>非流式 (stream=false)</th></tr>
+<tr><td>首 Token 延迟</td><td>~100ms（立即看到）</td><td>数秒~数十秒（全部生成后返回）</td></tr>
+<tr><td>用户体验</td><td>逐字打字效果</td><td>长时间白屏等待</td></tr>
+<tr><td>连接占用</td><td>长连接</td><td>短连接</td></tr>
+<tr><td>适用场景</td><td>聊天、实时翻译、代码补全</td><td>批处理、离线摘要</td></tr>
+</table>
+
+<h3>流式中断处理</h3>
+<table>
+<tr><th>场景</th><th>处理方式</th></tr>
+<tr><td><strong>客户端取消</strong></td><td><code>AbortController.abort()</code>，后端检测连接断开后终止推理</td></tr>
+<tr><td><strong>后端超时</strong></td><td>设置 <code>max_tokens</code> 上限，超时自动截断</td></tr>
+<tr><td><strong>部分结果</strong></td><td>中断时已生成的 Token 保存至 DB，可展示部分结果</td></tr>
+</table>
+
+<div class="highlight">
+Nginx/CDN 代理流式响应必须关闭缓冲：<code>proxy_buffering off</code>，否则代理会把 Token 攒到一定量再发，破坏"逐字输出"的体验。这是最常见的流式输出踩坑。
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、多模型路由</h2>
+
+<div class="intuition-box">
+<p>并非所有请求都需要最强模型——"翻译一句话"用 7B 模型就行，"分析代码架构"才需要 72B。智能路由可以在保证质量的同时降低 40~60% 成本。</p>
+</div>
+
+<div class="arch-diagram">
+多模型路由流程:
+
+               ┌──────────┐
+               │  用户请求  │
+               └─────┬────┘
+                     ▼
+              ┌──────────────┐
+              │  路由判断器     │
+              │ (Router)      │
+              └──┬──────┬────┘
+       简单请求   │      │  复杂请求
+                 ▼      ▼
+          ┌────────┐ ┌────────┐
+          │ 小模型   │ │ 大模型   │
+          │ 7B/14B  │ │ 72B/API│
+          │ 成本 1x  │ │ 成本 20x│
+          └────────┘ └────────┘
+</div>
+
+<h3>路由判断方法</h3>
+<table>
+<tr><th>方法</th><th>原理</th><th>延迟</th><th>准确度</th></tr>
+<tr><td><strong>关键词规则</strong></td><td>正则匹配："翻译"→小模型，"分析代码"→大模型</td><td>&lt;1ms</td><td>低</td></tr>
+<tr><td><strong>文本分类器</strong></td><td>BERT/FastText 判断难度等级</td><td>~5ms</td><td>高</td></tr>
+<tr><td><strong>意图识别</strong></td><td>NLU 引擎识别意图 + 实体，映射到模型能力</td><td>~10ms</td><td>最高</td></tr>
+<tr><td><strong>级联策略</strong></td><td>先用小模型生成，置信度低时升级大模型</td><td>可能翻倍</td><td>高质量</td></tr>
+</table>
+
+<h3>级联策略详解</h3>
+<p><span class="term">级联策略</span>是最实用的路由方式：先用小模型生成，检查质量分（logprob 均值），低于阈值时升级到大模型。</p>
+<p>优势：60~70% 的请求可以用小模型满足，整体成本降低 40~60%。劣势：质量不达标的请求延迟翻倍（小模型 + 大模型两次推理）。</p>
+
+<h3>A/B 测试</h3>
+<table>
+<tr><th>环节</th><th>做法</th></tr>
+<tr><td><strong>流量分割</strong></td><td>按用户 ID 哈希分桶，5% 流量走新路由策略</td></tr>
+<tr><td><strong>指标对比</strong></td><td>响应质量（LLM-as-Judge）、延迟 P50/P99、成本/请求</td></tr>
+<tr><td><strong>灰度发布</strong></td><td>5% → 20% → 50% → 100% 逐步放量</td></tr>
+<tr><td><strong>自动回滚</strong></td><td>质量指标低于阈值时自动切回旧策略</td></tr>
+</table>
+
+<div class="highlight">
+路由器本身的性能开销必须 <strong>&lt;10ms</strong>——否则抵消了小模型的速度优势。关键词规则 + 轻量分类器的组合是最优方案：规则处理明确场景（0ms），分类器兜底不确定场景（5ms）。
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、限流与熔断</h2>
+
+<div class="intuition-box">
+<p>LLM 推理又慢又贵——当模型开始频繁超时或 OOM，必须快速"切断"问题链路，防止雪崩。这就是熔断器的价值。</p>
+</div>
+
+<h3>熔断器三状态</h3>
+<div class="arch-diagram">
+熔断器状态机:
+
+   ┌────────┐   失败率 < 阈值   ┌────────┐
+   │ CLOSED  │ ──────────────▶ │ CLOSED  │  正常调用
+   │ (正常)   │                 │ (正常)   │
+   └────┬───┘                 └────────┘
+        │ 失败率 > 50%
+        ▼
+   ┌────────┐   超时后尝试
+   │  OPEN   │ ──────────────▶ ┌───────────┐
+   │ (熔断)   │                 │ HALF-OPEN  │
+   └────────┘                 │ (半开探测)   │
+        ▲                     └──────┬────┘
+        │ 探测失败                    │ 探测成功
+        └─────────────────────────────┘
+                                      ▼
+                                ┌────────┐
+                                │ CLOSED  │  恢复正常
+                                └────────┘
+</div>
+
+<h3>熔断参数</h3>
+<table>
+<tr><th>参数</th><th>推荐值</th><th>说明</th></tr>
+<tr><td>监控指标</td><td>—</td><td>推理超时率、GPU OOM 率、5xx 错误率</td></tr>
+<tr><td>熔断条件</td><td>失败率 > 50%</td><td>最近 60s 内且请求数 > 20</td></tr>
+<tr><td>熔断时间</td><td>30s ~ 5min</td><td>初始 30s，每次失败加倍</td></tr>
+<tr><td>半开探测</td><td>1 个请求</td><td>成功则恢复，失败则继续熔断</td></tr>
+</table>
+
+<h3>多级降级策略</h3>
+<table>
+<tr><th>级别</th><th>策略</th><th>说明</th></tr>
+<tr><td>L1 轻度</td><td>缓存兜底</td><td>返回语义相似问题的缓存答案</td></tr>
+<tr><td>L2 中度</td><td>切换小模型</td><td>大模型不可用时降级为 7B 模型</td></tr>
+<tr><td>L3 重度</td><td>模板回复</td><td>"服务繁忙，请稍后再试"</td></tr>
+<tr><td>L4 极端</td><td>功能关闭</td><td>关闭 AI 功能，仅保留基础功能</td></tr>
+</table>
+
+<div class="highlight">
+并发控制也很关键：每个用户最多 N 个并发推理请求（信号量模式），超出排队。GPU 感知调度根据显存/算力剩余动态调整并发上限。付费用户走优先级队列，免费用户低优先级排队。
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、幂等性设计</h2>
+
+<div class="intuition-box">
+<p>LLM 推理成本高（一次请求可能消耗数千 Token），网络抖动导致的重复请求会造成重复扣费、浪费 GPU 算力、会话历史污染。幂等性保证"同一请求执行一次和执行多次效果一样"。</p>
+</div>
+
+<h3>幂等键方案</h3>
+<table>
+<tr><th>方案</th><th>生成方式</th><th>优缺点</th></tr>
+<tr><td><strong>客户端 UUID</strong>（推荐）</td><td>Header <code>Idempotency-Key: uuid</code></td><td>灵活，客户端控制粒度</td></tr>
+<tr><td><strong>内容哈希</strong></td><td><code>sha256(user_id + model + messages_hash)</code></td><td>自动去重，但粒度粗</td></tr>
+</table>
+
+<h3>幂等处理流程</h3>
+<div class="arch-diagram">
+幂等处理流程:
+
+  请求到达
+     │
+     ▼
+┌──────────────┐
+│ 查 Redis 缓存 │  key = "idempotent:{idempotency_key}"
+└──────┬───────┘
+       │
+   ┌───┴───┐
+   ▼       ▼
+ 命中     未命中
+   │       │
+   ▼       ▼
+ 直接返回  ┌──────────────┐
+ 缓存结果  │ 加分布式锁     │  ← 防并发重复
+          └──────┬───────┘
+                 │
+                 ▼
+          ┌──────────────┐
+          │ 执行推理       │
+          └──────┬───────┘
+                 │
+                 ▼
+          ┌──────────────┐
+          │ 结果写 Redis   │  TTL = 24h
+          └──────────────┘
+</div>
+
+<h3>重试安全</h3>
+<table>
+<tr><th>策略</th><th>说明</th></tr>
+<tr><td><strong>指数退避</strong></td><td>重试间隔 1s → 2s → 4s → 8s，避免雪崩</td></tr>
+<tr><td><strong>抖动 (Jitter)</strong></td><td><code>delay = base × 2^attempt + random(0, base)</code>，打散重试峰值</td></tr>
+<tr><td><strong>最大重试</strong></td><td>通常 3 次，超过进入 Dead Letter Queue</td></tr>
+<tr><td><strong>可重试判断</strong></td><td>5xx 和超时可重试，4xx（参数错误）不重试</td></tr>
+</table>
+
+<div class="highlight">
+流式接口的幂等性比较特殊：首次请求建立流式连接，相同幂等键的重复请求返回已有流的读取端。幂等缓存的 TTL 应大于客户端最大重试周期，通常设 24h。
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、会话管理</h2>
+
+<div class="intuition-box">
+<p>LLM 本身是无状态的——每次调用都是独立的。多轮对话的上下文需要后端维护：加载历史消息 → 拼接 System Prompt → 截断超长对话 → 发送给模型。</p>
+</div>
+
+<h3>上下文窗口管理策略</h3>
+<table>
+<tr><th>策略</th><th>原理</th><th>优缺点</th></tr>
+<tr><td><strong>尾部截断</strong></td><td>保留 System Prompt + 最近 N 轮</td><td>简单，但丢失早期重要信息</td></tr>
+<tr><td><strong>摘要压缩</strong></td><td>用 LLM 对早期对话生成摘要替换原文</td><td>保留语义，但引入额外推理成本</td></tr>
+<tr><td><strong>滑动窗口 + 摘要</strong></td><td>最近 K 轮保留原文，更早的做摘要</td><td>平衡效果与成本（推荐）</td></tr>
+<tr><td><strong>RAG 增强</strong></td><td>历史对话存入向量库，检索相关片段注入</td><td>适合超长会话，需向量检索基础设施</td></tr>
+</table>
+
+<div class="arch-diagram">
+滑动窗口 + 摘要策略:
+
+  上下文预算 = MAX_TOKENS - System Prompt - 输出预留
+
+  ┌──────────────────────────────────────────┐
+  │ System Prompt │ 早期摘要 │ 最近 K 轮原文   │  输出预留
+  │   (始终保留)   │ (LLM压缩) │ (完整保留)     │  (20%)
+  └──────────────────────────────────────────┘
+
+  触发条件: 累计 Token > 窗口 70% 时，对早期消息做摘要
+  压缩比: 约 5:1 ~ 10:1
+</div>
+
+<h3>会话存储方案</h3>
+<table>
+<tr><th>存储</th><th>场景</th><th>特点</th></tr>
+<tr><td><strong>Redis</strong></td><td>活跃会话（24h 内）</td><td>高性能读写，TTL 自动过期</td></tr>
+<tr><td><strong>PostgreSQL</strong></td><td>持久化 + 审计</td><td>事务安全，支持全文检索</td></tr>
+<tr><td><strong>Redis + DB</strong></td><td>混合方案（推荐）</td><td>Redis 热数据快速读写，异步写入 DB 持久化</td></tr>
+</table>
+
+<div class="highlight">
+Redis 会话过期后的恢复流程：从 DB 加载完整消息历史 → 检查是否需要摘要压缩 → 重建 Redis 缓存。多端同步问题（用户在手机和电脑同时对话）需要基于 session_id 共享状态，而非基于连接。
+</div>
+</div>
+
+<!-- Section 8 -->
+<div class="section" id="s8">
+<h2>八、负载均衡</h2>
+
+<div class="intuition-box">
+<p>LLM 推理与传统 Web 服务不同——请求耗时从秒到分钟不等，资源消耗差 100 倍。传统轮询完全不适用，需要 GPU 感知的智能调度。</p>
+</div>
+
+<h3>负载均衡策略对比</h3>
+<table>
+<tr><th>策略</th><th>原理</th><th>LLM 适用性</th></tr>
+<tr><td><strong>加权轮询</strong></td><td>按权重循环分配，A100 权重高于 T4</td><td>⭐⭐⭐ 简单有效</td></tr>
+<tr><td><strong>最小连接数</strong></td><td>选当前连接最少的节点</td><td>⭐⭐ 不感知请求复杂度差异</td></tr>
+<tr><td><strong>GPU 感知</strong></td><td>基于 GPU 利用率 + 显存实时选择</td><td>⭐⭐⭐⭐⭐ 最优</td></tr>
+<tr><td><strong>Queue-based</strong></td><td>请求入全局队列，空闲 GPU 主动拉取</td><td>⭐⭐⭐⭐ 充分利用资源</td></tr>
+</table>
+
+<h3>GPU 感知打分</h3>
+<div class="formula">
+score = gpu_util × 0.4 + (memory_used / memory_total × 100) × 0.3 + queue_depth × 0.3
+</div>
+<p>选 score 最低的节点——GPU 利用率 40% 权重 + 显存占用 30% 权重 + 队列深度 30% 权重。GPU 指标通过 DCGM Exporter → Prometheus → 路由器定时拉取。</p>
+
+<h3>Queue-based 调度</h3>
+<div class="arch-diagram">
+Queue-based 调度:
+
+请求 ──▶ ┌─────────────────────┐ ──▶ GPU Node 1 (空闲 → 拉取)
+请求 ──▶ │    全局任务队列        │ ──▶ GPU Node 2 (空闲 → 拉取)
+请求 ──▶ │  (Redis/Kafka/NATS)  │ ──▶ GPU Node 3 (忙碌 → 等待)
+请求 ──▶ └─────────────────────┘ ──▶ GPU Node 4 (空闲 → 拉取)
+</div>
+
+<h3>跨区域部署</h3>
+<table>
+<tr><th>策略</th><th>说明</th></tr>
+<tr><td><strong>就近接入</strong></td><td>DNS GeoDNS / Anycast 将用户路由到最近区域</td></tr>
+<tr><td><strong>区域自治</strong></td><td>每个区域独立部署完整推理栈，避免跨区调用</td></tr>
+<tr><td><strong>溢出路由</strong></td><td>本区域 GPU 满载时，溢出到其他区域或云 GPU</td></tr>
+<tr><td><strong>数据合规</strong></td><td>敏感数据不出境，特定区域使用特定模型版本</td></tr>
+</table>
+
+<div class="highlight">
+<strong>LLM 扩容速度</strong>是传统 Web 服务的痛点：传统容器秒级启动，LLM 推理节点加载 30GB+ 模型需要分钟级。解决方案：预热节点提前加载模型 + 云 GPU（按量计费）作为弹性备份。
+</div>
+</div>
+
+<!-- Section 9 -->
+<div class="section" id="s9">
+<h2>九、成本控制</h2>
+
+<div class="intuition-box">
+<p>LLM API 是 AI 应用的最大成本项。五把降本利器：语义缓存（省 20~40%）、模型路由（省 40~60%）、Prompt 精简（省 10~30%）、Batch API（省 50%）、量化部署（省 30~50%）。</p>
+</div>
+
+<h3>Token 计量计费</h3>
+<table>
+<tr><th>环节</th><th>做法</th></tr>
+<tr><td><strong>定价表</strong></td><td>每个模型配置 input/output 单价（$/1K tokens）</td></tr>
+<tr><td><strong>实时计量</strong></td><td>推理完成后记录 (model, input_tokens, output_tokens, cost)，异步写入时序数据库</td></tr>
+<tr><td><strong>预算告警</strong></td><td>50% / 80% / 95% / 100% 分别触发提醒/警告/告警/拒绝</td></tr>
+<tr><td><strong>自动策略</strong></td><td>超预算后自动降级（大模型→小模型→缓存兜底）</td></tr>
+</table>
+
+<h3>缓存减少重复调用</h3>
+<table>
+<tr><th>缓存类型</th><th>实现方式</th><th>命中率</th></tr>
+<tr><td><span class="term">精确缓存</span></td><td>Prompt 完全一致时命中，Hash 做 Key</td><td>低（5~15%），FAQ 场景高</td></tr>
+<tr><td><span class="term">语义缓存</span></td><td>Prompt Embedding 相似度 > 0.95 时命中</td><td>中（15~40%），需向量数据库</td></tr>
+<tr><td><span class="term">KV Cache</span></td><td>推理引擎层面复用 Prefix 的注意力缓存</td><td>高（System Prompt 接近 100%）</td></tr>
+</table>
+
+<h3>语义缓存原理</h3>
+<p>用户提问 → 生成 Embedding → 在向量数据库中搜索相似度 > 0.95 的历史问题 → 命中则直接返回缓存答案，跳过 LLM 推理。相似度阈值是关键参数：过高则命中率低，过低则答案不准。需要通过评估集调优。</p>
+
+<h3>Batch API</h3>
+<table>
+<tr><th>特点</th><th>说明</th></tr>
+<tr><td><strong>成本优势</strong></td><td>OpenAI Batch API 价格为实时 API 的 50%</td></tr>
+<tr><td><strong>调度窗口</strong></td><td>24h 完成窗口，系统在低峰期执行，最大化 GPU 利用率</td></tr>
+<tr><td><strong>适用场景</strong></td><td>日报生成、批量翻译、数据标注等非实时场景</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li><strong>语义缓存优先：</strong>最直接的降本手段。相似问题复用 LLM 答案，可降低 20~40% API 费用。用向量数据库和相似度阈值控制质量。</li>
+<li><strong>GPU 感知调度：</strong>基于实时 GPU 利用率和显存选择节点，避免部分 GPU 过载而其他空闲。DCGM Exporter + Prometheus 是常见组合。</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li><strong>用 QPS 限流：</strong>LLM 请求消耗差异巨大，10 token 和 10000 token 的资源占用完全不是一个量级。只看 QPS 无法反映真实成本，应该做 Token 级限流。</li>
+<li><strong>传统轮询负载均衡：</strong>LLM 推理耗时从秒到分钟不等，轮询会导致部分 GPU 严重过载。更合适的是 GPU 感知调度或基于队列的调度。</li>
+</ul>
+</div>
+</div>
+
+<div class="highlight">
+<strong>核心要点</strong>：LLM 后端与传统 Web 后端的根本区别在于"每个请求的资源消耗差异巨大"。这导致限流需要 Token 级、负载均衡需要 GPU 感知、路由需要智能分级。成本控制的核心是"用最小的模型满足需求"——语义缓存 + 模型路由 + Batch API 三板斧可降低 50~70% 总成本。
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>设计一个 LLM API Gateway，需要考虑哪些核心功能？</summary>
+<div class="answer">
+<p>核心功能：认证鉴权（API Key/OAuth）、多维限流（RPM/TPM/并发）、流式代理（SSE 透传 + proxy_buffering off）、路由分发（按模型/用户等级/请求特征）、配额管理（实时 Token 计量 + 预扣修正）、可观测性（日志/链路追踪/指标）、安全防护（Prompt 注入检测/敏感内容过滤）。</p>
+</div>
+</details>
+
+<details>
+<summary>SSE 和 WebSocket 在 LLM 流式输出场景下如何选择？</summary>
+<div class="answer">
+<p>SSE 优先（大多数场景）：LLM 输出是单向推流，SSE 天然适合；基于 HTTP 穿透代理/CDN；自动重连。WebSocket 仅在需要双向通信（中途修改方向）、二进制传输（音频流）、高频交互（协作编辑+AI 补全）时使用。</p>
+</div>
+</details>
+
+<details>
+<summary>如何设计多模型路由系统实现成本优化？</summary>
+<div class="answer">
+<p>核心思路：用最小的模型满足需求。请求分级（轻量分类器 Easy/Medium/Hard）→ 模型映射（7B/14B/72B）→ 级联兜底（小模型质量不够升级大模型）。实践效果：60~70% 请求用小模型，成本降低 40~60%。关键约束：路由器判断 <10ms，否则抵消小模型速度优势。</p>
+</div>
+</details>
+
+<details>
+<summary>LLM 后端如何实现 Token 级别的限流？</summary>
+<div class="answer">
+<p>预估扣减：请求到达时按 input_tokens + max_tokens 预扣配额；实际修正：推理完成后按实际 output_tokens 退还差额。实现方式：Redis + Lua 脚本保证原子性，Sorted Set 实现滑动窗口。同时限制 TPM（Token/分钟）和 RPM（请求/分钟）。</p>
+</div>
+</details>
+
+<details>
+<summary>如何设计 LLM 服务的熔断和降级策略？</summary>
+<div class="answer">
+<p>熔断：监控推理超时率/GPU OOM 率/5xx 错误率，60s 内失败率 >50% 触发熔断，30s 后进入半开探测。多级降级：L1 缓存兜底 → L2 切小模型 → L3 模板回复 → L4 关闭 AI 功能。降级应自动化：监控指标 → 告警 → 自动降级 → 恢复后自动恢复。</p>
+</div>
+</details>
+
+<details>
+<summary>LLM 场景下如何实现请求幂等性？</summary>
+<div class="answer">
+<p>客户端在 Header 传递 Idempotency-Key（UUID），服务端以此为维度去重。处理流程：查 Redis 缓存 → 未命中加分布式锁 → 执行推理 → 结果写缓存（TTL 24h）→ 释放锁。流式幂等：首次建立流，重复请求返回已有流的读取端。</p>
+</div>
+</details>
+
+<details>
+<summary>多轮对话中如何管理上下文窗口？</summary>
+<div class="answer">
+<p>推荐滑动窗口 + 摘要混合策略：始终保留 System Prompt + 最近 3~5 轮原文，当累计 Token 超过窗口 70% 时对早期消息做摘要压缩（压缩比 5:1~10:1）。总上下文 = System Prompt + 摘要 + 最近 N 轮 + 输出预留（20%）。超长会话可结合 RAG 增强：历史对话 Embedding 存入向量库，检索相关片段补充。</p>
+</div>
+</details>
+
+<details>
+<summary>LLM 推理服务的负载均衡与传统 Web 服务有何不同？</summary>
+<div class="answer">
+<p>三大差异：请求耗时差异大（秒~分钟 vs 毫秒级）、资源消耗差异大（GPU 显存 vs CPU 差异小）、扩容速度慢（分钟级模型加载 vs 秒级容器启动）。推荐 GPU 感知负载均衡 + 全局队列：推理节点通过 DCGM Exporter 上报 GPU 指标，调度器基于实时指标选最空闲节点，配合 Continuous Batching 最大化吞吐。</p>
+</div>
+</details>
+
+<details>
+<summary>如何设计 LLM 的成本监控和优化系统？</summary>
+<div class="answer">
+<p>计量系统：每次推理记录 (model, tokens, cost, latency)，异步写入时序数据库，实时流处理计算分钟级用量。优化手段按效果排序：语义缓存（20~40%）> 模型路由（40~60%）> Prompt 精简（10~30%）> Batch API（50%）> 量化部署（30~50%）。</p>
+</div>
+</details>
+
+<details>
+<summary>如何保障 LLM 后端系统的高可用性（SLA 99.9%）？</summary>
+<div class="answer">
+<p>冗余部署（至少 2 个 AZ，每 AZ 至少 2 个推理节点）、深度健康检查（实际执行推理而非 ping）、自动扩缩（基于 GPU 利用率 HPA + 预热节点）、故障转移（主模型不可用自动切备用）、混合架构（自建 GPU 为主 + 云 GPU 弹性备份）、定期容灾演练（Chaos Engineering）、灰度变更（金丝雀 5% → 蓝绿切换 + 回滚版本）。</p>
+</div>
+</details>
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

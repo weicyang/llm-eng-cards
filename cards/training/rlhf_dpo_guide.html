@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W04 · RLHF / DPO / GRPO — 人类对齐训练</title>
+<style>
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --border: #30363d;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --blue: #58a6ff;
+  --green: #3fb950;
+  --purple: #bc8cff;
+  --orange: #d29922;
+  --cyan: #39d2c0;
+  --red: #f85149;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.7;
+  font-size: 16px;
+  padding-left: 300px;
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+a { color: var(--blue); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.home-float {
+  position: fixed;
+  top: 1.2rem;
+  right: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 0.45rem 0.9rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  z-index: 1000;
+  transition: all 0.2s;
+}
+.home-float:hover { color: var(--blue); border-color: var(--blue); text-decoration: none; }
+
+h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--blue), var(--purple), var(--cyan));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 0.3rem;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  margin-bottom: 2.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+h2 {
+  font-size: 1.55rem;
+  margin: 2.8rem 0 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--border);
+  color: var(--blue);
+}
+
+h3 {
+  font-size: 1.25rem;
+  margin: 1.8rem 0 0.7rem;
+  color: var(--green);
+}
+
+h4 {
+  font-size: 1.05rem;
+  margin: 1.2rem 0 0.5rem;
+  color: var(--purple);
+}
+
+p { margin-bottom: 0.9rem; }
+
+ul, ol {
+  margin: 0.5rem 0 1rem 1.5rem;
+}
+
+li { margin-bottom: 0.35rem; }
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0 1.5rem;
+  font-size: 0.92rem;
+}
+
+th, td {
+  border: 1px solid var(--border);
+  padding: 0.6rem 0.8rem;
+  text-align: left;
+}
+
+th {
+  background: var(--surface);
+  color: var(--blue);
+  font-weight: 600;
+}
+
+td { background: var(--bg); }
+
+tr:hover td { background: var(--surface); }
+
+code {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+  font-size: 0.88em;
+  color: var(--cyan);
+}
+
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  overflow-x: auto;
+  margin: 0.8rem 0 1.2rem;
+  line-height: 1.5;
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.88rem;
+  color: var(--text);
+}
+
+.key-point {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--orange);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  margin: 1.2rem 0;
+}
+
+.key-point strong:first-child,
+.key-point .kp-title {
+  color: var(--orange);
+  display: block;
+  margin-bottom: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.info-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--blue);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+}
+
+.tip-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--green);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+}
+
+.warn-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--red);
+  border-radius: 6px;
+  padding: 1rem 1.2rem;
+  margin: 1rem 0;
+}
+
+.formula {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.8rem 1.2rem;
+  margin: 0.8rem 0;
+  text-align: center;
+  font-size: 1.05rem;
+  color: var(--cyan);
+  font-family: "Cambria Math", "Times New Roman", serif;
+  overflow-x: auto;
+}
+
+.section-num {
+  color: var(--purple);
+  margin-right: 0.4rem;
+}
+
+.tag {
+  display: inline-block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 0.1rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-right: 0.3rem;
+}
+
+.interview-qa {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 1rem 0;
+  overflow: hidden;
+}
+
+.interview-qa summary {
+  padding: 0.8rem 1.2rem;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.interview-qa summary::-webkit-details-marker { display: none; }
+
+.interview-qa summary::before {
+  content: "Q";
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  background: var(--orange);
+  color: var(--bg);
+  font-size: 0.8rem;
+  font-weight: 700;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.interview-qa summary::after {
+  content: "▸";
+  margin-left: auto;
+  color: var(--text-muted);
+  transition: transform 0.2s;
+}
+
+.interview-qa[open] summary::after {
+  transform: rotate(90deg);
+}
+
+.interview-qa .a {
+  padding: 0.8rem 1.2rem;
+  color: var(--text);
+  line-height: 1.65;
+  border-top: 1px solid var(--border);
+}
+
+.interview-qa .a::before {
+  content: "A: ";
+  color: var(--green);
+  font-weight: 600;
+}
+
+.flow-diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin: 1.2rem 0;
+  text-align: center;
+  font-family: "Cascadia Code", "Fira Code", Consolas, monospace;
+  font-size: 0.9rem;
+  line-height: 2;
+  overflow-x: auto;
+  white-space: pre;
+}
+
+.flow-diagram .stage {
+  color: var(--blue);
+  font-weight: 600;
+}
+
+.flow-diagram .arrow {
+  color: var(--orange);
+}
+
+.flow-diagram .label {
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.compare-good {
+  color: var(--green);
+}
+
+.compare-bad {
+  color: var(--red);
+}
+
+.compare-mid {
+  color: var(--orange);
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: 1.6rem; }
+  .container { padding: 1rem; }
+  table { font-size: 0.82rem; }
+  th, td { padding: 0.4rem 0.5rem; }
+  .flow-diagram { font-size: 0.78rem; padding: 1rem; }
+}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{display:block;font-size:.95rem;font-weight:700;color:var(--blue,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--blue,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--blue,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+/* 标准组件体系 */
+.section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.5rem 1.6rem;margin:1.6rem 0}
+.section>h2:first-child{margin-top:0}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、人类对齐的必要性</a>
+<a href="#s2">二、RLHF 三阶段流程</a>
+<a href="#s3">三、Reward Model 详解</a>
+<a href="#s4">四、PPO 对齐</a>
+<a href="#s5">五、DPO (Direct Preference Optimization)</a>
+<a href="#s6">六、GRPO (Group Relative Policy Optimization)</a>
+<a href="#s7">七、其他对齐方法</a>
+<a href="#s8">八、Constitutional AI</a>
+<a href="#s9">九、对齐方法对比表</a>
+<a href="#s10">十、过优化与对齐税</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+
+<a href="../../index.html" class="home-float">⌂ 首页</a>
+
+<div class="container">
+
+<h1>W04 · RLHF / DPO / GRPO</h1>
+<p class="subtitle">人类对齐训练 — Reinforcement Learning from Human Feedback, Direct Preference Optimization &amp; Beyond</p>
+
+<!-- ============================================================ -->
+<div class="section">
+<h2 id="s1">一、人类对齐的必要性</h2>
+
+<div class="intuition-box">
+<p>预训练模型学的是"人类会怎么写下一个词"，不是"人类希望它怎么回答"。<span class="term">对齐</span>要补的正是这个缺口——把"像人写的"变成"对人有用的"，而这一步没法靠加数据加参数自动获得。</p>
+</div>
+
+<h3>预训练模型的根本问题</h3>
+<p>大语言模型经过预训练后，虽然具备强大的语言能力，但存在以下严重问题：</p>
+<ul>
+  <li><strong>有害内容：</strong>模型可能生成有毒、偏见、暴力或非法内容</li>
+  <li><strong>事实不准确：</strong>自信地输出错误信息（Hallucination / 幻觉）</li>
+  <li><strong>不遵循指令：</strong>预训练目标是"预测下一个 token"，而非"回答用户问题"</li>
+  <li><strong>目标不对齐：</strong>模型的训练目标（最小化语言建模 loss）≠ 人类期望的行为</li>
+</ul>
+
+<h3>对齐的三个 H 原则</h3>
+<div class="info-box">
+  <p>Anthropic 定义的三个核心对齐维度：</p>
+  <ul>
+    <li><strong style="color:var(--green)">Helpful（有用）：</strong>能理解并完成用户意图，提供高质量回答</li>
+    <li><strong style="color:var(--green)">Harmless（无害）：</strong>拒绝生成危险、有害或非法内容</li>
+    <li><strong style="color:var(--green)">Honest（诚实）：</strong>不编造信息，承认不确定性，表达自身局限</li>
+  </ul>
+</div>
+
+<h3>对齐的意义</h3>
+<p>对齐不仅是安全问题，也直接影响模型的实用性。SFT 是最基本的对齐手段，而 RLHF/DPO 进一步利用<strong>人类偏好</strong>信号来精细调整模型行为，使其输出更符合人类期望。</p>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>预训练模型的目标函数（next-token prediction）和人类期望之间存在 gap，这就是对齐要解决的问题</li>
+    <li>三个 H（Helpful/Harmless/Honest）是评估对齐效果的核心框架</li>
+    <li>对齐方法从 SFT → RLHF → DPO → GRPO 逐步演进，核心思路从"模仿人类"到"从偏好学习"</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s2">二、RLHF 三阶段流程</h2>
+
+<div class="intuition-box">
+<p>三个阶段各管一件事：SFT 教格式，奖励模型学偏好，PPO 把偏好翻译成参数更新。三者严格串行，任何一环的上限就是整条链的上限——所以奖励模型标不准时，再怎么调 PPO 都没用。</p>
+</div>
+
+<div class="arch-diagram">
+  RLHF 的完整回路：前两阶段是离线的，第三阶段才是那个"转起来"的环
+
+  ── 阶段 1：SFT（离线，一次性）──────────────────────────────
+     指令-回复对 ──▶ 监督微调 ──▶ π_sft
+                                   │
+                    ┌──────────────┴──────────────┐
+                    ▼                              ▼
+              作为策略的初始化                 冻结成参考模型 π_ref
+
+  ── 阶段 2：奖励模型（离线，一次性）─────────────────────────
+     同一 prompt 的两个回复 (y_w 优, y_l 劣)
+              │
+              ▼   Bradley-Terry：把"哪个更好"变成可微的成对损失
+        ┌──────────────┐
+        │  奖励模型 RM  │ ──▶ r(x, y) 输出一个标量分数
+        └──────────────┘      训完即冻结
+
+  ── 阶段 3：PPO（在线，循环）──────────────────────────────
+
+        ┌────────────────────────────────────────────────┐
+        │                                                │
+        ▼                                                │
+   ┌──────────┐  采样   ┌──────────────────────────┐     │
+   │ 策略 π_θ │ ──────▶ │  回复 y ~ π_θ( · | x )    │     │
+   │ ✎ 在更新  │         └────────────┬─────────────┘     │
+   └──────────┘                      │                    │
+        ▲                             ├──▶ ┌──────────┐   │
+        │                             │    │ RM  ❄    │──▶ r
+        │                             │    └──────────┘   │
+        │                             │                    │
+        │                             ├──▶ ┌──────────┐   │
+        │                             │    │ π_ref ❄  │──▶ logp_ref
+        │                             │    └──────────┘   │
+        │                             │            │       │
+        │                             │            ▼       │
+        │                             │    KL(π_θ ‖ π_ref) │
+        │                             │            │       │
+        │                             ▼            ▼       │
+        │                    奖励 = r − β · KL  ◀───┘       │
+        │                             │                    │
+        │                             ▼                    │
+        │                     ┌──────────────┐             │
+        │                     │ 价值网络 V ✎  │──▶ 优势 A   │
+        │                     └──────────────┘             │
+        │                             │                    │
+        └──────── PPO 梯度更新 π_θ ◀───┘                    │
+                          │                                 │
+                          └─────────────────────────────────┘
+
+  同时驻留四个模型：π_θ（在学）、π_ref（在拉）、RM（在评）、V（在估）
+  其中两个要更新、两个冻结 —— 这就是 PPO 显存吃紧的根源。
+  β 越大，策略被拴得越紧：奖励涨得慢，但也更不容易跑出语言分布之外。
+</div>
+
+<h3>完整流程图</h3>
+<div class="flow-diagram"><span class="stage">[ Stage 1: SFT ]</span>
+预训练模型 + 高质量指令数据 → 监督微调模型 π_SFT
+          <span class="arrow">│</span>
+          <span class="arrow">▼</span>
+<span class="stage">[ Stage 2: Reward Model ]</span>
+π_SFT 生成多组回答 → 人类标注偏好排序 → 训练奖励模型 r(x,y)
+          <span class="arrow">│</span>
+          <span class="arrow">▼</span>
+<span class="stage">[ Stage 3: PPO 优化 ]</span>
+用 RM 打分 + PPO 强化学习优化 π_θ，同时 KL 约束防止偏离 π_SFT</div>
+
+<h3>Stage 1: Supervised Fine-Tuning (SFT)</h3>
+<ul>
+  <li>使用人工撰写的高质量 (instruction, response) 对来微调预训练模型</li>
+  <li>让模型学会"对话格式"和"遵循指令"</li>
+  <li>本质是<strong>行为克隆</strong>（模仿人类标注者的行为）</li>
+  <li>局限：只能学到标注者的平均水平，无法超越标注者</li>
+</ul>
+
+<h3>Stage 2: Reward Model 训练</h3>
+<ul>
+  <li>让 SFT 模型对同一个 prompt 生成多个候选回答</li>
+  <li>人类标注者对这些回答进行<strong>偏好排序</strong>（y_w ≻ y_l）</li>
+  <li>训练一个 Reward Model 来模拟人类偏好</li>
+  <li>RM 通常使用和 LLM 相同的架构，去掉 LM Head 后加一个标量输出</li>
+</ul>
+
+<h3>Stage 3: PPO 强化学习优化</h3>
+<ul>
+  <li>将 LLM 视为一个"策略"(Policy)，RM 分数视为"奖励"(Reward)</li>
+  <li>使用 PPO 算法最大化 RM 打分，同时用 KL 散度约束防止偏离 SFT 模型太远</li>
+  <li>最终得到对齐后的模型 π_θ</li>
+</ul>
+
+<div class="formula">
+  max_π_θ  E_{x~D, y~π_θ(·|x)} [ r(x,y) ] − β · KL[ π_θ(y|x) ‖ π_SFT(y|x) ]
+</div>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>RLHF 三阶段的具体作用和数据流要能完整描述</li>
+    <li>Stage 1 SFT 解决"会对话"，Stage 2 RM 建模偏好，Stage 3 PPO 用偏好信号优化策略</li>
+    <li>KL 约束是防止 reward hacking 和分布偏移的关键手段</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s3">三、Reward Model 详解</h2>
+
+<div class="intuition-box">
+<p><span class="term">奖励模型</span>学的是"两个回复哪个更好"这个相对判断，而不是绝对分数——人类标绝对分会飘，标相对好坏才稳。Bradley-Terry 把成对比较变成可微的损失，这个转换就是整个 RLHF 能跑起来的接口。</p>
+</div>
+
+<h3>偏好数据收集</h3>
+<p>Reward Model 训练的基础是<strong>人类偏好数据</strong>。典型的数据收集流程：</p>
+<ol>
+  <li>给定一个 prompt x，让 SFT 模型生成 K 个候选回答 {y₁, y₂, ..., yₖ}</li>
+  <li>人类标注者对 K 个回答进行<strong>排序</strong>（ranking）</li>
+  <li>将排序转化为两两比较的偏好对 (y_w, y_l)，其中 y_w 是人类偏好的回答</li>
+  <li>每个排序可以产生 C(K,2) = K(K-1)/2 个偏好对</li>
+</ol>
+
+<h3>Bradley-Terry 模型</h3>
+<p>BT 模型将偏好建模为一个概率问题：</p>
+<div class="formula">
+  P(y_w ≻ y_l | x) = σ(r(x, y_w) − r(x, y_l))
+</div>
+<p>其中 σ 是 sigmoid 函数，r(x,y) 是 Reward Model 输出的标量分数。直觉：偏好回答的 reward 越高于非偏好回答，概率越接近 1。</p>
+
+<h3>RM 训练目标</h3>
+<p>最大化偏好对的似然，即最小化以下 loss：</p>
+<div class="formula">
+  L_RM = −E_{(x, y_w, y_l) ~ D} [ log σ(r(x, y_w) − r(x, y_l)) ]
+</div>
+
+<h3>RM 的质量决定上限</h3>
+<div class="warn-box">
+  <p><strong>核心认知：RM 质量 = RLHF 效果的天花板。</strong></p>
+  <ul>
+    <li>RM 不准确 → PPO 会优化一个错误的方向 → 产生 Reward Hacking</li>
+    <li>人类标注者之间的不一致性（inter-annotator disagreement）直接影响 RM 质量</li>
+    <li>RM 在 OOD（分布外）数据上的泛化能力有限</li>
+    <li>InstructGPT 使用 ~33k 偏好对比数据来训练 RM，后续工作通常需要更多</li>
+  </ul>
+</div>
+
+<h4>RM 架构选择</h4>
+<table>
+  <tr><th>方案</th><th>做法</th><th>优缺点</th></tr>
+  <tr><td>同架构 RM</td><td>与策略模型相同大小的 LLM 改造</td><td>效果好，但开销大（需要加载两份模型）</td></tr>
+  <tr><td>小模型 RM</td><td>较小的 LLM 训练 RM</td><td>更省资源，但可能不够准确</td></tr>
+  <tr><td>多头 RM</td><td>针对不同维度输出多个 reward</td><td>更细粒度控制，训练复杂</td></tr>
+</table>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>Bradley-Terry 模型的数学原理 — 用 sigmoid 函数建模偏好概率</li>
+    <li>RM loss 是 cross-entropy loss 的变形，本质是二分类</li>
+    <li>RM 质量是 RLHF 效果的天花板，数据质量 > 数据量</li>
+    <li>偏好排序 → 偏好对的转换可以产生 C(K,2) 组合，数据高效利用</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s4">四、PPO 对齐</h2>
+
+<div class="intuition-box">
+<p>PPO 同时挂着四个模型：策略在学、参考在拉、奖励在评、价值在估。<span class="term">KL 散度</span>那一项的作用是把策略拴在参考模型附近，防止它为了刷高奖励跑到语言分布之外——去掉这根绳子，模型能在几百步内学会说人听不懂的话。</p>
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>奖励一路涨，人工评分反而在掉。<strong>背景</strong>——某团队用自训的奖励模型跑 PPO，训练看板上奖励曲线非常漂亮，从 0.4 稳步升到 0.9。<strong>问题</strong>——同期人工盲评的胜率却从 62% 掉到 48%。抽样几十条输出后看清了原因：模型学会了三个套路——把回答堆长、开头复述一遍问题、结尾加一段免责声明。这三样恰好都是奖励模型偏好数据里的高分特征（标注者当时普遍把更长更"周全"的回复标为更好），于是模型优化的是<span class="term">奖励模型的偏见</span>，不是真实偏好。这就是典型的 <span class="term">Reward Hacking</span>。<strong>方案</strong>——四件事一起做：在奖励里加一项长度惩罚；把 KL 系数从 0.01 提到 0.05 把策略拴紧；补约 500 条"短而准优于长而空"的偏好对重训奖励模型；并把"奖励模型分数与人工评分的相关性"作为早停判据，相关性一掉就停。<strong>效果</strong>——奖励分数回落到 0.72（比之前"难看"），但人工胜率升到 68%。<strong>值得记住的是</strong>：当代理指标和真实目标背道而驰时，代理指标变难看才是对的。
+</div>
+
+<h3>PPO 在 RLHF 中的角色</h3>
+<p>Proximal Policy Optimization（PPO）是一种策略梯度算法，在 RLHF 中作为核心优化算法来调整 LLM 的参数。将 LLM 的文本生成看作 RL 中的"动作序列"：</p>
+<table>
+  <tr><th>RL 概念</th><th>LLM 对应</th></tr>
+  <tr><td>State (状态)</td><td>已生成的 token 序列 + prompt</td></tr>
+  <tr><td>Action (动作)</td><td>生成下一个 token</td></tr>
+  <tr><td>Policy (策略)</td><td>LLM 本身 π_θ(y|x)</td></tr>
+  <tr><td>Reward (奖励)</td><td>RM 的评分 r(x,y)（通常只在序列末尾给予）</td></tr>
+  <tr><td>Value Function</td><td>Critic 模型 V(s)（估算未来累计奖励）</td></tr>
+</table>
+
+<h3>PPO 训练中的四个模型</h3>
+<div class="info-box">
+  <p>RLHF-PPO 训练需要同时维护<strong>四个模型</strong>，这是其最大开销来源：</p>
+  <ol>
+    <li><strong style="color:var(--blue)">Policy Model (Actor)</strong> — 正在训练的 LLM，参数 θ 会更新</li>
+    <li><strong style="color:var(--green)">Reference Model</strong> — SFT 后的 LLM 冻结副本，用于计算 KL 惩罚</li>
+    <li><strong style="color:var(--orange)">Reward Model</strong> — 冻结的 RM，提供 reward 信号</li>
+    <li><strong style="color:var(--purple)">Critic Model (Value)</strong> — 估算状态价值函数 V(s)，用于计算 Advantage</li>
+  </ol>
+</div>
+
+<h3>KL 散度约束</h3>
+<p>KL 散度项 <code>β · KL[π_θ ‖ π_ref]</code> 是 RLHF 中至关重要的正则项：</p>
+<ul>
+  <li><strong>防止分布偏移：</strong>确保优化后的策略不会偏离 SFT 模型太远，保持语言质量</li>
+  <li><strong>防止 Reward Hacking：</strong>模型不会学到"欺骗" RM 获取高分的捷径</li>
+  <li><strong>β 的取值：</strong>需要仔细调节，太小则约束无效，太大则学不到偏好信号</li>
+</ul>
+<div class="formula">
+  KL[π_θ ‖ π_ref] = E_{y~π_θ} [ log(π_θ(y|x) / π_ref(y|x)) ]
+</div>
+
+<h3>Reward Hacking</h3>
+<p>当 RM 不完美时，PPO 可能找到 RM 的"漏洞"来获取高分，但人类实际上不认可这些输出：</p>
+<ul>
+  <li>输出过长、重复某些"安全"模板以获取高分</li>
+  <li>使用人类偏好的格式但内容空洞</li>
+  <li>过度"讨好"式回答，丧失客观性</li>
+</ul>
+
+<h3>PPO 训练不稳定性</h3>
+<div class="warn-box">
+  <p><strong>PPO 在 RLHF 中面临的主要挑战：</strong></p>
+  <ul>
+    <li><strong>超参数敏感：</strong>learning rate、β、clip range、mini-batch size 等需要精细调节</li>
+    <li><strong>训练不稳定：</strong>reward 可能突然崩塌（reward collapse），需要仔细监控</li>
+    <li><strong>资源开销大：</strong>同时维护 4 个模型的显存和计算开销巨大</li>
+    <li><strong>难以复现：</strong>随机种子、硬件差异都可能导致结果显著不同</li>
+    <li><strong>工程复杂：</strong>需要 experience buffer、GAE、多轮采样等，实现复杂</li>
+  </ul>
+</div>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>PPO 在 RLHF 中的四个模型各自的作用，尤其是为什么需要 Reference Model</li>
+    <li>KL 散度约束的作用：防止分布偏移和 Reward Hacking</li>
+    <li>PPO 训练的最大痛点：四模型的内存开销 + 训练不稳定</li>
+    <li>正是这些痛点催生了 DPO 等更简洁的替代方案</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s5">五、DPO (Direct Preference Optimization)</h2>
+
+<div class="intuition-box">
+<p>DPO 的洞察是：最优策略和奖励函数之间存在一一对应关系。既然如此，就不必先把奖励显式训出来再去优化它——直接对着偏好对做一个分类式的损失，把"训 RM"和"跑 RL"两步压成一步。</p>
+</div>
+
+<div class="arch-diagram">
+  同样的偏好数据，PPO 与 DPO 走的两条路：
+
+  ── PPO 路径（两段、在线采样）───────────────────────────────
+
+    偏好对          ┌──────────┐
+    (x, y_w, y_l) ─▶│  训 RM   │─▶ r(x,y)  冻结
+                    └──────────┘      │
+                                       ▼
+    prompt x ──▶ π_θ 采样 y ──▶ 打分 r ──▶ 算优势 A（需价值网络 V）
+                    ▲                                │
+                    └────────── PPO 更新 ◀───────────┘
+                         ＋ KL(π_θ ‖ π_ref) 拴住
+
+    驻留模型：π_θ ✎   V ✎   RM ❄   π_ref ❄        ── 四个
+    数据是在线产生的（策略每更新一次，采样分布就变）
+    优点：能探索到偏好数据之外的回复
+    代价：显存吃紧、超参敏感、奖励模型的偏见会被放大成 Reward Hacking
+
+  ── DPO 路径（一段、离线）──────────────────────────────────
+
+    偏好对 (x, y_w, y_l)
+        │
+        ├──▶ π_θ   计算 log π_θ(y_w|x), log π_θ(y_l|x)      ✎
+        │
+        └──▶ π_ref 计算 log π_ref(y_w|x), log π_ref(y_l|x)  ❄
+                              │
+                              ▼
+        隐式奖励   r̂ = β · [ log π_θ(y|x) − log π_ref(y|x) ]
+                              │
+                              ▼
+        loss = −log σ( r̂(y_w) − r̂(y_l) )   ── 一个成对分类损失
+                              │
+                              ▼
+                     直接反向传播更新 π_θ
+
+    驻留模型：π_θ ✎   π_ref ❄                      ── 两个
+    数据是离线固定的（不采样，一遍遍过同一批偏好对）
+    优点：显存减半、无需价值网络、训练稳定、超参少
+    代价：探索范围被离线数据的覆盖面锁死；β 过小易过拟合偏好对
+
+  ─────────────────────────────────────────────────────────
+  一句话：PPO 把偏好"编译"成一个奖励函数再去优化，
+          DPO 发现这个中间产物可以消掉，于是直接对偏好求梯度。
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>从 PPO 换到 DPO，一轮训练从 26 小时缩到 7 小时。<strong>背景</strong>——某团队要给一个 8B 模型做偏好对齐，手上有单机 8×A100 和约 4 万条离线偏好对。<strong>问题</strong>——PPO 要同时驻留策略、参考模型、奖励模型、价值网络四个模型，其中两个还要保存优化器状态；显存排完之后 micro-batch 只能压到 1，单步约 3.2 秒，跑一轮要 26 小时。更麻烦的是 KL 系数、裁剪范围、价值损失权重几个超参互相耦合，一轮 26 小时意味着调参周期以天计。<strong>方案</strong>——改用 DPO：只需要策略和一个冻结的参考模型，价值网络和奖励模型都不用了；把省下的显存换成更大的 micro-batch。<strong>效果</strong>——显存占用降到约原来的一半，micro-batch 提到 4，单步降到约 0.9 秒，一轮 7 小时，调参迭代速度提升近四倍。<strong>代价要说清</strong>——DPO 没有在线采样，模型只能在那 4 万条偏好对覆盖到的空间里学；后续要突破这个上限，还是得回到在线方法或者补数据。
+</div>
+
+<h3>核心思想</h3>
+<p>DPO（Rafailov et al., 2023）的关键洞察：<strong>不需要显式训练一个 Reward Model，可以直接从偏好数据优化策略。</strong></p>
+<p>传统 RLHF 是两步走（先训 RM → 再用 RL 优化），而 DPO 将这两步合并成一个<strong>闭式解</strong>，变成一个简单的监督学习问题。</p>
+
+<h3>数学推导核心</h3>
+
+<h4>Step 1: RLHF 的最优策略有闭式解</h4>
+<p>RLHF 的目标函数有一个已知的最优解形式：</p>
+<div class="formula">
+  π*(y|x) = (1/Z(x)) · π_ref(y|x) · exp(r(x,y) / β)
+</div>
+<p>其中 Z(x) 是归一化常数（partition function）。</p>
+
+<h4>Step 2: 从最优策略反解出隐式 reward</h4>
+<p>将上式取对数并重排，可以用策略的对数概率表达 reward：</p>
+<div class="formula">
+  r(x,y) = β · log(π*(y|x) / π_ref(y|x)) + β · log Z(x)
+</div>
+
+<h4>Step 3: 代入 Bradley-Terry 模型</h4>
+<p>将隐式 reward 代入偏好概率公式，Z(x) 项在差值中消掉：</p>
+<div class="formula">
+  P(y_w ≻ y_l | x) = σ( β · [log(π_θ(y_w|x)/π_ref(y_w|x)) − log(π_θ(y_l|x)/π_ref(y_l|x))] )
+</div>
+
+<h4>最终 DPO Loss</h4>
+<div class="formula" style="border-color: var(--green); font-size: 1.1rem;">
+  L_DPO = −E_{(x, y_w, y_l)} [ log σ( β · (log π_θ(y_w|x)/π_ref(y_w|x) − log π_θ(y_l|x)/π_ref(y_l|x)) ) ]
+</div>
+
+<h3>DPO vs RLHF 对比</h3>
+<table>
+  <tr><th>维度</th><th>RLHF (PPO)</th><th>DPO</th></tr>
+  <tr><td>是否需要 RM</td><td class="compare-bad">需要单独训练</td><td class="compare-good">不需要</td></tr>
+  <tr><td>优化方式</td><td>强化学习 (PPO)</td><td>监督学习 (类 cross-entropy)</td></tr>
+  <tr><td>需要的模型数</td><td class="compare-bad">4 个</td><td class="compare-good">2 个 (π_θ + π_ref)</td></tr>
+  <tr><td>训练稳定性</td><td class="compare-bad">不稳定，超参数敏感</td><td class="compare-good">稳定，类似 SFT</td></tr>
+  <tr><td>实现复杂度</td><td class="compare-bad">高（需要采样、GAE 等）</td><td class="compare-good">低（标准 loss 优化）</td></tr>
+  <tr><td>计算资源</td><td class="compare-bad">高</td><td class="compare-good">更低</td></tr>
+  <tr><td>性能上限</td><td class="compare-good">理论上可能更高</td><td class="compare-mid">接近 RLHF</td></tr>
+  <tr><td>Online 数据</td><td class="compare-good">可以在线采样</td><td class="compare-bad">默认离线（offline）</td></tr>
+</table>
+
+<h3>DPO 的局限</h3>
+<ul>
+  <li><strong>离线偏好：</strong>默认使用固定的偏好数据，无法探索新的策略空间</li>
+  <li><strong>依赖参考模型：</strong>π_ref 的质量直接影响效果</li>
+  <li><strong>偏好数据质量要求高：</strong>噪声标注会直接影响训练</li>
+  <li><strong>过拟合风险：</strong>由于是监督学习形式，可能过拟合偏好数据</li>
+</ul>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>DPO 的数学推导要能完整讲清楚：从 RLHF 最优解 → 反解 reward → 代入 BT 模型 → 消去 Z(x)</li>
+    <li>DPO Loss 的直觉理解：增大好回答的概率 / 参考比值，减小坏回答的概率 / 参考比值</li>
+    <li>DPO 本质上是在 <em>隐式</em> 地做 reward modeling，reward 被 reparameterize 成了策略的对数概率比</li>
+    <li>DPO 是 offline 方法，这是其与 PPO 的重要区别</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s6">六、GRPO (Group Relative Policy Optimization)</h2>
+
+<div class="intuition-box">
+<p>GRPO 把 PPO 里那个还要单独训练的价值网络换成了一个更朴素的东西：同一道题采样一组答案，用<span class="term">组内相对优势</span>当基线。少养一个模型，显存和要调的超参一起减半。</p>
+</div>
+
+<div class="arch-diagram">
+  优势 A 怎么算：PPO 要训一个网络去估，GRPO 直接用组内统计量
+
+  ── PPO ────────────────────────────────────────────────
+     prompt x ──▶ 采样 1 个回复 y ──▶ r(x,y)
+                                        │
+                          ┌─────────────┴──────────────┐
+                          │  价值网络 V(x)  ✎ 要训练     │  ← 额外一个模型
+                          └─────────────┬──────────────┘   额外一份优化器状态
+                                        ▼                   额外一套超参
+                              A = r − V(x)
+     V 估不准 ─▶ 优势有偏 ─▶ 策略更新方向漂 ─▶ 训练不稳
+
+  ── GRPO ───────────────────────────────────────────────
+     prompt x ──┬──▶ 采样 y₁ ──▶ r₁
+                ├──▶ 采样 y₂ ──▶ r₂
+                ├──▶ 采样 y₃ ──▶ r₃      同一道题采样 G 个回复
+                ├──▶      ...
+                └──▶ 采样 y_G ──▶ r_G
+                                  │
+                                  ▼
+                    用这一组自己的均值和标准差做归一化
+
+                         rᵢ − mean(r₁..r_G)
+                  Aᵢ = ──────────────────────
+                          std(r₁..r_G)
+
+     不需要价值网络：基线就是"这道题的平均水平"
+     组内比较天然消掉了题目难度差异 —— 难题上答得比同组好，
+     和简单题上答得比同组好，得到的优势是同一量级
+
+  ─────────────────────────────────────────────────────
+  代价：每个 prompt 要采 G 个回复（常取 8~64），采样开销上去了；
+  收益：省一个模型、省一套超参、优势估计不再依赖一个可能估歪的网络。
+  这个交换在答案可自动判分的场景（数学、代码）上尤其划算 ——
+  因为那里的 r 可以由规则给出，连奖励模型都能省掉。
+</div>
+
+<h3>背景与动机</h3>
+<p>GRPO 由 DeepSeek（2024）提出，核心改进是<strong>去掉 Critic Model</strong>，用<strong>组内相对奖励</strong>来估计 Advantage，大幅降低资源消耗。</p>
+
+<h3>核心设计</h3>
+
+<h4>去掉 Critic 模型</h4>
+<p>PPO 需要一个与 Policy 同等规模的 Critic 模型来估计状态价值 V(s)，GRPO 的方案：</p>
+<ol>
+  <li>对每个 prompt x，用当前策略 π_θ 采样一组（Group） G 个回答 {y₁, ..., y_G}</li>
+  <li>用 Reward Model（或规则）对这 G 个回答打分 {r₁, ..., r_G}</li>
+  <li>在组内计算 Advantage：对 reward 做 <strong>标准化</strong>（减均值、除标准差）</li>
+</ol>
+
+<div class="formula">
+  Â_i = (r_i − mean(r₁, ..., r_G)) / std(r₁, ..., r_G)
+</div>
+
+<h4>GRPO 目标函数</h4>
+<div class="formula">
+  L_GRPO = E [ (1/G) · Σᵢ min(ρᵢ · Âᵢ, clip(ρᵢ, 1−ε, 1+ε) · Âᵢ) ] − β · KL[π_θ ‖ π_ref]
+</div>
+<p>其中 ρᵢ = π_θ(yᵢ|x) / π_old(yᵢ|x) 是重要性采样比率，clip 操作继承自 PPO 以限制策略更新幅度。</p>
+
+<h3>GRPO vs PPO</h3>
+<table>
+  <tr><th>维度</th><th>PPO</th><th>GRPO</th></tr>
+  <tr><td>Critic 模型</td><td class="compare-bad">需要（与 LLM 同等规模）</td><td class="compare-good">不需要</td></tr>
+  <tr><td>Advantage 计算</td><td>GAE（时序差分）</td><td>组内 reward 标准化</td></tr>
+  <tr><td>显存占用</td><td class="compare-bad">4 个模型</td><td class="compare-good">3 个模型</td></tr>
+  <tr><td>训练稳定性</td><td class="compare-bad">较不稳定</td><td class="compare-good">更稳定</td></tr>
+  <tr><td>适用场景</td><td>通用 RL</td><td>LLM 对齐，尤其数学/代码推理</td></tr>
+</table>
+
+<h3>GRPO 在 DeepSeek 中的应用</h3>
+<div class="tip-box">
+  <p>DeepSeek-R1 使用 GRPO 实现了强大的推理能力，关键策略：</p>
+  <ul>
+    <li>结合 <strong>规则奖励</strong>（准确率、格式正确性）和 <strong>模型奖励</strong>（RM 打分）</li>
+    <li>数学题用准确率做 reward（结果正确 r=1，错误 r=0），无需 RM</li>
+    <li>通过大 group size (G=64) 保证 Advantage 估计质量</li>
+    <li>与 SFT 联合使用：先 RL 再 SFT，再 RL 再 SFT，迭代进化</li>
+  </ul>
+</div>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>GRPO 最大的贡献是去掉 Critic，用"组内相对比较"代替价值函数估计</li>
+    <li>Advantage 估计用 group-level reward 标准化，直觉：同一 prompt 下的相对好坏</li>
+    <li>GRPO 比 PPO 少一个模型，显存节省约 25-33%</li>
+    <li>DeepSeek-R1 的成功证明了 GRPO + 规则奖励在推理任务上的有效性</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s7">七、其他对齐方法</h2>
+
+<div class="intuition-box">
+<p>这一批方法的共同动作是继续拆零件：KTO 连成对数据都不要了（单条好/坏标注即可），ORPO 把 SFT 和偏好优化合成一个损失，SimPO 干掉<span class="term">参考模型</span>。每拆掉一个零件都省一份成本，也各自让出一点能力——所以选型问题永远是"你能接受让出哪一点"。</p>
+</div>
+
+<h3>KTO (Kahneman-Tversky Optimization)</h3>
+<p>KTO 的创新点：<strong>不需要偏好对，只需要"好/坏"二元标签</strong>。</p>
+<ul>
+  <li>灵感来自前景理论（Prospect Theory）：人对损失比收益更敏感</li>
+  <li>损失函数对"坏回答"施加更大的惩罚权重</li>
+  <li>数据收集更简单：只需标注"这个回答好不好"，不需要两两比较</li>
+</ul>
+<div class="formula">
+  L_KTO = E_{y_good} [1 − σ(β · r̂)] + λ · E_{y_bad} [1 − σ(−β · r̂)]
+</div>
+<p>其中 r̂ = log(π_θ/π_ref) − KL_ref，λ > 1 对负样本给予更大权重。</p>
+
+<h3>ORPO (Odds Ratio Preference Optimization)</h3>
+<p>ORPO 直接将偏好学习整合到 SFT 过程中，<strong>不需要 RM 也不需要参考模型</strong>。</p>
+<ul>
+  <li>在 SFT 的 NLL loss 基础上加入一个 odds ratio 正则项</li>
+  <li>使用 log odds ratio 区分好/坏回答</li>
+  <li>最简洁的对齐方法之一：只需要一个模型、一次训练</li>
+</ul>
+
+<h3>SimPO (Simple Preference Optimization)</h3>
+<ul>
+  <li>简化 DPO，使用<strong>序列平均对数概率</strong>代替 per-token log prob</li>
+  <li>加入<strong>长度归一化</strong>，消除长度偏差</li>
+  <li>不需要参考模型（去掉 π_ref），进一步降低资源需求</li>
+</ul>
+
+<h3>IPO (Identity Preference Optimization)</h3>
+<ul>
+  <li>解决 DPO 的一个理论缺陷：DPO 假设 BT 模型完美成立</li>
+  <li>IPO 使用一个更鲁棒的正则化目标</li>
+  <li>在偏好数据有噪声时表现更好</li>
+</ul>
+
+<h3>RLAIF (RL from AI Feedback)</h3>
+<p>用 <strong>AI 模型替代人类标注者</strong>来提供偏好反馈：</p>
+<ul>
+  <li>使用一个强大的 LLM（如 GPT-4）作为偏好标注者</li>
+  <li>大幅降低人类标注成本和时间</li>
+  <li>可以大规模生成偏好数据</li>
+  <li>风险：AI 标注的偏好可能不完全代表人类偏好，存在"AI 回音壁"效应</li>
+</ul>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>KTO 只需好/坏标签（非偏好对），数据收集更简单</li>
+    <li>ORPO 最简洁：单模型 + 单阶段 = SFT + 对齐同时完成</li>
+    <li>SimPO 去掉 π_ref，IPO 解决 DPO 的 BT 模型假设问题</li>
+    <li>RLAIF 用 AI 替代人类标注者，是当前扩展偏好数据的主流方式</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s8">八、Constitutional AI</h2>
+
+<div class="intuition-box">
+<p>Constitutional AI 把"人来标哪个回复更安全"换成"模型按写好的原则自己批改自己"。人类的工作从逐条标注上移到写原则——标注量从随数据线性增长，变成几乎恒定。</p>
+</div>
+
+<h3>Anthropic 的自我改进方法</h3>
+<p>Constitutional AI (CAI) 由 Anthropic 在 2022 年提出，核心思想：让模型<strong>自我批评和自我修正</strong>，减少对人类标注的依赖。</p>
+
+<h3>CAI 的两个阶段</h3>
+
+<h4>阶段 1: Supervised — 自我批评 + 修正 (Critique → Revision)</h4>
+<ol>
+  <li>给模型一个"宪法"（Constitution）：一组明确的行为准则</li>
+  <li>模型生成初始回答 → 模型根据宪法<strong>自我批评</strong> → 模型生成修正后的回答</li>
+  <li>用修正后的回答作为 SFT 数据进行训练</li>
+</ol>
+
+<h4>阶段 2: RL — AI 反馈的 RLHF (RLAIF)</h4>
+<ol>
+  <li>让 AI 根据宪法原则来判断哪个回答更好</li>
+  <li>用 AI 生成的偏好数据训练 RM</li>
+  <li>用 RL 进行最终对齐</li>
+</ol>
+
+<h3>Red Teaming 自动化</h3>
+<div class="info-box">
+  <p>CAI 的一个重要应用是<strong>自动化红队测试</strong>（Red Teaming）：</p>
+  <ul>
+    <li>让 AI 自动生成对抗性的 prompt（攻击尝试）</li>
+    <li>测试模型是否能安全应对这些攻击</li>
+    <li>将失败案例纳入训练，持续提升安全性</li>
+    <li>比人工 Red Teaming 更高效、覆盖面更广</li>
+  </ul>
+</div>
+
+<h3>宪法示例</h3>
+<pre><code>原则 1: 请选择最无害、最符合道德的回答。
+原则 2: 请选择不包含种族、性别、宗教歧视的回答。
+原则 3: 请选择最诚实、不编造事实的回答。
+原则 4: 请选择最有帮助、信息量最大的回答。
+原则 5: 如果两个回答差不多，选择更谨慎的那个。</code></pre>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>CAI 的核心创新：用一组原则（宪法）指导 AI 自我改进，减少人类标注</li>
+    <li>两阶段：自我批评修正 (SFT) + AI 反馈 (RLAIF)</li>
+    <li>自动化 Red Teaming 是 CAI 的重要衍生应用</li>
+    <li>CAI 是 Claude 模型安全训练的核心技术</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s9">九、对齐方法对比表</h2>
+
+<div class="intuition-box">
+<p>选型只需要回答三个问题：手上是成对偏好数据还是单条标注？答案能不能自动判分？显存和调参预算有多少？三个答案基本就唯一确定了方法——剩下的差异在实践中往往小于数据质量带来的差异。</p>
+</div>
+
+<h3>常见对齐方法的资源与数据需求速查</h3>
+<table>
+<tr><th>方法</th><th>训练期需驻留的模型</th><th>需要的数据形态</th><th>是否在线采样</th><th>主要超参</th><th>最适合的场景</th></tr>
+<tr><td>PPO</td><td>策略 ＋ 价值网络 ＋ 奖励模型 ＋ 参考模型（4 个）</td><td>偏好对 → 先训奖励模型</td><td>是</td><td>KL 系数、裁剪范围、价值损失权重</td><td>预算充足、需要探索离线数据之外的行为</td></tr>
+<tr><td>DPO</td><td>策略 ＋ 参考模型（2 个）</td><td>成对偏好数据</td><td>否</td><td>β</td><td>有现成偏好对、要快速稳定拿到对齐效果</td></tr>
+<tr><td>GRPO</td><td>策略 ＋ 参考模型（＋ 奖励来源）</td><td>可打分的 prompt（规则或奖励模型）</td><td>是</td><td>组大小 G、KL 系数</td><td>答案可自动判分的推理任务（数学、代码）</td></tr>
+<tr><td>KTO</td><td>策略 ＋ 参考模型（2 个）</td><td>单条的好/坏标注，不需配对</td><td>否</td><td>期望权重</td><td>只有点赞点踩这类非配对反馈</td></tr>
+<tr><td>ORPO</td><td>策略（1 个）</td><td>成对偏好数据</td><td>否</td><td>λ（偏好项权重）</td><td>想把 SFT 与偏好优化并成一步、省一遍训练</td></tr>
+<tr><td>SimPO</td><td>策略（1 个）</td><td>成对偏好数据</td><td>否</td><td>β、目标边界 γ</td><td>显存最紧、且不想维护参考模型</td></tr>
+</table>
+
+<h3>按手头条件反查该用哪种方法</h3>
+<table>
+<tr><th>你的约束</th><th>推荐路径</th><th>理由</th></tr>
+<tr><td>只有点赞/点踩，没有成对数据</td><td>KTO</td><td>其余方法都要求同一 prompt 下的优劣配对</td></tr>
+<tr><td>有成对偏好数据，单机多卡，想稳</td><td>DPO</td><td>两个模型即可，超参基本只有 β 一个</td></tr>
+<tr><td>任务答案可用规则自动判分</td><td>GRPO</td><td>奖励可由规则给出，连奖励模型都能省掉</td></tr>
+<tr><td>显存极紧，连参考模型都放不下</td><td>SimPO / ORPO</td><td>两者都不需要常驻参考模型</td></tr>
+<tr><td>需要模型学会离线数据里没有的行为</td><td>PPO 或 GRPO</td><td>只有在线采样才能探索到数据覆盖之外</td></tr>
+<tr><td>标注预算极少但有明确的安全准则</td><td>Constitutional AI ＋ DPO</td><td>用原则批改替代逐条人工标注，产出的偏好对再喂 DPO</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先把奖励模型或判分规则做扎实，它是整条链的上限</li>
+<li>把"代理指标与人工评分的相关性"做成早停判据，而不是只盯奖励曲线</li>
+<li>对齐前后都要跑一遍通用能力基准，把<span class="term">对齐税</span>量化出来</li>
+<li>KL 系数从保守值起步，观察输出是否开始偏离自然语言再放松</li>
+<li>偏好数据先验收标注一致率，低于可用基准线就先修规范</li>
+<li>在奖励里显式加长度惩罚，长度偏好是最常见的一种代理偏差</li>
+<li>能用规则判分的任务就用规则，省下的奖励模型偏见比省下的算力更值钱</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要拿奖励曲线当成绩单，它衡量的是代理目标而不是真实偏好</li>
+<li>不要去掉或调得过松 KL 约束，策略会在几百步内跑出语言分布</li>
+<li>不要在奖励模型明显有偏时靠调 PPO 超参补救，先回去修数据</li>
+<li>不要用同一个模型既当策略又当裁判，自我偏好会一路自我强化</li>
+<li>不要只在对齐任务上评测，安全和风格变好而基础能力塌了同样是失败</li>
+<li>不要把 DPO 的 β 设得过小，那等于允许策略在偏好对上过拟合</li>
+<li>不要指望离线方法学会偏好数据里从未出现的行为</li>
+</ul>
+</div>
+</div>
+
+<table>
+  <tr>
+    <th>方法</th>
+    <th>是否需要 RM</th>
+    <th>需要 π_ref</th>
+    <th>数据需求</th>
+    <th>训练复杂度</th>
+    <th>稳定性</th>
+    <th>效果</th>
+  </tr>
+  <tr>
+    <td><strong>RLHF (PPO)</strong></td>
+    <td class="compare-bad">是</td>
+    <td>是</td>
+    <td>偏好对 + 在线采样</td>
+    <td class="compare-bad">高（4 模型 + RL）</td>
+    <td class="compare-bad">不稳定</td>
+    <td class="compare-good">强</td>
+  </tr>
+  <tr>
+    <td><strong>DPO</strong></td>
+    <td class="compare-good">否</td>
+    <td>是</td>
+    <td>偏好对（离线）</td>
+    <td class="compare-good">低（2 模型 + SL）</td>
+    <td class="compare-good">稳定</td>
+    <td class="compare-good">强</td>
+  </tr>
+  <tr>
+    <td><strong>GRPO</strong></td>
+    <td class="compare-mid">可选</td>
+    <td>是</td>
+    <td>在线采样 + 规则/RM</td>
+    <td class="compare-mid">中（3 模型 + RL）</td>
+    <td class="compare-mid">较稳定</td>
+    <td class="compare-good">强</td>
+  </tr>
+  <tr>
+    <td><strong>KTO</strong></td>
+    <td class="compare-good">否</td>
+    <td>是</td>
+    <td>好/坏标签</td>
+    <td class="compare-good">低</td>
+    <td class="compare-good">稳定</td>
+    <td class="compare-mid">中等</td>
+  </tr>
+  <tr>
+    <td><strong>ORPO</strong></td>
+    <td class="compare-good">否</td>
+    <td class="compare-good">否</td>
+    <td>偏好对</td>
+    <td class="compare-good">最低（1 模型）</td>
+    <td class="compare-good">稳定</td>
+    <td class="compare-mid">中等</td>
+  </tr>
+  <tr>
+    <td><strong>SimPO</strong></td>
+    <td class="compare-good">否</td>
+    <td class="compare-good">否</td>
+    <td>偏好对</td>
+    <td class="compare-good">低</td>
+    <td class="compare-good">稳定</td>
+    <td class="compare-mid">中等偏上</td>
+  </tr>
+  <tr>
+    <td><strong>IPO</strong></td>
+    <td class="compare-good">否</td>
+    <td>是</td>
+    <td>偏好对</td>
+    <td class="compare-good">低</td>
+    <td class="compare-good">稳定</td>
+    <td class="compare-mid">中等</td>
+  </tr>
+</table>
+
+<h3>如何选择对齐方法？</h3>
+<div class="tip-box">
+  <ul>
+    <li><strong>资源充足 + 需要最强效果：</strong>RLHF (PPO) 或 GRPO</li>
+    <li><strong>有偏好数据 + 简单快速：</strong>DPO（默认首选）</li>
+    <li><strong>只有好/坏标签：</strong>KTO</li>
+    <li><strong>资源极有限 + 最简单：</strong>ORPO 或 SimPO</li>
+    <li><strong>数学/代码推理：</strong>GRPO（可用规则奖励）</li>
+    <li><strong>偏好数据有噪声：</strong>IPO（更鲁棒）</li>
+  </ul>
+</div>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>能够根据具体场景（资源、数据、任务类型）推荐合适的对齐方法</li>
+    <li>清楚各方法在复杂度/数据需求/稳定性/效果上的 trade-off</li>
+    <li>DPO 是当前工业界最广泛使用的对齐方法（因为简单高效）</li>
+    <li>GRPO 在推理任务上表现突出，是新的热门方向</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s10">十、过优化与对齐税</h2>
+
+<div class="intuition-box">
+<p>奖励模型只是真实偏好的一个代理，代理一旦被优化到极致就必然与本体分道扬镳——这就是 Goodhart 定律在对齐上的形态。它的临床表现很稳定：奖励曲线一路上扬，人工评分开始下滑，两条线的交叉点就是该早停的位置。</p>
+</div>
+
+<h3>Reward Over-optimization</h3>
+<p>当持续用 RL 优化 reward 时，reward 分数会持续上升，但人类评估的质量在某个点后反而<strong>下降</strong>。这就是过优化（Over-optimization）。</p>
+
+<div class="flow-diagram"><span class="label">训练步数 →</span>
+
+<span class="stage">RM Score (代理指标)</span>:  ↗ ↗ ↗ ↗ ↗ ↗ ↗ 📈 持续上升
+<span class="stage">Human Rating (真实质量)</span>: ↗ ↗ ↗ ↗ 🏔️ ↘ ↘ 📉 先升后降
+
+                         <span class="arrow">^</span>
+                    <span class="label">最优停止点</span></div>
+
+<h3>Goodhart's Law</h3>
+<div class="warn-box">
+  <p><strong>"When a measure becomes a target, it ceases to be a good measure."</strong></p>
+  <p>当 RM 分数从"评估指标"变成"优化目标"时，模型会学到利用 RM 缺陷而非真正提升质量。这是 Goodhart's Law 在 RLHF 中的直接体现。</p>
+</div>
+
+<h3>过优化的表现</h3>
+<ul>
+  <li><strong>风格退化：</strong>回答变得冗长、模板化、过度"安全"</li>
+  <li><strong>内容空洞：</strong>使用大量修饰语但信息量低</li>
+  <li><strong>多样性丧失：</strong>不同 prompt 产生高度相似的回答</li>
+  <li><strong>"sycophancy"（谄媚）：</strong>过度迎合用户观点，即使用户说法有误</li>
+</ul>
+
+<h3>对齐税 (Alignment Tax)</h3>
+<p>对齐训练带来安全性和有用性的同时，也可能<strong>降低模型的原始能力</strong>：</p>
+<ul>
+  <li><strong>知识遗忘：</strong>RLHF 可能导致模型忘记部分预训练知识</li>
+  <li><strong>过度拒绝：</strong>模型对合理请求也产生过度保守的拒绝（"I can't help with that"）</li>
+  <li><strong>创造力下降：</strong>过度对齐使模型偏向"安全"的回答，减少创新性</li>
+  <li><strong>推理能力退化：</strong>在某些复杂推理任务上的性能可能下降</li>
+</ul>
+
+<h3>缓解策略</h3>
+<div class="tip-box">
+  <ul>
+    <li><strong>Early Stopping：</strong>基于人类评估而非 RM 分数来决定何时停止训练</li>
+    <li><strong>RM Ensemble：</strong>使用多个 RM 取平均，减少单一 RM 的偏差</li>
+    <li><strong>增大 β：</strong>更强的 KL 约束限制偏离程度</li>
+    <li><strong>RM 定期更新：</strong>用当前策略生成新数据重新训练 RM</li>
+    <li><strong>多轮迭代：</strong>RLHF → 评估 → 修正 → 再训练</li>
+    <li><strong>混合训练：</strong>对齐训练时混入预训练数据，防止灾难性遗忘</li>
+  </ul>
+</div>
+
+<div class="key-point">
+  <strong>💡 知识要点</strong>
+  <ul>
+    <li>Reward Over-optimization 是 RLHF 中的核心问题：RM Score ↑ 但真实质量 ↓</li>
+    <li>Goodhart's Law 解释了为什么代理指标不能无限优化</li>
+    <li>对齐税：安全和有用之间存在 trade-off，过度对齐反而降低模型能力</li>
+    <li>"sycophancy"是过优化的典型症状，是高频考察点</li>
+  </ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="qa" style="border-bottom-color: var(--orange);">Q&amp;A</h2>
+
+<details class="interview-qa">
+  <summary>RLHF 的三个阶段分别是什么？每个阶段的数据和目标是什么？</summary>
+  <div class="a">Stage 1 SFT：使用人工标注的 (instruction, response) 对进行监督微调，目标是让模型学会遵循指令和对话格式。Stage 2 Reward Model：用 SFT 模型生成候选回答，人类标注偏好排序，训练 RM 建模 P(y_w ≻ y_l) = σ(r(y_w) - r(y_l))。Stage 3 PPO：用 RM 分数作为 reward，用 PPO 算法优化策略模型，同时用 KL 散度约束防止偏离 SFT 模型。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>DPO 相比 RLHF 有什么优势？它是如何绕过 Reward Model 的？</summary>
+  <div class="a">DPO 的核心洞察是 RLHF 的最优策略有闭式解 π*(y|x) ∝ π_ref(y|x) · exp(r(x,y)/β)，可以反解出 r(x,y) = β · log(π*/π_ref) + const。将此隐式 reward 代入 Bradley-Terry 模型后，常数项消掉，得到只依赖 π_θ 和 π_ref 的损失函数。这样就不需要显式训练 RM，直接从偏好数据以监督学习的方式优化策略。优势包括：只需 2 个模型（节省 ~50% 显存）、训练稳定（类似 SFT）、实现简单、超参数少。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>什么是 Reward Hacking？如何缓解？</summary>
+  <div class="a">Reward Hacking 是指模型学会了利用 Reward Model 的缺陷来获取高分，而非真正提升回答质量。例如输出过长的模板化回答、过度使用"讨好"式措辞等。缓解方法包括：增大 KL 约束系数 β 限制偏离程度、使用多个 RM ensemble 减少偏差、基于人类评估做 early stopping、定期用新数据重训 RM、以及结合规则约束（如长度惩罚）。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>GRPO 与 PPO 的核心区别是什么？为什么更节省资源？</summary>
+  <div class="a">GRPO 的核心创新是去掉 Critic Model。PPO 需要一个与策略模型同等规模的 Critic 来估计状态价值 V(s)，而 GRPO 对每个 prompt 采样一组回答（Group），在组内对 reward 做标准化来估计 Advantage：Â_i = (r_i - μ) / σ。这样少维护一个大模型，显存节省约 25-33%。同时组内相对比较比绝对价值估计更稳定。DeepSeek-R1 成功使用 GRPO + 规则奖励在数学推理上取得了突破。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>Bradley-Terry 模型在 RLHF 中的作用是什么？</summary>
+  <div class="a">Bradley-Terry 模型将人类的偏好建模为概率形式：P(y_w ≻ y_l) = σ(r(y_w) - r(y_l))，其中 σ 是 sigmoid 函数。它的作用是将"哪个更好"这一主观判断转化为可优化的数学目标。RM 的训练 loss 就是基于 BT 模型的负对数似然：L = -log σ(r(y_w) - r(y_l))。BT 模型的一个关键性质是只关心 reward 的差值而非绝对值，这使得 DPO 推导中的 partition function Z(x) 可以消掉。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>KL 散度在 RLHF 中起什么作用？β 值如何影响训练？</summary>
+  <div class="a">KL 散度 KL[π_θ ‖ π_ref] 衡量当前策略与参考模型（SFT 模型）的分布差异。它在 RLHF 中有两个关键作用：(1) 防止分布偏移，确保模型不会生成语言质量低下的输出；(2) 防止 Reward Hacking，限制模型过度利用 RM 缺陷。β 是 KL 惩罚的权重系数：β 太小则约束无效，模型容易过优化；β 太大则策略几乎无法更新，学不到偏好信号。实践中 β 通常在 0.01-0.5 之间，需要根据任务仔细调节。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>DPO 是 offline 方法，这有什么问题？如何改进？</summary>
+  <div class="a">DPO 使用固定的偏好数据集训练，无法像 PPO 那样在线采样新回答并获取反馈。问题包括：(1) 偏好数据分布可能与当前策略生成的分布不匹配（distribution shift）；(2) 无法探索策略空间中的新区域；(3) 可能过拟合偏好数据。改进方案包括：Online DPO（用当前策略采样新数据对做迭代训练）、Iterative DPO（多轮交替采样+训练）、Self-Play（让模型与自身对弈生成偏好对）。这些方法在保留 DPO 简洁性的同时引入在线探索能力。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>什么是对齐税？如何平衡安全性与能力？</summary>
+  <div class="a">对齐税（Alignment Tax）指对齐训练在提升安全性和有用性的同时，可能导致模型原始能力的下降。具体表现：过度拒绝合理请求、创造力和多样性降低、部分知识遗忘、推理能力退化等。平衡策略包括：(1) 混合训练——在对齐训练中混入预训练数据防止灾难性遗忘；(2) 分级安全策略——对不同风险等级的内容采取不同程度的限制；(3) 精细的评估体系——同时监控安全指标和能力指标；(4) 渐进式对齐——小步迭代而非一次过度优化。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>Constitutional AI 和标准 RLHF 有什么区别？</summary>
+  <div class="a">标准 RLHF 依赖大量人类标注的偏好数据训练 RM，而 Constitutional AI (CAI) 用一组明确的原则（"宪法"）指导 AI 自我批评和修正。CAI 分两阶段：(1) Supervised 阶段——模型生成初始回答后，按宪法自我批评并修正，修正后的回答做 SFT 数据；(2) RL 阶段——用 AI 根据宪法判断偏好（RLAIF），训练 RM 后做 RL 优化。核心优势是大幅减少人类标注需求，同时可以系统化地覆盖安全原则。CAI 还衍生出自动化 Red Teaming，让 AI 生成攻击性 prompt 测试自身。</div>
+</details>
+
+<details class="interview-qa">
+  <summary>如果让你为一个新的 LLM 设计对齐方案，你会怎么选择？</summary>
+  <div class="a">设计思路取决于资源、数据和任务：(1) 首先做高质量的 SFT，这是所有对齐方法的基础；(2) 如果有高质量偏好对数据且资源有限，首选 DPO——简单稳定效果好；(3) 如果需要最强效果且资源充足，用 RLHF (PPO) 或 GRPO；(4) 如果任务可以定义规则奖励（如代码/数学），GRPO 是最佳选择（参考 DeepSeek-R1）；(5) 如果只有好坏标签没有偏好对，用 KTO；(6) 使用 RLAIF 扩展偏好数据规模；(7) 引入 Constitutional AI 做安全保障；(8) 注意监控对齐税和过优化，设置合理的 early stopping。整体思路：SFT → DPO/GRPO → 迭代评估+修正。</div>
+</details>
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+  </body>
+</html>

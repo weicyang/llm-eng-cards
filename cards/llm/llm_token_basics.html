@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L19 · Token 切分与文本压缩</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、Token 是什么</a>
+<a href="#s2">二、BPE 算法 — 分词器的核心</a>
+<a href="#s3">三、英文与中文的分词差异</a>
+<a href="#s4">四、不同模型的分词器对比</a>
+<a href="#s5">五、Token 统计与工程实践</a>
+<a href="#s6">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>L19 · Token 切分与文本压缩</h1>
+<p class="subtitle">BPE 基础 → 字节合并规则 → 英文中文差异 → GPT-4o vs Qwen 分词器对比 → Token 统计</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>Token 是文本在大模型世界里的"最小积木"兼"计价单位"：分词器把文字切成片段、编上号，模型只认这些数字；同一句话在不同模型里切出的 Token 数可以差出两三倍，直接决定你要付多少钱。</p>
+</div>
+
+<!-- ========== 1. Token 是什么 ========== -->
+<div class="section">
+<h2 id="s1">一、Token 是什么</h2>
+
+<p>大模型本质上是一台巨大的数字计算机，它只能理解数字，无法直接处理文字。<span class="term">分词器（Tokenizer）</span>就是横在文字和数字之间的翻译官，负责把一段文本切分成一个个片段，每个片段就是一个 <span class="term">Token</span>——模型读写文本的最小单位，它可以是一个完整的词、一个汉字、一个词缀，甚至只是一个标点或换行符。</p>
+
+<p>切分完成后，分词器会拿每个片段去查一本"字典"——<span class="term">词汇表（Vocabulary）</span>，即模型认识的全部片段的清单——得到对应的编号 <span class="term">Token ID</span>。模型真正吃进去、吐出来的都是这些整数编号，文字只是进出模型时的一层"包装"。</p>
+
+<div class="arch-diagram">
+  "今天天气不错"            ← 人类看到的文字
+        │
+        ▼  ① 分词器切分
+  [今天] [天气] [不错]       ← 一个个 Token
+        │
+        ▼  ② 查词汇表
+  [8374, 12901, 5523]       ← Token ID（数字序列）
+        │
+        ▼  ③ 转为向量送入模型
+  模型计算（只和数字打交道）
+        │
+        ▼  ④ 输出数字 → 反查词汇表
+  "适合出门散步"             ← 人类看到的回答
+</div>
+
+<h3>分词器的三步工作</h3>
+<table>
+<tr><th>步骤</th><th>操作</th><th>结果</th></tr>
+<tr><td>① 文本切分</td><td>将文字拆成多个片段</td><td>每个片段 = 一个 Token</td></tr>
+<tr><td>② 查表映射</td><td>用 Token ID 替换每个片段</td><td>文本变为数字序列</td></tr>
+<tr><td>③ 送入模型</td><td>数字序列作为模型输入</td><td>模型可以处理</td></tr>
+</table>
+
+<h3>Token 的常见形态</h3>
+<table>
+<tr><th>形态</th><th>例子</th><th>出现场景</th></tr>
+<tr><td>完整单词</td><td><code>meeting</code></td><td>英文高频词</td></tr>
+<tr><td>词的一部分</td><td><code>un</code> + <code>happy</code></td><td>带前后缀的英文词</td></tr>
+<tr><td>单个汉字</td><td><code>天</code></td><td>中文生僻字</td></tr>
+<tr><td>汉字词组</td><td><code>今天</code></td><td>中文高频词组</td></tr>
+<tr><td>标点/符号</td><td><code>，</code> <code>。</code> <code>\n</code></td><td>任何文本</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Token 之于大模型，就像像素之于图片——你以为模型在"读文章"，其实它在读一串编号，文章只是编号的人类可读形式。</p>
+</div>
+
+</div>
+
+<!-- ========== 2. BPE 算法 ========== -->
+<div class="section">
+<h2 id="s2">二、BPE 算法 — 分词器的核心</h2>
+
+<p>主流大模型的分词器几乎都使用 <span class="term">BPE（Byte-Pair Encoding，字节对编码）</span>——一种基于统计的贪心合并算法：在海量训练文本上反复找出出现频率最高的相邻片段对，把它们合并成一个新符号，直到词汇表达到预定大小。规则非常简单，却极其有效。</p>
+
+<h3>核心思想</h3>
+<p>找到文本中出现频率最高的一对相邻字节/字符，将它们合并为一个新符号，然后重复此过程。越常用的组合越早被合并成单独的符号，占用的 Token 也就越少。</p>
+
+<h3>逐步合并示例</h3>
+<pre><code>原始文本: A B A B A B A A B
+
+第 1 轮: 合并 A,B → 符号 C
+  C C C C A C
+
+第 2 轮: 合并 C,C → 符号 D
+  D C A D A C (注意从左往右优先)
+
+第 3 轮: 合并 A,C → 符号 E
+  D C E D E</code></pre>
+
+<p>整个过程只需记录：最终文本 + 每步合并规则 + 规则顺序 → 即可还原原始文本，完全可逆。</p>
+
+<div class="arch-diagram">
+  ┌────────────────────────────────────────────┐
+  │          BPE 训练循环（离线完成）            │
+  │                                            │
+  │   海量训练文本                              │
+  │        │                                   │
+  │        ▼                                   │
+  │   统计所有相邻片段对的出现频率               │
+  │        │                                   │
+  │        ▼                                   │
+  │   选出频率最高的一对 → 合并为新符号          │
+  │        │                                   │
+  │        ▼                                   │
+  │   新符号登记进词汇表                        │
+  │        │                                   │
+  │        └──→ 回到"统计频率"，直到词汇表满     │
+  └────────────────────────────────────────────┘
+                     │
+                     ▼
+      推理时：按学到的合并规则依次切分新文本
+</div>
+
+<h3>BPE 训练流程拆解</h3>
+<table>
+<tr><th>阶段</th><th>做什么</th><th>产出</th></tr>
+<tr><td>频率统计</td><td>扫描语料，统计相邻片段对出现次数</td><td>片段对频率表</td></tr>
+<tr><td>贪心合并</td><td>把频率最高的一对合并成新符号</td><td>新的合并规则</td></tr>
+<tr><td>登记词汇表</td><td>新符号加入词汇表并分配 ID</td><td>词汇表 +1</td></tr>
+<tr><td>迭代</td><td>重复上述过程直到词汇表达到目标大小</td><td>完整分词器</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>BPE 就像输入法的联想词库：你越常打"今天"，它越倾向于把"今天"当成一个整体来记——常用组合永远值得一个"短编码"。</p>
+</div>
+
+<h3>BPE 的本质</h3>
+<p><strong>用更少的基础符号（词汇表更小）来描述更长的文本（Token 数更少）。</strong>这是一种典型的"以空间换效率"：词汇表里多存一个高频组合，线上每句话就少算一个 Token。</p>
+
+</div>
+
+<!-- ========== 3. 英文与中文的差异 ========== -->
+<div class="section">
+<h2 id="s3">三、英文与中文的分词差异</h2>
+
+<h3>英文分词器</h3>
+<p>英文由 26 个字母组成，BPE 算法效果非常好：高频字母对会被逐步合并成常见单词，一个常用英文单词往往只占 1 个 Token。</p>
+<pre><code>A, T 合并 → AT
+A, T, T 合并 → ATT
+最终: "I am attending a meeting" → 7 tokens</code></pre>
+
+<h3>中文分词器</h3>
+<p>中文已经是"终极形态"——一个汉字本身就是一个完整的语义单位，不存在更小的可合并单元（再拆就是笔画和字节，合并收益极低）。所以中文分词器必须把大量汉字和词组直接收进词汇表，词汇表天然就更大。</p>
+
+<table>
+<tr><th>维度</th><th>英文分词器</th><th>中文分词器</th></tr>
+<tr><td>基础单位</td><td>字母 → 合并成词</td><td>汉字（已是完整单位）</td></tr>
+<tr><td>词汇表大小</td><td>较小</td><td>较大（需覆盖大量汉字和词语）</td></tr>
+<tr><td>压缩效果</td><td>好（高频字母对可大量合并）</td><td>有限（汉字本身不可再拆）</td></tr>
+<tr><td>典型效率</td><td>1 token ≈ 0.75 个英文单词</td><td>1 token ≈ 1.5 个汉字</td></tr>
+</table>
+
+<h3>同等信息量的 Token 消耗对比</h3>
+<table>
+<tr><th>文本</th><th>规模</th><th>约消耗 Token</th></tr>
+<tr><td>英文</td><td>100 个单词</td><td>≈ 133</td></tr>
+<tr><td>中文</td><td>100 个汉字</td><td>≈ 67</td></tr>
+<tr><td>代码</td><td>100 个字符</td><td>≈ 25~33</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>英文字母是"原材料"，要靠 BPE 现场组装成词；汉字是"成品"，出厂即成品——所以中文分词器拼的是词汇表的收录量，而不是合并轮数。</p>
+</div>
+
+</div>
+
+<!-- ========== 4. 不同模型分词器对比 ========== -->
+<div class="section">
+<h2 id="s4">四、不同模型的分词器对比</h2>
+
+<h3>同一句话的 Token 差异</h3>
+<p>视频中用同一句中文测试了两个模型的分词器，结果差距超过 2 倍：</p>
+<table>
+<tr><th>模型</th><th>词汇表大小</th><th>Token 数</th></tr>
+<tr><td>GPT-4o</td><td>~200,000</td><td>52</td></tr>
+<tr><td>Qwen3-235B</td><td>~151,000</td><td>125</td></tr>
+</table>
+
+<h3>为什么不同</h3>
+<ul>
+  <li><strong>训练数据不同</strong> — 词汇表的构建依赖训练文本的频率统计</li>
+  <li><strong>语言偏好不同</strong> — GPT-4o 训练数据英文更多，Qwen 训练数据中文更多</li>
+  <li><strong>合并规则不同</strong> — 不同高频对在不同数据集中不同</li>
+</ul>
+
+<div class="arch-diagram">
+  拿到一段文本，如何知道它会花多少 Token？
+
+  ┌──────────────────────────────────────────┐
+  │ ① 先确定目标模型                          │
+  │    （分词器各不相同，结果不可跨模型迁移）   │
+  └────────────────┬─────────────────────────┘
+                   ▼
+  ┌──────────────────────────────────────────┐
+  │ ② 用该模型的官方分词器实测                 │
+  │    OpenAI → tiktoken / Tokenizer 页面     │
+  │    多模型对比 → Tiktokenizer              │
+  └────────────────┬─────────────────────────┘
+                   ▼
+  ┌──────────────────────────────────────────┐
+  │ ③ 分别统计输入与输出 Token                 │
+  │    中文场景额外留 1.5~2 倍余量             │
+  └────────────────┬─────────────────────────┘
+                   ▼
+          得到可信的成本与延迟预估
+</div>
+
+<div class="note-box">
+词汇表越大，Token 压缩效率越高，但模型需要记忆的映射关系（Embedding 矩阵）也越大。这是精度和效率的权衡，并非"越大越好"。
+</div>
+
+<div class="intuition-box">
+<p>词汇表就像模型自带的"词典"，词典是按它读过的语料编纂的——读英文多的模型英文词条密，读中文多的模型中文词条密。</p>
+</div>
+
+</div>
+
+<!-- ========== 5. Token 统计与工程实践 ========== -->
+<div class="section">
+<h2 id="s5">五、Token 统计与工程实践</h2>
+
+<h3>Token 为什么重要</h3>
+<p>大模型 API 按 Token 数量计费，上下文窗口也以 Token 为上限，所以了解 Token 对控制成本和设计系统都至关重要。</p>
+
+<table>
+<tr><th>工具</th><th>地址</th><th>说明</th></tr>
+<tr><td>OpenAI Tokenizer</td><td>platform.openai.com/tokenizer</td><td>GPT 系列分词器</td></tr>
+<tr><td>Tiktokenizer</td><td>tiktokenizer.vercel.app</td><td>多模型分词器对比</td></tr>
+</table>
+
+<h3>快速估算口诀</h3>
+<table>
+<tr><th>语言</th><th>经验换算</th><th>备注</th></tr>
+<tr><td>英文</td><td>1 token ≈ 0.75 个单词 ≈ 4 个字符</td><td>常见单词多为 1 token</td></tr>
+<tr><td>中文</td><td>1 token ≈ 1.5 个汉字</td><td>高频词组可整词 1 token</td></tr>
+<tr><td>代码</td><td>1 token ≈ 3~4 个字符</td><td>缩进、符号都算 token</td></tr>
+</table>
+
+<div class="highlight">
+<strong>案例一 · 跨境电商商品文案系统：</strong>背景：某团队每天生成 5 万条中文商品文案，单条平均 400 个输出 Token，使用 GPT-4o。问题：中文在英文主导训练的分词器下消耗偏高，月度输出成本约 1.5 万美元。方案：换用中文词汇表覆盖更好的模型，并把提示词模板从 600 Token 精简到 220 Token。效果：单条平均 Token 从 400 降到 260（-35%），月度成本降到约 6,800 美元，输出更短也让单条生成耗时下降约 30%。
+</div>
+
+<div class="highlight">
+<strong>案例二 · RAG 知识库问答：</strong>背景：某客服系统把整篇产品手册（约 8,000 Token）全量塞进上下文。问题：输入 Token 高企，关键段落被无关内容淹没，回答经常抓不住重点。方案：按 512 Token 切块、64 Token 重叠做语义检索，每次只注入 Top-3 相关块。效果：单次输入从 8,000 降到约 1,700 Token（-79%），人工抽检准确率从 74% 提升到 88%。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>上线前用目标模型的官方分词器实测 Token 数</li>
+<li>中文场景给预算留 1.5~2 倍余量</li>
+<li>把固定模板做成精简、可复用的短提示词</li>
+<li>长文档先切块检索，再注入最相关片段</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要用"字数"直接当 Token 数报预算</li>
+<li>不要假设 A 模型的 Token 数适用于 B 模型</li>
+<li>不要图省事把整篇文档塞进上下文</li>
+<li>不要忽略输出 Token（它通常比输入贵 3~4 倍）</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>Token ≠ 字数 ≠ 单词数：1 token ≈ 0.75 个英文单词 ≈ 1.5 个汉字，同一句话在不同模型中的 Token 数可能差 2~3 倍——先量，再花。</p>
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s6">Q&A</h2>
+
+<details>
+<summary>什么是 Token？大模型为什么需要 Token？</summary>
+<div class="answer">Token 是文本被分词器切分后的最小单位，每个 Token 对应词汇表中的一个编号（数字）。大模型需要 Token 的原因在于它本质上是数字计算机，只能处理数字而不能直接处理文字。分词器将文本转换为数字序列后，模型才能理解和生成内容。Token 可以是一个字、一个词、一段字节或一个符号，具体取决于分词规则和训练数据。</div>
+</details>
+
+<details>
+<summary>BPE 算法的核心思想是什么？为什么它能压缩文本？</summary>
+<div class="answer">BPE（Byte-Pair Encoding）的核心思想是：找到文本中出现频率最高的相邻字符对，将它们合并为一个新符号，重复此过程直到达到词汇表大小限制。它能压缩文本的原因有三：①高频字符对被合并为单个符号，减少总 Token 数；②只需记录合并规则和顺序即可还原原始文本，完全可逆；③用更少的基础符号描述更长的文本，词汇表更小但表达能力更强。整个过程类似"常用组合的编码越短越好"的优化思路。</div>
+</details>
+
+<details>
+<summary>为什么不同模型对同一句话的 Token 数不同？</summary>
+<div class="answer">原因有三：①训练数据不同——词汇表的构建依赖训练文本的频率统计，不同数据集的高频字符对不同；②语言偏好不同——GPT-4o 英文训练数据多，英文合并效率高，Qwen 中文训练数据多，中文词条覆盖更好；③合并规则不同——同样的片段在一个分词器中可能合并为 1 个 Token，在另一个分词器中可能拆成 3 个。因此同一句话在不同模型中的 Token 数可能差 2~3 倍，直接影响 API 调用成本，跨模型估算时必须重新实测。</div>
+</details>
+
+<details>
+<summary>词汇表是不是越大越好？</summary>
+<div class="answer">不是。词汇表越大，Token 压缩效率越高，同样文本消耗的 Token 越少，但代价也很明显：①Embedding 矩阵随词汇表线性增大，模型参数和显存占用上升；②低频词条训练不充分，反而可能拖累效果；③词表过大还会增加输出层 Softmax 的计算量。所以各家模型都在"压缩效率"和"参数开销"之间找平衡，GPT-4o 约 20 万、Qwen 约 15 万都是权衡后的工程选择。</div>
+</details>
+
+<details>
+<summary>如何快速估算一段文本的 Token 数？</summary>
+<div class="answer">粗略估算用经验口诀：英文 1 token ≈ 0.75 个单词（约 4 个字符），中文 1 token ≈ 1.5 个汉字，代码 1 token ≈ 3~4 个字符。精确统计则要用目标模型的官方分词器：OpenAI 系列可用 tiktoken 库或 platform.openai.com/tokenizer 页面，多模型对比可用 Tiktokenizer。注意估算结果只适用于同一个分词器，换模型必须重新统计，中文和代码场景建议在估算值上再留 1.5~2 倍余量。</div>
+</details>
+
+<details>
+<summary>工程上有哪些常见的"浪费 Token"坏习惯？怎么优化？</summary>
+<div class="answer">常见坏习惯包括：①把整篇文档塞进上下文，而不是检索最相关片段；②提示词模板冗长重复，每次请求都发送几千 Token 的固定文本；③用字数代替 Token 数做预算，中文场景严重低估；④只盯着输入 Token，忽略更贵的输出 Token。对应优化：长文档先切块做 RAG 检索（实测可省 70%+ 输入）；精简并复用提示词模板；用官方分词器实测后再报预算；对输出设置长度上限和结构化格式，压缩输出 Token。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1S5miBvEsu" target="_blank">Token 到底是什么？— 揭秘大模型背后的文字压缩术</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

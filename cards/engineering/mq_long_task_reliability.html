@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST20 · 消息队列长任务可靠执行</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353;--sidebar-w:250px}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.arch-diagram{background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(63,185,80,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#484f58;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、长任务如何击穿队列安全网</a>
+<a href="#s2">二、任务指针架构：队列只当传令兵</a>
+<a href="#s3">三、短步骤拆分与单步执行循环</a>
+<a href="#s4">四、幂等设计：至少一次而不重复</a>
+<a href="#s5">五、租约、心跳与 fencing token</a>
+<a href="#s6">六、运维面：隔离、监控、对账与交互</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>ST20 · 消息队列长任务可靠执行</h1>
+<p class="subtitle">可见性超时陷阱 / 任务指针 / 短步骤拆分 / 幂等键 / 事务 Outbox / 租约与 fencing token / 监控对账</p>
+
+<div class="intuition-box">
+长任务可靠执行的本质，不是逼消息队列承诺"恰好一次"，而是把大任务拆成随时可以重来一小步，把记忆从消息体搬进数据库：队列只负责喊"下一步该干什么"，数据库负责记住"干到哪了"，幂等键和 fencing token 守在两者的交叉口，防止重复和错乱。
+</div>
+
+<!-- ==================== 一、长任务如何击穿队列安全网 ==================== -->
+<div class="section" id="s1">
+<h2>一、长任务如何击穿队列安全网</h2>
+
+<div class="intuition-box">
+消息队列的投递保证是为"秒级任务"设计的：领走消息、几十秒内干完、回个 ACK，皆大欢喜。一旦任务要跑十几分钟甚至几小时，队列用来防丢消息的那套机制——可见性超时、自动提交、未确认重投——就会反过来咬你：要么任务悄悄丢了，要么同一件事被两个 Worker 各干一遍。
+</div>
+
+<p>先明确消息队列的基本协议。Worker 从队列取到消息后，队列并不会立刻删除它，而是给它上一个"锁"：在 <span class="term">可见性超时</span>（Visibility Timeout，SQS 的叫法，指消息被取走后对其他消费者隐藏的时间窗，默认只有 30 秒）内这条消息对别人不可见；Worker 在窗口内处理完并发回 <span class="term">ACK</span>（确认，Acknowledgement，告诉队列"这条我干完了，可以删"），消息才真正删除；如果 Worker 崩溃或超时未确认，消息重新可见，交给别的 Worker 重试。这套机制在短任务下非常可靠，但它隐含一个前提：<strong>处理时间远小于超时窗口</strong>。长任务恰恰违反了这个前提。</p>
+
+<h3>直接把长任务塞进队列的四种死法</h3>
+
+<ul>
+<li><strong>任务丢失：</strong>如果框架在处理刚开始就自动 ACK（很多客户端默认"取到即确认"），之后 Worker 重启或宕机，未完成的任务就永久消失了，队列里没有任何痕迹，任务表里也没有记录。</li>
+<li><strong>重复执行：</strong>反过来，如果迟迟不 ACK，消息过了可见性窗口被重新投递，两个 Worker 会同时处理同一个任务。对模型调用、外部工具、写文件这类有副作用的操作，意味着双份的成本和错乱的输出。</li>
+<li><strong>资源独占：</strong>一个 20 分钟的任务把某个 Worker 的并发槽位占满，后面排队的短任务全部被阻塞，整个队列的吞吐被少数长任务拖死。</li>
+<li><strong>队列自身的"超时地雷"：</strong>每种主流队列都有自己的长任务陷阱，见下表。</li>
+</ul>
+
+<h3>三大主流队列的长任务陷阱对照</h3>
+
+<table>
+<tr><th>队列</th><th>保护机制</th><th>长任务下的翻车方式</th><th>默认值</th></tr>
+<tr><td>SQS</td><td>可见性超时：取走后隐藏一段时间，超时未删除则重新可见</td><td>任务跑超窗口 → 同一消息被另一个消费者再次取走，双份执行</td><td>30 秒（最大 12 小时，可用 ChangeMessageVisibility 续期）</td></tr>
+<tr><td>Kafka</td><td>消费组心跳：消费者须定期 poll 以证明自己活着</td><td>单条消息处理超过 max.poll.interval.ms → 被判定死亡，触发消费组重平衡，分区被夺走再分配，新旧消费者并行处理</td><td>max.poll.interval.ms = 5 分钟</td></tr>
+<tr><td>RabbitMQ</td><td>手动确认 + 连接级心跳</td><td>consumer_timeout 到期直接关闭通道（3.8.15 起引入）；连接断开时所有未 ACK 消息批量重新入队，形成重投风暴</td><td>consumer_timeout = 30 分钟</td></tr>
+</table>
+
+<div class="arch-diagram">            一条长任务消息的三种命运（以可见性超时机制为例）
+
+ 生产者 ──► [ 队列 ] ──取走──► Worker-A 开始处理（预计 20 分钟）
+                │
+                │  消息进入"不可见"状态，窗口 30 秒
+                │
+   ┌────────────┼─────────────────────────────────────┐
+   │ 命运一 ✓    │ 命运二 ✗            │ 命运三 ✗      │
+   │ 30 秒内干完 │ 窗口到期仍未 ACK     │ Worker-A 宕机 │
+   │ 发 ACK 删除 │ 消息重新可见         │ 消息重新可见   │
+   │             │ Worker-B 再次取走    │ Worker-B 接管 │
+   │             │ → A、B 并行双份执行  │ （前提是没丢） │
+   └────────────┴─────────────────────────────────────┘
+        短任务走命运一；长任务几乎注定撞进命运二或命运三</div>
+
+<h3>朴素直塞 vs 指针架构</h3>
+
+<table>
+<tr><th>维度</th><th>朴素直塞（消息体=完整任务）</th><th>任务指针架构（消息体=引用）</th></tr>
+<tr><td>消息体内容</td><td>全部输入参数、上下文、中间结果</td><td>仅 task_id、step_id、幂等键等元数据</td></tr>
+<tr><td>状态记录在哪</td><td>只存在于 Worker 内存</td><td>任务表 + 检查点，落库持久化</td></tr>
+<tr><td>Worker 崩溃后</td><td>从头重跑或彻底丢失</td><td>从最近检查点恢复，只重跑当前步骤</td></tr>
+<tr><td>消息体积</td><td>可达 MB 级，拖慢队列</td><td>几百字节，队列只做调度</td></tr>
+<tr><td>重复执行危害</td><td>整段重做，副作用翻倍</td><td>幂等键拦截，最多浪费一小步</td></tr>
+</table>
+
+<div class="highlight">
+📌 生产案例一：某 SaaS 的周报生成服务把单个约 15 分钟的任务直接投入 SQS，可见性超时沿用默认 30 秒。结果每条消息平均被 2 个 Worker 先后取走，模型调用的重复率高达 12%，一周烧掉约 12% 的额外 token 费用，还出现过两份报告写进同一个存储桶互相覆盖。改造为"步骤拆分 + 每步开始前调用 ChangeMessageVisibility 续期 + 幂等键兜底"后，双份执行率降至 0.4%，残余重复全部被幂等键无声消化，模型账单回到基线。
+</div>
+
+<div class="intuition-box">
+把队列想象成机场传送带：它擅长传送行李箱（标准件、几秒取走），不擅长传送一栋房子。长任务要可靠，先把房子拆成一箱箱标准件，每箱贴上编号和回执单——丢了一箱就补一箱，绝不用把整栋房子重盖一遍。
+</div>
+</div>
+
+<!-- ==================== 二、任务指针架构 ==================== -->
+<div class="section" id="s2">
+<h2>二、任务指针架构：队列只当传令兵</h2>
+
+<div class="intuition-box">
+指针架构一句话概括：队列负责调度流转，状态机记录进度。消息不再是任务本身，而是"任务在哪个步骤该被推进了"的一张便条；真正的记忆全部放在数据库里，随时可以换人接手。
+</div>
+
+<p>指针架构有三个支柱：瘦消息体、任务表状态机、事务 Outbox。三者分别回答三个问题——"消息里放什么""进度记在哪""任务记录和消息如何保证同时产生"。</p>
+
+<h3>支柱一：消息体只放指针</h3>
+
+<p>消息体瘦身到只含三类元数据：<code>task_id</code>（任务主键）、<code>step_id</code>（当前应执行的步骤）、<span class="term">幂等键</span>（idempotency key，用于识别"这件事是不是已经干过"的稳定标识，通常由 task_id + step_id + 操作版本号拼成）。所有大块内容——用户上传的原始文件、模型的完整输出、图表二进制——一律写入对象存储，消息里只传存储路径。这样做的好处不只是省带宽：当消息被重复投递时，重复的那一份拿到的也只是同一张便条，指向同一份数据，天然降低了副作用扩散面。</p>
+
+<table>
+<tr><th>内容</th><th>放哪</th><th>理由</th></tr>
+<tr><td>task_id / step_id / 幂等键</td><td>消息体</td><td>调度必需，体积小，重投无害</td></tr>
+<tr><td>大输入输出（文档、图片、模型长文本）</td><td>对象存储，消息里只放 URL</td><td>消息 MB 级会拖慢投递，重投代价大</td></tr>
+<tr><td>当前进度、已完成步骤清单</td><td>任务表</td><td>进度是事实状态，不能依赖消息顺序还原</td></tr>
+<tr><td>每步的输入输出快照、工具调用记录、模型版本</td><td>检查点表</td><td>崩溃恢复和事后审计都要用</td></tr>
+<tr><td>重试次数、错误信息、租约归属</td><td>任务表</td><td>跨 Worker 可见，接管者需要这些信息</td></tr>
+</table>
+
+<h3>支柱二：任务表即状态机</h3>
+
+<p>每个任务在数据库里是一行记录，带一个显式的状态字段：<code>pending → running → waiting → completed / failed</code>，外加 <code>retrying</code>、<code>cancelled</code>、<code>timed_out</code> 等分支。状态迁移必须走条件更新——只有从合法前态才能跳到目标态，任何非法迁移直接被数据库拒绝。这层状态机的价值在于：进度展示、取消操作、对账扫描、故障接管全部读同一张表，不再需要去猜队列里的消息现在是什么处境。每个关键步骤完成后还要写一条 <span class="term">检查点</span>（Checkpoint，把当前步骤的输入、输出、工具调用记录、所用模型版本等快照持久化，供崩溃后从该点续跑），它是长任务"断点续传"能力的物理载体。</p>
+
+<h3>支柱三：事务 Outbox 解决双写问题</h3>
+
+<p>创建任务时应用必须同时做两件事：把任务记录写进数据库、把启动消息投进队列。这是两次对两个系统的写入，不存在跨两者的原子事务——如果数据库提交成功后、发消息之前进程崩溃，任务就永远停在 pending，没人会来执行它。这个缺口叫 <span class="term">双写问题</span>（Dual-Write Problem，两次独立写入无法同时成功或同时失败，中间崩溃必然产生不一致）。标准解法是 <span class="term">事务 Outbox</span>（Transactional Outbox，把"要发的消息"先作为一行写进与业务数据同库的 outbox 表，与业务写入共用一个事务提交，再由独立的 relay 进程负责真正把消息投出去）：</p>
+
+<pre><code>BEGIN;
+  INSERT INTO tasks (...) VALUES (...);        -- 任务记录
+  INSERT INTO outbox (task_id, step_id, ...) ; -- 待发消息
+COMMIT;  -- 一个事务，要么都在，要么都不在
+-- relay 进程轮询 outbox，投递成功后标记该行为已发送</code></pre>
+
+<div class="arch-diagram">                 任务指针架构 · 全文总览
+
+ 用户请求                数据库（真相源）                 消息队列（调度层）
+    │   ①提交任务   ┌────────────────────────┐
+    ▼               │ tasks 表   状态机       │
+ ┌─────┐  ②同事务   │ checkpoints 表 检查点   │   ④relay 拉取未发送行
+ │ API │─写两行────►│ outbox 表   待发指针    │──────────► 投递消息
+ └─────┘            └────────────────────────┘              │
+    │ 立即返回 202 + task_id                    ⑤Worker 取到"指针" │
+    ▼                                                       ▼
+ 轮询进度 ◄──────────── 任务表 ◄──── ⑥每步完成写检查点 ┌─────────┐
+ （进度永远读表，        │        + 下一步调度意图       │ Worker  │
+  不读队列）             └──────── ⑦ACK 当前消息 ────────└─────────┘
+                                          ⑧发下一步消息（回到④）</div>
+
+<div class="highlight">
+📌 生产案例二：某数据平台的批量导出服务最初采用"先写库再发消息"的朴素顺序，上线后监控发现每天约有 0.6% 的任务停在 pending 永不动——全部对应部署窗口或进程重启时卡在两次写入之间的瞬间。引入事务 Outbox + 每 2 秒一次的 relay 轮询后，pending 悬挂任务连续 90 天为 0，relay 自身的重复投递（投递成功但标记失败）由消费端幂等键兜住，未产生任何重复执行。
+</div>
+
+<div class="intuition-box">
+Outbox 的精髓是"先写信放进自家抽屉，再让专职邮差取走投递"。抽屉和业务账本在同一个保险柜里（同一事务），只要账本记了这笔账，信一定在抽屉里；邮差哪怕把同一封信念两遍，收信人（消费者）靠幂等键也只会办一次事。
+</div>
+
+<table>
+<tr><th>outbox 表关键字段</th><th>作用</th></tr>
+<tr><td>id（单调递增）</td><td>relay 按序扫描，保证同任务消息不乱序</td></tr>
+<tr><td>task_id / step_id / 幂等键</td><td>即未来消息体的全部内容</td></tr>
+<tr><td>sent_at（可空）</td><td>为空即未投递，投递成功后回填；崩溃后可安全重扫</td></tr>
+<tr><td>retry_count / next_retry_at</td><td>relay 投递失败的退避记录，避免打爆队列</td></tr>
+</table>
+</div>
+
+<!-- ==================== 三、短步骤拆分与单步执行循环 ==================== -->
+<div class="section" id="s3">
+<h2>三、短步骤拆分与单步执行循环</h2>
+
+<div class="intuition-box">
+不要问"这个 20 分钟的任务怎么扛住宕机"，要问"怎么把它变成 4 个 5 分钟的任务"。步骤边界就是恢复边界：宕机损失的上限被压缩到一个步骤，而每个步骤都短到落在队列超时窗口之内，所有队列机制重新变成你的朋友。
+</div>
+
+<p>以一个 20 分钟的企业报告生成为例，可以沿业务的天然关节拆成：需求分析 → 大纲规划 → 逐章生成（每章一步）→ 图表制作 → 汇总排版 → 交付。每一步独立可恢复、有明确的输入输出、耗时控制在 5 分钟以内。拆完之后的执行循环就变得非常机械：</p>
+
+<div class="arch-diagram">          单步执行循环：领取 → 执行 → 存档 → 提交
+
+ 时间轴 ─────────────────────────────────────────────────────►
+
+ ①领取（毫秒级）   条件更新抢占任务：
+    UPDATE tasks SET worker_id=W2, status='running',
+           lease_until=now()+5min, fencing_token=token+1
+    WHERE task_id=T AND status='waiting';
+    └─ 影响行数=0 → 说明别人已抢到，直接放弃，零冲突
+
+ ②执行（≤5 分钟硬上限）   调用模型/工具，产出本步结果
+    └─ 到点没跑完 → 主动中断，按失败处理，绝不恋战
+
+ ③存档（关键！先于 ACK）   一个事务写两行：
+    检查点（本步输入输出、工具调用记录、模型版本）
+    + 下一步调度意图（step_id=next、status='waiting'）
+
+ ④提交   ACK 当前消息 → 发下一步消息（经 outbox）
+    └─ 若 ACK 前崩溃：消息重投，新 Worker 读检查点，
+       发现本步已完成，直接跳到下一步 —— 幂等兜底</div>
+
+<p>这个循环里有两个顺序决定生死。<strong>第一，先存档再 ACK。</strong>如果先发 ACK 再写检查点，两者之间崩溃就会既丢了消息又没留下进度，任务从此失踪；反过来先写检查点再 ACK，最坏情况只是同一步被重放一次，交给幂等键处理。<strong>第二，用条件更新领取任务。</strong>如上图 ①，领取动作是一条带状态前置条件的 UPDATE，数据库保证只有一个 Worker 能改成功，其余竞争者拿到"影响行数 0"后安静退出，不需要额外的分布式锁。</p>
+
+<h3>步骤粒度怎么定</h3>
+
+<table>
+<tr><th>粒度</th><th>典型形态</th><th>代价</th><th>适用判断</th></tr>
+<tr><td>过粗（10 分钟+）</td><td>整份报告一步完成</td><td>崩溃重跑成本高，容易再次撞穿队列超时窗口</td><td>步骤耗时 ≥ 超时窗口一半时就是危险信号</td></tr>
+<tr><td>适中（30 秒 ~ 5 分钟）</td><td>每章一步、每批数据一步</td><td>调度与检查点开销可接受</td><td>默认选择；崩溃损失 ≤ 5 分钟</td></tr>
+<tr><td>过细（每几秒一步）</td><td>每个 token、每行数据一步</td><td>队列消息量爆炸，检查点写库压力剧增，调度开销超过实际工作</td><td>除非单步副作用极贵（如付款），否则不值得</td></tr>
+</table>
+
+<table>
+<tr><th>ACK 顺序</th><th>崩溃窗口内的后果</th><th>结论</th></tr>
+<tr><td>先 ACK，后写检查点</td><td>消息没了、进度也没了 → 任务永久失踪</td><td>禁止</td></tr>
+<tr><td>先写检查点，后 ACK</td><td>消息重投 → 同一步可能被重放一次</td><td>正确；重复交给幂等键消化</td></tr>
+<tr><td>写检查点与发下一步消息同事务（经 outbox）</td><td>进度与调度意图原子落库，relay 保证下一步消息最终发出</td><td>推荐组合</td></tr>
+</table>
+
+<div class="highlight">
+📌 生产案例三：某企业的年度报告生成任务总时长约 20 分钟、拆成 6 步后单步最长 4 分钟。一次 Worker 因内存不足被杀，当时正在生成第三章。旧方案下整份报告从头重跑，平均恢复耗时 20 分钟、模型费用白花七成；指针 + 检查点方案下，新 Worker 读到检查点后仅重跑第三章，3.5 分钟恢复完成，单次故障的模型成本下降约 70%，用户侧只感知到一次短暂的进度停滞。
+</div>
+
+<div class="intuition-box">
+步骤拆分就是给长任务装"存档点"。玩长流程游戏没人敢一命通关不存档——每过一个 Boss 存一次档，角色挂了从最近的存档点复活，损失也就是最近一段路。检查点表就是你的存档文件。
+</div>
+</div>
+
+<!-- ==================== 四、幂等设计 ==================== -->
+<div class="section" id="s4">
+<h2>四、幂等设计：至少一次而不重复</h2>
+
+<div class="intuition-box">
+可靠性的正确姿势不是追求"恰好投递一次"——在分布式系统里那几乎做不到，而是接受"至少投递一次"，然后让消费端无论收到几遍都只产生一份效果。前者是把脑袋埋进沙子，后者才是工程。
+</div>
+
+<p>主流队列能提供的最强投递保证通常是 <span class="term">至少一次</span>（At-Least-Once，消息保证不丢，但可能送达多次）：网络抖动导致 ACK 丢失、Worker 崩溃后消息重投、relay 重复发布，都会让同一条消息到达消费端两遍以上。既然重复不可避免，防线就必须建在消费侧：<span class="term">幂等消费</span>（Idempotent Consumption，同一个操作执行一次和执行多次对系统状态的最终影响完全相同）。</p>
+
+<h3>稳定的幂等键是地基</h3>
+
+<p>幂等键必须在任务创建那一刻就确定下来，且对同一逻辑操作永远相同。推荐格式：<code>task_id + step_id + operation_version</code>。其中 <code>operation_version</code> 是容易被忽略的一段——当某个步骤的逻辑升级（换了模型、改了提示词）需要强制重跑时，升版本号即可让旧键失效、新键放行，幂等保护与人工重放两不耽误。键不稳定（比如用时间戳、用随机数）等于没有键。</p>
+
+<h3>业务层的三道防线</h3>
+
+<table>
+<tr><th>防线</th><th>机制</th><th>拦截场景</th><th>特点</th></tr>
+<tr><td>数据库唯一索引</td><td>把幂等键（或其映射的业务键）设为唯一约束，重复插入直接报错</td><td>重复创建订单、记录、文件元数据</td><td>最可靠，交给数据库原子性，无需应用层判断</td></tr>
+<tr><td>外部接口传幂等键</td><td>调用支付、邮件、第三方 API 时把幂等键放进请求头/参数</td><td>重复扣款、重复发通知</td><td>依赖对方支持；不支持时用下一行的台账兜底</td></tr>
+<tr><td>调用台账</td><td>本地表记录"键 → 已调用 + 对方返回的流水号"，调用前先查台账</td><td>对方接口无幂等能力时的二次防护</td><td>查台账与发起调用之间仍有小窗口，需配合唯一索引收敛</td></tr>
+</table>
+
+<table>
+<tr><th>操作类型</th><th>幂等实现要点</th></tr>
+<tr><td>插入记录</td><td>唯一索引 + INSERT 冲突时忽略或返回已有记录</td></tr>
+<tr><td>更新字段</td><td>用"置为某值"替代"加一减一"；必须累加时配合版本号条件更新</td></tr>
+<tr><td>外部调用（模型/工具）</td><td>传递幂等键；调用结果写入检查点，重放时先读缓存结果</td></tr>
+<tr><td>写文件/对象存储</td><td>以内容哈希或幂等键命名目标路径，覆盖写天然幂等</td></tr>
+<tr><td>发消息/通知</td><td>以幂等键去重，发送状态记入台账</td></tr>
+</table>
+
+<div class="intuition-box">
+电梯的"关门"键按一百次和按一次效果一样，这就是幂等；而"往购物车加一件"按一百次就是事故。长任务里每一个步骤都要自问：这个动作是关门键，还是加购键？是加购键就必须给它配一把幂等锁。
+</div>
+
+<div class="highlight">
+💡 知识要点：幂等键、唯一索引、检查点三者构成闭环——消息重投时，新 Worker 先读检查点发现"这步已经做完"，直接跳到下一步；万一检查点缺失而操作其实已在外部系统生效，唯一索引和台账还能兜住最后一层。三层防线缺任何一层，都会在某个故障组合下漏出重复。
+</div>
+</div>
+
+<!-- ==================== 五、租约、心跳与 fencing token ==================== -->
+<div class="section" id="s5">
+<h2>五、租约、心跳与 fencing token</h2>
+
+<div class="intuition-box">
+分布式系统里没有"他死了所以我接管"的可靠判断，只有"他的租约到期了所以我接管"。但接管瞬间最危险的不是没人干活，而是旧人没死透——那个只是打了个盹的旧 Worker 醒过来，拿着过期的权限继续写数据。fencing token 就是门口的保安：只认最新的工牌，旧工牌一律拦下。
+</div>
+
+<h3>租约与心跳：把"所有权"变成有时间戳的租约</h3>
+
+<p>Worker 领取任务时，除写入自己的 <code>worker_id</code>，还要写入 <code>lease_until</code>（租约到期时间，例如当前时间 + 5 分钟）和一个递增的 <span class="term">fencing token</span>（防护令牌，每次任务易主就 +1 的单调递增编号，代表"第几任所有者"）。执行期间 Worker 定期 <span class="term">心跳</span>（Heartbeat，每隔固定间隔更新一次租约到期时间，证明自己还活着且仍在干活，通常每 10 秒续一次 30 秒的租约）续租；一旦超时未续——进程崩溃、机器宕机、网络分区——租约过期，任务回到可领取状态，新 Worker 带着更大的 token 接管。接管者读检查点续跑，旧 Worker 的半成品被丢弃。</p>
+
+<h3>为什么光有租约还不够：GC 停顿僵尸</h3>
+
+<p>租约机制有一个无法根除的盲区：<span class="term">租约过期 ≠ 进程死亡</span>。旧 Worker 可能只是遭遇了一次超长的垃圾回收停顿、CPU 被宿主机抢占、或者网络延迟导致续租请求迟到——租约确实到期了，新 Worker 也确实接管了，但旧 Worker 片刻之后"醒"了过来，它并不知道自己已被取代，继续执行剩余的写操作。两个 Worker 同时写同一个任务的检查点和结果，谁后写谁覆盖，数据错乱。</p>
+
+<div class="arch-diagram">        fencing token 拦截僵尸写入（经典竞态）
+
+ 时间 ──────────────────────────────────────────────────────►
+
+ Worker-A: 领取任务 token=41 ──执行──▌GC 停顿▌──醒来──► 写入(token=41) ✗被拒
+                                      │
+ 租约:        [────租约 41────]过期!    │
+                                      ▼
+ Worker-B:              领取任务 token=42 ──执行──► 写入(token=42) ✓接受
+                                                        │
+ 存储层规则: 只接受 token ≥ 已见最大值的写入              │
+             A 醒来时 41 < 42 → 直接拒绝 ◄──────────────┘
+
+ 结论: 租约决定"谁该干活"，fencing token 决定"谁的写入算数"</div>
+
+<p>防御落在存储边界：任务表和检查点的每次更新都带上 token，数据库用条件更新只接受不低于当前记录 token 的写入（旧 token 的写入影响行数为 0，Worker 检测到后应立即自杀退出）。这与 Kafka 用 controller epoch 驱逐过期控制器、HDFS 用 generation stamp 作废旧块写入是同一个思想——<strong>权威来自递增的编号，不来自"我以为我还持有锁"</strong>。注意一个细节：续租不产生新 token，只有易主才递增，否则续租本身就会拒绝掉自己。</p>
+
+<h3>错误分类与死信</h3>
+
+<p>步骤执行失败后不能一律重试，先分类：</p>
+
+<table>
+<tr><th>错误类型</th><th>例子</th><th>处理策略</th></tr>
+<tr><td>临时错误</td><td>网络超时、模型服务限流 429、数据库短暂不可用</td><td><span class="term">指数退避</span>（Exponential Backoff，每次重试的等待时间翻倍，如 1s→2s→4s→8s，并叠加随机抖动避免所有重试者同一时刻蜂拥）重试 3~5 次</td></tr>
+<tr><td>永久错误</td><td>参数非法、输入格式损坏、权限被拒</td><td>重试一万次也不会成功，直接进 <span class="term">死信队列</span>（Dead-Letter Queue / DLQ，专门收纳反复处理失败的消息，供人工排查与修复后重放），不浪费配额</td></tr>
+<tr><td>未知错误</td><td>5xx 但原因不明</td><td>有限次短重试，耗尽后转死信；保留完整错误上下文</td></tr>
+<tr><td>超时</td><td>单步超过 5 分钟硬上限</td><td>主动中断，写回失败状态；可能是任务本身需要再拆细</td></tr>
+</table>
+
+<table>
+<tr><th>参数</th><th>推荐量级</th><th>理由</th></tr>
+<tr><td>单步执行上限</td><td>≤ 5 分钟</td><td>落在各队列默认超时窗口内，机制不再反噬</td></tr>
+<tr><td>租约时长</td><td>单步上限的 3~6 倍（如 15~30 分钟）</td><td>容忍 GC 停顿与网络抖动，又不至于让接管等太久</td></tr>
+<tr><td>心跳间隔</td><td>租约时长的 1/3（如 10 秒续 30 秒）</td><td>允许连续丢 2 次心跳仍不失租</td></tr>
+<tr><td>重试退避上限</td><td>重试耗尽总时长 &lt; 租约剩余时长</td><td>避免退避期间租约被他人接管造成双执行</td></tr>
+</table>
+
+<div class="highlight">
+📌 生产案例四：某任务平台曾用纯租约（无 token）管理接管，一个月内出现 4 次"旧写入覆盖新状态"事故，最严重的一次是已完成的报告被僵尸 Worker 的中间结果覆盖，用户收到半成品。上线 fencing token（任务表条件更新 + 检查点表同规则）后，此类覆盖事故归零；僵尸 Worker 醒来的平均存活时间从"直到跑完剩下步骤"缩短到 200 毫秒内自检退出。
+</div>
+
+<div class="intuition-box">
+记住这条分工：心跳回答"你还活着吗"，租约回答"你现在还有权干吗"，fencing token 回答"你这一笔写入算数吗"。三个问题层层递进，少了第三问，前两问答得再好也可能写出脏数据。
+</div>
+</div>
+
+<!-- ==================== 六、运维面：隔离、监控、对账与交互 ==================== -->
+<div class="section" id="s6">
+<h2>六、运维面：隔离、监控、对账与交互</h2>
+
+<div class="intuition-box">
+长任务系统上线只是开始，真正的可靠性来自运维面的四件事：长短分流别让慢活堵死快活、四层防御（熔断、降级、续跑、回收）防崩、监控盯住"最老消息在等谁"、定时对账把系统自己发现不了的状态漂移捞出来。
+</div>
+
+<h3>资源隔离与四层防御</h3>
+
+<p>首先是物理隔离：长任务队列和短任务队列必须分开，各自的 Worker 池也分开，按模型类型、工具类型再限并发——比如同时调用绘图工具的步骤全局最多 8 个，防止一个批量任务把外部配额打爆。在此之上，长周期任务比短任务多一套防御纵深：短任务耗时短、依赖少，直接执行即可；长任务极易被网络抖动、接口限流击中，需要"防断、防乱、防崩"的多层防御：</p>
+
+<table>
+<tr><th>防御层</th><th>触发条件</th><th>动作</th><th>防的是什么</th></tr>
+<tr><td>熔断</td><td>某子任务连续报错或超时超过阈值</td><td>立刻切断对该依赖的调用，快速失败</td><td>错误传染：一个坏依赖拖死所有并行任务</td></tr>
+<tr><td>降级</td><td>高级服务不可用或响应劣化</td><td>切换备用方案（如换更便宜的小模型、跳过可选步骤）</td><td>整体不可用：宁可有损服务也不全军覆没</td></tr>
+<tr><td>续跑</td><td>任务中断</td><td>从检查点恢复而非从头重来</td><td>重复成本与用户等待（对应本文第三、五节机制）</td></tr>
+<tr><td>回收</td><td>任务结束（无论成败）</td><td>清理临时文件、中间产物、缓存，释放内存</td><td>服务器被残留物撑爆：长任务的临时产物往往以 GB 计</td></tr>
+</table>
+
+<h3>监控指标与定时对账</h3>
+
+<p>长任务系统最怕的不是报错，而是"安静地卡住"。监控必须覆盖这条链路上的静默故障：</p>
+
+<table>
+<tr><th>指标</th><th>含义</th><th>报警阈值参考</th></tr>
+<tr><td>最老消息等待时间</td><td>队头消息已等了多久，直接反映堵塞</td><td>短队列 &gt; 1 分钟、长队列 &gt; 单步上限 × 3</td></tr>
+<tr><td>租约过期率</td><td>单位时间内被接管的任务占比</td><td>突增说明 Worker 不稳定或任务在变重</td></tr>
+<tr><td>死信队列深度</td><td>DLQ 里积压的失败消息数</td><td>&gt; 0 即值得关注，持续增长立即处理</td></tr>
+<tr><td>步骤失败率（按步骤分组）</td><td>哪一步最常挂</td><td>单步失败率 &gt; 5% 触发熔断评估</td></tr>
+<tr><td>对账差异数</td><td>定时扫描发现的"状态与消息不匹配"任务数</td><td>理想为 0，非零逐条人工定位</td></tr>
+</table>
+
+<p>最后一道防线是<span class="term">定时对账</span>（Reconciliation，周期性地用数据库状态反向核对系统应有行为，找出掉队者）：例如每分钟扫描一次任务表，把"状态为 running 但租约已过期 10 分钟""状态为 pending 但超过 5 分钟没有对应消息"的任务捞出来，强制回滚到 waiting 重新调度。队列和数据库在极端时序下总会有细微漂移，对账就是承认这一点并主动纠偏。</p>
+
+<h3>用户交互：取消与进度</h3>
+
+<p>用户点"取消"时不能简单杀进程：正确流程是在任务表写入 <code>cancelled</code> 意图 → 当前步骤在下一次心跳/检查点处读到取消标记 → 安全保存已有状态 → 释放 Worker 与租约 → 回收临时产物。进度展示则一律读任务表（当前步骤、已完成步骤数），不要读队列——队列里的消息只反映"待办"，不反映"已做到哪"。</p>
+
+<div class="highlight">
+📌 生产案例五：某内容平台用 Kafka 消费生成任务，单条消息处理 8 分钟，超过 max.poll.interval.ms 默认 5 分钟，消费组每天发生 30+ 次重平衡：分区被反复夺走再分配，新旧消费者并行处理，重复调用外部绘图工具每天约 200 次。治理分两步——任务侧拆成 ≤ 4 分钟短步骤（第三节方案），参数侧将 max.poll.interval.ms 调到步骤上限的 3 倍并减小单次 poll 条数——重平衡降至每天 0~1 次，重复调用归零，队列积压消化速度反而提升了约 40%（Worker 不再因重平衡空转）。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>消息体只放指针，大块内容进对象存储</li>
+<li>先写检查点和下一步意图，再 ACK</li>
+<li>领取任务用带状态前置条件的 UPDATE</li>
+<li>幂等键在任务创建时就定死，含操作版本号</li>
+<li>临时错误退避重试，永久错误直接进死信</li>
+<li>长短任务分队列、分 Worker 池</li>
+<li>定时对账扫描异常状态任务</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>把 20 分钟任务原样塞进默认配置的队列</li>
+<li>取到消息就自动 ACK，状态只存内存</li>
+<li>用时间戳或随机数当幂等键</li>
+<li>所有错误一律无限重试</li>
+<li>只靠租约不加 fencing token 就允许并发写</li>
+<li>进度展示去读队列而不是任务表</li>
+<li>任务结束后不清理临时文件</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+整套方案浓缩成一句话：队列负责调度流转，状态机记录进度，用"至少一次投递 + 幂等消费 + 状态去重"换可靠执行。队列会抖、会重投、会超时，但只要进度在数据库里、每一步可重放、写入认 token 不认人，这些抖动就都只是噪音，不是事故。
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>把可见性超时直接调到很大（比如 12 小时）不就能跑长任务了吗？</summary>
+<div class="answer">
+<p>能跑，但把故障检测一起关掉了。可见性超时同时承担两个职责：防重复取走，和"Worker 死了之后让别人接手"。调到 12 小时意味着 Worker 崩溃后，那条消息要等最长 12 小时才会重新可见，任务失败从"分钟级发现"退化成"半天后才发现"。SQS 对 in-flight 消息还有配额限制，长窗口会让大量消息长期滞留不可见状态。正确做法是保持短窗口（与单步时长匹配），配合步骤拆分：每一步都短到窗口内能完成，需要更久就靠心跳式续期（ChangeMessageVisibility）一段一段续，故障检测粒度始终保持在分钟级。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么要把任务状态放数据库，而不是全放在消息属性里传递？</summary>
+<div class="answer">
+<p>因为消息是"易失的指令"，数据库是"持久的事实"。消息属性里的进度只有当前持有者看得见，消息一旦被重新投递或被多个消费者经手，中间状态就失控了；而取消任务、进度展示、定时对账、故障接管这些操作都需要一个所有组件随时可查的单一事实源。消息重复投递、乱序到达在长任务场景是常态，数据库里的状态机加条件更新能天然收敛这些混乱，消息属性做不到。另外消息体越大，重投和堆积的代价越高，把大块内容赶出消息体本身也是性能要求。</p>
+</div>
+</details>
+
+<details>
+<summary>Kafka 不是有事务和幂等生产者吗，是不是就不用 Outbox 和消费端幂等了？</summary>
+<div class="answer">
+<p>两码事。Kafka 的幂等生产者和事务解决的是"消息写入 broker 这一跳"的重复与原子性——保证写分区不重、跨主题要么全成要么全败。但业务数据在外部数据库里，"写数据库 + 写 Kafka"仍然是跨系统双写，崩溃窗口依然存在，这半边还得靠 Outbox。消费端更管不到：就算消息只投递了一次，消费者处理到一半崩溃、重启后按 offset 重新消费，同一条消息还是会被处理两遍。所以链路三跳（业务库→broker→消费逻辑）每一跳都要有自己的原子性或幂等手段，Kafka 事务只负责其中一跳。</p>
+</div>
+</details>
+
+<details>
+<summary>步骤拆分到底拆多细合适？有没有可操作的判断标准？</summary>
+<div class="answer">
+<p>三条判断线。第一，单步耗时控制在队列超时窗口的一半以内（如窗口 10 分钟则单步 ≤ 5 分钟），给抖动留出余量；第二，步骤边界切在业务的天然关节上——有明确输入输出、可以独立验证成败的位置，比如"每一章""每一批 1000 条"，而不是机械地按时间切；第三，看单步的副作用成本：一步里包含昂贵或不可逆操作（付款、对外发信）时，宁可再拆细一点，让幂等键把守更小的关口。反方向的信号是：当消息量、检查点写库压力、调度开销明显超过实际工作量时，说明拆过头了，该合并。</p>
+</div>
+</details>
+
+<details>
+<summary>fencing token 听起来要改存储层，很多系统是不是可以不上？</summary>
+<div class="answer">
+<p>取决于重复写入的后果。如果僵尸 Worker 多干的活只是浪费算力、结果会被后续正确步骤覆盖且无外部副作用，纯租约加幂等键通常够用，上 token 属于过度设计。但满足任何一条就值得上：写入会覆盖他人更新的检查点或最终结果、会触发不可逆的外部动作（付款、发信、调用计费 API）、或系统里出现过"旧写入盖掉新状态"的事故。实现上未必要改存储引擎——在任务表、检查点表的更新语句里带上"且 token ≥ 当前值"的条件判断，就是最小可行版本，成本很低。</p>
+</div>
+</details>
+
+<details>
+<summary>2 小时的超长任务（比如模型微调），检查点本身都巨大，这套方案还适用吗？</summary>
+<div class="answer">
+<p>适用，但检查点的形态要变。这类任务的"步骤"不再是几十秒的小步，而是训练框架原生的存档点：每 N 个 epoch 或每 30 分钟把权重、优化器状态存进对象存储，检查点表里只记"存档路径 + 步数 + 损失值"等元数据。恢复时新 Worker 按元数据加载最近的存档续训。配套调整两点：租约和心跳照常续，但单步上限改成"两个存档点间隔加余量"；对账扫描的阈值同步放宽。本质不变——队列传的仍是指针，进度仍在库里，只是"存档文件"从数据库行变成了对象存储里的大文件。</p>
+</div>
+</details>
+
+<details>
+<summary>用户的进度展示用轮询还是 SSE？和这套架构怎么配合？</summary>
+<div class="answer">
+<p>两种都要读任务表，区别只在推送方式。任务分钟级、用户量小、想省事，用轮询：客户端每 2~3 秒查一次任务表的当前步骤和完成数，实现简单、无连接管理负担。任务步骤多、想要平滑的实时进度条、用户会长时间停留，用 SSE 由服务端把任务表变更推下去，注意服务端推送的数据源仍然是任务表而非队列。不推荐用 WebSocket 做纯进度展示，连接双向能力用不上还增加运维复杂度。一个常见错误是从队列深度或消息状态推断进度——队列只知道"还有什么没干"，不知道"干到哪了"。</p>
+</div>
+</details>
+
+<details>
+<summary>取消一个正在执行中的长任务，怎么做才算安全？</summary>
+<div class="answer">
+<p>核心是"取消是意图，不是动作"：API 只在任务表写入 cancelled 标记然后立即返回，真正的停止发生在 Worker 侧——它在每次心跳或检查点写入时读到标记，走优雅退出路径：保存当前步骤已有成果、写回最终状态、释放租约、触发临时文件回收。避免直接杀进程，那样会留下半写的检查点和无人认领的租约，要等租约过期才有人接管。对于调用外部系统的步骤，若对方支持取消接口则顺带调用，不支持就在台账里记录、由幂等键保证后续重放不会重复生效。整个过程对用户展示"正在取消…"，直到任务表状态真正落为 cancelled。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; 消息队列长任务可靠执行 &middot; ST20</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

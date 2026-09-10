@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G09 · Embedding 模型选型与 Rerank 搭配</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.15rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、本质理解：Embedding 模型到底决定了什么？</a>
+<a href="#s2">二、当前主流模型的核心差异</a>
+<a href="#s3">三、选型的决策树</a>
+<a href="#s4">四、MTEB 榜单：选型的数据支撑</a>
+<a href="#s5">五、Rerank：为什么 Embedding 之后还需要再排一次？</a>
+<a href="#s6">六、Embedding + Rerank 的搭配方案</a>
+<a href="#s7">七、什么时候需要做领域微调？</a>
+<a href="#s8">八、回答框架</a>
+<a href="#s9">生产案例</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>G09 · Embedding 模型选型与 Rerank 搭配</h1>
+<p class="subtitle">Embedding Model Selection — BGE-M3 / GTE / E5 / Jina v2 对比、MTEB 榜单解读、两阶段检索架构、领域微调决策框架</p>
+
+<div class="intuition-box"><p>Embedding 模型选型的本质：定义什么叫'相似'——选错模型，检索上限就被锁死，后面 Rerank 再强也救不了。</p></div>
+
+<!-- Section 1: 本质理解 -->
+<div class="section" id="s1">
+
+<h2>一、本质理解：Embedding 模型到底决定了什么？</h2>
+
+<p>很多人觉得 Embedding 就是"把文本变成向量"，这个理解太浅。在 RAG 系统里，Embedding 模型的核心作用是<strong>定义什么叫"相似"</strong>。</p>
+
+<h3>语义映射的准确性决定检索上限</h3>
+
+<p>用户问"退保要走什么流程"，知识库里有一段"投保人申请解除保险合同的操作步骤"——字面完全不一样，但意思高度相关。Embedding 模型的任务就是让它们的向量足够接近。</p>
+
+<div class="arch-diagram">
+Embedding 语义映射示意:
+
+用户 Query: "退保要走什么流程"
+              │
+              ▼
+    Embedding Model
+              │
+              ▼
+   向量空间中的位置:
+   
+   "退保要走什么流程"          ★ ← Query 向量
+       │
+       ├── "投保人申请解除保险合同的操作步骤"  ← 正确文档 (应该很近)
+       │         距离: 0.12 ✓
+       │
+       ├── "退货流程说明"                      ← 错误文档 (应该很远)
+       │         距离: 0.67 ✗
+       │
+       └── "退款申请指南"                      ← 错误文档 (应该很远)
+                 距离: 0.71 ✗
+
+如果模型把 "退保" 映射到 "退货/退款" 附近
+→ 召回一堆不相关内容 → Rerank 再强也救不了
+</div>
+
+<p class="highlight">Embedding 模型的质量直接决定 RAG 检索的<strong>上限</strong>。选错了模型，后面所有环节都在给一个错误的起点做补救。</p>
+
+<h3>Embedding 在 RAG Pipeline 中的位置</h3>
+
+<div class="arch-diagram">
+RAG 检索链路:
+
+用户提问: "退保要走什么流程"
+      │
+      ▼
+┌─────────────────────────────────┐
+│  Query Embedding                │
+│  将 Query 编码为向量             │
+└──────────────┬──────────────────┘
+               │
+               ▼
+┌─────────────────────────────────┐
+│  向量检索 (Bi-Encoder)          │  ← 粗召回，速度快
+│  从百万文档中召回 Top 20-50     │
+└──────────────┬──────────────────┘
+               │
+               ▼
+┌─────────────────────────────────┐
+│  Rerank (Cross-Encoder)         │  ← 精排序，精度高
+│  对 20-50 条候选做精排           │
+└──────────────┬──────────────────┘
+               │
+               ▼
+         Top 3-5 文档 → LLM 生成回答
+</div>
+</div>
+
+<!-- Section 2: 主流模型对比 -->
+<div class="section" id="s2">
+<h2>二、当前主流模型的核心差异</h2>
+
+<table>
+<tr>
+  <th>模型</th>
+  <th>出品方</th>
+  <th>语种</th>
+  <th>上下文</th>
+  <th>参数量</th>
+  <th>特点</th>
+</tr>
+<tr>
+  <td><strong>BGE-M3</strong></td>
+  <td>BAAI 智源</td>
+  <td>中英多语言</td>
+  <td>8192</td>
+  <td>~567M</td>
+  <td>支持稠密/稀疏/ColBERT 三种检索模式，C-MTEB 长期前列</td>
+</tr>
+<tr>
+  <td><strong>BGE-large-zh</strong></td>
+  <td>BAAI 智源</td>
+  <td>纯中文</td>
+  <td>512</td>
+  <td>~326M</td>
+  <td>纯中文精度略高于 M3，但上下文窗口小</td>
+</tr>
+<tr>
+  <td><strong>GTE-multilingual-base</strong></td>
+  <td>阿里达摩院</td>
+  <td>多语言</td>
+  <td>8192</td>
+  <td>~278M</td>
+  <td>与 BGE-M3 直接竞品，MTEB 多语言榜互有胜负</td>
+</tr>
+<tr>
+  <td><strong>E5-small/base/large</strong></td>
+  <td>微软</td>
+  <td>多语言</td>
+  <td>512</td>
+  <td>33M~560M</td>
+  <td>完整尺寸梯度，small 适合资源紧张/低延迟场景</td>
+</tr>
+<tr>
+  <td><strong>Jina Embeddings v2</strong></td>
+  <td>Jina AI</td>
+  <td>多语言</td>
+  <td>8192</td>
+  <td>~160M</td>
+  <td>超长上下文（8K），适合法律条文/技术章节</td>
+</tr>
+</table>
+
+<div class="intuition-box">
+<p>这张表里真正会卡住你的不是 MTEB 分数，而是<span class="term">最大上下文长度</span>和<span class="term">部署形态</span>这两栏——分数差一两个点还能靠 Rerank 补，chunk 超出模型窗口被截断的那部分内容，等于根本没进过索引。</p>
+</div>
+
+<h3>各模型适用场景速查</h3>
+
+<div class="arch-diagram">
+模型选型速查:
+
+┌─────────────────────────────────────────────────────────┐
+│  场景                    │  推荐模型                      │
+├─────────────────────────┼───────────────────────────────┤
+│  中文通用                │  BGE-M3 (首选)                 │
+│  纯中文 + 短 Chunk       │  BGE-large-zh                  │
+│  多语言 (中日韩英)       │  BGE-M3 / GTE (跑对比)        │
+│  资源紧张 / CPU 部署     │  E5-small                      │
+│  长文档 (>1000 token)    │  BGE-M3 / Jina v2              │
+│  阿里生态                │  GTE-multilingual-base          │
+└─────────────────────────────────────────────────────────┘
+</div>
+</div>
+
+<!-- Section 3: 选型决策树 -->
+<div class="section" id="s3">
+<h2>三、选型的决策树</h2>
+
+<p>选型核心维度有三个：<strong>语种支持</strong>、<strong>上下文长度</strong>、<strong>部署资源</strong>。按决策树逐层判断即可：</p>
+
+<div class="arch-diagram">
+Embedding 选型决策树:
+
+                    ┌──────────────────┐
+                    │  文档是什么语言？ │
+                    └────────┬─────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+         纯中文         多语言          纯英文
+              │              │              │
+              ▼              ▼              ▼
+        ┌──────────┐   ┌──────────┐   ┌──────────┐
+        │ BGE-M3   │   │ BGE-M3   │   │ E5 /     │
+        │ 首选     │   │ or GTE   │   │ OpenAI   │
+        └────┬─────┘   └────┬─────┘   └──────────┘
+             │              │
+             ▼              ▼
+     ┌──────────────────────────┐
+     │  Chunk 有多长？          │
+     └────────────┬─────────────┘
+                  │
+     ┌────────────┼────────────┐
+     ▼            ▼            ▼
+  < 512 token   512-1000     > 1000 token
+     │            │            │
+     ▼            ▼            ▼
+  所有模型     BGE-M3       BGE-M3 / Jina v2
+  都能胜任     (8192)       (8K 超长上下文)
+                  │
+                  ▼
+         ┌──────────────────┐
+         │  部署资源怎么样？ │
+         └────────┬─────────┘
+                  │
+     ┌────────────┼────────────┐
+     ▼            ▼            ▼
+  有 GPU       CPU 部署     边缘设备
+     │            │            │
+     ▼            ▼            ▼
+  随便选      E5-small     E5-small
+              (33M参数)    (推理极快)
+</div>
+
+<p><strong>场景适配的量化验证：</strong>在某金融保险场景中，我们在同一测试集上对比了两个候选模型：</p>
+
+<table>
+<tr><th>模型</th><th>Retrieval MRR</th><th>分类准确率</th><th>聚类质量</th><th>推理速度</th></tr>
+<tr><td>BGE-M3</td><td>0.72</td><td>0.89</td><td>0.65</td><td>120ms/query</td></tr>
+<tr><td>GTE-multilingual-base</td><td>0.69</td><td>0.91</td><td>0.71</td><td>85ms/query</td></tr>
+</table>
+
+<p>如果核心任务是检索，选 BGE-M3（MRR 高 3%）；如果核心任务是分类/聚类，选 GTE（准确率高 2%）。关键：不要只看排行榜，要在自己的数据上验证。</p>
+</div>
+
+<!-- Section 4: MTEB 榜单 -->
+<div class="section" id="s4">
+<h2>四、MTEB 榜单：选型的数据支撑</h2>
+
+<p>MTEB（Massive Text Embedding Benchmark）是 Hugging Face 维护的 Embedding 模型评测榜单，是选型的"标准答案"参考。</p>
+
+<h3>看榜单的三大技巧</h3>
+
+<table>
+<tr>
+  <th>误区</th>
+  <th>正确做法</th>
+  <th>原因</th>
+</tr>
+<tr>
+  <td>看总分排名</td>
+  <td>看 <strong>Retrieval 子任务</strong>分数</td>
+  <td>MTEB 总分包含分类/聚类/句对匹配等，RAG 只关心检索</td>
+</tr>
+<tr>
+  <td>只看英文榜</td>
+  <td>看 <strong>C-MTEB</strong>（中文榜）</td>
+  <td>中文场景下英文榜排名不代表中文表现</td>
+</tr>
+<tr>
+  <td>无脑选排名最高的</td>
+  <td>关注 <strong>参数量</strong>与推理成本</td>
+  <td>排名靠前的可能是几十亿参数，部署成本高</td>
+</tr>
+</table>
+
+<p class="highlight">实践中提到 MTEB / C-MTEB / Retrieval 子任务得分是<strong>很好的加分项</strong>——说明你的选型有系统化的评估方法，不是"听别人说好就用了"。</p>
+
+<h3>实际选型流程</h3>
+
+<div class="arch-diagram">
+选型流程:
+
+Step 1: MTEB 榜单筛选候选
+         C-MTEB Retrieval 子任务 Top 5
+              │
+              ▼
+Step 2: 过滤不适合的
+         去掉参数过大 / 不支持目标语种 / 上下文不够的
+              │
+              ▼
+Step 3: 自有测试集跑对比
+         准备 50-100 条 (query, 正确文档) 对
+         跑 MRR@5 / Recall@5 对比
+              │
+              ▼
+Step 4: 综合决策
+         精度 + 推理速度 + 部署成本 → 最终选型
+</div>
+
+<p><strong>数据更新提示：</strong>本卡的看榜方法论与选型流程适用于任何时期的榜单；2026 年最新榜单数据与梯队变化（开源模型首次登顶、头部分数集中在 62-71 区间）见 <a href="./embedding_deep.html#s5">G03 · MTEB 2026 榜单深度解读</a>。</p>
+</div>
+
+<!-- Section 5: Rerank -->
+<div class="section" id="s5">
+<h2>五、Rerank：为什么 Embedding 之后还需要再排一次？</h2>
+
+<div class="intuition-box">
+<p><span class="term">Bi-Encoder</span> 回答的是"这篇文档跟这个问题是不是一个话题"，<span class="term">Cross-Encoder</span> 回答的是"这篇文档里到底有没有这个问题的答案"——同样问"世界上最高的山"，前者会把三座高峰一起端上来，后者才知道只有一座对。</p>
+</div>
+
+<h3>Bi-Encoder 的根本局限</h3>
+
+<p>向量检索用的是 <strong>Bi-Encoder（双塔模型）</strong>——query 和文档各自独立编码成向量，然后算余弦相似度。</p>
+
+<div class="arch-diagram">
+Bi-Encoder (向量检索):
+
+  Query: "世界上最高的山"          Doc: "珠穆朗玛峰介绍"
+        │                              │
+        ▼                              ▼
+  ┌──────────┐                   ┌──────────┐
+  │ Encoder  │                   │ Encoder  │  ← 独立编码
+  └────┬─────┘                   └────┬─────┘
+       │                              │
+       ▼                              ▼
+    vec_q                          vec_d
+       │                              │
+       └──────────┬───────────────────┘
+                  ▼
+          cos(vec_q, vec_d) = 0.85
+          
+  优势: 快！文档向量可离线预计算
+  劣势: query 和文档无交互，只能衡量"话题相关性"
+</div>
+
+<p>Bi-Encoder 只能衡量<strong>"话题相关性"</strong>，无法判断<strong>"文档是否真的包含答案"</strong>。用户问"世界上最高的山"，Bi-Encoder 可能把珠穆朗玛峰、K2、干城章嘉峰三座山的介绍都召回来——因为它们都跟"高山"相关。但只有珠穆朗玛峰是正确答案。</p>
+
+<h3>Cross-Encoder 的精排能力</h3>
+
+<div class="arch-diagram">
+Cross-Encoder (Rerank):
+
+  输入: [CLS] "世界上最高的山" [SEP] "珠穆朗玛峰海拔8848米，是世界最高峰..." [SEP]
+                            │
+                            ▼
+                    ┌──────────────┐
+                    │  Transformer  │  ← query 和 doc 联合编码
+                    │   (完整交互)  │
+                    └──────┬───────┘
+                           │
+                           ▼
+                    相关性分数: 0.97
+                    
+  优势: 精确！能看到完整交互，区分"话题相关但不含答案" vs "含答案"
+  劣势: 慢！每对 (query, doc) 都要做一次完整推理，不能预计算
+</div>
+
+<h3>两阶段检索架构</h3>
+
+<div class="arch-diagram">
+两阶段检索 = 粗召回(Bi-Encoder) + 精排(Cross-Encoder):
+
+全库 (百万文档)
+      │
+      ▼
+┌─────────────────────────────────────┐
+│  Stage 1: Bi-Encoder 粗召回         │
+│  速度: ~10ms (ANN 近似检索)         │
+│  候选: Top 20-50                    │
+│  精度: 话题相关性 (可能有噪声)       │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────┐
+│  Stage 2: Cross-Encoder 精排        │
+│  速度: ~50ms/pair × 50 = ~2.5s      │
+│  输出: Top 3-5                      │
+│  精度: 语义精确匹配                  │
+└──────────────┬──────────────────────┘
+               │
+               ▼
+         Top 3-5 → LLM 生成回答
+         
+  两阶段各取所长: 前者快，后者准
+</div>
+
+<p class="highlight">只有粗召回没有精排的系统，噪声文档必然偏多，LLM 的幻觉风险也更高。</p>
+</div>
+
+<!-- Section 6: 搭配方案 -->
+<div class="section" id="s6">
+<h2>六、Embedding + Rerank 的搭配方案</h2>
+
+<p>Rerank 模型的选择有一个核心原则：<strong>尽量选跟 Embedding 同系列的</strong>，因为训练数据和语义空间更一致，搭配效果最好。</p>
+
+<table>
+<tr>
+  <th>场景</th>
+  <th>Embedding (粗召回)</th>
+  <th>Rerank (精排)</th>
+  <th>备注</th>
+</tr>
+<tr>
+  <td><strong>中文通用</strong></td>
+  <td>BGE-M3</td>
+  <td>BGE-Reranker-base</td>
+  <td>开源社区最常用组合，验证充分</td>
+</tr>
+<tr>
+  <td><strong>多语言</strong></td>
+  <td>GTE-multilingual-base</td>
+  <td>GTE-multilingual-reranker</td>
+  <td>阿里生态最佳组合</td>
+</tr>
+<tr>
+  <td><strong>资源紧张</strong></td>
+  <td>E5-small</td>
+  <td>MiniLM-L6-cross-encoder</td>
+  <td>参数量小，CPU 可部署</td>
+</tr>
+<tr>
+  <td><strong>长文档</strong></td>
+  <td>Jina-embeddings-v2</td>
+  <td>Jina-ColBERT-v2</td>
+  <td>ColBERT 精度接近 Cross-Encoder 但快得多</td>
+</tr>
+</table>
+
+<h3>ColBERT：介于 Bi-Encoder 和 Cross-Encoder 之间</h3>
+
+<div class="arch-diagram">
+三种编码器架构对比:
+
+Bi-Encoder:     Q → Encoder → vec_q ─┐
+                D → Encoder → vec_d ─┴→ cos(vec_q, vec_d)
+                独立编码，无交互 → 快但不准
+
+Cross-Encoder:  [Q; D] → Encoder → score
+                联合编码，完整交互 → 准但慢
+
+ColBERT:        Q → Encoder → [vec_q1, vec_q2, ..., vec_qn]
+                D → Encoder → [vec_d1, vec_d2, ..., vec_dm]
+                
+                MaxSim(q_i, d_j) → Σ max_j sim(q_i, d_j)
+                
+                Token 级交互，延迟求和 → 准且较快
+                精度接近 Cross-Encoder，速度快 10-100x
+</div>
+</div>
+
+<!-- Section 7: 领域微调 -->
+<div class="section" id="s7">
+<h2>七、什么时候需要做领域微调？</h2>
+
+<div class="intuition-box">
+<p>需要<span class="term">领域微调</span>的判据不是"我们是不是垂直行业"，而是"我们行业的口语说法和文档正式说法，在通用向量空间里是不是离得太远"——"轻症"和"轻度恶性肿瘤"在保险从业者眼里是同一件事，在通用语料里却是两个方向。</p>
+</div>
+
+<h3>通用模型在垂直领域的精度不足</h3>
+
+<p>通用 Embedding 模型的训练数据以通用语料为主。在专业垂直领域，语义映射可能不准确：</p>
+
+<div class="arch-diagram">
+保险领域的语义映射问题:
+
+用户 Query: "轻症赔付比例"
+知识库文档: "轻度恶性肿瘤按基本保额的 20% 给付"
+
+保险从业者一看就知道: "轻症" = "轻度恶性肿瘤" 的口语表达
+
+但通用 Embedding 模型:
+  "轻症" → 更接近 "感冒/发烧/轻微病症"  (通用语料中的关联)
+  "轻度恶性肿瘤" → 更接近 "癌症/重疾"  (医学语料中的关联)
+  
+  结果: 两个表达的向量距离较远 → 检索召回失败
+</div>
+
+<h3>判断是否需要微调</h3>
+
+<div class="arch-diagram">
+微调决策流程:
+
+Step 1: 准备评测数据
+        50-100 条 (用户真实 query, 正确文档) 对
+              │
+              ▼
+Step 2: 通用模型跑评测
+        计算 Recall@5 (Top 5 里能找到正确答案的比例)
+              │
+              ▼
+        Recall@5 < 0.7?
+         ┌────┴────┐
+         │ Yes     │ No
+         ▼         ▼
+     需要微调    通用模型够用
+              │
+              ▼
+Step 3: 准备微调数据
+        500-1000 条 (query, 正确文档) 对
+              │
+              ▼
+Step 4: 训练
+        Loss: MultipleNegativesRankingLoss
+        Epochs: 2-3 (避免过拟合)
+        Batch 内自动构造负样本
+</div>
+
+<p><strong>微调数据量说明：</strong>500-1000 条是本卡场景实测的快速验证起点；不同场景数据量差异较大，数百到上万对均常见（如领域深度微调常用 1000-10000 对）。请以自有 Recall@K 评估结果为准调整规模。</p>
+
+<h3>微调效果实测</h3>
+
+<table>
+<tr>
+  <th>指标</th>
+  <th>通用模型 (BGE-M3)</th>
+  <th>微调后</th>
+  <th>提升</th>
+</tr>
+<tr>
+  <td>MRR</td>
+  <td>0.58</td>
+  <td>0.82</td>
+  <td><strong>+24%</strong></td>
+</tr>
+<tr>
+  <td>微调数据量</td>
+  <td>—</td>
+  <td>800 条</td>
+  <td>—</td>
+</tr>
+<tr>
+  <td>数据准备耗时</td>
+  <td>—</td>
+  <td>~2 天</td>
+  <td>ROI 极高</td>
+</tr>
+</table>
+
+<h3>Rerank 模型的领域微调</h3>
+
+<p>Rerank 模型也可以做领域微调，效果同样显著。微调数据格式是<strong>三元组</strong>：</p>
+
+<div class="formula">
+(query, 正例文档, 难负例文档)
+</div>
+
+<p>其中"难负例"是关键——它是那些跟 query 话题相关但实际不含答案的文档，正是 Bi-Encoder 最容易误判的那种。用向量检索召回的候选集里筛出不含答案的文档，就是天然的难负例来源。</p>
+</div>
+
+<!-- Section 8: 回答框架 -->
+<div class="section" id="s8">
+<h2>八、回答框架</h2>
+
+<h3>常见翻车点</h3>
+
+<table>
+<tr>
+  <th>翻车点</th>
+  <th>进阶追问</th>
+  <th>正确应对</th>
+</tr>
+<tr>
+  <td>只说模型名</td>
+  <td>"为什么选 BGE 不选 GTE？"</td>
+  <td>讲选型维度 + 对比过程 + MRR 数据</td>
+</tr>
+<tr>
+  <td>不知道 MTEB</td>
+  <td>"你选模型的评估方法是什么？"</td>
+  <td>提到 MTEB / C-MTEB / Retrieval 子任务</td>
+</tr>
+<tr>
+  <td>没有用 Rerank</td>
+  <td>"你的检索链路是什么？"</td>
+  <td>讲两阶段架构：Bi-Encoder + Cross-Encoder</td>
+</tr>
+<tr>
+  <td>不知道何时微调</td>
+  <td>"你做过 Embedding 微调吗？"</td>
+  <td>讲 Recall@5 < 0.7 的判断标准 + 实测数据</td>
+</tr>
+</table>
+
+<h3>完整回答四层递进</h3>
+
+<div class="arch-diagram">
+回答框架 (四层递进):
+
+Layer 1: 选型维度
+         "我们的场景是中文金融保险文档，
+          Chunk 长度 500 token，有 T4 GPU"
+              │
+              ▼
+Layer 2: 对比过程
+         "MTEB 筛选候选 → BGE-M3 vs GTE
+          自有测试集 MRR 对比，BGE-M3 高 3%"
+              │
+              ▼
+Layer 3: 搭配方案
+         "BGE-M3 检索 + BGE-Reranker-base 精排
+          同系列训练数据一致，搭配效果最好"
+              │
+              ▼
+Layer 4: 微调决策
+         "通用模型 MRR 0.58，
+          800 条领域数据微调后 MRR 0.82 (+24%)"
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先在自己的测试集上评估，再参考排行榜</li>
+<li>明确核心任务是检索/分类/聚类，针对性选模型</li>
+<li>考虑部署成本（GPU 型号、推理延迟）</li>
+<li>预留 A/B 测试，上线后持续监控效果</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>只看排行榜第一名就用</li>
+<li>忽略场景适配（中文/英文/多语言）</li>
+<li>不考虑维度对存储和检索性能的影响</li>
+<li>上线后不做效果监控</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="section" id="s9">
+<h2>生产案例</h2>
+<div class="intuition-box">
+<p><strong>生产验证：</strong>某法律 RAG 系统从 text-embedding-ada-002 迁移至 bge-large-zh 后，中文法律检索 Recall@10 从 <strong>61%</strong> 提升至 <strong>84%</strong>（+23 个百分点）。关键原因：ada-002 的训练数据中英文占比 85%+，中文领域术语（如"不当得利""善意取得"）的向量区分度不足（余弦相似度 0.92+，几乎无法区分）。bge-large-zh 在中文法律语料上训练，同义词区分度提升至 0.78。成本对比：ada-002 $0.0001/1K tokens，bge-large-zh 自部署（A10 × 1）月成本 <strong>¥800</strong>，日均处理 <strong>50 万</strong>次查询，单次成本约 ¥0.00005（比 API 便宜 85%）。选型决策树验证：中文 → 领域特定 → 数据量大 → 自部署 bge，完全命中。</p>
+</div>
+</div>
+
+<!-- Q&A Section -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>你的 RAG 系统 Embedding 用的什么模型？为什么选它？</summary>
+<div class="answer">我们用的是 BGE-M3。选型依据：(1) 场景是中文文档，BGE-M3 在 C-MTEB Retrieval 子任务排名前列；(2) 支持 8192 token 上下文，能覆盖我们的 Chunk 长度；(3) 同时支持稠密/稀疏/多向量三种检索模式，灵活性高。选型时还对比了 GTE-multilingual-base，在我们的测试集上 BGE-M3 的 MRR 高约 3 个百分点。</div>
+</details>
+
+<details>
+<summary>BGE-M3 和 BGE-large-zh 有什么区别？什么时候该用哪个？</summary>
+<div class="answer">BGE-M3 是多语言模型，支持中英等多语言，上下文窗口 8192 token，支持三种检索模式。BGE-large-zh 专注纯中文，上下文窗口只有 512 token，在纯中文短文本场景下某些任务精度略高。如果你的文档全是中文且 Chunk 控制在 500 token 以内，BGE-large-zh 可以考虑；否则 BGE-M3 更安全。</div>
+</details>
+
+<details>
+<summary>MTEB 榜单怎么看？</summary>
+<div class="answer">三个要点：(1) 看 Retrieval 子任务分数，不要看总分——总分包含分类/聚类/匹配等，RAG 只关心检索；(2) 看对应语言的榜单——中文场景看 C-MTEB，不要被英文榜排名误导；(3) 注意参数量——排名靠前的可能是几十亿参数大模型，要平衡精度和部署成本。</div>
+</details>
+
+<details>
+<summary>为什么向量检索之后还需要 Rerank？</summary>
+<div class="answer">向量检索用 Bi-Encoder，query 和文档独立编码，只能衡量"话题相关性"，无法判断"是否包含答案"。Rerank 用 Cross-Encoder，把 query 和文档联合编码，能看到完整语义交互，精确区分"话题相关但不含答案"和"含答案"。两阶段架构：Bi-Encoder 从百万文档快速召回 Top 20-50，Cross-Encoder 精排取 Top 3-5，前者快后者准。</div>
+</details>
+
+<details>
+<summary>Embedding 和 Rerank 模型怎么搭配？</summary>
+<div class="answer">核心原则是选同系列的，训练数据和语义空间更一致。中文通用：BGE-M3 + BGE-Reranker-base；多语言：GTE-multilingual-base + GTE-multilingual-reranker；资源紧张：E5-small + MiniLM-L6-cross-encoder；长文档：Jina-embeddings-v2 + Jina-ColBERT-v2。</div>
+</details>
+
+<details>
+<summary>什么时候需要做 Embedding 领域微调？</summary>
+<div class="answer">判断方法：准备 50-100 条 (query, 正确文档) 对，用通用模型跑 Recall@5。如果低于 0.7，大概率需要微调。微调只需 500-1000 条数据对，用 MultipleNegativesRankingLoss 训练 2-3 个 epoch。我们保险领域项目实测：BGE-M3 通用模型 MRR 0.58，800 条数据微调后 MRR 0.82，提升 24 个百分点。</div>
+</details>
+
+<details>
+<summary>ColBERT 是什么？跟 Bi-Encoder 和 Cross-Encoder 什么关系？</summary>
+<div class="answer">ColBERT 是介于 Bi-Encoder 和 Cross-Encoder 之间的架构。它对 query 和文档分别编码，但保留 token 级别的向量（而非聚合成单一向量），通过 MaxSim 计算相似度。精度接近 Cross-Encoder，速度快 10-100 倍，特别适合长文档场景。BGE-M3 的多向量检索模式和 Jina-ColBERT-v2 都是基于这个思路。</div>
+</details>
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

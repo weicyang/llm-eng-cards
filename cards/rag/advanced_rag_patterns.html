@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G18 · 高级 RAG 模式</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、Self-RAG：让模型学会"自我反思"</a>
+<a href="#s2">二、Corrective RAG (CRAG)：检索质量的自动纠错</a>
+<a href="#s3">三、Adaptive RAG：查询复杂度路由</a>
+<a href="#s4">四、RAPTOR：层次化摘要树</a>
+<a href="#s5">五、HyDE：假设性文档嵌入</a>
+<a href="#s6">六、Agentic RAG：给检索注入 Agent 灵魂</a>
+<a href="#s7">七、查询分解与多步推理</a>
+<a href="#s8">八、模式选择指南</a>
+<a href="#qa">Q&A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>G18 · 高级 RAG 模式</h1>
+<p class="subtitle">Advanced RAG Patterns — Self-RAG / CRAG / Adaptive RAG / RAPTOR / HyDE / Agentic RAG / 多步推理</p>
+
+<div class="intuition-box">
+<p>高级 RAG 的本质：给固定的"检索→生成"流水线注入<strong>判断力</strong>——让系统自己决定要不要检索、检索结果够不够好、要不要再查一轮。</p>
+</div>
+
+<!-- Section 1: Self-RAG -->
+<div class="section" id="s1">
+<h2>一、Self-RAG：让模型学会"自我反思"</h2>
+
+<p><span class="term">Self-RAG</span>（Self-Reflective Retrieval-Augmented Generation）由 Asai et al., 2023 提出：在 SFT 训练阶段把 <strong>4 个反思 token</strong> 训入模型权重——<strong>Retrieve</strong>（生成前判断要不要检索）、<strong>ISREL</strong>（检索后判断文档是否相关）、<strong>ISSUP</strong>（生成后判断内容有无 context 支撑）、<strong>ISUSE</strong>（输出前判断答案是否对用户有用），让模型在生成文本时同步输出对自身行为的判断。</p>
+
+<p><strong>一句话结论：</strong>反思能力训进模型权重而非外挂规则，推理时零额外开销，同时解决 Naive RAG 的三大痛点——不必要检索（跳过可省 200-500ms 延迟）、噪声注入（丢弃无关文档）、幻觉（ISSUP 忠实性自检）。</p>
+
+<p><strong>效果数据（不同场景实测）：</strong>事实准确性 68%→82%（+14%），不必要检索率 100%→35%，平均延迟 800ms→520ms（-35%）。</p>
+
+<div class="highlight">
+<strong>深入阅读：</strong>反思 token 的训练数据构造、自适应推理决策树、生产部署架构与四维评测体系，见 Self-RAG 权威主卡 <a href="self_rag_system_design.html">G19 · Self-RAG 系统设计核心</a>。
+</div>
+</div>
+
+<!-- Section 2: CRAG -->
+<div class="section" id="s2">
+<h2>二、Corrective RAG (CRAG)：检索质量的自动纠错</h2>
+
+<div class="intuition-box">
+<p>CRAG 的本质：检索完不急着用，先让"质检员"评估结果，不合格就切换到 Web 搜索作为 fallback。</p>
+</div>
+
+<p><span class="term">Corrective RAG</span> 由 Yan et al. 2024 提出，核心思想是在检索和生成之间插入一个<strong>知识评估模块</strong>，对检索结果进行三档评级，根据评级结果动态调整后续策略。</p>
+
+<h3>三级评估策略</h3>
+<table>
+<tr><th>评级</th><th>判断条件</th><th>行动</th><th>典型场景</th></tr>
+<tr><td><strong>CORRECT</strong></td><td>至少 1 篇文档高度相关</td><td>直接使用检索结果</td><td>知识库覆盖该主题</td></tr>
+<tr><td><strong>AMBIGUOUS</strong></td><td>部分相关但不充分</td><td>检索结果 + Web 搜索合并</td><td>知识库有但不完整</td></tr>
+<tr><td><strong>INCORRECT</strong></td><td>所有文档都不相关</td><td>完全切换到 Web 搜索</td><td>知识库未覆盖</td></tr>
+</table>
+
+<p>CRAG 还有一个关键步骤——<span class="term">Knowledge Refinement</span>（知识精炼）：不是把所有检索结果都塞给 LLM，而是先用一个轻量模型提取每篇文档中与 query 相关的关键句，去噪后再送入生成阶段。这一步可以将 context 的噪声比例从 40% 降低到 10% 以下。</p>
+
+<div class="highlight">
+<strong>CRAG 的核心价值：</strong>当知识库不完整或存在陈旧信息时，Web Search 作为 fallback 通道确保系统不会"硬答"。在企业场景中，知识库覆盖率通常只有 60-70%，CRAG 的 fallback 机制可以将"无法回答"的比例从 30% 降至 5% 以下。
+</div>
+</div>
+
+<!-- Section 3: Adaptive RAG -->
+<div class="section" id="s3">
+<h2>三、Adaptive RAG：查询复杂度路由</h2>
+
+<div class="intuition-box">
+<p>Adaptive RAG 的本质：在检索前先给问题"分诊"——简单问题走快速通道，复杂问题走多步通道，不浪费资源也不漏掉信息。</p>
+</div>
+
+<p><span class="term">Adaptive RAG</span> 由 Jeong et al. 2024 提出，核心创新是在 pipeline 入口添加一个<strong>复杂度分类器</strong>，将 query 路由到三种不同的处理策略。</p>
+
+<h3>三级路由策略</h3>
+<table>
+<tr><th>复杂度</th><th>典型 Query</th><th>处理策略</th><th>延迟</th></tr>
+<tr><td><strong>Simple</strong></td><td>"Python 什么时候发布？"</td><td>直接 LLM 回答（跳过检索）</td><td>~200ms</td></tr>
+<tr><td><strong>Moderate</strong></td><td>"解释 RAG 的工作原理"</td><td>单次检索 + 生成</td><td>~800ms</td></tr>
+<tr><td><strong>Complex</strong></td><td>"比较 GraphRAG 和 Vector RAG 在多跳推理上的优劣"</td><td>问题分解 + 多步检索 + 综合</td><td>~2000ms</td></tr>
+</table>
+
+<h3>分类器的三种实现方式</h3>
+<p><strong>方式 1：轻量级 BERT 分类器</strong> — 用几百条标注数据 fine-tune 一个三分类模型，推理延迟 <10ms，适合生产环境。</p>
+<p><strong>方式 2：LLM 判断</strong> — 用 prompt 让 GPT-4 判断复杂度，灵活但增加 300-500ms 延迟，适合原型阶段。</p>
+<p><strong>方式 3：规则启发式</strong> — 关键词匹配：包含"比较/对比/分析"→ complex，包含"是什么/什么时候"→ simple。零成本但泛化能力弱。</p>
+
+<div class="highlight">
+<strong>路由准确性是关键瓶颈：</strong>误判简单问题为复杂会浪费 5 倍计算资源；误判复杂为简单会因缺少检索而答错。在实际部署中，分类器 F1 需要达到 0.85 以上才能带来正向 ROI。
+</div>
+
+<div class="intuition-box">
+<p>Adaptive RAG 与 Self-RAG 的关系：Adaptive 是<strong>路由级</strong>自适应（整个 pipeline 的走向），Self-RAG 是<strong>token 级</strong>自适应（生成过程中逐步判断）。两者可以组合——先用 Adaptive 路由，复杂路径中再用 Self-RAG 控制质量。</p>
+</div>
+</div>
+
+<!-- Section 4: RAPTOR -->
+<div class="section" id="s4">
+<h2>四、RAPTOR：层次化摘要树</h2>
+
+<div class="intuition-box">
+<p>RAPTOR 解决的核心矛盾：查询粒度与索引粒度不匹配——宏观问题（"这篇论文的主题？"）需要高层摘要，细节问题（"实验用了多少数据？"）需要原始分块，RAPTOR 两个都给你。</p>
+</div>
+
+<p><span class="term">RAPTOR</span>（Recursive Abstractive Processing for Tree-Organized Retrieval）由 Sarthi et al. 2024 提出，核心思想是构建一棵<strong>多层级摘要树</strong>，叶子节点是原始 chunks，越往上越抽象，查询时在<strong>所有层级同时检索</strong>。</p>
+
+<div class="arch-diagram">
+RAPTOR 摘要树构建:
+
+Level 2 (最抽象):  [全文档主题摘要]
+                      /          \
+Level 1 (中间层):  [章节A摘要]    [章节B摘要]
+                   /    \          /    \
+Level 0 (叶子):  [c1]  [c2]    [c3]  [c4]    ← 原始 chunks
+
+构建过程 (自底向上):
+  1. Level 0: 原始分块
+  2. 对 Level 0 做 embedding → 聚类 (K-Means)
+  3. 每个簇用 LLM 生成摘要 → Level 1
+  4. 对 Level 1 再聚类 → 再摘要 → Level 2
+  5. 重复直到达到预设层数 (通常 2-3 层)
+
+查询时: 所有层级同时检索 → 合并 → Rerank → Top-K
+</div>
+
+<h3>RAPTOR vs 普通分块 vs Parent-Child</h3>
+<table>
+<tr><th>方面</th><th>普通分块</th><th>Parent-Child</th><th>RAPTOR</th></tr>
+<tr><td>索引层级</td><td>单层</td><td>固定两层</td><td>多层递归（2-5层）</td></tr>
+<tr><td>全局理解</td><td>差（碎片化）</td><td>中等</td><td>好（高层摘要包含全局视角）</td></tr>
+<tr><td>细节保留</td><td>好</td><td>好</td><td>好（叶子层保留原文）</td></tr>
+<tr><td>索引成本</td><td>低</td><td>中</td><td>高（需 LLM 生成每层摘要）</td></tr>
+<tr><td>适用场景</td><td>通用</td><td>代码/长文档</td><td>多粒度查询需求</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产经验：</strong>RAPTOR 的索引构建成本是普通分块的 5-10 倍（LLM 摘要调用），但查询质量在"全局总结类"query 上提升 30-50%。适合知识库规模中等（<10万 chunks）且查询粒度多样的场景。
+</div>
+</div>
+
+<!-- Section 5: HyDE -->
+<div class="section" id="s5">
+<h2>五、HyDE：假设性文档嵌入</h2>
+
+<div class="intuition-box">
+<p>HyDE 的反直觉之处：不用"问题"去搜"答案"，而是先让 LLM 编一个"假设性答案"，用这个答案的 embedding 去检索——因为答案和文档的表述方式更接近。</p>
+</div>
+
+<p><span class="term">HyDE</span>（Hypothetical Document Embeddings）由 Gao et al. 2022 提出，解决的痛点是 <strong>query-document 语义鸿沟</strong>：用户的 query 是短、口语化的问句（"怎么报销"），而文档是长、规范化的陈述句（"差旅费用报销流程管理办法"），两者在向量空间中的距离远大于语义上的实际相关性。</p>
+
+<h3>HyDE 的三步流程</h3>
+<p><strong>Step 1：</strong>LLM 基于 query 生成一个假设性回答（不需要准确，只需要风格和文档类似）</p>
+<p><strong>Step 2：</strong>用假设性回答的 embedding（而非原始 query）去检索向量库</p>
+<p><strong>Step 3：</strong>返回最相似的 Top-K 文档作为真正的 context</p>
+
+<h3>HyDE 的优劣势</h3>
+<table>
+<tr><th>优势</th><th>劣势</th></tr>
+<tr><td>桥接 query-document 表达鸿沟</td><td>LLM 生成的假设可能包含错误，误导检索方向</td></tr>
+<tr><td>对短/模糊 query 效果好（提升 5-15%）</td><td>增加一次 LLM 调用延迟（200-500ms）</td></tr>
+<tr><td>无需 fine-tune embedding 模型</td><td>对精确关键词查询反而有害（如 "torch.nn.Linear 参数"）</td></tr>
+</table>
+
+<div class="highlight">
+<strong>改进方案：</strong>生成多个（3-5 个）假设性文档，取 embedding 平均值，减少单次生成的偏差。或者用 <code>α × query_emb + (1-α) × hyde_emb</code> 做融合，α=0.5 通常效果最好。
+</div>
+</div>
+
+<!-- Section 6: Agentic RAG -->
+<div class="section" id="s6">
+<h2>六、Agentic RAG：给检索注入 Agent 灵魂</h2>
+
+<div class="intuition-box">
+<p>Agentic RAG = RAG + Agent：检索不再是固定流程，而是 Agent 工具箱中的一个 tool，LLM 自主决定何时检索、检索什么、什么时候够了。</p>
+</div>
+
+<p><span class="term">Agentic RAG</span> 将检索能力嵌入 Agent 的 <span class="term">ReAct</span>（Reasoning + Acting）循环中，Agent 可以根据中间推理结果动态选择下一步行动——可能是查向量库，可能是搜互联网，可能是查数据库，也可能是直接计算。</p>
+
+<h3>Agentic RAG vs 普通 RAG</h3>
+<table>
+<tr><th>能力</th><th>普通 RAG</th><th>Agentic RAG</th></tr>
+<tr><td>数据源</td><td>固定单源</td><td>动态选择（向量库/Web/SQL/代码）</td></tr>
+<tr><td>检索次数</td><td>固定一次</td><td>迭代多步（根据中间结果决定）</td></tr>
+<tr><td>错误恢复</td><td>无</td><td>可重试、换策略、换数据源</td></tr>
+<tr><td>多跳推理</td><td>不支持</td><td>自然支持（每步推理触发新检索）</td></tr>
+<tr><td>延迟可控性</td><td>固定可预测</td><td>不确定（需设 max_iterations）</td></tr>
+</table>
+
+<div class="arch-diagram">
+Agentic RAG 的 ReAct 循环:
+
+Thought: "用户问的是跨领域问题，需要先查技术文档再查代码"
+Action: vector_search("RAG 架构设计")
+Observation: [检索结果...]
+Thought: "需要更具体的实现细节，查代码库"
+Action: code_search("RAG pipeline implementation")
+Observation: [代码结果...]
+Thought: "现在有足够信息，可以综合回答"
+Final Answer: ...
+</div>
+
+<div class="highlight">
+<strong>生产风险（一句话）：</strong>Agentic 迭代次数不确定，可能导致延迟爆炸与成本失控——必须设置迭代上限（max_iterations）、超时 fallback、单请求成本上限三重防护（某企业 5% 的请求触发 3+ 轮迭代，P99 延迟从 800ms 飙至 8s）。完整的核心工作流、成本控制、评估体系与迁移方案见 <a href="agentic_rag.html">G20 · Agentic RAG</a>。
+</div>
+</div>
+
+<!-- Section 7: Multi-Step RAG -->
+<div class="section" id="s7">
+<h2>七、查询分解与多步推理</h2>
+
+<div class="intuition-box">
+<p>多步 RAG 的本质：把一个大问题拆成小问题，每个小问题独立检索回答，最后综合——和人类做研究的过程一样。</p>
+</div>
+
+<h3>两种多步模式</h3>
+
+<p><strong>模式 1：Query Decomposition</strong> — 先将复杂问题分解为 2-4 个子问题，逐一检索回答后综合。适合比较类（"A 和 B 的区别"）和多跳类（"X 的作者在哪工作"）问题。</p>
+
+<p><strong>模式 2：<span class="term">IRCoT</span></strong>（Interleaving Retrieval with Chain-of-Thought）— 在思维链的每一步推理中都触发检索，用新信息继续推理。这是最灵活的多步方式，但 LLM 调用次数是单次的 3-5 倍。</p>
+
+<table>
+<tr><th>模式</th><th>拆解方式</th><th>检索次数</th><th>最佳场景</th></tr>
+<tr><td>Query Decomposition</td><td>一次性拆成子问题</td><td>2-4 次</td><td>比较类、多跳类</td></tr>
+<tr><td>IRCoT</td><td>推理过程中按需检索</td><td>3-5+ 次</td><td>需要逐步推理的复杂问题</td></tr>
+<tr><td>Self-Ask</td><td>LLM 自问自答式分解</td><td>2-3 次</td><td>需要中间事实的问题</td></tr>
+</table>
+
+<div class="highlight">
+<strong>成本警示：</strong>多步检索的 LLM 调用次数是单次的 3-5 倍。在 GPT-4 定价下，单次 RAG 成本约 $0.01，多步模式可达 $0.03-0.05。对简单问题使用多步反而有害——增加延迟且可能引入噪声。建议先用 Adaptive Router 判断复杂度，只对 complex query 启用多步。
+</div>
+</div>
+
+<!-- Section 8: Selection Guide -->
+<div class="section" id="s8">
+<h2>八、模式选择指南</h2>
+
+<h3>七大模式全景对比</h3>
+<table>
+<tr><th>模式</th><th>核心创新</th><th>适用场景</th><th>增加的复杂度</th></tr>
+<tr><td><span class="term">Self-RAG</span></td><td>生成时自我反思</td><td>需要高忠实度</td><td>中（需 SFT 训练）</td></tr>
+<tr><td><span class="term">CRAG</span></td><td>检索质量评估 + Web fallback</td><td>知识库不完整</td><td>中</td></tr>
+<tr><td><span class="term">Adaptive RAG</span></td><td>复杂度路由</td><td>查询类型多样</td><td>低</td></tr>
+<tr><td><span class="term">RAPTOR</span></td><td>层次化摘要树</td><td>多粒度查询</td><td>高（索引成本）</td></tr>
+<tr><td><span class="term">HyDE</span></td><td>假设性文档检索</td><td>短/模糊 query</td><td>低</td></tr>
+<tr><td><span class="term">Agentic RAG</span></td><td>LLM 自主决策</td><td>复杂多源多步</td><td>高</td></tr>
+<tr><td><span class="term">Query Decomposition</span></td><td>问题分解多步检索</td><td>比较/多跳问题</td><td>中</td></tr>
+</table>
+
+<h3>渐进式实施路径</h3>
+<div class="arch-diagram">
+高级 RAG 渐进式升级路径:
+
+Level 0 (基线): Naive RAG
+  └── Hybrid Retrieval + Reranker + Streaming
+  └── 先跑 baseline，分析 bad case
+
+Level 1 (最高 ROI):
+  └── + Adaptive Router (判断复杂度，简单问题快速通道)
+  └── + HyDE (模糊 query 改写)
+
+Level 2 (质量加固):
+  └── + Self-RAG 式 Faithfulness 检查
+  └── + CRAG Web Fallback (知识库不足时容错)
+
+Level 3 (企业级):
+  └── + Query Decomposition (多跳问题)
+  └── + Agentic 多源检索
+  └── + RAPTOR / GraphRAG (全局总结)
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先跑 Naive RAG baseline，分析 bad case 类型再选优化方向</li>
+<li>每增加一层复杂度都做 A/B 测试验证 ROI</li>
+<li>用 Adaptive Router 做入口，简单问题走快速通道</li>
+<li>设置 max_iterations、超时、成本上限防止失控</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要一开始就用最复杂的模式（Agentic RAG 不等于最好）</li>
+<li>不要跳过 baseline 直接上高级模式，无法归因效果来源</li>
+<li>不要对所有 query 都启用多步检索，简单问题反而变差</li>
+<li>不要忽略延迟成本——每层复杂度都增加 200-500ms</li>
+</ul>
+</div>
+</div>
+
+<h3>迁移路径与生产案例</h3>
+<p>从 Naive RAG 渐进升级到完整 Agentic RAG 的四阶段迁移路径（各阶段核心改动、预期收益、开发周期与风险）及生产迁移案例，见 <a href="agentic_rag.html#s7">G20 · Agentic RAG 第七章：从 Naive RAG 迁移到 Agentic RAG</a>。</p>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>Self-RAG 的反思标记是怎么训进模型的？和普通 fine-tuning 有什么区别？</summary>
+<p class="answer">Self-RAG 在 SFT 阶段将 4 个反思标记（Retrieve/ISREL/ISSUP/ISUSE）作为特殊 token 加入训练数据。训练样本格式为 [query][Retrieve:Yes][doc][ISREL:Relevant][answer][ISSUP:Supported][ISUSE:Useful]，模型学会在正确的时机输出正确的判断标记。和普通 fine-tuning 的区别：普通 SFT 只训"输入→输出"的映射，Self-RAG 额外训了"中间决策"的能力。这需要构造带有反思标注的训练数据，通常用强模型（如 GPT-4）生成标注，再训到小模型（如 Llama-2-7B）上。</p>
+</details>
+
+<details>
+<summary>CRAG 的 Web Search fallback 有什么风险？如何控制？</summary>
+<p class="answer">主要风险：①Web 搜索结果质量不可控（可能包含错误或低质量内容）②安全风险（恶意网页注入）③延迟不可预测（Web 搜索受网络影响）。控制措施：限制 Web 搜索结果为可信域名白名单；对 Web 结果做额外的可信度评分过滤；设置 Web 搜索超时（>3s 降级到不搜索）；Knowledge Refinement 步骤提取关键句去噪。在金融/医疗等敏感领域，通常禁用 Web fallback 或限制为特定权威来源。</p>
+</details>
+
+<details>
+<summary>RAPTOR 和 Parent-Child Chunking 有什么本质区别？</summary>
+<p class="answer">本质区别在于"摘要生成方式"和"层级数量"。Parent-Child 是固定两层结构：小块（child）用于检索，大块（parent）用于送入 LLM，两者都是原始文本，没有生成摘要。RAPTOR 是多层递归结构：每一层都通过聚类+LLM 摘要生成新的、更抽象的节点。Parent-Child 保留的是"上下文窗口"（大块文本），RAPTOR 保留的是"不同抽象级别的理解"（从细节到全局）。查询时 Parent-Child 只检索 child 层，RAPTOR 在所有层级同时检索。</p>
+</details>
+
+<details>
+<summary>HyDE 在什么场景下最有效？什么场景下会失效？</summary>
+<p class="answer">最有效场景：①短/模糊 query（如"怎么报销"），query 和文档的表达风格差异大 ②开放域问答，用户用口语提问而文档用专业术语 ③embedding 模型没有针对 query-document 不对称做过优化。失效场景：①精确关键词查询（如"torch.nn.Linear 参数列表"），HyDE 生成的假设性文档可能偏离精确术语 ②LLM 对领域完全不了解时，假设性文档质量极差 ③对延迟敏感的场景（增加 200-500ms）。改进：生成 3-5 个假设文档取 embedding 均值，或做 query-hyde 融合（α=0.5）。</p>
+</details>
+
+<details>
+<summary>如何选择适合自己场景的高级 RAG 模式？</summary>
+<p class="answer">选择框架：①先跑 Naive RAG baseline，收集 100+ bad case ②分析 bad case 类型：检索不到 → 加 HyDE/Adaptive；检索到了但答错 → 加 Self-RAG 忠实性检查；知识库不覆盖 → 加 CRAG fallback；比较/多跳问题 → 加 Query Decomposition；全局总结问题 → 加 RAPTOR/GraphRAG ③逐步升级，每个优化做 A/B 测试 ④原则：不要过度设计，每加一层复杂度都增加延迟/成本/维护负担。80% 的场景在 Level 1（Adaptive + HyDE）就够了。</p>
+</details>
+
+<details>
+<summary>Agentic RAG 在生产环境中如何防止成本失控？</summary>
+<p class="answer">三层防护：①硬限制——max_iterations=5（最多 5 轮推理+检索），超时 10s 强制 fallback 到简单 RAG ②成本预算——每次请求设定上限（如 $0.05），达到上限立即终止并返回当前最佳结果 ③智能降级——高峰期自动禁用 Agentic 模式，全部走简单 RAG；低置信度的 Agent 决策强制人工审核。监控指标：平均迭代次数（应 <3）、P99 延迟（应 <5s）、fallback 比例（应 <10%）。某企业的经验：设置 max_iterations=3 后，成本降低 60%，质量仅下降 2%。</p>
+</details>
+
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

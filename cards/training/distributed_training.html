@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>W05 · 分布式训练</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#f78166;--green:#3fb950;--purple:#bc8cff}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 4rem;padding-left:300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:3rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--purple);margin:1.5rem 0 .75rem;font-size:1.15rem}
+p,li{color:var(--text);margin-bottom:.6rem}
+ul,ol{padding-left:1.5rem;margin-bottom:1rem}
+code{background:#1c2128;padding:.15em .4em;border-radius:4px;font-size:.9em;color:var(--accent2)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;margin:1rem 0;font-size:.85rem;line-height:1.6}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}
+th,td{border:1px solid var(--border);padding:.55rem .75rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem;margin:1.5rem 0}
+.tip{border-left:4px solid var(--green);background:rgba(63,185,80,.06);padding:1rem 1.2rem;border-radius:0 8px 8px 0;margin:1.2rem 0}
+.tip-title{font-weight:700;color:var(--green);margin-bottom:.4rem}
+.interview-box{border:1px solid var(--purple);border-radius:8px;padding:1.2rem 1.4rem;margin:1.5rem 0;background:rgba(188,140,255,.04)}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--purple);margin-bottom:.5rem;font-size:1.05rem}
+details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:0}
+summary{cursor:pointer;padding:.8rem 1.2rem;font-weight:600;color:var(--accent);list-style:none}
+summary::-webkit-details-marker{display:none}
+summary::before{content:"▸ ";color:var(--accent2)}
+details[open] summary::before{content:"▾ "}
+details .answer{padding:.2rem 1.2rem 1rem;color:#c9d1d9}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;margin:1rem 0;font-family:"Courier New",monospace;font-size:.82rem;line-height:1.5;overflow-x:auto;white-space:pre}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.15rem .5rem;border-radius:4px;font-size:.8rem;margin-right:.4rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{display:block;font-size:.95rem;font-weight:700;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+/* 标准组件体系 */
+.section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.5rem 1.6rem;margin:1.6rem 0}
+.section>h2:first-child{margin-top:0}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么需要分布式训练</a>
+<a href="#s2">二、Data Parallelism (DP / DDP)</a>
+<a href="#s3">三、ZeRO (Zero Redundancy Optimizer)</a>
+<a href="#s4">四、FSDP (Fully Sharded Data Parallel)</a>
+<a href="#s5">五、Tensor Parallelism (TP)</a>
+<a href="#s6">六、Pipeline Parallelism (PP)</a>
+<a href="#s7">七、3D 并行</a>
+<a href="#s8">八、Expert Parallelism</a>
+<a href="#s9">九、通信原语</a>
+<a href="#s10">十、并行策略选择指南</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>W05 · 分布式训练</h1>
+<p class="subtitle">Data Parallelism / ZeRO / FSDP / Tensor Parallelism / Pipeline Parallelism / 3D 并行</p>
+
+<!-- Section 1 -->
+<div class="section">
+<h2 id="s1">一、为什么需要分布式训练</h2>
+
+<div class="intuition-box">
+<p>"单卡装不下"和"单卡跑太慢"是两个互不相干的问题：前者只能靠切模型解决，后者只能靠切数据解决。混合精度、梯度累积这些手段能把前者往后推一点，但推不动本质——所以并行策略的第一步永远是先分清自己卡在哪一个上。</p>
+</div>
+
+<div class="arch-diagram">
+  同一个 4 层模型 + 同一个 batch，三种切法：
+
+  ① 数据并行 DP —— 切数据，不切模型
+     GPU0 [L1 L2 L3 L4]  ◀── batch 分片 0
+     GPU1 [L1 L2 L3 L4]  ◀── batch 分片 1     每卡一份完整模型
+     GPU2 [L1 L2 L3 L4]  ◀── batch 分片 2     算完把梯度平均一下
+     GPU3 [L1 L2 L3 L4]  ◀── batch 分片 3
+     通信：每步 1 次 All-Reduce（约 2 倍模型大小），且能藏进 backward
+
+  ② 张量并行 TP —— 切每一层的权重矩阵（层内切）
+                 L1              L2              L3
+     GPU0 [ W 左半 ] ──▶ [ W 左半 ] ──▶ [ W 左半 ] ──▶ ...
+     GPU1 [ W 右半 ] ──▶ [ W 右半 ] ──▶ [ W 右半 ] ──▶ ...
+               ▲               ▲               ▲
+               └── 每一层都要 All-Reduce 把部分和拼回去（在关键路径上）
+     通信：每层 2 次（前向）+ 2 次（反向）⇒ 极密集，只能靠 NVLink 扛
+
+  ③ 流水线并行 PP —— 切层（层间切）
+     GPU0 [L1] ──▶ GPU1 [L2] ──▶ GPU2 [L3] ──▶ GPU3 [L4]
+                 激活            激活            激活
+     通信：只在阶段边界传激活张量 ⇒ 量最小，可以跨机；代价是流水线空泡
+
+  ─────────────────────────────────────────────────────────────
+   一句话：DP 切数据、TP 切矩阵、PP 切层。
+   通信密度   TP  ≫  DP  ＞  PP
+   省显存     TP ≈ PP  ＞  DP（DP 一点都不省，反而每卡各存一份）
+</div>
+
+<div class="card">
+<h3>核心驱动力</h3>
+<table>
+<tr><th>瓶颈</th><th>典型场景</th><th>解决方向</th></tr>
+<tr><td>单卡内存不够</td><td>LLaMA-70B 参数 + 优化器状态 ≈ 560 GB（fp32）</td><td>模型并行 / ZeRO 分片</td></tr>
+<tr><td>训练时间太长</td><td>GPT-3 单卡训练需 ~355 年</td><td>数据并行</td></tr>
+<tr><td>模型参数超出单卡容量</td><td>MoE 万亿参数</td><td>Expert / Tensor / Pipeline 并行</td></tr>
+</table>
+</div>
+
+<h3>GPU 显存占用分析（以 7B 模型为例）</h3>
+<ul>
+<li>模型参数（fp16）：~14 GB</li>
+<li>梯度（fp16）：~14 GB</li>
+<li>优化器状态（Adam fp32）：~56 GB（2×fp32 params + 2×momentum）</li>
+<li>激活值（视 batch/seq 而定）：数十 GB</li>
+</ul>
+<p>总计远超单张 A100-80GB 容量 → 必须分布式。</p>
+
+<div class="interview-box">
+<ul>
+<li>能解释"为什么单卡不够"：内存 vs 计算两个维度</li>
+<li>了解 Adam 优化器为何占 4× 参数内存</li>
+<li>知道混合精度训练如何缓解（但不能彻底解决）</li>
+</ul>
+</div>
+
+<!-- Section 2 -->
+</div>
+
+<div class="section">
+<h2 id="s2">二、Data Parallelism (DP / DDP)</h2>
+
+<div class="intuition-box">
+<p><span class="term">数据并行</span>的全部内容就是"各看一批数据，算完把梯度平均一下"。真正的巧思在 Ring All-Reduce：它让这次平均的<strong>单卡通信量与卡数无关</strong>，这才是数据并行能一路扩到上千卡的根据。</p>
+</div>
+
+<h3>基本原理</h3>
+<div class="diagram">
+┌──────────┐   ┌──────────┐   ┌──────────┐
+│  GPU 0   │   │  GPU 1   │   │  GPU 2   │
+│ 完整模型 │   │ 完整模型 │   │ 完整模型 │
+│ Batch 0  │   │ Batch 1  │   │ Batch 2  │
+└────┬─────┘   └────┬─────┘   └────┬─────┘
+     │               │               │
+     └───── All-Reduce 梯度同步 ─────┘
+                     │
+              统一更新参数
+</div>
+
+<h3>DP vs DDP（PyTorch）</h3>
+<table>
+<tr><th>特性</th><th>DataParallel (DP)</th><th>DistributedDataParallel (DDP)</th></tr>
+<tr><td>通信方式</td><td>单进程多线程，GPU 0 汇总</td><td>多进程，Ring All-Reduce</td></tr>
+<tr><td>GIL 问题</td><td>受 GIL 限制</td><td>无 GIL 瓶颈</td></tr>
+<tr><td>负载均衡</td><td>GPU 0 内存/计算更高</td><td>各卡均衡</td></tr>
+<tr><td>多机支持</td><td>仅单机</td><td>支持多机</td></tr>
+<tr><td>性能</td><td>较差</td><td>接近线性加速</td></tr>
+</table>
+
+<h3>All-Reduce 通信</h3>
+<p>Ring All-Reduce 将 N 张卡组成环，分 2(N-1) 步完成梯度同步，每步通信量 = 参数量/N。</p>
+<p>总通信量 ≈ <code>2 × (N-1)/N × model_size</code>，当 N 较大时趋近 <code>2 × model_size</code>（与卡数无关）。</p>
+
+<h3>DDP 代码示例</h3>
+<pre><code>import torch.distributed as dist
+from torch.nn.parallel import DistributedDataParallel as DDP
+
+dist.init_process_group("nccl")
+model = MyModel().to(local_rank)
+model = DDP(model, device_ids=[local_rank])
+
+# 训练循环不变，梯度自动同步
+for batch in dataloader:
+    loss = model(batch)
+    loss.backward()  # DDP 在此自动 All-Reduce
+    optimizer.step()
+</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>DP 已弃用，实际必用 DDP；解释 Ring All-Reduce 原理</li>
+<li>DDP 的 gradient bucketing：按逆序将梯度分桶并行通信</li>
+<li>通信与计算重叠（overlap）：backward 尚未结束就开始同步已就绪的桶</li>
+<li>Linear scaling rule：batch 扩大 N 倍时 lr 也应相应调整</li>
+</ul>
+</div>
+
+<!-- Section 3 -->
+</div>
+
+<div class="section">
+<h2 id="s3">三、ZeRO (Zero Redundancy Optimizer)</h2>
+
+<div class="intuition-box">
+<p>ZeRO 的思路不是"让模型变小"，而是"别让 64 张卡各存一份一模一样的优化器状态"。它消除的是<span class="term">副本冗余</span>，计算量一分未减——所以它是显存方案，不是加速方案。</p>
+</div>
+
+<div class="arch-diagram">
+  以 7B 模型、N = 64 卡、fp16 训练 + Adam(fp32) 为例
+  单卡原本要放：参数 14 GB ＋ 梯度 14 GB ＋ 优化器状态 56 GB
+
+  DDP      参数 ████████████████   14 GB    ← 64 份完全相同（冗余）
+           梯度 ████████████████   14 GB    ← 64 份完全相同（冗余）
+           优化 ████████████████████████████████████████████████████████   56 GB    ← 64 份完全相同（冗余）
+                                  ────────
+                                   84 GB / 卡
+
+  ZeRO-1   参数 ████████████████   14 GB
+           梯度 ████████████████   14 GB
+           优化 ▏                  0.9 GB   ← 只留 1/64 分片
+                                  ────────
+                                   29 GB / 卡      通信量：同 DDP
+
+  ZeRO-2   参数 ████████████████   14 GB
+           梯度 ▏                  0.2 GB   ← 1/64
+           优化 ▏                  0.9 GB   ← 1/64
+                                  ────────
+                                   15 GB / 卡      通信量：同 DDP
+
+  ZeRO-3   参数 ▏                  0.2 GB   ← 1/64，用到时 All-Gather 临时拼回
+           梯度 ▏                  0.2 GB
+           优化 ▏                  0.9 GB
+                                  ────────
+                                  1.3 GB / 卡      通信量：1.5 倍 DDP
+
+  换句话说：stage 越高，省得越多，通信也越贵。按"最低够用"往上选，别一步跳到 3。
+</div>
+
+<h3>核心思想</h3>
+<p>DDP 中每张卡都保存完整的：模型参数 + 梯度 + 优化器状态 → 巨大冗余。ZeRO 通过<strong>分片（partition）</strong>消除冗余。</p>
+
+<h3>三个阶段</h3>
+<div class="card">
+<table>
+<tr><th>阶段</th><th>分片内容</th><th>每卡内存（相对 DDP）</th><th>通信量</th></tr>
+<tr><td>ZeRO-1</td><td>优化器状态</td><td>~1/N 优化器 + 完整参数和梯度</td><td>同 DDP</td></tr>
+<tr><td>ZeRO-2</td><td>优化器状态 + 梯度</td><td>~1/N（优化器+梯度）+ 完整参数</td><td>同 DDP</td></tr>
+<tr><td>ZeRO-3</td><td>优化器 + 梯度 + 参数</td><td>所有状态均 1/N</td><td>1.5× DDP</td></tr>
+</table>
+</div>
+
+<h3>内存节省分析（7B 模型，N=64 卡）</h3>
+<ul>
+<li>DDP 每卡：14(参数) + 14(梯度) + 56(Adam) = <strong>84 GB</strong></li>
+<li>ZeRO-1：14 + 14 + 56/64 ≈ <strong>29 GB</strong></li>
+<li>ZeRO-2：14 + 14/64 + 56/64 ≈ <strong>15 GB</strong></li>
+<li>ZeRO-3：(14+14+56)/64 ≈ <strong>1.3 GB</strong></li>
+</ul>
+
+<h3>ZeRO-3 通信模式</h3>
+<div class="diagram">
+Forward:  All-Gather 参数 → 计算 → 丢弃非本分片参数
+Backward: All-Gather 参数 → 计算梯度 → Reduce-Scatter 梯度
+Update:   仅更新本分片
+</div>
+
+<h3>DeepSpeed 实现</h3>
+<pre><code># ds_config.json
+{
+  "zero_optimization": {
+    "stage": 3,
+    "offload_optimizer": {"device": "cpu"},
+    "offload_param": {"device": "cpu"},
+    "overlap_comm": true,
+    "contiguous_gradients": true
+  }
+}
+</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>清晰区分 ZeRO 1/2/3 各自分片什么、通信开销差异</li>
+<li>ZeRO-3 的通信量为何是 DDP 的 1.5×（额外一次 All-Gather 参数）</li>
+<li>ZeRO-Offload：将优化器/参数卸载到 CPU/NVMe</li>
+<li>ZeRO-Infinity：利用 NVMe 支持万亿参数</li>
+</ul>
+</div>
+
+<!-- Section 4 -->
+</div>
+
+<div class="section">
+<h2 id="s4">四、FSDP (Fully Sharded Data Parallel)</h2>
+
+<h3>定位</h3>
+<p>PyTorch 原生的 ZeRO-3 实现（<code>torch.distributed.fsdp</code>），无需 DeepSpeed 依赖。</p>
+
+<h3>与 DeepSpeed ZeRO 的对比</h3>
+<table>
+<tr><th>特性</th><th>FSDP</th><th>DeepSpeed ZeRO-3</th></tr>
+<tr><td>框架</td><td>PyTorch 原生</td><td>第三方库</td></tr>
+<tr><td>分片粒度</td><td>按 Module（FlatParameter）</td><td>按 Parameter</td></tr>
+<tr><td>Activation Checkpointing</td><td>原生支持</td><td>原生支持</td></tr>
+<tr><td>CPU Offload</td><td>支持</td><td>支持 + NVMe</td></tr>
+<tr><td>混合精度</td><td>MixedPrecision policy</td><td>fp16/bf16 config</td></tr>
+<tr><td>生态集成</td><td>与 PyTorch 生态紧密</td><td>需要 DS launcher</td></tr>
+<tr><td>成熟度</td><td>快速迭代中</td><td>生产验证更多</td></tr>
+</table>
+
+<h3>Sharding Strategy</h3>
+<ul>
+<li><code>FULL_SHARD</code>：等同 ZeRO-3，参数+梯度+优化器全部分片</li>
+<li><code>SHARD_GRAD_OP</code>：等同 ZeRO-2，仅梯度和优化器分片</li>
+<li><code>NO_SHARD</code>：等同 DDP</li>
+<li><code>HYBRID_SHARD</code>：节点内 FULL_SHARD + 节点间 DDP（减少跨机通信）</li>
+</ul>
+
+<h3>代码示例</h3>
+<pre><code>from torch.distributed.fsdp import FullyShardedDataParallel as FSDP
+from torch.distributed.fsdp import ShardingStrategy, MixedPrecision
+
+mp_policy = MixedPrecision(
+    param_dtype=torch.bfloat16,
+    reduce_dtype=torch.bfloat16,
+    buffer_dtype=torch.bfloat16,
+)
+
+model = FSDP(
+    model,
+    sharding_strategy=ShardingStrategy.FULL_SHARD,
+    mixed_precision=mp_policy,
+    auto_wrap_policy=size_based_auto_wrap_policy,
+    device_id=local_rank,
+)
+</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>FSDP = PyTorch 原生 ZeRO-3，与 DeepSpeed 的选型考量是高频问题</li>
+<li>HYBRID_SHARD 策略在多机场景的优势：节点内高带宽全分片，节点间仅 DDP</li>
+<li>auto_wrap_policy 的作用：控制分片粒度，影响通信/内存权衡</li>
+</ul>
+</div>
+
+<!-- Section 5 -->
+</div>
+
+<div class="section">
+<h2 id="s5">五、Tensor Parallelism (TP)</h2>
+
+<div class="intuition-box">
+<p><span class="term">张量并行</span>切的是矩阵，一层还没算完就得通信；流水线并行切的是层，一层算完了才往下传。同一个"并行"字眼，前者吃带宽、后者吃延迟——这决定了它们该被放在拓扑的哪一层。</p>
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>把 TP 从 8 提到 16，性能反而崩了。<strong>背景</strong>——某团队有 2 个节点 × 8 卡，节点内 NVLink、节点间 InfiniBand；为了给更大的模型腾显存，他们把 TP 度从 8 提到 16，让一个 TP 组横跨两台机器。<strong>问题</strong>——TP 每层要做 2 次前向 + 2 次反向 All-Reduce，全部落在关键路径上、无法与计算重叠；而节点内 NVLink 约 600 GB/s，跨机 IB（400 Gbps）折算下来约 50 GB/s，相差一个数量级。结果 GPU 利用率从大约 55% 掉到不足 20%，单步时间涨了三倍多，"省下来的显存"完全被浪费的算力吃掉。<strong>方案</strong>——TP 退回 8、严格锁在节点内，跨机那一维改用通信量小得多的 PP=2，只在阶段边界传激活。<strong>效果</strong>——单步时间回到原来的水平，显存目标同样达成。这条经验可以直接当规则用：<strong>TP 度不要超过单节点的 GPU 数</strong>。
+</div>
+
+<h3>核心思想</h3>
+<p>将单个层的<strong>权重矩阵</strong>切分到多张卡上，每卡只计算部分矩阵乘法。</p>
+
+<h3>矩阵分割方式</h3>
+<div class="card">
+<h3>MLP 层的 TP（Megatron-LM 方案）</h3>
+<div class="diagram">
+输入 X ─────────────────────────────────────
+         │                                  │
+    Column Parallel (A 按列切)        Row Parallel (B 按行切)
+    ┌─────────┐                      ┌─────────┐
+    │ A₁(列)  │  GPU 0              │ B₁(行)  │  GPU 0
+    │ A₂(列)  │  GPU 1              │ B₂(行)  │  GPU 1
+    └─────────┘                      └─────────┘
+         │                                  │
+    无需通信(各自 XA_i)             All-Reduce 求和
+         │                                  │
+      GeLU激活                           输出 Y
+</div>
+<p><strong>Column Parallel Linear</strong>：权重 A 按列切分 → 每卡得到部分输出 → 无需通信（GeLU 可独立计算）</p>
+<p><strong>Row Parallel Linear</strong>：权重 B 按行切分 → 每卡计算部分结果 → All-Reduce 求和得完整输出</p>
+</div>
+
+<h3>Attention 层的 TP</h3>
+<p>多头注意力天然适合 TP：将不同的 head 分配到不同 GPU。Q/K/V 投影按列切分，输出投影按行切分。</p>
+
+<h3>通信分析</h3>
+<ul>
+<li>每个 Transformer 层需要 <strong>2 次 All-Reduce</strong>（Forward）+ <strong>2 次 All-Reduce</strong>（Backward）</li>
+<li>通信量与隐藏层维度相关，适合<strong>单机高带宽 NVLink</strong> 互联</li>
+<li>跨机 TP 因网络带宽限制通常不推荐</li>
+</ul>
+
+<div class="interview-box">
+<ul>
+<li>TP 的本质是"层内并行"——同一层的矩阵乘法被拆分</li>
+<li>列切分后为何不需 AllReduce（因为后续 GeLU 可独立计算）</li>
+<li>行切分后需要 AllReduce（因为需要把部分和相加）</li>
+<li>TP 度通常 = 单机 GPU 数（如 8），不跨机</li>
+</ul>
+</div>
+
+<!-- Section 6 -->
+</div>
+
+<div class="section">
+<h2 id="s6">六、Pipeline Parallelism (PP)</h2>
+
+<div class="intuition-box">
+<p>流水线<span class="term">空泡</span>不是 bug 而是几何必然：阶段数决定要多久才能把流水线填满，micro-batch 数决定填满之后还能跑多久。两者的比值就是空泡率，所以降空泡只有两条路——要么少切几段，要么多灌几批。</p>
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>PP=8 的流水线有一半算力在空转。<strong>背景</strong>——某 80 层模型按 8 段切流水线，micro-batch 数沿用了默认的 8。<strong>问题</strong>——按 (p-1)/(p-1+m) 计算，空泡率 = 7/(7+8) ≈ <strong>47%</strong>，将近一半的 GPU 时间在等上游或等下游；从 profiler 上看就是大片规则的空白。<strong>方案</strong>——先按 m ≥ 4p 的经验把 micro-batch 数提到 32，空泡率降到 7/(7+32) ≈ 18%；再换 Interleaved 1F1B、每卡承担 v=2 组非连续层，等效 m×v = 64，空泡率进一步压到 7/(7+64) ≈ 10%。同时把调度从 GPipe 换成 1F1B，让激活峰值从随 m 增长的 O(m) 回落到 O(p)。<strong>效果</strong>——空泡率 47% → 约 10%，且激活显存没有因为 m 变大而爆掉。这里的关键是两步必须一起做：只调 m 会把省下的时间赔在显存上。
+</div>
+
+<h3>核心思想</h3>
+<p>将模型的<strong>不同层</strong>分配到不同 GPU，数据像流水线一样依次通过各阶段。</p>
+
+<h3>Pipeline Bubble 问题</h3>
+<div class="diagram">
+朴素 PP（4 阶段，1 个 micro-batch）:
+
+时间 →  t1    t2    t3    t4    t5    t6    t7    t8
+GPU 0: [F0]  [  ]  [  ]  [  ]  [B0]  [  ]  [  ]  [  ]
+GPU 1: [  ]  [F0]  [  ]  [  ]  [  ]  [B0]  [  ]  [  ]
+GPU 2: [  ]  [  ]  [F0]  [  ]  [  ]  [  ]  [B0]  [  ]
+GPU 3: [  ]  [  ]  [  ]  [F0]  [  ]  [  ]  [  ]  [B0]
+
+Bubble 比例 = (p-1) / (p-1+m)  ，p=阶段数，m=micro-batch数
+</div>
+
+<h3>调度策略对比</h3>
+<table>
+<tr><th>策略</th><th>特点</th><th>Bubble 比例</th><th>内存</th></tr>
+<tr><td>GPipe</td><td>先全部 Forward，再全部 Backward</td><td>(p-1)/(p-1+m)</td><td>高（需存所有 micro-batch 激活）</td></tr>
+<tr><td>1F1B</td><td>一个 Forward 接一个 Backward 交替</td><td>同 GPipe</td><td>低（仅需存 p 个 micro-batch 激活）</td></tr>
+<tr><td>Interleaved 1F1B</td><td>每个 GPU 分配多组非连续层</td><td>(p-1)/(p-1+m×v)，v=虚拟阶段数</td><td>中等</td></tr>
+</table>
+
+<h3>Micro-batch</h3>
+<p>将一个 mini-batch 切分为 m 个 micro-batch，增大 m 可显著降低 bubble 比例。通常 m ≥ 4p。</p>
+
+<div class="interview-box">
+<ul>
+<li>Pipeline Bubble 的公式与优化方法</li>
+<li>1F1B 相比 GPipe 的内存优势（O(p) vs O(m)）</li>
+<li>Interleaved schedule 通过虚拟阶段进一步减少 bubble</li>
+<li>PP 的通信量极小（仅传激活/梯度），适合跨机</li>
+</ul>
+</div>
+
+<!-- Section 7 -->
+</div>
+
+<div class="section">
+<h2 id="s7">七、3D 并行</h2>
+
+<div class="intuition-box">
+<p>三个维度各有各的"贵"，映射顺序其实是被硬件逼出来的：TP 通信最密所以必须关进机内 NVLink，PP 通信最稀所以可以放到跨机，DP 通信能与反向重叠所以放最外层。记住"由贵到贱、由内到外"，配置就不用猜。</p>
+</div>
+
+<div class="arch-diagram">
+  64 × A100（8 节点 × 8 卡），配置 TP=8, PP=4, DP=2
+
+               ┌───────────── DP 组 0 ─────────────────────────┐
+   PP 阶段 0   │  节点 0:  [ r0   r1   r2  ...  r6   r7  ]     │  ◀── 层 1-20
+   PP 阶段 1   │  节点 1:  [ r8   r9   r10 ...  r14  r15 ]     │  ◀── 层 21-40
+   PP 阶段 2   │  节点 2:  [ r16  r17  r18 ...  r22  r23 ]     │  ◀── 层 41-60
+   PP 阶段 3   │  节点 3:  [ r24  r25  r26 ...  r30  r31 ]     │  ◀── 层 61-80
+               └────────────────────┬─────────────────────────┘
+                                    │
+                     DP：两组之间 All-Reduce 梯度（最外层，藏进 backward）
+                                    │
+               ┌────────────────────┴───── DP 组 1 ───────────┐
+   PP 阶段 0   │  节点 4:  [ r32  r33  ...       r38  r39 ]    │
+   PP 阶段 1   │  节点 5:  [ r40  r41  ...       r46  r47 ]    │
+   PP 阶段 2   │  节点 6:  [ r48  r49  ...       r54  r55 ]    │
+   PP 阶段 3   │  节点 7:  [ r56  r57  ...       r62  r63 ]    │
+               └──────────────────────────────────────────────┘
+                     └── 每一行方框内的 8 张卡 = 一个 TP 组 ──┘
+                          组内走节点内 NVLink，不跨机
+
+  映射原则（按通信代价从贵到贱，由内向外排）：
+    TP   每层 4 次 All-Reduce，在关键路径上   ─▶ 锁进节点内（NVLink 约 600 GB/s）
+    PP   只在阶段边界传激活，量最小           ─▶ 允许跨节点（IB 约 50 GB/s）
+    DP   每步 1 次 All-Reduce，可与计算重叠   ─▶ 放最外层
+
+  校验式：TP × PP × DP = 总卡数；global_batch = micro_batch × DP × 梯度累积步数
+</div>
+
+<h3>组合策略：DP × TP × PP</h3>
+<div class="diagram">
+              ┌─── TP (层内，NVLink) ───┐
+              │                          │
+         ┌────┴────┐              ┌────┴────┐
+         │ GPU 0-3 │              │ GPU 4-7 │     ← 一个节点内 TP=4
+         └────┬────┘              └────┬────┘
+              │                          │
+              └──── PP (层间，跨节点) ────┘
+                         │
+                    DP (数据并行，跨多组)
+</div>
+
+<h3>Megatron-DeepSpeed</h3>
+<p>NVIDIA Megatron-LM + Microsoft DeepSpeed 的集成方案，是训练超大模型的标准选择。</p>
+<ul>
+<li>Megatron 提供高效 TP + PP 实现</li>
+<li>DeepSpeed 提供 ZeRO 优化器 + Offload + 通信优化</li>
+</ul>
+
+<h3>实际配置案例：训练 70B 模型</h3>
+<div class="card">
+<p><strong>硬件</strong>：64 × A100-80GB（8 节点，每节点 8 卡 NVLink）</p>
+<table>
+<tr><th>并行维度</th><th>配置</th><th>原因</th></tr>
+<tr><td>TP</td><td>8（节点内）</td><td>NVLink 高带宽，TP 通信密集</td></tr>
+<tr><td>PP</td><td>4（跨 4 个节点）</td><td>PP 通信量小，可走 IB 网络</td></tr>
+<tr><td>DP</td><td>2（剩余节点）</td><td>增加吞吐</td></tr>
+</table>
+<p><strong>总 GPU</strong>：TP(8) × PP(4) × DP(2) = 64</p>
+<p><strong>每卡内存</strong>：70B / 8(TP) / 4(PP) ≈ 2.2B 参数/卡 ≈ 4.4GB（fp16）+ 优化器/激活</p>
+</div>
+
+<h3>配置原则</h3>
+<ul>
+<li><strong>TP 优先用 NVLink</strong>：通信最密集，带宽要求最高</li>
+<li><strong>PP 可跨机</strong>：通信量小（仅传激活张量）</li>
+<li><strong>DP 最外层</strong>：扩展性最好，通信可与计算重叠</li>
+</ul>
+
+<div class="interview-box">
+<ul>
+<li>解释为什么 TP 必须放在节点内（NVLink 600GB/s vs IB 400Gb/s）</li>
+<li>如何根据模型大小和硬件拓扑确定 TP/PP/DP 配置</li>
+<li>global_batch_size = micro_batch × DP × gradient_accumulation</li>
+</ul>
+</div>
+
+<!-- Section 8 -->
+</div>
+
+<div class="section">
+<h2 id="s8">八、Expert Parallelism</h2>
+
+<div class="intuition-box">
+<p><span class="term">专家并行</span>的通信原语是 All-to-All 而不是 All-Reduce，原因很直接：要搬的东西不是梯度，是 token 本身。token 得先飞到自己被路由到的那张卡上算完，再飞回来——于是路由均不均匀，直接决定了这一步有多慢。</p>
+</div>
+
+<h3>MoE 模型回顾</h3>
+<p>Mixture-of-Experts（MoE）模型中，每个 token 仅路由到 top-k 个专家，稀疏激活大幅降低计算量。</p>
+
+<h3>Expert Parallelism 策略</h3>
+<div class="diagram">
+┌─────────────────────────────────────────────────────────┐
+│           Router 决定 token → expert 映射                │
+└────────────────────────┬────────────────────────────────┘
+                         │ All-to-All
+         ┌───────────────┼───────────────┐
+         ▼               ▼               ▼
+   ┌──────────┐   ┌──────────┐   ┌──────────┐
+   │ GPU 0    │   │ GPU 1    │   │ GPU 2    │
+   │ Expert   │   │ Expert   │   │ Expert   │
+   │ 0,1,2,3  │   │ 4,5,6,7  │   │ 8,9,10,11│
+   └──────────┘   └──────────┘   └──────────┘
+         │               │               │
+         └───────────────┼───────────────┘
+                         │ All-to-All (结果送回)
+                         ▼
+</div>
+
+<h3>All-to-All 通信</h3>
+<ul>
+<li>每张卡需要将分配到其他卡专家的 token 发送过去，同时接收其他卡发来的 token</li>
+<li>通信量取决于 token 路由的均匀性 → 负载均衡 loss 很重要</li>
+<li>通信模式：All-to-All（每对 GPU 间都有数据交换）</li>
+</ul>
+
+<h3>与其他并行的组合</h3>
+<ul>
+<li>Expert Parallelism + Data Parallelism：非专家层用 DP，专家层分散到不同卡</li>
+<li>Expert Parallelism + Tensor Parallelism：大专家内部再做 TP</li>
+<li>典型案例：Switch Transformer、Mixtral 8×7B</li>
+</ul>
+
+<div class="interview-box">
+<ul>
+<li>Expert Parallelism 的通信原语是 All-to-All，不是 All-Reduce</li>
+<li>负载均衡问题：token 分布不均导致部分 GPU 空闲</li>
+<li>Capacity factor 的作用：限制每个专家处理的 token 上限</li>
+<li>与 DP 的区别：DP 是同模型不同数据，EP 是不同专家不同 token</li>
+</ul>
+</div>
+
+<!-- Section 9 -->
+</div>
+
+<div class="section">
+<h2 id="s9">九、通信原语</h2>
+
+<div class="intuition-box">
+<p>只要记住 Reduce-Scatter 和 All-Gather 这两块积木，其余<span class="term">通信原语</span>都能拼出来——All-Reduce 就是两者相接。会拼积木，就能用"数据量 ÷ 带宽 + 步数 × 延迟"手算出任何策略的通信时间，选型时不必靠感觉。</p>
+</div>
+
+<h3>核心原语</h3>
+<table>
+<tr><th>原语</th><th>语义</th><th>通信量/卡</th><th>使用场景</th></tr>
+<tr><td>All-Reduce</td><td>所有卡的数据求和后广播到所有卡</td><td>2×(N-1)/N × D</td><td>DDP 梯度同步、TP</td></tr>
+<tr><td>All-Gather</td><td>收集所有卡的分片拼成完整数据</td><td>(N-1)/N × D</td><td>ZeRO-3 参数收集</td></tr>
+<tr><td>Reduce-Scatter</td><td>求和后将结果分片到各卡</td><td>(N-1)/N × D</td><td>ZeRO 梯度分片</td></tr>
+<tr><td>All-to-All</td><td>每卡向每卡发送不同数据</td><td>(N-1)/N × D</td><td>MoE Expert 并行</td></tr>
+<tr><td>Broadcast</td><td>一张卡的数据发送到所有卡</td><td>D</td><td>参数初始化</td></tr>
+<tr><td>Reduce</td><td>所有卡数据求和到一张卡</td><td>(N-1)/N × D</td><td>聚合指标</td></tr>
+</table>
+<p>其中 D = 数据大小，N = GPU 数量。</p>
+
+<h3>All-Reduce = Reduce-Scatter + All-Gather</h3>
+<div class="diagram">
+Reduce-Scatter:  每卡分片，各自求和 → 每卡拥有 1/N 结果
+All-Gather:      各卡收集所有分片 → 每卡拥有完整结果
+组合 = All-Reduce
+</div>
+
+<h3>通信库</h3>
+<table>
+<tr><th>库</th><th>后端</th><th>适用场景</th></tr>
+<tr><td>NCCL</td><td>NVIDIA GPU</td><td>GPU 间通信（NVLink / PCIe / IB），性能最优</td></tr>
+<tr><td>Gloo</td><td>CPU / GPU</td><td>CPU 通信、小规模 GPU、调试</td></tr>
+<tr><td>MPI</td><td>多种</td><td>HPC 场景，PyTorch 支持有限</td></tr>
+</table>
+
+<h3>通信带宽计算</h3>
+<p>Ring All-Reduce 时间估算：</p>
+<pre><code>t = 2 × (N-1)/N × D / Bandwidth + 2 × (N-1) × Latency
+
+例：1B 参数(fp16=2GB)，8卡NVLink(300GB/s 双向)
+t ≈ 2 × 7/8 × 2GB / 300GB/s ≈ 11.7ms
+</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>All-Reduce = Reduce-Scatter + All-Gather 的等价关系</li>
+<li>Ring vs Tree All-Reduce 的权衡</li>
+<li>NCCL 的 NVLink/PCIe/IB 自动拓扑感知</li>
+<li>能手算通信时间：数据量 / 带宽 + 延迟</li>
+</ul>
+</div>
+
+<!-- Section 10 -->
+</div>
+
+<div class="section">
+<h2 id="s10">十、并行策略选择指南</h2>
+
+<div class="intuition-box">
+<p>选型的提问顺序是固定的：先问"装不装得下"（决定要不要切模型、切到什么程度），再问"跑不跑得快"（决定 DP 铺多宽）。顺序颠倒就会出现"为了显得先进上了 3D 并行，结果比 DDP 还慢"这种典型翻车。</p>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>动手前先把显存账算清：参数 + 梯度 + 优化器状态 + 激活，四项分开列</li>
+<li>装得下就老老实实 DDP，简单策略的<span class="term">MFU</span>往往更高</li>
+<li>TP 度不超过单节点 GPU 数，严格锁在 NVLink 域内</li>
+<li>ZeRO / FSDP 从最低够用的 stage 起步，通信量是随 stage 递增的</li>
+<li>PP 的 micro-batch 数取 4 倍阶段数以上，并搭配 1F1B 压住激活峰值</li>
+<li>多机且只有 IB 互联时，优先试 FSDP 的 HYBRID_SHARD</li>
+<li>MoE 必须带负载均衡辅助 loss 和 capacity factor</li>
+<li>PP 切层按"计算量均等"切，而不是按层数均等切</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要跨机开 TP，这是分布式训练里最常见也最贵的一个错</li>
+<li>不要还在用 <code>DataParallel</code>，单进程多线程受 GIL 限制且 GPU 0 会过载</li>
+<li>不要一上来就 ZeRO-3 + CPU offload，PCIe 会立刻变成新瓶颈</li>
+<li>不要改了 global batch 却不动学习率，等效批量变了收敛行为也变了</li>
+<li>不要只看单卡显存占用就判断方案成立，要一起看 GPU 利用率和单步时间</li>
+<li>不要把流水线的层数平均切，Embedding 和 LM head 会让首尾阶段明显偏重</li>
+<li>不要把梯度累积当成数据并行的等价替代，它省显存但一点都不加速</li>
+<li>不要在没测过通信拓扑的集群上照搬别人的 TP/PP/DP 配置</li>
+</ul>
+</div>
+</div>
+
+<h3>按模型大小选型</h3>
+<table>
+<tr><th>模型规模</th><th>推荐策略</th><th>说明</th></tr>
+<tr><td>&lt; 1B</td><td>DDP</td><td>单卡可放下，纯数据并行即可</td></tr>
+<tr><td>1B ~ 10B</td><td>DDP + ZeRO-2/3 或 FSDP</td><td>分片优化器/梯度即可</td></tr>
+<tr><td>10B ~ 70B</td><td>TP + PP + DP (3D并行)</td><td>需要模型并行 + 数据并行</td></tr>
+<tr><td>70B ~ 200B</td><td>TP8 + PP + ZeRO-1 + 大规模 DP</td><td>多机多卡全面并行</td></tr>
+<tr><td>&gt; 200B / MoE</td><td>3D并行 + Expert Parallelism</td><td>稀疏模型需额外 EP</td></tr>
+</table>
+
+<h3>按硬件配置选型</h3>
+<table>
+<tr><th>硬件条件</th><th>策略建议</th></tr>
+<tr><td>单机 1-2 卡</td><td>梯度累积 + 混合精度 + Gradient Checkpointing</td></tr>
+<tr><td>单机 4-8 卡（NVLink）</td><td>FSDP / ZeRO-3，或 TP (模型较大时)</td></tr>
+<tr><td>多机，节点内 NVLink</td><td>节点内 TP + 节点间 PP + DP</td></tr>
+<tr><td>多机，仅 IB 互联</td><td>FSDP HYBRID_SHARD 或 PP + DP（避免跨机 TP）</td></tr>
+</table>
+
+<h3>决策流程</h3>
+<div class="tip">
+<div class="tip-title">快速决策树</div>
+<ol>
+<li>模型能放入单卡？→ DDP 即可</li>
+<li>不能 → 需要模型并行。单机多卡有 NVLink？→ 先试 TP</li>
+<li>TP 后仍放不下？→ 加 PP 切层</li>
+<li>需要更多吞吐？→ 外层加 DP</li>
+<li>优化器状态太大？→ ZeRO-1/2/3 分片</li>
+<li>MoE 模型？→ 加 Expert Parallelism</li>
+</ol>
+</div>
+
+<div class="interview-box">
+<ul>
+<li>能根据具体场景（模型大小 + 硬件）给出并行方案</li>
+<li>理解各策略的通信代价和适用拓扑</li>
+<li>知道 Sequence Parallelism（长序列场景的补充方案）</li>
+<li>了解最新趋势：Context Parallelism（超长上下文并行）</li>
+</ul>
+</div>
+
+<!-- Q&A Section -->
+</div>
+
+<div class="section">
+<h2 id="qa">Q&amp;A</h2>
+
+<details>
+<summary>Q1: DDP 的 All-Reduce 通信量是多少？为什么和卡数无关？</summary>
+<div class="answer">
+<p>Ring All-Reduce 通信量 = <code>2 × (N-1)/N × model_size</code>，当 N 较大时趋近 2×model_size。</p>
+<p>原因：Ring 算法将数据分为 N 块，Reduce-Scatter 阶段每卡发送 (N-1) 次、每次 1/N 数据；All-Gather 阶段同理。每卡总发送 = 2×(N-1)/N × D ≈ 2D。每步通信量随 N 减小，但步数随 N 增加，两者抵消。</p>
+</div>
+</details>
+
+<details>
+<summary>Q2: ZeRO-3 和 Tensor Parallelism 有什么区别？都是分片参数为什么效果不同？</summary>
+<div class="answer">
+<p><strong>ZeRO-3</strong>：将参数存储分片，计算前 All-Gather 恢复完整参数，每卡仍执行完整矩阵乘法。本质是<strong>内存优化</strong>。</p>
+<p><strong>TP</strong>：将计算本身分片，每卡只计算部分矩阵乘法，结果通过 All-Reduce 合并。本质是<strong>计算并行</strong>。</p>
+<p>关键差异：ZeRO-3 不减少每卡的计算量（甚至增加通信）；TP 减少每卡计算量但引入前向/反向通信。TP 适合计算密集层，ZeRO-3 适合通用内存优化。</p>
+</div>
+</details>
+
+<details>
+<summary>Q3: Pipeline Parallelism 的 Bubble 如何计算？怎样减少？</summary>
+<div class="answer">
+<p>Bubble 比例 = <code>(p-1) / (p-1 + m)</code>，p=流水线阶段数，m=micro-batch 数。</p>
+<p>减少方法：① 增大 m（更多 micro-batch）；② 使用 Interleaved Schedule（每 GPU 承担多组非连续层，虚拟阶段数 v 倍降低 bubble）；③ 减少 p（更少的流水线阶段）。实践中通常要求 m ≥ 4p 以将 bubble 控制在 ~20% 以内。</p>
+</div>
+</details>
+
+<details>
+<summary>Q4: 为什么 Tensor Parallelism 不适合跨机使用？</summary>
+<div class="answer">
+<p>TP 每个 Transformer 层的 Forward 需要 2 次 All-Reduce，Backward 同样 2 次，共 4 次集合通信。通信频率极高且在关键路径上（无法与计算重叠）。</p>
+<p>NVLink 带宽 ~600GB/s（双向），而跨机 InfiniBand 典型带宽 ~50GB/s（400Gbps）。跨机 TP 会使通信成为严重瓶颈，GPU 利用率骤降。因此 TP 度通常 ≤ 节点内 GPU 数（8）。</p>
+</div>
+</details>
+
+<details>
+<summary>Q5: FSDP 的 HYBRID_SHARD 策略解决什么问题？</summary>
+<div class="answer">
+<p>在多机场景中，FULL_SHARD 的 All-Gather/Reduce-Scatter 需要跨机通信（带宽低），而 NO_SHARD(DDP) 内存效率差。</p>
+<p>HYBRID_SHARD 在<strong>节点内</strong>做 FULL_SHARD（利用 NVLink 高带宽），<strong>节点间</strong>做 DDP（仅 All-Reduce 梯度，通信量可控）。兼顾内存效率和通信效率，是多机训练的实用折中。</p>
+</div>
+</details>
+
+<details>
+<summary>Q6: 训练 70B 模型，给你 64 张 A100-80GB（8节点×8卡），如何配置并行策略？</summary>
+<div class="answer">
+<p>推荐配置：<strong>TP=8, PP=4, DP=2</strong>（8×4×2=64）</p>
+<ul>
+<li><strong>TP=8</strong>（节点内）：70B/8=8.75B 参数/卡，利用 NVLink 高带宽</li>
+<li><strong>PP=4</strong>（跨4个节点）：模型 80 层分为 4 段（每段 20 层），PP 通信量小可走 IB</li>
+<li><strong>DP=2</strong>（剩余 2 组）：提升吞吐，可搭配 ZeRO-1 进一步省内存</li>
+</ul>
+<p>每卡存储：~8.75B/4(PP)=2.2B 参数(fp16≈4.4GB) + 优化器状态(ZeRO-1分片) + 激活，80GB 足够。</p>
+</div>
+</details>
+
+<details>
+<summary>Q7: DeepSpeed ZeRO-3 的通信量为什么是 DDP 的 1.5 倍？</summary>
+<div class="answer">
+<p>DDP 通信：1 次 All-Reduce = Reduce-Scatter + All-Gather = 2D。</p>
+<p>ZeRO-3 通信：</p>
+<ul>
+<li>Forward：1 次 All-Gather（收集参数） = D</li>
+<li>Backward：1 次 All-Gather（收集参数） + 1 次 Reduce-Scatter（分发梯度） = 2D</li>
+</ul>
+<p>总计 3D = 1.5 × DDP 的 2D。额外开销来自 Forward 阶段需要 All-Gather 参数（DDP 中参数本地已有完整副本无需通信）。</p>
+</div>
+</details>
+
+<details>
+<summary>Q8: MoE 模型的 Expert Parallelism 中，All-to-All 通信的挑战是什么？</summary>
+<div class="answer">
+<p>主要挑战：</p>
+<ul>
+<li><strong>负载不均</strong>：Router 可能将大量 token 路由到少数专家 → 部分 GPU 过载，其余空闲</li>
+<li><strong>通信量不确定</strong>：每次 forward 的 All-to-All 数据量取决于路由结果，难以静态优化</li>
+<li><strong>通信模式不友好</strong>：All-to-All 是全对全通信，无法像 Ring 那样分步流水化</li>
+<li><strong>Capacity factor 溢出</strong>：超出容量的 token 被丢弃，影响模型质量</li>
+</ul>
+<p>解决方案：辅助负载均衡 loss、GShard 的 random routing、Switch Transformer 的 capacity factor。</p>
+</div>
+</details>
+
+<details>
+<summary>Q9: Gradient Accumulation 和 Data Parallelism 的关系？能否替代？</summary>
+<div class="answer">
+<p><strong>Gradient Accumulation</strong>：单卡上多次 forward/backward 后再 step，等效于更大 batch。时间换空间。</p>
+<p><strong>Data Parallelism</strong>：多卡同时处理不同数据，空间换时间。</p>
+<p>等效关系：<code>global_batch = micro_batch × DP_size × grad_accum_steps</code>。两者可互相部分替代——资源有限时用 GA 模拟大 batch，资源充足时用 DP 加速训练。区别：GA 不加速，只是节省内存；DP 真正并行加速。</p>
+</div>
+</details>
+
+<details>
+<summary>Q10: Sequence Parallelism 是什么？和 Tensor Parallelism 什么关系？</summary>
+<div class="answer">
+<p><strong>Sequence Parallelism (SP)</strong>：将序列维度切分到不同 GPU，用于 LayerNorm 和 Dropout 等无法被 TP 切分的操作。</p>
+<p>在 Megatron-LM 中，TP 处理 Attention 和 MLP 的矩阵运算，但 LayerNorm/Dropout 仍需完整序列在每卡重复计算。SP 将这些操作也并行化：</p>
+<ul>
+<li>TP 区域：按隐藏维度切分（Column/Row Parallel）</li>
+<li>SP 区域：按序列维度切分（各卡持有不同 token）</li>
+<li>过渡：TP→SP 用 Reduce-Scatter，SP→TP 用 All-Gather</li>
+</ul>
+<p>SP 不增加通信量（将原有 All-Reduce 拆为 Reduce-Scatter + All-Gather），但节省 LayerNorm/Dropout 的激活内存。</p>
+</div>
+</details>
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+  </body>
+</html>

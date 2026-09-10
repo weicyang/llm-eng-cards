@@ -1,0 +1,1089 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP13 · 模型量化</title>
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--accent2:#3fb950;--accent3:#f0883e;--accent4:#bc8cff;--accent5:#ff7b72;--accent6:#79c0ff;--gradient:linear-gradient(135deg,#58a6ff,#bc8cff,#f0883e)}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.75;font-size:16px;padding-left:300px}
+.container{max-width:960px;margin:0 auto;padding:2rem 1.5rem 4rem}
+h1{font-size:2.4rem;font-weight:800;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:.3rem}
+.subtitle{color:var(--muted);font-size:1.05rem;margin-bottom:2.5rem}
+h2{font-size:1.5rem;font-weight:700;margin:2.8rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border);color:var(--accent)}
+h3{font-size:1.15rem;font-weight:600;margin:1.5rem 0 .6rem;color:var(--accent4)}
+p{margin:.6rem 0}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+ul,ol{padding-left:1.6rem;margin:.5rem 0}
+li{margin:.35rem 0}
+strong{color:#f0f6fc}
+code{font-family:"Cascadia Code","Fira Code",Consolas,monospace;background:#1c2129;padding:.15em .4em;border-radius:4px;font-size:.9em;color:var(--accent6)}
+pre{background:#1c2129;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;margin:1rem 0;line-height:1.6}
+pre code{background:none;padding:0;font-size:.85em;color:var(--text)}
+
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.4rem 1.5rem;margin:1rem 0}
+.tip-box{background:linear-gradient(135deg,rgba(88,166,255,.08),rgba(188,140,255,.08));border:1px solid rgba(88,166,255,.25);border-radius:10px;padding:1.2rem 1.4rem;margin:1.2rem 0}
+.tip-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.warn-box{background:rgba(240,136,62,.06);border:1px solid rgba(240,136,62,.25);border-radius:10px;padding:1.2rem 1.4rem;margin:1.2rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--accent3);margin-bottom:.5rem}
+
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th{background:rgba(88,166,255,.1);color:var(--accent);font-weight:600;text-align:left;padding:.7rem .8rem;border:1px solid var(--border)}
+td{padding:.6rem .8rem;border:1px solid var(--border);vertical-align:top}
+tr:nth-child(even) td{background:rgba(255,255,255,.02)}
+
+details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;overflow:hidden}
+details summary{padding:.8rem 1.2rem;cursor:pointer;font-weight:600;color:var(--accent);user-select:none;transition:background .2s}
+details summary:hover{background:rgba(88,166,255,.06)}
+details[open] summary{border-bottom:1px solid var(--border)}
+details .answer{padding:1rem 1.2rem;line-height:1.8}
+
+.formula{background:#1c2129;border:1px solid var(--border);border-radius:8px;padding:1rem 1.5rem;margin:1rem 0;text-align:center;font-family:"Cascadia Code",Consolas,monospace;font-size:1.05rem;color:var(--accent6);letter-spacing:.5px}
+
+.toc{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.2rem 1.5rem;margin:1.5rem 0}
+.toc h3{margin-top:0;color:var(--accent)}
+.toc ol{margin:0;padding-left:1.4rem}
+.toc li{margin:.3rem 0}
+.toc a{color:var(--text);font-size:.95rem}
+.toc a:hover{color:var(--accent)}
+
+.comparison{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.comparison .col{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem}
+.comparison .col h4{margin:0 0 .6rem;font-size:1rem}
+.col.pros h4{color:var(--accent2)}
+.col.cons h4{color:var(--accent5)}
+
+.tag{display:inline-block;padding:.15em .55em;border-radius:4px;font-size:.8rem;font-weight:600;margin:.15rem .2rem}
+.tag-green{background:rgba(63,185,80,.15);color:var(--accent2)}
+.tag-blue{background:rgba(88,166,255,.15);color:var(--accent)}
+.tag-orange{background:rgba(240,136,62,.15);color:var(--accent3)}
+.tag-purple{background:rgba(188,140,255,.15);color:var(--accent4)}
+.tag-red{background:rgba(255,123,114,.15);color:var(--accent5)}
+
+.flow-diagram{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.5rem;margin:1rem 0;padding:1rem;background:var(--surface);border:1px solid var(--border);border-radius:10px}
+.flow-step{background:rgba(88,166,255,.1);border:1px solid rgba(88,166,255,.3);border-radius:8px;padding:.5rem 1rem;font-weight:600;font-size:.9rem;color:var(--accent)}
+.flow-arrow{color:var(--muted);font-size:1.2rem}
+
+@media(max-width:640px){
+  h1{font-size:1.7rem}
+  .container{padding:1.2rem 1rem 3rem}
+  .comparison{grid-template-columns:1fr}
+  table{font-size:.82rem}
+  th,td{padding:.5rem}
+  
+}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+
+/* 标准组件体系 */
+.section{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:1.5rem 1.6rem;margin:1.6rem 0}
+.section>h2:first-child{margin-top:0}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+.highlight{border-left:3px solid #58a6ff;padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、量化基础</a>
+<a href="#s2">二、数据类型全览</a>
+<a href="#s3">三、PTQ vs QAT</a>
+<a href="#s4">四、GPTQ</a>
+<a href="#s5">五、AWQ (Activation-aware Weight Quantization)</a>
+<a href="#s6">六、GGUF / llama.cpp 量化</a>
+<a href="#s7">七、bitsandbytes</a>
+<a href="#s8">八、精度-速度-内存权衡</a>
+<a href="#s9">九、量化最佳实践</a>
+<a href="#s10">十、Q&A</a>
+</aside>
+<div class="container">
+
+<h1>DP13 · 模型量化</h1>
+<p class="subtitle">Quantization — 用更少的 bit 表示模型权重，在精度、速度与内存之间取得最优平衡</p>
+
+<!-- ============================================================ -->
+<div class="section">
+<h2 id="s1">一、量化基础</h2>
+<div class="intuition-box">
+<p>量化就是把一条连续的数轴换成有限个刻度：省下的是存储和带宽，丢掉的是刻度之间的那些值。</p>
+</div>
+
+<h3>什么是量化</h3>
+<p>量化 (Quantization) 是将模型权重和/或激活值从<strong>高精度浮点数</strong>（如 FP32）映射到<strong>低精度数据类型</strong>（如 INT8、INT4）的过程。其核心目标是在<strong>尽量保持模型精度</strong>的前提下，显著减少模型的<strong>内存占用</strong>和<strong>推理延迟</strong>。</p>
+
+<div class="flow-diagram">
+  <span class="flow-step">FP32 权重</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">量化映射</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">INT8 / INT4 权重</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">推理时反量化</span>
+</div>
+
+<h3>对称量化 vs 非对称量化</h3>
+<div class="comparison">
+<div class="col">
+<h4>对称量化 (Symmetric)</h4>
+<ul>
+<li>zero_point = 0，原点对齐</li>
+<li>公式：<code>q = round(x / scale)</code></li>
+<li>适合权重分布近似关于 0 对称的情况</li>
+<li>计算更简单、推理更快</li>
+</ul>
+</div>
+<div class="col">
+<h4>非对称量化 (Asymmetric)</h4>
+<ul>
+<li>引入 zero_point 偏移量</li>
+<li>公式：<code>q = round(x / scale) + zero_point</code></li>
+<li>适合分布不对称的激活值（如 ReLU 输出）</li>
+<li>表达范围更灵活，精度可能更高</li>
+</ul>
+</div>
+</div>
+
+<h3>量化核心公式</h3>
+<div class="card">
+<p><strong>量化 (Quantize)：</strong></p>
+<div class="formula">q = clamp(round(x / scale + zero_point), q_min, q_max)</div>
+<p><strong>反量化 (Dequantize)：</strong></p>
+<div class="formula">x̂ = scale × (q − zero_point)</div>
+<p><strong>参数计算：</strong></p>
+<div class="formula">scale = (x_max − x_min) / (q_max − q_min)<br>zero_point = round(q_min − x_min / scale)</div>
+<p style="margin-top:.8rem;color:var(--muted)">其中 x 是原始浮点值，q 是量化后的整数值，scale（缩放因子）和 zero_point（零点）决定了映射关系。</p>
+</div>
+
+<div class="arch-diagram">  一个权重从浮点变成整数、再变回来的完整过程
+
+  原始分布（FP16 权重，近似钟形）
+      ░░▒▒▓▓███████▓▓▒▒░░
+   ───┼─────────┼─────────┼───►  x
+    x_min       0       x_max
+
+              │ scale = (x_max − x_min) / (q_max − q_min)
+              │ zero_point 决定 0 落在哪个整数刻度上
+              ▼
+  INT4 只有 16 个刻度可用
+   ●   ●   ●   ●   ●   ●   ●   ●   ●   ●   ●   ●   ●   ●   ●   ●
+   -8                        0                              7
+    └─┬─┘
+      每个刻度覆盖一段区间，落在区间里的值全部被 round 到同一个点
+                                      → 舍入误差
+   超出 [x_min, x_max] 的值被 clamp 到边界
+                                      → 截断误差（离群值在这里被压扁）
+
+              │ 反量化 x̂ = scale × (q − zero_point)
+              ▼
+  恢复出的分布：形状还在，细节没了
+
+  ┌── 量化粒度决定用多少组 scale 去拟合这条分布 ──────────────┐
+  │  per-tensor    整个张量一组       省元数据，离群值毁全局    │
+  │  per-channel   每个输出通道一组   常用于权重                │
+  │  per-group     每 128 个权重一组  精度最好，元数据开销最大   │
+  └────────────────────────────────────────────────────────┘
+
+  ★ 量化的全部难点都在离群值：极少数很大的值会把 x_max 拉高，
+    导致 scale 变大，其余绝大多数权重的有效刻度被浪费
+  ★ 后面 GPTQ / AWQ / LLM.int8() 的差别，本质都是"怎么对付离群值"</div>
+
+<h3>量化误差</h3>
+<p>量化本质上是一种<strong>有损压缩</strong>。量化误差来源于：</p>
+<ul>
+<li><strong>舍入误差</strong> — round() 操作引入的离散化误差</li>
+<li><strong>截断误差</strong> — clamp 操作将超出范围的值截断到边界</li>
+<li><strong><span class="term">量化粒度</span></strong> — per-tensor（全局一个 scale）vs per-channel（每通道独立 scale）vs per-group（分组量化），粒度越细精度越高但开销越大</li>
+</ul>
+
+<div class="tip-box">
+<ul>
+<li>量化 = 高精度浮点 → 低精度整数/浮点的映射，核心是 <code>scale</code> 和 <code>zero_point</code></li>
+<li>对称量化用于权重、非对称量化用于激活值是常见搭配</li>
+<li>量化粒度：per-tensor &lt; per-channel &lt; per-group，粒度越细精度越好</li>
+<li>量化误差 ≠ 模型精度损失 — 误差需要在下游任务上实际评估</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s2">二、数据类型全览</h2>
+<div class="intuition-box">
+<p>低精度类型都在同一笔预算里分配位数：给指数多一点就换来范围，给尾数多一点就换来精度。</p>
+</div>
+
+<table>
+<thead>
+<tr><th>类型</th><th>位宽</th><th>范围</th><th>精度</th><th>典型用途</th></tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>FP32</strong></td>
+<td>32 bit</td>
+<td>±3.4×10³⁸</td>
+<td>~7 位有效数字</td>
+<td>训练基准、参数存储</td>
+</tr>
+<tr>
+<td><strong>FP16</strong></td>
+<td>16 bit</td>
+<td>±6.5×10⁴</td>
+<td>~3.3 位有效数字</td>
+<td>混合精度训练、推理</td>
+</tr>
+<tr>
+<td><strong>BF16</strong></td>
+<td>16 bit</td>
+<td>±3.4×10³⁸</td>
+<td>~3 位有效数字</td>
+<td>大模型训练（Google TPU 原生）</td>
+</tr>
+<tr>
+<td><strong>FP8 (E4M3)</strong></td>
+<td>8 bit</td>
+<td>±448</td>
+<td>~2 位有效数字</td>
+<td>H100 推理加速、训练探索</td>
+</tr>
+<tr>
+<td><strong>INT8</strong></td>
+<td>8 bit</td>
+<td>-128 ~ 127</td>
+<td>均匀量化</td>
+<td>推理量化、边缘部署</td>
+</tr>
+<tr>
+<td><strong>INT4</strong></td>
+<td>4 bit</td>
+<td>-8 ~ 7</td>
+<td>均匀量化</td>
+<td>GPTQ/AWQ 权重量化</td>
+</tr>
+<tr>
+<td><strong>NF4</strong></td>
+<td>4 bit</td>
+<td>非均匀分布</td>
+<td>信息论最优</td>
+<td>QLoRA / bitsandbytes</td>
+</tr>
+</tbody>
+</table>
+
+<div class="card">
+<h3>BF16 vs FP16 — 为什么大模型训练偏爱 BF16？</h3>
+<ul>
+<li><strong>BF16</strong>：8 位指数 + 7 位尾数 → 范围与 FP32 相同，不易溢出</li>
+<li><strong>FP16</strong>：5 位指数 + 10 位尾数 → 精度更高但范围小，需要 loss scaling</li>
+<li>大模型训练中，<strong>数值范围</strong>比精度更重要 → BF16 无需 loss scaling 即可稳定训练</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>NF4 — 为正态分布量身定制</h3>
+<p><span class="term">NF4</span> (4-bit NormalFloat) 假设权重服从正态分布，将量化桶不均匀地分布在正态分布的分位数上，使得每个桶覆盖大致相等的概率质量，从信息论角度达到<strong>4 bit 量化的最优精度</strong>。</p>
+</div>
+
+<div class="tip-box">
+<ul>
+<li>BF16 vs FP16 的核心差异：范围 vs 精度的取舍；BF16 是大模型训练的事实标准</li>
+<li>NF4 是信息论最优的 4-bit 数据类型（假设正态分布），是 QLoRA 的核心</li>
+<li>FP8 是下一代推理加速方向（NVIDIA H100 原生支持 FP8 Tensor Core）</li>
+<li>INT4 是当前 LLM 推理量化的主流位宽</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s3">三、PTQ vs QAT</h2>
+<div class="intuition-box">
+<p>QAT 是让模型在训练时就学会带着量化误差工作，PTQ 是训练完再压——对大模型来说，前者的账根本算不过来。</p>
+</div>
+
+<div class="comparison">
+<div class="col">
+<h4>PTQ — 训练后量化 (Post-Training Quantization)</h4>
+<ul>
+<li>在模型训练<strong>完成后</strong>直接量化</li>
+<li>不需要重新训练，只需少量校准数据</li>
+<li>计算成本极低（分钟级）</li>
+<li>LLM 的<strong>主流方案</strong>（GPTQ、AWQ 等）</li>
+<li>4-bit PTQ 可能导致较大精度损失</li>
+</ul>
+</div>
+<div class="col">
+<h4>QAT — 量化感知训练 (Quantization-Aware Training)</h4>
+<ul>
+<li>在训练过程中<strong>模拟量化</strong>效果</li>
+<li>前向传播插入伪量化节点 (fake quantization)</li>
+<li>模型学会适应量化误差 → 精度更高</li>
+<li>需要完整训练流程，成本极高</li>
+<li>对 LLM 来说通常不现实（训练太贵）</li>
+</ul>
+</div>
+</div>
+
+<div class="card">
+<h3>为什么 LLM 主要用 PTQ？</h3>
+<ol>
+<li><strong>训练成本</strong> — 7B 模型全量训练需数千 GPU 小时，QAT 意味着重新训练</li>
+<li><strong>PTQ 已够好</strong> — GPTQ/AWQ 等方法在 4-bit 下精度损失可控</li>
+<li><strong>灵活性</strong> — 同一个 FP16 基模型可按需求量化到不同精度</li>
+<li><strong>新方法不断涌现</strong> — PTQ 算法持续改进，精度损失越来越小</li>
+</ol>
+</div>
+
+<div class="tip-box">
+<ul>
+<li>PTQ 是 LLM 量化的事实标准，QAT 因训练成本过高在 LLM 场景较少使用</li>
+<li>PTQ 只需<span class="term">校准数据</span>（通常 128-512 条样本），无需标签</li>
+<li>QAT 精度更高但成本不可接受 — 需要能解释为什么 LLM 偏好 PTQ</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s4">四、GPTQ</h2>
+<div class="intuition-box">
+<p>GPTQ 的巧思在于"错了就补"：一个权重被量化产生的误差，立刻摊到还没量化的权重上去抵消。</p>
+</div>
+
+<div class="card">
+<p><span class="tag tag-blue">论文</span> <em>GPTQ: Accurate Post-Training Quantization for Generative Pre-Trained Transformers</em> (Frantar et al., 2023)</p>
+</div>
+
+<h3>核心思想</h3>
+<p>GPTQ 是一种基于<strong>二阶信息（Hessian 矩阵）</strong>的逐层 PTQ 方法。它的目标是最小化量化前后每一层输出的差异：</p>
+<div class="formula">min ‖WX − W_q X‖² </div>
+<p>其中 W 是原始权重，W_q 是量化后的权重，X 是校准数据的激活值。</p>
+
+<h3>算法流程</h3>
+<div class="card">
+<ol>
+<li><strong>收集校准数据</strong> — 用少量数据（128 条）前向传播，记录每层输入激活 X</li>
+<li><strong>计算 Hessian</strong> — H = 2X Xᵀ，衡量每个权重对输出的影响程度</li>
+<li><strong>逐列量化</strong> — 按列顺序，每量化一个权重后，用 Hessian 信息补偿其他未量化权重</li>
+<li><strong>分组处理</strong> — 将列分成大小为 128 的组 (block)，组内顺序量化，组间懒更新 (lazy batch update)</li>
+</ol>
+</div>
+
+<h3>从 OBQ 到 GPTQ</h3>
+<p>GPTQ 源于 <strong>Optimal Brain Quantization (OBQ)</strong> 的简化：</p>
+<ul>
+<li>OBQ：每次选择量化误差最小的权重 → O(d³) 复杂度</li>
+<li>GPTQ：固定量化顺序（按列），不再搜索最优顺序 → O(d·k²) 复杂度</li>
+<li>实验证明固定顺序的精度损失极小，但速度提升数个数量级</li>
+</ul>
+
+<h3>关键特点</h3>
+<table>
+<tr><th>特性</th><th>说明</th></tr>
+<tr><td>量化精度</td><td>4-bit / 3-bit / 2-bit（4-bit 最常用）</td></tr>
+<tr><td>量化速度</td><td>7B 模型约 4-5 分钟（单 GPU）</td></tr>
+<tr><td>校准数据</td><td>128 条样本即可，无需标签</td></tr>
+<tr><td>group_size</td><td>默认 128，越小精度越高但体积越大</td></tr>
+<tr><td>推理后端</td><td>支持 ExLlama、AutoGPTQ、vLLM</td></tr>
+</table>
+
+<pre><code># AutoGPTQ 使用示例
+from auto_gptq import AutoGPTQForCausalLM, BaseQuantizeConfig
+
+quantize_config = BaseQuantizeConfig(
+    bits=4,
+    group_size=128,
+    desc_act=False,       # 是否按激活值降序排列列
+)
+
+model = AutoGPTQForCausalLM.from_pretrained(
+    model_name, quantize_config=quantize_config
+)
+model.quantize(calibration_dataset)
+model.save_quantized(output_dir)</code></pre>
+
+<div class="tip-box">
+<ul>
+<li>GPTQ 核心 = Hessian 逐列量化 + 误差补偿（残差重分配到未量化列）</li>
+<li>相比 OBQ，GPTQ 固定列顺序，将复杂度从 O(d³) 降到 O(d·k²)</li>
+<li>group_size=128 是精度与压缩率的平衡点</li>
+<li>desc_act=True 精度更好但推理更慢（需重新排列权重）</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s5">五、AWQ (Activation-aware Weight Quantization)</h2>
+<div class="intuition-box">
+<p>AWQ 换了个角度看重要性：一个权重重不重要，不看它自己有多大，而看它乘的那个激活有多大。</p>
+</div>
+
+<div class="card">
+<p><span class="tag tag-purple">论文</span> <em>AWQ: Activation-aware Weight Quantization for LLM Compression and Acceleration</em> (Lin et al., 2024)</p>
+</div>
+
+<h3>核心洞察</h3>
+<p>不是所有权重都同等重要。AWQ 发现：<strong>仅 1% 的"显著权重" (salient weights) 就能显著影响模型精度</strong>，而这些权重可以通过对应的<strong>激活值大小</strong>来识别。</p>
+
+<div class="card">
+<h3>关键直觉</h3>
+<p>如果某个输入通道的激活值很大，那么该通道对应的权重即使量化误差很小，也会在输出端被<strong>放大</strong>。因此应该保护这些权重。</p>
+<div class="formula">保护策略：对显著权重乘以缩放因子 s → 等效降低量化误差的影响</div>
+</div>
+
+<h3>算法步骤</h3>
+<ol>
+<li><strong>统计激活值</strong> — 用校准数据计算每个输入通道的<strong>平均激活幅度</strong></li>
+<li><strong>确定缩放因子</strong> — 对显著通道的权重乘以缩放因子 s &gt; 1（等效于缩小该通道量化步长）</li>
+<li><strong>搜索最优 s</strong> — 通过 grid search 找到每组权重的最优缩放因子，最小化量化误差</li>
+<li><strong>应用量化</strong> — 在缩放后的权重上执行标准 INT4 量化</li>
+</ol>
+
+<div class="arch-diagram">  两条不同的技术路线，对付的是同一个敌人：量化误差在输出端被放大
+
+  ┌── GPTQ：逐列量化 + 误差补偿 ──────────────────────────────┐
+  │                                                          │
+  │   权重矩阵 W （按列推进）                                  │
+  │   ┌───┬───┬───┬───┬───┐                                  │
+  │   │ ✔ │ ✔ │ ▶ │   │   │   ✔ 已量化   ▶ 正在量化   空 未处理│
+  │   └───┴───┴─┬─┴───┴───┘                                  │
+  │             │ 量化第 3 列，产生误差 e                       │
+  │             ▼                                            │
+  │   用 Hessian（H = 2XXᵀ，来自校准数据）算出：               │
+  │   把 e 按什么比例分摊给右边未量化的列，能让输出变化最小      │
+  │             │                                            │
+  │             └──► 第 4、5 列的浮点值被"预先补偿"后再量化      │
+  │                                                          │
+  │   代价：要算 Hessian 的逆，慢；且对校准数据比较敏感          │
+  └──────────────────────────────────────────────────────────┘
+
+  ┌── AWQ：先按激活缩放，再普通量化 ──────────────────────────┐
+  │                                                          │
+  │   校准数据前向一遍，统计每个输入通道的平均激活幅度           │
+  │                                                          │
+  │   通道:   c0     c1     c2     c3                         │
+  │   激活:   小     大     小     小        ← c1 是显著通道    │
+  │            │      │      │      │                        │
+  │            ▼      ▼      ▼      ▼                        │
+  │   权重 ×  1.0    × s    1.0    1.0      （s > 1）          │
+  │            │      │                                      │
+  │            │      └─ 放大后再量化，相对量化误差被压小        │
+  │            │         推理时在激活侧除回来，数学上等价        │
+  │            ▼                                             │
+  │   在缩放后的权重上做标准 INT4 量化，不需要求逆              │
+  │                                                          │
+  │   代价：s 要 grid search；好处是快，且对校准数据不敏感       │
+  └──────────────────────────────────────────────────────────┘
+
+  ★ 共同前提：误差本身无法消除，只能挪到"乘出来影响最小"的地方
+  ★ 4-bit 下两者精度接近，选型更多看推理后端支持和量化耗时</div>
+
+<h3>AWQ vs GPTQ 对比</h3>
+<table>
+<tr><th>维度</th><th>GPTQ</th><th>AWQ</th></tr>
+<tr><td>核心思路</td><td>Hessian 误差补偿</td><td>激活感知权重缩放</td></tr>
+<tr><td>量化速度</td><td>较慢（需 Hessian 逆）</td><td><strong>更快</strong>（无需矩阵求逆）</td></tr>
+<tr><td>精度 (4-bit)</td><td>优秀</td><td>优秀（略优）</td></tr>
+<tr><td>校准依赖</td><td>对校准数据较敏感</td><td>对校准数据<strong>不敏感</strong></td></tr>
+<tr><td>推理框架</td><td>ExLlama / AutoGPTQ / vLLM</td><td>vLLM / TensorRT-LLM / AutoAWQ</td></tr>
+<tr><td>硬件支持</td><td>GPU (CUDA)</td><td>GPU (CUDA)，TensorRT 优化</td></tr>
+</table>
+
+<pre><code># AutoAWQ 使用示例
+from awq import AutoAWQForCausalLM
+
+model = AutoAWQForCausalLM.from_pretrained(model_path)
+quant_config = {
+    "zero_point": True,
+    "q_group_size": 128,
+    "w_bit": 4,
+    "version": "GEMM"   # GEMM or GEMV
+}
+model.quantize(tokenizer, quant_config=quant_config)
+model.save_quantized(output_path)</code></pre>
+
+<div class="tip-box">
+<ul>
+<li>AWQ 核心 = 按激活值大小保护显著权重（scale up → 降低量化相对误差）</li>
+<li>比 GPTQ 量化速度更快（不需要 Hessian 逆矩阵计算）</li>
+<li>对校准数据不敏感是其重要优势</li>
+<li>与 TensorRT-LLM 深度集成，适合生产部署</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s6">六、GGUF / llama.cpp 量化</h2>
+<div class="intuition-box">
+<p>k-quant 的思路很朴素：既然各层敏感度不同，那就别用统一位宽，敏感的多给几位，不敏感的少给几位。</p>
+</div>
+
+<h3>GGUF 格式</h3>
+<p><strong>GGUF</strong> (GPT-Generated Unified Format) 是 <code>llama.cpp</code> 生态系统使用的模型文件格式，由 Georgi Gerganov 设计。它是 GGML 格式的继任者，特点是：</p>
+<ul>
+<li><strong>单文件</strong> — 权重、tokenizer、元数据全部打包在一个文件中</li>
+<li><strong>可扩展</strong> — 支持自定义键值对元数据</li>
+<li><strong>内存映射</strong> — 可以直接 mmap 到内存，加载极快</li>
+<li><strong>跨平台</strong> — 纯 CPU 推理，支持 x86、ARM、Apple Silicon</li>
+</ul>
+
+<h3>量化级别详解</h3>
+<table>
+<thead>
+<tr><th>量化类型</th><th>位宽 (avg)</th><th>7B 大小</th><th>精度</th><th>推荐场景</th></tr>
+</thead>
+<tbody>
+<tr><td><strong>Q2_K</strong></td><td>~2.6 bit</td><td>~2.8 GB</td><td>较差</td><td>极端内存受限</td></tr>
+<tr><td><strong>Q3_K_S</strong></td><td>~3.4 bit</td><td>~3.2 GB</td><td>一般</td><td>低内存设备</td></tr>
+<tr><td><strong>Q4_K_M</strong></td><td>~4.8 bit</td><td>~4.4 GB</td><td><span class="tag tag-green">推荐</span></td><td>精度-大小最佳平衡</td></tr>
+<tr><td><strong>Q5_K_S</strong></td><td>~5.5 bit</td><td>~5.0 GB</td><td>较好</td><td>更重视精度</td></tr>
+<tr><td><strong>Q5_K_M</strong></td><td>~5.7 bit</td><td>~5.3 GB</td><td>好</td><td>精度优先</td></tr>
+<tr><td><strong>Q6_K</strong></td><td>~6.6 bit</td><td>~5.9 GB</td><td>优秀</td><td>接近 FP16 精度</td></tr>
+<tr><td><strong>Q8_0</strong></td><td>~8.5 bit</td><td>~7.2 GB</td><td>极好</td><td>几乎无损</td></tr>
+</tbody>
+</table>
+
+<div class="card">
+<h3>K-quant 命名规则</h3>
+<p><code>Q{bits}_K_{size}</code> 其中：</p>
+<ul>
+<li><strong>Q{bits}</strong> — 主要量化位宽</li>
+<li><strong>K</strong> — 使用 k-quant 方法（混合精度量化，关键层保留更高精度）</li>
+<li><strong>S / M / L</strong> — Small / Medium / Large，指非关键层使用的精度等级</li>
+</ul>
+<p>k-quant 会自动将 attention 层和输出层保持在更高精度，非关键的 FFN 层使用更低精度。</p>
+</div>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个中文法律问答助手要压到 4-bit 上线，团队直接用了公开的通用英文语料做校准，量化耗时几分钟，PPL 只涨了一点点，看起来很顺利。</p>
+<p><strong>问题：</strong>上线后中文长条款的引用频繁出错，法条编号会被写错一两位，专业术语偶尔被替换成近义的日常词。用同一批业务样本对比量化前后，发现量化前的准确率约 八成八，量化后掉到约 七成一，而通用 PPL 指标几乎没动。原因是校准数据决定了各层激活值的统计分布，用英文通用文本校准出来的 scale，对中文法律文本里那些高频的专有名词和数字串并不合适。</p>
+<p><strong>方案：</strong>换成从线上真实请求里抽的 128 条样本做校准，覆盖条款检索、案情问答、文书生成三类，长度也按线上分布来；同时把 LM Head 和 Embedding 层排除在低比特之外，保持较高精度。</p>
+<p><strong>效果：</strong>准确率回到约 八成六，模型体积和推理速度基本不变。这里唯一变的是校准数据——校准集是量化方案的一部分，不是随便找一份文本就行。</p>
+</div>
+
+<h3>使用流程</h3>
+<pre><code># 1. 从 HuggingFace 转换为 GGUF
+python convert_hf_to_gguf.py ./model_dir --outtype f16
+
+# 2. 量化
+./llama-quantize model-f16.gguf model-Q4_K_M.gguf Q4_K_M
+
+# 3. 推理
+./llama-cli -m model-Q4_K_M.gguf -p "Hello" -n 128 \
+    --threads 8 --ctx-size 4096</code></pre>
+
+<div class="tip-box">
+<ul>
+<li>GGUF 是端侧/CPU 推理的事实标准格式（Ollama、LM Studio 等都基于此）</li>
+<li><strong>Q4_K_M</strong> 是最常推荐的量化级别 — 精度损失小且压缩率高</li>
+<li>k-quant 使用混合精度：关键层高精度 + 非关键层低精度</li>
+<li>GGUF 支持 mmap → 加载速度快，多进程可共享内存</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s7">七、bitsandbytes</h2>
+<div class="intuition-box">
+<p>bitsandbytes 优化的是"能不能跑起来"，不是"跑得多快"——它让单卡装下大模型，生产提速是另一批工具的事。</p>
+</div>
+
+<h3>概述</h3>
+<p><code>bitsandbytes</code> 是由 Tim Dettmers 开发的轻量级量化库，与 HuggingFace Transformers 深度集成。它以<strong>易用性</strong>著称 — 只需一行代码即可将模型以 4-bit 或 8-bit 加载。</p>
+
+<h3>核心功能</h3>
+<div class="card">
+<h4 style="color:var(--accent);margin-bottom:.6rem">load_in_8bit</h4>
+<ul>
+<li>使用 <strong>LLM.int8()</strong> 方法（Dettmers et al., 2022）</li>
+<li>混合精度分解：将权重矩阵按<span class="term">离群特征</span> (outlier features) 拆分</li>
+<li>离群特征以 FP16 计算，其余以 INT8 计算</li>
+<li>几乎零精度损失，内存减少约 50%</li>
+</ul>
+</div>
+
+<div class="card">
+<h4 style="color:var(--accent4);margin-bottom:.6rem">load_in_4bit + NF4</h4>
+<ul>
+<li>使用 <strong>QLoRA</strong> 提出的 NF4 数据类型</li>
+<li>假设权重服从正态分布，分位数量化达到信息论最优</li>
+<li>支持<strong><span class="term">双重量化</span></strong> (double quantization) — 对量化常数再量化，进一步节省内存</li>
+<li>内存减少约 75%，是 QLoRA 微调的基础</li>
+</ul>
+</div>
+
+<h3>使用方式</h3>
+<pre><code>from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+
+# 8-bit 加载
+model_8bit = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    load_in_8bit=True,
+    device_map="auto"
+)
+
+# 4-bit NF4 加载（QLoRA 配置）
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,   # 双重量化
+)
+
+model_4bit = AutoModelForCausalLM.from_pretrained(
+    model_name,
+    quantization_config=bnb_config,
+    device_map="auto"
+)</code></pre>
+
+<h3>bitsandbytes 与 QLoRA 的关系</h3>
+<div class="card">
+<div class="flow-diagram">
+  <span class="flow-step">预训练模型 (FP16)</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">bitsandbytes NF4 量化</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">冻结量化权重</span>
+  <span class="flow-arrow">→</span>
+  <span class="flow-step">LoRA 适配器 (FP16/BF16)</span>
+</div>
+<p style="margin-top:.8rem">QLoRA = <strong>NF4 量化底座</strong> + <strong>LoRA 可训练适配器</strong>。bitsandbytes 提供量化层，PEFT/LoRA 提供参数高效微调。</p>
+</div>
+
+<div class="tip-box">
+<ul>
+<li>bitsandbytes 是 HuggingFace 生态最易用的量化方案 — 一行代码即可使用</li>
+<li>LLM.int8() 的关键创新：离群特征检测 + 混合精度分解</li>
+<li>NF4 + 双重量化 → QLoRA 的核心，使得单卡微调大模型成为可能</li>
+<li>bitsandbytes 主要用于<strong>微调</strong>和<strong>开发</strong>；生产推理通常用 GPTQ/AWQ/GGUF</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s8">八、精度-速度-内存权衡</h2>
+<div class="intuition-box">
+<p>位宽降一半不等于速度翻倍：省下的是显存和带宽，能不能变快取决于有没有对应的低精度 kernel。</p>
+</div>
+
+<h3>不同量化方案对比</h3>
+<table>
+<thead>
+<tr><th>方案</th><th>位宽</th><th>7B 内存</th><th>精度损失</th><th>推理速度</th><th>适用场景</th></tr>
+</thead>
+<tbody>
+<tr>
+<td>FP32</td><td>32 bit</td><td>~28 GB</td><td>基准</td><td>1×</td><td>研究基准</td>
+</tr>
+<tr>
+<td>FP16 / BF16</td><td>16 bit</td><td>~14 GB</td><td>可忽略</td><td>~2×</td><td>标准推理</td>
+</tr>
+<tr>
+<td>INT8 (LLM.int8())</td><td>8 bit</td><td>~7 GB</td><td>极小</td><td>~1.5×*</td><td>开发 / 微调</td>
+</tr>
+<tr>
+<td>GPTQ 4-bit</td><td>4 bit</td><td>~4 GB</td><td>小</td><td>~3-4×</td><td><span class="tag tag-green">GPU 推理</span></td>
+</tr>
+<tr>
+<td>AWQ 4-bit</td><td>4 bit</td><td>~4 GB</td><td>小</td><td>~3-4×</td><td><span class="tag tag-green">GPU 生产推理</span></td>
+</tr>
+<tr>
+<td>GGUF Q4_K_M</td><td>~4.8 bit</td><td>~4.4 GB</td><td>小</td><td>取决于 CPU</td><td><span class="tag tag-blue">CPU / 端侧</span></td>
+</tr>
+<tr>
+<td>NF4 (bnb)</td><td>4 bit</td><td>~3.5 GB</td><td>小</td><td>较慢†</td><td><span class="tag tag-purple">QLoRA 微调</span></td>
+</tr>
+</tbody>
+</table>
+<p style="color:var(--muted);font-size:.85rem">* LLM.int8() 因离群特征检测有额外开销，推理速度提升有限<br>† bitsandbytes 4-bit 推理需反量化，速度不如 GPTQ/AWQ 的定制 kernel</p>
+
+<h3>选型决策树</h3>
+<div class="card">
+<pre style="background:transparent;border:none;padding:0;color:var(--text);font-size:.9rem;line-height:2">
+┌─ 目标是什么？
+│
+├─ GPU 生产推理 ──→ AWQ 4-bit (vLLM / TensorRT-LLM)
+│                  或 GPTQ 4-bit (ExLlama / vLLM)
+│
+├─ CPU / 端侧推理 ──→ GGUF Q4_K_M (llama.cpp / Ollama)
+│
+├─ 微调大模型 ──→ bitsandbytes NF4 + QLoRA
+│
+├─ 最高精度推理 ──→ FP16 / BF16 (或 INT8 做轻量压缩)
+│
+└─ 极端压缩 ──→ GPTQ 2-3 bit (精度损失需评估)
+</pre>
+</div>
+
+<div class="tip-box">
+<ul>
+<li>4-bit 量化是精度与压缩的甜蜜点 — 通常精度损失 &lt; 1% perplexity</li>
+<li>GPU 推理选 GPTQ / AWQ；CPU 推理选 GGUF；微调选 bitsandbytes</li>
+<li>内存估算公式：参数量 × 位宽 / 8 ≈ 显存占用（单位 Bytes）</li>
+<li>需要能画出完整的决策树，根据场景推荐量化方案</li>
+</ul>
+</div>
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s9">九、量化最佳实践</h2>
+<div class="intuition-box">
+<p>量化最危险的地方在于它不会报错：模型照常输出，指标照常绿，质量已经悄悄掉了一截。</p>
+</div>
+
+<h3>校准数据选择</h3>
+<div class="card">
+<ul>
+<li><strong>多样性优先</strong> — 校准数据应覆盖模型预期处理的各种文本类型</li>
+<li><strong>数量不需要太多</strong> — GPTQ 通常 128 条即可，AWQ 更少</li>
+<li><strong>常用数据集</strong>：C4、WikiText-2、Pile 子集、目标领域数据</li>
+<li><strong>避免极端</strong> — 不要用全空白或重复文本作为校准数据</li>
+<li><strong>长度匹配</strong> — 校准样本长度应接近推理时的典型输入长度</li>
+</ul>
+</div>
+
+<h3>评估量化后模型质量</h3>
+<div class="card">
+<table>
+<tr><th>评估维度</th><th>方法</th><th>说明</th></tr>
+<tr>
+<td>困惑度 (Perplexity)</td>
+<td>WikiText-2 / C4 <span class="term">困惑度</span></td>
+<td>最基本的量化前后对比指标</td>
+</tr>
+<tr>
+<td>下游任务</td>
+<td>MMLU / HellaSwag / ARC 等</td>
+<td>实际任务精度比 PPL 更有意义</td>
+</tr>
+<tr>
+<td>生成质量</td>
+<td>人工评估 / MT-Bench</td>
+<td>PPL 可能不反映生成文本质量</td>
+</tr>
+<tr>
+<td>推理速度</td>
+<td>tokens/s (TPS)</td>
+<td>确保量化确实带来加速</td>
+</tr>
+<tr>
+<td>内存占用</td>
+<td>GPU memory / RSS</td>
+<td>验证内存节省符合预期</td>
+</tr>
+</table>
+</div>
+
+<div class="arch-diagram">  一条能兜住风险的量化上线流程，关键是每一步都有明确的拦截条件
+
+   ① 定目标
+      内存预算？延迟预算？跑在什么硬件上？
+      ↓  （目标不清楚，后面选什么都是猜）
+   ② 选方案
+      GPU 生产推理 → AWQ / GPTQ
+      CPU / 端侧    → GGUF k-quant
+      单卡微调      → NF4 + QLoRA
+      ↓
+   ③ 备校准集
+      从线上真实请求抽样，覆盖各类任务，长度贴近真实分布
+      ↓
+   ④ 执行量化
+      敏感层排除在外：Embedding / LM Head 保高精度，LayerNorm 不量化
+      ↓
+   ⑤ 三层验收 ── 任何一层不过就回到 ③ 或 ②
+      ┌──────────────┬──────────────────────────────────┐
+      │ 困惑度        │ 只能用来发现"崩得很明显"的情况     │
+      │ 下游任务       │ 用自己的业务样本，不是公开榜单     │
+      │ 人工 / 对比评估 │ 长回答、多轮、指令遵循最容易退化   │
+      └──────────────┴──────────────────────────────────┘
+      ↓
+   ⑥ 量速度和显存
+      确认确实变快、确实省显存 —— 有些组合只省内存不提速
+      ↓
+   ⑦ 灰度上线
+      量化版与原版并行，小流量对比输出，指标稳了再放量
+
+   ★ 顺序不能省的是 ⑤：PPL 通过不代表任务通过，任务通过不代表长文本没退化
+   ★ 对话模型比基础模型更脆弱，微调过的模型尤其要按 ⑤ 全跑一遍</div>
+
+<h3>混合精度量化</h3>
+<div class="card">
+<p>不同层对量化的敏感度不同。混合精度策略：</p>
+<ul>
+<li><strong>Embedding 层</strong> — 通常保持 FP16（或至少 8-bit），因为直接影响输入表示</li>
+<li><strong>Attention 层</strong> — 可以使用 4-bit，但 Q/K 投影可能需要更高精度</li>
+<li><strong>FFN 层</strong> — 对量化最不敏感，可以激进量化到 4-bit 甚至 3-bit</li>
+<li><strong>LM Head (输出层)</strong> — 保持高精度（影响 token 预测概率分布）</li>
+<li><strong>LayerNorm</strong> — 始终保持 FP32（参数极少，量化收益几乎为零）</li>
+</ul>
+</div>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个已经做过指令微调的对话模型压到 4-bit，量化前后在 WikiText 上的困惑度差异不到 1%，团队据此判断可以直接上线。</p>
+<p><strong>问题：</strong>灰度两天后客诉集中在"答非所问"和"不按格式输出"。人工抽了 200 条对比看，单轮短问答几乎没差别，问题全出在两类场景：需要严格 JSON 输出的接口调用，格式错误率从约 2% 涨到约 一成三；多轮对话超过五六轮后，模型开始忘记前面设定的角色和约束。困惑度衡量的是下一个 Token 的平均预测能力，而指令遵循和格式约束依赖的是分布尾部那些低概率 Token 的相对次序，量化恰好破坏的就是这部分。</p>
+<p><strong>方案：</strong>验收标准从"看困惑度"改成三件套：业务样本的下游任务准确率、结构化输出的格式合规率、以及一批固定的多轮对话脚本做人工对比；同时把 LM Head 保持在较高精度，这一层直接影响输出概率分布。</p>
+<p><strong>效果：</strong>调整后格式错误率回到约 3%，多轮遗忘问题明显缓解。结论是困惑度只能用来发现"崩得很明显"的量化，细粒度的能力退化必须靠贴近业务的评测才能看见。</p>
+</div>
+
+<div class="warn-box">
+<ul>
+<li>量化后<strong>必须评估</strong> — 不能假设量化不影响精度</li>
+<li>PPL 不是唯一指标 — 有时 PPL 差异很小但生成质量明显下降</li>
+<li>对话模型比基础模型更<strong>脆弱</strong> — SFT/RLHF 微调可能放大量化敏感性</li>
+</ul>
+</div>
+
+<div class="tip-box">
+<ul>
+<li>校准数据：128 条多样化样本通常足够，领域数据比通用数据更好</li>
+<li>评估三件套：PPL + 下游任务 + 人工评估</li>
+<li>混合精度是高级优化方向：关键层高精度 + 非关键层低精度</li>
+<li>GGUF k-quant 自动实现混合精度策略，GPTQ 的 desc_act 类似</li>
+</ul>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>校准数据从线上真实请求抽样，覆盖各类任务，长度贴近真实分布</li>
+<li>Embedding 与 LM Head 保持较高精度，LayerNorm 不参与量化</li>
+<li>验收用业务样本的下游任务指标，困惑度只作为崩溃探测</li>
+<li>结构化输出和多轮对话单独做一组回归，它们退化得最早</li>
+<li>量化版先与原版并行灰度，小流量对比输出稳定后再放量</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要用通用公开语料校准垂直领域模型，scale 会拟合到错误的分布上</li>
+<li>不要因为困惑度没变就认为量化无损，尾部分布的破坏它看不见</li>
+<li>不要把位宽降低直接当成速度提升，没有对应 kernel 时反而更慢</li>
+<li>不要对微调过的对话模型套用基础模型的量化结论，它更脆弱</li>
+<li>不要为了压到极小位宽牺牲长回答质量，收益通常撑不住损失</li>
+</ul>
+</div>
+</div>
+
+
+<!-- ============================================================ -->
+</div>
+
+<div class="section">
+<h2 id="s10">十、Q&amp;A</h2>
+
+<details>
+<summary>Q1：什么是模型量化？为什么 LLM 需要量化？</summary>
+<div class="answer">
+<p>量化是将模型权重和/或激活值从高精度浮点数（FP32/FP16）映射到低精度数据类型（INT8/INT4）的过程。LLM 需要量化的原因：</p>
+<ul>
+<li><strong>内存瓶颈</strong> — 7B 参数模型以 FP16 存储需要约 14GB 显存，70B 则需要约 140GB</li>
+<li><strong>推理加速</strong> — 低精度运算可利用硬件加速（如 INT8 Tensor Core）</li>
+<li><strong>部署需求</strong> — 让大模型能在消费级 GPU 甚至 CPU 上运行</li>
+<li><strong>带宽优化</strong> — LLM 推理通常是内存带宽受限 (memory-bound)，减少数据量直接提升吞吐</li>
+</ul>
+</div>
+</details>
+
+<details>
+<summary>Q2：对称量化和非对称量化有什么区别？各自适用场景？</summary>
+<div class="answer">
+<p><strong>对称量化</strong>：zero_point = 0，将 [-max(|x|), max(|x|)] 映射到 [-127, 127]。计算简单，适合<strong>权重</strong>（通常近似对称分布）。</p>
+<p><strong>非对称量化</strong>：引入 zero_point 偏移，将 [x_min, x_max] 映射到 [0, 255]。可更好表示不对称分布，适合<strong>激活值</strong>（尤其是 ReLU 后的非负激活）。</p>
+<p>LLM 中常见的搭配：<strong>权重用对称量化、激活值用非对称量化</strong>。但很多 4-bit 方法只量化权重（weight-only quantization），此时激活值保持 FP16 计算。</p>
+</div>
+</details>
+
+<details>
+<summary>Q3：PTQ 和 QAT 的区别？为什么 LLM 主要用 PTQ？</summary>
+<div class="answer">
+<p><strong>PTQ (训练后量化)</strong>：模型训练完成后直接量化，只需少量校准数据（无需标签），成本极低。</p>
+<p><strong>QAT (量化感知训练)</strong>：在训练中插入伪量化节点模拟量化效果，模型学习适应量化误差，精度更高但需完整训练流程。</p>
+<p>LLM 主要用 PTQ 的原因：</p>
+<ol>
+<li>LLM 训练成本极高（数百万美元），QAT 意味着重新训练</li>
+<li>现代 PTQ 方法（GPTQ/AWQ）在 4-bit 下精度损失已足够小</li>
+<li>PTQ 提供灵活性 — 同一模型可按需量化到不同精度</li>
+<li>QAT 需要修改训练管线，对开源社区不友好</li>
+</ol>
+</div>
+</details>
+
+<details>
+<summary>Q4：请解释 GPTQ 的核心原理</summary>
+<div class="answer">
+<p>GPTQ 是基于二阶信息的逐层 PTQ 方法：</p>
+<ol>
+<li><strong>目标</strong>：最小化量化前后每层输出的 L2 误差 ‖WX − W_qX‖²</li>
+<li><strong>Hessian 矩阵</strong>：H = 2XXᵀ，衡量每个权重对输出的影响</li>
+<li><strong>逐列量化</strong>：固定顺序按列量化，每量化一个权重后利用 Hessian 逆将误差最优地补偿到剩余未量化权重</li>
+<li><strong>分组加速</strong>：按组 (block_size=128) 处理，组内精确更新，组间懒批量更新</li>
+</ol>
+<p>核心创新：相比 OBQ（需要搜索最优量化顺序，O(d³)），GPTQ 固定列顺序但精度几乎不损失，复杂度降至 O(d·k²)，使得大模型量化变得实际可行。</p>
+</div>
+</details>
+
+<details>
+<summary>Q5：AWQ 和 GPTQ 有什么区别？各自的优缺点？</summary>
+<div class="answer">
+<p><strong>GPTQ</strong>：通过 Hessian 信息做误差补偿，逐列量化后将误差重分配到未量化权重。</p>
+<p><strong>AWQ</strong>：通过激活值大小识别显著权重，对其乘以缩放因子保护，减少量化误差在输出端的放大效应。</p>
+<table style="margin:.8rem 0">
+<tr><th></th><th>GPTQ</th><th>AWQ</th></tr>
+<tr><td>量化速度</td><td>较慢</td><td>更快</td></tr>
+<tr><td>校准数据敏感性</td><td>较高</td><td>较低</td></tr>
+<tr><td>精度</td><td>优秀</td><td>优秀（略优）</td></tr>
+<tr><td>推理后端</td><td>ExLlama/vLLM</td><td>vLLM/TensorRT-LLM</td></tr>
+</table>
+<p>选择建议：如果用 TensorRT-LLM 部署选 AWQ；如果用 ExLlama/vLLM 两者都可以。</p>
+</div>
+</details>
+
+<details>
+<summary>Q6：GGUF 格式是什么？Q4_K_M 代表什么意思？</summary>
+<div class="answer">
+<p><strong>GGUF</strong> (GPT-Generated Unified Format) 是 llama.cpp 使用的模型格式，特点是单文件打包（权重+分词器+元数据）、支持内存映射 (mmap)、纯 CPU 推理。</p>
+<p><strong>Q4_K_M</strong> 的含义：</p>
+<ul>
+<li><strong>Q4</strong> — 主要量化位宽为 4 bit</li>
+<li><strong>K</strong> — 使用 k-quant 方法（混合精度，关键层更高精度）</li>
+<li><strong>M</strong> — Medium 级别的非关键层精度</li>
+</ul>
+<p>k-quant 的精髓是<strong>自动混合精度</strong>：attention 和 output 层保持更高精度（如 6-bit），FFN 等非关键层使用更低精度（如 4-bit）。Q4_K_M 是社区最推荐的量化级别，在精度和体积之间取得最佳平衡。</p>
+</div>
+</details>
+
+<details>
+<summary>Q7：bitsandbytes 的 LLM.int8() 是如何处理离群特征的？</summary>
+<div class="answer">
+<p>LLM.int8() 发现大模型中存在少量<strong>离群特征 (outlier features)</strong> — 某些隐藏维度的激活值远大于其他维度（可达正常值的 100 倍以上）。直接 INT8 量化会严重损害这些特征。</p>
+<p>解决方案 — <strong>混合精度分解</strong>：</p>
+<ol>
+<li>检测离群特征维度（激活值 &gt; 阈值，通常为 6.0）</li>
+<li>将权重矩阵拆分为两部分：离群维度 + 正常维度</li>
+<li>离群维度以 FP16 精度计算矩阵乘法</li>
+<li>正常维度以 INT8 精度计算矩阵乘法</li>
+<li>两部分结果相加，得到最终输出</li>
+</ol>
+<p>这使得 INT8 量化几乎零精度损失，但因为分支计算有额外开销，推理加速有限。</p>
+</div>
+</details>
+
+<details>
+<summary>Q8：NF4 为什么比普通 INT4 更适合量化神经网络权重？</summary>
+<div class="answer">
+<p>神经网络权重通常近似<strong>正态分布</strong>。普通 INT4 使用<strong>均匀</strong>量化桶，导致：</p>
+<ul>
+<li>密集区域（均值附近）的权重被少数桶覆盖 → 精度浪费</li>
+<li>稀疏区域（尾部）占用过多桶 → 编码效率低</li>
+</ul>
+<p><strong>NF4 (4-bit NormalFloat)</strong> 的做法：</p>
+<ol>
+<li>先将权重归一化到标准正态分布 N(0,1)</li>
+<li>在正态分布的<strong>分位数</strong>上放置 16 个量化桶</li>
+<li>每个桶覆盖相等的概率质量（约 1/16）</li>
+</ol>
+<p>这从信息论角度是最优的 — 相同 4 bit 下，NF4 保留的信息量最大。实验表明 NF4 比 INT4 在量化精度上有明显优势。</p>
+</div>
+</details>
+
+<details>
+<summary>Q9：如何估算一个 LLM 量化后的内存占用？</summary>
+<div class="answer">
+<p>基本公式：<strong>内存 ≈ 参数量 × 每参数字节数</strong></p>
+<ul>
+<li>FP32：参数量 × 4 bytes</li>
+<li>FP16/BF16：参数量 × 2 bytes</li>
+<li>INT8：参数量 × 1 byte</li>
+<li>INT4：参数量 × 0.5 byte</li>
+</ul>
+<p>以 <strong>LLaMA-2 70B</strong> 为例：</p>
+<table style="margin:.5rem 0">
+<tr><th>精度</th><th>计算</th><th>约占内存</th></tr>
+<tr><td>FP32</td><td>70B × 4B</td><td>~280 GB</td></tr>
+<tr><td>FP16</td><td>70B × 2B</td><td>~140 GB</td></tr>
+<tr><td>INT8</td><td>70B × 1B</td><td>~70 GB</td></tr>
+<tr><td>INT4</td><td>70B × 0.5B</td><td>~35 GB</td></tr>
+</table>
+<p>注意额外开销：量化元数据（scale/zero_point）、KV Cache、激活值内存、框架开销等。实际占用通常比理论值高 10-20%。分组量化 (group_size=128) 也会增加少量元数据开销。</p>
+</div>
+</details>
+
+<details>
+<summary>Q10：在生产环境中，你会如何选择量化方案？</summary>
+<div class="answer">
+<p>选择量化方案需要考虑多个维度：</p>
+<ol>
+<li><strong>部署硬件</strong>
+  <ul>
+    <li>有 GPU → GPTQ / AWQ (4-bit) + vLLM/TensorRT-LLM</li>
+    <li>纯 CPU → GGUF Q4_K_M + llama.cpp</li>
+    <li>边缘设备 → GGUF 低比特 + llama.cpp（内存受限选 Q3/Q2）</li>
+  </ul>
+</li>
+<li><strong>精度要求</strong>
+  <ul>
+    <li>精度敏感 → INT8 或 Q5_K_M / Q6_K</li>
+    <li>精度可妥协 → 4-bit 量化</li>
+  </ul>
+</li>
+<li><strong>吞吐需求</strong>
+  <ul>
+    <li>高并发服务 → AWQ + vLLM (Continuous Batching)</li>
+    <li>单用户交互 → GGUF + Ollama 即可</li>
+  </ul>
+</li>
+<li><strong>评估流程</strong>
+  <ul>
+    <li>量化后必须跑 PPL + 下游任务 + 人工评估</li>
+    <li>与 FP16 基线对比，确认精度损失在可接受范围</li>
+  </ul>
+</li>
+</ol>
+<p>黄金法则：<strong>AWQ 4-bit + vLLM</strong> 是当前 GPU 部署的最佳默认选择；<strong>GGUF Q4_K_M</strong> 是 CPU 部署的最佳默认选择。</p>
+</div>
+</details>
+</div>
+
+<div style="margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border);text-align:center;color:var(--muted);font-size:.85rem">
+  DP13 · 模型量化 — LLM 深度指南
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

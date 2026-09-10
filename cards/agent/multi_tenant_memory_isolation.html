@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A49 · Agent 多租户与记忆隔离</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么 Agent 隔离比传统多租户难</a>
+<a href="#s2">二、存储层：记忆与数据的物理边界</a>
+<a href="#s3">三、链路层：身份强制注入与上下文透传</a>
+<a href="#s4">四、工具与行为边界：密钥、沙箱与授权</a>
+<a href="#s5">五、配额与噪声邻居：限流、熔断与分级</a>
+<a href="#s6">六、缓存层与上线排雷清单</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>A49 · Agent 多租户与记忆隔离</h1>
+<p class="subtitle">数据 / 记忆 / 工具 / 行为 / 配额的五层隔离架构 · 前置过滤与 RLS · 身份强制注入 · 噪声邻居治理</p>
+
+<div class="intuition-box">
+<p>多租户 <span class="term">多租户（Multi-Tenancy）</span>：一套系统同时服务多个客户（租户），彼此数据与资源互不可见。Agent 场景下它的本质是一句话——隔离不能靠提示词里写"你只服务租户 A"，而要让租户身份成为每一次取数、每一次工具调用、每一次缓存读取都绕不开的架构锚点。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、为什么 Agent 隔离比传统多租户难</h2>
+
+<p>传统 SaaS 的多租户是一个被解决了二十年的老问题：给业务表加一列 <code>tenant_id</code>，每条查询带上过滤条件，数据行的边界就立起来了。但 Agent 把这个问题重新撕开了——因为 Agent 隔离的不再是静态的数据行，而是<strong>会自己生长、会主动行动的状态</strong>：记忆会随对话累积，工具会代表租户发起真实的外部调用，配额会被某个租户的突发流量瞬间吃光。从"数据隔离"升级到"行为边界与上下文隔离"，是 Agent 架构的第一课。</p>
+
+<p>更麻烦的是，Agent 有四个传统 Web 应用从未面对过的泄露面。任何一个失守，都构成 OWASP LLM Top 10 中 LLM06（敏感信息泄露）定义的跨租户事故：</p>
+
+<ul>
+<li><strong>记忆泄露</strong>：向量库没有按租户分区时，租户 A 的文档被嵌入共享索引，租户 B 发来一个语义相似的提问，纯粹靠相似度计算就把 A 的内容召回进了 B 的上下文——不需要任何攻击行为，架构缺陷本身就是漏洞。</li>
+<li><strong>凭证共享</strong>：所有租户共用一把模型 API Key，A 的突发用量会把 B 打到限流，账单无法归属，密钥一旦泄露要全平台陪葬。</li>
+<li><strong>工具越权</strong>：Agent 执行工具调用时若不校验当前租户权限，一次错误的写入就能落到别的租户名下。</li>
+<li><strong>配额耗尽</strong>：一个租户的批量任务占满所有并发槽位，其余租户集体超时，这就是 <span class="term">噪声邻居（Noisy Neighbor）</span>——共享资源池中单个租户的异常负载拖垮所有邻居的现象。</li>
+</ul>
+
+<p>这四个泄露面有一个更深层的共同点：<strong>它们都无法靠模型自身防住</strong>。模型既不知道某份文档属于哪个租户，也不知道某把 Key 是否共享，更不知道这次工具调用是否越权——它只能看到平台组装好的上下文。所以隔离设计的方向必须反过来：不是"如何让模型理解租户概念"，而是"即使模型被完全骗过，架构如何让越界行为不可能发生"。这也是提示词级隔离与架构级隔离的本质区别——前者依赖概率性语言模型的自觉，后者依赖确定性系统的强制。</p>
+
+<p>推动隔离落地的还有合规这只看得见的手：SOC 2 Type II 审计要求平台能证明一个租户的数据不可能被任何其他租户访问，GDPR 要求对"这份数据在谁的系统中、谁能看到"给出明确答案，企业客户的采购合同里也越来越多地直接写入数据驻留与租户隔离条款。一次跨租户事故损失的往往不是一个客户，而是整个企业市场的准入资格——隔离不只是技术问题，更是 B2B 商业模式的入场券。</p>
+
+<table>
+<tr><th>维度</th><th>传统 Web 多租户</th><th>Agent 多租户</th></tr>
+<tr><td>隔离对象</td><td>数据库中的静态业务数据行</td><td>数据 + 记忆 + 凭证 + 工具行为 + 配额 + 审计日志</td></tr>
+<tr><td>身份载体</td><td>会话 Token，请求结束即失效</td><td>长期有效的真实 API Key、跨会话累积的记忆</td></tr>
+<tr><td>泄露路径</td><td>查询漏加过滤条件</td><td>漏过滤、语义召回串库、缓存串号、工具越权、注入诱导</td></tr>
+<tr><td>失败影响</td><td>部分请求 503 / 看到别人的行</td><td>上下文污染、跨租户记忆串扰、账单失控、合规事故</td></tr>
+<tr><td>计费单位</td><td>请求数 / 存储量</td><td>Token + 请求数 + 并发槽位</td></tr>
+</table>
+
+<div class="arch-diagram">
+租户 A 请求                    租户 B 请求
+    │                             │
+    ▼                             ▼
+┌────────────────────────────────────────────┐
+│              共享 Agent 平台                 │
+│                                            │
+│  ① 记忆面   向量库无分区 ──► 语义相似即串召回 │
+│  ② 凭证面   共用 API Key ──► 限流互相拖累    │
+│  ③ 行为面   工具不校验租户 ──► 越权写入       │
+│  ④ 配额面   无租户级限流 ──► 一家打爆全家     │
+└────────────────────────────────────────────┘
+        四个泄露面，任意一个失守 = 跨租户事故
+</div>
+
+<div class="intuition-box">
+<p>大模型不是保安，是演员——它会照着上下文里出现的内容继续演下去，绝不会替你把守租户边界。指望模型"自动分辨"谁是谁，等于把门锁交给路人口头保管。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、存储层：记忆与数据的物理边界</h2>
+
+<p>记忆隔离是整个体系的地基。Agent 的记忆至少分三类，每一类的隔离手段不同：<strong>工作记忆</strong>（当前上下文窗口）必须保证每个请求的实例状态独立，处理完租户 A 的长驻进程如果不清空状态就接租户 B，A 的上下文会直接渗进 B 的回答；<strong>语义记忆</strong>（向量库中的嵌入）必须按租户分区，这是串扰事故最高发的地方；<strong>协作状态</strong>（多 Agent 共享的黑板/键值存储）必须用 <code>tenant/{id}/*</code> 之类的命名空间前缀加访问控制。</p>
+
+<h3>2.1 三种存储布局：Silo、Pool、Bridge</h3>
+
+<p>向量层的隔离布局沿用了 SaaS 的经典三分法，但 trade-off 在 Agent 场景被放大了：纯逻辑隔离（共享实例 + 租户 ID 过滤）最省钱，但一个过滤 bug 或一次 <span class="term">提示词注入（Prompt Injection）</span>——攻击者在输入或检索到的文档中埋入诱导性指令，诱使系统绕过既定规则——就能造成越权；全部物理隔离最安全，但算力闲置、成本失控。成熟的 SaaS 平台最终普遍收敛到 Bridge 混合模式。</p>
+
+<table>
+<tr><th>布局</th><th>做法</th><th>隔离强度</th><th>成本</th><th>适用场景</th></tr>
+<tr><td>Silo 孤岛式</td><td>每租户独立索引/集合、独立密钥、独立运行时</td><td>最强，地址级隔离</td><td>最高，运维量随租户数线性增长</td><td>金融、医疗等强合规租户，数据驻留有硬性要求</td></tr>
+<tr><td>Pool 共享池</td><td>共享索引，仅靠应用层 <code>tenant_id</code> 过滤</td><td>最弱，一个 bug 即全库裸奔</td><td>最低</td><td>仅限低敏感、无企业客户的内部场景</td></tr>
+<tr><td>Bridge 混合</td><td>计算共享，但凭证库与记忆命名空间由基础设施级 ACL 强制；高敏租户给专属资源池</td><td>强（两个最高危维度基础设施兜底）</td><td>可控</td><td>B2B SaaS 的推荐默认值</td></tr>
+</table>
+
+<h3>2.2 前置过滤，而不是后置过滤</h3>
+
+<p>向量检索的权限控制有一个非常隐蔽的细节：过滤必须发生在相似度计算之前（<span class="term">前置过滤（Pre-Filtering）</span>），而不是取回 Top-K 之后再在应用层剔除（<span class="term">后置过滤（Post-Filtering）</span>）。后置过滤的问题不只是"多查了几条"：其一，越权文档已经被数据库读取过，在最小权限原则下这本身就构成一次未授权访问，审计直接不通过；其二，越权文档占掉了 Top-K 名额，租户真正能用的召回变少，回答质量下降；其三，在共享向量空间中，检索过程中不同租户的文档彼此可见，合规敏感的租户无法接受。</p>
+
+<table>
+<tr><th>方案</th><th>强制执行位置</th><th>能否被应用层绕过</th><th>评价</th></tr>
+<tr><td>应用层后置过滤</td><td>业务代码</td><td>能，漏写一行就全漏</td><td>不合格，只配做原型</td></tr>
+<tr><td>向量库元数据前置过滤</td><td>检索引擎（Milvus 分区键 / Qdrant payload filter / Chroma 集合）</td><td>视封装而定，裸客户端仍可传错过滤</td><td>合格，必须配合客户端封装</td></tr>
+<tr><td>数据库行级安全 <span class="term">RLS（行级安全）</span>：数据库引擎强制执行的访问策略，查询无论怎么写都只能返回策略允许的行</td><td>数据库引擎（如 pgvector + PostgreSQL RLS 策略）</td><td>不能，引擎级兜底</td><td>最强，授权不依赖应用代码的正确性</td></tr>
+</table>
+
+<p>存量系统常有的疑虑是：给已有的共享库补行级安全，是否需要停机大迁移？通常不需要。稳妥的路径分三步：先回填 <code>tenant_id</code> 列并建好索引，人工核查少量无主记录；再以"只审计、不拦截"模式启用策略，观察一两周被策略过滤掉的查询量与漏打标的位置；最后切换为拦截模式并按租户灰度放量。每一步都可回滚、都有审计日志佐证。这套"先补齐、再观察、后拦截"的节奏同样适用于向量库的分区改造——永远不要相信一步到位的切换，要相信可观察的渐进切换。</p>
+
+<h3>2.3 封装存储客户端，让"漏过滤"不可能发生</h3>
+
+<p>即便用了前置过滤，只要业务代码能拿到裸的向量客户端，就永远存在"这次忘传过滤条件"的可能。正确做法是把裸客户端设为私有，对外只暴露 <code>retrieve(tenantContext, query)</code> 这样的封装接口，过滤条件在存储客户端层由框架强制注入——租户上下文来自认证后的会话，而不是 Agent 自己声明的参数。一个被注入攻击完全接管的 Agent，在它自己的代码层面怎么挣扎都改不动过滤器，因为注入点位于它够不着的层。</p>
+
+<div class="arch-diagram">
+写入路径                          查询路径
+文档 ─► 分块 ─► 嵌入              用户提问
+       │ 强制打上                     │
+       ▼ tenant_id 元数据             ▼
+┌──────────────────┐        ┌──────────────────┐
+│ 向量库（按租户分区）│        │ 封装检索客户端      │
+│ tenant_A: ns-a   │        │ ① 取认证会话的租户上下文│
+│ tenant_B: ns-b   │◄───────│ ② 强制注入过滤/命名空间│
+│ tenant_C: ns-c   │ 前置过滤│ ③ 缺上下文直接拒绝调用 │
+└──────────────────┘        └──────────────────┘
+   相似度计算只在租户自己的分区内进行
+</div>
+
+<div class="highlight">
+<strong>生产案例 · 企业级 RAG 的身份感知改造：</strong>某服务 5000+ 并发用户、文档量超千万的企业检索系统，早期向量检索完全身份无关，权限检查形同虚设。引入身份感知检索 + 元数据前置过滤 + 来源强制标注后：未授权暴露风险下降 85%~95%；幻觉引用率从 8%~15% 降到 1%~3%；由于过滤更精准、塞进上下文的无关块变少，单次查询的 Token 成本反而下降 20%~35%；代价是鉴权检查让 p95 检索延迟上升 10~40ms，p99 反而趋于稳定。<strong>安全与成本在这里不是对立的——过滤做得越好，浪费的 Token 越少。</strong>
+</div>
+
+<p>还有一个容易被忽视的维度：写入路径的隔离。检索过滤只保证"查得干净"，但如果写入端不打租户标签，后续所有过滤都是空中楼阁——文档落错分区，过滤做得再完美也救不回来。因此写入 API 同样要封装：分块、嵌入、入库的流水线统一从认证会话获取租户 ID 并盖进元数据，缺少该标识的数据直接拒绝入库。读路径与写路径对称强制，隔离才算闭环。</p>
+
+<div class="intuition-box">
+<p>向量相似度不认识身份，检索层就是安全边界——模型最终能用到的，只是检索允许它看到的那部分。把边界画在模型下面是徒劳的，画在检索层才是确定性的。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、链路层：身份强制注入与上下文透传</h2>
+
+<p>存储层立好了边界，接下来的问题是：租户身份从哪里来、怎么传到每一个下游组件？大量事故的根因不是存储层没做隔离，而是身份在传递链路上断了——业务代码手动传参、某次重构漏加过滤、异步任务丢了上下文。链路层的核心原则只有一条：<strong>租户身份必须由网关从验证过的凭证中解出并强制注入，业务代码只有"用"的权利，没有"填"的权利。</strong></p>
+
+<h3>3.1 网关解析 + 全链路透传</h3>
+
+<p>标准链路是：用户携带 JWT 请求 → 网关验签、校验过期 → 从 Payload 中解出 <code>tenant_id</code> 与用户 ID → 注入 <code>X-Tenant-ID</code> 请求头 → 全链路透传给 Agent 运行时、检索服务、工具执行层与审计日志。选择 JWT 的原因是其自包含性：网关无需查库即可验证并解出租户信息，高并发下性能优势明显。这里有个关键设计判断——<strong>这一环是整个隔离体系的锚点</strong>，租户 ID 未注入或注入错误，下游所有隔离措施都会失去依据。</p>
+
+<table>
+<tr><th>租户身份来源</th><th>可信度</th><th>风险</th></tr>
+<tr><td>前端请求参数 / 查询字符串</td><td>不可信</td><td>可被任意伪造，改个参数即越权</td></tr>
+<tr><td>页面 UI 状态 / 本地存储</td><td>不可信</td><td>可被篡改，且与真实身份可能不一致</td></tr>
+<tr><td>网关从签名验证后的 JWT 解出</td><td>可信</td><td>仅需管好密钥与 TTL（见下）</td></tr>
+</table>
+
+<p>身份解出来之后，"怎么传"同样有讲究。下表对比四种常见的透传方案：越往下，断链风险越低，但要求的基础设施封装越强。</p>
+
+<table>
+<tr><th>透传方案</th><th>形式</th><th>断链风险</th><th>适用场景</th></tr>
+<tr><td>业务代码显式传参</td><td>每个调用手动传 <code>tenantId</code></td><td>高——每处调用靠自觉，一次重构即可漏掉</td><td>仅限原型验证</td></tr>
+<tr><td>请求头端到端透传</td><td>网关注入 <code>X-Tenant-ID</code>，下游逐跳读取</td><td>中——异步任务、消息队列容易丢头</td><td>同步请求链路</td></tr>
+<tr><td>请求作用域上下文对象</td><td>入口注入、处处读取的作用域上下文</td><td>低——取不到上下文即拒绝调用</td><td>单进程内推荐默认</td></tr>
+<tr><td>任务载荷显式携带</td><td>异步任务/消息体显式带租户标识，消费侧强制校验</td><td>低——入队时显式声明，出队时强制核对</td><td>异步与跨服务场景</td></tr>
+</table>
+
+<h3>3.2 JWT 的三个隐藏坑</h3>
+
+<p>JWT 用于工具调用的租户上下文传播是正确做法，但标准 JWT 有一个致命短板：<strong>基础规范没有吊销机制</strong>——校验只看签名和过期时间，不看"这个具体令牌是否已被作废"。一把默认一小时有效的令牌若在调试日志中被记录、被错误缓存，泄露后的一小时内都能冒用该租户身份。三条缓解措施需要同时上：工具调用令牌 TTL 压到 5 分钟以内；维护按租户的吊销登记表，每次工具调用前核对令牌 ID；按任务轮换令牌，每个 Agent 任务签发新令牌并绑定任务标识，任务结束后旧令牌即便未过期也不可复用。</p>
+
+<div class="arch-diagram">
+用户请求(带 JWT)
+     │
+     ▼
+┌─────────────┐   验签失败 / 过期 ──► 401 拒绝
+│   API 网关    │
+│  验签 + 解码   │
+└──────┬──────┘
+       │ 解出 tenant_id / user_id
+       │ 注入 X-Tenant-ID（业务代码不可改写）
+       ▼
+┌──────────────────────────────────┐
+│ 租户路由中间件                      │
+│  配额守卫 ─► 限流器 ─► 模型路由      │
+└──────┬───────────────────────────┘
+       ▼                     ▼
+  封装检索客户端          工具执行沙箱
+ （自动带租户过滤）      （自动带租户权限校验）
+</div>
+
+<div class="intuition-box">
+<p>租户 ID 必须来自验证过的身份凭证，而不是任何"可以被填写"的地方。凡是参数能填的地方，攻击者就会去填。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、工具与行为边界：密钥、沙箱与授权</h2>
+
+<p>Agent 与聊天机器人最危险的区别是：它手里有真实的外部行动能力——真实的 API Key、真实的数据写入、真实的网络调用。工具层隔离要做三件事：每个租户只看见自己的工具集与密钥；每次执行都发生在独立沙箱；每次写入或外呼之前都强制校验当前租户的权限。</p>
+
+<h3>4.1 为什么共享一把 API Key 必然出事</h3>
+
+<p>最常见的凭证错误，是全平台共用一把模型或三方服务的 Key，仅靠提示词或请求头里的租户声明来区分。它会以四种方式分别爆雷：限流互踩（A 的突发用量把共享 Key 推到限速上限，B 的请求开始收到 429）；成本不可归属（供应商账单只有一个聚合数字，自建计量只要漏打一个标签就全盘错账）；吊销爆炸半径（Key 泄露需要轮换时，所有租户同时失去服务）；审计混杂（供应商日志里的行为主体是共享 Key，无法向任何一个租户的审计方证明"这些记录都是你的"）。</p>
+
+<table>
+<tr><th>凭证方案</th><th>限流隔离</th><th>成本归属</th><th>吊销影响面</th><th>审计可分</th></tr>
+<tr><td>全租户共享一把 Key</td><td>无，互相拖累</td><td>靠自建打标，易错</td><td>全平台停摆</td><td>不可分</td></tr>
+<tr><td>每租户独立 Key</td><td>有</td><td>天然按 Key 归属</td><td>仅影响该租户</td><td>可分</td></tr>
+<tr><td>凭据库 + 作用域句柄解析</td><td>有</td><td>可分</td><td>仅影响该租户</td><td>可分，且租户上下文来自认证会话，Agent 无法通过修改参数冒领别人的密钥</td></tr>
+</table>
+
+<h3>4.2 控制面与执行面分离：模型输出不是授权</h3>
+
+<p>生产级架构必须把"决定允许什么"与"执行被允许的事"拆成两个平面：<span class="term">控制面（Control Plane）</span>负责认证、鉴权、任务管理与策略引擎；<span class="term">执行面（Execution Plane）</span>是隔离运行时，只负责执行已经通过策略校验的操作。中间最关键的一条原则是——<strong>模型输出是数据，不是授权</strong>。模型生成了 <code>{"tool": "execute_command", "command": "..."}</code>，不代表这次执行被允许了；策略引擎必须在运行时再次校验：该租户是否有这个工具、参数是否在白名单内、目标资源是否属于该租户。工具执行还应进入独立沙箱（容器、microVM 或受限进程），临时文件、网络出口、命令执行都被限制在会话边界内，会话结束即销毁，跨会话的数据残留随之消失。</p>
+
+<p>一个容易忽略的细节是<strong>按租户的工具白名单</strong>：不同租户的订阅等级与风险等级不同，可见的工具集合也应不同——基础租户只开放只读检索类工具，企业租户解锁数据写入，专属租户才允许代码执行或外呼 Webhook。这样即便提示词注入诱导出了恶意工具调用，该工具在这个租户的可见集合里根本不存在，策略引擎会直接拒绝。工具授权应像权限一样管理：默认拒绝、显式授权、定期回收——连续 90 天未被调用的工具授权应当被重新审视。</p>
+
+<div class="arch-diagram">
+控制面（决定允许什么）            执行面（执行被允许的）
+┌──────────────────────┐      ┌──────────────────────┐
+│ Agent API / 认证鉴权   │      │ 租户 A 沙箱（会话级）    │
+│ 策略引擎               │─────►│  临时文件 / 命令 / 网络   │
+│ 工具白名单（按租户）     │ 校验  ├──────────────────────┤
+│ 审计日志（按租户分区）   │ 通过  │ 租户 B 沙箱（会话级）    │
+└──────────────────────┘      │  互不可见，会话结束即销毁  │
+  模型选了工具 ≠ 允许执行        └──────────────────────┘
+</div>
+
+<p>会话级沙箱的最小约束集至少应覆盖以下几项，缺任何一项都会让沙箱形同虚设：</p>
+<ul>
+<li><strong>文件系统</strong>：独立临时目录、会话结束即销毁，禁止挂载任何跨租户共享卷；</li>
+<li><strong>网络出口</strong>：白名单制，只允许访问该租户预先授权的域名与服务地址，默认拒绝；</li>
+<li><strong>环境变量与密钥</strong>：只注入当前租户作用域内的凭证，平台级主密钥永远不进沙箱；</li>
+<li><strong>资源上限</strong>：CPU、内存、执行时长逐项设限，防止单个任务耗尽宿主算力；</li>
+<li><strong>生命周期</strong>：会话结束即销毁是唯一退出路径，不存在跨会话保留状态的通道。</li>
+</ul>
+
+<div class="highlight">
+<strong>生产案例 · 共享凭证与共享限流的连环爆雷：</strong>某 AI 文档分析平台三个月内从 5 个试用客户涨到 80 多个付费企业，但所有服务共用同一把模型 API Key、同一个限流器、同一个 Redis 上下文池。某个周五下午，一家客户通过 API 批量提交 2 万份合同，瞬间触发 15000 次并发 LLM 调用：所有并发槽位被占满，其余 79 家客户全部超时；Redis CPU 冲到 98%，上下文缓存大面积驱逐，所有人反复命中冷缓存；一家正在做线上 Demo 的客户当场翻车；更糟的是所有租户共享同一个 Token 计费桶，一天烧掉 3000 美金额度，全部混进同一张月账单。复盘结论只有一句——<strong>没有租户隔离；</strong>整改后按租户维度重建配额守卫、限流器与计费桶，此类"一家打爆全家"的事故归零。
+</div>
+
+<div class="intuition-box">
+<p>模型选择了工具，不等于系统允许执行工具。授权必须由确定性的策略引擎给出，而不是由概率性的模型输出隐含。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、配额与噪声邻居：限流、熔断与分级</h2>
+
+<p>上一节的事故里，真正压垮平台的不是数据泄露，而是资源公平性失守。模型推理和向量检索都是昂贵且有限的资源，不做配额管理，任何一个租户的突发流量都能耗光全局算力。配额隔离（"体力分配"）要覆盖四个维度：每分钟请求数（RPM）、每分钟 Token 数（TPM）、并发槽位、以及按周期的 Token 预算——<strong>供应商的 RPM/TPM 保护的是 API Key，而租户级配额保护的是客户彼此</strong>，两者是独立的两层，缺一不可。</p>
+
+<h3>5.1 网关里的三道闸</h3>
+
+<p>配额守卫通常落在租户路由中间件里，依次是三道闸：其一，分布式限流——多实例网关各自内存计数必然失真（实例 A 放行 100、实例 B 放行 80，总和早已超标），标准做法是 Redis 滑动窗口，用 Lua 脚本把"清理过期记录 → 写入新记录 → 统计窗口数量"合成一次原子操作，避免高并发下的竞态计数偏差；其二，熔断控制——大模型幻觉可能让 Agent 陷入循环，按步数检测异常循环并及时切断，把单租户故障控制在最小范围；其三，模型路由——按租户配置决定请求走哪个模型与哪个供应商。</p>
+
+<table>
+<tr><th>配额手段</th><th>保护对象</th><th>实现要点</th><th>失守后果</th></tr>
+<tr><td>租户级 RPM / TPM 限流</td><td>模型 API 吞吐</td><td>Redis 滑动窗口 + Lua 原子计数</td><td>单租户刷爆限速，全员 429</td></tr>
+<tr><td>并发槽位上限</td><td>推理与检索算力</td><td>按租户发令牌，超额排队或拒绝</td><td>批量任务占满槽位，全员超时</td></tr>
+<tr><td>周期 Token 预算</td><td>成本</td><td>每次调用前核对余额，超限降级</td><td>一天烧光月预算，账单无法归属</td></tr>
+<tr><td>步数熔断</td><td>Agent 循环失控</td><td>循环检测 + 超阈值中断转人工审批</td><td>死循环无限烧钱</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例 · 限流前后的两组数字：</strong>某 Agent 平台最初只有全局限流器。一家大客户启动营销活动后，日调用量从 8 万涨到 90 万，共享配额被全部吃光——200 多家中小客户的 p95 延迟从 2.1 秒涨到 18 秒，429 错误率峰值达 37%，当月 SLA 达标率从 99.95% 跌到 91%。落地租户级配额（RPM / TPM / 并发槽位三层 + 月度 Token 预算，大客户保留弹性档位）之后，大客户吞吐提升 3 倍的同时，中小客户 p95 回落到 2.4 秒，全平台 429 率降到 0.4%，当月因噪声邻居流失的客户数为零。<strong>全局限流保护的是系统，租户级限流保护的是客户——两者不是一回事。</strong>
+</div>
+
+<h3>5.2 分级策略：把成本花在刀刃上</h3>
+
+<p>绝对的物理隔离意味着算力闲置与成本失控，纯逻辑隔离又撑不住高敏租户，工程上的解法是分级（Tiering）：按服务等级把租户分组，不同等级匹配不同的隔离强度与模型配置。AWS Bedrock AgentCore 的多租户参考实现给出了典型的三级结构——Tier（服务等级）→ Tenant（租户）→ User（用户），在知识库文档、记忆、模型访问、成本追踪上逐层强制隔离。普通租户走共享池 + 强逻辑隔离，用便宜的小模型；高级租户用推理能力更强的大模型并解锁更多工具；高敏租户给专属资源池或独立运行时。隔离策略从"一刀切"变成"按风险定价"。</p>
+
+<table>
+<tr><th>等级</th><th>隔离模式</th><th>模型配置</th><th>典型租户</th></tr>
+<tr><td>基础版</td><td>共享池 + 基础设施级命名空间 / 过滤强制</td><td>小模型，低成本</td><td>小型机构，简单检索问答</td></tr>
+<tr><td>专业版</td><td>共享计算 + 独立凭证作用域与记忆命名空间</td><td>大模型 + 更多工具授权</td><td>中大型企业，复杂分析</td></tr>
+<tr><td>专属版</td><td>Silo：专属运行时 / 资源池 / 独立索引</td><td>可按租户选模型或微调</td><td>金融、医疗等强合规租户</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>配额是租户之间的"体力分配"——不设上限的共享资源池，等于把任意一个租户的突发流量预设为全平台的事故。而分级策略的精髓是：在安全、成本与体验的三角里，按租户的风险等级定价，而不是追求一刀切的绝对安全。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、缓存层与上线排雷清单</h2>
+
+<p>缓存是最容易被隔离设计遗忘的角落，也是事故最"安静"的角落。语义缓存为了省模型调用成本，会对相似度极高的查询直接返回历史答案——如果缓存 Key 只有查询文本，那么租户 A 生成的答案会在某个语义相近的时刻端给租户 B，全程无任何报错。两条铁律：<strong>所有缓存 Key 必须包含租户/用户 ID，按用户维度管理生命周期</strong>；更进一步，Key 里还应包含用户有效权限范围的哈希——否则"检索和权限都对，唯独缓存把不该给的答案给了人"。敏感内容干脆不缓存，或设置极短的过期时间。语义缓存可分两级：租户私有缓存做默认策略（相似度超过阈值如 0.98 直接返回历史结果，保证敏感数据绝对不出租户），全局公共缓存只收录无敏感性的公共知识。</p>
+
+<div class="highlight">
+<strong>生产案例 · 上线四个月后的一次"眼熟"：</strong>某 SaaS 平台稳定运行四个月后，一名支持工程师在租户 A 的账号里跑测试查询，看到一段"似曾相识但不属于 A"的内容——它来自租户 B。排查发现：共享向量索引上的一次检索没有带租户过滤，模型照单全收，而系统把隔离当成了提示词里的一句叮嘱，没有任何报警被触发。整改措施包括：租户 ID 从认证凭证派生并在边缘绑定、封装检索客户端使"无租户上下文的查询"在接口层面不可能发出、为每个租户埋入独一无二的哨兵文档做对抗性回归（证明它永远不会出现在别人的检索、回答、日志与导出中）。整改后的混沌测试中，跨租户泄露事件减少约 70%，而哨兵文档测试成为每次发版前的固定动作。
+</div>
+
+<p>缓存隔离还有第二个隐蔽陷阱：<strong>权限漂移</strong>。用户的权限集合会变化（调岗、项目结束），若缓存 Key 只含租户 ID 而不含权限快照，旧缓存可能端出用户曾经有权、如今已无权的数据。因此 Key 中要纳入权限哈希：生成缓存时把当前有效权限集的哈希一并写入，读取时先算当前权限哈希再比对，不一致即视为未命中。这个设计等于让"权限变更"自动作废所有相关缓存，代价是命中率略有下降，换来的是过期数据永远不会被端出。</p>
+
+<h3>6.1 上线排雷清单</h3>
+
+<table>
+<tr><th>雷点</th><th>错误姿势</th><th>正确姿势</th></tr>
+<tr><td>全局变量 / 单例存会话状态</td><td>模块级变量缓存当前租户上下文</td><td>状态只存在于请求作用域，进程内不落全局</td></tr>
+<tr><td>流式输出共用上下文</td><td>多个会话共享一个流式缓冲</td><td>每个流式响应独立持有自己的上下文实例</td></tr>
+<tr><td>长驻进程跨租户复用</td><td>处理完 A 直接接 B</td><td>每请求新实例，或两次请求之间彻底清空工作记忆</td></tr>
+<tr><td>长期记忆无限膨胀</td><td>原始对话全量入库</td><td>定期摘要压缩，摘要同样按租户分区</td></tr>
+<tr><td>敏感内容进缓存</td><td>统一长 TTL</td><td>不缓存或极短 TTL，Key 带租户 + 权限哈希</td></tr>
+<tr><td>审计日志混写</td><td>全平台一条流水</td><td>按租户分区存储，支持单租户独立导出</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>租户 ID 从验证过的 JWT 解出，网关注入、全链路透传</li>
+<li>封装存储客户端，无租户上下文的调用直接拒绝</li>
+<li>向量检索前置过滤，强合规场景上数据库行级安全</li>
+<li>每租户独立凭证作用域，密钥句柄解析绑定认证会话</li>
+<li>工具执行前过策略引擎，执行进会话级沙箱</li>
+<li>租户级限流 + 预算 + 熔断，与供应商限速分两层</li>
+<li>用哨兵文档做对抗性回归，每次发版验证不串租户</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在系统提示词里写"请只回答当前租户的问题"</li>
+<li>相信前端传来的 <code>tenant_id</code> 参数</li>
+<li>业务代码手写过滤条件，靠开发者自觉</li>
+<li>先召回全量再应用层剔除的后置过滤</li>
+<li>全租户共享一把模型 API Key</li>
+<li>模型说"可以执行"就真的直接执行</li>
+<li>为了绝对安全给所有租户上物理隔离，成本失控</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>隔离不能靠开发者自觉——凡是需要"记得加过滤条件"的地方，迟早会在某个周五下午被忘掉。让错误的调用在接口层面发不出去，比写一百遍代码规范都管用。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+<details>
+<summary>每条查询都加了 WHERE tenant_id = ?，为什么还是可能泄露？</summary>
+<div class="answer">因为应用层过滤的正确性依赖"每一处调用都记得加、都加对"，而这个前提在真实代码库里守不住：一次重构漏掉一处、一个异步任务丢了上下文、一次提示词注入诱导模型构造出绕过过滤的查询参数，都会造成越权。可靠的方案是把强制执行点下移：优先用数据库行级安全（引擎级策略，查询怎么写都只能返回允许的行），其次是封装存储客户端，在客户端层由框架强制注入租户过滤，并对缺少租户上下文的调用直接拒绝。判断标准很简单——"漏过滤"应该是接口层面不可能发生的事，而不是团队约定。</div>
+</details>
+<details>
+<summary>Silo、Pool、Bridge 三种隔离布局怎么选？</summary>
+<div class="answer">看租户的敏感度与付费等级，而不是追求一刀切。Pool（共享索引 + 应用层过滤）成本最低但最脆弱，一个过滤 bug 即跨租户泄露，只适合低敏感、无企业客户的场景；Silo（每租户独立索引、密钥与运行时）隔离最强、合规审计最简单，但运维量随租户数线性增长，只给金融、医疗等强合规租户；Bridge 是 B2B SaaS 的推荐默认值——计算资源共享控制成本，但凭证库作用域和记忆命名空间由基础设施级访问控制强制隔离，把两个最高危的维度用基础设施兜底。成熟平台通常再叠加分级策略，让隔离强度随服务等级浮动。</div>
+</details>
+<details>
+<summary>为什么向量检索必须前置过滤，不能先召回再剔除？</summary>
+<div class="answer">三个原因。第一，后置过滤意味着越权文档已经被数据库读取过，即使最终没展示给用户，在最小权限原则下这本身就是一次未授权访问，合规审计不通过。第二，越权文档会占用 Top-K 名额，导致租户真正有权看到的文档被挤出召回结果，回答质量下降。第三，共享向量空间里检索过程中不同租户的文档彼此可见，对合规敏感租户不可接受。前置过滤把过滤放在相似度计算之前，保证"取到的 Top-K 就是你有权看到的 Top-K"；实测代价只是鉴权检查带来约 10~40ms 的 p95 延迟，换来的是暴露风险下降 85% 以上。</div>
+</details>
+<details>
+<summary>为什么租户身份必须由网关注入，不能让前端传？</summary>
+<div class="answer">因为前端传来的任何东西都是"可以被填写"的：查询参数、请求体字段、本地存储，攻击者改一个值就能冒领另一个租户的身份。正确链路是网关验证 JWT 签名与有效期，从 Payload 中解出 tenant_id 与用户 ID，再以请求头形式注入并全链路透传，业务代码只有读取权没有修改权。这一环是整个隔离体系的锚点——身份注入一旦失效或注错，下游的存储过滤、工具鉴权、配额统计全部失去依据。同理，检索用的权限过滤条件也必须从服务端验证后的凭证派生，绝不能信任客户端声明的权限。</div>
+</details>
+<details>
+<summary>提示词注入和多租户隔离到底是什么关系？</summary>
+<div class="answer">提示词注入是多租户体系里"应用层隔离"的专门杀手。如果租户边界依赖应用代码里的过滤参数或提示词叮嘱，攻击者就可以在输入或被检索进上下文的文档里埋入诱导指令，诱使 Agent 省略过滤、改写参数或调用越权工具——隔离防线从"被 bug 攻破"变成"被主动说服"。对策是让注入攻击"说服不了"任何人：过滤条件在存储客户端层由框架注入，Agent 代码够不着；工具执行前必须过独立策略引擎，模型输出只算数据不算授权；工具按租户白名单收敛，最小权限；再配合输出校验与审计。架构层面的确定性强制，是对抗概率性模型被操纵的唯一可靠方式。</div>
+</details>
+<details>
+<summary>多个租户共享同一个模型推理服务，上下文会不会串？</summary>
+<div class="answer">模型本身是无状态的——它不会"记得"上一个请求，所谓串扰不发生在模型权重里，而发生在给模型组装上下文的地方：共享的工作记忆、未按租户分区的向量库、漏了租户前缀的缓存、跨请求复用的长驻进程状态。只要保证每个请求的上下文组装过程只从当前租户的分区取数（检索、缓存、会话历史全部带租户边界），并且每个请求使用独立或彻底清空的运行时状态，共享模型服务就是安全的。反过来说，如果上下文组装有任何一处身份无关，共享不共享模型都会串——所以修复方向永远是取数链路，而不是给模型加隔离。</div>
+</details>
+<details>
+<summary>预算有限、只能先做几层，优先级怎么排？</summary>
+<div class="answer">按"泄露的不可逆程度"排序。第一优先是存储层：向量库按租户分区或上数据库行级安全，封装检索客户端——记忆一旦串了，污染是持久且难以溯源的。第二是链路层的身份强制注入，因为它是其他所有层的锚点，身份传错了下游全错。第三是工具与凭证隔离，每租户独立密钥作用域加执行前策略校验——这是唯一能造成"代表租户对外行动"的越权。第四是配额与限流，防的是可用性事故而非数据泄露，可以随规模增长逐步收紧。缓存隔离建议与存储层同步做，因为语义缓存的串号极其安静，等被发现时往往已经持续了数月。</div>
+</details>
+<details>
+<summary>记忆按租户隔离之后，跨租户的联合检索与公共知识是不是完全不能做了？</summary>
+<div class="answer">可以共存，关键是分层。租户私有记忆严格不出租户；跨租户的需求放到"公共知识层"——平台帮助文档、行业百科类内容、脱敏后的聚合统计。公共知识的写权限只归平台方，租户只读不写，避免任何一个租户通过注入污染全局知识库。确需跨租户统计分析时，采用"计算不动数据"的方式：查询引擎进入各租户分区做计算，只输出聚合数字，原始数据不出租户。判断原则一句话：原始记忆绝对不出域，聚合知识脱敏后可出域。</div>
+</details>
+<details>
+<summary>怎么证明隔离真的有效？除了等事故，有没有主动的测试手段？</summary>
+<div class="answer">有，而且应该做成发布流程的一部分。第一层是哨兵文档回归：为每个租户埋入内容独立、编号唯一的哨兵文档，每次发版前与定期巡检时断言它绝不出现在任何其他租户的检索结果、模型回答、日志或导出中。第二层是混沌注入：在测试环境故意构造三类请求——语义相似探测（用租户 B 的口吻问与 A 相关的内容）、参数篡改（伪造 tenant_id）、提示词注入（诱导 Agent 省略过滤），确认系统全部拒绝。第三层是审计抽查：每周随机抽取若干请求，人工核对网关、检索、工具、计费四类日志中的租户 ID 是否端到端一致。三层合起来构成"攻、防、溯"的验证闭环，可量化的指标是哨兵测试零泄露记录的保持天数与被拦截的跨租户访问尝试趋势。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

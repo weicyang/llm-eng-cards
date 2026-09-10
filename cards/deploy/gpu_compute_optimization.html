@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP19 · GPU 算力瓶颈与优化</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、GPU 为什么在"摸鱼"：利用率低的三大原因</a>
+<a href="#s2">二、算力与带宽：屋顶线下的 GPU</a>
+<a href="#s3">三、全功能 GPU：一张卡吃下全精度</a>
+<a href="#s4">四、MUSA 架构：动态调度避免忙闲不均</a>
+<a href="#s5">五、万卡协同：超节点与集合通信</a>
+<a href="#s6">六、榨干算力的工程清单</a>
+<a href="#s7">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>DP19 · GPU 算力瓶颈与优化</h1>
+<p class="subtitle">GPU 利用率低 → 全功能GPU → MUSA 架构 → 计算核心共享电路 → 动态调度 → 万卡协同</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>榨干 GPU 算力的全部故事围绕两个字——"别等"：别让核心等数据（访存优化），别让数据等核心（算子融合与流水线），别让卡等卡（集合通信与超节点）。硬件、架构、系统三层协同，才能把标称算力变成真实吞吐。</p>
+</div>
+
+<!-- ========== 1. GPU 为什么在摸鱼 ========== -->
+<div class="section">
+<h2 id="s1">一、GPU 为什么在"摸鱼"：利用率低的三大原因</h2>
+
+<p>GPU 内部有成千上万个计算核心，纸面算力动辄几百上千 TFLOPS，但实际跑大模型时，这些核心大部分时间都在"摸鱼"。统计下来，真正用于有效计算的时间往往不足六成。核心们的时间主要浪费在三种等待上：</p>
+
+<table>
+<tr><th>等待类型</th><th>等什么</th><th>根因</th><th>对应优化手段</th></tr>
+<tr><td>等数据</td><td>等内存把权重/激活搬进计算单元</td><td>算力增速远快于显存带宽增速（访存墙）</td><td>算子融合、量化、增大 batch</td></tr>
+<tr><td>等指令</td><td>等任务分发和调度</td><td>小算子太多、调度开销占比高</td><td>算子融合、CUDA Graph、编译优化</td></tr>
+<tr><td>等同步</td><td>等其他核心/其他卡完成</td><td>负载不均、梯度同步、流水气泡</td><td>动态调度、通信重叠、负载均衡</td></tr>
+</table>
+
+<p>业界用 <span class="term">MFU（Model FLOPs Utilization，模型算力利用率）</span>来量化这件事：实际有效算力 ÷ 硬件理论峰值算力。大规模训练场景下，MFU 普遍只有 30%~50%——也就是说，花几千万买的卡，一半时间在空转。提升 MFU 的每一个百分点，都是真金白银。</p>
+
+<div class="intuition-box">
+<p>GPU 像一座有上万名工人的超级工厂：原料（数据）运不进来、工单（指令）发不下去、完工还要等全员集合点名（同步），真正开工的时间不到六成——优化的本质就是消灭这三种等待。</p>
+</div>
+
+</div>
+
+<!-- ========== 2. 算力与带宽 ========== -->
+<div class="section">
+<h2 id="s2">二、算力与带宽：屋顶线下的 GPU</h2>
+
+<p>三种等待里最致命的是"等数据"，因为它由物理规律决定：过去十年 GPU 算力增长了近百倍，而<span class="term">HBM（高带宽显存）</span>的带宽只增长了十几倍，两者之间的剪刀差就是<span class="term">访存墙（Memory Wall）</span>。判断一个算子是否被访存墙卡住，工程上常用<span class="term">屋顶线模型（Roofline Model）</span>：横轴是<span class="term">算术强度（Arithmetic Intensity）</span>——每从内存搬运 1 字节数据能做多少次浮点运算（FLOPs/Byte），纵轴是实际可达算力。</p>
+
+<div class="arch-diagram">
+  实际算力
+  (TFLOPS)
+     ▲
+     │              ┌──────────────────  ← 算力天花板
+     │             ╱                       (H100: 989 TFLOPS FP16)
+     │            ╱
+     │           ╱  ← 带宽斜坡
+     │          ╱     (3.35 TB/s × 算术强度)
+     │         ╱
+     │        ╱
+     └───────┴─────────────────────────→ 算术强度 (FLOPs/Byte)
+           拐点 ≈ 295
+
+     拐点左侧: 访存受限 —— 算力再猛也在等数据
+       (decode 注意力 / LayerNorm / 激活函数)
+     拐点右侧: 计算受限 —— 带宽够用, 拼的是算力
+       (大 batch 矩阵乘 / 训练前向)
+</div>
+
+<p>以 NVIDIA H100 SXM 为例：FP16/BF16 算力 989 TFLOPS，HBM3 带宽 3.35 TB/s，拐点约在 295 FLOPs/Byte——算术强度低于 295 的算子，带宽就是天花板，堆算力毫无意义。</p>
+
+<table>
+<tr><th>指标</th><th>A100 80GB SXM</th><th>H100 SXM</th><th>倍数</th></tr>
+<tr><td>FP16/BF16 Tensor 算力（稠密）</td><td>312 TFLOPS</td><td>989 TFLOPS</td><td>≈ 3.2×</td></tr>
+<tr><td>显存带宽</td><td>2.0 TB/s (HBM2e)</td><td>3.35 TB/s (HBM3)</td><td>≈ 1.7×</td></tr>
+<tr><td>Roofline 拐点</td><td>≈ 156 FLOPs/Byte</td><td>≈ 295 FLOPs/Byte</td><td>访存压力更大</td></tr>
+<tr><td>卡间互联</td><td>NVLink 600 GB/s</td><td>NVLink 900 GB/s</td><td>1.5×</td></tr>
+</table>
+
+<table>
+<tr><th>算子/阶段</th><th>算术强度</th><th>瓶颈类型</th><th>优化方向</th></tr>
+<tr><td>大 batch 矩阵乘（训练）</td><td>高（数百~上千）</td><td>计算受限</td><td>用满 Tensor Core、混合精度</td></tr>
+<tr><td>注意力 Q·Kᵀ（长序列）</td><td>中等</td><td>视实现而定</td><td>FlashAttention 分块融合</td></tr>
+<tr><td>Decode 阶段逐 token 生成</td><td>极低（batch=1 时约 1~2）</td><td>访存受限</td><td>增大 batch、量化、KV Cache 优化</td></tr>
+<tr><td>LayerNorm / 激活函数</td><td>极低（&lt;1）</td><td>访存受限</td><td>与相邻算子融合</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>屋顶线模型是一把尺子：算术强度低于拐点，再猛的算力也是摆设，瓶颈在"运数据"；高于拐点，才轮到算力说话。优化前先量一量，方向错了努力全白费。</p>
+</div>
+
+</div>
+
+<!-- ========== 3. 全功能 GPU ========== -->
+<div class="section">
+<h2 id="s3">三、全功能 GPU：一张卡吃下全精度</h2>
+
+<p>不同任务对数值精度的需求天差地别：科学计算要 FP64 的双精度，AI 训练用 TF32/BF16 就够，推理甚至可以压到 INT8/INT4，而图形渲染又离不开 FP32。传统做法是不同场景买不同的卡，数据中心里塞满异构硬件，利用率可想而知。<span class="term">全功能 GPU</span>（以摩尔线程为代表）的思路是：用<span class="term">共享电路设计</span>让同一套计算核心支持全精度场景——同一块硅片，既能跑 FP64 科学计算，也能跑 BF16 训练和 INT8 推理，还能做 FP32 渲染。</p>
+
+<table>
+<tr><th>精度</th><th>典型场景</th><th>为什么用这个精度</th></tr>
+<tr><td>FP64</td><td>科学计算（物理仿真、气象）</td><td>误差累积敏感，必须双精度</td></tr>
+<tr><td>TF32 / BF16</td><td>AI 训练</td><td>梯度对数值范围敏感，BF16 指数位与 FP32 相同，训练稳定且省一半带宽</td></tr>
+<tr><td>INT8 / INT4</td><td>AI 推理</td><td>权重已收敛，低精度量化几乎不掉点，吞吐翻倍</td></tr>
+<tr><td>FP32</td><td>图形渲染</td><td>光照、几何计算的标准精度</td></tr>
+</table>
+
+<table>
+<tr><th>数据格式</th><th>位宽</th><th>指数/尾数位</th><th>特点</th></tr>
+<tr><td>FP32</td><td>32 bit</td><td>8 / 23</td><td>通用基准，显存占用大</td></tr>
+<tr><td>TF32</td><td>19 bit</td><td>8 / 10</td><td>NVIDIA 训练加速格式，范围同 FP32</td></tr>
+<tr><td>BF16</td><td>16 bit</td><td>8 / 7</td><td>范围大、精度低，训练首选</td></tr>
+<tr><td>FP16</td><td>16 bit</td><td>5 / 10</td><td>精度高、范围小，易溢出需 loss scaling</td></tr>
+<tr><td>INT8</td><td>8 bit</td><td>—</td><td>推理量化主力，带宽占用降为 1/4</td></tr>
+</table>
+
+<p>共享电路的工程价值在于"一卡多用"：白天跑训练，晚上跑推理，周末还能接渲染农场——硬件利用率从"专用卡只能干一件事"变成"全场景通吃"。对预算有限的数据中心，这比峰值算力数字更实际。</p>
+
+<div class="intuition-box">
+<p>全功能 GPU 像一口"万能灶"：同一套灶具，大火（FP64）炖科学计算，中火（BF16）炒 AI 训练，小火（INT8）煎推理——不用为每道菜单独买灶，厨房利用率自然上去了。</p>
+</div>
+
+</div>
+
+<!-- ========== 4. MUSA 架构 ========== -->
+<div class="section">
+<h2 id="s4">四、MUSA 架构：动态调度避免忙闲不均</h2>
+
+<p>有了全精度的计算核心，还差一个聪明的"调度员"。传统 GPU 调度比较僵硬：任务按提交顺序排队，资源按固定规则分配，经常出现"一边核心在排队等任务，一边核心在空转"的忙闲不均。<span class="term">MUSA（Moore Threads Unified System Architecture）</span>是摩尔线程的统一系统架构，核心能力是<strong>动态调度</strong>：根据任务的实时需求，把计算核心、内存控制器、通信单元灵活分配给最需要的任务，让硬件资源始终流向最忙的地方。</p>
+
+<div class="arch-diagram">
+  静态调度 (传统方式):
+  任务A ████████░░░░░░░░   ← 占着资源但后期空闲
+  任务B ░░░░░░░░████████   ← 前期只能干等
+  核心1 [A][A][空][空]     ← 忙闲不均, 利用率低
+
+  MUSA 动态调度:
+  任务A ████████
+  任务B ░░████████████
+  核心1 [A][A][B][B]       ← 实时重分配, 无缝衔接
+  核心2 [B][A][B][B]       ← 谁忙给谁, 全程无空转
+</div>
+
+<table>
+<tr><th>对比项</th><th>静态调度</th><th>动态调度（MUSA）</th></tr>
+<tr><td>资源分配</td><td>提交时固定，运行中不变</td><td>按实时负载动态调整</td></tr>
+<tr><td>忙闲不均</td><td>常见，空闲核心无法被借用</td><td>空闲资源实时补给繁忙任务</td></tr>
+<tr><td>多任务混跑</td><td>互相干扰，性能抖动</td><td>隔离 + 弹性分配，干扰可控</td></tr>
+<tr><td>生态兼容</td><td>—</td><td>提供 musify 等工具转换 CUDA 代码，降低迁移成本</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>动态调度像智能红绿灯：哪条车道车多就把绿灯时间给谁，而不是每个方向固定 30 秒——路口通行效率（硬件利用率）靠的是"看见流量"，而不是"遵守规则"。</p>
+</div>
+
+</div>
+
+<!-- ========== 5. 万卡协同 ========== -->
+<div class="section">
+<h2 id="s5">五、万卡协同：超节点与集合通信</h2>
+
+<p>单卡算力再强也有上限，训练千亿级大模型必须上万张卡。卡一多，问题就从"算得快"变成"配合得好"：跨卡通信延迟、梯度数据一致性、故障恢复，任何一环掉链子，几千张卡就得停下来陪跑。万卡协同的核心技术栈包括：</p>
+
+<table>
+<tr><th>技术</th><th>作用</th><th>关键手段</th></tr>
+<tr><td>超节点架构</td><td>把多张卡组成一个内部高速互联的节点</td><td>节点内 NVLink/光模块直连，节点间组带宽网络</td></tr>
+<tr><td>HCCL 集合通信</td><td>高效完成卡间数据交换</td><td>NPU Direct 绕开 CPU 直接传输，降低通信延迟</td></tr>
+<tr><td>数据并行</td><td>扩大吞吐</td><td>各节点处理不同数据批次，AllReduce 同步梯度</td></tr>
+<tr><td>张量并行</td><td>切开单层大矩阵</td><td>节点内切分权重，高频通信走节点内链路</td></tr>
+<tr><td>流水线并行</td><td>按层切分模型</td><td>微批次流水接力，压缩气泡空转</td></tr>
+</table>
+
+<div class="arch-diagram">
+  ┌─ 超节点 A (节点内高速互联) ────────────┐
+  │  GPU₀ ── GPU₁ ── GPU₂ ── … ── GPUₙ   │
+  │   └─────── NVLink / 光模块直连 ────────┘│
+  └──────────────────┬────────────────────┘
+                     │ 节点间网络 (RDMA / RoCE)
+  ┌──────────────────┼────────────────────┐
+  │  超节点A ⇄ 超节点B ⇄ 超节点C ⇄ …       │
+  │                                          │
+  │  数据并行: 各节点算不同数据批次            │
+  │  张量并行: 节点内切矩阵 (通信不出节点)     │
+  │  流水线并行: 节点间按层接力                │
+  │  每步结束: AllReduce 全员对表同步梯度      │
+  └──────────────────────────────────────────┘
+</div>
+
+<p>这里的关键设计原则是<strong>通信分级</strong>：通信频率最高的张量并行被严格限制在节点内部（走 NVLink 这类每秒数百 GB 的链路），通信量大的数据并行梯度同步走节点间网络，并用计算-通信重叠把同步时间藏在计算背后。万卡训练的本质，就是把每一种通信都安排到它该去的链路上。</p>
+
+<div class="intuition-box">
+<p>万卡训练是一场万人接力赛：超节点是同一间更衣室的队友（内部传接快），节点间靠光模块"高速公路"递棒，AllReduce 是每轮结束后的全员对表——棒掉一次，全场都得等。</p>
+</div>
+
+</div>
+
+<!-- ========== 6. 榨干算力的工程清单 ========== -->
+<div class="section">
+<h2 id="s6">六、榨干算力的工程清单</h2>
+
+<p>把前五节的认知落到工程上，优化决策可以浓缩成三个问题：</p>
+
+<div class="arch-diagram">
+  性能不达标？先问三个问题:
+
+  ① 算术强度够吗？
+     不够 → 访存受限
+            → 算子融合 / FlashAttention / 量化 INT8
+  ② 精度可以降吗？
+     可以 → 训练换 BF16 混合精度 / 推理上 INT8-INT4
+            → 带宽占用减半起步, 吞吐近翻倍
+  ③ 卡在等卡吗？
+     是   → 通信与计算重叠 / 超节点内高频通信
+            → 梯度累积减少同步次数 / 负载均衡
+</div>
+
+<table>
+<tr><th>层面</th><th>技术</th><th>收益量级</th></tr>
+<tr><td>算子层</td><td>算子融合 / FlashAttention</td><td>注意力 2~4 倍加速</td></tr>
+<tr><td>精度层</td><td>BF16 混合精度训练 / INT8 推理</td><td>带宽占用减半~四分之一</td></tr>
+<tr><td>显存层</td><td>KV Cache + PagedAttention</td><td>推理吞吐 2~4 倍</td></tr>
+<tr><td>通信层</td><td>计算-通信重叠、梯度累积</td><td>同步开销大幅隐藏</td></tr>
+<tr><td>系统层</td><td>超节点 + 动态调度</td><td>MFU 从 30% 级提升到 50% 级</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例 · FlashAttention 把注意力从"访存大户"变成"算力标兵"：</strong>背景是标准注意力实现要把 n×n 的注意力矩阵反复写回 HBM——序列长度 4096 时，单头单层就是 1600 万个元素来回搬运。问题是注意力因此成为典型的访存受限算子，GPU 算力利用率长期不到 30%，训练时间被"搬数据"吃掉大半。方案是 FlashAttention：把 Q·Kᵀ、softmax、加权 V 三步融合为一个算子，用分块 + 在线 softmax 技巧让所有中间结果留在片上 SRAM，永不写回 HBM。效果：FlashAttention-2 在 A100 上达到理论算力峰值的约 70%，相比标准实现端到端训练提速 15% 以上，如今已是 PyTorch 和所有主流大模型框架的默认实现——一个算子层面的改动，撬动了整个行业的训练成本。
+</div>
+
+<div class="highlight">
+<strong>生产案例 · vLLM 用"虚拟内存"思路救活推理吞吐：</strong>背景是在线推理服务中，KV Cache 必须为每个请求按最大上下文长度预分配显存——一个 70B 模型 2048 长度的 KV Cache 约 5GB，32 并发就是 160GB 起步。问题是请求实际用不满预分配的空间，实测浪费高达 60%~80%，显存被"占座"导致并发上不去，吞吐被死死卡住。方案是 vLLM 的 PagedAttention：借鉴操作系统虚拟内存，把 KV Cache 切成固定大小的"页"按需分配，请求结束立即回收。效果：显存浪费降到 4% 以内，同等硬件下吞吐提升 2~4 倍，vLLM 由此成为开源推理引擎的事实标准——又是"别等、别浪费"这条主线的胜利。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>优化前先用屋顶线模型判断瓶颈在算力还是带宽，再选手段</li>
+<li>训练默认开 BF16 混合精度，推理能上 INT8 就上 INT8</li>
+<li>推理服务用 PagedAttention 类方案管理 KV Cache，别让显存被占座</li>
+<li>万卡训练把高频通信（张量并行）锁在节点内，梯度同步与计算重叠</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要看到"算力 989 TFLOPS"就以为能跑满——decode 阶段可能连 5% 都用不上</li>
+<li>不要对访存受限算子堆算力，那是给堵车的路修停车场</li>
+<li>不要忽略 MFU：30% 和 50% 的差距，就是几千万硬件投资打水漂的比例</li>
+<li>不要在节点间跑张量并行——层内通信频率极高，跨节点延迟会拖垮全局</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>GPU 优化有严格的顺序：先判断瓶颈（屋顶线），再降精度（BF16/INT8），然后融合算子（FlashAttention），最后治通信（超节点/重叠）——顺序反了，就是用战术上的勤奋掩盖战略上的懒惰。</p>
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s7">Q&A</h2>
+
+<details>
+<summary>GPU 利用率为什么低？如何提升？</summary>
+<div class="answer">GPU 利用率低的核心原因是计算核心大量时间在等待而非计算，主要有三类：等数据（内存带宽跟不上算力，即访存墙）、等指令（小算子太多、调度开销大）、等同步（负载不均、梯度同步、流水气泡）。实际训练中 MFU 普遍只有 30%~50%。提升手段要对症下药：访存瓶颈用算子融合、量化和增大 batch 来提高算术强度；调度瓶颈用算子融合和 CUDA Graph 减少小算子；同步瓶颈用动态调度、通信-计算重叠和负载均衡。关键是先定位瓶颈类型再选手段，对访存受限的算子堆算力是无效的。</div>
+</details>
+
+<details>
+<summary>什么是全功能 GPU？它的核心创新是什么？</summary>
+<div class="answer">全功能 GPU 是指同一块芯片支持全精度计算场景的 GPU：FP64 用于科学计算，TF32/BF16 用于 AI 训练，INT8/INT4 用于 AI 推理，FP32 用于图形渲染。它的核心创新是共享电路设计——传统方案中不同精度往往需要不同的专用硬件，导致数据中心堆满异构卡、各自利用率低下；共享电路让同一套计算核心通过配置切换精度，一块硅片覆盖所有场景。工程价值在于"一卡多用"：同一批卡白天跑训练、晚上跑推理、周末接渲染任务，硬件利用率从专用卡的单场景变成全场景通吃，对预算有限的数据中心比峰值算力数字更实际。</div>
+</details>
+
+<details>
+<summary>什么是屋顶线模型？怎么用它判断算子是计算受限还是访存受限？</summary>
+<div class="answer">屋顶线模型是判断算子性能上限的工具：纵轴是实际可达算力，横轴是算术强度（每搬运 1 字节数据做多少次浮点运算）。图中有两条线——水平的算力天花板（如 H100 的 989 TFLOPS）和斜向上的带宽线（带宽 × 算术强度），两线交点就是拐点（H100 约 295 FLOPs/Byte）。算术强度低于拐点的算子落在带宽斜坡上，属于访存受限，瓶颈在搬数据，堆算力无效，该做算子融合、量化或增大 batch；高于拐点的算子顶到算力天花板，属于计算受限，该优化 Tensor Core 利用率和混合精度。例如 decode 阶段 batch=1 时算术强度只有 1~2，是典型的访存受限；大 batch 训练的矩阵乘算术强度上千，是典型的计算受限。</div>
+</details>
+
+<details>
+<summary>为什么大模型 decode 阶段是访存瓶颈而不是计算瓶颈？</summary>
+<div class="answer">因为 decode 阶段是逐 token 生成的自回归过程：每生成一个 token，都要把模型全部权重从显存读进计算单元一次，但每个权重只参与极少量的计算。以 batch=1 为例，读入 1 个 FP16 权重（2 字节）只做约 2 次乘加运算，算术强度约 1~2 FLOPs/Byte，远低于 H100 约 295 的拐点——算力 989 TFLOPS 几乎完全闲置，时间全花在 3.35 TB/s 的带宽搬权重上。这就是为什么 decode 速度主要取决于显存带宽而非算力，也是为什么增大 batch（多个请求共享一次权重读取）、INT8 量化（权重减半）和 KV Cache 优化能直接提升吞吐——它们都在提高算术强度或减少搬运量。</div>
+</details>
+
+<details>
+<summary>数据并行、张量并行、流水线并行该怎么选？</summary>
+<div class="answer">选择取决于模型形状和集群拓扑。数据并行：每卡一份完整模型、处理不同数据批次，只需周期性 AllReduce 同步梯度，实现最简单、扩展性最好，模型装得下就优先用它。张量并行：把单层权重矩阵切开分给多卡，通信发生在每一层内部、频率极高，必须限制在节点内走 NVLink 这类高速链路，跨节点用会被延迟拖垮。流水线并行：按层把模型切到不同节点，层间只传激活值、通信量小，适合跨节点，但要注意微批次划分以压缩流水气泡。实践中大规模训练是三者叠加：节点内张量并行、节点间流水线并行、全局再套数据并行，MoE 模型还会在专家维度加一层专家并行。</div>
+</details>
+
+<details>
+<summary>万卡训练中 AllReduce 梯度同步为什么成为瓶颈？怎么优化？</summary>
+<div class="answer">数据并行下，每完成一步训练，所有卡都要通过 AllReduce 交换并平均梯度，保证各卡模型参数一致。万卡规模下这个操作的数据量等于整个模型的参数量（千亿模型就是数百 GB），而且它是同步屏障——最慢的一张卡决定全场等待时间，任何一条链路抖动都会放大成全局延迟。优化手段有几类：一是通信-计算重叠，把梯度同步拆到反向传播过程中，边算边传，把通信时间藏在计算背后；二是梯度累积，多个 micro-step 攒一批再同步，减少同步次数；三是拓扑优化，用超节点把高频通信限制在节点内、节点间走 RDMA 高速网络；四是算法层面用梯度压缩或异步更新降低通信量。字节、Meta 等公司的万卡实践都表明，同步效率直接决定 MFU 能到 30% 还是 50%。</div>
+</details>
+
+<details>
+<summary>混合精度训练为什么能提速又不损失精度？</summary>
+<div class="answer">混合精度训练用 BF16/FP16 做前向和反向计算，用 FP32 保存主权重。提速来自两方面：低精度数据只有一半的位宽，显存占用和搬运量直接减半，算术强度翻倍；同时 Tensor Core 对低精度有数倍于 FP32 的吞吐。不损失精度的关键在于三个设计：一是保留 FP32 主权重，参数更新的累积误差不会因低精度被截断；二是 loss scaling（FP16 场景）把小梯度放大到可表示范围，反向后再缩回来，避免梯度下溢；三是 BF16 本身指数位与 FP32 相同（8 位），数值范围一致，几乎不需要 loss scaling 就能稳定训练。这也是为什么 BF16 成为大模型训练的事实标准——它用一半的带宽换来了几乎无损的稳定性。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1kkY4z5EjQ" target="_blank">GPU 算力瓶颈与优化</a> · <span class="up-name">小白debug</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A10 · Agent 概念、原理与构建模式</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、从 LLM 到 Agent — 为什么需要 Agent</a>
+<a href="#s2">二、ReAct 模式 — Agent 最核心的运行模式</a>
+<a href="#s3">三、ReAct 系统提示词设计</a>
+<a href="#s4">四、ReAct Agent 代码实现</a>
+<a href="#s5">五、Plan-and-Execute 模式 — 先规划再执行</a>
+<a href="#s6">六、Agent 开发最佳实践</a>
+<a href="#s7">高频问答</a>
+</aside>
+<div class="container">
+
+<h1>A10 · Agent 概念、原理与构建模式</h1>
+<p class="subtitle">LLM 的局限 → Agent 的定义 → ReAct 模式 → 系统提示词设计 → 代码实现 → Plan-and-Execute 模式</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>Agent 的本质是"LLM 当大脑 + 工具当手脚 + 主程序当神经系统"——模型负责想和决定，主程序负责调度执行，循环跑起来就能自主完成任务。</p>
+</div>
+
+<!-- ==================== 1. 从 LLM 到 Agent ==================== -->
+<div class="section">
+<h2 id="s1">一、从 LLM 到 Agent — 为什么需要 Agent</h2>
+
+<h3>LLM 的核心局限</h3>
+<p>大模型（如 GPT-4o、DeepSeek）回答问题能力强，但有两个根本性缺陷：</p>
+<ul>
+  <li><strong>无法感知外界环境</strong> — 不主动给信息，模型无法自行查看文件、数据库或网络</li>
+  <li><strong>无法改变外界环境</strong> — 模型只能输出文本，不能写文件、执行命令、调用 API</li>
+</ul>
+
+<p><strong>举例：</strong>让 GPT-4o 写贪吃蛇游戏，它能给代码，但"把代码写入文件"这步必须你自己来。如果你已有贪吃蛇代码想让模型改写，也必须你手动复制粘贴给它。</p>
+
+<h3>Agent = LLM + 工具</h3>
+<p><span class="term">Agent</span>（AI Agent）的本质：给大模型接上"感官和四肢"，让它能自主感知和改变外部环境。</p>
+
+<table>
+<tr><th>组件</th><th>类比</th><th>作用</th></tr>
+<tr><td>LLM</td><td>🧠 大脑</td><td>推理、决策、生成</td></tr>
+<tr><td>工具（Tools）</td><td>🤖 感官+四肢</td><td>读写文件、执行命令、搜索网络</td></tr>
+<tr><td>Agent 主程序</td><td>⚙️ 神经系统</td><td>串联模型与工具的执行循环</td></tr>
+</table>
+
+<div class="highlight">
+Agent 不是一个新模型，而是一种<strong>架构模式</strong>：LLM 做大脑 + 工具做手脚 + 主程序做调度 = 能自主完成复杂任务的智能程序。
+</div>
+
+<div class="intuition-box">
+<p>LLM 只会"说"，Agent 能"做"——分水岭就是有没有能改变外部环境的工具和一个执行循环。</p>
+</div>
+
+<h3>Agent 的典型应用场景</h3>
+<table>
+<tr><th>Agent 类型</th><th>代表产品</th><th>核心能力</th></tr>
+<tr><td>编程 Agent</td><td>Cursor、Claude Code</td><td>自动读写代码、运行终端、调试</td></tr>
+<tr><td>搜索 Agent</td><td>Manus</td><td>自动搜索、浏览网页、整理报告</td></tr>
+<tr><td>办公 Agent</td><td>各类 PPT/Excel Agent</td><td>自动操作 Office 软件</td></tr>
+</table>
+</div>
+
+<!-- ==================== 2. ReAct 模式 ==================== -->
+<div class="section">
+<h2 id="s2">二、ReAct 模式 — Agent 最核心的运行模式</h2>
+
+<h3>ReAct 是什么</h3>
+<p><span class="term">ReAct</span>（<strong>Re</strong>asoning <strong>a</strong>nd A<strong>ct</strong>ing，思考与行动）是目前使用最广泛的 Agent 运行模式，由 2022 年 10 月的论文提出，至今仍是主流。</p>
+
+<div class="intuition-box">
+<p>ReAct = Reasoning + Acting：想一步、做一步、看一步，如此循环直到任务完成。</p>
+</div>
+
+<h3>ReAct 核心循环</h3>
+<div class="arch-diagram">
+用户提交任务
+    ↓
+┌─── Thought（思考） ─── 模型分析当前状态，决定下一步
+│       ↓
+│   Action（行动） ────── 模型请求调用某个工具
+│       ↓
+│   Observation（观察） ── 工具执行结果返回给模型
+│       ↓
+│   （循环，直到任务完成）
+│       ↓
+└── Final Answer ──────── 模型认为任务完成，输出最终答案
+</div>
+
+<h3>四个核心标签</h3>
+<table>
+<tr><th>标签</th><th>英文</th><th>含义</th><th>示例</th></tr>
+<tr><td>Thought</td><td>思考</td><td>模型分析当前状态，判断下一步</td><td>"用户需要贪吃蛇游戏，我先写 HTML 文件"</td></tr>
+<tr><td>Action</td><td>行动</td><td>请求调用工具（注意是<strong>请求</strong>）</td><td>"调用 write_to_file('index.html', content)"</td></tr>
+<tr><td>Observation</td><td>观察</td><td>工具执行结果返回</td><td>"写入成功"</td></tr>
+<tr><td>Final Answer</td><td>最终答案</td><td>任务完成，输出结果</td><td>"贪吃蛇游戏已完成，三个文件已创建"</td></tr>
+</table>
+
+<div class="warn-box">
+大模型本身<strong>不能调用工具</strong>，只能"请求调用"。真正执行工具的是 Agent 主程序。这个区别非常重要：模型输出 Action 标签 → Agent 主程序解析 → 执行对应函数 → 返回 <span class="term">Observation</span>（观察，即工具执行后返回给模型的结果）。
+</div>
+</div>
+
+<!-- ==================== 3. 系统提示词设计 ==================== -->
+<div class="section">
+<h2 id="s3">三、ReAct 系统提示词设计</h2>
+
+<p>ReAct 模式不是靠模型训练实现的，而是靠<span class="term">系统提示词（System Prompt）</span>。系统提示词相当于给模型安排了一个"迷你剧本"，模型会严格按照剧本执行。</p>
+
+<div class="intuition-box">
+<p>系统提示词就是 Agent 的"演出剧本"——ReAct 不是训练进模型的，而是写进提示词里，模型照着剧本演。</p>
+</div>
+
+<h3>系统提示词五大组成部分</h3>
+<table>
+<tr><th>部分</th><th>作用</th><th>关键内容</th></tr>
+<tr><td>① 职责描述</td><td>定义 Agent 的角色和运行规则</td><td>"你需要将任务分解为多个步骤，每步先 Thought 再 Action..."</td></tr>
+<tr><td>② 示例</td><td>用 <span class="term">few-shot</span>（少量示例，通过示范教会模型输出格式）示例教模型格式</td><td>埃菲尔铁塔高度的完整 Thought→Action→Observation→Final Answer 示例</td></tr>
+<tr><td>③ 可用工具</td><td>列出可调用的工具及参数</td><td>read_file、write_to_file、run_terminal_command</td></tr>
+<tr><td>④ 注意事项</td><td>约束模型行为</td><td>"每次只调用一个工具"、"确保路径正确"</td></tr>
+<tr><td>⑤ 环境信息</td><td>提供运行时上下文</td><td>当前操作系统、项目目录、文件列表</td></tr>
+</table>
+
+<div class="highlight">
+系统提示词 = 角色定义 + 运行规则 + 示例 + 工具清单 + 环境信息。它决定了 Agent 的每一步该怎么走，是 ReAct 模式的核心。
+</div>
+
+<h3>系统提示词与用户任务的关系</h3>
+<p>规范做法是系统提示词和用户任务分开传给模型（System Message vs User Message）。但部分模型（如 DeepSeek 网页版）不支持分开提交，此时可以合并为一条消息，大多数情况下也能正常运行。</p>
+</div>
+
+<!-- ==================== 4. 代码实现 ==================== -->
+<div class="section">
+<h2 id="s4">四、ReAct Agent 代码实现</h2>
+
+<h3>核心架构</h3>
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────┐
+│                    Agent 主程序                    │
+│                                                   │
+│  1. 构建 messages = [system_prompt, user_task]    │
+│  2. while True:                                   │
+│     a. response = call_model(messages)            │
+│     b. 提取 thought，打印                         │
+│     c. if response contains "Final Answer":       │
+│          return final_answer                      │
+│     d. 提取 action (工具名 + 参数)                │
+│     e. result = execute_tool(action)              │
+│     f. 打印 observation                           │
+│     g. messages.append(observation)               │
+│     h. 回到步骤 a                                 │
+└──────────────────────────────────────────────────┘
+</div>
+
+<h3>关键代码逻辑</h3>
+<ul>
+  <li><strong>工具列表</strong>：read_file、write_to_file、run_terminal_command — 工具就是普通函数</li>
+  <li><strong>模型调用</strong>：采用同步返回（非流式），简化代码复杂度</li>
+  <li><strong>安全机制</strong>：运行终端命令前会询问用户确认（因为终端命令有破坏性）</li>
+  <li><strong>循环终止</strong>：检测到 <span class="term">Final Answer</span>（最终答案，模型判断任务完成时输出的终止信号）标签时退出 while 循环</li>
+</ul>
+
+<div class="intuition-box">
+<p>Agent 主程序说白了就是一个 while 循环：调模型 → 解析 Action → 执行工具 → 把结果喂回模型，直到出现 Final Answer。</p>
+</div>
+
+<h3>完整 Agent 流程图（四个角色）</h3>
+<div class="arch-diagram">
+ 用户          Agent 主程序          模型            工具
+  │                │                  │              │
+  │──提交任务────→│                  │              │
+  │                │──messages──────→│              │
+  │                │←─thought+action─│              │
+  │←─打印 thought─│                  │              │
+  │                │──执行 action───────────────────→│
+  │                │←─observation────────────────────│
+  │←─打印 observe─│                  │              │
+  │                │──(循环)────────→│              │
+  │                │  ...             │              │
+  │                │←─final answer───│              │
+  │←─输出结果─────│                  │              │
+</div>
+</div>
+
+<!-- ==================== 5. Plan-and-Execute ==================== -->
+<div class="section">
+<h2 id="s5">五、Plan-and-Execute 模式 — 先规划再执行</h2>
+
+<p>ReAct 是"边想边做"，而 <span class="term">Plan-and-Execute</span> 是"先规划全局，再逐步执行"。LangChain 提出的这套模式在很多复杂任务中表现更好。</p>
+
+<div class="intuition-box">
+<p>Plan-and-Execute 像"项目经理带工程师"：Plan 模型定计划，执行 Agent 干活，Replan 模型复盘修订。</p>
+</div>
+
+<h3>四个核心模块</h3>
+<table>
+<tr><th>模块</th><th>职责</th><th>类比</th></tr>
+<tr><td><strong>Plan 模型</strong></td><td>接收用户问题，生成初始执行计划</td><td>📋 项目经理</td></tr>
+<tr><td><strong>Replan 模型</strong></td><td>根据执行结果动态调整计划</td><td>📋 项目经理（修订版）</td></tr>
+<tr><td><strong>执行 Agent</strong></td><td>执行计划中的单个步骤（可以是 ReAct Agent）</td><td>🔧 工程师</td></tr>
+<tr><td><strong>Agent 主程序</strong></td><td>串联整个 Plan → Execute → Replan 循环</td><td>⚙️ 调度中心</td></tr>
+</table>
+
+<h3>运行流程</h3>
+<div class="arch-diagram">
+用户提问 → Agent 主程序 → Plan 模型 → 生成执行计划 [Step1, Step2, Step3]
+                                              ↓
+                              ┌─── 循环开始 ──────────────────────┐
+                              │ 1. 取当前计划的第一步               │
+                              │ 2. 发给执行 Agent 执行             │
+                              │ 3. 执行结果加入历史记录             │
+                              │ 4. Replan 模型根据结果生成新计划    │
+                              │    - 删除已完成的步骤               │
+                              │    - 用实际数据替换占位符           │
+                              │    - 或返回 Final Answer            │
+                              │ 5. 如果还有步骤 → 回到 1           │
+                              └────────────────────────────────────┘
+</div>
+
+<h3>模拟示例：查询澳网冠军家乡</h3>
+<table>
+<tr><th>轮次</th><th>执行步骤</th><th>执行结果</th><th>Replan 后的新计划</th></tr>
+<tr><td>第 1 轮</td><td>查询当前日期</td><td>2025年</td><td>[查2025年澳网男单冠军, 查冠军家乡]</td></tr>
+<tr><td>第 2 轮</td><td>查2025年澳网男单冠军</td><td>辛纳</td><td>[查辛纳的家乡]</td></tr>
+<tr><td>第 3 轮</td><td>查辛纳的家乡</td><td>意大利圣坎迪多</td><td>所有步骤完成 → Final Answer</td></tr>
+</table>
+
+<div class="note-box">
+Plan-and-Execute 内部嵌套了执行 Agent（Agent 套 Agent），执行 Agent 可以用 ReAct 模式，也可以用其他模式。Plan-and-Execute 只关心"能否完成步骤"，不关心内部怎么实现。
+</div>
+
+<h3>ReAct vs Plan-and-Execute 对比</h3>
+<table>
+<tr><th>维度</th><th>ReAct</th><th>Plan-and-Execute</th></tr>
+<tr><td>策略</td><td>边想边做</td><td>先规划后执行</td></tr>
+<tr><td>灵活性</td><td>每步重新决策</td><td>全局规划 + 动态调整</td></tr>
+<tr><td>适用场景</td><td>简单任务、工具调用少</td><td>复杂任务、多步骤</td></tr>
+<tr><td>代表产品</td><td>大部分基础 Agent</td><td>Manus、Claude Code (部分)</td></tr>
+<tr><td>模型调用次数</td><td>每轮 1 次</td><td>每轮 2 次（执行+Replan）</td></tr>
+<tr><td>复杂度</td><td>低</td><td>高</td></tr>
+</table>
+</div>
+
+<!-- ==================== 6. 最佳实践 ==================== -->
+<div class="section">
+<h2 id="s6">六、Agent 开发最佳实践</h2>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+  <li>系统提示词用模板 + 占位符，动态填充环境信息</li>
+  <li>工具函数保持单一职责（一个函数做一件事）</li>
+  <li>危险工具（如终端命令）执行前让用户确认</li>
+  <li>用 few-shot 示例教会模型输出格式</li>
+  <li>将 Observation 追加到 messages 列表，保持上下文连续</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+  <li>不要在系统提示词中塞太多无关信息</li>
+  <li>不要让模型自己执行工具（模型只能请求）</li>
+  <li>不要省略安全确认直接执行破坏性操作</li>
+  <li>不要一次性给模型太多工具（选择困难）</li>
+  <li>不要忽略 Observation 的格式（模型依赖格式解析）</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>最佳实践的核心就一句话：让模型只管决策，让主程序负责执行与安全把关——各司其职。</p>
+</div>
+</div>
+
+<!-- ==================== 高频问答 ==================== -->
+<div class="qa-section">
+<h2 id="s7">高频问答</h2>
+
+<details>
+<summary>什么是 AI Agent？它和普通 LLM 应用有什么区别？</summary>
+<div class="answer">AI Agent 是在大模型基础上增加了工具调用能力的智能程序，能够自主感知和改变外部环境。核心区别：普通 LLM 应用只能输出文本，Agent 能自主读写文件、执行命令、调用 API，形成"思考→行动→观察"的闭环。Agent = LLM（大脑）+ Tools（感官和四肢）+ 主程序（调度循环）。</div>
+</details>
+
+<details>
+<summary>ReAct 模式的核心流程是什么？为什么叫 ReAct？</summary>
+<div class="answer">ReAct 是 Reasoning and Acting 的缩写。核心流程是四步循环：Thought（模型思考）→ Action（请求调用工具）→ Observation（观察工具结果）→ 循环或 Final Answer。关键特点：①模型只能请求调用工具，不能直接执行；②每次观察后模型重新思考是否继续；③循环直到模型返回 Final Answer。这个模式由 2022 年论文提出，至今仍是 Agent 最主流的运行模式。</div>
+</details>
+
+<details>
+<summary>ReAct 模式是通过模型训练实现的吗？</summary>
+<div class="answer">不是。ReAct 模式主要通过系统提示词（System Prompt）实现，而非模型训练。系统提示词定义了模型的角色、运行规则、可用工具和环境信息，相当于给模型安排了一个"迷你剧本"。模型会严格按照提示词中定义的格式输出 Thought/Action/Observation/Final Answer 标签。这意味着换一个模型，只要支持系统提示词，就能实现 ReAct。</div>
+</details>
+
+<details>
+<summary>ReAct 和 Plan-and-Execute 模式有什么区别？各自适合什么场景？</summary>
+<div class="answer">ReAct 是"边想边做"，每一步根据当前状态决定下一步行动，适合简单任务和少量工具调用。Plan-and-Execute 是"先全局规划，再逐步执行"，包含 Plan 模型（生成计划）、Replan 模型（动态调整计划）和执行 Agent（执行单步），适合复杂多步骤任务。主要区别：①策略不同（即时决策 vs 全局规划）；②模型调用次数不同（每轮1次 vs 每轮2次）；③Plan-and-Execute 内部嵌套了执行 Agent（Agent 套 Agent）。Manus 和 Claude Code 中都能看到 Plan-and-Execute 的影子。</div>
+</details>
+
+<details>
+<summary>Agent 中"模型请求调用工具"和"模型调用工具"有什么本质区别？</summary>
+<div class="answer">这是一个关键的设计区分。模型只能输出"我想调用 write_to_file 工具，参数是 xxx"（请求），真正执行工具函数的是 Agent 主程序。这种分离设计的好处：①安全性 — 主程序可以在执行前做权限检查、用户确认；②可控性 — 主程序可以限制工具调用频率、添加日志；③灵活性 — 同样的模型输出，不同主程序可以有不同执行策略。如果让模型直接调用工具，就失去了安全控制和审计能力。</div>
+</details>
+
+<details>
+<summary>为什么 Agent 在运行终端命令前通常需要用户确认？</summary>
+<div class="answer">终端命令具有不可逆的破坏性（如 rm -rf、数据库操作），而模型的推理并不总是正确的。用户确认是一个安全兜底机制：①防止模型误判执行危险命令；②让用户对关键操作有感知和控制权；③生产环境中可以作为审批流的一部分。目前主流编程 Agent（如 Cursor、Claude Code）都在终端命令执行前设置了确认机制。</div>
+</details>
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1TSg7zuEqR" target="_blank">Agent 的概念、原理与构建模式 — 从零打造一个简化版的 Claude Code</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+  <script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

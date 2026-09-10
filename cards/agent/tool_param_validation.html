@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A31 · 工具调用参数四层防御</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、参数为什么会错：三个源头</a>
+<a href="#s2">二、第一层 · 格式校验与契约漂移</a>
+<a href="#s3">三、第二层 · 类型归一</a>
+<a href="#s4">四、第三层 · 边界守护</a>
+<a href="#s5">五、第四层 · 语义净化</a>
+<a href="#s6">六、工程账：开销、处置与重试上限</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>A31 · 工具调用参数四层防御</h1>
+<p class="subtitle">Tool Parameter Validation — 格式校验 / 类型归一 / 边界守护 / 语义净化 · 契约漂移检测 · 失败处置与重试上限</p>
+
+<div class="intuition-box">
+<p>工具调用的参数不是"我们自己传进去的值"，而是一段由模型生成、经过上游接口和用户内容污染的<span class="term">不可信输入</span>——它可能语法完好、类型合理、范围正常，却依然带着能把系统打穿的载荷。四层防御的意义在于：每一层只回答一个问题，且回答不了的问题必须交给下一层，而不是指望某一层"顺手也管一下"。</p>
+</div>
+
+<!-- ==================== 1. 参数错误的三个源头 ==================== -->
+<div class="section" id="s1">
+<h2>一、参数为什么会错：三个源头</h2>
+
+<div class="intuition-box">
+<p>把参数错误笼统归因为"模型不靠谱"是最贵的误判——因为其中相当一部分错误里模型是完全正确的，是上游接口悄悄改了字段，或者用户内容里藏了东西。源头不同，防御手段完全不同。</p>
+</div>
+
+<p>一次工具调用的参数在到达执行点之前，至少经过三双手：模型的生成、上游服务的返回、用户输入的透传。三者的失效方式互不相同，却常常在日志里长成同一副模样——一条 <code>JSONDecodeError</code> 或者一个 500。分不清源头，就只会反复在同一层加正则。</p>
+
+<table>
+<tr><th>源头</th><th>典型失效</th><th>随时间的变化规律</th><th>该由哪一层拦</th></tr>
+<tr><td><strong>模型生成</strong></td><td>漏必填字段、字段名近义替换（<code>city</code> 写成 <code>city_name</code>）、数字写成带单位的字符串</td><td>随 prompt/模型版本波动，换模型就重新分布</td><td>第一层 + 第二层</td></tr>
+<tr><td><strong>上游契约</strong></td><td>字段改名、类型从 int 变 string、可选字段突然缺失、枚举新增取值</td><td>低频但突发，且不通知你</td><td>第一层（契约快照比对）</td></tr>
+<tr><td><strong>用户内容透传</strong></td><td>合法字段里塞入超长文本、越界数值、命令/SQL 片段、路径遍历串</td><td>被主动探测时集中爆发</td><td>第三层 + 第四层</td></tr>
+</table>
+
+<p>值得单独强调的是<span class="term">约束解码</span>——在解码的每一步用 Schema 编译出的状态机屏蔽掉所有会违反结构的 token，让模型在物理上无法输出不合规的结构。它能极大压低第一类源头的错误率，但对后两类源头完全无效：上游改字段它管不着，用户塞进合法字符串字段里的 <code>rm -rf</code> 它照样放行。</p>
+
+<div class="highlight">
+OpenAI 官方数据（Structured Outputs 发布说明，2024-08）：在其复杂 JSON Schema 遵循的评测上，开启 <code>strict</code> 的 <code>gpt-4o-2024-08-06</code> 得分 100%，而 <code>gpt-4-0613</code> 低于 40%。需要注意官方对两种模式的定性差异——JSON Mode 只保证输出是可解析的合法 JSON，不保证符合你给定的 Schema；<code>strict</code> 模式才提供 Schema 层面的保证。官方同时列明了它仍会失败的情形：模型拒答、触达 max tokens、内容过滤，所以即便开了 <code>strict</code> 也必须保留错误处理。跨模型的系统更不能把结构正确性外包给某一家的 API，自建参数校验层是必需项。
+</div>
+
+<h3>四层防御的总体形状</h3>
+
+<p>四层的排列不是随意的，而是按"排查成本从低到高、覆盖问题从粗到细"递进。前一层不通过就没有必要进入后一层——格式都解析不出来，谈类型转换毫无意义。</p>
+
+<div class="arch-diagram">
+模型生成的工具参数（不可信输入）
+    │
+    ▼
+┌ 第 1 层 · 格式校验 ────────────────────────────────┐
+│  JSON 能否解析？必填字段齐全？字段名是否在契约内？   │
+│  失败特征：JSONDecodeError / KeyError               │
+└────────────────────────────────────────────────────┘
+    │ 通过                       ✗ → 拒绝 + 契约漂移告警
+    ▼
+┌ 第 2 层 · 类型归一 ────────────────────────────────┐
+│  "25" → 25 ？"true" → True ？ID 统一成 string ？    │
+│  失败特征：索引失效 / 字符串拼接代替数值加法         │
+└────────────────────────────────────────────────────┘
+    │ 通过                       ✗ → 拒绝或按白名单强转
+    ▼
+┌ 第 3 层 · 边界守护 ────────────────────────────────┐
+│  数值在 [min,max] ？长度、页大小、数组元素数上限？   │
+│  失败特征：库存变负 / 一次拉回 47 万行 / 资源耗尽    │
+└────────────────────────────────────────────────────┘
+    │ 通过                       ✗ → 拒绝（不要静默截断）
+    ▼
+┌ 第 4 层 · 语义净化 ────────────────────────────────┐
+│  值本身是否会被下游当作指令执行？是否越权指向？      │
+│  失败特征：命令注入 / SQL 注入 / 路径遍历 / SSRF     │
+└────────────────────────────────────────────────────┘
+    │ 通过                       ✗ → 拒绝 + 安全审计事件
+    ▼
+执行工具调用
+</div>
+
+<p>本文讲的是参数本身怎么被一层层洗干净，属于工程视角。与之相邻的一张卡是 <a href="../security/tool_call_security.html">《SEC03 · 工具调用安全》</a>，它站在安全视角讲工具的权限管控、执行隔离与链路审计——也就是"就算脏参数漏过去了，这次调用能造成多大破坏、事后能不能查清"。两张卡在第四层的注入防御上有交集：本文关心的是"这个值怎么洗、洗不干净怎么办"，SEC03 关心的是"该不该让这个工具有能力执行它、执行了怎么留痕"。</p>
+</div>
+
+<!-- ==================== 2. 格式校验 ==================== -->
+<div class="section" id="s2">
+<h2>二、第一层 · 格式校验与契约漂移</h2>
+
+<div class="intuition-box">
+<p>格式校验拦的是"根本读不懂"的输入，成本最低、收益最直接；但它真正的价值不在于挡住模型的手误，而在于成为上游契约变更的传感器——字段名对不上的那一刻，就是上游改了接口的那一刻。</p>
+</div>
+
+<p>这一层只回答三个问题：这段文本能不能解析成 JSON；解析出来的对象里必填字段是否齐全；出现的字段名是否都在约定的契约里。三个问题都很浅，但它们是后面所有层的前提。第三个问题还顺带提供了一个额外能力——检测<span class="term">契约漂移</span>，即上游服务在没有通知下游的情况下改变了字段名、类型或可选性，导致原本正确的解析代码突然失效。</p>
+
+<table>
+<tr><th>检查项</th><th>拦住的问题</th><th>常见实现</th><th>漏检后的表现</th></tr>
+<tr><td>可解析性</td><td>截断的 JSON、多余的 Markdown 代码块围栏、尾随逗号</td><td><code>json.loads</code> + 前置清洗</td><td>调用点抛异常，整条链路中断</td></tr>
+<tr><td>必填字段齐全</td><td>模型漏写 <code>required</code> 字段</td><td>Schema <code>required</code> 声明</td><td>下游取值得到 <code>None</code>，错误延后暴露</td></tr>
+<tr><td>字段名合规</td><td>近义改名、大小写/下划线风格漂移</td><td><code>additionalProperties: false</code></td><td>参数被静默忽略，工具用默认值执行</td></tr>
+<tr><td>结构层级</td><td>该是对象的地方给了数组、嵌套层级错位</td><td>Schema 类型声明 + 嵌套深度上限</td><td>遍历逻辑越界或死循环</td></tr>
+<tr><td>字段名未知即告警</td><td><strong>上游契约漂移</strong></td><td>契约快照 + 差异比对</td><td>接口改了没人知道，直到大面积报错</td></tr>
+</table>
+
+<p class="highlight"><strong>示例场景：</strong>一个出行助手的天气工具对接第三方 API，契约里写的是 <code>temperature: 25</code>（数值，摄氏度）。某次上游发版后，同一个字段变成了 <code>temp: "25度"</code>——字段名改了，类型从数值变成字符串，还多了单位后缀。<strong>问题：</strong>解析层按 <code>temperature</code> 取值，取到 <code>None</code> 后进入格式化逻辑抛异常；因为工具调用被编排器包了自动重试，同一个必然失败的请求被重试 3 次，故障期间该工具的错误率从基线 0.3% 涨到 100%，而告警只报了"天气工具异常"，排查方向一开始完全偏在自己的代码上。<strong>方案：</strong>把契约固化成一份 Schema 快照随代码一起版本管理，每次响应做字段集合比对：出现未知字段名或缺失已知字段，立刻按"契约漂移"单独打一类告警（区别于普通业务异常），并对已知的旧字段名保留一个显式的兼容映射层。同时给这类必然失败的错误加上不可重试标记。<strong>效果：</strong>下一次上游改字段时，告警在首个请求就点名"出现未知字段 <code>temp</code>、缺失字段 <code>temperature</code>"，定位从小时级压到分钟级，且无效重试被消除。</p>
+
+<h3>契约漂移的检测机制</h3>
+
+<div class="arch-diagram">
+上游响应 / 模型参数
+    │
+    ├──→ 字段集合 S_actual
+    │
+契约快照（随代码版本管理）
+    │
+    └──→ 字段集合 S_expected
+                │
+                ▼
+        集合差异比对
+                │
+   ┌────────────┼────────────┐
+   ▼            ▼            ▼
+S_actual     两者相等    S_expected
+ 有余项                    有缺项
+   │            │            │
+   ▼            ▼            ▼
+未知字段     正常放行    必填缺失 → 拒绝
+   │                     可选缺失 → 补默认值
+   ▼
+「契约漂移」告警（独立告警类别，不混入业务异常）
+   │
+   ▼
+兼容映射层：temp → temperature，剥离单位后缀
+   （显式、有注释、有下线计划，不做模糊匹配）
+</div>
+
+<h3>Schema 声明式校验与手写校验的取舍</h3>
+
+<p>这一层有两种写法：用 JSON Schema / Pydantic / Zod 声明结构，让库去校验；或者在函数入口手写 <code>if</code> 判断。二者不是优劣关系，而是各自擅长不同的约束类型。</p>
+
+<table>
+<tr><th>维度</th><th>声明式 Schema</th><th>手写校验</th></tr>
+<tr><td>结构与类型约束</td><td>擅长，且能直接喂给约束解码，让模型少犯错</td><td>能做但冗长，容易漏分支</td></tr>
+<tr><td>跨字段不变量</td><td>受限（如"结束时间必须晚于开始时间"多数 Schema 表达不了）</td><td>擅长，一行代码即可</td></tr>
+<tr><td>错误信息质量</td><td>结构化、可直接回喂给模型做修复</td><td>取决于自己写得多细</td></tr>
+<tr><td>与模型 API 的耦合</td><td>各家对 JSON Schema 支持是子集：<code>minLength</code>/<code>maxLength</code>/<code>minItems</code> 与复杂正则常被排除，且要求逐层 <code>additionalProperties: false</code>、嵌套与属性数量有上限</td><td>无耦合，服务端完全自主</td></tr>
+<tr><td>随契约演进的维护成本</td><td>低，Schema 是单一事实来源</td><td>高，校验逻辑散落在各调用点</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>正确的组合是：用 Schema 声明所有能声明的结构约束，并把同一份 Schema 同时用于约束解码和服务端校验；Schema 表达不了的跨字段规则和业务不变量，用手写校验补在后面。绝不能因为开了约束解码就删掉服务端校验——那等于把系统的安全边界搬到了模型供应商的实现里。</p>
+</div>
+</div>
+
+<!-- ==================== 3. 类型归一 ==================== -->
+<div class="section" id="s3">
+<h2>三、第二层 · 类型归一</h2>
+
+<div class="intuition-box">
+<p>类型错误是四层里最阴的一层：它不报错。字符串 <code>"100"</code> 和数字 <code>100</code> 在日志里长得一模一样，程序会带着错误的类型一路跑到底，直到某个索引失效或某次加法变成拼接才暴露，而那时已经离现场很远了。</p>
+</div>
+
+<p><span class="term">类型归一</span>指的是在参数进入业务逻辑之前，把每个字段强制转换成契约声明的目标类型，转换失败即视为校验失败。它的目标不是"容错"，而是消除同一字段在系统内部存在多种运行时表示的可能。</p>
+
+<p class="highlight"><strong>示例场景：</strong>一个客服 Agent 的订单查询工具接收 <code>user_id</code> 参数，上游用户中心的返回值时而是数字 <code>10087</code>、时而是字符串 <code>"10087"</code>，取决于走的是缓存还是主库。<strong>问题：</strong>数据库里 <code>user_id</code> 是 <code>bigint</code> 且建了索引，但查询层直接把参数原样拼进条件；当传入字符串时发生隐式类型转换，索引失效，单次查询从 8ms 退化到 1.9s，全表扫描把连接池占满，同一时段该工具的 P99 从 40ms 涨到 6s 以上。<strong>方案：</strong>在工具入口做一次强制归一——<code>user_id</code> 一律转成 <code>int</code>，转换失败直接拒绝并返回结构化错误；同时在慢查询监控里对"同一 SQL 模板出现两种参数类型"单独打点。<strong>效果：</strong>类型统一后索引恢复命中，该工具 P99 回到 45ms 以内，且此后任何上游类型漂移都会在入口被拒绝而不是渗入查询层。</p>
+
+<table>
+<tr><th>字段语义</th><th>常见输入形态</th><th>归一目标</th><th>推荐策略</th></tr>
+<tr><td>数值量（金额、数量）</td><td><code>100</code> / <code>"100"</code> / <code>"100.0"</code> / <code>"100元"</code></td><td><code>int</code> / <code>Decimal</code></td><td>严格转换；带单位后缀视为失败，不做剥离猜测</td></tr>
+<tr><td>标识符（ID、订单号）</td><td><code>10087</code> / <code>"10087"</code> / <code>"010087"</code></td><td>统一选一种并全局一致</td><td>优先 <code>string</code>，避免前导零丢失与精度溢出</td></tr>
+<tr><td>布尔开关</td><td><code>true</code> / <code>"true"</code> / <code>"是"</code> / <code>1</code></td><td><code>bool</code></td><td>白名单映射；表外取值一律拒绝</td></tr>
+<tr><td>枚举</td><td><code>"PAID"</code> / <code>"paid"</code> / <code>"已支付"</code></td><td>规范化枚举值</td><td>大小写归一后查表；不在表内即拒绝，不做模糊匹配</td></tr>
+<tr><td>时间</td><td>时间戳秒/毫秒 / <code>"2026-09-09"</code> / <code>"明天"</code></td><td>带时区的 <code>datetime</code></td><td>相对表达（"明天"）由上游解析完再进工具，工具只收绝对时间</td></tr>
+<tr><td>数组</td><td><code>["a"]</code> / <code>"a"</code> / <code>"a,b"</code></td><td><code>list</code></td><td>单值可包装成单元素数组；字符串切分需契约明确声明</td></tr>
+</table>
+
+<h3>宽松转换的代价</h3>
+
+<p>类型归一最容易走偏的地方是"越宽松越稳"。把 <code>"100元"</code> 剥离单位当成 100、把 <code>"是"</code> 当成 <code>true</code>、把 <code>"1,2"</code> 切成两个元素，短期内确实让失败率下降，但代价是三重的：错误被掩盖后无法统计，上游契约漂移彻底失去可见性；猜测规则本身会在边缘输入上猜错（<code>"1,200"</code> 是一个数还是两个数）；一旦有人依赖了这种宽松，它就再也收不回来了。</p>
+
+<div class="intuition-box">
+<p>转换规则要写成一张能被穷举的映射表，而不是一串"尽量试试看"的分支。区分"确定的等价表示"（<code>"100"</code> 与 <code>100</code>）和"需要猜测的表示"（<code>"100元"</code>）：前者归一，后者拒绝并让上游或模型改正。</p>
+</div>
+
+<pre><code># 严格归一：只接受确定的等价表示
+def to_int(v, field):
+    if isinstance(v, bool): raise Invalid(field, "bool 不可当数值")
+    if isinstance(v, int): return v
+    if isinstance(v, str) and v.strip().lstrip("-").isdigit():
+        return int(v.strip())
+    raise Invalid(field, f"期望整数，实际 {type(v).__name__}: {v!r}")</code></pre>
+
+<p>注意这段代码里对 <code>bool</code> 的显式排除。在 Python 里 <code>isinstance(True, int)</code> 为真，<code>True</code> 会被静默转成 1——这类语言层面的类型陷阱，是手写校验最值得存在的地方，Schema 通常表达不了。</p>
+</div>
+
+<!-- ==================== 4. 边界守护 ==================== -->
+<div class="section" id="s4">
+<h2>四、第三层 · 边界守护</h2>
+
+<div class="intuition-box">
+<p>类型对了不代表值合理。<code>1000</code> 是一个完美的整数，作为年龄却是荒谬的；<code>1000000</code> 作为购买数量能把库存刷成负数。边界守护就是给每个参数装上护栏，把"语法正确但业务荒谬"的取值挡在外面。</p>
+</div>
+
+<p>这一层的关键认知是：边界不只是防御恶意输入，更是给系统的资源消耗设上限。一个没有上限的 <code>page_size</code>、一个没有元素数上限的批量数组，本质上是把系统的内存和数据库连接的控制权交给了调用方。</p>
+
+<table>
+<tr><th>边界类型</th><th>约束对象</th><th>示例</th><th>缺失后果</th></tr>
+<tr><td>数值区间</td><td>年龄、数量、金额、比例</td><td>年龄 ∈ [0,150]；数量 ∈ [1,999]</td><td>库存/余额被刷成负数，业务不变量被破坏</td></tr>
+<tr><td>字符串长度</td><td>搜索词、备注、名称</td><td>搜索词 ≤ 128 字符</td><td>超长文本挤占上下文窗口，或触发下游截断</td></tr>
+<tr><td>集合规模</td><td>批量 ID 数组、多路查询</td><td>批量 ID ≤ 50 个</td><td>单次请求放大成上千次下游调用</td></tr>
+<tr><td>返回量上限</td><td><code>limit</code> / <code>page_size</code></td><td>硬上限 1000 行，超限截断并显式标记</td><td>一次查询把全表拉进模型上下文</td></tr>
+<tr><td>时间跨度</td><td>报表起止时间</td><td>跨度 ≤ 90 天</td><td>扫描量与耗时不可控，慢查询拖垮库</td></tr>
+<tr><td>递归/嵌套深度</td><td>嵌套过滤条件、目录遍历</td><td>深度 ≤ 5</td><td>栈溢出或指数级展开</td></tr>
+</table>
+
+<p class="highlight"><strong>示例场景：</strong>一个电商下单工具的 <code>quantity</code> 参数只做了类型校验没做边界校验。<strong>问题：</strong>有人构造出数量为 1,000,000 的下单请求，库存扣减是先扣后校验，直接把 SKU 库存写成负数；由于库存服务对负库存没有约束，超卖状态又被同步给了下游的履约与结算，人工回滚涉及数百条脏数据，且扣减事务的长时间锁等把该表的写入 QPS 打到接近 0。<strong>方案：</strong>在参数层给 <code>quantity</code> 加 <code>[1, 999]</code> 的硬区间，同时在数据库层给库存字段加 <code>CHECK (stock >= 0)</code> 约束作为最后的物理屏障，两层都不依赖对方。<strong>效果：</strong>越界请求在入口被拒绝并计入安全打点；即便参数层未来出现漏洞，数据库约束也保证脏数据无法落库——这也是分层防御的意义：任何单层都可能被绕过，但同时绕过两层的概率极低。</p>
+
+<h3>边界值该配在哪里</h3>
+
+<p>边界不应该硬编码在校验函数里。生产上更可维护的做法是把边界作为工具定义的一部分声明出来，让校验层、文档、以及给模型看的工具描述共用同一份声明。这样做有个额外好处：模型看到 <code>quantity: 1-999</code> 的描述后，越界生成的概率本身就会下降——第三层的最好状态是很少被触发。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每个数值参数都显式声明区间，没有"默认无限制"的字段</li>
+<li>返回量上限做成服务端硬上限，调用方只能调小不能调大</li>
+<li>业务不变量在数据库层再加一道约束（如 <code>stock >= 0</code>）</li>
+<li>越界请求单独打点，观察是模型跑偏还是有人在探测</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>把越界值静默夹到合法区间（<code>min(quantity, 999)</code>），用户拿到的结果与请求不一致却毫不知情</li>
+<li>只在前端限制范围，服务端不校验</li>
+<li>边界写死在代码里，与工具描述、文档三处不一致</li>
+<li>先执行副作用再校验边界</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ==================== 5. 语义净化 ==================== -->
+<div class="section" id="s5">
+<h2>五、第四层 · 语义净化</h2>
+
+<div class="intuition-box">
+<p>前三层问的都是"这个值形状对不对"，第四层问的是"这个值会不会被下游当成指令执行"。城市名 <code>北京; rm -rf /</code> 是一个长度合规、类型正确的字符串——它的问题不在形状，而在于它将被拼进 shell 命令。</p>
+</div>
+
+<p><span class="term">语义净化</span>指的是在格式、类型、范围都合规之后，进一步判断参数值的<em>内容</em>是否会在下游被解释成可执行的语法结构，并把这种可能性消除掉。它针对的是<strong>拼接</strong>这个动作：只要参数值会被拼进另一种语言的语句里——SQL、shell 命令、文件路径、URL、模板——它就有被解释成语法结构而非数据的风险。</p>
+
+<table>
+<tr><th>拼接目标</th><th>危险载荷形态</th><th>根治手段（首选）</th><th>兜底手段</th></tr>
+<tr><td>SQL 语句</td><td><code>' OR 1=1 --</code>、<code>'; DROP TABLE …</code></td><td>参数化查询：值永不参与语句结构</td><td>字段名/操作符走枚举白名单</td></tr>
+<tr><td>Shell 命令</td><td><code>; rm -rf /</code>、<code>$(curl …)</code>、反引号</td><td>不经 shell 直接 exec，参数以数组传入</td><td>值只允许白名单字符集</td></tr>
+<tr><td>文件路径</td><td><code>../../etc/passwd</code>、空字节</td><td>路径归一化后校验是否仍在允许的根目录内</td><td>文件名白名单正则</td></tr>
+<tr><td>HTTP 请求 URL</td><td>内网地址、云元数据端点</td><td>域名白名单 + 解析后 IP 段校验 + 禁跟随跳转</td><td>出网走统一代理并限制目标</td></tr>
+<tr><td>模板渲染</td><td><code>{{7*7}}</code>、<code>${…}</code></td><td>用不执行表达式的渲染器，数据与模板分离</td><td>转义模板定界符</td></tr>
+</table>
+
+<p>这张表最重要的一列是"根治手段"。<span class="term">参数化查询</span>之所以是根治而非缓解，是因为它把值与语句结构在协议层就分开了——值无论长什么样都只能是值，不可能变成语法。凡是存在这类结构性隔离手段的场景，都不应该退而依赖字符过滤。</p>
+
+<h3>白名单收敛与黑名单追赶</h3>
+
+<p><span class="term">白名单收敛</span>是指不去枚举"哪些取值危险"，而是先把参数的取值空间压缩到业务真正需要的最小集合，集合之外的一切默认拒绝。它与黑名单的根本差别在于失效方向：白名单漏配会误拒合法请求（吵，但安全），黑名单漏配会放过攻击（安静，但致命）。</p>
+
+<div class="arch-diagram">
+黑名单思路（追赶式，永远滞后）
+    允许全部取值空间
+        │  逐个减去已知的攻击特征
+        ▼
+    ['"; -- UNION DROP …]  ← 特征库
+        │
+        ▼
+    剩余空间依然巨大 ─── 新绕过手法出现 ─── 补正则 ─── 循环
+        （无 DROP 关键词的 ` OR 1=1 ` 直接穿过）
+
+白名单思路（收敛式，一次到位）
+    先把取值空间压到业务真正需要的极小集合
+        │
+        ├── 字段名 → 枚举（order_id / status / created_at）
+        ├── 操作符 → 枚举（= / > / < / IN）
+        ├── 值     → 类型 + 区间 + 长度
+        │
+        ▼
+    取值空间小到可以穷举 ─── 未知形态默认拒绝
+        │
+        ▼
+    黑名单特征库降级为「兜底 + 攻击可观测性」，不再是主防线
+</div>
+
+<div class="intuition-box">
+<p>顺序反过来就会陷入无穷的追赶：先建白名单把空间压小，再用黑名单兜底并统计攻击尝试；而不是先靠黑名单挡，指望正则写得足够全。判断标准很朴素——如果你的防御能否生效取决于攻击者是否用了你见过的写法，那它就还不是防线。</p>
+</div>
+
+<p>另一个容易被忽略的点：语义净化的位置应当尽量靠近拼接点。在入口做一次全局过滤看似省事，但同一个值拼进 SQL 和拼进 shell 的危险字符集完全不同，全局过滤要么过宽（漏）要么过严（把正常的 <code>O'Brien</code> 这类值也拒了）。按工具类型分别净化，才能既准又不误伤。</p>
+
+<p>需要澄清与相邻卡的边界：本层解决的是"值本身怎么洗干净、洗不干净就拒绝"。而"这个工具是否本就不该拥有执行 shell 的权限"、"执行时是否跑在隔离沙箱里"、"读取类工具与外发类工具之间是否存在链式升级"这类问题，属于权限与隔离设计，见 <a href="../security/tool_call_security.html">《SEC03 · 工具调用安全》</a>。参数校验做得再好也无法弥补一个权限过大的工具；反过来，权限收得再紧，脏参数依然能在授权范围内造成业务数据错乱。两者必须同时存在。</p>
+</div>
+
+<!-- ==================== 6. 工程账 ==================== -->
+<div class="section" id="s6">
+<h2>六、工程账：开销、处置与重试上限</h2>
+
+<div class="intuition-box">
+<p>四层防御的总开销通常在毫秒量级，和一次工具调用的网络往返相比可以忽略；真正贵的从来不是校验本身，而是校验失败后的处置策略——一次让模型重新生成参数，成本是一整轮推理。</p>
+</div>
+
+<h3>四层的性能开销对比</h3>
+
+<p>下表的量级用于说明各层的相对开销结构，实际数值取决于 Schema 复杂度、参数体积和实现语言。结论是稳定的：所有层的开销都远小于一次模型推理或一次跨服务调用。</p>
+
+<table>
+<tr><th>层</th><th>典型耗时量级</th><th>随参数规模的增长</th><th>覆盖的错误占比（经验值）</th><th>可否省略</th></tr>
+<tr><td>第 1 层 格式校验</td><td>&lt; 1ms（JSON 解析 + Schema）</td><td>线性于参数体积</td><td>最高，多数低级错误在此暴露</td><td>不可</td></tr>
+<tr><td>第 2 层 类型归一</td><td>微秒级（逐字段转换）</td><td>线性于字段数</td><td>中，但漏检代价最隐蔽</td><td>不可</td></tr>
+<tr><td>第 3 层 边界守护</td><td>微秒级（区间比较）</td><td>近似常数</td><td>低频，单次代价极高</td><td>不可</td></tr>
+<tr><td>第 4 层 语义净化</td><td>0.1–几 ms（正则/路径归一）</td><td>线性于字符串长度，复杂正则可能退化</td><td>低频，单次代价最高</td><td>不可</td></tr>
+<tr><td>（生成侧）约束解码</td><td>首次 Schema 编译约 50–200ms，后续可缓存</td><td>随 Schema 嵌套与枚举规模上升</td><td>大幅降低第 1 层失败率</td><td>可选，且不替代服务端校验</td></tr>
+</table>
+
+<p>唯一需要留心的开销项是复杂正则。用于注入检测的正则如果写出嵌套量词和回溯分支，在特定构造的长字符串上会退化到指数时间，本身就成了一个拒绝服务面。实践上应先用长度上限截断，再用简单的字符集判断替代复杂正则。</p>
+
+<h3>校验失败后：拒绝、修复，还是重新生成</h3>
+
+<div class="arch-diagram">
+                        校验失败
+                            │
+                            ▼
+                失败原因是否可由模型自行改正？
+                            │
+            ┌───────────────┴───────────────┐
+            │ 是（漏字段/类型错/越界）        │ 否（注入/越权/契约漂移）
+            ▼                               ▼
+     结构化错误回喂重生成                直接拒绝
+     「field=quantity 期望              │
+       1-999，实际 1000000」            ├─ 注入 → 安全审计事件 + 告警
+            │                          ├─ 契约漂移 → 契约告警 + 兼容层
+            ▼                          └─ 越权 → 交由权限层处理
+     重试计数 +1                              （不给模型重试机会）
+            │
+      ┌─────┴─────┐
+      │ < 上限(2)  │ ≥ 上限
+      ▼           ▼
+   重新校验    停止重试
+      │        │
+      │        ├─ 有安全默认值 → 降级执行（并告知用户已降级）
+      │        └─ 无 → 向用户返回明确失败，不静默兜底
+      ▼
+    通过 → 执行
+</div>
+
+<p>三种处置方式的代价结构完全不同，选错会在成本或正确性上付出代价：</p>
+
+<table>
+<tr><th>处置方式</th><th>做法</th><th>代价</th><th>适用</th><th>风险</th></tr>
+<tr><td><strong>拒绝</strong></td><td>返回结构化错误，本次调用终止</td><td>近零</td><td>注入、越权、契约漂移等模型改不了的失败</td><td>用户体验上表现为功能不可用，需明确文案</td></tr>
+<tr><td><strong>自动修复</strong></td><td>服务端按确定规则纠正（<code>"100"</code>→<code>100</code>）</td><td>近零</td><td>确定的等价表示转换</td><td>规则一旦含猜测就会静默改变语义，且掩盖上游问题</td></tr>
+<tr><td><strong>回喂重生成</strong></td><td>把校验错误写清楚交给模型重出参数</td><td>一整轮推理的 token 与延迟</td><td>漏字段、类型错、越界等模型可自行改正的失败</td><td>无上限时可能循环；错误信息含糊则重试无效</td></tr>
+<tr><td><strong>降级执行</strong></td><td>用安全默认值执行并告知用户</td><td>结果不完整</td><td>非关键参数缺失、只读场景</td><td>绝不可用于有副作用的写操作</td></tr>
+</table>
+
+<h3>重试上限该定多少</h3>
+
+<p>重试的收益衰减极快：第一次重试携带了新信息（具体哪个字段错、期望什么），修复率高；第二次开始信息量不再增加，模型往往在同一处反复出错。行业实践中常见的默认值是最多 2–3 次，且在结构约束到位的管道里重试率通常能压到 2% 以下，对平均成本的影响不到百分之几。真正的成本失控出现在两种情况：没有上限，以及把不可修复的失败（如注入被拦）也送去重试——后者每次都必然再次失败，纯属白烧 token。</p>
+
+<div class="intuition-box">
+<p>重试预算要按"整个任务"而不是"单次调用"来记。单次调用限 2 次、任务内 20 次工具调用，最坏情况就是 40 轮额外推理。给任务级别设一个总的校验重试配额，超了就整体失败并上报，比在每个调用点各自限次安全得多。</p>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>同一份 Schema 同时驱动约束解码与服务端校验</li>
+<li>错误信息结构化并点名字段与期望值，便于回喂</li>
+<li>按失败原因分流：可改正的重生成，不可改正的直接拒</li>
+<li>重试配额按任务累计，并在超限时上报而非静默失败</li>
+<li>四层各自打点，观察错误在层间的分布迁移</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>因为开了约束解码就删掉服务端校验</li>
+<li>把注入、越权类失败也送给模型重试</li>
+<li>用"再试一次"当兜底，不设次数上限</li>
+<li>校验失败只记一行日志、不区分错误类别</li>
+<li>把复杂回溯正则放在长字符串的必经路径上</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details><summary>开了 OpenAI 的 strict Structured Outputs，四层校验是不是可以砍掉前两层？</summary><div class="answer">不能。约束解码解决的是"模型生成的结构不合规"这一个源头，它在解码时屏蔽违规 token，所以对字段缺失、类型错误这类问题确实极其有效。但参数错误还有另外两个源头：上游接口的契约漂移和用户内容透传，约束解码对这两者完全无能为力——上游把 <code>temperature</code> 改成 <code>temp</code>，模型侧的 Schema 约束一点也管不到。此外各家 API 对 JSON Schema 的支持只是子集，长度限制、复杂正则等约束往往被忽略，跨字段不变量更是表达不了。还有一个现实原因：一旦你的系统需要同时支持多家模型，硬保证就不存在了（例如 Anthropic 侧的 <code>strict</code> 语义被标注为忽略）。把结构正确性外包给某一家供应商的实现，等于把系统边界交给了别人的版本更新。</div></details>
+
+<details><summary>为什么类型归一要严格拒绝而不是尽量宽松地转换？</summary><div class="answer">宽松转换的短期收益是失败率下降，长期代价是三重的。第一，猜测规则会在边缘输入上猜错，<code>"1,200"</code> 到底是一个数还是两个数没有确定答案，猜错的结果是静默的语义错误而不是报错。第二，宽松转换掩盖了上游的问题，你再也不知道有多少请求本来是不合规的，契约漂移彻底失去可见性。第三，宽松一旦上线就收不回来，会有调用方开始依赖它。合理的做法是区分"确定的等价表示"和"需要猜测的表示"：<code>"100"</code> 与 <code>100</code> 在任何语境下都等价，可以归一；<code>"100元"</code> 需要剥离单位，属于猜测，应该拒绝并让上游改正。</div></details>
+
+<details><summary>越界的参数为什么不能直接夹到合法区间？</summary><div class="answer">因为静默夹取会让用户拿到与请求语义不符的结果，且完全无感。用户请求买 1,000,000 件，系统夹成 999 件并下单成功，这既不是用户想要的，也没有任何一方知道发生了偏差。更麻烦的是它污染了监控：越界请求本来是一个重要信号（可能是模型跑偏，也可能有人在探测边界），被夹取后在指标上表现为完全正常的成功调用。正确做法是拒绝并返回明确的错误，同时对越界事件单独打点。唯一可以接受截断的是返回量上限这类只读场景，但也必须在结果里显式标记"已截断"，让上层和模型都知道数据不完整。</div></details>
+
+<details><summary>本文和《SEC03 · 工具调用安全》在注入防御上重复了吗？边界怎么划？</summary><div class="answer">不重复，视角不同。本文是工程视角，关心的是参数值本身怎么被逐层洗干净：能不能解析、类型对不对、范围合不合理、值会不会被下游当作语法结构执行；失败之后是拒绝、修复还是让模型重生成，以及各自的成本。SEC03 是安全视角，关心的是这次调用<strong>被允许做什么</strong>：工具的权限该怎么授予与收敛、执行时是否跑在隔离环境里、读取类工具与外发类工具之间的链式升级怎么检测、事后审计能不能还原整条链路。两者的交集只在第四层：本文讲怎么用白名单收敛取值空间、用参数化查询做结构隔离，SEC03 讲这类工具本身该不该拥有对应的执行能力、以及被绕过后如何限制爆炸半径。实践中两者必须同时存在——参数洗得再干净也弥补不了一个权限过大的工具，权限收得再紧，脏参数仍能在授权范围内把业务数据搞乱。</div></details>
+
+<details><summary>让模型重新生成参数的重试次数应该定多少？</summary><div class="answer">单次调用 2–3 次是合理起点，但更重要的是配额记在哪里。重试的收益衰减很快：第一次重试携带了新信息（哪个字段错、期望什么范围），修复率最高；第二次之后信息量不再增加，模型常在同一处反复犯错，继续重试只是烧 token。同时必须按失败原因分流——注入被拦、权限不足、上游契约漂移这些失败模型自己改不了，送去重试每次都必然再失败。另一个容易踩的坑是配额的粒度：如果只限制单次调用，一个包含 20 次工具调用的任务最坏可能产生 40 轮额外推理，所以应该给任务级别设一个累计的校验重试配额，超限就整体失败并上报。</div></details>
+
+<details><summary>四层的顺序能调换吗？比如先做语义净化再做格式校验？</summary><div class="answer">不建议调换，顺序本身承载了两个设计意图。一是依赖关系：格式都解析不出来的时候，谈不上对某个字段做类型转换或注入检测，因为你甚至拿不到字段。二是成本递增：前面的层耗时更低、覆盖的错误更多，把便宜的检查放在前面能让大部分坏输入在最低成本处被挡掉，尤其是语义净化里的正则匹配是四层中最贵的一项，让它只处理已经通过前三层的输入是明显更划算的。此外顺序还影响错误信息的质量：先做格式校验，报出的错误是"缺少字段 quantity"这种可直接回喂给模型的信息；如果顺序打乱，很可能报出一个语义层的错误，而真实原因只是 JSON 少了一个括号。</div></details>
+
+<details><summary>为什么说注入检测用的正则本身可能是个风险点？</summary><div class="answer">用于匹配攻击特征的正则常常写得很复杂，带嵌套量词和多重可选分支。这类正则在遇到特定构造的长输入时会发生灾难性回溯，匹配耗时从微秒退化到秒甚至更久，于是校验层自己变成了拒绝服务的入口——攻击者不需要绕过你的检测，只需要让检测跑得足够慢。缓解方式有几个：先用长度上限把输入截短再匹配，因为超长输入本来就该被第三层拦掉；能用字符集判断的就不要用正则（判断"是否只含字母数字和连字符"不需要复杂表达式）；给正则匹配设超时或使用线性时间的正则引擎。更根本的解法还是回到白名单收敛——当取值空间被压到可穷举的枚举时，根本不需要在长字符串上跑复杂正则。</div></details>
+
+<details><summary>契约漂移的告警为什么要和普通业务异常分开？</summary><div class="answer">因为两者的处置路径完全不同。普通业务异常通常指向自己的代码或数据，排查方向是本地日志、最近的发布、依赖的资源；契约漂移指向的是上游服务改了接口，排查方向是对方的变更记录，需要联系的是另一个团队。如果两者混在同一类告警里，值班的人只会看到"某工具错误率飙升"，第一反应必然是查自己刚发的版本，而真实原因在别人的系统里，这个方向性错误往往要消耗掉大量排查时间。把字段集合比对的结果做成独立告警类别，让告警直接说出"出现未知字段 temp、缺失字段 temperature"，定位就从推理变成了阅读。附带的好处是这类告警天然自带修复方案——补一个显式的兼容映射，并给它安排下线计划。</div></details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A54 · 多 Agent 负载均衡与任务调度</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、两个失效的假设</a>
+<a href="#s2">二、任务复杂度建模：给任务称体重</a>
+<a href="#s3">三、容量归一：把异构 Agent 放进同一把秤</a>
+<a href="#s4">四、派发决策：算法谱系与推拉之争</a>
+<a href="#s5">五、健康感知：活着不等于好用</a>
+<a href="#s6">六、过载、失准与调度器自身</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>A54 · 多 Agent 负载均衡与任务调度</h1>
+<p class="subtitle">任务复杂度建模 / 异构 Agent 容量归一 / 预期负载最优派发 / 分层探针与熔断半开 / 过载降级与调度器高可用</p>
+
+<div class="intuition-box">
+<p>传统负载均衡建立在两个假设上：请求差不多重，后端差不多强。在多 Agent 系统里这两个假设同时崩掉——所以第一步不是挑算法，而是把"任务有多重"和"节点还剩多少"变成同一个单位的数字。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、两个失效的假设</h2>
+
+<p>轮询（Round Robin）和最少连接数（Least Connections）能统治 Web 负载均衡二十年，靠的不是算法精妙，而是它们赖以生存的两个前提在 Web 世界基本成立：同一个接口的请求耗时方差不大（几十到几百毫秒），后端机器是同规格批量采购的。在这两个前提下，"平均发牌"和"真实均衡"几乎是同一件事。</p>
+
+<p>把同一套东西搬到多 Agent 系统上，两个前提同时失效。一次 Agent 调用的耗时可以从 300 毫秒（缓存命中的简单分类）跨到 90 秒（开了深度思考、串了五轮工具调用的研究型任务），跨度是两三个数量级；而 Agent 池往往是拼凑出来的——有的挂着本地 GPU 跑开源模型，有的只是薄薄一层壳去调云端 API，有的还额外背着向量库和浏览器沙箱。<strong>方差跨数量级的时候，"平均分配请求数"和"公平分配压力"是两件毫不相干的事。</strong></p>
+
+<table>
+<tr><th>传统负载均衡的隐含假设</th><th>Web 场景为何成立</th><th>多 Agent 场景为何崩掉</th></tr>
+<tr><td>请求成本同质</td><td>同接口耗时方差在一个数量级内</td><td>Token 数从 200 到 100k，耗时跨 2~3 个数量级</td></tr>
+<tr><td>后端能力同质</td><td>同规格机器、同镜像部署</td><td>本地 GPU / 云 API / 带外部依赖的 Agent 混编</td></tr>
+<tr><td>请求无状态</td><td>会话放在 Redis，打哪台都一样</td><td>会话上下文与 Prompt 缓存有强节点亲和性</td></tr>
+<tr><td>后端容量是硬上限</td><td>连接数打满就拒绝，边界清晰</td><td>上游 API 配额、显存、排队深度是三条不同的软上限</td></tr>
+</table>
+
+<h3>1.1 两种典型的失效方式</h3>
+
+<p>轮询的失效方式是<strong>灌爆慢节点</strong>。它对后端的实际状态一无所知，一个已经排了 12 个任务的 Agent 和一个空闲的 Agent 在它眼里没有区别，于是慢节点的队列只会越来越长，最终触发上游超时——而超时重试又会按同样的轮次再灌一遍。</p>
+
+<p>最少连接数看起来聪明一些，它至少看得见"手上有几个活"，失效方式是<strong>被任务粒度欺骗</strong>：一个正在处理 80k token 长文摘要的 Agent 计数是 1，一个刚接了五个短分类请求的 Agent 计数是 5，于是下一个大任务被派给了那个真正忙得喘不上气的节点。它数的是任务条数，而真正稀缺的是算力和显存。</p>
+
+<p>还有一个更隐蔽的问题：<span class="term">Prompt 缓存亲和性</span>——同一段系统提示词和历史对话如果连续落到同一个推理实例，其 KV 缓存可以直接复用，省下的是这段前缀的全部 prefill 计算与对应的输入 Token 费用。纯粹追求负载均匀的调度器会把同一会话的连续请求打散到不同节点，均衡是达到了，代价是每次都重新预填一遍长上下文。<strong>在多 Agent 系统里，"均衡"从来不是唯一目标，它要和亲和性、优先级、成本一起被权衡。</strong></p>
+
+<div class="intuition-box">
+<p>轮询假设每个请求都是一颗一样的米粒，所以数米粒就够了。Agent 世界里飞过来的是米粒和西瓜混在一起，你必须先称重，再决定扔给谁。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、任务复杂度建模：给任务称体重</h2>
+
+<p>调度的第一块基础设施是<span class="term">任务复杂度建模</span>——在任务真正执行之前，用可观测的输入特征预估它将消耗多少资源，输出一个可比较的分值。这件事之所以可行，是因为大模型推理的成本结构相当规整，并不是黑箱。</p>
+
+<h3>2.1 为什么输出比输入贵得多</h3>
+
+<p>一次大模型调用的耗时由两个阶段构成，它们的性能瓶颈完全不同。<span class="term">Prefill（预填充）</span>阶段把整段输入一次性算成 KV 缓存，是可以高度并行的大矩阵乘法，受算力（compute-bound）约束，吞吐很高；<span class="term">Decode（解码）</span>阶段逐个 token 自回归生成，每生成一个 token 都要把模型权重和 KV 缓存重新读一遍，受显存带宽（memory-bound）约束，几乎无法靠并行加速。</p>
+
+<div class="formula">
+预计耗时 ≈ 输入Token数 / Prefill吞吐 + 输出Token数 × 单Token生成时延(TPOT)
+</div>
+
+<p>这个结构直接决定了复杂度打分里的权重分配：<strong>同样 1000 个 token，放在输出侧的成本通常是输入侧的一个数量级以上</strong>。所以"按输入长度排序任务"是常见的误判——一个 200 token 输入、要求生成 8000 token 报告的任务，比一个 20k token 输入、只要求回答"是/否"的任务重得多。</p>
+
+<h3>2.2 四类特征与打分</h3>
+
+<table>
+<tr><th>特征</th><th>怎么拿到</th><th>权重量级</th><th>典型陷阱</th></tr>
+<tr><td>输入 Token 数</td><td>执行前用分词器精确计算</td><td>低（1×）</td><td>忽略了系统提示词与历史消息，只数用户输入</td></tr>
+<tr><td>预期输出 Token 数</td><td><code>max_tokens</code> 上限 + 同类任务历史 P50</td><td>高（10~20×）</td><td>直接拿 <code>max_tokens</code> 当预估，导致普遍高估</td></tr>
+<tr><td>模型档位与推理模式</td><td>路由决策已知：模型规模、是否开思考</td><td>乘性系数</td><td>思考型模型的隐式思考 Token 常被漏算</td></tr>
+<tr><td>预期工具轮数</td><td>任务类型的历史轮数分布</td><td>乘性系数</td><td>每轮工具结果都会追加进上下文，成本非线性增长</td></tr>
+</table>
+
+<p>把四类特征加权求和后，不要线性映射到 1~10 分，而要<strong>按历史分位数映射</strong>：因为任务成本是重尾分布，线性映射会让 95% 的任务挤在 1~2 分区间，分值失去区分度。用分位数映射后，"5 分"稳定表示"比一半的任务重"，调度阈值才有意义。</p>
+
+<h3>2.3 预估精度只需要够用</h3>
+
+<p>复杂度预估不需要准，只需要<strong>能把重任务和轻任务分进不同的桶</strong>。调度决策本质是排序，排序只依赖相对大小；把 3 分的任务估成 4 分毫无影响，把 9 分的任务估成 2 分才是灾难。所以建模的重点应该放在"不要低估重任务"上——预估偏保守（宁可高估）比追求无偏更符合工程利益，因为低估的代价是节点被打爆，高估的代价只是稍微浪费一点容量。</p>
+
+<div class="intuition-box">
+<p>复杂度分不是预言，是分桶。你要的不是"这个任务会花 4.7 秒"，而是"这个任务属于重量级，别扔给那个已经在喘的节点"。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、容量归一：把异构 Agent 放进同一把秤</h2>
+
+<p>任务称完体重，接下来要给每个 Agent 量出"还能扛多少"。这一步的难点在于异构：CPU 使用率对一个纯调 API 的 Agent 毫无意义（它 90% 时间在等网络，CPU 接近 0，但配额可能已经用满），显存占用对一个云端 Agent 也无从采集。</p>
+
+<h3>3.1 真正的瓶颈指标</h3>
+
+<table>
+<tr><th>指标</th><th>适用的 Agent 类型</th><th>采样周期</th><th>失真风险</th></tr>
+<tr><td>排队深度（等待中的任务数）</td><td>全部</td><td>1~2 秒</td><td>不区分队列里任务的轻重，需按复杂度分加权</td></tr>
+<tr><td>在途复杂度总和</td><td>全部</td><td>实时递增/递减</td><td>依赖复杂度预估的准确性</td></tr>
+<tr><td>KV 缓存 / 显存占用率</td><td>自部署推理</td><td>1 秒</td><td>接近上限时性能断崖式下跌，不是线性劣化</td></tr>
+<tr><td>上游配额余量（RPM / TPM）</td><td>云 API 型</td><td>滑动窗口统计</td><td>多副本共用同一把配额，本地计数会低估</td></tr>
+<tr><td>近期 P95 时延与成功率</td><td>全部</td><td>10~30 秒 EWMA</td><td>滞后于故障发生，只能作为辅助信号</td></tr>
+</table>
+
+<p>其中<strong>在途复杂度总和</strong>是最值得投入的一个指标：它把"手上有几个活"升级成"手上活的总重量"，正是最少连接数缺的那一块。实现上就是派发时把任务复杂度分加到目标 Agent 的计数器上，回调完成时减掉。</p>
+
+<h3>3.2 容量归一：用基准任务集校准</h3>
+
+<p>不同 Agent 的能力要换算成同一个单位——把复杂度分的量纲反过来用，定义容量为"每秒能消化的复杂度点数"。校准方式是<span class="term">基准任务集</span>：准备一组覆盖轻中重三档的标准任务，在节点上线时（以及每次模型或硬件变更后）跑一遍，测出实际吞吐，得到该节点的容量点数。这样一台 8 卡机和一个云 API 通道就有了可比较的数字。</p>
+
+<div class="formula">
+预期负载 = (在途复杂度总和 + 本次任务复杂度) / 该节点容量点数
+</div>
+
+<div class="arch-diagram">
+   任务 T (复杂度 7)
+        │
+        ▼
+ ┌──────────────────────────────────────────────────────────┐
+ │                    调 度 器                                │
+ │  ┌────────────┐   ┌─────────────┐   ┌─────────────────┐  │
+ │  │ 复杂度建模   │──▶│  候选过滤    │──▶│  预期负载排序     │  │
+ │  │ in/out/模型 │   │ 能力/配额/熔断│   │ (在途+C)/容量    │  │
+ │  └────────────┘   └─────────────┘   └────────┬────────┘  │
+ └──────────────────────────────────────────────┼───────────┘
+                                                ▼
+   ┌────────────────┬────────────────┬────────────────┐
+   │   Agent-A      │    Agent-B     │    Agent-C     │
+   │ 本地 GPU 70B    │  云 API Sonnet │  云 API Haiku  │
+   │ 容量 40 点/秒   │  容量 25 点/秒  │  容量 60 点/秒  │
+   │ 在途 12 → 0.48 │  在途 20 → 0.96│  在途 5 → 0.20 │◀── 最低
+   └────────────────┴────────────────┴────────────────┘
+        (12+7)/40         (20+7)/25        (5+7)/60
+</div>
+
+<h3>3.3 为什么必须是"预期"负载，而不是"当前"负载</h3>
+
+<p>如果只看当前负载，多个并发的派发决策会在同一瞬间看到同一个空闲节点，然后一起扑上去——这就是<span class="term">羊群效应</span>，也是所有基于陈旧指标的调度算法的通病。指标采集有周期（假设 2 秒），这 2 秒内可能已经派发了几百个任务，而调度器眼里的负载还是 2 秒前的快照。</p>
+
+<p>解决办法有两个，通常一起用。一是<strong>本地预扣</strong>：派发瞬间就把复杂度加到本地维护的在途计数上，不等远端指标回传，这样后续决策立刻能看到"这个节点刚被塞了一个大任务"。二是<strong>二选一（Power of Two Choices）</strong>：随机抽两个候选节点，只在这两个之间选负载更低的那个。这个策略的价值在于它对陈旧信息有天然的鲁棒性——最坏情况是选到了次优节点，而不是像"全局选最优"那样把所有请求都推向同一个已经过期的"最闲"节点。</p>
+
+<div class="intuition-box">
+<p>调度器看到的永远是过去的世界。所以它不该赌"我知道谁最闲"，而该赌"我随手挑两个，其中较闲的那个大概不会太糟"。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、派发决策：算法谱系与推拉之争</h2>
+
+<p>把前两节的材料准备好之后，具体选哪个算法反而成了最简单的一步。关键是认清每种算法真正在优化什么，以及它需要什么样的信息基础设施来支撑。</p>
+
+<table>
+<tr><th>策略</th><th>决策依据</th><th>需要的基础设施</th><th>适用场景</th><th>主要代价</th></tr>
+<tr><td>轮询 / 加权轮询</td><td>顺序 / 静态权重</td><td>无</td><td>任务同质、节点同质的内部批处理</td><td>完全无视实时状态</td></tr>
+<tr><td>最少连接数</td><td>在途任务条数</td><td>在途计数</td><td>任务耗时方差小于 3 倍</td><td>被任务粒度欺骗</td></tr>
+<tr><td>最少在途复杂度</td><td>在途复杂度加权和</td><td>复杂度建模 + 计数器</td><td>任务重量差异大的通用场景</td><td>依赖预估质量</td></tr>
+<tr><td>预期负载最优</td><td>(在途+C)/容量</td><td>再加容量校准</td><td>异构节点池</td><td>容量需定期重新校准</td></tr>
+<tr><td>P2C + EWMA</td><td>随机两选一比时延</td><td>时延统计</td><td>节点数多、指标必然陈旧</td><td>不保证全局最优</td></tr>
+<tr><td>有界负载一致性哈希</td><td>哈希亲和 + 负载上限</td><td>哈希环 + 负载水位</td><td>需要 Prompt 缓存复用的会话流量</td><td>扩缩容时有重映射抖动</td></tr>
+<tr><td>集中队列拉取</td><td>Agent 空闲即取</td><td>可靠队列</td><td>长耗时、成本难预估的任务</td><td>失去全局排序与亲和性控制</td></tr>
+</table>
+
+<h3>4.1 推模型与拉模型的分水岭</h3>
+
+<p>前面所有讨论都属于<strong>推模型</strong>：调度器预估成本、观察状态、主动把任务塞给某个节点。它的全部风险集中在一件事上——预估错了就派错了。<strong>拉模型</strong>反过来：任务统一进队列，Agent 处理完手上的活就自己来取下一个。它天然免疫复杂度预估失准，因为"我现在有空"这个信号不需要预估，是节点自己的事实。</p>
+
+<p>代价也很明确：拉模型下调度器失去了对派发时机的控制，很难实现"这个大任务必须给 GPU 节点""同一会话优先复用缓存"这类约束——因为是节点先举手，不是调度器先挑人。工程上常见的折中是<strong>分类队列 + 拉取</strong>：按任务类型和重量分成若干队列（如 gpu-heavy / api-light / batch），每个 Agent 只订阅它有能力消费的队列，在队列内部用拉取模式自然均衡。这样硬约束由队列划分表达，均衡由拉取保证，两边的好处都拿到了一部分。</p>
+
+<div class="arch-diagram">
+             需要"分给谁"的强控制？（亲和性/优先级/硬约束）
+                          │
+              ┌───────────┴───────────┐
+             是                        否
+              │                        │
+              ▼                        ▼
+      任务成本可预估？            ┌──────────────┐
+              │                  │  集中队列拉取   │
+      ┌───────┴───────┐          │  Agent 空即取  │
+     是                否         └──────────────┘
+      │                │
+      ▼                ▼
+ ┌──────────┐   ┌──────────────┐
+ │ 预期负载最优│   │ 分类队列+拉取  │
+ │ 节点异构   │   │ 队列表达硬约束 │
+ └──────────┘   └──────────────┘
+      │
+      │ 节点数 > 数十、指标必然陈旧
+      ▼
+ ┌──────────────┐
+ │ P2C + EWMA   │
+ └──────────────┘
+</div>
+
+<div class="highlight">
+<strong>行业数据 · 多 Agent 的成本放大：</strong>Anthropic 工程博客《How we built our multi-agent research system》（2025-06）公布了两组数字：单 Agent 的 Token 消耗约为普通聊天的 <strong>4 倍</strong>，多 Agent 系统约为 <strong>15 倍</strong>；在 BrowseComp 评测上，Token 用量单独就解释了 <strong>80%</strong> 的效果方差（叠加工具调用次数与模型选择共解释 95%）。这对调度的含义很直接：Token 既是效果的主要驱动，也是成本的主要构成，因此"把任务派给谁"同时决定了这次任务的质量和账单——调度器实际上是成本控制的第一道闸门，而不只是一个流量分发器。
+</div>
+
+<div class="intuition-box">
+<p>推模型是"我猜你行"，拉模型是"你说你行"。猜不准的时候，就把选择权交回给干活的人。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、健康感知：活着不等于好用</h2>
+
+<p>调度器手里的 Agent 名单必须持续刷新，否则再精妙的算法也只是在往坟墓里投任务。传统健康检查只回答"进程在不在"，而 LLM Agent 有一整类传统检查完全看不见的故障：<strong>它活着，但变傻了</strong>——上游模型被静默降级、提示词模板被人改坏、工具凭证过期、上下文被污染后开始胡乱调用工具。进程健康、端口通畅、CPU 正常，输出全是垃圾。</p>
+
+<h3>5.1 分层探针</h3>
+
+<table>
+<tr><th>层级</th><th>探测内容</th><th>典型周期</th><th>能发现什么</th><th>成本与副作用</th></tr>
+<tr><td>L1 存活探针</td><td>轻量心跳 / 端口连通</td><td>5 秒，连续 3 次失联判死</td><td>进程崩溃、网络分区、机器宕机</td><td>几乎为零</td></tr>
+<tr><td>L2 功能探针</td><td>执行固定小任务，校验输出结构与已知答案</td><td>30 秒</td><td>模型不可用、凭证过期、模板损坏、输出格式退化</td><td>有 Token 成本，必须只读无副作用</td></tr>
+<tr><td>L3 质量抽样</td><td>对真实流量抽样离线打分</td><td>分钟级</td><td>模型降智、答案质量缓慢漂移</td><td>成本最高，结论滞后</td></tr>
+</table>
+
+<p>L1 用"连续 3 个周期失联"而不是"单次超时"来判死，是为了容忍网络抖动——单次误判会把一个健康节点摘掉，摘掉后剩余节点负载上升，容易引发连环误判。L2 的设计有两条硬约束：探针任务必须<strong>幂等且无副作用</strong>（绝不能真的下单、真的写库），而且必须有<strong>可验证的期望输出</strong>，否则它只能证明"有响应"，退化成一个昂贵的 L1。</p>
+
+<h3>5.2 熔断状态机的三个细节</h3>
+
+<div class="arch-diagram">
+                    ┌─────────────────────────────┐
+          ┌────────▶│         CLOSED 正常          │
+          │         │  滑动窗口统计成功率            │
+          │         │  条件: 窗口内请求数 ≥ 20 且    │
+          │         │        失败率 > 50%           │
+          │         └──────────────┬──────────────┘
+          │                        │ 跳闸
+    连续 N 次探测成功                ▼
+          │         ┌─────────────────────────────┐
+          │         │          OPEN 熔断           │
+          │         │  全部快速失败，不占用超时预算    │
+          │         │  冷却 10s（失败则指数延长）     │
+          │         └──────────────┬──────────────┘
+          │                        │ 冷却结束
+          │                        ▼
+          │         ┌─────────────────────────────┐
+          └─────────│       HALF-OPEN 半开         │
+                    │  仅放行 ≤3 个并发探测请求      │
+        任一失败 ────▶│  其余继续快速失败             │
+        回到 OPEN     └─────────────────────────────┘
+</div>
+
+<p>第一个细节是<strong>最小请求数门槛</strong>：窗口内只有 2 个请求、其中 1 个失败，失败率 50% 达标，但这是小样本噪声。不设门槛的熔断器会在低流量时段疯狂误触发。第二个细节是<strong>半开的并发限制</strong>：半开状态只允许极少量探测请求通过，否则冷却期积压的流量会在开闸瞬间一次性涌向刚刚恢复的节点，把它二次打死。第三个细节是<strong>冷却时间指数延长</strong>：如果半开探测再次失败，下一轮冷却时间应该翻倍，而不是固定 10 秒——对一个已经彻底挂掉的节点每 10 秒探一次，是持续的无效开销。</p>
+
+<h3>5.3 重试：退避、抖动与预算</h3>
+
+<p>重试是必要的，但重试也是把小故障放大成雪崩的最常见路径。三件事必须一起做：</p>
+
+<ul>
+<li><span class="term">指数退避</span>：等待时间随重试次数翻倍（1s → 2s → 4s），给下游留出恢复窗口。只做退避不做抖动仍然危险——同一时刻失败的请求会在同一时刻重试。</li>
+<li><span class="term">随机抖动</span>：在退避基础上叠加随机量。工程上常用"完全抖动"，即从 <code>[0, 2^n × base]</code> 区间均匀取值，把重试洪峰彻底摊平成一条平线。</li>
+<li><span class="term">重试预算</span>：全局限制重试请求占总请求量的比例（典型上限 10%）。这是最容易被忽略却最关键的一道闸——它保证"下游全挂"时重试带来的额外压力有硬上限，而不是随失败率线性膨胀。</li>
+</ul>
+
+<div class="highlight">
+<strong>示例场景 · 跨层重试放大：</strong>一个三层链路——网关调编排器、编排器调 Agent、Agent 调工具——每层都"很合理"地配了最多 3 次重试。工具侧发生一次持续 30 秒的抖动，最坏情况下单个用户请求向工具发起的调用次数是 3×3×3 = <strong>27 次</strong>，也就是说工具在故障期间承受的压力是正常流量的 27 倍，一次本可自愈的抖动被重试自己变成了持续过载。修正方式是<strong>只在最靠近故障的一层重试</strong>（这里是 Agent 调工具那一层），上层只做超时和熔断、不做重试；同时给这一层配 10% 的重试预算，把最坏放大倍数从 27 倍压到 1.1 倍。
+</div>
+
+<div class="intuition-box">
+<p>存活探针问的是"你还有呼吸吗"，功能探针问的是"你还会做题吗"。LLM Agent 最贵的故障是第二个问题答错，而第一个问题一切正常。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、过载、失准与调度器自身</h2>
+
+<p>前五节假设系统整体容量是够的，只是分配需要优化。真正的生产事故往往发生在容量不够的那一刻——这时调度器的职责从"选最优"切换成"保住一部分"。</p>
+
+<h3>6.1 队列积压时按截止时间丢弃</h3>
+
+<p>队列长度超过阈值就返回"系统繁忙"是一种粗糙但有效的保护。更精细的做法是<span class="term">按截止时间调度</span>：每个任务入队时带上它的时延预算（比如用户交互类 8 秒、批处理类 5 分钟），调度器在出队时先检查"这个任务就算现在开始执行也已经来不及了吗"，来不及的直接丢弃并快速失败。</p>
+
+<p>这个策略的价值在于避免<strong>无效功</strong>：严重积压的 FIFO 队列会出现最坏局面——队头的任务已经等了 20 秒，上游早就超时断连了，Agent 却还在认认真真为它计算，算完的结果没人接收；而后面每个任务都重复这个命运，于是系统 100% 满载、0% 有效产出。反直觉的应对是<strong>过载时切到后进先出</strong>：既然排在前面的注定超时，不如优先服务刚到的请求，至少保证一部分请求能在预算内完成。</p>
+
+<table>
+<tr><th>过载档位</th><th>触发条件（示例阈值）</th><th>动作</th><th>用户感知</th></tr>
+<tr><td>L0 正常</td><td>队列等待 P95 &lt; 1s</td><td>按预期负载最优派发</td><td>无</td></tr>
+<tr><td>L1 收紧</td><td>队列等待 P95 &gt; 3s</td><td>暂停非核心任务派发，重任务改路由到小模型</td><td>答案质量略降</td></tr>
+<tr><td>L2 丢弃过期</td><td>队列长度 &gt; 容量×5</td><td>出队时丢弃已超时延预算的任务；切 LIFO</td><td>部分请求快速失败</td></tr>
+<tr><td>L3 入口限流</td><td>队列长度 &gt; 容量×10</td><td>入口直接拒绝，返回重试时间建议</td><td>明确的繁忙提示</td></tr>
+</table>
+
+<h3>6.2 预估失准的闭环校准</h3>
+
+<p>复杂度预估一定会失准，重要的是让它随时间变准。做法是把每次任务的<strong>预估值与实际消耗</strong>都记下来，按任务类型分组计算误差比（实际/预估）的移动平均，作为该类型的校准系数回填到打分公式里。这样"生成周报"这类被系统性低估的任务，会在几百次执行后自动获得一个 1.6 倍的修正。</p>
+
+<p>还需要一道运行时兜底：任务实际消耗一旦超过预估的若干倍（比如 3 倍），说明这次预估彻底失效，应当立即触发处理——要么中止（对有超时预算的交互任务），要么把这个节点标记为"已超载"暂停向它派发新任务，防止一个被严重低估的任务在节点上持续挤占资源。</p>
+
+<h3>6.3 调度器自己不能是单点</h3>
+
+<table>
+<tr><th>故障模式</th><th>后果</th><th>对策</th></tr>
+<tr><td>调度器进程崩溃</td><td>派发完全停摆</td><td>调度逻辑无状态化，多副本 + 前置负载均衡</td></tr>
+<tr><td>在途计数丢失</td><td>重启后误判所有节点空闲，瞬间灌爆</td><td>计数放外部存储（Redis/etcd），并设置慢启动预热</td></tr>
+<tr><td>多副本决策打架</td><td>同一节点被多个副本同时选中</td><td>共享在途计数 + 用 P2C 替代全局选最优</td></tr>
+<tr><td>注册表脑裂</td><td>已下线节点仍在接收任务</td><td>注册项带 TTL 自动过期，节点主动续租</td></tr>
+<tr><td>指标通道故障</td><td>拿不到负载数据，无法打分</td><td>降级为加权轮询，而不是停止派发</td></tr>
+</table>
+
+<p>最后一行是整节最重要的一条原则：<strong>调度器的所有依赖都必须可降级</strong>。指标采集挂了就退回加权轮询，复杂度模型不可用就退回最少连接数，注册表不可用就用本地缓存的上一份名单。一个"信息不全就不敢派发"的调度器，比一个"信息不全就退回笨办法"的调度器危险得多——前者会把一次监控故障升级成一次全站不可用。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>把在途负载按<strong>任务复杂度加权</strong>，而不是数任务条数</li>
+<li>容量用基准任务集校准，模型或硬件变更后<strong>重新校准</strong></li>
+<li>派发瞬间<strong>本地预扣</strong>复杂度，不等指标回传</li>
+<li>功能探针必须<strong>无副作用</strong>且有可验证的期望输出</li>
+<li>熔断器设<strong>最小请求数门槛</strong>，半开限制并发探测数</li>
+<li>只在最靠近故障的那一层重试，并配<strong>重试预算</strong></li>
+<li>过载时按<strong>时延预算丢弃</strong>注定超时的任务，避免无效功</li>
+<li>指标通道故障时<strong>降级为轮询</strong>，绝不停止派发</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>拿 <code>max_tokens</code> 当输出预估，导致所有任务被普遍高估</li>
+<li>把复杂度分<strong>线性映射</strong>到 1~10，让 95% 任务挤在低分区</li>
+<li>用"全局选最优"配 2 秒周期的陈旧指标，制造<strong>羊群效应</strong></li>
+<li>只靠进程存活判断健康，看不见"活着但变傻"</li>
+<li>单次心跳超时就摘节点，一次抖动引发连环误判</li>
+<li>指数退避<strong>不加抖动</strong>，失败请求整齐列队再次冲击</li>
+<li>每一层都独立配 3 次重试，把故障放大成 27 倍压力</li>
+<li>调度器在内存里维护在途计数，重启即误判全员空闲</li>
+</ul>
+</div>
+</div>
+
+<div class="highlight">
+<strong>💡 知识要点：</strong>这张卡讲的是"任务怎么分、分给谁"这一件事的完整链路——称重、量容量、选节点、判健康、过载兜底。多 Agent 系统的其余治理面（通信拓扑怎么选、协议怎么分层组合、跨 Agent 状态怎么同步和断点恢复、可观测闭环怎么搭）是另一个正交的话题，见 <a href="../agent/multi_agent_production_governance.html">《A48 · 多 Agent 生产治理》</a>：<strong>A48 是多 Agent 治理的全景地图，本文只钻其中"调度"这一格，把它挖到能落地的深度。</strong>当同一批任务争抢的不是算力而是同一个外部工具或资源时，问题从"负载均衡"变成"并发仲裁"，见 <a href="../agent/multi_agent_tool_conflict.html">《A55 · 多 Agent 工具调用冲突仲裁》</a>。
+</div>
+
+<div class="intuition-box">
+<p>容量够的时候，调度器的工作是选最优；容量不够的时候，它的工作是决定谁被放弃。第二种能力才是生产系统真正被考验的那一半。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>最少连接数已经能感知负载了，为什么在 Agent 场景还不够？</summary>
+<div class="answer">因为它数的是任务条数，而多 Agent 系统里稀缺的资源是算力、显存和 Token 配额，两者之间没有稳定的换算关系。一个正在处理 80k token 长文摘要的 Agent 计数是 1，一个刚接了五个短分类的 Agent 计数是 5，最少连接数会把下一个大任务派给前者——而前者才是真正忙得喘不上气的。修正方式是把计数换成"在途复杂度加权和"：派发时把任务的复杂度分加到目标节点的计数器上，完成时减掉。这一步改动很小，但它把"数米粒"变成了"称重量"，是从 Web 式负载均衡跨到 Agent 调度的最短路径。</div>
+</details>
+
+<details>
+<summary>预估任务复杂度时，为什么输出 Token 的权重要比输入高一个数量级？</summary>
+<div class="answer">因为大模型推理的两个阶段瓶颈完全不同。预填充阶段把整段输入一次算成 KV 缓存，是可并行的大矩阵乘法，受算力约束，吞吐很高；解码阶段逐个 token 自回归生成，每个 token 都要重新读一遍模型权重和 KV 缓存，受显存带宽约束，几乎无法并行加速。所以同样 1000 个 token，出现在输出侧的成本通常是输入侧的一个数量级以上。这直接推翻了"按输入长度排任务"的直觉：一个 200 token 输入、要生成 8000 token 报告的任务，远比一个 20k token 输入、只答"是/否"的任务重。</div>
+</details>
+
+<details>
+<summary>复杂度预估注定不准，这套方案还成立吗？</summary>
+<div class="answer">成立，因为调度决策本质是排序，排序只依赖相对大小而不是绝对精度。把 3 分估成 4 分对结果毫无影响，只有把 9 分估成 2 分才是灾难，所以建模的目标应该是"不要低估重任务"，宁可整体偏保守。此外有三道补救：一是闭环校准，记录每类任务的预估与实际之比，用移动平均回填校准系数；二是运行时兜底，实际消耗超过预估 3 倍就中止任务或暂停向该节点派发；三是最终退路，把推模型换成拉模型——任务进队列，Agent 空了自己来取，"我现在有空"是节点自己的事实，根本不需要预估。</div>
+</details>
+
+<details>
+<summary>为什么"全局选最负载最低的节点"反而可能比随机二选一更差？</summary>
+<div class="answer">因为调度器看到的负载永远是过去的快照。指标采集有周期，假设 2 秒，这 2 秒内可能已经派发了几百个任务，而调度器眼里的数据还是 2 秒前的。此时"全局选最优"意味着所有并发决策都指向同一个"最闲"节点，一起把它灌爆，这就是羊群效应。随机二选一（Power of Two Choices）只在随机抽到的两个候选间比较，最坏结果是选到次优节点，不会出现全体涌向同一个过期最优解的情况，因此对陈旧信息有天然鲁棒性。工程上还应叠加本地预扣：派发瞬间就把复杂度记到本地在途计数上，不等远端指标回传。</div>
+</details>
+
+<details>
+<summary>为什么 Agent 需要"业务心跳"这一层，普通存活检查差在哪？</summary>
+<div class="answer">因为 LLM Agent 有一整类"进程健康但输出是垃圾"的故障：上游模型被静默降级、提示词模板被人改坏、工具凭证过期、上下文被污染后开始乱调工具。这些情况下端口通畅、CPU 正常、存活探针全绿，调度器却在源源不断地把任务投进一个只会产出错误答案的节点。功能探针的做法是定期让节点执行一个固定的小任务，并校验输出的结构和已知答案，这样才能捕捉"变傻"。设计上有两条硬约束：探针任务必须幂等且完全无副作用，绝不能真的下单写库；必须有可验证的期望输出，否则它只能证明"有响应"，退化成一个昂贵的存活检查。</div>
+</details>
+
+<details>
+<summary>重试的三件套——退避、抖动、预算，各自防的是什么？</summary>
+<div class="answer">退避防的是"追着打"：失败往往意味着下游过载，立刻重试只会加剧过载，等待时间随次数翻倍是给下游留恢复窗口。抖动防的是"整齐列队"：同一时刻失败的一批请求，如果退避时长完全相同，就会在同一时刻一起重试，形成周期性的二次洪峰，所以要在退避区间内随机取值把洪峰摊平。预算防的是"总量失控"：前两者只管单个请求的节奏，不管系统总的重试量；全局限制重试占总请求量的比例（典型 10%）之后，即使下游全挂，额外压力也有硬上限。三者之外还有一条常被忽略的原则——只在最靠近故障的那一层重试，否则三层各自 3 次会把压力放大到 27 倍。</div>
+</details>
+
+<details>
+<summary>队列严重积压时，为什么后进先出可能比先进先出更好？</summary>
+<div class="answer">因为先进先出在严重积压时会陷入 100% 满载、0% 有效产出的最坏局面：队头任务已经等了远超时延预算的时间，上游早就超时断连，Agent 却还在为它认真计算，算完的结果没人接收；后面每个任务重复同样的命运，系统所有算力都花在生产没人要的结果上。后进先出优先服务刚到的请求，这些请求的时延预算还没用完，至少能保证一部分成功返回。更完整的做法是给每个任务带上时延预算，出队时先判断"就算现在开始也来不及吗"，来不及的直接丢弃快速失败，把算力留给还救得回来的请求。这是过载保护的核心思路：宁可明确放弃一部分，也不要让所有请求一起失败。</div>
+</details>
+
+<details>
+<summary>调度器本身怎么做到不成为单点，最容易踩的坑是什么？</summary>
+<div class="answer">基本做法是调度逻辑无状态化、多副本部署、前置一层普通负载均衡，Agent 注册表和在途计数放到 Redis 或 etcd 这类外部存储，注册项带 TTL 由节点主动续租以避免脑裂。最容易踩的坑是把在途计数留在进程内存里：调度器重启后计数归零，它会认为所有节点都空闲，然后在几秒内把积压流量一次性灌进去——一次例行发布就变成一次全站抖动，正确做法是计数外置并配合慢启动预热。另一个坑是"信息不全就不敢派发"：指标通道故障时应该降级为加权轮询，复杂度模型不可用时退回最少连接数，注册表不可用时用本地缓存的上一份名单，绝不能停止派发，否则一次监控故障会被升级成一次业务不可用。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

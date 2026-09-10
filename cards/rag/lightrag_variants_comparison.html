@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G28 · 轻量 GraphRAG 变体选型</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#8b949e}
+.data-asof strong{color:#d29922}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、轻量派从哪来：索引账单压垮了谁</a>
+<a href="#s2">二、LightRAG：砍掉社区层</a>
+<a href="#s3">三、HippoRAG 2：用个性化 PageRank 做联想</a>
+<a href="#s4">四、LazyGraphRAG：把 LLM 全推到查询时</a>
+<a href="#s5">五、为什么两份评测能得出相反结论</a>
+<a href="#s6">六、选型：三个维度定方案</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>G28 · 轻量 GraphRAG 变体选型</h1>
+<p class="subtitle">LightRAG 去社区化 / HippoRAG 2 个性化 PageRank / LazyGraphRAG 延迟摘要 / 增量更新代价 / 评测口径矛盾 / 三维决策</p>
+
+<div class="intuition-box">
+<p>微软 GraphRAG 用"预先给全图生成社区摘要"换来了全局洞察能力，代价是索引账单和增量更新的噩梦。后来的每一个变体，本质上都在回答同一个问题：这份摘要能不能不预先做？LightRAG 的答案是不做，HippoRAG 2 的答案是换个机制做，LazyGraphRAG 的答案是等到有人问了再做。</p>
+</div>
+
+<p>这张卡假设你已经知道 GraphRAG 是什么。它的实体抽取、Leiden 社区检测、Local/Global Search 双路径在 <a href="./graphrag_guide.html">G21 GraphRAG</a> 里讲过，经典知识图谱的三元组与嵌入推理在 <a href="../data/knowledge_graph.html">D02 知识图谱</a>，图存储引擎选型在 <a href="../database/graph_database_guide.html">B04 图数据库</a>。这里只讲后来者：它们各自砍掉了 GraphRAG 的哪一块，砍掉之后失去了什么。</p>
+
+<!-- ==================== 一 ==================== -->
+<div class="section" id="s1">
+<h2>一、轻量派从哪来：索引账单压垮了谁</h2>
+
+<p>要理解这些变体为什么长成现在这样，得先看清 GraphRAG 的成本结构。它的索引流程有五步：切块、LLM 抽实体与关系、建图、跑社区检测、<strong>为每一个社区生成摘要</strong>。前四步的成本还算可控，第五步是账单的主体——每个社区都要调一次大模型写摘要，而一个中等规模语料能产出成百上千个社区。</p>
+
+<div class="arch-diagram">
+  GraphRAG 索引五步与成本分布
+
+  ┌──────────┐
+  │ 原始文档 │
+  └────┬─────┘
+       │  ① 切块                        成本：可忽略
+       ▼
+  ┌──────────┐
+  │  Chunks  │
+  └────┬─────┘
+       │  ② LLM 逐块抽实体+关系          成本：★★★ 与语料量线性相关
+       ▼
+  ┌──────────┐
+  │ 实体/关系│
+  └────┬─────┘
+       │  ③ 建图 + 消歧                  成本：★
+       ▼
+  ┌──────────┐
+  │  知识图  │
+  └────┬─────┘
+       │  ④ Leiden 社区检测              成本：★ 纯图算法，不调 LLM
+       ▼
+  ┌──────────┐
+  │  社区树  │
+  └────┬─────┘
+       │  ⑤ 逐社区生成摘要               成本：★★★★ 账单主体
+       ▼                                      也是增量更新的病根
+  ┌──────────────┐
+  │ 社区摘要索引 │
+  └──────────────┘
+
+  轻量派动的刀，全在 ② 和 ⑤ 上。
+</div>
+
+<p class="data-asof"><strong>数据截止 2026-09</strong> · 下表数字来自各方案的论文、官方博客与第三方实测文章，模型定价变动频繁，用于算账前请按当期单价重算。</p>
+
+<table>
+<tr><th>成本项</th><th>量级</th><th>出处</th></tr>
+<tr><td>GraphRAG 索引 100 万 token 语料</td><td>约 20~50 美元（按当时 GPT-4o 定价估算）</td><td>第三方实测文章 puppylpg 博客（2026-06）</td></tr>
+<tr><td>传统向量 RAG 索引同等语料</td><td>几美分</td><td>同上，差三到四个数量级</td></tr>
+<tr><td>GraphRAG 索引 5GB 法律文档</td><td>约 3.3 万美元</td><td>社区实践者估算，广泛转引</td></tr>
+<tr><td>GraphRAG 单次 Global Search 读入 token</td><td>610 个社区 × 约 1000 token ≈ 61 万</td><td>LightRAG 论文法律数据集实验</td></tr>
+<tr><td>GraphRAG 一次增量更新</td><td>约 1399 × 2 × 5000 token 用于重建社区摘要</td><td>LightRAG 论文同一组实验</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>社区摘要是 GraphRAG 全局洞察能力的来源，也是它一切麻烦的来源：加一批新文档，社区结构就变了，旧摘要全部作废，得重新聚类、重新写一遍。这不是实现上的瑕疵，是设计的必然后果——预计算的东西，一旦底层变了就得重算。</p>
+</div>
+
+<h3>三条不同的破局思路</h3>
+
+<p>看清病根之后，三个变体的取舍就有了统一的解释框架。它们都同意"社区摘要太贵"，但对"那全局洞察怎么办"给出了不同答案。</p>
+
+<table>
+<tr><th>方案</th><th>砍掉了什么</th><th>用什么补</th><th>失去了什么</th></tr>
+<tr><td>LightRAG</td><td>整个社区层（步骤 ④⑤）</td><td>查询时用双层关键词现场组装</td><td>预计算的全局视角，深度洞察偏弱</td></tr>
+<tr><td>HippoRAG 2</td><td>社区层，但保留 LLM 抽取</td><td>个性化 PageRank 在图上传播相关性</td><td>图更稠密，索引仍需 LLM 抽三元组</td></tr>
+<tr><td>LazyGraphRAG</td><td>索引阶段的<strong>全部</strong> LLM 调用（步骤 ②⑤）</td><td>经典 NLP 建概念图，摘要推迟到查询时</td><td>索引后无法预览语义结构，查询时更重</td></tr>
+</table>
+</div>
+
+<!-- ==================== 二 ==================== -->
+<div class="section" id="s2">
+<h2>二、LightRAG：砍掉社区层</h2>
+
+<p><span class="term">LightRAG</span> 是港大 HKUDS 团队的方案，定位就是 Microsoft GraphRAG 的轻量替代。它的核心决定只有一个：不做社区检测，也不做社区摘要。索引从五步变成三步——抽实体关系、建图、存向量。</p>
+
+<h3>双层关键词检索：在查询时拼全局视角</h3>
+
+<p>砍掉社区摘要之后，"回答宏观问题"的能力从哪来？LightRAG 的做法是把查询拆成两层关键词：<span class="term">低层关键词</span>指向具体实体（比如某个公司名、某条法规编号），<span class="term">高层关键词</span>指向抽象概念（比如"合规风险""市场竞争"）。两层分别去检索，再把结果拼起来。</p>
+
+<div class="arch-diagram">
+  LightRAG 的四种检索模式共享同一套索引
+
+                    用户查询
+                        │
+              ┌─────────┴─────────┐
+              │  LLM 拆两层关键词  │
+              └─────────┬─────────┘
+                        │
+      ┌─────────┬───────┴───────┬─────────┐
+      ▼         ▼               ▼         ▼
+  ┌────────┐┌────────┐    ┌────────┐┌────────┐
+  │ naive  ││ local  │    │ global ││ hybrid │
+  │纯向量  ││低层关键││    │高层关键││ 两层并 │
+  │        ││词→实体 ││    │词→关系 ││   用   │
+  └───┬────┘└───┬────┘    └───┬────┘└───┬────┘
+      │         │              │         │
+      └─────────┴──────┬───────┴─────────┘
+                       ▼
+            ┌────────────────────┐
+            │  同一套索引         │
+            │  实体+关系图 / 向量 │
+            └────────────────────┘
+
+  对比 GraphRAG：Local Search 走图遍历、Global Search 走社区摘要，
+  两条路径背后是完全不同的数据结构，切换代价大。
+  LightRAG 四种模式只是查询路径不同，索引不用重建。
+</div>
+
+<div class="intuition-box">
+<p>LightRAG 的"轻"不在模型小，而在于它把全局视角从"预先算好存起来"改成了"用的时候现拼"。代价是拼出来的全局视角不如预先精心总结的那份深，好处是加数据的时候没有任何东西需要作废。</p>
+</div>
+
+<h3>增量更新：从级联重建变成直接追加</h3>
+
+<p>这是 LightRAG 最实在的工程价值。新文档进来时，走的流程和首次索引完全一样——抽实体关系、缝进已有的图——没有任何"作废重算"的环节。官方仓库还说明了删除场景：删文档时可以利用构建阶段的 LLM 缓存快速重建受影响的实体与关系。</p>
+
+<table>
+<tr><th>维度</th><th>Microsoft GraphRAG</th><th>LightRAG</th></tr>
+<tr><td>索引步骤</td><td>5 步（含社区检测 + 摘要）</td><td>3 步（无社区）</td></tr>
+<tr><td>索引 100 万 token 成本</td><td>约 20~50 美元</td><td>约 0.15 美元</td></tr>
+<tr><td>单次检索读入 token</td><td>Global 模式约 61 万</td><td>不到 100</td></tr>
+<tr><td>单次检索 LLM 调用</td><td>数百次（逐社区遍历）</td><td>1 次</td></tr>
+<tr><td>查询延迟</td><td>Global 模式 10 秒到 1 分钟</td><td>1~3 秒</td></tr>
+<tr><td>增量更新</td><td>拆社区、重生成摘要，级联复杂</td><td>直接追加</td></tr>
+<tr><td>实体消歧</td><td>多层策略</td><td>朴素名称匹配</td></tr>
+</table>
+
+<p class="data-asof"><strong>上表数字来自 LightRAG 论文（法律数据集实验）与 HKUDS 官方仓库 README，档期 2024–2026</strong> · 成本随所用模型单价浮动，此处保留原文量级用于横向对比，不作为绝对值引用。</p>
+
+<h3>被砍掉的那部分：实体消歧</h3>
+
+<p>表格最后一行值得单独说。GraphRAG 有多层实体消歧策略，LightRAG 用的是朴素名称匹配——同一个实体在不同文档里叫法不同（"苹果公司""Apple Inc.""AAPL"），LightRAG 大概率会把它们当成三个不同的节点。这在实体命名规范的语料里问题不大，在人名地名混乱的语料里会显著拉低图质量。选型时这一条常被成本数字盖过去，但它直接决定了图能不能用。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>某券商研报知识库最初上 GraphRAG，8 万篇研报的首次索引跑了 11 小时、花掉四位数美元，团队认了。真正劝退的是第二个月——新增 3000 篇研报，社区结构变化触发全量摘要重建，成本几乎与首次索引持平。切到 LightRAG 后每月增量的边际成本降到两位数美元，但随之出现新问题：同一家公司在研报里的七八种简称被建成了独立节点，不得不额外做一层别名归一化的预处理。省下来的钱，有一部分变成了数据清洗的工作量。
+</div>
+</div>
+
+<!-- ==================== 三 ==================== -->
+<div class="section" id="s3">
+<h2>三、HippoRAG 2：用个性化 PageRank 做联想</h2>
+
+<p><span class="term">HippoRAG 2</span> 出自俄亥俄州立 OSU-NLP 团队的论文《From RAG to Memory: Non-Parametric Continual Learning for Large Language Models》（arXiv:2502.14802）。它的出发点跟 LightRAG 不太一样——不是嫌贵，是嫌图 RAG 在<strong>基础事实检索上反而不如普通 RAG</strong>。</p>
+
+<div class="intuition-box">
+<p>这篇论文最诚实的一句话是它的问题陈述：图结构确实改善了"归纳总结"和"联想"能力，但在"这个事实在哪篇文档里"这种基础任务上，图 RAG 的表现明显低于标准向量 RAG。加了图反而退步，这才是它要修的东西。</p>
+</div>
+
+<h3>机制：把段落也放进图里，再让相关性在图上扩散</h3>
+
+<p>HippoRAG 2 的离线索引分三步：用 LLM 做 <span class="term">OpenIE</span>（开放域信息抽取，不预设 schema）从每个段落抽三元组，形成无 schema 的开放知识图；用编码器检测短语节点之间的同义关系，相似度超阈值就加一条同义边；最后把原始段落也作为<strong>段落节点</strong>并入图中，与它抽出的概念之间连上下文边。</p>
+
+<div class="arch-diagram">
+  HippoRAG 2 在线检索流程
+
+  查询
+   │
+   │ ① Query-to-Triple：整句查询直接匹配三元组
+   │    （不是先做 NER 再查，而是整句嵌入匹配）
+   ▼
+  ┌──────────────────────┐
+  │  候选三元组 + 候选段落 │
+  └──────────┬───────────┘
+             │ ② 识别记忆（recognition memory）
+             │    LLM 当过滤器，剔掉不相关的三元组
+             ▼
+  ┌──────────────────────┐
+  │   种子节点 seed nodes  │   ← 短语节点与段落节点都可以当种子
+  └──────────┬───────────┘
+             │ ③ Personalized PageRank
+             │    从种子出发，相关性沿边扩散
+             ▼
+  ┌─────────────────────────────────────┐
+  │  开放知识图                          │
+  │                                     │
+  │   [短语节点]──关系边──[短语节点]      │
+  │       │                  │          │
+  │    同义边              上下文边       │
+  │       │                  │          │
+  │   [短语节点]        [段落节点]        │
+  └──────────┬──────────────────────────┘
+             │ ④ 按 PPR 得分排序，取 top 段落
+             ▼
+        送给 LLM 生成答案
+</div>
+
+<p><span class="term">个性化 PageRank</span>（PPR）是这套机制的核心。普通 PageRank 算的是全图节点的绝对重要性，个性化版本则偏向一组指定的种子节点——相关性从种子出发沿边扩散，离种子近、连接紧密的节点得分高。用它做检索的直觉是：你问"爱因斯坦和量子力学的争论"，种子落在这两个概念上，PPR 会自动把与两者都强连接的那些段落顶上来，即使那些段落里一次都没出现完整的查询词。这就是所谓的联想式检索。</p>
+
+<h3>两处关键改进</h3>
+
+<table>
+<tr><th>改进</th><th>HippoRAG 1 的问题</th><th>HippoRAG 2 的做法</th></tr>
+<tr><td>段落深度整合</td><td>图里只有短语节点，段落游离在外</td><td>段落作为节点入图，PPR 直接对段落打分</td></tr>
+<tr><td>查询链接方式</td><td>先做 NER 抽实体再匹配，丢失查询语境</td><td>整句查询直接匹配三元组，保留语境</td></tr>
+<tr><td>在线 LLM 参与</td><td>抽完就不再用 LLM，噪声三元组直接进 PPR</td><td>识别记忆过滤，只保留相关三元组当种子</td></tr>
+</table>
+
+<p>论文报告的核心结论是：在联想记忆类任务上比当时最强的嵌入模型提升约 7%，同时在事实性和归纳总结类任务上也不低于标准 RAG——也就是补上了前面说的那个退步。实验中用 Llama-3.3-70B-Instruct 同时承担抽取和三元组过滤，检索器用 NV-Embed-v2。</p>
+
+<div class="intuition-box">
+<p>HippoRAG 2 和 LightRAG 的分工可以这么理解：LightRAG 优化的是"建图和查询要便宜"，HippoRAG 2 优化的是"多跳问题要答得准"。前者是工程账，后者是效果账。它们不是同一条赛道上的竞品。</p>
+</div>
+</div>
+
+<!-- ==================== 四 ==================== -->
+<div class="section" id="s4">
+<h2>四、LazyGraphRAG：把 LLM 全推到查询时</h2>
+
+<p><span class="term">LazyGraphRAG</span> 是微软自己给 GraphRAG 打的补丁，2024 年 11 月由 GraphRAG 原班人马（Darren Edge、Ha Trinh、Jonathan Larson 等）发布。它的思路最激进：<strong>索引阶段一次 LLM 都不调。</strong></p>
+
+<h3>用经典 NLP 换掉 LLM 抽取</h3>
+
+<p>既然 LLM 抽实体贵，那就不用 LLM。LazyGraphRAG 的索引只做两件事：把文本块嵌入向量，以及用名词短语抽取加共现统计建一张概念图——都是前深度学习时代的经典 NLP 技术，成本几乎为零。社区检测照跑（那本来就是纯图算法，不花 LLM 钱），但不再为社区生成摘要。</p>
+
+<div class="arch-diagram">
+  三种索引策略的 LLM 调用分布
+
+              索引阶段              查询阶段
+  ┌────────────────────────┬──────────────────────┐
+  │                        │                      │
+  GraphRAG
+  │ ████████████████████   │ ██████               │
+  │ 抽实体+社区摘要，全量   │ 遍历社区摘要          │
+  │                        │                      │
+  LightRAG
+  │ ██████                 │ █                    │
+  │ 只抽实体关系            │ 一次调用              │
+  │                        │                      │
+  LazyGraphRAG
+  │ (空)                   │ ████████             │
+  │ 名词短语+共现，零调用   │ 只对查询触及的区域做   │
+  │                        │ 相关性测试与摘要       │
+  └────────────────────────┴──────────────────────┘
+
+  总成本的差别不只是搬运：GraphRAG 为整个语料付费，
+  LazyGraphRAG 只为被问到的那部分付费。
+  语料里大部分内容从来没被任何查询触及过 —— 那部分钱就省下来了。
+</div>
+
+<p>微软官方博客给出的数字是：LazyGraphRAG 的索引成本与向量 RAG 相同，即完整 GraphRAG 的 0.1%。查询侧，在最低预算档下达到与 GraphRAG Global Search 相当的答案质量而查询成本低 700 倍；把预算提到中档（500 次相关性测试）时，用 GraphRAG Global Search 约 4% 的成本，在局部和全局查询上都优于后者。</p>
+
+<div class="intuition-box">
+<p>LazyGraphRAG 的省钱逻辑和缓存的省钱逻辑是同一个：不要为没人用的东西提前付费。GraphRAG 给语料里每一个社区都写了摘要，但一次典型查询可能只碰到其中百分之几——剩下的摘要是纯浪费。把生成推迟到查询时，等于把"全量预计算"换成了"按需计算"。</p>
+</div>
+
+<h3>可调的成本-质量旋钮</h3>
+
+<p>LazyGraphRAG 有一个主参数叫<span class="term">相关性测试预算</span>（relevance test budget），控制查询时愿意花多少次 LLM 调用去筛选相关内容。预算调高，质量上升成本上升；调低则相反。这个设计的价值在于它把成本-质量权衡收敛成了一个可以按业务场景调的旋钮，而不是要换整套架构。</p>
+
+<table>
+<tr><th>预算档</th><th>成本相对 GraphRAG Global</th><th>质量表现</th></tr>
+<tr><td>最低档</td><td>约 1/700</td><td>与 GraphRAG Global Search 质量相当</td></tr>
+<tr><td>中档（500 次相关性测试）</td><td>约 4%</td><td>在局部与全局查询上均优于 GraphRAG</td></tr>
+</table>
+
+<p class="data-asof"><strong>数据来自 Microsoft Research 官方博客《LazyGraphRAG: Setting a new standard for quality and cost》（2024-11）</strong> · 为官方自测口径，实际表现依语料与查询分布而定。</p>
+
+<h3>它的代价</h3>
+
+<p>索引不产出社区摘要，意味着你失去了一份"数据集语义结构的目录"。GraphRAG 的社区摘要除了服务查询，本身也是可浏览的资产——运营同学可以翻一遍摘要，快速了解这批语料里有哪些主题。LazyGraphRAG 把这份资产变成了按需生成的临时产物，看不到全貌。对于以探索性分析为目的的场景，这个损失是实的。</p>
+</div>
+
+<!-- ==================== 五 ==================== -->
+<div class="section" id="s5">
+<h2>五、为什么两份评测能得出相反结论</h2>
+
+<p>如果你同时读过 LightRAG 论文和几篇多跳问答的对比测评，会遇到一个尖锐的矛盾：前者说 LightRAG 全面胜过 GraphRAG，后者的表里 LightRAG 的分数低到不像话。这一节专门拆这个矛盾，因为看不懂它，就没法正确使用任何一份评测数据。</p>
+
+<h3>两份数据摆在一起</h3>
+
+<p class="data-asof"><strong>下面两组数字口径完全不同，不可直接比较</strong> · 第一组来自 LightRAG 官方仓库 README 报告的胜率实验；第二组转引自腾讯云开发者社区的 HippoRAG 2 解析文章，该文注明数据整理自 KAG 与 PIKE-RAG 论文。</p>
+
+<table>
+<tr><th>口径一：LLM 判定胜率（LightRAG 官方，四个领域平均趋势）</th><th>GraphRAG</th><th>LightRAG</th></tr>
+<tr><td>全面性</td><td>45.6%</td><td>54.4%</td></tr>
+<tr><td>多样性</td><td>22.8%</td><td>77.2%</td></tr>
+<tr><td>赋能性</td><td>41.2%</td><td>58.8%</td></tr>
+<tr><td>总体</td><td>45.2%</td><td>54.8%</td></tr>
+</table>
+
+<table>
+<tr><th>口径二：多跳问答 F1（第三方转引）</th><th>HotpotQA</th><th>2Wiki</th><th>MuSiQue</th></tr>
+<tr><td>RAPTOR</td><td>69.5</td><td>52.1</td><td>28.9</td></tr>
+<tr><td>GraphRAG</td><td>68.6</td><td>58.6</td><td>38.5</td></tr>
+<tr><td><strong>LightRAG</strong></td><td><strong>2.4</strong></td><td><strong>11.6</strong></td><td><strong>1.6</strong></td></tr>
+<tr><td>HippoRAG</td><td>63.5</td><td>71.8</td><td>35.1</td></tr>
+<tr><td>HippoRAG 2</td><td>75.5</td><td>71.0</td><td>48.6</td></tr>
+<tr><td>KAG</td><td>76.2</td><td>76.2</td><td>48.7</td></tr>
+</table>
+
+<h3>三个层面的口径差异</h3>
+
+<p>同一个系统一边赢 54.8%，一边拿 2.4 分，差异不来自系统本身，来自评测设计的三处不同。</p>
+
+<table>
+<tr><th>差异层面</th><th>口径一</th><th>口径二</th><th>影响</th></tr>
+<tr><td>任务类型</td><td>长文摘要式问答（"这几件事怎么互相影响"）</td><td>多跳事实问答（答案是一个短实体）</td><td>两类任务需要的检索能力本就不同</td></tr>
+<tr><td>评分方式</td><td>LLM 两两对比判胜率，看全面性、多样性</td><td>F1，与标准答案做词级匹配</td><td>胜率衡量"答得好不好"，F1 衡量"答得对不对"</td></tr>
+<tr><td>输出形态要求</td><td>鼓励详尽展开</td><td>要求精确短答案，多余内容拉低精确率</td><td>详尽的回答在 F1 下会被严重扣分</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>LightRAG 拿 2.4 分不代表它检索能力差 30 倍，更可能是它按设计输出了一段详尽的实体关系描述，而 F1 要的是"1987 年"这样三个字的答案。用长跑成绩评价短跑运动员，数字会很难看，但结论是无效的。</p>
+</div>
+
+<h3>那这两份数据还能不能用</h3>
+
+<p>能用，但只能用来回答各自对应的问题。想知道"用户问开放式分析问题时，哪个方案的回答更有信息量"，看口径一；想知道"用户问需要串联多个文档才能答的事实问题时，哪个方案更可能给出正确答案"，看口径二。真正危险的用法是拿其中一份去做全局结论——比如看到 F1 表就断定 LightRAG 不能用，或者看到胜率表就以为它在事实问答上也强。</p>
+
+<p>另外要注意，第三方复现的分数普遍低于原作者自测，这在图 RAG 领域尤其明显，因为配置项多（抽取模型、chunk 大小、检索模式、prompt 模板）且很多论文没有完整公开。看到某个方案在第三方表里异常低，第一反应应该是"配置或答案格式对不上"，而不是"这个方案不行"。HippoRAG 2 论文本身也印证了这一点——它明确指出图 RAG 方法在基础事实任务上会退步，说明这类落差是这个技术路线的共性问题，不是某一家的实现缺陷。</p>
+
+<h3>第三份数据：同语料实测下的索引开销</h3>
+
+<p>前两组数据比的是效果，成本这一侧同样存在口径问题。GraphRAG-Bench（厦大与港理工，ICLR 2026，arXiv:2506.05690）在同一份语料、同一套流程下实测了各方案的图构建开销，结果和厂商口径的落差值得单独看一眼。</p>
+
+<p class="data-asof"><strong>下表转引自 GraphRAG-Bench 论文附录的图构建效率实验（Table 15）</strong> · 为该基准自选语料下的单次测量，不同语料规模与抽取模型会改变绝对值，此处只用于横向比较。</p>
+
+<table>
+<tr><th>方案</th><th>构建耗时（秒）</th><th>总 token 消耗</th></tr>
+<tr><td>KGP</td><td>32.0</td><td>89,215</td></tr>
+<tr><td>HippoRAG</td><td>77.4</td><td>177,961</td></tr>
+<tr><td>HippoRAG 2</td><td>96.7</td><td>329,993</td></tr>
+<tr><td>Fast-GraphRAG</td><td>281.7</td><td>251,817</td></tr>
+<tr><td>MS-GraphRAG</td><td>292.5</td><td>654,673</td></tr>
+<tr><td>LazyGraphRAG</td><td>253.6</td><td>591,150</td></tr>
+<tr><td>LightRAG</td><td>710.3</td><td>474,172</td></tr>
+</table>
+
+<p>两处值得注意。第一，LightRAG 的 token 消耗只比 MS-GraphRAG 少约 28%，远不是官方口径暗示的两个数量级；而墙钟时间反而是后者的 2.4 倍——<strong>"轻量"指的是省 token，不等于跑得快</strong>。第二，LazyGraphRAG 在这份实测里消耗了 59 万 token，与"索引阶段零 LLM 调用"的官方描述明显不符，最可能的解释是基准使用的复现实现与微软原版存在差异。</p>
+
+<div class="intuition-box">
+<p>这张表真正的用处不是给方案排名次，而是提醒你：<strong>厂商公布的成本数字是在厂商选定的语料和配置下测的</strong>。它们通常没有造假，但也不能直接搬到你的场景里当预算依据。唯一可靠的做法是拿自己语料的一个小样本跑通全流程，实测单价再外推。</p>
+</div>
+
+<div class="highlight">
+<strong>示例场景：</strong>某团队为客服知识库做图 RAG 选型，照着一张多跳问答 F1 对比表直接排除了 LightRAG，选了分数最高的方案，结果上线后发现真实用户问的九成是"这个套餐怎么退订"这类单跳问题，图结构带来的提升微乎其微，而每月索引账单涨了两个数量级。复盘时才意识到：选型第一步不该是看谁分数高，而该是先统计自家用户真实问题的类型分布——他们的多跳问题占比不到 4%。
+</div>
+</div>
+
+<!-- ==================== 六 ==================== -->
+<div class="section" id="s6">
+<h2>六、选型：三个维度定方案</h2>
+
+<p>把前五节收拢成可操作的决策。三个维度按重要性排序：知识库更新频率、查询类型分布、预算约束。</p>
+
+<div class="arch-diagram">
+  选型决策树
+
+  第一步：先问要不要上图
+  ────────────────────────────────────
+  用户问题里跨实体、跨文档的比例有多高？
+    │
+    ├─ 低于 10%  ──▶ 别上图。传统向量 RAG 又快又省
+    │                 图结构的收益覆盖不了成本
+    │
+    └─ 显著存在 ──▶ 继续往下
+
+  第二步：看更新频率
+  ────────────────────────────────────
+    │
+    ├─ 知识库基本静态（季度级更新）
+    │    └─▶ 可以承受 GraphRAG 的预计算
+    │
+    ├─ 频繁增量（日级 / 周级）
+    │    └─▶ LightRAG（直接追加）
+    │        或 LazyGraphRAG（索引本就便宜，重建无压力）
+    │
+    └─ 流式 / 一次性查询
+         └─▶ LazyGraphRAG（索引成本等同向量 RAG）
+
+  第三步：看查询类型
+  ────────────────────────────────────
+    │
+    ├─ 宏观归纳（"整体趋势是什么"）
+    │    └─▶ GraphRAG 社区摘要 或 LazyGraphRAG
+    │
+    ├─ 多跳事实（"A 的供应商的母公司是谁"）
+    │    └─▶ HippoRAG 2（PPR 联想检索）
+    │
+    └─ 混合且成本敏感
+         └─▶ LightRAG hybrid 模式
+</div>
+
+<table>
+<tr><th>场景</th><th>推荐</th><th>理由</th></tr>
+<tr><td>静态语料 + 深度分析报告</td><td>Microsoft GraphRAG</td><td>预计算的社区摘要在宏观归纳上仍是最强，且索引只付一次</td></tr>
+<tr><td>日更知识库 + 成本敏感</td><td>LightRAG</td><td>增量零额外代价，查询 1~3 秒，索引成本低两个数量级</td></tr>
+<tr><td>多跳事实问答为主</td><td>HippoRAG 2</td><td>PPR 联想检索针对的就是这类问题，且修正了图 RAG 在事实任务上的退步</td></tr>
+<tr><td>探索性分析 / 一次性查询</td><td>LazyGraphRAG</td><td>索引近乎免费，只为被问到的部分付费</td></tr>
+<tr><td>实体命名混乱的语料</td><td>GraphRAG 或先做别名归一化</td><td>LightRAG 的朴素名称匹配在这类语料上会把同一实体拆成多个节点</td></tr>
+<tr><td>单跳问答为主</td><td>都不用，走传统 RAG</td><td>图结构的收益覆盖不了任何一种方案的成本</td></tr>
+</table>
+
+<h3>混合架构：不必二选一</h3>
+
+<p>生产系统里常见的做法是分层：稳定的核心知识（产品手册、法规条文）走 GraphRAG 做一次深度索引，动态数据（工单、日志、新闻）走 LightRAG 持续追加，前面挂一个查询路由判断该走哪条路。这个架构的代价是要维护两套索引和一个路由器，收益是把各自的长处都拿到了。路由怎么做、什么时候值得上，<a href="./graphrag_guide.html">G21</a> 的混合路由一节有更细的讨论。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>选型前先统计真实用户问题的类型分布，多跳占比低就别上图</li>
+<li>把索引成本按"每月增量"算，而不是只算首次索引</li>
+<li>引用评测数字时连带说明任务类型和评分方式</li>
+<li>语料实体命名混乱时，先做别名归一化再上 LightRAG</li>
+<li>先用小样本语料跑通全流程算清单价，再决定全量索引</li>
+<li>把成本-质量旋钮（如相关性测试预算）暴露成可配置项</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>别拿单一榜单分数下全局结论，先看它测的是什么任务</li>
+<li>别忽略隐藏成本：抽实体的一次性账单和消歧的人工投入</li>
+<li>别在实体关系稀疏的语料上建图，边少的图没有检索价值</li>
+<li>别把 GraphRAG 的社区摘要当成免费副产品，它是账单主体</li>
+<li>别默认第三方复现分数就是方案的真实水平</li>
+<li>别为了追新换架构，先确认现有方案的瓶颈到底在哪</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>LightRAG 相比 Microsoft GraphRAG 到底"轻"在哪？</summary>
+<div class="answer">轻在砍掉了整个社区层。GraphRAG 的索引有五步，其中第五步"为每个社区生成摘要"要逐社区调用大模型，是账单的主体；LightRAG 的索引只有三步——抽实体关系、建图、存向量，完全不做社区检测和摘要。这带来两个连锁效果：一是索引成本降低约两个数量级（论文实验中 100 万 token 语料从 20~50 美元降到 0.15 美元量级），二是增量更新从"拆社区、重生成全部摘要"变成"把新实体直接缝进老图"。代价是失去了预计算的全局视角，LightRAG 改用查询时的双层关键词检索现场组装，在需要深度归纳的宏观问题上不如 GraphRAG 的社区摘要。</div>
+</details>
+
+<details>
+<summary>为什么 LightRAG 在有些评测里赢 GraphRAG，在另一些里分数低得离谱？</summary>
+<div class="answer">因为两类评测的口径完全不同，不可直接比较。LightRAG 官方报告的是 LLM 两两对比的胜率，任务是长文摘要式问答，评的是全面性、多样性这类维度，LightRAG 总体胜率约 54.8%。而多跳问答榜单用的是 F1，任务是答案为一个短实体的事实问题，与标准答案做词级匹配——在这类表里 LightRAG 的 HotpotQA 只有 2.4 分。差距的根源在于 LightRAG 按设计输出的是详尽的实体关系描述，而 F1 要的是"1987 年"这样的精确短答案，详尽反而被扣分。所以正确的用法是按问题类型选数据：想知道开放式分析问题答得好不好看胜率，想知道事实问题答得对不对看 F1。</div>
+</details>
+
+<details>
+<summary>HippoRAG 2 的个性化 PageRank 具体解决什么问题？</summary>
+<div class="answer">解决的是"答案分散在多个文档、任何单篇都不完整"的多跳检索问题。普通 PageRank 算全图节点的绝对重要性，个性化版本会偏向一组指定的种子节点，让相关性从种子出发沿边扩散。HippoRAG 2 的做法是：先把查询整句匹配到图里的三元组和段落上得到候选，再用一个 LLM 做"识别记忆"过滤掉不相关的三元组，剩下的作为种子跑 PPR，最后按得分取 top 段落。这样即使某个段落里一次都没出现完整的查询词，只要它与种子概念连接紧密就能被顶上来——这就是联想式检索。论文报告它在联想记忆类任务上比当时最强的嵌入模型提升约 7%。</div>
+</details>
+
+<details>
+<summary>LazyGraphRAG 的索引成本真能降到 0.1% 吗？</summary>
+<div class="answer">按微软官方博客的口径是的，它的索引成本与向量 RAG 相同，即完整 GraphRAG 的 0.1%。实现方式是索引阶段一次 LLM 都不调：用名词短语抽取和共现统计这类经典 NLP 技术建概念图，社区检测照跑（那本来就是纯图算法不花钱），但不生成社区摘要。所有生成式工作推迟到查询时，只对查询实际触及的语料区域做相关性测试和摘要。省钱的本质和缓存一样——不为没人用的东西提前付费，因为一次典型查询往往只碰到语料里百分之几的内容。代价是失去了可浏览的语义结构目录，无法在提问前先了解这批语料有哪些主题。</div>
+</details>
+
+<details>
+<summary>三个变体里，增量更新能力怎么排序？</summary>
+<div class="answer">LightRAG 和 LazyGraphRAG 都很好，但好的原因不同；GraphRAG 最差。LightRAG 是结构上就没有需要作废的预计算产物，新文档走的流程和首次索引一样，直接把新实体缝进老图，边际成本等于抽取那几个新文档的成本。LazyGraphRAG 是因为索引本身就近乎免费（不调 LLM），所以哪怕整个重建一次也没什么压力。GraphRAG 的问题在于社区摘要是全局预计算的——加一批数据社区结构就变了，旧摘要作废，需要重新聚类并重生成摘要，LightRAG 论文的实验里这一次更新约耗 1399 × 2 × 5000 token。如果你的知识库是日级或周级更新，GraphRAG 的这个特性基本就是劝退项。</div>
+</details>
+
+<details>
+<summary>什么情况下这些图 RAG 方案一个都不该用？</summary>
+<div class="answer">当用户问题里跨实体、跨文档的比例很低时。图结构的价值来自"把散落在多处的关联串起来"，如果九成问题是"这个套餐怎么退订"这类单篇文档就能答的单跳问题，那么建图带来的检索提升微乎其微，而成本要多出一到两个数量级。第二种情况是语料本身实体关系稀疏——一堆互不相干的独立条目，抽出来的图边很少，几乎退化成孤立节点集合，检索时没有可传播的路径。所以选型的第一步不是比较哪个方案分数高，而是统计自家用户真实问题的类型分布；这一步跳过去，后面选得再仔细也是在优化一个不该存在的系统。</div>
+</details>
+
+<details>
+<summary>LightRAG 的实体消歧弱，实际会造成什么后果？</summary>
+<div class="answer">同一个实体在不同文档里的不同叫法会被建成多个独立节点，图因此被切碎。比如"苹果公司""Apple Inc."" AAPL"在朴素名称匹配下就是三个节点，各自只连着自己那部分文档抽出的关系，检索时无论命中哪一个都只能看到全貌的三分之一，多跳路径也会因为节点没打通而断掉。GraphRAG 有多层消歧策略，这方面明显更稳。实践中的应对是在索引前加一层别名归一化预处理——维护实体别名词典，或者用嵌入相似度做一轮聚类合并。需要提醒的是这笔工作量往往会抵消掉一部分省下来的索引成本，选型时应该把它算进总账，而不是只看索引单价。</div>
+</details>
+
+<details>
+<summary>生产环境能不能同时用多个方案？</summary>
+<div class="answer">可以，而且是成熟系统里的常见做法。典型的分层架构是：稳定的核心知识（产品手册、法规条文、组织架构）走 GraphRAG 做一次深度索引，享受社区摘要带来的宏观归纳能力，反正它不怎么变，预计算的钱只付一次；动态数据（工单、日志、新闻、研报）走 LightRAG 持续追加，享受零成本增量；前面挂一个查询路由，根据问题类型判断该查哪一路，或者两路都查再融合。代价是要维护两套索引、一个路由器和一套融合逻辑，运维复杂度明显上升，所以只在两类知识的更新频率差异确实很大时才值得。如果你的语料是均质的，选一个方案做好比拼装两个更划算。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

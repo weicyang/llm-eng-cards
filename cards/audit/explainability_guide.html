@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>U04 · 模型可解释性</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+/* 标准组件体系补充 */
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、可解释性概述</a>
+<a href="#s2">二、SHAP — SHapley Additive exPlanations</a>
+<a href="#s3">三、LIME — Local Interpretable Model-agnostic Explanations</a>
+<a href="#s4">四、Integrated Gradients 与梯度方法</a>
+<a href="#s5">五、Attention 可视化</a>
+<a href="#s6">六、LLM 推理链解释</a>
+<a href="#s7">七、可解释性与性能权衡</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>U04 · 模型可解释性</h1>
+<p class="subtitle">Model Explainability — SHAP、LIME、Attention 可视化与 LLM 推理链解释</p>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、可解释性概述</h2>
+
+<div class="intuition-box">
+<p>解释不是为了让模型变透明，是为了在出事时能对监管、对用户说清楚"这一次"的判断依据是什么。</p>
+</div>
+
+<h3>为什么需要可解释性</h3>
+<table>
+<tr><th>驱动因素</th><th>说明</th><th>示例</th></tr>
+<tr><td><strong>合规要求</strong></td><td>EU AI Act 要求高风险 AI 决策可解释</td><td>信贷审批拒绝时必须解释原因</td></tr>
+<tr><td><strong>信任建立</strong></td><td>用户需要理解 AI 的推理过程</td><td>医疗诊断建议附带推理依据</td></tr>
+<tr><td><strong>调试优化</strong></td><td>理解模型错误的原因</td><td>发现模型过度依赖某个无关特征</td></tr>
+<tr><td><strong>安全审计</strong></td><td>验证模型没有学到有害模式</td><td>检测模型是否对特定群体有偏差</td></tr>
+</table>
+
+<h3>可解释性分类体系</h3>
+<p><span class="term">全局解释</span>回答"这个模型整体上依赖什么"，<span class="term">局部解释</span>回答"这一条预测为什么是这个结果"。合规场景要的几乎总是后者——监管问的是某位申请人被拒的原因，不是模型的平均特征重要性。</p>
+<table>
+<tr><th>维度</th><th>分类</th><th>说明</th><th>代表方法</th></tr>
+<tr><td rowspan="2"><strong>范围</strong></td><td>全局解释</td><td>理解模型整体行为</td><td>特征重要性、决策规则</td></tr>
+<tr><td>局部解释</td><td>解释单个预测</td><td>SHAP、LIME</td></tr>
+<tr><td rowspan="2"><strong>时机</strong></td><td>固有可解释</td><td>模型本身可解释</td><td>线性模型、决策树</td></tr>
+<tr><td>事后解释</td><td>对黑盒模型做事后解释</td><td>SHAP、LIME、Grad-CAM</td></tr>
+<tr><td rowspan="2"><strong>依赖性</strong></td><td>模型无关</td><td>适用于任何模型</td><td>SHAP(KernelSHAP)、LIME</td></tr>
+<tr><td>模型特定</td><td>利用模型内部结构</td><td>TreeSHAP、Attention、梯度</td></tr>
+</table>
+
+<p class="highlight">可解释性与准确性之间存在权衡：越复杂的模型（如 LLM）越难解释。实践中的策略是"分层解释"——对终端用户用自然语言解释，对技术团队用特征归因，对审计员用完整的决策链。</p>
+
+<h3>方法选型决策路径</h3>
+<p>面对"这个预测要怎么解释"，先问三个问题：模型内部权重能不能拿到、输入是表格还是序列、解释是给人看还是给审计留证。这三个答案基本就锁定了方法。</p>
+
+<div class="arch-diagram">              要解释一次预测
+                    │
+        ┌───────────┴───────────┐
+   拿不到权重                 拿得到权重
+   （黑盒 API）                （自有模型）
+        │                           │
+   KernelSHAP / LIME        ┌───────┴────────┐
+   反事实扰动             树模型            神经网络
+        │                    │                 │
+        │               TreeSHAP        ┌──────┴──────┐
+        │             （精确·最快）    表格/文本      图像
+        │                    │        DeepSHAP     Grad-CAM
+        │                    │        Integrated   SmoothGrad
+        │                    │        Gradients        │
+        └────────────────────┴────────────┬────────────┘
+                                          ▼
+                          归因结果 + 模型版本 + 输入快照
+                                  写入决策日志
+                                          │
+                    ┌─────────────────────┼─────────────────────┐
+                    ▼                     ▼                     ▼
+              终端用户看的            分析师看的            审计员看的
+              自然语言理由            SHAP 图表             完整证据链</div>
+
+<div class="interview-box">
+<ul>
+<li>可解释性的四大驱动力：合规（法规强制）、信任（用户接受度）、调试（改进模型）、安全（发现偏差）</li>
+<li>全局 vs 局部、固有 vs 事后、模型无关 vs 模型特定——三个正交的分类维度</li>
+<li>LLM 的可解释性特别难——参数量巨大、行为非线性、输出空间无限</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、SHAP — SHapley Additive exPlanations</h2>
+
+<div class="intuition-box">
+<p>把一次预测看成一笔团队奖金，SHAP 做的是"按每个特征的实际贡献分账"，而且分完的账加起来必须正好等于这次预测偏离平均值的那部分。</p>
+</div>
+
+<h3>Shapley 值的数学原理</h3>
+<p>SHAP 基于合作博弈论中的 <span class="term">Shapley 值</span>，将每个特征视为"参与者"，计算其对预测结果的边际贡献。公式 φ_i = Σ_{S⊆N\{i}} [|S|!(|N|-|S|-1)!/|N|!] × [f(S∪{i}) − f(S)]，读法是：遍历所有不含特征 i 的特征子集 S，看"把 i 加进去后预测变了多少"，再按子集大小加权平均。</p>
+
+<p><strong>为什么这个绕圈子的定义值得算：</strong>它是唯一同时满足下面三条公理的归因方式，这三条正好对应审计场景最在意的三个问题。</p>
+
+<table>
+<tr><th>公理</th><th>含义</th><th>缺了它会怎样</th></tr>
+<tr><td>局部准确性</td><td>所有特征归因之和 = 本次预测 − 基线预测</td><td>解释和结论对不上账，审计追问"剩下那部分是谁贡献的"答不出</td></tr>
+<tr><td>一致性</td><td>特征在新模型里贡献更大，归因值不会反而变小</td><td>模型迭代后归因排序乱跳，无法做版本间对比</td></tr>
+<tr><td>缺失性</td><td>取值缺失的特征归因必为 0</td><td>没填的字段也被算成拒贷理由，客户投诉直接成立</td></tr>
+</table>
+
+<p>调用面很薄，真正的工程量在采样基线（<code>background</code>）的选择上——基线代表"平均客户"，选错了整份归因都会系统性偏移。</p>
+
+<pre><code>import shap
+explainer = shap.TreeExplainer(model, data=X_background)   # 基线=代表性样本集
+sv = explainer.shap_values(X_test)
+
+shap.force_plot(explainer.expected_value, sv[0], X_test.iloc[0])  # 单条决策依据
+shap.summary_plot(sv, X_test)                                     # 全局特征重要性</code></pre>
+
+<h3>SHAP 变体对比</h3>
+<table>
+<tr><th>变体</th><th>适用模型</th><th>时间复杂度</th><th>精确性</th></tr>
+<tr><td><strong>KernelSHAP</strong></td><td>任何模型（模型无关）</td><td>O(2^M) 近似</td><td>近似</td></tr>
+<tr><td><strong>TreeSHAP</strong></td><td>树模型（XGBoost/RF/LightGBM）</td><td>O(TLD²)</td><td>精确</td></tr>
+<tr><td><strong>DeepSHAP</strong></td><td>深度神经网络</td><td>O(单次前向传播)</td><td>近似</td></tr>
+<tr><td><strong>PartitionSHAP</strong></td><td>文本/图像数据</td><td>O(特征组数)</td><td>近似</td></tr>
+</table>
+
+<p>文本数据不能按单 token 拆——token 之间高度相关，逐个遮蔽会得到毫无意义的归因。<code>PartitionSHAP</code> 的做法是按层级把相邻 token 聚成块再遮蔽，代价是归因粒度变粗（落在短语而非字上），换来的是可接受的计算量。</p>
+
+<pre><code>explainer = shap.Explainer(sentiment_model, masker=shap.maskers.Text(tokenizer))
+sv = explainer(["这家餐厅的食物非常美味，服务也很周到"])
+shap.text_plot(sv)   # "美味" +0.32 / "周到" +0.28 / "非常" +0.15；红=正向 蓝=负向</code></pre>
+
+<p class="highlight"><strong>示例场景：</strong>某消费金融团队用 XGBoost 做预授信额度，风控要求每笔拒绝都要给出前三大原因。最初用 KernelSHAP，单条解释 4.2 秒，日均 30 万次调用下解释服务成了整条链路的瓶颈，P99 延迟从 180ms 涨到 4.5s。问题在于 KernelSHAP 把树模型当黑盒采样。改用 TreeSHAP 后利用树结构精确计算，单条降到 6 毫秒，同时归因由近似变精确；再把 <code>background</code> 从全量训练集换成 200 条 K-means 聚类中心，内存占用从 3.1GB 降到 40MB。最终解释接口 P99 稳定在 11ms，拒绝理由随决策同步落库。</p>
+
+<div class="interview-box">
+<ul>
+<li>SHAP 的理论优势：唯一同时满足局部准确性、一致性、缺失性三个公理的归因方法</li>
+<li>TreeSHAP 是实践中最常用的——精确且高效，但限于树模型</li>
+<li>对 LLM 的局限：输入是高维 token 序列，计算完整 Shapley 值不可行，通常用 PartitionSHAP 近似</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、LIME — Local Interpretable Model-agnostic Explanations</h2>
+
+<div class="intuition-box">
+<p>再复杂的决策边界，放到一个样本的极小邻域里看都近似是一条直线——LIME 就是在那一小块地方拟合这条直线，然后用直线的斜率当解释。</p>
+</div>
+
+<h3>LIME 核心思想</h3>
+<p>在预测点附近生成<span class="term">扰动样本</span>（随机开关部分特征或遮蔽部分词），用原模型给这些样本打分，再按"离原样本多近"加权拟合一个线性模型；线性模型的系数就是特征重要性。它完全不看模型内部，因此对黑盒 API 也适用。</p>
+
+<div class="arch-diagram">    原样本 x
+  "食物美味，但服务态度很差"
+        │
+        ▼  ① 邻域扰动（随机遮蔽词/特征）
+  ┌──────────────────────────────────┐
+  │ x₁ "食物美味，但____很差"        │
+  │ x₂ "____，但服务态度很差"        │
+  │ x₃ "食物美味，但服务态度____"    │
+  │  ...  共 N=5000 条               │
+  └──────────────────────────────────┘
+        │
+        ▼  ② 原模型逐条打分（黑盒即可，只要能调 predict）
+   y₁=0.61  y₂=0.12  y₃=0.88  ...
+        │
+        ▼  ③ 按与 x 的距离加权（近的样本权重大）
+   w = exp(−d(x,xᵢ)² / σ²)
+        │
+        ▼  ④ 加权线性回归拟合局部代理模型
+   g(z) = β₀ + β₁z₁ + ... + βₘzₘ
+        │
+        ▼  ⑤ 取 |β| 最大的 top-k 作为解释
+   "很差" −0.38 │ "美味" +0.25 │ "服务态度" −0.12
+
+  ⚠ N 和 σ 都是超参：改一次，解释就可能换一副样子</div>
+
+<pre><code>explainer = LimeTextExplainer(class_names=["负面", "正面"])
+exp = explainer.explain_instance(
+    "这家餐厅的食物非常美味，但服务态度很差",
+    classifier.predict_proba, num_features=10, num_samples=5000)
+exp.show_in_notebook()   # "很差" -0.38 / "美味" +0.25 / "服务态度" -0.12</code></pre>
+
+<p>把 <code>num_samples</code> 从 5000 降到 500 通常能让解释快 10 倍，但同一个样本连跑三次可能给出三份不同的 top-3。合规场景里这是硬伤：客户两次查询同一笔拒绝，看到的理由不一致。</p>
+
+<h3>SHAP vs LIME 对比</h3>
+<table>
+<tr><th>维度</th><th>SHAP</th><th>LIME</th></tr>
+<tr><td>理论基础</td><td>Shapley 值（博弈论，有公理保证）</td><td>局部线性近似（无理论最优保证）</td></tr>
+<tr><td>一致性</td><td>满足（相同模型相同解释）</td><td>不保证（随机采样导致结果波动）</td></tr>
+<tr><td>计算效率</td><td>TreeSHAP 快，KernelSHAP 慢</td><td>中等（取决于采样数）</td></tr>
+<tr><td>全局解释</td><td>支持（聚合局部 SHAP）</td><td>不直接支持</td></tr>
+<tr><td>适用性</td><td>表格、文本、图像</td><td>表格、文本、图像</td></tr>
+<tr><td>稳定性</td><td>高（确定性计算）</td><td>低（采样随机性）</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>LIME 的优势是直觉简单——"在局部用简单模型解释复杂模型"</li>
+<li>LIME 的最大弱点是不稳定性——多次运行可能得到不同解释</li>
+<li>实践选择：有树模型用 TreeSHAP（精确+快），其他模型优先 KernelSHAP（有理论保证），LIME 作为快速探索工具</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、Integrated Gradients 与梯度方法</h2>
+
+<div class="intuition-box">
+<p>只看当前点的梯度等于只问"再多一点会怎样"，而模型早就饱和了、答案是"没什么变化"；<span class="term">Integrated Gradients</span> 改问"从空白一路加到现在，这个特征一共贡献了多少"。</p>
+</div>
+
+<h3>Integrated Gradients 原理</h3>
+<p>公式 IG_i(x) = (x_i − x'_i) × ∫₀¹ ∂F(x' + α(x−x'))/∂x_i dα，其中 x' 是<span class="term">基线输入</span>。实现上就是把基线到输入的直线切成 n_steps 段，每段求一次梯度再取平均——所以成本约等于 n_steps 次前向+反向，n_steps=50 是常用起点。</p>
+
+<pre><code>ig = IntegratedGradients(model)
+baseline = torch.zeros_like(input_ids)          # 文本常用 [PAD] embedding
+attr = ig.attribute(input_ids, baselines=baseline, target=1, n_steps=50)
+# "精彩" 0.45 / "非常" 0.22 / "电影" 0.08</code></pre>
+
+<p><strong>基线不是随便选的。</strong>IG 的语义是"相对基线的增量贡献"，基线代表"什么都没有的状态"。图像用全黑会让黑色物体的归因塌成 0，此时改用模糊图或高斯噪声基线更稳；文本用全零 embedding 在有些模型里落在一个语义奇怪的点上，用 [PAD] 或 [MASK] 的 embedding 更可靠。工程上常做的是多基线取平均，牺牲一倍算力换掉基线敏感性。</p>
+
+<h3>梯度方法家族</h3>
+<table>
+<tr><th>方法</th><th>原理</th><th>优点</th><th>缺点</th></tr>
+<tr><td><strong>Vanilla Gradient</strong></td><td>∂y/∂x，直接计算输出对输入的梯度</td><td>最快</td><td>梯度噪声大、饱和问题</td></tr>
+<tr><td><strong>Gradient × Input</strong></td><td>梯度 × 输入值</td><td>简单改进</td><td>仍有噪声</td></tr>
+<tr><td><strong>Integrated Gradients</strong></td><td>路径积分梯度</td><td>有公理保证、稳定</td><td>需要选择基线</td></tr>
+<tr><td><strong>SmoothGrad</strong></td><td>多次加噪声求梯度平均</td><td>视觉上更清晰</td><td>计算量大</td></tr>
+<tr><td><strong>Grad-CAM</strong></td><td>用最后一层卷积的梯度加权</td><td>CNN 可视化标准</td><td>仅限 CNN</td></tr>
+</table>
+
+<h3>Captum 工具库与层级归因</h3>
+<p>Captum 是 PyTorch 生态的标准归因库。除了对输入做归因，它还能对<em>中间层</em>做归因——<code>LayerConductance</code> 把 IG 的思路搬到某一层的神经元上，回答"这一层的哪些单元在为最终判断出力"。</p>
+
+<pre><code>lc = LayerConductance(model, model.transformer.layer[11])
+layer_attr = lc.attribute(input_ids, baselines=baseline, target=1)
+# 逐层扫一遍后典型结论：第 8-10 层贡献最大 → 情感语义主要在这几层成形</code></pre>
+
+<table>
+<tr><th>归因层次</th><th>回答什么问题</th><th>典型用途</th></tr>
+<tr><td>输入归因（IG / DeepSHAP）</td><td>哪个 token、哪个字段推动了这次判断</td><td>对外出解释、写决策日志</td></tr>
+<tr><td>层归因（LayerConductance）</td><td>信息在第几层成形，哪层贡献最大</td><td>决定剪枝/蒸馏保留哪些层</td></tr>
+<tr><td>神经元归因（NeuronConductance）</td><td>某个具体单元编码了什么概念</td><td>排查模型是否学到敏感属性代理特征</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>Integrated Gradients 是唯一同时满足"敏感性"和"实现不变性"公理的梯度方法</li>
+<li>基线选择很关键——文本用全零/padding embedding，图像用全黑/全灰</li>
+<li>Captum 是 PyTorch 生态的标准可解释性工具——支持 IG、Layer Conductance 等多种方法</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、Attention 可视化</h2>
+
+<div class="intuition-box">
+<p>注意力告诉你模型"往哪儿看了"，但看了不等于据此决策——它是探索工具，不是能拿去应付审计的证据。</p>
+</div>
+
+<h3>Attention 权重的可解释性争议</h3>
+<table>
+<tr><th>观点</th><th>论据</th><th>代表论文</th></tr>
+<tr><td><strong>Attention ≈ 解释</strong></td><td>高注意力权重表示模型"关注"该 token</td><td>早期 Transformer 工作</td></tr>
+<tr><td><strong>Attention ≠ 解释</strong></td><td>注意力权重和梯度归因不一致，随机注意力也能保持性能</td><td>Jain & Wallace, 2019</td></tr>
+<tr><td><strong>条件性解释</strong></td><td>某些 head 的注意力有语义含义，但不是所有</td><td>Clark et al., 2019</td></tr>
+</table>
+
+<h3>Attention 可视化实现</h3>
+<p>拿注意力只需要加载模型时开 <code>output_attentions=True</code>，拿到形状 (层, batch, head, seq, seq) 的张量，再用 BertViz 的 <code>model_view</code>（全层全 head 全景）或 <code>head_view</code>（单 head 细节）渲染。</p>
+
+<pre><code>model = AutoModel.from_pretrained("bert-base-chinese", output_attentions=True)
+att = model(**tokenizer("北京是中国的首都", return_tensors="pt")).attentions
+model_view(att, tokens)   # 全景：哪些 head 有结构
+head_view(att, tokens)    # 细节：单个 head 的注意力模式</code></pre>
+
+<p>扫一遍全景图会看到几类反复出现的模式，认识它们能避免把机械模式当成语义发现：</p>
+
+<table>
+<tr><th>注意力模式</th><th>视觉特征</th><th>实际含义</th></tr>
+<tr><td>语义关联 head</td><td>特定词对之间的亮点，如"北京"↔"首都"</td><td>少数确实编码了语言学关系，值得深挖</td></tr>
+<tr><td>对角线 head</td><td>沿主对角线的亮带</td><td>只在看邻近位置，是位置信息的副产物，无解释价值</td></tr>
+<tr><td>汇聚 head</td><td>整列都指向 [CLS] 或句首 token</td><td>"注意力沉降"，模型无处可看时的默认行为，纯噪声</td></tr>
+</table>
+
+<h3>Attention Rollout — 跨层追踪</h3>
+<p>单层注意力只说明"这一层里 token 之间怎么看"，但一个 12 层模型的信息早已被层层搬运。<span class="term">Attention Rollout</span> 把各层矩阵连乘起来，还原从输入 token 到输出的整体信息流，关键是不能忘了残差连接——残差相当于每层都有一条"信息原地不动"的通路，忽略它会严重高估注意力的搬运量。</p>
+
+<div class="arch-diagram">  单层视角（不可靠）          Rollout 视角（考虑残差）
+
+  Layer 12  A₁₂                A_eff = Ã₁₂ · Ã₁₁ · ... · Ã₁
+     ↑ 只看这一层                 其中 Ã = 0.5·A + 0.5·I
+  Layer 11  A₁₁                          └─ 残差恒等通路
+     ↑                                      再按行归一化
+  Layer  1  A₁
+     ↑                          ┌──────────────────────────┐
+  输入 token                    │ 输入 token → 输出的       │
+                                │ 有效贡献路径（可累计）    │
+  ❌ 忽略了 11 层的搬运          └──────────────────────────┘
+  ❌ 忽略了残差旁路              ✅ 端到端可读的注意力流</div>
+
+<pre><code>rollout = torch.eye(n)
+for A in [a.mean(dim=1) for a in attentions]:      # 先按 head 取均值
+    A = 0.5 * A + 0.5 * torch.eye(n)               # 关键：并入残差恒等映射
+    A = A / A.sum(dim=-1, keepdim=True)            # 行归一化
+    rollout = A @ rollout                          # 逐层滚动连乘</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>Attention 权重作为解释有争议——不能简单地说"模型看了哪里就是靠哪里做决策"</li>
+<li>Attention Rollout 比单层 Attention 更可靠——它考虑了跨层的信息流和残差连接</li>
+<li>实践中推荐组合使用：Attention 用于探索性分析，SHAP/IG 用于严格的特征归因</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、LLM 推理链解释</h2>
+
+<div class="intuition-box">
+<p>LLM 写出来的推理步骤是一份"供人阅读的说明"，不是它内部的计算记录——它足够拿去解释给用户，但不足以证明模型真的这么想。</p>
+</div>
+
+<h3>LLM 可解释性的独特挑战</h3>
+<table>
+<tr><th>挑战</th><th>说明</th><th>现有方案</th></tr>
+<tr><td><strong>规模</strong></td><td>数十亿参数，无法逐个分析</td><td>探针（Probing）、稀疏自编码器</td></tr>
+<tr><td><strong>输出空间</strong></td><td>输出是自由文本而非类别</td><td>Chain-of-Thought、自我解释</td></tr>
+<tr><td><strong>涌现行为</strong></td><td>大模型出现小模型没有的能力</td><td>机制解释性（Mechanistic Interpretability）</td></tr>
+<tr><td><strong>黑盒 API</strong></td><td>商用模型无法访问内部权重</td><td>输入扰动、对比解释</td></tr>
+</table>
+
+<h3>Chain-of-Thought 作为解释</h3>
+<p>让模型先分步推理再给结论（"Q3 收入 0.9 亿比 Q2 的 1.2 亿下降 25% → 连续下降是负面信号 → 但缺季节性与利润率数据 → 结论：不建议，需补充维度"），这份链条对用户是最容易读懂的解释形式。但它的<span class="term">忠实性</span>——即推理链是否真的对应模型内部的计算路径——是无法验证的。</p>
+
+<p>判断一份 CoT 能拿来干什么，可以看它在三个用途上的成色：</p>
+
+<table>
+<tr><th>用途</th><th>CoT 够不够用</th><th>原因</th></tr>
+<tr><td>给用户解释"为什么是这个结果"</td><td>够，且目前最好</td><td>自然语言比 SHAP 数值可读性高一个量级</td></tr>
+<tr><td>发现明显的逻辑错误</td><td>基本够</td><td>算错百分比、前提自相矛盾这类问题会暴露在链条上</td></tr>
+<tr><td>作为"模型确实这么推理"的证据</td><td>不够</td><td>模型可能先出结论再补理由，链条是事后合理化</td></tr>
+</table>
+
+<p>因此工程上的定位是：CoT 与结论一起落库供追溯，但不把它当作模型行为的技术证据；后者仍要靠归因方法和扰动测试。</p>
+
+<h3>反事实解释（Counterfactual Explanations）</h3>
+<p><span class="term">反事实解释</span>回答的是"要改什么，结果才会不一样"，形式上比归因更贴近人的直觉，也更贴近合规要求的"可操作建议"——告诉客户"负债率降到 55% 以下即可通过"，远比告诉他"debt_ratio 的 SHAP 值是 −0.31"有用。做法是搜索能翻转预测的最小输入改动。</p>
+
+<pre><code># 核心就是这个搜索：找编辑距离最小的翻转点
+for i, tok in enumerate(tokens):
+    for alt in alternatives(tok):
+        cand = tokens[:i] + [alt] + tokens[i+1:]
+        if model.predict(detokenize(cand)) != prediction:
+            yield {"pos": i, "from": tok, "to": alt, "dist": 1}
+# "食物非常[美味]"→正面；改成"[难吃]"→负面 ⇒ "美味"是本次判断的关键词</code></pre>
+
+<table>
+<tr><th>反事实的约束</th><th>为什么必须加</th><th>实现要点</th></tr>
+<tr><td>可行性</td><td>"把年龄改成 25 岁就能通过"不是客户能执行的建议</td><td>把不可变特征标为冻结，不参与搜索</td></tr>
+<tr><td>稀疏性</td><td>同时改 8 个特征的建议无法执行</td><td>限制编辑距离，优先返回单特征改动</td></tr>
+<tr><td>数据分布内</td><td>翻转点若落在训练分布外，模型在那里的预测本身不可信</td><td>用密度估计过滤离群反事实</td></tr>
+<tr><td>算力上限</td><td>朴素搜索是 特征数 × 候选值 次推理，长文本直接爆</td><td>先用归因排序，只搜 top-k 特征</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>CoT 是最实用的 LLM 解释方式，但要意识到其局限——可能是"事后合理化"而非真实推理过程</li>
+<li>反事实解释对用户最直观："如果X不同，结果会是Y"——但计算成本高</li>
+<li>LLM 的"真正可解释性"仍是开放问题——机制解释性（Mechanistic Interpretability）是前沿方向</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、可解释性与性能权衡</h2>
+
+<div class="intuition-box">
+<p>不要追求"一份解释满足所有人"——客户要的是能照着做的理由，分析师要的是能对比的数值，审计要的是能复现的证据链，三者的粒度天然不同。</p>
+</div>
+
+<h3>可解释性-性能光谱</h3>
+<table>
+<tr><th>模型类型</th><th>可解释性</th><th>性能</th><th>适用场景</th></tr>
+<tr><td>线性回归/逻辑回归</td><td style="color:var(--green)">★★★★★</td><td>★★☆☆☆</td><td>法规要求完全透明的场景</td></tr>
+<tr><td>决策树</td><td style="color:var(--green)">★★★★☆</td><td>★★★☆☆</td><td>规则明确、业务逻辑清晰</td></tr>
+<tr><td>随机森林/XGBoost</td><td style="color:var(--accent)">★★★☆☆</td><td>★★★★☆</td><td>表格数据、特征工程成熟</td></tr>
+<tr><td>深度神经网络</td><td style="color:var(--orange)">★★☆☆☆</td><td>★★★★★</td><td>图像、语音、复杂模式</td></tr>
+<tr><td>LLM（GPT-4/Claude）</td><td style="color:var(--red)">★☆☆☆☆</td><td>★★★★★</td><td>通用语言理解和生成</td></tr>
+</table>
+
+<h3>实践策略 — 分层解释</h3>
+<p><strong>核心原则：</strong>同一次决策产出四份粒度不同的解释，共享同一个模型版本号与输入快照，从而互相印证。用户看到的理由必须能在审计层的证据链里找到对应的归因数值，否则一旦客户投诉，就会出现"客服说的原因"和"日志里的原因"不一致的尴尬局面。</p>
+
+<table>
+<tr><th>受众</th><th>解释形式</th><th>产出示例</th><th>关键要求</th></tr>
+<tr><td>终端用户</td><td>自然语言理由 + 反事实建议</td><td>"负债率 68% 超过 50% 阈值，且有 2 次逾期；负债率降至 50% 以下可重新申请"</td><td>简洁、可理解、可操作</td></tr>
+<tr><td>业务分析师</td><td>SHAP 特征重要性与可视化</td><td>force plot 显示 debt_ratio −0.31、credit_history −0.22 为主要负向因素</td><td>可量化、可对比、可追踪</td></tr>
+<tr><td>技术团队</td><td>完整归因 + 模型内部分析</td><td>IG 归因 + Attention Rollout + 中间层探针结果</td><td>完整、精确、可复现</td></tr>
+<tr><td>审计与合规</td><td>决策日志 + Model Card + 证据链</td><td>模型 v2.3、5 个决策特征、偏差测试通过记录、SHAP 报告附件</td><td>可追溯、留存期内可重放</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>解释与决策<strong>同事务落库</strong>：模型版本、输入快照、归因结果、阈值一起写，事后才可能复现</li>
+<li>对外理由用<strong>确定性方法</strong>（TreeSHAP、规则）生成，保证同一笔申请两次查询理由一致</li>
+<li>给用户的理由配上<strong>反事实建议</strong>，把"为什么被拒"变成"怎样能通过"</li>
+<li>把<strong>基线样本集</strong>纳入版本管理，基线一换，历史归因就不可比</li>
+<li>用<strong>删除测试</strong>（遮蔽 top-k 特征看预测是否真的变化）定期验证归因本身可信</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>别拿 <strong>Attention 权重</strong>当对外解释——学界已明确它与真实归因不一致，经不起质证</li>
+<li>别用 <strong>LIME 生成面向客户的固定理由</strong>，采样随机性会让同一笔申请出现不同说法</li>
+<li>别把 <strong>CoT 当成模型内部机制的证明</strong>，它可能是结论已定后补出来的合理化叙述</li>
+<li>别在<strong>预测服务的同步链路里跑 KernelSHAP</strong>，指数级采样会把 P99 延迟拖垮</li>
+<li>别只留归因<strong>不留输入</strong>：没有输入快照，半年后监管要求复现时无法重算</li>
+</ul>
+</div>
+</div>
+
+<p class="highlight"><strong>示例场景：</strong>某银行信用卡审批模型上线后收到监管问询，要求对近 6 个月 1.4 万笔拒绝逐笔说明理由。团队当时只存了最终评分和"综合评估未通过"的模板话术，归因是查询时实时重算的——但模型已迭代过两个版本，特征工程也改过，重算结果与当初决策口径不一致的比例达到 23%。整改方案是把解释从"查询时计算"改为"决策时固化"：决策事务里同步写入模型版本、特征快照、TreeSHAP 前五项归因与命中阈值，存储成本增加约每笔 1.8KB、日均 340MB。此后逐笔理由的可复现率为 100%，同类问询的响应时间从两周降到按需导出。</p>
+
+<div class="interview-box">
+<ul>
+<li>可解释性和性能的权衡是核心设计决策——不是越可解释越好</li>
+<li>分层解释策略：不同受众需要不同粒度和形式的解释</li>
+<li>高风险场景（医疗、金融、法律）可解释性优先级高于性能</li>
+</ul>
+</div>
+</div>
+
+<!-- Q&A Section -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>SHAP 和 LIME 的核心区别是什么？各自的优缺点？</summary>
+<p class="answer">核心区别在理论基础：SHAP 基于合作博弈论的 Shapley 值，是唯一同时满足局部准确性、一致性、缺失性三个公理的归因方法，保证了理论上的最优性和唯一性；LIME 基于"局部线性近似"，在预测点附近用简单模型拟合，没有理论最优保证。SHAP 优点：结果稳定（确定性计算）、有全局解释能力（聚合局部值）、理论保证强；缺点：KernelSHAP 计算慢（指数级复杂度），TreeSHAP 限于树模型。LIME 优点：实现简单、直觉清晰、模型无关；缺点：结果不稳定（依赖随机采样）、超参数敏感（采样数、邻域大小）、不支持全局解释。实践建议：树模型用 TreeSHAP，深度模型用 DeepSHAP 或 IG，快速探索用 LIME。</p>
+</details>
+
+<details>
+<summary>Attention 权重能否作为模型解释的依据？</summary>
+<p class="answer">这是一个有争议的问题：①反对方（Jain & Wallace, 2019）指出注意力权重与梯度归因不一致，且随机替换注意力权重不显著影响性能，说明注意力权重不可靠地反映特征重要性；②支持方认为某些 attention head 确实捕获了有意义的语言学模式（如语法依赖、共指消解）；③折中观点：Attention 可以作为探索性分析工具，但不能作为严格的因果解释。最佳实践：使用 Attention Rollout（跨层追踪注意力流，考虑残差连接）比单层 attention 更可靠；将 Attention 与 Integrated Gradients 等梯度方法结合使用；在需要合规级解释的场景中，不依赖 Attention 作为唯一证据。</p>
+</details>
+
+<details>
+<summary>Integrated Gradients 的原理和优势是什么？</summary>
+<p class="answer">Integrated Gradients（IG）的核心思想是：从一个"基线输入"（如全零向量）到实际输入，沿直线路径积分梯度，得到每个特征的贡献度。公式：IG_i(x) = (x_i - x'_i) × ∫₀¹ ∂F(x'+α(x-x'))/∂x_i dα。直觉理解：不是看"当前点的梯度"（瞬时变化率），而是看"从无到有的整个变化过程"。优势：①满足两个关键公理——敏感性（如果某特征改变导致预测变化，其归因值非零）和实现不变性（功能相同的模型给出相同归因）；②唯一满足这两个公理的梯度方法（Vanilla Gradient 不满足敏感性，因为梯度可能为零）；③计算高效——只需要前向和反向传播，不需要采样。局限：需要选择合适的基线，且基线的选择会影响结果。</p>
+</details>
+
+<details>
+<summary>LLM 的 Chain-of-Thought 是否等于真正的可解释性？</summary>
+<p class="answer">CoT 不等于真正的可解释性，但它是当前最实用的 LLM 解释方式。原因分析：①CoT 可能是"事后合理化"——模型先得出结论，再生成看似合理的推理步骤（类似人类的认知偏差），研究表明 CoT 步骤和模型内部计算过程并不完全一致；②CoT 可能"编造推理"——模型生成的推理链可能包含看似合理但实际错误的逻辑步骤（幻觉延伸到推理过程）；③CoT 的忠实性无法验证——我们无法确定 CoT 步骤真正反映了模型的"思考过程"。但 CoT 的实际价值：①对用户最直观——自然语言解释比 SHAP 数值更易理解；②可发现逻辑错误——即使 CoT 不完全忠实，暴露的推理链也有助于发现明显的逻辑缺陷；③可审计——CoT 提供了可记录、可检查的"决策依据"。正确做法：将 CoT 视为"用户可理解的解释"而非"真实的模型内部机制"。</p>
+</details>
+
+<details>
+<summary>如何在高风险场景中平衡可解释性和模型性能？</summary>
+<p class="answer">三种策略：①分层解释——用高性能黑盒模型做预测，用可解释方法提供事后解释。例如用 GPT-4 做信贷评估，同时用 SHAP 提供特征重要性解释，用 CoT 提供自然语言解释；②可解释代理——训练一个简单的可解释模型（如决策树）模拟黑盒模型的行为，当两者一致时用黑盒结果+简单模型解释，不一致时触发人工审核；③混合架构——关键决策因素用可解释模型（逻辑回归/决策树），辅助分析用复杂模型。例如信贷审批：基础规则（负债率、收入比）用可解释模型决定"通过/拒绝"边界，模型只在边界附近的"灰区"发挥作用。合规建议：EU AI Act 要求高风险 AI 决策"可以向受影响者解释"——不是要求模型内部完全透明，而是要求能给出有意义的、可理解的解释。</p>
+</details>
+
+<details>
+<summary>解释应该在决策时固化还是在被问到时重算？为什么？</summary>
+<p class="answer">应该在决策时固化，理由是可复现性。归因结果依赖三样东西：模型权重、特征工程逻辑、基线样本集。这三样任何一样在事后发生变更，重算得到的解释就不再是当初那次决策的依据。模型迭代通常以周为单位，而监管问询、客户投诉、诉讼取证往往发生在几个月甚至一两年之后，届时几乎不可能还原当时的完整环境。固化的具体做法是把解释纳入决策事务：写入模型版本号、输入特征快照、归因值 top-k、命中的阈值、以及对外展示的理由文本，与决策结果同生共死。代价是存储——按每笔一两 KB 估算，日均百万次决策约增加 1-2GB/天，可以按留存期做冷热分层。反过来，"查询时重算"唯一的好处是省存储，但它把一个确定性的合规义务变成了赌运气，通常不划算。</p>
+</details>
+
+<details>
+<summary>怎么验证一份特征归因本身是可信的，而不是看起来合理？</summary>
+<p class="answer">归因方法自己不会报错，输出的数值总是"看起来像那么回事"，所以需要独立的验证手段。最常用的是删除测试（deletion test）：按归因值从高到低依次遮蔽特征，记录预测置信度的下降曲线。如果归因可信，遮蔽 top-k 应该让预测迅速崩塌；如果曲线平缓，说明归因排序没抓住真正起作用的特征。对应的是插入测试（insertion test）——从空白输入开始按归因顺序逐个加回特征，看预测多快恢复。第二类手段是随机化对照：把模型权重随机重置后重跑同一套归因，如果输出的热力图和原来长得差不多，说明这个方法主要在反映输入的表面结构而非模型行为，属于典型的失效信号。第三类是一致性交叉验证：用两种独立方法（如 TreeSHAP 与 Integrated Gradients）对同一批样本归因，统计 top-3 特征的重合率，重合率长期低于某个水位就要怀疑其中一方的配置有问题（最常见的是基线选错）。这些测试成本不高，适合作为模型上线前的固定关卡跑一遍并留档。</p>
+</details>
+
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});
+</script>
+  </body>
+</html>

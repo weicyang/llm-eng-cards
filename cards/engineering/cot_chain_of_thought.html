@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E03 · 思维链 CoT：原理、变体与工程取舍 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:10px;padding:1.2rem;margin:1rem 0;font-family:monospace;font-size:.85rem;line-height:1.6;overflow-x:auto;color:var(--cyan);white-space:pre}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.highlight{background:rgba(88,166,255,.08);border-left:3px solid var(--accent);padding:.8rem 1.2rem;border-radius:0 8px 8px 0;margin:1rem 0}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+@media(max-width:980px){.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、从直接报答案到展示解题过程：CoT 是什么、从哪来</a>
+<a href="#s2">二、为什么一步步思考有效：中间步骤就是计算资源</a>
+<a href="#s3">三、Zero-shot vs Few-shot：触发 CoT 的两条路</a>
+<a href="#s4">四、Self-Consistency：多路采样投票换可靠推理</a>
+<a href="#s5">五、CoT 家族：ToT、GoT 与 ReAct 的推理形态</a>
+<a href="#s6">六、Faithfulness 争议：推理链不等于真实计算</a>
+<a href="#s7">七、工程取舍：什么时候用 CoT、怎么省着用</a>
+<a href="#qa">Q&amp;A（10 题）</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+<h1>E03 · 思维链 CoT：原理、变体与工程取舍</h1>
+<p class="subtitle">CoT 原理与起源 / Zero-shot vs Few-shot / Self-Consistency / ToT 与 ReAct 变体 / Faithfulness 争议 / 工程取舍</p>
+
+<div class="section" id="s1">
+<h2>一、从直接报答案到展示解题过程：CoT 是什么、从哪来</h2>
+<div class="intuition-box">
+CoT 的本质不是让模型"想得更认真"，而是把一道难题从"一次前向传播报答案"改写成"先输出一串中间结论再收尾"，让每个中间结果都写进上下文、供后续 token 复用。
+</div>
+<p><span class="term">Chain-of-Thought（思维链，CoT）</span>指的是一种 prompting 技术：在给大模型的示例里，不只给出"问题→答案"，而是补上一段连贯的中间推理步骤，模型在面对新问题时也会模仿这种"先推理、后作答"的格式。这个概念由 Google 的 Jason Wei 等人在 2022 年 1 月的论文《Chain-of-Thought Prompting Elicits Reasoning in Large Language Models》中正式提出，随后成为 LLM 时代影响最深远的 prompting 思想之一。</p>
+<p>要理解它为什么重要，先看没有 CoT 时模型在做什么。自回归语言模型生成答案是一个 token 接一个 token 地"猜"，面对"食堂原有 23 个苹果，用掉 20 个做午餐，又买了 6 个，还剩几个"这类题，如果直接让它报答案，它必须在<strong>一次前向计算</strong>里同时完成"23−20"和"+6"两步运算。一旦模型没有显式保存"还剩 3 个"这个中间结果，就很容易把题目里的几个数字拼成错误算式，报出 27 或 29 这类答案。这不是模型"不聪明"，而是它的计算结构被迫把所有推理压缩进单步输出。</p>
+
+<div class="arch-diagram">直接作答（Standard Prompting）          CoT 推理（Chain-of-Thought）
+────────────────────────────────         ────────────────────────────────
+┌──────────┐        ┌──────────┐         ┌──────────┐
+│  问题     │──────▶│  答案     │         │  问题     │
+└──────────┘        └──────────┘         └────┬─────┘
+                                              │ 先生成中间推理
+"23 个苹果，用掉 20，又买 6"                     ▼
+        │                                ┌──────────────┐
+        ▼                                │ 步1: 23-20=3  │
+   一步报出 "29" ✗                        │ 步2: 3+6=9    │
+                                         └────┬─────────┘
+所有运算压缩进一次前向传播，                        ▼
+中间结果无处存放，极易跳步出错              ┌──────────────┐
+                                          │ 答案: "9" ✓   │
+                                          └──────────────┘
+</div>
+
+<p>Wei 等人的关键洞见是：把推理链写进 few-shot 示例后，模型会把它当作要模仿的"输出格式"。每个示例变成一个三元组 <code>〈输入，思维链，输出〉</code>，而不只是 <code>〈输入，输出〉</code>。实验结果相当惊人：在 GSM8K 小学数学应用题基准上，540B 参数的 PaLM 模型仅用 8 条 CoT 示例，就把解题准确率从约 17.9% 拉到 56.9%，甚至超过了"微调过的 GPT-3 + 验证器"的 55%。没有更新任何参数、没有新训练数据，只是换了一种写 prompt 的方式。</p>
+<p>但这里有一个常被忽略的前提：CoT 的收益是<strong>随规模涌现</strong>的。<span class="term">涌现能力（Emergent Ability）</span>指某种能力只在模型规模跨过某个阈值后才突然出现。Wei 的实验显示，CoT 的红利主要集中在大约 60B~100B 参数以上的大模型；对 10B 以下的小模型，加上推理链不仅没收益，有时反而比直接作答更差——因为小模型容量不足，生成的推理步骤"流畅但不合逻辑"，等于用一堆错误的中间结论把自己带偏。</p>
+
+<table>
+<tr><th>维度</th><th>标准 Prompting</th><th>CoT Prompting</th></tr>
+<tr><td>示例形式</td><td>〈问题，答案〉二元组</td><td>〈问题，推理链，答案〉三元组</td></tr>
+<tr><td>计算方式</td><td>一次前向压缩全部推理</td><td>逐 token 外化中间步骤</td></tr>
+<tr><td>中间状态</td><td>藏在隐状态里、易丢失</td><td>写进上下文、可被后续复用</td></tr>
+<tr><td>可调试性</td><td>黑盒，错了不知道错在哪</td><td>能看到是哪一步出错</td></tr>
+<tr><td>模型规模要求</td><td>无特别要求</td><td>需 ≥60~100B 才稳定见效</td></tr>
+<tr><td>Token 成本</td><td>低</td><td>显著更高（多生成推理链）</td></tr>
+</table>
+
+<div class="highlight">
+<strong>📊 生产数据：</strong>在 GSM8K 数学应用题上，540B PaLM + 8 条 CoT 示例把准确率从 17.9% 提升到 56.9%，超过微调 GPT-3 + 验证器的 55%。这组数字之所以关键，是因为它证明推理能力可以"零训练"地被 prompt 激发出来——但同样的技巧搬到小模型上几乎不产生收益。
+</div>
+
+<h3>三篇里程碑论文的时间线</h3>
+<p>理解 CoT 的发展只需记住三篇论文的分工：Wei 等人证明"展示解题过程有效且随规模涌现"，Kojima 等人证明"一句话就能触发、无需示例"，Wang 等人则解决"如何让单链推理更稳"。它们共同构成今天推理类 prompt 工程的基本骨架。</p>
+<table>
+<tr><th>论文</th><th>年份/会议</th><th>贡献</th><th>代表数字</th></tr>
+<tr><td>Wei 等，Chain-of-Thought</td><td>2022 / NeurIPS</td><td>Few-shot CoT，证明规模涌现</td><td>GSM8K：17.9%→56.9%</td></tr>
+<tr><td>Kojima 等，Zero-Shot Reasoners</td><td>2022 / NeurIPS</td><td>Zero-shot CoT，单句触发语激活</td><td>MultiArith：17.7%→78.7%</td></tr>
+<tr><td>Wang 等，Self-Consistency</td><td>2022 / ICLR 2023</td><td>多路采样 + 多数投票</td><td>GSM8K 再 +17.9%</td></tr>
+<tr><td>Yao 等，ReAct / ToT</td><td>2022–2023</td><td>推理与工具交替；树状搜索</td><td>24 点等探索类任务大幅提升</td></tr>
+<tr><td>Turpin 等，Unfaithful CoT</td><td>2023 / NeurIPS</td><td>揭示忠实性（Faithfulness）问题</td><td>偏置输入下准确率最多 -36%</td></tr>
+</table>
+</div>
+
+<div class="section" id="s2">
+<h2>二、为什么一步步思考有效：中间步骤就是计算资源</h2>
+<div class="intuition-box">
+CoT 不是玄学，它利用了自回归生成的两条硬规律：已生成的 token 会成为后续生成的条件，而上下文就是模型唯一的工作记忆——把推理写出来，等于给模型外接了一块"草稿纸 + 内存"。
+</div>
+<p>为什么同一道题，加一句"一步步想"就能从错变对？答案不在"模型更努力"，而在自回归生成的结构特性。第一条规律是：<strong>每个已生成的 token 对后续生成可见</strong>。当模型写下"第一步：30% × 45 = 13.5"，这个中间结果就进入了上下文，后面计算第二步时模型能"看到"这个正确的 13.5，而不是在隐状态里凭感觉重算。第二条规律是：<strong>语言模型没有上下文之外的工作记忆</strong>，CoT 通过把推理过程外化到输出里，人为制造了一块工作记忆。</p>
+<p>从概率角度看，CoT 把原本一步到位的估计 <code>P(答案 | 问题)</code> 拆解成一串条件概率的乘积 <code>P(步1|问题) × P(步2|步1,问题) × … × P(答案|所有步,问题)</code>。每一个子步骤都是一个更简单、模型更擅长的"条件续写"任务。对包含 n 个推理步的问题，这相当于把一道难题拆成 n 道容易的小题，模型把计算资源分摊到每一步，而不是全压在一次输出上。</p>
+
+<div class="arch-diagram">自回归生成：每个 token 都以"此前全部文本"为条件
+
+ 生成步1 tokens ─▶ "先算 23-20=3"
+                      │  写入上下文（外化工作记忆）
+                      ▼
+ 生成步2 tokens ─▶ "再算 3+6=9"   ◀── 能"看到"步1 的中间结果 3
+                      │
+                      ▼
+ 生成答案 tokens ─▶ "所以答案是 9" ◀── 条件于完整推理链
+
+─────────────────────────────────────────────────────
+ 无 CoT：问题 ─────────────────▶ 答案
+        （一次前向，压缩所有运算，中间态易丢）
+
+ 有 CoT：问题 ─▶ [中间状态1] ─▶ [中间状态2] ─▶ … ─▶ 答案
+        （多步自回归，每步可读取前面写下的中间结果）
+</div>
+
+<p>这套机制带来四个具体好处。其一是<strong>分解计算负担</strong>：复杂的中间状态不必全部塞进模型的隐状态，通过显式输出记下来，推理负担骤降。其二是<strong>错误可暴露</strong>：每步都摆在明面上，模型（或人、或校验器）能发现第 2 步算错了，而不是把错误藏在一个不透明的答案里。其三是<strong>激活预训练里学到的推理模式</strong>：模型在训练时见过海量数学解题、逻辑分析文本，CoT 的输出格式恰好匹配这些模式，等于调用它已有的"解题技能库"。其四是<strong>增加序列计算深度</strong>：Transformer 单层计算量固定，但生成更多推理 token 等于给了模型更多自回归时间步，让它能做更长的序列化计算。</p>
+
+<table>
+<tr><th>机制</th><th>原理</th><th>带来的收益</th></tr>
+<tr><td>外化工作记忆</td><td>中间结果写进上下文</td><td>复杂状态不再依赖隐状态硬扛</td></tr>
+<tr><td>逐步条件化</td><td>每步以前文为条件生成</td><td>难题拆成多个简单续写任务</td></tr>
+<tr><td>错误暴露</td><td>每步可见、可检查</td><td>便于定位与纠正，不藏错</td></tr>
+<tr><td>激活预训练模式</td><td>匹配训练时见过的解题文本</td><td>调用已有推理技能库</td></tr>
+<tr><td>增加计算深度</td><td>更多 token=更多自回归步</td><td>支撑更长的序列化计算</td></tr>
+</table>
+
+<div class="highlight">
+<strong>💡 知识要点：</strong>推理链必须出现在答案之前，答案才能真正利用前面的中间状态。如果你让模型先报答案再补一段"解释"，那只是事后合理化，起不到计算作用——顺序本身就是 CoT 生效的关键。
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、Zero-shot vs Few-shot：触发 CoT 的两条路</h2>
+<div class="intuition-box">
+Few-shot CoT 靠"示范"，Zero-shot CoT 靠"一句咒语"——前者效果稳但要手写示例，后者零成本但略逊，两者本质都是激活模型里已经存在的推理能力。
+</div>
+<p>Wei 最初的 CoT 需要人工为每类任务精心编写推理示例，这在落地时是个瓶颈：算术要算术的例子、常识要常识的例子，样例准备成了瓶颈。东京大学的 Kojima 等人在 2022 年 5 月的论文《Large Language Models are Zero-Shot Reasoners》（NeurIPS 2022）里给出了一个近乎"作弊"的解法：<span class="term">Zero-shot CoT</span>——不给任何示例，只在问题末尾追加一句"Let's think step by step"（让我们一步步思考），模型就会自发地组织出中间步骤。</p>
+<p>这句看似随意的指令效果惊人：在 MultiArith 基准上，配合 InstructGPT 使用时，正答率从 17.7% 直接跳到 78.7%；在 GSM8K、符号推理、逻辑推理等多个领域也都有一致的显著提升。它之所以有效，是因为大模型在预训练里早已见过无数"先分析、后结论"的文本，一句触发语就把这种潜在能力唤醒了——这也再次印证 CoT 是涌现能力，模型越大这句咒语越灵。</p>
+
+<div class="arch-diagram">Few-shot CoT（Wei 2022）              Zero-shot CoT（Kojima 2022）
+────────────────────────────          ────────────────────────────
+示例1: 问题→推理链→答案                问题
+示例2: 问题→推理链→答案                  +
+示例3: 问题→推理链→答案                "Let's think step by step."
+……（手写 3~8 条示范）                    （零示例，一句触发语）
+新问题 → 模仿示例格式推理                     │
+                                              ▼
+        │                              阶段1: 生成推理链
+        ▼                              阶段2: 从推理中抽取答案
+ 稳定、准确率高，但示例成本高             零示例成本，效果略逊但通用
+</div>
+
+<p>工程上 Zero-shot CoT 通常用<strong>两阶段</strong>实现更稳：第一阶段拼接触发语让模型生成推理文本，第二阶段再追加一句"因此，答案是（用阿拉伯数字）"把最终答案从推理里干净地抽取出来。之所以要分两步，是因为第一阶段生成的文字里推理和结论是混在一起的，直接解析容易出错。</p>
+<p>但 Zero-shot CoT 也有明确短板：生成的步骤质量不稳定，有时会冗余、跑题；在多选题里可能难以收敛到唯一明确的答案；而且那句触发语并非万能，换个任务未必最优。相比之下，<span class="term">Few-shot CoT</span>通过示例固定了推理格式与口径，效果更稳、更适合对准确率要求高的生产场景，代价是 prompt 更长、需要维护示例。</p>
+
+<table>
+<tr><th>维度</th><th>Few-shot CoT</th><th>Zero-shot CoT</th></tr>
+<tr><td>触发方式</td><td>示例里写好推理链</td><td>追加"一步步思考"触发语</td></tr>
+<tr><td>示例成本</td><td>需人工编写并维护</td><td>零示例</td></tr>
+<tr><td>Prompt 长度</td><td>较长</td><td>最短（多一句话）</td></tr>
+<tr><td>效果稳定性</td><td>高、格式可控</td><td>略逊、步骤质量不稳</td></tr>
+<tr><td>典型提升</td><td>GSM8K 17.9%→56.9%</td><td>MultiArith 17.7%→78.7%</td></tr>
+<tr><td>适用场景</td><td>高准确率要求、口径统一</td><td>快速原型、无样例可用</td></tr>
+</table>
+
+<div class="highlight">
+<strong>📊 生产数据：</strong>某电商客服在做"退款金额多步核算"时，先用 Zero-shot CoT 快速验证，正答率从直接作答的约 58% 提到约 81%；随后为统一口径改用 3 条手写 Few-shot CoT 示例，正答率进一步稳定到 89%，且输出格式可控、便于下游解析。两段式演进的边际成本几乎只有示例编写的一次性投入。
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、Self-Consistency：多路采样投票换可靠推理</h2>
+<div class="intuition-box">
+单条推理链可能走偏，但正确结论往往能从多条不同路径殊途同归——Self-Consistency 用"多采样 + 多数投票"把偶然走偏的路径稀释掉。
+</div>
+<p>CoT 已经比直接作答强，但它仍是"一条链走到底"：一旦第 2 步推理错了，第 3、4 步会基于错误前提继续推导，最终答案大概率跟着错。Wang 等人（2022，ICLR 2023）提出的 <span class="term">Self-Consistency（自洽性）</span>就是针对这个脆弱性：对同一道题，用较高的温度（temperature &gt; 0）采样生成多条不同的推理路径，然后对最终答案做<span class="term">多数投票（Majority Voting）</span>，取出现次数最多的那个。</p>
+<p>背后的直觉很朴素：正确答案往往可以通过多种不同的推理路径得到，而错误答案通常是随机产生的，不同路径不太可能恰好收敛到同一个错误结论。于是"多数派"大概率就是对的。实验证明，Self-Consistency 在 CoT 基础上还能再提一截：GSM8K +17.9%、SVAMP +11.0%、AQuA +12.2%，在数学推理类任务上尤其显著。</p>
+
+<div class="arch-diagram">同一问题 ──▶ temperature=0.7 采样多条推理链
+                │
+   ┌────────┬───┴────┬────────┬────────┐
+   ▼        ▼        ▼        ▼        ▼
+ 链1       链2      链3      链4      链5
+ "9"      "9"      "7"      "9"      "9"
+   │        │        │        │        │
+   └────────┴────┬───┴────────┴────────┘
+                 ▼
+        多数投票: "9" 得 4/5 票
+                 ▼
+        最终答案 = 9 ✓（比单链更可靠）
+
+ 注: 走偏的链3 被多数派稀释，不影响最终结论
+</div>
+
+<p>代价同样直白：调用次数变成原来的 N 倍（通常 5~10 次），token 成本和延迟随之线性放大。所以 Self-Consistency 几乎不会全量铺开，而是用在"离散输出 + 高价值"的场景——分类、判断、数学结论这类能清晰投票的任务，且往往只对关键请求启用。对开放式生成（写文案、长文摘要）它就不太适用，因为多条路径的文本难以投票。</p>
+
+<table>
+<tr><th>方法</th><th>推理路径</th><th>成本</th><th>准确率</th><th>适用输出类型</th></tr>
+<tr><td>直接作答</td><td>0 条链</td><td>1x</td><td>基准</td><td>任意</td></tr>
+<tr><td>贪心 CoT</td><td>1 条链</td><td>~2-3x</td><td>明显提升</td><td>任意</td></tr>
+<tr><td>Self-Consistency</td><td>5~10 条链投票</td><td>~5-10x</td><td>再 +5%~15%</td><td>离散/可投票</td></tr>
+<tr><td>ToT（见下节）</td><td>树状搜索多分支</td><td>更高</td><td>复杂规划任务显著</td><td>需探索/回溯</td></tr>
+</table>
+
+<div class="highlight">
+<strong>📊 生产数据：</strong>某金融风控在做"多条件规则判定"时，把单链 CoT 升级为 Self-Consistency 5 路采样投票，判定准确率从 84% 提到 95%（+11pp），误判率近乎减半；代价是该接口的 token 成本约为原来的 5 倍、P95 延迟从 1.8s 升到 4.5s。团队最终只对金额超过阈值的审批单启用投票，整体成本只上升约 30%。
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、CoT 家族：ToT、GoT 与 ReAct 的推理形态</h2>
+<div class="intuition-box">
+CoT 是一条线性链，而真实解题常常需要试错、回头、查资料——ToT 把链变成树、GoT 变成图、ReAct 则让推理和调用工具交替进行，它们都是为了突破"单线到底"的局限。
+</div>
+<p>标准 CoT 是<strong>线性、单向</strong>的：一步接一步，不能回头。但很多难题（如 24 点游戏、创意规划、策略推理）需要探索多条路、评估哪条更有希望、甚至放弃走错的分支。这催生了一整个"结构化推理"家族。<span class="term">Tree of Thoughts（ToT）</span>把推理组织成搜索树：在每个决策点生成多个候选步骤，分别评估，只扩展最有希望的分支，必要时回溯。它把"线性思考"升级成"深思熟虑的搜索"。</p>
+<p><span class="term">Graph of Thoughts（GoT）</span>更进一步，允许推理节点之间任意连接、合并、循环，适合那些步骤间有复杂依赖、需要汇总多条线索的任务。而 <span class="term">ReAct</span>则解决了另一类问题——纯推理拿不到外部信息。ReAct 让"Reasoning（推理）"和"Action（行动）"交替进行：模型先想一步，然后调用工具（查数据库、搜索、调 API），观察返回结果，再继续推理。它正是今天大量 Agent 循环的原型。</p>
+
+<div class="arch-diagram">                 Few-shot CoT（Wei 2022）
+                          │ 推理链 = 线性、单向
+        ┌─────────────────┼─────────────────────┐
+        ▼                 ▼                     ▼
+  Zero-shot CoT      Self-Consistency       结构化推理
+  （Kojima 2022）    （Wang 2022）              │
+  一句触发语          多链采样+投票          ┌────┴────┐
+                                            ▼         ▼
+                                          ToT       GoT
+                                        树状搜索   图结构
+                                      可回溯/评估  可合并/循环
+        └─────────────────┬─────────────────────┘
+                          ▼
+                    ReAct（Yao 2022）
+            推理 ⇄ 行动 交替（调用工具/查数据）
+            想一步 → 做一步 → 观察 → 再想
+</div>
+
+<p>还有一支值得一提：<span class="term">PAL（Program-Aided Language）</span>让模型把推理写成代码、交给解释器执行，把"算数"这种模型不擅长的事外包给确定性的程序；<span class="term">Least-to-Most</span>则先把大问题拆成子问题、再从最简单的子问题逐个解决。这些变体共同说明：CoT 不是一个固定技巧，而是一类"把推理过程结构化、外化"的设计思想的起点。</p>
+
+<table>
+<tr><th>方法</th><th>结构形态</th><th>核心能力</th><th>典型场景</th><th>成本</th></tr>
+<tr><td>CoT</td><td>线性链</td><td>逐步推理</td><td>数学/逻辑/符号</td><td>中</td></tr>
+<tr><td>Self-Consistency</td><td>多条链</td><td>采样投票</td><td>离散判断、高可靠</td><td>较高</td></tr>
+<tr><td>ToT</td><td>树</td><td>搜索+回溯</td><td>24 点、规划、策略</td><td>高</td></tr>
+<tr><td>GoT</td><td>图</td><td>合并/循环</td><td>复杂依赖、多线索汇总</td><td>高</td></tr>
+<tr><td>ReAct</td><td>推理+行动交替</td><td>调用工具/外部信息</td><td>Agent、检索问答</td><td>中-高</td></tr>
+<tr><td>PAL</td><td>推理生成代码</td><td>程序精确计算</td><td>数学、可验证计算</td><td>中</td></tr>
+</table>
+
+<div class="highlight">
+<strong>💡 知识要点：</strong>选哪种变体，取决于任务的"形状"——能一步步走完的用 CoT，需要试错回头的用 ToT，需要查外部数据的用 ReAct，需要精确计算的用 PAL。盲目叠加最复杂的结构只会徒增 token 与延迟。
+</div>
+<div class="highlight">
+<strong>📊 生产数据：</strong>某企业内部问答机器人最初用纯 CoT 回答"某项目上季度预算还剩多少"这类需要查库的问题，准确率仅约 54%——因为模型只能凭记忆"编"数字。改为 ReAct（先推理要查哪张表，再调用 SQL 工具取数，观察结果后再作答）后，准确率升到 92%，且每次作答都附带可核对的数据来源。代价是平均每次触发 1~3 次工具调用、延迟从 2.2s 升到约 5s，团队因此只对"必须查实时数据"的问题启用 ReAct，其余仍走普通 CoT。
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、Faithfulness 争议：推理链不等于真实计算</h2>
+<div class="intuition-box">
+CoT 让答案更准，但写出来的推理链未必是模型"真正的思考过程"——它可能只是事后编出的一段听起来合理的解释，这动摇了"读推理链=审计模型"的假设。
+</div>
+<p>很多人把 CoT 当作可解释性红利：既然能看到模型一步步怎么想，似乎就能审计它的决策。但 Turpin 等人（NYU/Anthropic，NeurIPS 2023）在论文《Language Models Don't Always Say What They Think》里给出了反例：<span class="term">Faithfulness（忠实性）</span>问题——CoT 解释可以"看似合理"却系统性地不忠实于模型真实的预测依据。</p>
+<p>他们的实验设计很巧妙：在 few-shot prompt 里偷偷加入"偏置特征"，比如把多选题示例重新排序，使正确答案总是"(A)"。结果模型的预测被明显带偏，但生成的 CoT 推理链里<strong>从不提及</strong>这个偏置，反而会编出一段看似合理的推理来为被带偏的答案辩护。在 BIG-Bench Hard 的 13 个任务上，用 GPT-3.5 和 Claude 1.0 测试，这种偏置导致准确率最多下降 36%。在社会偏见任务（BBQ）上，模型会给出符合刻板印象的答案，并用"不一致地权衡证据"的方式自圆其说，却绝口不提偏见本身的影响。</p>
+
+<div class="arch-diagram">偏置实验（Turpin 2023）：
+
+  few-shot 示例被动手脚：正确答案总是排在 "(A)"
+                │
+                ▼
+  模型预测被带偏 ─────▶ 准确率最多下降 36%
+                │        （BIG-Bench Hard 13 任务）
+                ▼
+  生成的 CoT 推理链：
+    ✓ 看起来合理、内部自洽
+    ✗ 从不提及"答案总在 A"这个偏置
+    ✗ 反而为被带偏的答案编造理由
+
+  结论：推理链 plausible（可信） ≠ faithful（忠实）
+        行为被偏置驱动，解释却掩盖了真实原因
+</div>
+
+<p>这个发现的工程含义很实在：<strong>不能把 CoT 推理链当作可靠的审计证据</strong>。推理链能提升答案质量，但"能读出步骤"不等于"能审计决策动机"。后续 Lanham 等人（2023）通过直接干预推理链（加错误、改写、截断）进一步发现：忠实度随任务和模型规模波动，更强更大的模型在多数任务上反而可能产生更不忠实的推理——能力与忠实度并不天然同步。对需要合规、可追责的场景，依赖 CoT 文本做安全保证是危险的，要么专门提升忠实度，要么改用别的可验证手段。</p>
+
+<table>
+<tr><th>概念</th><th>含义</th><th>CoT 的现实表现</th></tr>
+<tr><td>Plausible（可信）</td><td>解释听起来合理、能说服人</td><td>通常满足</td></tr>
+<tr><td>Faithful（忠实）</td><td>解释真实反映预测依据</td><td>系统性不满足</td></tr>
+<tr><td>偏置影响</td><td>输入特征悄悄左右答案</td><td>准确率最多 -36%，链中不提</td></tr>
+<tr><td>事后合理化</td><td>为先有结论编造理由</td><td>常见，尤其在偏见任务</td></tr>
+<tr><td>审计价值</td><td>读链=审模型？</td><td>不可靠，需额外验证手段</td></tr>
+</table>
+
+<div class="highlight">
+<strong>📊 生产数据：</strong>Turpin 等人在 BIG-Bench Hard 的 13 个任务上，通过重排 few-shot 选项使正确答案恒为"(A)"，GPT-3.5 与 Claude 1.0 的准确率最多下降 36%，而模型生成的推理链几乎从不提及这一偏置——说明推理链会"合理化"被操纵的答案，而非如实报告决策依据。
+</div>
+</div>
+
+<div class="section" id="s7">
+<h2>七、工程取舍：什么时候用 CoT、怎么省着用</h2>
+<div class="intuition-box">
+CoT 是为"需要多步推理"的问题准备的工具：用对地方是利器，用在简单任务上就是浪费 token、放大延迟，还可能帮倒忙。
+</div>
+<p>判断要不要用 CoT，核心是看任务是否真的需要多步推理。数学应用题、多步逻辑推导、需要追踪执行过程的代码调试、要把规则套用到事实上的法律/政策判断，这些都是 CoT 的主场，收益显著。反过来，简单事实召回（"德国首都是哪"）、直白分类（"这句话情感是正面还是负面"）、直接翻译这类任务，CoT 几乎无益；对"1+1 等于几"这种题强行展开推理，只会浪费 token、拖慢响应，并不会更准。还有一类要特别小心：纯记忆型问题（"2020 年奥运会在哪举办"）根本不需要推理，CoT 帮不上忙。</p>
+<p>除了任务类型，还要记住三条成本与风险账。第一，<strong>token 与延迟</strong>：推理链会额外生成几百到上千 token，API 成本和响应时间都显著上升，Self-Consistency 更是 N 倍放大。第二，<strong>错误传导</strong>：推理链本身可能出错，且一步错、步步错，CoT 能减少"跳跃性错误"，但不能消除推理错误。第三，<strong>小模型反噬</strong>：对 10B 以下的模型，CoT 收益微弱甚至为负，别指望用一句"一步步想"拯救容量不足的小模型。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>多步数学、逻辑、代码调试、规则套用任务优先启用 CoT</li>
+<li>高价值、离散输出的判定叠加 Self-Consistency 投票</li>
+<li>先写推理、后抽取答案，两阶段保证输出可解析</li>
+<li>对外产品只展示简要依据或最终答案，不暴露完整思考链</li>
+<li>对关键结论用校验器/程序复核，不盲信推理链</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>别对简单分类、事实召回、翻译任务强加 CoT</li>
+<li>别把完整推理链当作可审计的决策依据</li>
+<li>别期望 10B 以下小模型靠 CoT 获得稳定收益</li>
+<li>别忽视推理链带来的 token 成本与延迟放大</li>
+<li>别让一步走偏的推理链不加校验地直达最终答案</li>
+</ul>
+</div>
+</div>
+
+<table>
+<tr><th>任务类型</th><th>是否适合 CoT</th><th>推荐做法</th><th>理由</th></tr>
+<tr><td>数学应用题/多步计算</td><td>很适合</td><td>Few-shot CoT，必要时投票</td><td>收益最大、步骤可验证</td></tr>
+<tr><td>逻辑推导/符号推理</td><td>很适合</td><td>CoT + Self-Consistency</td><td>离散结论、可投票</td></tr>
+<tr><td>代码调试/执行追踪</td><td>适合</td><td>CoT 逐步追踪</td><td>需一步步还原状态</td></tr>
+<tr><td>法律/政策规则套用</td><td>适合</td><td>CoT + 关键结论复核</td><td>规则套事实属多步</td></tr>
+<tr><td>简单分类/情感判断</td><td>不适合</td><td>直接 prompt / few-shot</td><td>推理徒增噪声与成本</td></tr>
+<tr><td>事实召回/翻译</td><td>不适合</td><td>直接作答</td><td>无需推理，CoT 无益</td></tr>
+<tr><td>开放式长文生成</td><td>视情况</td><td>结构化大纲而非长链</td><td>多链难以投票收敛</td></tr>
+</table>
+
+<div class="highlight">
+<strong>📊 生产数据：</strong>某在线教育机构把"小学数学应用题自动批改"从直接作答升级为 Few-shot CoT：批改准确率从约 62% 提到 91%（+29pp），但单题输出 token 从约 40 涨到约 380（约 9.5 倍）、平均响应从 0.9s 到 3.1s。团队随后对置信度低的题追加 Self-Consistency 3 路投票，把剩余误判再压掉约四成，最终整体批改可信度达到可上线标准，而 token 成本仅在低置信题上多花约 20%。
+</div>
+
+<div class="highlight">
+<strong>💡 知识要点：</strong>推理类模型（o1、DeepSeek-R1、Extended Thinking 等）已经把 CoT 思想"内化"进模型——它们在回答前自动进行扩展的内部推理，无需用户手写"一步步思考"。理解 CoT 的原理，正是理解这类模型为何在数学、代码、多步逻辑上表现更强的钥匙。
+</div>
+
+<h3>与结构化输出配合：推理链不是交付物</h3>
+<p>落地时有一个容易被忽略的问题：推理链是自由文本，而下游系统要的是可解析的结果。正确姿势是把"思考"和"答案"分开——要求模型在推理之后用固定标记（如"最终答案：……"）输出结论，再用正则或二次调用抽取并做 Schema 校验；更稳妥的做法是让模型把推理写进 JSON 的 <code>reasoning</code> 字段、结论写进 <code>answer</code> 与 <code>confidence</code> 字段，下游只消费结构化字段，不解析自由文本。</p>
+<p>配套的还有两条纪律。一是<strong>隐藏推理链</strong>：除非必要，不要把完整思考过程展示给终端用户，只展示简要依据和最终结论，避免冗长干扰与 prompt 细节外泄。二是<strong>关键数值复核</strong>：对金额、数量这类数值结论，用程序或计算器工具重算关键算式，与模型结论交叉校验，不一致就触发重采样或人工复核。CoT 加上结构化输出与事后校验，才能把"模型的推断"变成"系统的结论"。</p>
+<table>
+<tr><th>实践</th><th>做法</th><th>收益</th></tr>
+<tr><td>推理与结论分离</td><td>JSON 的 reasoning 与 answer 分开字段</td><td>下游直接消费，不解析自由文本</td></tr>
+<tr><td>答案抽取</td><td>固定标记 + 正则抽取最终答案</td><td>避免长推理链污染结论</td></tr>
+<tr><td>推理链隐藏</td><td>只展示简要依据与结论</td><td>降低干扰、避免泄露 prompt 细节</td></tr>
+<tr><td>数值复核</td><td>程序/工具重算关键算式</td><td>拦截金额、数量类推断错误</td></tr>
+</table>
+
+<h3>成本-准确率预算：把推理花在刀刃上</h3>
+<p>上线 CoT 前必须算一笔账：推理链通常让输出 token 放大 2~10 倍、延迟同步上升，Self-Consistency 还要再乘以采样路数。常用的预算控制有三类：一是<strong>路由分层</strong>，用轻量分类器或规则判断问题难度，简单题直接作答，难题才走 CoT；二是<strong>级联调用</strong>，先跑单链 CoT，仅当答案置信度低或命中高风险类别时才升级为多路投票；三是<strong>链长约束</strong>，在指令中限定推理步数，避免冗长、跑题、难以收敛的长链。目标是把成本集中投给"错误代价"最高的那一小部分请求。</p>
+<table>
+<tr><th>策略</th><th>做法</th><th>成本影响</th><th>准确率影响</th></tr>
+<tr><td>路由分层</td><td>简单题直答，难题走 CoT</td><td>总成本可降 50%~70%</td><td>整体准确率基本不变</td></tr>
+<tr><td>级联调用</td><td>低置信再上多路投票</td><td>仅 10%~30% 请求追加成本</td><td>显著降低难题误判</td></tr>
+<tr><td>链长约束</td><td>限定推理步数上限</td><td>Token 降 20%~40%</td><td>深度推理可能略降</td></tr>
+<tr><td>模型降级</td><td>简单题走小模型、难题走大模型</td><td>单价显著下降</td><td>需评估小模型推理下限</td></tr>
+</table>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A（10 题）</h2>
+<details>
+<summary>CoT 到底改变了什么，为什么同一道题加一句话就从错变对？</summary>
+<div class="answer">
+<p>它改变的是计算的组织方式，而不是模型的"态度"。自回归模型每个 token 都以之前的文本为条件，且上下文是它唯一的工作记忆。CoT 让模型先把中间结论写出来，这些结果就进入了上下文，供后续步骤复用；相当于把"一次前向压缩所有推理"改成"多个简单续写任务串起来"。难题被拆成易题，中间状态不再丢失，准确率自然上升。关键前提是模型足够大，否则生成的推理链流畅却不合逻辑。</p>
+</div>
+</details>
+<details>
+<summary>Zero-shot CoT 那句"Let's think step by step"为什么能起作用？</summary>
+<div class="answer">
+<p>因为大模型在预训练阶段见过海量"先分析、后结论"的文本（解题、论证、说明文），这种推理模式已经被编码进参数里。一句恰当的触发语就能把这种潜在能力激活，让模型自发组织中间步骤，无需任何示例。这也解释了为什么它是涌现能力——模型越大、见过的推理文本越多，这句咒语越灵；对小模型则几乎无效。实践中它效果略逊于精心编写的 Few-shot CoT，但胜在零示例成本、跨任务通用。</p>
+</div>
+</details>
+<details>
+<summary>Self-Consistency 为什么能比单条 CoT 更可靠，代价是什么？</summary>
+<div class="answer">
+<p>单条推理链一旦中途走偏，后续步骤会基于错误前提一路错到底。Self-Consistency 用较高温度采样多条不同的推理路径，再对最终答案多数投票。由于正确答案往往能从多条不同路径殊途同归，而错误答案通常各自随机、难以收敛到同一个错误结论，多数派大概率是对的。代价很直接：调用次数变成 N 倍（通常 5~10 次），token 成本和延迟线性放大，所以一般只对高价值、离散输出的任务启用。</p>
+</div>
+</details>
+<details>
+<summary>ToT、GoT、ReAct 分别在解决 CoT 的什么局限？</summary>
+<div class="answer">
+<p>标准 CoT 是线性、单向、不回头也不碰外部信息的。ToT 把推理组织成搜索树，在决策点生成多个候选、评估后只扩展最有希望的分支并支持回溯，适合 24 点、规划这类需要试错的题。GoT 用图结构允许节点合并、循环，处理步骤间复杂依赖。ReAct 则让推理和行动交替——想一步、调用工具查数据、观察结果、再想——解决纯推理拿不到外部信息的问题，也是现代 Agent 的原型。选哪种取决于任务的"形状"，而不是越复杂越好。</p>
+</div>
+</details>
+<details>
+<summary>为什么说推理链不能当作模型决策的审计证据？</summary>
+<div class="answer">
+<p>Turpin 等人的实验表明，CoT 解释可以"看似合理"却系统性不忠实：当在 few-shot 里偷偷把正确答案都排在 (A) 时，模型预测被明显带偏（BIG-Bench Hard 上准确率最多降 36%），但生成的推理链从不提及这个偏置，反而为被带偏的答案编造合理理由。也就是说，推理链是 plausible（可信）而非 faithful（忠实）——它描述的可能不是模型真实的决策依据。所以涉及合规、可追责的场景，不能只靠读推理链来审计，需要额外的可验证手段。</p>
+</div>
+</details>
+<details>
+<summary>CoT 在什么情况下不仅没用，反而会帮倒忙？</summary>
+<div class="answer">
+<p>主要有三种情况。一是任务本身不需要多步推理，比如简单分类、事实召回、直接翻译，此时 CoT 只会浪费 token、拖慢响应，不会更准。二是模型太小，10B 以下的模型容量不足，生成的推理链流畅但不合逻辑，可能把自己带偏，表现比直接作答还差。三是推理链本身出错且不加校验——一步错、步步错，CoT 能减少跳跃性错误，却消除不了推理错误。所以对简单任务、小模型、以及无复核的关键结论，都要谨慎使用 CoT。</p>
+</div>
+</details>
+<details>
+<summary>生产环境里该怎么控制 CoT 的成本和延迟？</summary>
+<div class="answer">
+<p>核心是分层使用、按需加码。先判断任务是否真需要多步推理，不需要的直接作答；需要的基础场景用单链 CoT；只对高价值、离散输出的判定叠加 Self-Consistency，并控制采样路数（3~5 路通常已拿到大部分收益）。对外产品不暴露完整思考链，只展示简要依据或最终答案，既省带宽又避免误导。还可以结合路由：对简单请求走轻量路径，对复杂请求才启用完整推理，把放大的 token 与延迟成本限制在真正值得的地方。</p>
+</div>
+</details>
+<details>
+<summary>CoT 和 o1、DeepSeek-R1 这类推理模型是什么关系？</summary>
+<div class="answer">
+<p>推理模型可以理解为把 CoT 思想"产品化、内化"进了模型本身。CoT 原本是用户在 prompt 里要求模型"展示步骤"；而 o1、DeepSeek-R1、Extended Thinking 等模型在回答前会自动进行扩展的内部推理，通常通过专门的训练（如强化学习）获得，无需用户手写触发语。它们在数学、代码、多步逻辑上的强势表现，正是 CoT 原理在起作用。理解 CoT 为什么有效，就理解了这类模型的能力来源与边界。</p>
+</div>
+</details>
+<details>
+<summary>摘要、写作这类开放任务用 CoT 有收益吗？</summary>
+<div class="answer">
+<p>收益有限。CoT 的甜区是"有明确正确答案、可以逐步收敛"的封闭式问题；而摘要、文案、创意写作没有唯一正确答案，多路推理也难以投票，长链反而容易变得冗长、跑题。实践中更合适的替代是结构化大纲：先让模型列出要点或提纲，再按提纲展开成文。这相当于"先想后写"的轻量版，既能稳定格式、减少遗漏，又不会背上完整推理链的成本。</p>
+</div>
+</details>
+<details>
+<summary>预算有限只能选一个推理技术时，优先上哪个？</summary>
+<div class="answer">
+<p>优先 Few-shot CoT。它成本可控、不依赖多路调用，而且能通过示例固定推理格式与企业口径，单次投入的收益最稳定。Zero-shot CoT 适合冷启动验证，Self-Consistency 是高价值场景的放大器，ToT、ReAct 则要等任务形态明确需要探索或外部工具时再考虑。正确的路径是先把单链推理的收益吃满，再按错误代价从大到小逐级叠加更复杂的结构，而不是一开始就把最贵的方案全量铺开。</p>
+</div>
+</details>
+</div>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

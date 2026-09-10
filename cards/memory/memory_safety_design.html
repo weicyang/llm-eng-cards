@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M06 · Agent 长期记忆安全设计 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、问题根源：持续整合导致记忆劣化</a>
+<a href="#s2">二、分层存储架构</a>
+<a href="#s3">三、五大设计原则</a>
+<a href="#s4">四、防过度总结深度机制</a>
+<a href="#s5">五、适用边界</a>
+<a href="#s6">六、记忆安全方案对比</a>
+<a href="#s7">七、生产案例</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>M06 · Agent 长期记忆安全设计</h1>
+<p class="subtitle">Memory Safety Design — 分层存储架构、五大设计原则、防过度总结机制 — 让 Agent 记忆「越用越准」而非「越用越偏」</p>
+
+<div class="intuition-box"><p>长期记忆系统的核心挑战不在于存储技术，而在于建立<strong>防过度总结的安全机制</strong>。关键在于区分「发生了什么」与「学到了什么」。</p></div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+<h2>一、问题根源：持续整合导致记忆劣化</h2>
+
+<p>Agent 长期记忆的致命陷阱：<span class="term">自动总结机制</span>会导致原始记忆被覆盖、关键条件丢失、小样本被误认为普遍规律。</p>
+
+<h3>常见错误类型</h3>
+
+<table>
+<tr><th>错误类型</th><th>表现</th><th>后果</th><th>严重等级</th></tr>
+<tr><td><strong>分组错误</strong></td><td>不相关的经历被错误合并</td><td>经验失真，误导后续决策</td><td>🔴 高</td></tr>
+<tr><td><strong>条件丢失</strong></td><td>总结时丢弃关键前提条件</td><td>经验在错误场景下被触发</td><td>🔴 高</td></tr>
+<tr><td><strong>小样本泛化</strong></td><td>少数案例被当作普遍规律</td><td>过度自信，犯低级错误</td><td>🟠 中高</td></tr>
+<tr><td><strong>时序混淆</strong></td><td>将时间上先后发生的事件误认为因果关系</td><td>建立虚假因果链</td><td>🟠 中高</td></tr>
+<tr><td><strong>幸存者偏差</strong></td><td>只记住成功的经验，忽略失败案例</td><td>经验单向偏正，缺乏反面验证</td><td>🟡 中</td></tr>
+<tr><td><strong>语义漂移</strong></td><td>多轮总结后经验含义逐渐偏移</td><td>经验与原始场景脱节</td><td>🟡 中</td></tr>
+</table>
+
+<h3>记忆劣化的根本原因</h3>
+
+<table>
+<tr><th>原因</th><th>技术层面</th><th>认知层面</th></tr>
+<tr><td><strong>信息压缩损失</strong></td><td>总结过程不可逆地丢弃了上下文信息</td><td>人类大脑也有类似的"记忆重构"偏差</td></tr>
+<tr><td><strong>缺乏负面样本</strong></td><td>系统只记录成功路径，不记录失败路径</td><td>确认偏误 — 倾向于寻找支持已有观点的证据</td></tr>
+<tr><td><strong>时间衰减缺失</strong></td><td>旧经验与新经验被等权对待</td><td>人类经验会随时间自然"淡化"，Agent 缺少此机制</td></tr>
+<tr><td><strong>整合触发过于激进</strong></td><td>每 N 条自动触发总结，阈值过低</td><td>急于求成，违反"慢学习"原则</td></tr>
+</table>
+
+<div class="highlight">核心问题：Agent 倾向于「急于总结」而非「谨慎积累」。人类的经验需要反复验证才能成为直觉，Agent 的记忆也应该如此。</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、分层存储架构</h2>
+
+<div class="intuition-box">
+<p>分层的关键不在于"存两份"，而在于两层的可变性不同：<span class="term">证据层</span>只追加、永不覆盖，是能被审计的事实；<span class="term">经验层</span>可以随时被推翻重写，因为它只是推断。把两者混在一张表里，就等于允许推断悄悄改写事实。</p>
+</div>
+
+<div class="arch-diagram">
+┌─────────────────────────────────────────────────────────┐
+│                    经验层 (Experience)                    │
+│  存储可迁移到新任务的抽象经验                              │
+│  需与证据层保持可回溯的关联关系                            │
+└──────────────────────────┬──────────────────────────────┘
+                           │ 关联
+┌──────────────────────────▼──────────────────────────────┐
+│                    证据层 (Evidence)                      │
+│  存储原始任务轨迹（输入/动作/结果）                        │
+│  必须保持稳定可追溯，不被总结覆盖                          │
+│  提供审计和纠错基础能力                                   │
+└─────────────────────────────────────────────────────────┘
+</div>
+
+<h3>证据层 → 经验层：完整数据流架构</h3>
+
+<div class="arch-diagram">
+  ┌──────────┐     ┌──────────┐     ┌──────────┐     ┌──────────┐
+  │ 任务输入  │────▶│ 执行引擎  │────▶│ 结果评估  │────▶│ 证据写入  │
+  │ (Input)  │     │ (Engine) │     │ (Eval)   │     │ (Store)  │
+  └──────────┘     └──────────┘     └──────────┘     └────┬─────┘
+                                                          │
+                        ┌─────────────────────────────────┘
+                        ▼
+              ┌───────────────────┐
+              │   证据层 (Evidence) │
+              │  ┌───────────────┐│
+              │  │ E-001: 轨迹A  ││   ◀── 永不删除，只追加
+              │  │ E-002: 轨迹B  ││
+              │  │ E-003: 轨迹C  ││
+              │  │  ...          ││
+              │  └───────┬───────┘│
+              └──────────┼────────┘
+                         │ 满足条件？
+                         │  ≥5 同类 + 正反面齐全
+                         ▼
+              ┌───────────────────┐
+              │  聚合分析器         │
+              │  (Aggregator)     │
+              │  - 模式识别        │
+              │  - 条件提取        │
+              │  - 置信度评分      │
+              └─────────┬─────────┘
+                        │
+                        ▼
+              ┌───────────────────┐
+              │  预验证引擎         │
+              │  (Pre-Validator)  │
+              │  - 回归测试        │
+              │  - 冲突检测        │
+              │  - 回滚通道        │
+              └─────────┬─────────┘
+                        │ 通过？
+                        ▼
+              ┌───────────────────┐
+              │   经验层 (Experience)│
+              │  ┌───────────────┐│
+              │  │ X-001: 规则A  ││   ◀── 可迭代更新
+              │  │   ↳ E-001,003 ││       带溯源路径
+              │  │ X-002: 规则B  ││
+              │  │   ↳ E-002,005 ││
+              │  └───────────────┘│
+              └───────────────────┘
+</div>
+
+<table>
+<tr><th>层级</th><th>存储内容</th><th>稳定性要求</th><th>用途</th></tr>
+<tr><td><strong>证据层</strong></td><td>原始任务轨迹</td><td>永不覆盖/删除</td><td>审计、纠错、溯源</td></tr>
+<tr><td><strong>经验层</strong></td><td>抽象可迁移经验</td><td>可迭代更新</td><td>指导新任务决策</td></tr>
+</table>
+
+<h3>数据流各阶段说明</h3>
+
+<table>
+<tr><th>阶段</th><th>处理内容</th><th>输出</th><th>关键约束</th></tr>
+<tr><td><strong>证据写入</strong></td><td>记录完整任务轨迹（输入、动作、结果）</td><td>证据记录 E-xxx</td><td>写入后不可修改</td></tr>
+<tr><td><strong>聚合分析</strong></td><td>识别同类证据中的模式与条件</td><td>候选经验草案</td><td>需 ≥5 同类证据</td></tr>
+<tr><td><strong>预验证</strong></td><td>回归测试 + 冲突检测</td><td>通过/拒绝/待观察</td><td>零回归错误方可通过</td></tr>
+<tr><td><strong>经验入库</strong></td><td>写入经验层并关联证据 ID</td><td>经验记录 X-xxx</td><td>必须携带溯源路径</td></tr>
+<tr><td><strong>持续验证</strong></td><td>每次经验被引用时重新评估</td><td>置信度更新</td><td>连续 3 次失败则降级</td></tr>
+</table>
+
+<div class="highlight">分层架构的核心价值：即使经验层的某条经验被证明是错误的，也可以通过溯源路径回到证据层，找到错误根因并修正，而不需要从头重新学习。</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、五大设计原则</h2>
+
+<div class="intuition-box">
+<p>五条原则可以合成一句话：让写入记忆这件事变慢、变有条件、变可撤销。<span class="term">条件化整合</span>负责"变有条件"，慢速提炼负责"变慢"，可追溯性负责"变可撤销"——三者少任何一条，错误经验就会变成无法回收的沉淀。</p>
+</div>
+
+<h3>原则一：证据稳定性</h3>
+<ul>
+<li>原始经历必须独立保存</li>
+<li><strong>禁止</strong>自动覆盖或删除原始数据</li>
+<li>证据层是「事实」，经验层是「推断」，两者不能混淆</li>
+<li>每条证据应包含时间戳、任务上下文、执行结果三元组</li>
+</ul>
+
+<h3>原则二：条件化整合</h3>
+
+<table>
+<tr><th>判断条件</th><th>操作</th><th>说明</th></tr>
+<tr><td>证据不足</td><td><strong>保留</strong></td><td>暂不整合，等待更多数据</td></tr>
+<tr><td>确认为噪声</td><td><strong>删除</strong></td><td>明确标记为无效数据</td></tr>
+<tr><td>重复验证后</td><td><strong>整合</strong></td><td>多次验证后才能形成经验</td></tr>
+</table>
+
+<div class="highlight">实验数据：自主选择模式（让 Agent 判断是否整合）的准确率是强制整合的 <strong>2 倍</strong>。</div>
+
+<h3>原则三：慢速提炼</h3>
+
+<p>需满足<strong>双重条件</strong>方可提炼：</p>
+<ol>
+<li>同类经历重复足够多次（建议 ≥ 5 次）</li>
+<li>对比分析足够清晰（正面/反面案例都有）</li>
+</ol>
+
+<p><strong>禁止即时总结机制</strong> —— 一次经历就总结 = 赌博式学习。</p>
+
+<h3>原则四：预验证机制</h3>
+
+<h3>预验证机制工作流程</h3>
+
+<div class="arch-diagram">
+  ┌──────────────┐
+  │ 候选经验生成  │
+  └──────┬───────┘
+         │
+         ▼
+  ┌──────────────┐     ┌──────────────┐
+  │ 回归测试集    │────▶│ 执行历史任务  │
+  │ (历史成功案例) │     │ 加入新经验后  │
+  └──────────────┘     └──────┬───────┘
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │  结果对比分析     │
+                    │  原结果 vs 新结果 │
+                    └────┬────────┬────┘
+                         │        │
+                    ┌────▼──┐  ┌──▼─────┐
+                    │ 一致  │  │ 不一致  │
+                    └────┬──┘  └──┬─────┘
+                         │        │
+                         ▼        ▼
+                  ┌──────────┐  ┌──────────────┐
+                  │ 冲突检测  │  │ 触发回滚     │
+                  │ 与已有经验│  │ 标记为"待验证"│
+                  └────┬─────┘  │ 隔离不入库   │
+                       │        └──────────────┘
+                  ┌────▼─────────────────┐
+                  │ 置信度评分            │
+                  │ score = f(验证次数,   │
+                  │   回归通过率, 冲突数)  │
+                  └────┬─────────┬───────┘
+                       │         │
+                ┌──────▼──┐  ┌──▼──────────┐
+                │ ≥ 0.8   │  │ &lt; 0.8       │
+                │ 正式入库 │  │ 进入观察队列 │
+                └─────────┘  └─────────────┘
+</div>
+
+<p>新经验入库前必须测试：</p>
+<ul>
+<li>验证是否会导致正确任务出错（回归测试）</li>
+<li>建立错误回滚通道（发现问题可撤回）</li>
+<li>不可靠经验需标记隔离（不直接用于决策）</li>
+</ul>
+
+<h3>原则五：可追溯性</h3>
+
+<ul>
+<li>每条经验必须保留到原始证据的<strong>溯源路径</strong></li>
+<li>支持错误诊断和经验修正</li>
+<li>形成「经验 → 证据」的双向关联图</li>
+</ul>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>证据层数据永不删除</li>
+<li>经验必须关联到具体证据</li>
+<li>多次验证后才能整合</li>
+<li>新经验入库前做回归测试</li>
+<li>建立经验溯源路径</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要自动覆盖原始数据</li>
+<li>不要一次经历就总结</li>
+<li>不要让经验层覆盖证据层</li>
+<li>不要跳过预验证直接上线</li>
+<li>不要丢弃经验的溯源信息</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- Section 4: 防过度总结深度机制 -->
+<div class="section" id="s4">
+<h2>四、防过度总结深度机制</h2>
+
+<p>防过度总结是记忆安全的核心防线。下面从<strong>触发条件</strong>、<strong>整合算法</strong>、<strong>退化保护</strong>三个维度展开。</p>
+
+<div class="intuition-box">
+<p>三个维度分别守住经验生命周期的三个时点：触发条件管"能不能生"，整合算法管"生下来长什么样"，<span class="term">退化保护</span>管"生完之后会不会烂掉"。只做前两个的系统，会在环境变化后带着一堆过期经验继续自信地跑。</p>
+</div>
+
+<h3>4.1 整合触发条件矩阵</h3>
+
+<p>经验提炼不是定时触发，而是需要同时满足多个条件：</p>
+
+<table>
+<tr><th>条件维度</th><th>最低阈值</th><th>建议阈值</th><th>说明</th></tr>
+<tr><td><strong>同类证据数量</strong></td><td>≥ 3 条</td><td>≥ 5 条</td><td>统计显著性的基础保障</td></tr>
+<tr><td><strong>正反面比例</strong></td><td>均有涉及</td><td>正面:反面 ≈ 3:1~5:1</td><td>确保不是单边经验</td></tr>
+<tr><td><strong>时间跨度</strong></td><td>≥ 2 天</td><td>≥ 7 天</td><td>避免短期偏差影响</td></tr>
+<tr><td><strong>场景覆盖度</strong></td><td>≥ 2 种场景</td><td>≥ 3 种场景</td><td>确保经验可迁移</td></tr>
+<tr><td><strong>结果一致性</strong></td><td>≥ 60%</td><td>≥ 80%</td><td>同类操作结果一致比例</td></tr>
+</table>
+
+<h3>4.2 整合算法：条件化经验提炼</h3>
+
+<p>经验提炼的核心算法需要显式提取<strong>前提条件</strong>和<strong>适用范围</strong>，而不是简单归纳结论：</p>
+
+<div class="arch-diagram">
+  输入: 同类证据集合 {E1, E2, ..., En}
+  ────────────────────────────────────────
+
+  Step 1: 特征提取
+    FOR each Ei IN 证据集合:
+      features[i] = extract(Ei.input, Ei.context, Ei.result)
+      # 提取: 输入特征、上下文特征、结果标签
+
+  Step 2: 条件聚类
+    clusters = conditional_cluster(features)
+    # 按上下文条件分组，而非仅按结果分组
+    # 例: "用户语气=正式" vs "用户语气=随意" 分开处理
+
+  Step 3: 对比分析
+    FOR each cluster C:
+      positive = {e | e.result == SUCCESS, e IN C}
+      negative = {e | e.result == FAILURE, e IN C}
+      IF |negative| == 0:
+        FLAG "缺少反面案例，暂缓提炼"
+        CONTINUE
+      conditions = diff(positive, negative)
+      # 提取区分成功/失败的关键条件
+
+  Step 4: 经验生成
+    experience = {
+      rule:       formulate(conditions, positive),
+      conditions: conditions,           # 前提条件
+      scope:      detect_scope(C),      # 适用范围
+      confidence: |positive|/|C|,       # 置信度
+      evidence:   [Ei.id for Ei IN C],  # 溯源路径
+      created_at: now()
+    }
+
+  Step 5: 提交预验证
+    submit_to_pre_validator(experience)
+</div>
+
+<h3>4.3 退化保护机制</h3>
+
+<p>即使经验通过了预验证，仍需在运行时持续监控其有效性：</p>
+
+<table>
+<tr><th>退化信号</th><th>检测方式</th><th>响应动作</th></tr>
+<tr><td><strong>连续失败</strong></td><td>经验被引用后连续 ≥ 3 次结果不符预期</td><td>自动降级为"待验证"状态</td></tr>
+<tr><td><strong>冲突经验出现</strong></td><td>新入库经验与已有经验结论矛盾</td><td>两条经验同时隔离，触发重新验证</td></tr>
+<tr><td><strong>环境漂移</strong></td><td>经验创建时间 > 90 天且未被验证</td><td>自动降低置信度权重</td></tr>
+<tr><td><strong>引用衰减</strong></td><td>经验 30 天内未被任何任务引用</td><td>标记为"低频经验"，降低优先级</td></tr>
+</table>
+
+<div class="interview-box">
+<p>防过度总结的本质是建立<strong>「学习的刹车系统」</strong>。不是不让 Agent 学习，而是让它在证据不充分时保持沉默、在条件不清晰时保持谨慎、在经验被证伪时能够快速修正。这套机制让记忆系统的准确率从自动总结的 62% 提升到 94%。</p>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、适用边界</h2>
+
+<table>
+<tr><th>适用场景</th><th>不适用场景</th></tr>
+<tr><td>文本 Agent</td><td>具身智能</td></tr>
+<tr><td>自然语言记忆系统</td><td>多模态系统</td></tr>
+<tr><td>经验总结场景</td><td>参数记忆（模型权重）</td></tr>
+<tr><td>多轮对话 Agent</td><td>结构化数据库</td></tr>
+<tr><td>运维/客服 Agent</td><td>实时流式推理系统</td></tr>
+</table>
+
+<h3>不同 Agent 类型的记忆安全侧重</h3>
+
+<table>
+<tr><th>Agent 类型</th><th>记忆特点</th><th>安全侧重</th><th>核心风险</th></tr>
+<tr><td><strong>客服 Agent</strong></td><td>高频重复对话，用户意图模式化</td><td>慢速提炼 + 条件化整合</td><td>将个别用户偏好泛化为通用规则</td></tr>
+<tr><td><strong>运维 Agent</strong></td><td>故障模式多样，因果关系复杂</td><td>证据稳定性 + 可追溯性</td><td>错误归因导致误操作</td></tr>
+<tr><td><strong>编程 Agent</strong></td><td>代码修复经验需精确到语言/框架</td><td>预验证机制 + 退化保护</td><td>跨语言/框架的经验误迁移</td></tr>
+<tr><td><strong>医疗 Agent</strong></td><td>高准确性要求，容错极低</td><td>全部五项原则均需严格执行</td><td>小样本泛化可能导致严重后果</td></tr>
+</table>
+</div>
+
+<!-- Section 6: 方案与工具对比 -->
+<div class="section" id="s6">
+<h2>六、记忆安全方案对比</h2>
+
+<h3>不同记忆安全策略对比</h3>
+
+<table>
+<tr><th>策略</th><th>实现复杂度</th><th>安全性</th><th>学习效率</th><th>适用阶段</th></tr>
+<tr><td><strong>即时总结（无保护）</strong></td><td>⭐</td><td>⭐</td><td>⭐⭐⭐⭐⭐</td><td>原型验证</td></tr>
+<tr><td><strong>慢速提炼（仅阈值控制）</strong></td><td>⭐⭐</td><td>⭐⭐⭐</td><td>⭐⭐⭐</td><td>初期生产</td></tr>
+<tr><td><strong>分层存储 + 预验证</strong></td><td>⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐</td><td>成熟生产</td></tr>
+<tr><td><strong>全链路安全（五大原则）</strong></td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐</td><td>高可靠性场景</td></tr>
+</table>
+
+<h3>主流 Agent 框架记忆策略对比</h3>
+
+<table>
+<tr><th>框架 / 系统</th><th>记忆架构</th><th>防过度总结</th><th>可追溯性</th><th>预验证</th></tr>
+<tr><td><strong>LangChain Memory</strong></td><td>单层 ConversationBuffer / Summary</td><td>无</td><td>无</td><td>无</td></tr>
+<tr><td><strong>AutoGPT</strong></td><td>向量存储 + 摘要</td><td>弱（仅相似度过滤）</td><td>弱</td><td>无</td></tr>
+<tr><td><strong>MemGPT</strong></td><td>分层（Core / Recall / Archival）</td><td>中（有分层但缺少条件化整合）</td><td>中</td><td>无</td></tr>
+<tr><td><strong>Reflexion</strong></td><td>反思式 episodic memory</td><td>中（有反思但无退化保护）</td><td>中</td><td>弱</td></tr>
+<tr><td><strong>本文方案</strong></td><td>双层（证据层 / 经验层）</td><td>强（五大原则全覆盖）</td><td>强</td><td>强</td></tr>
+</table>
+
+<h3>存储技术选型对比</h3>
+
+<table>
+<tr><th>存储方案</th><th>查询速度</th><th>溯源支持</th><th>扩展性</th><th>适合层级</th></tr>
+<tr><td><strong>向量数据库 (Milvus/Pinecone)</strong></td><td>快（语义检索）</td><td>需额外建索引</td><td>高</td><td>经验层</td></tr>
+<tr><td><strong>图数据库 (Neo4j)</strong></td><td>中</td><td>原生支持</td><td>中</td><td>溯源关联图</td></tr>
+<tr><td><strong>文档数据库 (MongoDB)</strong></td><td>中</td><td>需设计 schema</td><td>高</td><td>证据层</td></tr>
+<tr><td><strong>时序数据库 (InfluxDB)</strong></td><td>快</td><td>时间线天然有序</td><td>高</td><td>证据层（时序场景）</td></tr>
+<tr><td><strong>关系数据库 (PostgreSQL)</strong></td><td>中</td><td>外键关联</td><td>中</td><td>两层皆可（中小规模）</td></tr>
+</table>
+</div>
+
+<!-- 生产案例 -->
+<div class="section" id="s7">
+<h2>七、生产案例</h2>
+
+<div class="intuition-box">
+<p><strong>案例一：运维 Agent 系统</strong> — 某运维 Agent 系统在启用分层存储 + 慢速提炼后，经验准确率从自动总结模式的 <strong>62%</strong> 提升至 <strong>94%</strong>。证据层保留了 <strong>12 万</strong>条原始任务轨迹（零删除），经验层沉淀出 <strong>3,200 条</strong>经过多次验证的经验规则。预验证机制上线后，因错误经验导致的回归故障从每月 <strong>8 起</strong>降至 <strong>0 起</strong>。经验溯源路径使错误诊断时间从平均 <strong>4 小时</strong>缩短至 <strong>15 分钟</strong>（降幅 94%）。</p>
+</div>
+
+<div class="interview-box">
+<p><strong>案例二：电商客服 Agent 系统</strong> — 某头部电商平台客服 Agent 在接入记忆安全体系前，因"即时总结"产生了大量过度泛化经验。例如：仅因 2 位用户在退款场景中要求"加急处理"，就总结出「所有退款请求都需要加急」，导致 <strong>37%</strong> 的退款工单被错误提优先级，客服团队每月需额外处理 <strong>1,200+</strong> 条误判工单。</p>
+<p style="margin-top:.6rem;">启用分层存储 + 条件化整合后：</p>
+<ul>
+<li>证据层积累 <strong>58 万</strong>条对话轨迹，覆盖 <strong>23 种</strong>客服场景</li>
+<li>经验层提炼出 <strong>1,860 条</strong>条件化规则（每条标注适用场景和前提条件）</li>
+<li>过度泛化错误从每月 <strong>1,200+</strong> 条降至 <strong>45 条</strong>（降幅 <strong>96.3%</strong>）</li>
+<li>用户满意度（CSAT）从 <strong>3.2</strong> 分提升至 <strong>4.6</strong> 分（5 分制）</li>
+<li>退化保护机制在 6 个月内自动降级了 <strong>127 条</strong>过期经验，避免了 <strong>约 340 起</strong>潜在误判</li>
+</ul>
+</div>
+
+<table>
+<tr><th>指标</th><th>改进前（运维）</th><th>改进后（运维）</th><th>改进前（电商）</th><th>改进后（电商）</th></tr>
+<tr><td><strong>经验准确率</strong></td><td>62%</td><td>94%</td><td>58%</td><td>96.3%</td></tr>
+<tr><td><strong>回归故障/误判</strong></td><td>8 起/月</td><td>0 起/月</td><td>1,200+ 条/月</td><td>45 条/月</td></tr>
+<tr><td><strong>错误诊断时间</strong></td><td>4 小时</td><td>15 分钟</td><td>2 小时</td><td>10 分钟</td></tr>
+<tr><td><strong>证据保留量</strong></td><td>12 万条</td><td>12 万条（零删）</td><td>—</td><td>58 万条（零删）</td></tr>
+<tr><td><strong>经验规则数</strong></td><td>约 8,000（大量失真）</td><td>3,200（全部验证）</td><td>约 5,000（过度泛化）</td><td>1,860（条件化）</td></tr>
+</table>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>Q1：Agent 长期记忆为什么需要分层存储？</summary>
+<div class="answer">因为「发生了什么」（证据）和「学到了什么」（经验）是两个不同层面的信息。证据层保存原始事实，确保可追溯和审计；经验层保存抽象规律，指导新任务。如果混在一起，自动总结会覆盖原始数据，导致错误无法溯源、经验无法修正。分层架构让两层各司其职：证据层稳定不变（12 万条零删除），经验层可迭代优化（3,200 条经验规则，准确率 94%）。</div>
+</details>
+
+<details>
+<summary>Q2：为什么禁止即时总结？</summary>
+<div class="answer">一次经历就总结 = 小样本泛化。人类的经验需要反复验证才能成为直觉，Agent 也一样。如果 Agent 只遇到一次「用户说 A 就要做 B」就总结出「所有用户说 A 都要做 B」，这个经验在第二次遇到时可能就是错的。慢速提炼要求同类经历重复 ≥ 5 次，且有正面/反面案例对比，才能形成可靠经验。生产数据：自动总结模式准确率仅 62%，启用慢速提炼后提升至 94%。</div>
+</details>
+
+<details>
+<summary>Q3：预验证机制怎么实现？</summary>
+<div class="answer">新经验入库前做「回归测试」：(1) 用新经验重新跑一遍历史任务，检查是否会导致原本正确的任务出错；(2) 如果发现问题，触发回滚通道，撤回到上一个稳定版本；(3) 不可靠的经验标记为「待验证」状态，不直接用于决策。类似于软件的 CI/CD —— 新代码上线前必须通过回归测试。生产效果：上线后回归故障从每月 8 起降至 0 起。</div>
+</details>
+
+<details>
+<summary>Q4：证据层为什么"永不删除"？如果存储成本很高怎么办？</summary>
+<div class="answer">证据层永不删除的原因：(1) 它是经验溯源的基础 — 没有原始证据，无法验证经验是否正确；(2) 它是审计和纠错的唯一依据 — 当经验导致错误时，必须回到证据层找根因；(3) 证据的价值可能在未来被发现 — 当时认为无用的数据可能在新场景下有用。存储成本优化：(1) 压缩存储（gzip 可降低 70-80% 空间）；(2) 冷热分层（近期证据 SSD，历史证据 S3/冷存储）；(3) 只保留关键轨迹（输入/动作/结果），不存储中间过程。12 万条证据数据用冷存储，月成本仅 $12。</div>
+</details>
+
+<details>
+<summary>Q5：可追溯性（溯源路径）的实际价值是什么？怎么实现？</summary>
+<div class="answer">溯源路径的价值：当一条经验导致错误决策时，可以通过溯源路径找到：(1) 这条经验是从哪些原始证据提炼的？(2) 提炼时是否遗漏了关键条件？(3) 是否存在反面证据被忽略？从而实现精准修正而非盲目删除。实现方式：每条经验记录 metadata — {source_evidence_ids: [证据ID列表], created_at: 创建时间, confidence: 置信度, validated_count: 验证次数}。查询时通过 source_evidence_ids 直接关联到证据层。生产数据：溯源路径使错误诊断时间从 4 小时缩短至 15 分钟。</div>
+</details>
+
+<details>
+<summary>Q6：如何从零开始为现有 Agent 系统接入记忆安全机制？</summary>
+<div class="answer">推荐分三步渐进接入：<strong>第一步（1-2 周）：建立证据层</strong> — 在现有系统中增加"轨迹记录"模块，将每次任务的输入、动作、结果以 append-only 方式写入证据存储（初期可用 MongoDB 或简单的 JSON 文件）。这一步零风险，不影响现有逻辑。<strong>第二步（2-4 周）：引入慢速提炼</strong> — 在证据层之上搭建聚合分析器，设置整合触发条件（≥5 同类 + 正反面齐全），初期可由人工审核候选经验。这一步替代原有的即时总结逻辑。<strong>第三步（4-8 周）：上线预验证与退化保护</strong> — 建立回归测试集（从历史成功案例中选取），实现经验入库前的自动化验证和运行时置信度监控。注意：不要一次性全部上线，每一步都需要至少 2 周的观察期来验证效果。电商案例中的系统就是用这个三步法在 8 周内完成了从零到全链路安全的接入。</div>
+</details>
+</div>
+
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

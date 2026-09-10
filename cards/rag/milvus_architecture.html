@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>G30 · Milvus：从单机到分布式的向量数据库</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么不能拿 MySQL 硬扛向量</a>
+<a href="#s2">二、三种部署：Lite / Standalone / Distributed</a>
+<a href="#s3">三、分布式核心：存算分离与三类节点</a>
+<a href="#s4">四、索引、过滤与混合检索</a>
+<a href="#s5">五、RAG / Agent 场景怎么选</a>
+<a href="#s6">六、上线前的运维清单</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+<div class="container">
+
+<h1>G30 · Milvus：从单机到分布式的向量数据库</h1>
+<p class="subtitle">向量检索 vs 关系库 / Lite·Standalone·Distributed / QueryNode·DataNode·IndexNode / HNSW·IVF / 混合检索</p>
+
+
+<div class="intuition-box">
+<p>Milvus 不是「会算余弦的 MySQL」。它把近似最近邻、标量过滤和存算分离做成了可水平扩展的检索引擎——向量是一等公民，关系字段只是过滤器。</p>
+</div>
+
+<div class="section">
+<h2 id="s1">一、为什么不能拿 MySQL 硬扛向量</h2>
+<p>关系库擅长精确匹配：主键、B+ 树、事务。Agent 的 RAG 和长期记忆要的是另一件事：把 query 编成向量，在百万到百亿条候选里找「最像」的 k 条。这是 <span class="term">ANN</span>（Approximate Nearest Neighbor，近似最近邻：用可控误差换掉暴力扫描，把检索从 O(N) 降到近对数级）问题。MySQL 8 之后也能塞向量插件，但索引种类、过滤与 ANN 的协同、以及写入/检索独立扩容，都不是它的设计中心。</p>
+<table>
+<tr><th>能力</th><th>MySQL / pgvector</th><th>Milvus</th></tr>
+<tr><td>主索引对象</td><td>行 / 标量，向量是附加列</td><td>向量集合是一等公民</td></tr>
+<tr><td>规模</td><td>百万级常见，再大要自己分片</td><td>官方路径覆盖到百亿向量</td></tr>
+<tr><td>扩容</td><td>整库一起撑</td><td>检索、写入、建索引分开扩</td></tr>
+<tr><td>混合检索</td><td>先过滤再扫，或插件 knn</td><td>标量过滤 + 多路向量 + RRF/加权融合</td></tr>
+</table>
+<div class="highlight">Zilliz / LF AI 路径上的 Milvus 被定位成「从笔记本原型到数百亿向量集群同一套 API」。这不是营销口号，而是三种部署形态共享同一套 Collection / 搜索语义——换形态不必换查询语言。百万到十亿是常见生产跳档；过了十亿还用单机 Standalone，查询延迟和重建索引窗口都会按数据量线性恶化。</div>
+<div class="intuition-box">
+<p>关系库问「等于多少」，向量库问「像到什么程度」。把后者硬塞进前者，短期能跑通 demo，长期会在索引和扩容上还债。</p>
+</div>
+</div>
+
+<div class="section">
+<h2 id="s2">二、三种部署：Lite / Standalone / Distributed</h2>
+<p>视频从单机讲到分布式，对应官方三条产品线。<span class="term">Milvus Lite</span> 是 Python 库，适合 Notebook 和边缘；<span class="term">Standalone</span> 把核心打进一个 Docker，单机内存够就能扛中小生产；<span class="term">Distributed</span> 跑在 Kubernetes 上，组件冗余、按角色扩容。</p>
+<div class="arch-diagram">
+规模阶梯（同一套 SDK 语义）
+
+  Jupyter / 单元测试
+       └─ Milvus Lite（进程内库）
+  单机生产、不想上 K8s
+       └─ Standalone = Milvus 进程 + etcd + 对象存储
+  十亿级 / 要弹性
+       └─ Distributed
+            Access : Proxy
+            Coord  : Root / QueryCoord / DataCoord
+            Worker : QueryNode / DataNode / IndexNode
+            Deps   : etcd + S3/MinIO + Pulsar/Kafka
+</div>
+<table>
+<tr><th>形态</th><th>依赖</th><th>适合</th><th>别用在</th></tr>
+<tr><td>Lite</td><td>几乎无</td><td>本地原型、CI</td><td>多副本、高可用</td></tr>
+<tr><td>Standalone</td><td>Docker + 磁盘</td><td>中小流量、单机可接受宕机窗口</td><td>要在线无损升集群（官方不支持热升级成 Distributed）</td></tr>
+<tr><td>Distributed</td><td>K8s + 对象存储 + MQ</td><td>检索/写入要分开扩、要冗余</td><td>只有几千条向量的玩具项目</td></tr>
+</table>
+<div class="warn-box">
+Standalone 不能「在线升级」成 Distributed。业务真要过这道坎，需要 backup / VTS 迁数据，而不是改一个配置开关。选型时把 12 个月后的量级想清楚。
+</div>
+<div class="intuition-box">
+<p>三种形态差的是运维拓扑，不是「会不会搜向量」。先用 Lite 验证召回，再用 Standalone 接流量，量上来再拆 Distributed。</p>
+</div>
+</div>
+
+<div class="section">
+<h2 id="s3">三、分布式核心：存算分离与三类节点</h2>
+<p>2.x 把系统拆成无状态微服务：<span class="term">Proxy</span> 入口转发；<span class="term">QueryNode</span> 扛搜索；<span class="term">DataNode</span> 写增量与持久化；<span class="term">IndexNode</span> 离线建索引。元数据进 etcd，大文件进对象存储，近期变更走 Pulsar/Kafka。计算节点挂了可以拉起新的，数据还在对象存储里。</p>
+<div class="arch-diagram">
+Client
+  │ gRPC / REST
+  ▼
+Proxy ──分发──────────────┐
+  │                      │
+  ├─ insert/upsert ──► DataNode ──► 对象存储（数据/索引文件）
+  │                         │
+  │                         └─► MQ（流式增量）
+  ├─ build index ──────► IndexNode ──► 写回对象存储
+  └─ search/query ─────► QueryNode ◄── 加载 segment + 过滤位图
+                              │
+                              ▼
+                         TopK + 标量过滤结果
+</div>
+<table>
+<tr><th>节点</th><th>忙的时候在干什么</th><th>独立扩容的意义</th></tr>
+<tr><td>QueryNode</td><td>加载 segment、ANN、过滤</td><td>QPS 涨了只加检索节点</td></tr>
+<tr><td>DataNode</td><td>吃写入、刷盘、compaction</td><td>导入高峰不必拖垮查询</td></tr>
+<tr><td>IndexNode</td><td>HNSW/IVF 等重计算</td><td>建索引是 CPU/GPU 爆的活，不该跟查询抢槽</td></tr>
+</table>
+<div class="highlight">搜索、插入、建索引被刻意设计成可并行的三条流水线。生产上常见事故是「导入一波新文档，查询延迟跟着炸」——那通常是这三条还绑在同一台机器上，Standalone 阶段就要开始监控，而不是等 Distributed 才发现。经验阈值：导入占满 CPU 超过数分钟、P99 搜索从几十毫秒跳到秒级，就是该把 IndexNode / DataNode 拆走的信号。</div>
+<div class="intuition-box">
+<p>存算分离的直觉：节点是牲口，对象存储是粮仓。牲口可以换，粮仓不能丢。</p>
+</div>
+</div>
+
+<div class="section">
+<h2 id="s4">四、索引、过滤与混合检索</h2>
+<p>Milvus 支持 FLAT、IVF、HNSW、PQ、磁盘 ANN、GPU 索引等。过滤不是「先 ANN 再扔掉不匹配的行」这么简单：常见路径是标量先生成 bitset，再交给 ANN 在搜索中跳过无效点（in-filtering），避免召回一堆权限不对的邻居。多向量字段（照片 + 声音 + 指纹）走混合搜索，再用 <span class="term">RRF</span>（Reciprocal Rank Fusion，按排名倒数融合多路结果，不依赖不可比的原始分数）或加权分融合。</p>
+<p>调参没有全局最优。IVF 的 nlist 决定桶数，nprobe 决定搜几个桶：nprobe 加倍通常换来召回上升和延迟上升，必须在黄金集上画曲线。HNSW 的 M / efConstruction 决定图密度，内存往往按「每向量数百字节」往上走，十亿级就要认真考虑 PQ 或 DiskANN。没有至少 50–100 条带标注的真实 query，这些旋钮都是噪声。</p>
+<table>
+<tr><th>索引</th><th>直觉</th><th>代价</th></tr>
+<tr><td>FLAT</td><td>暴力比，准</td><td>数据一大就扫不动</td></tr>
+<tr><td>IVF</td><td>先聚类再在少数桶里搜</td><td>要调 nlist/nprobe</td></tr>
+<tr><td>HNSW</td><td>多层图跳走</td><td>内存吃得狠，构建慢</td></tr>
+<tr><td>PQ / DiskANN</td><td>压缩或把图放到盘上</td><td>精度和延迟要重新标定</td></tr>
+</table>
+<div class="practice-grid">
+<div class="do">
+按召回率标定 nprobe / ef，用固定黄金集回归；权限、租户、时间过滤做成标量字段，让 bitset 进 ANN，而不是在应用层二次过滤。
+</div>
+<div class="dont">
+默认 HNSW 一把梭，也不测过滤后召回还剩多少。应用层再滤一遍，等于把已经很贵的 TopK 浪费在无权限文档上。
+</div>
+</div>
+<div class="intuition-box">
+<p>索引选的是「误差换速度」的汇率。没有黄金 query 集，这个汇率是拍脑袋。</p>
+</div>
+</div>
+
+<div class="section">
+<h2 id="s5">五、RAG / Agent 场景怎么选</h2>
+<p>Agent 记忆和 RAG 都是「写入频率中等、查询要稳、要带元数据过滤」。起步 Lite 或 Standalone 足够；文档量过百万、要多副本或多租户，再上 Distributed。和 FAISS（库不是库）、Chroma（轻量嵌入库）、pgvector（事务友好）的分工：要事务和已有 Postgres 就 pgvector；要单机实验用 FAISS/Chroma；要检索当核心服务、还要独立扩 QueryNode，再上 Milvus。</p>
+<p>热更新不要跟「升集群」绑在一起。影子 Collection + 别名切换，可以在 Standalone 上把新 embedding 模型灰度出去；失败切回旧别名，用户无感。Distributed 解决的是 QPS 和容量，不是版本纪律。没有黄金 query 集（至少几十到上百条带标注的真实问句），换索引参数等于蒙眼调 nprobe。</p>
+<table>
+<tr><th>组件</th><th>更合适的选择</th><th>别指望它</th></tr>
+<tr><td>pgvector</td><td>已有 Postgres、要事务、百万级以下</td><td>独立扩检索节点、百亿向量</td></tr>
+<tr><td>Chroma / FAISS</td><td>本地实验、嵌入式检索</td><td>多租户 SLA、在线无损扩容</td></tr>
+<tr><td>Milvus Standalone</td><td>中小生产、同一套 API 试水</td><td>热升级成集群</td></tr>
+<tr><td>Milvus Distributed</td><td>检索是核心 SLA、写入与查询要拆开</td><td>几千条向量的玩具项目</td></tr>
+</table>
+<div class="arch-diagram">
+选型决策
+
+  只要事务 + 已有 PG？ ──是──► pgvector
+  │否
+  只要本地 demo / &lt;10 万条？ ──是──► Chroma / Lite
+  │否
+  检索是核心 SLA、要独立扩容？
+       ├─ 是 → Milvus Distributed（或云托管 Zilliz）
+       └─ 否 → Standalone，把 backup 策略先写进 runbook
+</div>
+<div class="note-box">
+官方文档写明 Standalone 与集群功能对齐，但不能在线升集群。RAG 热更新（影子索引、别名切换）可以在 Collection / 别名层做，不必等 Distributed。先保证「新索引可切、可回滚」，再谈节点数。
+</div>
+<div class="intuition-box">
+<p>向量库选型看的是「检索是不是你的核心 SLA」，不是 GitHub star。SLA 不在检索上，就别为 Distributed 付运维税。</p>
+</div>
+</div>
+
+<div class="section">
+<h2 id="s6">六、上线前的运维清单</h2>
+<p>架构选对了仍可能被运维拖死。Standalone 要把磁盘、etcd、对象存储的备份写进 runbook；Distributed 要把 QueryNode 副本数、导入限流、索引构建窗口写成告警，而不是等用户先报「搜索变慢」。</p>
+<table>
+<tr><th>检查项</th><th>建议基线</th><th>失败信号</th></tr>
+<tr><td>黄金 query 集</td><td>50–100 条真实问句 + 标注文档</td><td>换索引只看延迟、不看召回</td></tr>
+<tr><td>过滤字段</td><td>租户 / 权限 / 时间做成标量</td><td>应用层二次过滤导致有效 TopK 变空</td></tr>
+<tr><td>导入窗口</td><td>与查询高峰错开，或独立 DataNode</td><td>P99 从几十毫秒跳到秒级</td></tr>
+<tr><td>备份与别名</td><td>影子 Collection 可切回</td><td>一次重建失败导致全站不可检索</td></tr>
+<tr><td>容量</td><td>按 12 个月向量条数量级选型</td><td>Standalone 撑到十亿还没迁云</td></tr>
+</table>
+<div class="practice-grid">
+<div class="do">
+先用 Lite 验证召回，再用 Standalone 接小流量，量上来再拆 Distributed。每一步都带着同一套黄金集走。
+</div>
+<div class="dont">
+生产第一天就上 K8s 全集群，或反过来把百万级检索长期绑在 MySQL 插件上。两头都贵。
+</div>
+</div>
+<div class="intuition-box">
+<p>运维清单比架构图更能决定 RAG 稳不稳：召回集、过滤字段、导入窗口、回滚别名，缺一项都会在流量上来后爆。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+<details>
+<summary>为什么向量检索不能靠 MySQL 的普通索引？</summary>
+<div class="answer">B+ 树解决的是有序比较和等值查找。高维向量没有「按某一列排序就能剪枝」的性质，距离计算是全维参与的。暴力算 N 条还能凑合，到百万以上必须靠 ANN 图或倒排桶。MySQL 即使加了向量插件，也缺少独立的 Query/Data/Index 扩容和成熟的混合检索流水线，所以能做 demo，很难当检索 SLA 的主引擎。</div>
+</details>
+<details>
+<summary>Lite、Standalone、Distributed 怎么挑？</summary>
+<div class="answer">Lite 给开发和测试；Standalone 给单机可接受短暂不可用的中小生产；Distributed 给需要把检索、写入、建索引分开扩、并且要冗余的场景。三者查询语义尽量保持一致，但 Standalone 不能热升级成集群，迁过去要走备份/VTS。按 12 个月数据量和可用性要求选，不要按「听起来更高级」选。</div>
+</details>
+<details>
+<summary>QueryNode、DataNode、IndexNode 为什么要拆开？</summary>
+<div class="answer">三条流水线的资源曲线完全不同：查询要低延迟内存和 CPU，写入要吞吐和刷盘，建索引是突发重计算。绑在一起时，一次全量导入就会把查询尾延迟打穿。拆开之后可以只给 IndexNode 加 GPU、只给 QueryNode 加副本，这是云原生向量库相对「单进程搜库」的核心收益。</div>
+</details>
+<details>
+<summary>标量过滤应该放在 ANN 前还是后？</summary>
+<div class="answer">生产上更常见的是把过滤条件变成 bitset，在 ANN 过程中跳过无效点，而不是先取 TopK 再在应用层丢掉。后过滤会让有效召回远小于 K，权限场景尤其明显。Milvus 的 filter search 就是把「像」和「允许看」放进同一次检索，避免浪费已经很贵的图遍历。</div>
+</details>
+<details>
+<summary>HNSW 是不是默认最优？</summary>
+<div class="answer">内存够、数据中等、要高召回时 HNSW 很强，但构建慢、内存大。超大规模或成本敏感要用 IVF、PQ、DiskANN 或 GPU 索引，并用黄金集标定。没有召回率曲线就选 HNSW，等于把容量规划交给默认参数。索引是汇率，不是信仰。</div>
+</details>
+<details>
+<summary>RAG 热更新要不要上 Distributed？</summary>
+<div class="answer">不一定。热更新首先是版本和别名：旁路建新 Collection，校验后再切别名，失败回滚。这在 Standalone 也能做。Distributed 解决的是流量和容量，不是「能不能蓝绿」。先把增量 embedding、缓存失效、别名切换做对，再根据 QPS 和数据量决定要不要拆节点。</div>
+</details>
+<details>
+<summary>etcd、对象存储、消息队列各自存什么？</summary>
+<div class="answer">etcd 存小而关键的元数据：Collection 定义、节点拓扑、租约。对象存储（S3/MinIO）存 segment 数据和索引文件，节点挂了可以换新节点重新加载。Pulsar/Kafka 这类 log broker 扛近期增量，让 DataNode 和 QueryNode 跟上写入。三者缺一，要么丢拓扑，要么丢数据，要么丢「刚写入还没刷盘」的那一截。</div>
+</details>
+<details>
+<summary>混合检索的 RRF 和加权融合怎么选？</summary>
+<div class="answer">多路分数不可比时用 RRF，只看排名倒数，少调参。各路分数经过校准、你知道哪路更重要时再用加权。照片+声音+指纹这类多向量字段，先保证每路自己的召回，再融合；不要把三路向量拼成一个超长向量指望一次 ANN 搞定。黄金集要按「融合后」标注，而不是只评单路。</div>
+</details>
+<details>
+<summary>什么时候该从 Standalone 迁走？</summary>
+<div class="answer">出现这几类信号就该规划 Distributed 或托管：导入和查询互相踩踏、单机内存放不下 HNSW、需要多副本扛磁盘故障、租户隔离要独立扩 QueryNode。迁之前先做 backup/VTS 演练，因为没有在线升级开关。数据还在十万级、单机 P99 稳定时，迁集群只是提前交运维税。</div>
+</details>
+</div>
+
+<div class="video-source">📺 来源：<a href="https://space.bilibili.com/302188068" target="_blank">AI向量数据库天花板 | Milvus是什么？架构是怎么样的</a> · <span class="up-name">小白debug</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

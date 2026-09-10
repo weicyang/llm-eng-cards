@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>A23 · MCP 进阶：自建 Server 与协议分析</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、用 Python 从零构建一个 MCP Server</a>
+<a href="#s2">二、协议握手与通信时序</a>
+<a href="#s3">三、inputSchema：模型读懂工具的关键</a>
+<a href="#s4">四、中间人抓包：截获 STDIO 通信</a>
+<a href="#s5">五、绕过 Host：手动与 Server 对话</a>
+<a href="#s6">六、MCP 协议的边界：规定了什么、没规定什么</a>
+<a href="#s7">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>A23 · MCP 进阶：自建 Server 与协议分析</h1>
+<p class="subtitle">用 Python 创建 MCP Server → 截获输入输出 → 逐行分析协议 → 直接与 Server 通信 → MCP 的本质</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>MCP 协议拆开看只有两件事：用 JSON-RPC 2.0 自报家门（我有哪些工具），再按 JSON Schema 传参调用工具——看懂 STDIO 上这段文本流，你就从 MCP 用户变成了 MCP 开发者。</p>
+</div>
+
+<!-- ========== 1. 用 Python 从零构建 MCP Server ========== -->
+<div class="section">
+<h2 id="s1">一、用 Python 从零构建一个 MCP Server</h2>
+
+<p>自建 Server 的第一步是准备环境。这里用 <span class="term">uv</span>——Astral 出品的 Rust 编写的 Python 包管理器，比 pip 快 10~100 倍，其附带的 uvx 命令还能像 npx 一样直接运行未安装的 Python 工具包，是当前 MCP 生态的默认选择。</p>
+
+<pre><code>uv init weather              # 创建项目
+cd weather && uv venv        # 创建虚拟环境
+uv add "mcp[cli]" httpx      # 安装 MCP SDK 与 HTTP 客户端</code></pre>
+
+<h3>1.1 FastMCP：把普通函数变成 Tool</h3>
+
+<p><span class="term">FastMCP</span> 是官方 Python SDK 内置的高级封装，它用装饰器把普通 Python 函数自动转换为符合协议要求的 Tool，开发者完全不需要手写 JSON-RPC 消息。</p>
+
+<pre><code>from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("weather", log_level="error")  # 日志走 stderr，别污染 stdout
+
+@mcp.tool()
+def get_forecast(latitude: float, longitude: float) -> str:
+    """获取指定地区的天气预报。Args: latitude: 纬度; longitude: 经度"""
+    return httpx.get(f"https://api.weather.gov/points/{latitude},{longitude}").text
+
+mcp.run(transport="stdio")</code></pre>
+
+<h3>1.2 装饰器"榨"出了哪些元信息</h3>
+
+<table>
+<tr><th>函数上的元素</th><th>转换成的协议字段</th><th>作用</th></tr>
+<tr><td>函数名 <code>get_forecast</code></td><td><code>name</code></td><td>模型调用时引用的工具标识</td></tr>
+<tr><td>docstring 第一行</td><td><code>description</code></td><td>模型判断"该不该用这个工具"的依据</td></tr>
+<tr><td>类型注解 <code>float</code></td><td><code>inputSchema.properties.*.type</code></td><td>约束参数类型</td></tr>
+<tr><td>docstring 的 Args 段</td><td>各参数的 <code>description</code></td><td>模型提取参数的语义依据</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>写一个 MCP Tool 就是写一个带类型注解和 docstring 的普通 Python 函数——协议要求的全部元信息，都由装饰器从代码里自动提取。</p>
+</div>
+
+<h3>1.3 为什么必须 log_level="error"</h3>
+
+<p>STDIO 模式下，stdout 是唯一的协议通道，任何混入的非 JSON 文本（比如第三方库启动时打印的 banner）都会被 Host 当成协议消息解析并直接报错。把日志级别设为 error 并让日志走 stderr，是 STDIO Server 的第一纪律。</p>
+
+<div class="arch-diagram">
+┌──────────────┐    JSON-RPC 2.0 (STDIO)    ┌────────────────────────────┐
+│   MCP Host   │ ◄────────────────────────► │   MCP Server (weather.py)  │
+│  (Cline 等)  │   stdin 进 / stdout 出      │  ┌──────────────────────┐  │
+└──────────────┘                            │  │ FastMCP 运行时        │  │
+                                            │  │  ├─ 协议解析层        │  │
+                                            │  │  ├─ Tool 注册表       │  │
+                                            │  │  │   get_forecast     │  │
+                                            │  │  └─ 业务函数 ─────────┼──┼──► 外部 API
+                                            │  └──────────────────────┘  │ (weather.gov)
+                                            └────────────────────────────┘
+</div>
+
+<table>
+<tr><th>命令</th><th>作用</th><th>说明</th></tr>
+<tr><td><code>uv init</code></td><td>初始化项目骨架</td><td>生成 pyproject.toml</td></tr>
+<tr><td><code>uv venv</code></td><td>创建虚拟环境</td><td>隔离依赖</td></tr>
+<tr><td><code>uv add "mcp[cli]"</code></td><td>安装 SDK + 调试工具</td><td>cli 扩展含 mcp dev / mcp install</td></tr>
+<tr><td><code>uv run python weather.py</code></td><td>在虚拟环境中启动 Server</td><td>进程阻塞等待 stdin 输入</td></tr>
+</table>
+
+</div>
+
+<!-- ========== 2. 协议握手与通信时序 ========== -->
+<div class="section">
+<h2 id="s2">二、协议握手与通信时序</h2>
+
+<p>把 Server 的输入输出截获下来，会发现所谓"MCP 协议"就是 <span class="term">JSON-RPC 2.0</span>——一种轻量的远程过程调用协议，每条消息是一行带 jsonrpc、method、id 字段的 JSON，有 id 的是请求（需要响应），没有 id 的是通知（无需响应）。</p>
+
+<div class="arch-diagram">
+Client (Host)                                Server
+    │                                          │
+    │ ① initialize                             │
+    │   {protocolVersion, clientInfo, ...}     │
+    │ ───────────────────────────────────────► │
+    │ ② 响应: serverInfo + capabilities        │
+    │ ◄─────────────────────────────────────── │
+    │ ③ notifications/initialized（通知）      │
+    │ ───────────────────────────────────────► │
+    │ ④ tools/list（请求，带 id）              │
+    │ ───────────────────────────────────────► │
+    │ ⑤ 响应: tools[]                          │
+    │   (name / description / inputSchema)     │
+    │ ◄─────────────────────────────────────── │
+    │ ⑥ tools/call {name, arguments}           │
+    │ ───────────────────────────────────────► │
+    │ ⑦ 响应: content[]（工具执行结果）        │
+    │ ◄─────────────────────────────────────── │
+</div>
+
+<table>
+<tr><th>步骤</th><th>方向</th><th>内容</th><th>说明</th></tr>
+<tr><td>①</td><td>Client → Server</td><td>initialize 请求</td><td>Client 打招呼，报自己的版本和能力</td></tr>
+<tr><td>②</td><td>Server → Client</td><td>initialize 响应</td><td>Server 自我介绍（名称、版本、能力）</td></tr>
+<tr><td>③</td><td>Client → Server</td><td>initialized 通知</td><td>Client 确认握手完成，此后才能发业务请求</td></tr>
+<tr><td>④</td><td>Client → Server</td><td>tools/list 请求</td><td>询问有哪些工具可用</td></tr>
+<tr><td>⑤</td><td>Server → Client</td><td>tools/list 响应</td><td>返回工具列表（名称、描述、inputSchema）</td></tr>
+<tr><td>⑥</td><td>Client → Server</td><td>tools/call 请求</td><td>调用指定工具 + 参数</td></tr>
+<tr><td>⑦</td><td>Server → Client</td><td>tools/call 响应</td><td>返回工具执行结果</td></tr>
+</table>
+
+<h3>2.1 三种消息类型</h3>
+
+<table>
+<tr><th>类型</th><th>特征</th><th>典型例子</th></tr>
+<tr><td>Request</td><td>带 <code>id</code>，必须响应</td><td>initialize、tools/list、tools/call</td></tr>
+<tr><td>Notification</td><td>无 <code>id</code>，单向告知</td><td>notifications/initialized</td></tr>
+<tr><td>Response</td><td>用 <code>id</code> 与请求配对</td><td>工具列表、执行结果</td></tr>
+</table>
+
+<h3>2.2 版本协商</h3>
+
+<p>initialize 请求里的 <span class="term">protocolVersion</span> 是协议版本字符串（如 2024-11-05），Client 报出自己支持的版本，Server 回复实际将使用的版本。若双方版本完全不兼容，Server 会直接断开连接——这是协议演进留下的安全阀。</p>
+
+<div class="intuition-box">
+<p>MCP 握手就是"先对暗号再谈生意"：initialize 交换版本和能力声明，双方确认协议兼容之后，才允许列工具和发起调用。</p>
+</div>
+
+</div>
+
+<!-- ========== 3. inputSchema ========== -->
+<div class="section">
+<h2 id="s3">三、inputSchema：模型读懂工具的关键</h2>
+
+<p>tools/list 响应中，每个工具除了 name 和 description，最重要的就是 <span class="term">inputSchema</span>——一段遵循 <span class="term">JSON Schema</span> 规范的参数结构描述，用 JSON 来定义"另一个 JSON 应该长什么样"，包括参数名、类型、是否必填。它是模型生成合法参数的唯一依据。</p>
+
+<pre><code>{
+  "type": "object",
+  "properties": {
+    "latitude":  {"type": "number", "description": "纬度"},
+    "longitude": {"type": "number", "description": "经度"}
+  },
+  "required": ["latitude", "longitude"]
+}</code></pre>
+
+<table>
+<tr><th>字段</th><th>作用</th><th>写不好会怎样</th></tr>
+<tr><td><code>type</code></td><td>约束参数整体结构（object）</td><td>模型可能直接传数组</td></tr>
+<tr><td><code>properties</code></td><td>声明每个参数的名称与类型</td><td>参数类型错乱（如字符串数字）</td></tr>
+<tr><td><code>description</code></td><td>告诉模型参数的语义和单位</td><td>模型漏传、乱传参数</td></tr>
+<tr><td><code>required</code></td><td>标记必填参数</td><td>缺参调用导致执行失败</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例：</strong>某团队的天气 Server 上线后，模型经常只传 latitude 漏掉 longitude，一次调用成功率只有 71%。抓包发现 docstring 只写了"获取天气"，inputSchema 里两个参数都没有 description，模型只能靠猜。补全 Args 描述并保留 required 约束后，参数完整率升到 99.2%，一次成功率随之翻倍。工具描述不是注释，而是模型唯一能看到的说明书。
+</div>
+
+<div class="intuition-box">
+<p>inputSchema 是工具的"使用说明书"：description 决定模型会不会选它，required 和 type 决定模型传参传得对不对。</p>
+</div>
+
+</div>
+
+<!-- ========== 4. 中间人抓包 ========== -->
+<div class="section">
+<h2 id="s4">四、中间人抓包：截获 STDIO 通信</h2>
+
+<p>想看清真实 Host 与 Server 之间的完整对话，可以写一个中间人脚本 mcp_log.py：让 Host 把自己当成 Server 启动，脚本内部再启动真正的 Server，双向转发每一条消息并逐行写入日志文件。</p>
+
+<div class="arch-diagram">
+┌────────┐  spawn  ┌────────────┐  spawn  ┌────────────┐
+│  Host  │ ──────► │ mcp_log.py │ ──────► │ MCP Server │
+│(Cline) │ ◄────── │  （中间人） │ ◄────── │ (weather)  │
+└────────┘ stdout  └─────┬──────┘ stdout  └────────────┘
+                         │ 每条消息追加写入
+                         ▼
+                  mcpio.log（逐行 JSON）
+</div>
+
+<table>
+<tr><th>症状</th><th>日志特征</th><th>根因</th><th>修复</th></tr>
+<tr><td>Server 加载超时</td><td>无 initialize 响应</td><td>uvx 首次下载依赖超过 60 秒</td><td>先在终端手动跑一次预热缓存</td></tr>
+<tr><td>工具列表为空</td><td>tools/list 响应 tools=[]</td><td>函数未加 @mcp.tool()</td><td>检查装饰器与模块导入</td></tr>
+<tr><td>Host 报解析错误</td><td>stdout 混入非 JSON 行</td><td>print 或库 banner 污染协议通道</td><td>log_level="error"，日志改走 stderr</td></tr>
+<tr><td>调用参数被拒</td><td>tools/call 返回 error</td><td>参数不符合 inputSchema</td><td>完善 docstring 的 Args 描述</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例：</strong>一个自研查询 Server 接入 Cline 后始终加载失败，团队凭猜测换了三次配置都没解决。挂上中间人日志后 15 分钟即定位：Server 启动时第三方库向 stdout 打印了一行 banner，Host 把它当 JSON 解析失败，重试直到 60 秒超时。把日志改走 stderr 并设置 log_level="error" 后，加载时间从超时失败降到 1.4 秒，工具调用恢复 100% 成功。
+</div>
+
+<div class="warn-box">
+STDIO Server 的黄金法则：stdout 只允许出现协议消息。调试信息一律打印到 stderr（<code>print(..., file=sys.stderr)</code>），否则任何一行多余输出都会让 Host 当场翻脸。
+</div>
+
+<div class="intuition-box">
+<p>STDIO 抓包不需要任何网络工具——通信本来就是两个进程之间的文本流，插一个"传话筒"进程进去就能全量记录。</p>
+</div>
+
+</div>
+
+<!-- ========== 5. 绕过 Host ========== -->
+<div class="section">
+<h2 id="s5">五、绕过 Host：手动与 Server 对话</h2>
+
+<p>既然协议是纯文本 JSON-RPC，完全可以不用任何 MCP Host，直接在终端里给 Server 喂 JSON——启动进程后，向它的 stdin 逐行输入消息即可。</p>
+
+<pre><code># 启动 Server（进程阻塞等待 stdin）
+uv run python weather.py
+
+# ① 握手
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"manual","version":"0.1"}}}
+# ② 列工具
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+# ③ 调用工具
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_forecast","arguments":{"latitude":40.7,"longitude":-74.0}}}</code></pre>
+
+<div class="highlight">
+在这种情况下，我们自己就是 MCP Host。这证明了 MCP 协议与模型无关——它只是一套函数的发现与调用规范，整条链路里甚至可以没有大模型参与。
+</div>
+
+<h3>5.1 三种调试手段对比</h3>
+
+<table>
+<tr><th>手段</th><th>适用场景</th><th>优点</th><th>代价</th></tr>
+<tr><td>手动 stdin 输入</td><td>验证协议细节、复现 bug</td><td>零依赖，看清每个字节</td><td>手敲 JSON 繁琐</td></tr>
+<tr><td><span class="term">MCP Inspector</span>（<code>mcp dev</code> 启动）</td><td>日常开发自测</td><td>官方图形调试器，网页上点点点即可完成握手与调用</td><td>需要浏览器环境</td></tr>
+<tr><td>中间人日志</td><td>排查真实 Host 环境的问题</td><td>看到的是生产流量的真实形态</td><td>要自己写代理脚本</td></tr>
+</table>
+
+<p>MCP Inspector 是官方 SDK（<code>mcp[cli]</code> 扩展）自带的图形化调试器：一条 <code>mcp dev weather.py</code> 命令即可在网页上完成握手、查看工具列表、手动填参调用，是开发阶段最高频的工具。</p>
+
+<div class="intuition-box">
+<p>能在终端里手动和 Server 完成一次握手，就说明你真正拥有了这个协议——Host 只不过是替你打字的那个角色。</p>
+</div>
+
+</div>
+
+<!-- ========== 6. 协议的边界 ========== -->
+<div class="section">
+<h2 id="s6">六、MCP 协议的边界：规定了什么、没规定什么</h2>
+
+<p>把整条链路摊开，MCP 的管辖范围出人意料地小：它只规定 Server 侧的函数发现（tools/list）与函数调用（tools/call），连同必要的握手与传输方式。至于模型如何拿到工具列表、如何决定调用哪个工具、Host 与模型之间用什么格式通信——协议一概不管。</p>
+
+<div class="arch-diagram">
+┌──────────┐   XML / Function Calling    ┌──────────┐
+│   Host   │ ◄─────────────────────────► │ 模型 API  │   ← MCP 不规定
+└────┬─────┘   （各 Host 自定义格式）     └──────────┘     （协议空白区）
+     │
+     │  JSON-RPC 2.0
+     │  initialize / tools/list / tools/call
+     │
+┌────▼─────────┐
+│  MCP Server  │                                        ← MCP 只管这一段
+└──────────────┘                                          （工具发现 + 调用）
+</div>
+
+<table>
+<tr><th>环节</th><th>协议</th><th>作用范围</th></tr>
+<tr><td>Host ↔ 模型</td><td>无统一标准（Cline 用 XML、Cherry Studio 用 Function Calling）</td><td>模型选择工具、解析参数</td></tr>
+<tr><td>Host ↔ Server</td><td>MCP 协议（JSON-RPC 2.0）</td><td>工具发现、工具调用</td></tr>
+</table>
+
+<div class="note-box">
+不同 MCP Host 与模型的交互方式差异很大：Cline 用 XML 标签，Cherry Studio 用 Function Calling 的 JSON 结构。MCP 协议本身不规定这些，它只关心 Server 端的函数发现与调用——这正是同一个 Server 能被所有 Host 复用的原因。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>开发完 Server 先用 Inspector 或手动握手自测，再接入 Host</li>
+<li>日志一律走 stderr，并设置 log_level="error"</li>
+<li>把 docstring 和参数描述当成"给模型看的文档"来写</li>
+<li>关注 protocolVersion，与 SDK 版本保持同步</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要往 stdout 输出任何非协议内容（print、库 banner）</li>
+<li>不要假设所有 Host 的行为一致（确认流程、超时都不同）</li>
+<li>不要在 Server 代码里感知或依赖特定模型</li>
+<li>不要忽略 initialize 失败——后续所有请求都会被拒绝</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>MCP 的聪明之处在于"只管一半"：把 Host↔Server 这段做成统一标准，把 Host↔模型 这段留给生态自由竞争——管得少，才推得动。</p>
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s7">Q&A</h2>
+
+<details>
+<summary>MCP 协议规定了什么？没有规定什么？</summary>
+<div class="answer">MCP 只规定两件事：①Server 有哪些函数可用（tools/list 返回名称、描述、inputSchema）；②如何调用这些函数（tools/call 传名称和参数），外加 initialize 握手与 STDIO/HTTP 传输约定。它没有规定模型与 Host 之间如何交互——不同 Host 可以用 XML（Cline）、Function Calling（Cherry Studio）等任意格式与模型通信。MCP 协议脱离大模型也能运行，本质是一套函数发现与调用规范。</div>
+</details>
+
+<details>
+<summary>@mcp.tool() 装饰器做了什么？inputSchema 是什么？</summary>
+<div class="answer">装饰器从 Python 函数中自动提取三类元信息：①函数名作为 Tool 的 name；②docstring 首行作为 description，描述工具功能；③参数类型注解和 Args 说明自动生成 inputSchema。inputSchema 遵循 JSON Schema 规范，是一段"描述另一个 JSON 结构"的 JSON，定义了参数名称、类型和是否必填。模型在选择工具和提取参数时严格遵守 inputSchema，描述写得越清楚，模型传参的准确率越高。</div>
+</details>
+
+<details>
+<summary>为什么说"MCP 与模型无关"？这有什么实际意义？</summary>
+<div class="answer">MCP 协议只作用于 Host↔Server 这一段，消息里没有任何与模型相关的字段。你可以完全不用任何 Host 或模型，直接在终端用 JSON-RPC 格式与 Server 通信（手动发送 initialize、tools/list、tools/call）。实际意义有三：①Server 开发不需要考虑模型差异；②理论上任何语言甚至 shell 脚本都能实现 Server，只要遵循 JSON-RPC；③不同 Host 可以连接同一个 Server，Server 代码零改动。</div>
+</details>
+
+<details>
+<summary>MCP 通信为什么用 STDIO？还有什么替代方案？</summary>
+<div class="answer">STDIO（标准输入输出）是目前绝大多数 MCP Server 采用的传输方式，优点是实现简单（从 stdin 读请求、向 stdout 写响应）、安全（进程间通信不暴露网络端口）、轻量（无需网络库）。缺点是 Host 和 Server 必须在同一台机器上。替代方案是 HTTP + SSE（Streamable HTTP），适合跨机器或远程部署。使用 STDIO 时务必设置 log_level="error" 并让日志走 stderr，否则日志输出会污染协议通道。</div>
+</details>
+
+<details>
+<summary>initialize 握手阶段交换了哪些信息？为什么需要版本协商？</summary>
+<div class="answer">Client 在 initialize 请求中携带 protocolVersion（如 2024-11-05）、clientInfo（名称与版本）和 capabilities（支持的能力，如采样、根目录访问）。Server 在响应中返回自己实际使用的 protocolVersion、serverInfo 和能力声明。版本协商是协议演进的安全阀：当 Client 支持的版本与 Server 完全不兼容时，Server 会直接断开连接，而不是用错误的语义勉强通信。握手完成后 Client 还要发一条 initialized 通知，此后才允许发送 tools/list 等业务请求。</div>
+</details>
+
+<details>
+<summary>STDIO 模式下 Server 加载失败，如何系统排查？</summary>
+<div class="answer">按三层排查：①先看是不是超时——uvx/npx 首次下载依赖可能超过默认 60 秒，先在终端手动执行一次命令预热缓存；②再看协议通道是否被污染——写一个中间人脚本记录 stdout 的每一行，任何非 JSON 输出（print、第三方库 banner）都会让 Host 解析失败，修复方式是日志改走 stderr；③最后看协议语义——用 MCP Inspector 或手动输入 JSON 验证 initialize 和 tools/list 的响应是否正常。这三层覆盖了绝大多数加载失败问题。</div>
+</details>
+
+<details>
+<summary>FastMCP 和手写 JSON-RPC 有什么区别？该选哪种？</summary>
+<div class="answer">FastMCP 是官方 SDK 的高级封装，用装饰器自动完成函数到 Tool 的转换、inputSchema 生成和协议消息的编解码，几行代码就能跑起一个 Server。手写 JSON-RPC 则需要自己处理 initialize 握手、消息 id 配对、错误码等细节，通常只在需要极端控制或移植到无 SDK 语言时才用。日常开发应优先 FastMCP：它跟随官方协议版本演进，能避免自己实现时踩协议细节的坑。理解手写层的价值在于调试——当你看得懂原始 JSON 消息时，FastMCP 出错才不至于无从下手。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1Y854zmEg9" target="_blank">MCP终极指南 - 进阶篇</a> · <span class="up-name">马克的技术工作坊</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

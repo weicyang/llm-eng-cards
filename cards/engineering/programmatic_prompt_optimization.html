@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>E08 · 程序化 Prompt 优化</title>
+<style>
+/* 项目标准 CSS */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、手写 Prompt 的三个结构性问题</a>
+<a href="#s2">二、DSPy 的三层抽象：声明、组装、编译</a>
+<a href="#s3">三、指标契约：优化器唯一的方向盘</a>
+<a href="#s4">四、优化器怎么选：从自举示例到反思进化</a>
+<a href="#s5">五、反思式进化为什么样本效率高</a>
+<a href="#s6">六、落地边界与工程代价</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>E08 · 程序化 Prompt 优化</h1>
+<p class="subtitle">声明式契约 / DSPy 三层抽象 / 指标反馈通道 / 优化器选型 / 反思式进化 / 落地边界</p>
+
+<div class="intuition-box">
+<p>把 Prompt 当程序，而不是当文案：人只负责声明"这个任务的输入输出契约是什么"和"什么样的输出算好"，具体措辞、示例、指令顺序交给优化器去搜。换模型不再是重新调一遍 Prompt，而是重新编译一次。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、手写 Prompt 的三个结构性问题</h2>
+
+<p>这个板块前面七张卡讲的都是手工方法：怎么分层组织提示、怎么写角色与模板变量、怎么给出少样本示例、怎么控制推理链的长度。这些方法有效，而且在绝大多数项目里是唯一现实的起点。但它们共享一个前提——<strong>Prompt 的每一个字都由人来写、由人来改、由人来判断好不好</strong>。当系统规模、模型迭代速度、团队人数任何一维放大时，这个前提就会开始崩。本卡讲的是另一条路：不再由人来写措辞，而是把措辞当作一个可以被程序搜索出来的变量。</p>
+
+<h3>1.1 换模型就要重调：Prompt 与模型强耦合</h3>
+<p>手工调优的产物本质是"针对某个特定模型的某个特定版本的经验拟合"。一句"请你一步一步思考，先列出所有候选方案再逐个评估"在某个模型上能把准确率抬起来，换到另一个模型上可能毫无作用，甚至因为触发了过度冗长的输出而反向拖低效果。原因不难理解：不同模型的指令跟随强度、对格式约束的敏感度、默认的推理倾向都不同，而人工调优里那些看起来是"通用技巧"的东西，很多其实是在补某个模型的特定短板。模型一升级，短板换了位置，补丁就悬空了。团队的直接体感是：每次基座模型换代，之前几个月积累的措辞经验有相当一部分要重新验证，而验证成本全部由人承担。</p>
+
+<h3>1.2 调优不可复现：没有可回溯的搜索轨迹</h3>
+<p>手工调优的过程通常是这样的：看几个失败样例，改一句话，跑一遍感觉好了，提交。问题在于这个过程留下的产物只有"最终那版 Prompt"，中间试过哪些写法、为什么放弃、在哪些样例上有效——全部留在调优者的脑子里。这带来两个后果。一是无法复现：同一个人隔三个月再调一次，很可能走出完全不同的路径、落在完全不同的局部最优上。二是无法传递：新人接手一段满是奇怪约束的 Prompt，看不出哪条是踩过坑留下的护栏、哪条是当年随手加的冗余，于是既不敢删也不敢改。</p>
+
+<h3>1.3 多模块系统里人工调不动</h3>
+<p>真正让手工方法失效的是<span class="term">复合 AI 系统</span>——一条链路上串了多个各自带 Prompt 的模块，比如"查询改写 → 检索 → 段落筛选 → 答案合成 → 引用校验"这样五个模块的检索问答链路。这种系统里，任何一个模块的输出都是下游模块的输入，所以局部改动会沿链路传播：把改写模块调得更激进，检索召回变了，筛选模块面对的候选分布也变了，原本调好的筛选阈值随之失准。人工要做的其实是<strong>联合优化</strong>——五个 Prompt 的措辞组合起来才决定端到端效果——而人一次只能在脑子里握住一两个变量，五维联合搜索超出了手工能力的边界。</p>
+
+<div class="arch-diagram">
+   手工迭代循环                          编译式优化循环
+ ┌───────────────────┐              ┌────────────────────────┐
+ │ 人看 badcase       │              │ 人写 Signature（契约）  │
+ │      ↓            │              │ 人写 Metric（什么叫好） │
+ │ 人凭直觉改措辞      │              │ 人造评测集              │
+ │      ↓            │              └───────────┬────────────┘
+ │ 人跑一遍看感觉      │                          ↓
+ │      ↓            │              ┌────────────────────────┐
+ │ 觉得好了就提交      │              │ 优化器循环（程序执行）   │
+ └───────┬───────────┘              │  采样轨迹 → 评分/反馈    │
+         │                          │  → 生成候选 → 筛选保留   │
+         ▼                          └───────────┬────────────┘
+  产物：一段文本                                 ↓
+  轨迹：留在人脑里                        产物：一组具体 Prompt
+  换模型：从头再来                        轨迹：完整搜索记录可复现
+  多模块：人握不住                        换模型：改配置重跑编译
+</div>
+
+<p>把这三个问题放在一起看，指向的解法是同一个：<strong>把"问什么"和"怎么问"分开</strong>。"问什么"是任务契约——输入是什么、输出要什么字段、什么样的输出算合格，这部分承载业务知识，必须由人定义，而且它跨模型稳定。"怎么问"是具体措辞——用哪几个词强调、放几个示例、示例选哪几条、指令按什么顺序排，这部分是对特定模型的适配，本质上是一个搜索问题，而搜索是机器擅长的事。</p>
+
+<div class="intuition-box">
+<p>手写 Prompt 的困境不是"人写得不好"，而是"人写的东西不可微、不可复现、不可扩展"：它是一段文案，而工程需要的是一段可以重新编译的源码。</p>
+</div>
+
+<table>
+<tr><th>维度</th><th>手工调优</th><th>程序化优化</th></tr>
+<tr><td>人的产出物</td><td>最终 Prompt 文本</td><td>任务契约 + 指标函数 + 评测集</td></tr>
+<tr><td>换模型的代价</td><td>重新人工调优，经验大面积失效</td><td>改一行模型配置，重跑编译</td></tr>
+<tr><td>可复现性</td><td>低，路径依赖调优者的直觉</td><td>高，搜索轨迹与产物可存档比对</td></tr>
+<tr><td>多模块联合优化</td><td>不可行，人握不住多个耦合变量</td><td>天然支持，优化器同时调所有模块</td></tr>
+<tr><td>主要成本</td><td>人力工时</td><td>优化过程的 token 消耗 + 评测集建设</td></tr>
+<tr><td>失败模式</td><td>陷在调优者熟悉的写法里</td><td>指标写错则整体优化错方向</td></tr>
+</table>
+</div>
+
+<div class="section" id="s2">
+<h2>二、DSPy 的三层抽象：声明、组装、编译</h2>
+
+<p>DSPy 是这条路线上最成熟的框架，它的设计价值不在于提供了多少现成的提示模板，而在于提出了一组抽象，让"Prompt 是可编译的程序"这句话有了具体的落地形态。这组抽象一共三层，从下到上分别回答"任务是什么""链路怎么搭""措辞从哪来"。</p>
+
+<h3>2.1 Signature：声明输入输出契约</h3>
+<p><span class="term">Signature</span>（签名）是最底层的抽象，它声明一个 LLM 调用的输入输出契约，而<strong>不描述任何措辞</strong>。最简形式就是一个字符串 <code>"question -> answer"</code>：输入一个问题字段，输出一个答案字段。复杂一点可以写成 <code>"context, question -> reasoning, answer, citations"</code>，或者用类的形式给每个字段加上类型和一句自然语言描述。</p>
+
+<p>关键在于它刻意不写的东西：没有"你是一位资深专家"，没有"请一步步思考"，没有输出格式的 JSON 模板。这些全部由框架在运行时按目标模型的特性自动生成，或者由后面的优化器搜索出来。Signature 只承载一件事——<strong>这个任务的输入输出结构</strong>。这也是它跨模型稳定的原因：任务的结构不随模型变化，只有表达任务的措辞会变。</p>
+
+<h3>2.2 Module：把签名组装成推理结构</h3>
+<p><span class="term">Module</span>（模块）把 Signature 包装成可复用的推理策略。<code>dspy.Predict</code> 是最朴素的一层——拿到输入直接产出输出字段。<code>dspy.ChainOfThought</code> 会在输出字段前自动插入一个推理字段，让模型先写推理再给结论。<code>dspy.ReAct</code> 则把签名接入"思考—调用工具—观察"的循环。</p>
+
+<p>这一层的设计明显借用了神经网络的搭建习惯：模块可以嵌套、可以组合，一个自定义模块的内部可以调用另外几个模块，就像一个网络层内部可以包含子层。这带来的实际好处是<strong>推理结构和任务声明解耦</strong>：想把某个环节从直接作答改成带推理作答，只需要把 <code>Predict</code> 换成 <code>ChainOfThought</code>，Signature 一个字都不用动。</p>
+
+<pre><code>class RAGPipeline(dspy.Module):
+    def __init__(self):
+        self.rewrite = dspy.Predict("question -> search_query")
+        self.answer  = dspy.ChainOfThought("context, question -> answer, citations")
+
+    def forward(self, question):
+        q = self.rewrite(question=question).search_query
+        ctx = retrieve(q)
+        return self.answer(context=ctx, question=question)</code></pre>
+
+<p>这段代码里没有任何一句提示词。两个模块各自会在运行时生成自己的 Prompt，而这两个 Prompt 正是后面优化器要搜索的对象——注意它们会被<strong>联合</strong>优化，这正好对上第一节里人工做不到的那件事。</p>
+
+<h3>2.3 Optimizer：把声明编译成具体 Prompt</h3>
+<p><span class="term">Optimizer</span>（优化器，早期版本里叫 Teleprompter）是这套抽象的核心。它接收三样东西——一个已经搭好的 Module、一批训练样本、一个评估指标——然后自动搜索出每个模块该用什么少样本示例、什么指令措辞。调用形式非常短：</p>
+
+<pre><code>optimizer = dspy.MIPROv2(metric=my_metric, auto="medium")
+compiled = optimizer.compile(RAGPipeline(), trainset=train_examples)
+compiled.save("rag_v3.json")   # 产物是一组具体 Prompt，可版本化</code></pre>
+
+<div class="arch-diagram">
+              ┌──────────────────────────────────────────┐
+   人的输入    │  Signature: "context, question -> answer" │
+              │  Module:    ChainOfThought / ReAct / …    │
+              │  Metric:    什么样的输出算好（含文本反馈）  │
+              │  Trainset:  少量带标注的样本               │
+              └───────────────────┬──────────────────────┘
+                                  ↓  compile()
+              ┌──────────────────────────────────────────┐
+   优化器循环  │  ① 在样本上跑一遍 Module，收集执行轨迹      │
+              │  ② 用 Metric 打分（可附带自然语言诊断）     │
+              │  ③ 提出候选：新示例组合 / 新指令措辞         │
+              │  ④ 在验证集上评估候选，保留优秀的            │
+              │  ⑤ 未达预算上限则回到 ①                    │
+              └───────────────────┬──────────────────────┘
+                                  ↓
+              ┌──────────────────────────────────────────┐
+   编译产物    │  模块A 的指令 + 4 条精选示例                │
+              │  模块B 的指令 + 3 条精选示例                │
+              │  → 序列化为 JSON，可存档、可比对、可回滚     │
+              └──────────────────────────────────────────┘
+</div>
+
+<h3>2.4 "编译"这个隐喻的准确含义</h3>
+<p>"编译"这个词容易引起误解，需要说清楚它<strong>不是</strong>什么：它不是把自然语言翻译成机器码，也不是把 Prompt 压缩成某种二进制表示。它的准确含义是——把"任务声明 + 训练数据 + 评估指标"这三份高层输入，转换成一组针对目标模型的、具体的、可以直接发出去的 Prompt 文本。</p>
+
+<p>和传统编译器的类比在三个点上成立。第一，输入是高层声明，输出是低层可执行物，中间过程对使用者透明。第二，同一份源码可以针对不同目标平台编译出不同产物——这里的"目标平台"就是不同的模型。第三，产物是确定的、可存档的、可比对的。类比不成立的地方也要注意：传统编译是确定性的语法变换，而这里的编译是一个<strong>带随机性的搜索过程</strong>，同样的输入两次编译可能得到不同产物，所以编译产物必须像模型权重那样被版本化管理，不能假定"重跑一次就能复现"。</p>
+
+<div class="intuition-box">
+<p>Signature 是函数签名，Module 是函数体的结构，Optimizer 是编译器的优化通道——你写的是"要算什么"，编译器决定"用哪条指令算"。</p>
+</div>
+
+<table>
+<tr><th>抽象层</th><th>回答的问题</th><th>由谁决定</th><th>换模型时是否要改</th></tr>
+<tr><td>Signature</td><td>输入输出契约是什么</td><td>人（承载业务知识）</td><td>不需要改</td></tr>
+<tr><td>Module</td><td>推理结构怎么搭（直答 / 带推理 / 带工具）</td><td>人（架构决策）</td><td>通常不需要改</td></tr>
+<tr><td>Metric</td><td>什么样的输出算好</td><td>人（定义成功）</td><td>不需要改</td></tr>
+<tr><td>指令措辞</td><td>具体怎么说</td><td>优化器搜索</td><td>重新编译</td></tr>
+<tr><td>少样本示例</td><td>放哪几条、放几条</td><td>优化器搜索</td><td>重新编译</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景 · 模型升级后的重编译：</strong>某企业内部的合同条款抽取链路由三个模块串成（条款定位 → 字段抽取 → 一致性校验），三段 Prompt 是两位工程师断续手工调了约六周的产物，在原基座模型上字段级准确率 91.2%。基座模型换代后同一套 Prompt 直接跌到 83.5%，其中"一致性校验"模块退化最严重——新模型的默认输出更冗长，原先靠"只输出 JSON，不要解释"这一句话压住的格式漂移失效了。团队把三段 Prompt 重写为 Signature 加 Module 的声明形式，保留原有的 240 条标注样本作为训练与验证集，用中等预算编译一次（约 2.5 小时、消耗约 480 万 token、折算成本二十几美元）后达到 92.8%。真正的收益出现在下一次模型换代：只改了一行模型配置，重跑同一条编译命令，无人工介入，新模型上得到 93.4%，端到端从提交到验收不到一天。<strong>对比之下，六周的人力和一次编译的账单，量级完全不同。</strong></div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、指标契约：优化器唯一的方向盘</h2>
+
+<p>整套机制里最容易被低估的环节是指标函数。它不是一个附带的评估工具，而是<strong>优化的目标函数本身</strong>——优化器所有的搜索行为、所有的取舍判断，都只依据这一个函数的返回值。这带来一个残酷的对称性：指标写对了，优化器能替你把措辞搜到人力难以达到的水平；指标写错了，优化器会以同样的效率把系统推向错误的方向，而且它跑得越好，你偏得越远。</p>
+
+<h3>3.1 标量分数 vs 带文本反馈</h3>
+<p>指标最朴素的形式是返回一个标量分数，比如答案完全匹配就返回 1、否则返回 0，或者返回一个 0 到 1 之间的相似度。这能用，但信息量极低。一个 0.7 分只告诉优化器"当前这版不太好"，至于是哪里不好、为什么不好、该往哪个方向改，全部要靠优化器自己在候选空间里试出来——这就是为什么标量指标下的优化需要大量 rollout 才能收敛。</p>
+
+<p>更有效的形式是让指标同时返回<strong>自然语言诊断</strong>。同一个失败样例，标量指标说"0.7"，文本反馈可以说"答案事实正确但没有给出引用来源，且把两个不同年份的数据混在一句话里"。后者直接告诉了优化器该在指令里补什么。这就是 GEPA 的指标契约：必须返回一个同时带分数和反馈的对象。</p>
+
+<pre><code>def metric(gold, pred, trace=None, pred_name=None, pred_trace=None):
+    missing = [c for c in gold.citations if c not in pred.citations]
+    score = 1.0 - 0.5 * (len(missing) > 0) - 0.5 * (pred.answer != gold.answer)
+    fb = f"缺失引用：{missing}；请在输出前逐条核对来源" if missing else "引用完整"
+    return dspy.Prediction(score=max(score, 0.0), feedback=fb)</code></pre>
+
+<div class="arch-diagram">
+  标量反馈通道                       文本反馈通道
+ ┌──────────────┐                 ┌──────────────────────────────┐
+ │ 执行 → 打分   │                 │ 执行 → 打分 + 自然语言诊断      │
+ │      ↓       │                 │      ↓                        │
+ │   score=0.7  │                 │  score=0.5                    │
+ │      ↓       │                 │  feedback="答案对但缺引用来源，  │
+ │ 优化器知道：   │                 │   且混用了两个年份的数据"       │
+ │  "不太好"     │                 │      ↓                        │
+ │      ↓       │                 │ 优化器知道：哪里错 / 为什么错 /  │
+ │ 只能盲搜方向   │                 │   该怎么改                     │
+ │      ↓       │                 │      ↓                        │
+ │ 需大量 rollout│                 │ 少量 rollout 即可定向修正       │
+ └──────────────┘                 └──────────────────────────────┘
+   信息量：1 个浮点数                 信息量：一段可执行的修改建议
+</div>
+
+<h3>3.2 反馈从哪里来：轨迹是富矿</h3>
+<p>文本反馈不一定要人写，很多时候它已经躺在系统的执行轨迹里。编译失败的报错信息、单元测试的失败断言、检索模块返回的空结果、工具调用抛出的参数校验异常、JSON 解析失败的具体位置——这些都是天然的、免费的、精确的诊断信息。把它们从轨迹里提取出来拼进 feedback 字段，几乎不需要额外成本，却能显著改变优化的收敛速度。这也解释了为什么这类方法在代码生成、工具调用这些"失败原因天生可读"的任务上效果尤其好。</p>
+
+<h3>3.3 指标设计的四条原则</h3>
+<p>指标既然是方向盘，设计时就要按方向盘的标准来要求它。第一是<strong>可自动判定</strong>：指标要在没有人参与的情况下对任意输出给出分数，需要人看一眼才能打分的东西不能作为优化目标，只能作为最终的抽样验收。第二是<strong>与业务目标对齐</strong>：分数上升必须意味着业务效果上升，这一条最容易在不经意间被违反，下面的案例讲的就是它。第三是<strong>对部分正确要有梯度</strong>：非零即一的指标会让绝大多数候选拿到同样的分数，优化器无法区分"差一点点"和"差得很远"，搜索信号被抹平了。第四是<strong>把约束显式编码进分数</strong>：如果输出长度、格式合规、引用完整性是硬要求，就要把它们作为扣分项写进指标，而不是指望优化器自己意识到。</p>
+
+<div class="highlight">
+<strong>示例场景 · 指标写错导致的奖励作弊：</strong>某工单自动回复系统用编译式优化调 Prompt，指标最初设计为"回复文本与人工标准答案的语义相似度"（嵌入余弦相似度），阈值 0.75 算通过。一轮编译后离线分数从 0.68 升到 0.89，看起来很成功，灰度上线两周后用户满意度反而从 4.2 分掉到 3.6 分，工单二次进线率从 11% 升到 19%。复盘发现优化器找到了一个<span class="term">奖励作弊</span>路径：搜出来的指令引导模型生成一种"覆盖所有可能情况的万金油回复"——把标准答案里的高频词都堆进去，语义相似度自然很高，但对用户的具体问题没有给出可执行的动作。修正方式是把单一相似度指标拆成四项加权：关键动作项是否命中（0.4）、是否引用了正确的知识库条目（0.3）、是否包含与本工单无关的冗余段落（−0.2）、长度是否在 120 字以内（0.1），并且给失败样例附上"缺少哪个动作项"的文本反馈。用修正后的指标重新编译，离线综合分 0.81（低于之前的 0.89），但线上满意度回到 4.4 分、二次进线率降到 8%。<strong>教训是：离线分数变高不等于效果变好，指标就是需求文档，写歪了优化器会精确地满足那个歪掉的需求。</strong></div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>指标拆成多项加权，把格式、长度、引用完整性等硬约束显式编码为扣分项</li>
+<li>把执行轨迹里的报错、断言失败、空检索结果直接拼进文本反馈</li>
+<li>对部分正确给部分分，让优化器能区分"差一点"和"差很远"</li>
+<li>每次编译后抽样人工审阅高分产物，专门找"分数高但业务上不对"的样例</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要用单一语义相似度作为唯一指标——它最容易被万金油输出刷高</li>
+<li>不要用非零即一的严格匹配作为主指标，搜索信号会被抹平</li>
+<li>不要把需要人判断的主观维度写进自动指标，那属于最终验收环节</li>
+<li>不要在指标里遗漏负向约束，优化器不会自发规避你没写的东西</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>优化器是一个极其听话、完全没有常识的执行者：你说什么它就最大化什么。所以指标不是评估工具，是需求文档——写指标的过程就是把"什么叫好"从直觉翻译成代码的过程。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、优化器怎么选：从自举示例到反思进化</h2>
+
+<p>优化器的种类不少，但它们的差异可以归到两个问题上：<strong>调的是示例还是指令</strong>，以及<strong>用什么策略搜索</strong>。理清这两个维度，选型就变得直接。</p>
+
+<h3>4.1 BootstrapFewShot 系：自举示例，便宜且稳</h3>
+<p><span class="term">自举少样本</span>（BootstrapFewShot）的思路很朴素：拿训练样本跑一遍你搭好的 Module，把那些<strong>模型自己做对了的完整执行轨迹</strong>留下来，当作少样本示例塞回 Prompt。它的巧妙之处在于示例不是人工编写的，而是从目标模型自己的成功输出里挑出来的，因此示例的格式、语气、推理粒度天然与该模型匹配。DSPy 官方文档的建议是，样本极少（十条左右）时就从它开始；有五十条以上时可以换成带随机搜索的变体（BootstrapFewShotWithRandomSearch），在多组示例组合之间挑最好的一组。</p>
+
+<p>这一系的定位是<strong>基线</strong>：成本接近于零、跑得快、几乎不会把事情搞坏。它的天花板也很明确——它只调示例，不改指令。如果问题出在指令措辞本身（比如任务要求没说清、约束没写全），换多少组示例都补不上。</p>
+
+<h3>4.2 MIPROv2：联合优化指令与示例</h3>
+<p><span class="term">MIPROv2</span> 的做法是把指令和示例放在同一个搜索空间里联合优化。它分三步：先用自举生成若干组候选示例；然后由一个提示生成模型（通常配置一个更强的模型担任）基于任务描述和数据特征提出多组候选指令；最后用<strong>贝叶斯优化</strong>在"指令 × 示例"的组合空间里搜索，每轮在小批验证集上试一组组合，定期在完整验证集上评估当前最优。它有 light / medium / heavy 三档预算档位，把试验轮数和评估次数打包成一个参数。</p>
+
+<p>它的适用位置是中间地带：有一定量的标注数据（官方建议两百条以上以避免过拟合）、能承受几十轮试验的预算、指令和示例都需要调。在很长一段时间里它是这个方向的通用默认选择。</p>
+
+<h3>4.3 GEPA：反思式指令进化</h3>
+<p><span class="term">GEPA</span>（Genetic-Pareto，论文 arXiv:2507.19457）走的是另一条路。它不在候选空间里做数值搜索，而是<strong>让语言模型读自己的失败轨迹，用自然语言写出诊断，再据此改写指令</strong>。一轮迭代大致是：从当前候选池里挑一个候选，在小批样本上执行并收集完整轨迹（推理过程、工具调用、工具返回），把轨迹和指标的文本反馈一起交给一个反思模型，让它诊断问题并提出新的指令版本，然后评估新候选、决定是否纳入候选池。</p>
+
+<p>它的第二个关键设计是<span class="term">Pareto 前沿采样</span>：候选池不是只保留总分最高的那一个，而是维护一组"在不同样本上各有所长"的候选——某个候选可能总分一般，但它是唯一一个在某类困难样本上做对的，这种候选会被保留下来作为后续变异的种子。这是为了对抗贪心搜索的通病：所有候选朝同一个方向收敛，最后卡在同一个局部最优里。GEPA 还有一个合并（Merge）机制，把 Pareto 前沿上互不支配的候选的优点组合起来。</p>
+
+<p>论文报告的效果是：在六个任务上，GEPA 平均比 GRPO 这类强化学习方法高约 6 个百分点、最高约 19 到 20 个百分点，而 rollout 用量最多少 35 倍（GRPO 那一侧是两万四千次 rollout 量级）；相对当时最强的提示优化器 MIPROv2 也有 10 个百分点以上的优势，在 AIME-2025 上约 +12 个百分点。GEPA 项目主页给出的工程口径是"100 到 500 次评估"对比强化学习的"5000 到 25000 次以上"，并引用了 Databricks 的一个案例：开源模型配合自动化提示优化，在成本约为九十分之一的条件下超过了当时的旗舰闭源模型。这些数字的量级值得记住，但不要当成对自己业务的承诺——它们是特定基准、特定模型、特定预算下的结果。</p>
+
+<div class="arch-diagram">
+                      ┌──────────────────┐
+                      │  候选池（Pareto）  │
+                      │  C1 C2 C3 … Ck   │←──────┐
+                      └────────┬─────────┘       │
+        ① Pareto 采样：从"各有所长"的候选中选一个   │
+                               ↓                 │
+                      ┌──────────────────┐       │
+                      │ 在小批样本上执行   │       │ ⑤ 优于被支配者
+                      │ 收集完整轨迹：     │       │    则纳入候选池
+                      │ 推理 / 工具调用 /  │       │   （否则丢弃）
+                      │ 工具返回 / 报错    │       │
+                      └────────┬─────────┘       │
+        ② 指标打分 + 文本反馈                      │
+                               ↓                 │
+                      ┌──────────────────┐       │
+                      │ 反思模型读轨迹     │       │
+                      │ "为什么错了？"     │       │
+                      │ → 自然语言诊断     │       │
+                      └────────┬─────────┘       │
+        ③ 变异：据诊断改写指令                     │
+                               ↓                 │
+                      ┌──────────────────┐       │
+                      │ 新候选 C(k+1)     │───────┘
+                      │ ④ 在验证集上评估   │
+                      └──────────────────┘
+</div>
+
+<h3>4.4 选型依据</h3>
+<p>把上面三系放到一张表里，判断依据是四个：手上有多少标注数据、能承受多少 rollout 预算、瓶颈在示例还是指令、系统是单模块还是多模块链路。</p>
+
+<table>
+<tr><th>优化器</th><th>调什么</th><th>搜索策略</th><th>数据量要求</th><th>预算</th><th>适合的场景</th></tr>
+<tr><td>LabeledFewShot</td><td>示例（直接取标注）</td><td>无搜索</td><td>几条即可</td><td>几乎为零</td><td>确认链路能跑通的第一步</td></tr>
+<tr><td>BootstrapFewShot</td><td>示例（自举成功轨迹）</td><td>无搜索</td><td>约 10 条起</td><td>很低</td><td>基线；格式与语气需要锚定</td></tr>
+<tr><td>BootstrapFewShot + 随机搜索</td><td>示例组合</td><td>随机搜索</td><td>约 50 条起</td><td>低</td><td>示例质量在不同组合间波动大</td></tr>
+<tr><td>MIPROv2</td><td>指令 + 示例（联合）</td><td>贝叶斯优化</td><td>约 200 条起</td><td>中</td><td>两者都弱、预算中等的通用选择</td></tr>
+<tr><td>MIPROv2（零样本档）</td><td>仅指令</td><td>贝叶斯优化</td><td>中等</td><td>中</td><td>上下文吃紧、不想放示例</td></tr>
+<tr><td>GEPA</td><td>指令（反思进化）</td><td>反思变异 + Pareto 采样</td><td>少量（几条起可用）</td><td>低到中（rollout 省）</td><td>失败原因可从轨迹读出；多模块链路；工具调用类任务</td></tr>
+</table>
+
+<table>
+<tr><th>如果你的情况是……</th><th>先试</th><th>原因</th></tr>
+<tr><td>刚开始，不知道瓶颈在哪</td><td>BootstrapFewShot</td><td>几乎零成本的基线，先量出起点</td></tr>
+<tr><td>示例看着没问题，指令措辞可疑</td><td>GEPA 或 COPRO</td><td>这两者专攻指令空间</td></tr>
+<tr><td>指令和示例都弱，且预算充足</td><td>MIPROv2 或 GEPA</td><td>联合优化或反思进化都能覆盖</td></tr>
+<tr><td>单次 rollout 很贵（长链路 / 工具调用 / 真实副作用）</td><td>GEPA</td><td>样本效率是它的核心优势</td></tr>
+<tr><td>标注数据极少（几条到十几条）</td><td>GEPA 或 BootstrapFewShot</td><td>都不依赖大训练集</td></tr>
+<tr><td>提示层已经调到头，模型可微调</td><td>BootstrapFinetune</td><td>瓶颈已经不在提示层</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>选优化器先问一句"我的瓶颈是措辞还是示例"。示例不对，模型不知道输出长什么样；措辞不对，模型不知道要做什么。前者用自举，后者用反思——搞错了对象，预算烧完也不动。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、反思式进化为什么样本效率高</h2>
+
+<p>上一节给出了反思式进化的效果数字，这一节解释它为什么成立。理解这个机理很重要，因为它决定了什么任务适合用这套方法、什么任务用了也没用。</p>
+
+<h3>5.1 文本能承载因果，标量只能承载方向</h3>
+<p>把两条学习信号并排看就清楚了。强化学习那一侧，一次 rollout 的产出是一个标量奖励，比如 0.3。这个数字告诉优化过程的信息量上限就是一个浮点数——它能表达"这次比上次好还是差"，但表达不了"为什么"。要从大量这样的标量里反推出参数该往哪调，必须依赖统计：跑几千上万次，让噪声互相抵消，梯度方向才浮现出来。这就是为什么这类方法动辄需要上万次 rollout。</p>
+
+<p>反思式进化那一侧，一次 rollout 的产出是<strong>整条执行轨迹加一段自然语言诊断</strong>。轨迹里有模型的推理过程、调了哪个工具、传了什么参数、工具返回了什么、在哪一步开始偏。诊断里有"这个查询改写把专有名词拆开了，导致检索召回全是无关文档"这样的因果判断。一条这样的信号包含的可操作信息，可能相当于几百条标量信号统计出来的方向。<strong>样本效率的差距，本质上是单次反馈信息密度的差距</strong>，不是搜索算法更聪明。</p>
+
+<div class="formula">
+样本效率 ≈ 每次 rollout 的可操作信息量 / 收敛所需总信息量
+<br>
+标量奖励：1 个浮点数 → 需靠统计去噪 → 上万次 rollout
+<br>
+文本反馈：一段因果诊断 → 可直接定向修正 → 百次量级
+</div>
+
+<p>这也直接推出了适用边界：<strong>如果一个任务的失败原因无法用语言说清，反思式进化的优势就消失了</strong>。代码生成有编译错误和测试断言，工具调用有参数校验异常，检索问答有"召回了什么"可查——这些任务的失败原因天生可读，反思有的放矢。而像"这段文案的调性不够高级"这类失败，语言诊断本身就说不清楚，反思模型只能生成一些空泛的建议，优化退化成盲搜。</p>
+
+<h3>5.2 Pareto 前沿采样：不让候选挤在一个坑里</h3>
+<p>光有反思还不够。如果每轮都只挑当前总分最高的候选去变异，搜索会迅速退化成贪心爬坡：所有后代都是同一个祖先的微调，很快集体卡在一个局部最优上，而那个局部最优往往是"在多数简单样本上表现好、在某类困难样本上系统性失败"的形态。</p>
+
+<p><span class="term">Pareto 前沿</span>在这里指的是"逐样本的非支配集合"：候选 A 的总分可能不如候选 B，但只要存在某个样本上 A 比 B 做得好，A 就不被 B 完全支配，它就有资格留在前沿里。变异种子从这个前沿里随机采样，于是搜索会同时沿着多个不同的方向推进。那个"总分平平但唯一搞定了嵌套条件判断类样本"的候选被保住了，它后来可能贡献一条关键的指令片段。合并机制进一步把不同候选各自的优点缝到一起。</p>
+
+<div class="arch-diagram">
+  贪心搜索（只挑总分最高）        Pareto 采样（保留各有所长）
+
+  样本类型  A   B   C            样本类型  A   B   C
+  候选①    ✓   ✓   ✗            候选①    ✓   ✓   ✗   ← 总分高
+  候选②    ✓   ✗   ✓            候选②    ✓   ✗   ✓   ← 唯一搞定 C
+  候选③    ✗   ✓   ✓            候选③    ✗   ✓   ✓   ← C 上也行
+
+  只留候选①（总分 2/3 最高）      前沿保留 ①②③（互不支配）
+        ↓                              ↓
+  后代全是①的微调                  变异种子来自三个方向
+        ↓                              ↓
+  C 类样本永远搞不定               ①与②合并 → 可能全对
+  （卡在局部最优）                  （跨过局部最优）
+</div>
+
+<h3>5.3 它其实是把资深工程师的循环自动化了</h3>
+<p>值得说清楚的是，这套机理并不神秘——它就是<strong>把一个资深工程师调 Prompt 的工作流拆解出来，然后自动化并并行化</strong>。资深工程师做的事是：跑一批样例，挑出错的，看模型的推理过程找出错在哪一步，判断是哪句指令没说清，改掉，再跑一遍，同时凭经验记住"上次那个写法在长文档上更好，别丢了"。</p>
+
+<p>对照一下，反思式进化的四步几乎一一对应：采样轨迹对应"跑一批样例"，读轨迹加文本反馈对应"看推理过程找错在哪"，反思生成新指令对应"判断哪句没说清并改掉"，Pareto 前沿对应那个"凭经验记住各有所长的旧版本"的动作。差别只在两点：机器可以并行跑几十个候选而人只能串行，机器不会忘记也不会因为疲劳而跳过检查。</p>
+
+<p>这个对照还解释了一件事：<strong>为什么这套方法在人类专家已经调得很好的 Prompt 上收益有限，而在没人精调过的链路上收益巨大</strong>。它做的是同一件事，只是做得更快更全面。如果那件事已经被人做透了，剩下的空间自然不多。</p>
+
+<table>
+<tr><th>环节</th><th>资深工程师手工做</th><th>反思式进化自动做</th><th>差异</th></tr>
+<tr><td>发现问题</td><td>抽样看 badcase</td><td>在小批样本上采样轨迹</td><td>机器覆盖更全、不漏样本</td></tr>
+<tr><td>定位原因</td><td>读推理过程凭经验判断</td><td>反思模型读轨迹 + 指标文本反馈</td><td>人的判断更准，机器不疲劳</td></tr>
+<tr><td>提出改动</td><td>改一句措辞</td><td>生成完整候选指令</td><td>机器可并行提出数十个候选</td></tr>
+<tr><td>保留好版本</td><td>凭记忆保留"某场景下更好"的旧版</td><td>Pareto 前沿显式维护</td><td>机器不会遗忘</td></tr>
+<tr><td>验证</td><td>跑一遍看感觉</td><td>验证集上量化评估</td><td>机器有可比数字</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>文本反馈之所以比数值梯度省样本，不是因为算法更聪明，而是因为一句"检索召回全是无关文档，因为查询改写把专有名词拆开了"里装的信息，标量奖励要几百次采样才能统计出来。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、落地边界与工程代价</h2>
+
+<p>前面五节讲的是这条路怎么走通。这一节讲它什么时候不该走，以及走通之后要付的账。这套方法在社区里的口碑经历过一轮"被高估然后被低估"的循环，原因基本都是把它用在了不适合的场景上。</p>
+
+<h3>6.1 什么时候值得上，什么时候不值得</h3>
+<p>值得上的场景有四个共同特征。一是<strong>Prompt 会被稳定复用</strong>——它是产品里跑几个月甚至几年的链路，不是临时脚本，这样编译的一次性成本才能被摊薄。二是<strong>效果有可自动判定的量化指标</strong>——有标准答案、有可执行的测试、有可校验的结构，优化器才有方向盘。三是<strong>需要频繁换模型</strong>——只要有"模型换代就要重调"这个痛点，重编译的价值就成立。四是<strong>多模块链路</strong>——模块越多，人工联合优化越不可行，机器的优势越大。</p>
+
+<p>不值得上的场景同样清晰。一次性任务，编译成本永远收不回来，手写一版就用了。指标无法自动判定的任务——比如输出的价值主要在"读起来是否得体"这类维度上——优化器没有可靠的方向盘，跑再多轮也只是在噪声里游走。样本量极小到连划分训练验证集都困难时，优化出来的东西大概率是在几条样本上的过拟合，换一批输入就崩。还有强依赖人类主观审美的场景（品牌文案、创意策划），这类任务的"好"本身没有稳定的可编码定义，人工把关反而是唯一靠谱的路径。</p>
+
+<table>
+<tr><th>判断维度</th><th>值得上程序化优化</th><th>不值得，继续手工</th></tr>
+<tr><td>复用频率</td><td>产品长期链路，跑数月以上</td><td>一次性脚本、临时排查</td></tr>
+<tr><td>指标可判定性</td><td>有标准答案 / 可执行测试 / 可校验结构</td><td>只能靠人读一遍判断好坏</td></tr>
+<tr><td>模型换代频率</td><td>季度级或更快换基座</td><td>模型长期固定不动</td></tr>
+<tr><td>系统结构</td><td>多模块耦合链路</td><td>单次调用、逻辑简单</td></tr>
+<tr><td>样本规模</td><td>够划分训练与验证集</td><td>只有个位数样本</td></tr>
+<tr><td>质量的定义</td><td>可编码为分数</td><td>依赖主观审美与品牌调性</td></tr>
+</table>
+
+<h3>6.2 真实代价：三笔账</h3>
+<p>第一笔是<strong>token 账单</strong>。优化过程本身要把整条链路在样本上反复执行，还要额外调用反思模型或提示生成模型。一次中等预算的编译轻则数百次、重则数千次模型调用，链路长、上下文大的场景下单次编译烧掉数百万 token 是常态。这笔钱要提前算进项目预算，并且要设硬性的调用次数上限——这类框架通常都提供预算参数（比如按完整评估轮数或按指标调用次数计），务必显式设置，不要用默认值裸跑。</p>
+
+<p>第二笔是<strong>评测集账</strong>。这是最容易被低估的一笔。优化器的上限完全由评测集决定：评测集里没覆盖的场景，优化器不会为它优化；评测集分布偏离线上分布，优化出来的产物在线上就会失准；评测集里有标注错误，优化器会努力去拟合那个错误。所以这套方法的真正门槛不是学会框架 API，而是<strong>有没有一份能代表线上分布的、标注可靠的评测集</strong>。评测集本身怎么构建、怎么分层、怎么防泄漏，属于评测板块的专门话题，本卡不展开。</p>
+
+<p>第三笔是<strong>产物治理账</strong>。编译产物是一组具体的 Prompt 文本，而且由于搜索带随机性，重跑不保证复现。所以它必须被当作构建产物来管理：入库、打版本、和评测报告绑定、支持灰度和回滚。这套版本管理与灰度发布的机制不是这套方法特有的，<a href="./prompt_management_guide.html">《E04 · Prompt 管理工程化》</a> 已经完整覆盖，直接沿用即可——把编译产物当成一次新版本发布走那条流水线。</p>
+
+<div class="arch-diagram">
+  编译式优化的完整工程闭环
+
+  人的职责                          程序的职责
+ ┌────────────────────┐
+ │ 定契约（Signature） │
+ │ 定指标（Metric）    │──┐
+ │ 造评测集            │  │
+ └────────────────────┘  │
+                         ▼
+              ┌───────────────────────┐
+              │  编译（设预算上限！）    │
+              │  · rollout 次数封顶    │
+              │  · token 消耗监控      │
+              │  · 保留完整搜索轨迹     │
+              └──────────┬────────────┘
+                         ▼
+              ┌───────────────────────┐
+              │  产物：一组 Prompt      │
+              │  + 评测报告 + 搜索轨迹  │
+              └──────────┬────────────┘
+                         ▼
+ ┌────────────────────┐  │        ┌──────────────────────┐
+ │ 抽样审阅产物         │◀─┴───────▶│ 版本入库 / 灰度 / 回滚 │
+ │ 专找"分数高但不对"   │           │ （沿用 E04 那套流水线） │
+ └─────────┬──────────┘           └──────────┬───────────┘
+           │  发现指标漏洞 → 改指标 → 重编译             │
+           └───────────────────────────────────────────┘
+</div>
+
+<h3>6.3 人的工作变成了"定义什么叫好"</h3>
+<p>这套方法最值得琢磨的影响不在技术层面，而在分工层面。优化器接管了措辞搜索这件事之后，人的工作并没有减少，而是<strong>整体上移了一层</strong>：从"写 Prompt"变成"定义什么叫好"。</p>
+
+<p>具体来说，人要做三件事。一是定契约：这个任务的输入输出该是什么结构，哪些字段是必须的，链路该怎么切分成模块——这部分承载业务理解，机器给不出来。二是造评测集：什么样的输入代表真实分布，什么样的输出是标准答案，边界样例有哪些——这部分承载领域知识，也是整套方法的天花板所在。三是审产物：抽样检查优化器交出来的 Prompt，专门寻找那种"离线分数很高但业务上明显不对"的样例，因为这正是指标漏洞暴露的地方。上面第三节那个奖励作弊的案例，如果没有这道人工审阅，会一直到线上指标恶化才被发现。</p>
+
+<p>这三件事里的最后一件——怎么系统地验证一次 Prompt 改动是真的有效而不是碰巧——和 <a href="../agent/prompt_optimization_evaluation.html">《A41 · Agent Prompt 优化与有效性验证》</a> 讲的是同一件事：那张卡讲人怎么设计验证与审核流程，本卡讲机器怎么在这套验证框架里自动搜索。两者是互补的，不是替代关系：<strong>优化器负责搜措辞，人负责定契约、造评测集、审产物</strong>。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先手写一版 Prompt 跑出基线，再上优化器——没有基线就无法判断编译到底有没有用</li>
+<li>编译前显式设置 rollout / 指标调用次数上限，并监控 token 消耗</li>
+<li>把编译产物、评测报告、搜索轨迹三样一起入库，便于回溯"为什么变成这样"</li>
+<li>每次基座模型换代，把重编译当成标准动作纳入升级清单</li>
+<li>先在单个模块上验证这套流程走得通，再扩到整条多模块链路</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在没有可自动判定指标的任务上硬上优化器</li>
+<li>不要用默认预算裸跑，长链路上很容易烧出意外账单</li>
+<li>不要把编译产物直接推全量——它是一次新版本发布，要走灰度</li>
+<li>不要假设重跑编译能复现同一个产物，搜索带随机性，产物必须存档</li>
+<li>不要用优化器替代人工抽检，指标漏洞只能靠人看出来</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>程序化优化没有把人从循环里拿掉，而是把人挪到了更上游：以前你的产出是一段措辞，现在你的产出是一份"什么叫好"的可执行定义。前者会随模型换代作废，后者不会。</p>
+</div>
+</div>
+
+<div class="qa-section">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>把 Prompt 当程序编译，和手工写 Prompt 的根本区别在哪？</summary>
+<div class="answer">区别在于人交付什么。手工方式下，人交付的是最终的 Prompt 文本，措辞、示例、指令顺序全部由人决定；程序化方式下，人交付的是三样更抽象的东西——任务的输入输出契约、一个判断"什么样的输出算好"的指标函数、一批带标注的样本，而具体措辞由优化器搜索产生。这个差别带来三个实际后果：换模型时不用重新人工调优，只需用新模型重跑一次编译；搜索过程留下完整轨迹，可以存档、比对、在团队间传递；多模块链路可以被联合优化，而人工一次只能握住一两个耦合变量。代价是优化过程本身要消耗大量 token，而且效果完全受制于评测集的质量。</div>
+</details>
+
+<details>
+<summary>DSPy 里的 Signature、Module、Optimizer 分别解决什么问题？</summary>
+<div class="answer">Signature 声明一个 LLM 调用的输入输出契约，比如 <code>question -> answer</code>，它刻意不包含任何措辞——不写人设、不写"一步步思考"、不写输出格式模板，只描述任务的结构。Module 把 Signature 包装成可复用的推理结构：Predict 是直接作答，ChainOfThought 会自动插入一个推理字段，ReAct 接入"思考—调工具—观察"的循环；模块可以嵌套组合，像搭神经网络层一样搭链路。Optimizer（早期叫 Teleprompter）接收搭好的 Module、训练样本和评估指标，自动搜索出每个模块该用什么少样本示例、什么指令措辞。三层的分工是：Signature 和 Module 承载人的业务理解与架构决策，跨模型稳定；Optimizer 负责对特定模型的措辞适配，换模型就重跑。</div>
+</details>
+
+<details>
+<summary>DSPy 说的"编译"到底编译成了什么？和传统编译器是一回事吗？</summary>
+<div class="answer">它编译出来的是一组可以直接发给模型的具体 Prompt 文本——每个模块的指令措辞加上精选的少样本示例，通常序列化成 JSON 存档。它不是把自然语言翻译成机器码，也不涉及任何二进制表示。和传统编译器的类比在三点上成立：输入是高层声明、输出是低层可执行物、同一份源码可以针对不同目标（这里是不同模型）编译出不同产物。不成立的地方很关键：传统编译是确定性的语法变换，而这里是一个带随机性的搜索过程，同样的输入两次编译可能得到不同产物。所以编译产物必须像模型权重一样被显式版本化存档，不能假定"需要的时候重跑一次就能复现"。</div>
+</details>
+
+<details>
+<summary>为什么说指标函数写错比 Prompt 写错更危险？</summary>
+<div class="answer">因为指标函数是优化器唯一的方向盘。优化器所有的搜索行为都只依据指标的返回值，它是一个极其听话但完全没有常识的执行者——你让它最大化什么，它就最大化什么。Prompt 写错，影响范围是那一段措辞，改回来就好了；指标写错，优化器会以极高的效率把整个系统推向那个错误的方向，而且它跑得越"成功"，实际偏离越远。典型的失败形态是奖励作弊：如果只用语义相似度作为指标，优化器很容易搜出"堆砌标准答案高频词的万金油输出"，离线分数漂亮但对用户毫无帮助。防御手段有三个：指标拆成多项加权并把格式、长度、引用完整性等硬约束显式编码为扣分项；对部分正确给部分分以保留搜索梯度；每次编译后人工抽检高分产物，专门找"分数高但业务上不对"的样例。</div>
+</details>
+
+<details>
+<summary>指标返回标量分数和返回文本反馈，差别有多大？</summary>
+<div class="answer">差别在单次反馈的信息密度上，而这直接决定样本效率。返回 0.7 这样一个标量，优化器得到的信息量上限就是一个浮点数——它只知道"当前这版不太好"，至于哪里不好、为什么不好、该往哪改，全靠自己在候选空间里盲试，所以需要大量 rollout 才能收敛。返回"答案事实正确但缺少引用来源，且把两个不同年份的数据混在一句话里"这样的诊断，优化器直接知道该在指令里补什么。GEPA 的指标契约要求同时返回分数和反馈两者，正是为此。实践上文本反馈很多时候不需要人写——编译报错、测试失败断言、检索返回空、工具参数校验异常、JSON 解析失败位置，这些已经躺在执行轨迹里，提取出来拼进反馈字段几乎零成本。</div>
+</details>
+
+<details>
+<summary>BootstrapFewShot、MIPROv2、GEPA 该怎么选？</summary>
+<div class="answer">先问自己瓶颈在示例还是指令。BootstrapFewShot 只调示例：它拿训练样本跑一遍链路，把模型自己做对了的完整轨迹留下当少样本示例，成本接近零、跑得快、基本不会把事情搞坏，适合作为基线和只有十几条样本的场景，但它改不了指令措辞。MIPROv2 联合优化指令与示例，用贝叶斯优化在"指令 × 示例"的组合空间里搜，需要较多标注数据（官方建议两百条以上以防过拟合）和中等预算，是两者都弱时的通用选择。GEPA 专攻指令，通过让模型读自己的失败轨迹、用自然语言反思来改写指令，配合 Pareto 前沿采样保留多样化候选；它在标注数据少、单次 rollout 很贵、失败原因能从轨迹读出来的场景上优势最明显，工具调用与多模块链路是它的主场。</div>
+</details>
+
+<details>
+<summary>GEPA 为什么能用远少于强化学习的 rollout 达到更好的效果？</summary>
+<div class="answer">核心原因是单次反馈的信息密度差异，不是搜索算法本身更聪明。强化学习一次 rollout 的产出是一个标量奖励，只能表达"这次比上次好还是差"，要从中反推出改进方向必须靠统计去噪，因此需要上万次采样。GEPA 一次 rollout 的产出是整条执行轨迹（推理过程、工具调用、工具返回、报错）加上一段自然语言诊断，其中包含"哪里错、为什么错、该怎么改"的因果信息，一条这样的信号可能相当于几百条标量信号统计出来的方向。论文（arXiv:2507.19457）报告在六个任务上平均比 GRPO 高约 6 个百分点、最高约 19 到 20 个百分点，而 rollout 用量最多少 35 倍。这个优势有明确的适用条件：任务的失败原因必须能用语言说清。代码生成、工具调用、检索问答符合；"文案调性不够高级"这类失败说不清，反思就退化成盲搜。</div>
+</details>
+
+<details>
+<summary>Pareto 前沿采样在优化里起什么作用？没有它会怎样？</summary>
+<div class="answer">它的作用是防止搜索退化成贪心爬坡后卡在局部最优。如果每轮都只挑当前总分最高的候选去变异，所有后代都是同一个祖先的微调，很快集体收敛到同一个形态，而那个形态往往是"在多数简单样本上表现好、在某类困难样本上系统性失败"。Pareto 前沿在这里指逐样本的非支配集合：某个候选总分可能不高，但只要它在某个样本上比别人做得好，就不被完全支配，就有资格留在前沿里作为后续变异的种子。于是搜索会同时沿多个方向推进，那个"总分平平但唯一搞定了某类困难样本"的候选被保住，它后来可能贡献一条关键的指令片段；合并机制还能把不同候选各自的优点缝到一起。这个设计其实对应资深工程师"凭经验记住某个旧版本在长文档上更好、别丢了"的那个动作，只是显式化了，机器不会遗忘。</div>
+</details>
+
+<details>
+<summary>什么样的任务不适合用程序化优化？</summary>
+<div class="answer">四类。第一是一次性任务：编译本身要消耗大量 token 和时间，链路只跑一次的话这笔成本永远收不回来，手写一版就用了。第二是指标无法自动判定的任务：优化器唯一的方向盘就是指标函数，如果"好不好"只能靠人读一遍来判断，优化器就没有可靠信号，跑再多轮也只是在噪声里游走。第三是样本量极小到连划分训练验证集都困难：优化出来的产物大概率是在那几条样本上的过拟合，换一批真实输入就崩。第四是强依赖人类主观审美的场景，比如品牌文案、创意策划——这类任务的"好"本身没有稳定的可编码定义，人工把关反而是唯一靠谱的路径。反过来，值得上的场景有四个共同特征：Prompt 会被长期稳定复用、效果有可自动判定的量化指标、需要频繁更换基座模型、系统是多模块耦合链路。</div>
+</details>
+
+<details>
+<summary>上了程序化优化之后，人还需要做什么？</summary>
+<div class="answer">人的工作量没有减少，而是整体上移了一层，从"写 Prompt"变成"定义什么叫好"，具体是三件事。一是定契约：任务的输入输出该是什么结构、哪些字段必须有、链路该怎么切分成模块——这部分承载业务理解，机器给不出来。二是造评测集：什么样的输入代表真实的线上分布、什么样的输出是标准答案、边界样例有哪些——这是整套方法的天花板，评测集没覆盖的场景优化器不会为它优化，评测集里的标注错误优化器会努力去拟合。三是审产物：抽样检查优化器交出来的 Prompt，专门找那种离线分数很高但业务上明显不对的样例，因为这正是指标漏洞暴露的位置。除此之外，编译产物要按新版本发布来治理——入库、打版本、绑定评测报告、走灰度和回滚，这套流水线沿用现有的 Prompt 管理机制即可。</div>
+</details>
+
+<details>
+<summary>编译一次的成本大概是什么量级？怎么控制？</summary>
+<div class="answer">量级取决于链路长度、上下文规模和优化器预算档位。编译过程要把整条链路在样本上反复执行，还要额外调用反思模型或提示生成模型，一次中等预算的编译轻则数百次、重则数千次模型调用；链路长、上下文大的场景下单次编译消耗数百万 token 是常态。控制手段有几条：第一，编译前显式设置预算上限——这类框架通常提供按完整评估轮数或按指标调用次数计的预算参数，务必显式配置，不要用默认值裸跑；第二，先在单个模块上把流程验证通再扩到整条链路，避免在多模块上试错时成倍烧钱；第三，反思模型可以配置成比任务模型更强的模型，但它调用次数远少于任务模型，把强模型用在这里的性价比高于全链路都用强模型；第四，把编译当成 CI 里的定时任务而不是随手触发的操作，并对 token 消耗设告警。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>L09 · LoRA / QLoRA / PEFT 参数高效微调 - AI Knowledge</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem}}
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、为什么需要 LoRA？</a>
+<a href="#s2">二、数学原理：低秩分解</a>
+<a href="#s3">三、工程实现</a>
+<a href="#s4">四、优势特性</a>
+<a href="#s5">五、QLoRA：4-bit 量化微调</a>
+<a href="#s6">六、LoRA 变体与进阶</a>
+<a href="#s7">七、多 LoRA 服务与多任务热切换</a>
+<a href="#s8">八、其他 PEFT 方法</a>
+<a href="#s9">九、LoRA vs 全参数微调</a>
+<a href="#s10">生产案例</a>
+<a href="#qa">高频问答</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>L09 · LoRA / QLoRA / PEFT 参数高效微调</h1>
+<p class="subtitle">参数高效微调（PEFT）— 低秩分解减少 97% 参数，QLoRA 单卡微调大模型，多任务热切换与多 LoRA 生产服务</p>
+
+<div class="intuition-box"><p>LoRA 的核心直觉：大模型微调时，权重的变化量 ΔW 本身是「低秩」的 —— 不需要调整所有参数，只需要找到那个低维子空间。用两个小矩阵的乘积去近似 ΔW，参数量从 25 万降到 8000。</p></div>
+
+<!-- Section 1 -->
+<div class="section" id="s1">
+
+<h2>一、为什么需要 LoRA？</h2>
+
+<h3>1.1 全量微调的痛点</h3>
+
+<table>
+<tr><th>问题</th><th>具体表现</th><th>影响</th></tr>
+<tr><td><strong>参数量巨大</strong></td><td>一个 512×512 的线性层就有 ~25 万参数</td><td>显存占用大、训练慢</td></tr>
+<tr><td><strong>存储成本高</strong></td><td>每个任务需要保存一份完整模型副本</td><td>7B 模型 ≈ 14GB/份，10 个任务 = 140GB</td></tr>
+<tr><td><strong>灾难性遗忘</strong></td><td>微调新任务时破坏原有能力</td><td>需要在所有任务上联合训练</td></tr>
+<tr><td><strong>部署不灵活</strong></td><td>不同任务的模型无法快速切换</td><td>需要加载完整模型</td></tr>
+</table>
+
+<h3>1.2 显存账单：全量微调有多贵</h3>
+
+<p>传统的 Fine-tuning 需要更新模型的<strong>全部参数</strong>。以 LLaMA-2 70B 为例：</p>
+
+<ul>
+<li>模型参数量：70B，FP16 存储 ≈ <strong>140 GB</strong></li>
+<li>梯度（FP16）≈ 140 GB</li>
+<li>Adam 优化器状态（FP32 m + v）≈ 280 GB × 2 = <strong>560 GB</strong></li>
+<li>总 GPU 显存需求 ≈ <strong>840+ GB</strong>（约需 10+ 张 A100 80G）</li>
+</ul>
+
+<p>这样的成本对绝大多数团队和个人来说是不可接受的。<span class="term">PEFT（Parameter-Efficient Fine-Tuning，参数高效微调）</span>应运而生，目标是<strong>只训练极少量参数</strong>，就能达到接近全参数微调的效果。</p>
+
+<h3>1.3 PEFT 方法谱系</h3>
+
+<table>
+<tr><th>类别</th><th>代表方法</th><th>核心思想</th><th>可训练参数占比</th></tr>
+<tr><td><strong>加法式 (Additive)</strong></td><td>Adapter、Prefix Tuning</td><td>在模型中插入额外的小模块</td><td>0.1% ~ 3%</td></tr>
+<tr><td><strong>软提示 (Soft Prompt)</strong></td><td>Prompt Tuning、P-Tuning v1/v2</td><td>学习连续的虚拟 token 嵌入</td><td>0.01% ~ 0.1%</td></tr>
+<tr><td><strong>重参数化 (Reparameterization)</strong></td><td>LoRA、DoRA、AdaLoRA</td><td>低秩分解冻结权重的增量</td><td>0.1% ~ 1%</td></tr>
+<tr><td><strong>选择性 (Selective)</strong></td><td>BitFit、Fish Mask</td><td>只更新模型中特定子集参数</td><td>0.05% ~ 0.5%</td></tr>
+</table>
+
+<div class="highlight"><strong>HuggingFace PEFT 库</strong>统一了这些方法的实现接口。安装：<code>pip install peft</code>，支持与 <code>transformers</code>、<code>accelerate</code>、<code>bitsandbytes</code> 无缝集成。LoRA 是重参数化类中最流行的方法，也是本文的主角。</div>
+
+<div class="interview-box">
+<ul>
+<li>PEFT 的核心动机：降低全参数微调的<strong>显存、计算和存储</strong>开销</li>
+<li>四大分类：加法式 / 软提示 / 重参数化 / 选择性 —— LoRA 属于<strong>重参数化</strong></li>
+<li>PEFT 的"免费午餐"：推理时可将额外参数<strong>合并回原模型</strong>，不增加推理延迟</li>
+<li>关键权衡：可训练参数越少 → 训练越快/省内存，但可能牺牲表达能力</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section" id="s2">
+<h2>二、数学原理：低秩分解</h2>
+
+<h3>2.1 核心思想</h3>
+
+<p>全量微调时，权重矩阵的变化为：</p>
+
+<div class="arch-diagram">
+全量微调:  W' = W + ΔW    (ΔW 是 d×d 的大矩阵)
+
+LoRA:     W' = W + B × A   (B 是 d×r, A 是 r×d, r ≪ d)
+</div>
+
+<p>其中 <span class="term">r 是秩（rank）</span>，取值范围通常为 4~64，常用 4、8、16。这利用了线性代数中的低秩近似原理。</p>
+
+<h3>2.2 参数量对比</h3>
+
+<table>
+<tr><th>方案</th><th>参数量</th><th>计算方式</th></tr>
+<tr><td><strong>全量微调</strong></td><td>262,144 (25 万)</td><td>512 × 512 = d²</td></tr>
+<tr><td><strong>LoRA (r=8)</strong></td><td>8,192 (~8K)</td><td>512×8 + 8×512 = 2dr</td></tr>
+<tr><td><strong>LoRA (r=4)</strong></td><td>4,096 (~4K)</td><td>512×4 + 4×512 = 2dr</td></tr>
+<tr><td><strong>LoRA (r=16)</strong></td><td>16,384 (~16K)</td><td>512×16 + 16×512 = 2dr</td></tr>
+</table>
+
+<p>以 r=8 为例，参数量减少 <strong>97%</strong>（从 25 万降到 8192）。推广到任意 d×k 线性层：全参数需 d×k 个参数，LoRA 只需 r×(d+k)；对 4096×4096 的线性层取 r=8，压缩比高达 <strong>256×</strong>（仅需原来 0.39% 的可训练参数）。</p>
+
+<h3>2.3 矩阵分解的直觉</h3>
+
+<div class="arch-diagram">
+原始 ΔW (512 × 512):
+┌────────────────────────┐
+│                        │  262,144 个参数
+│    完整的权重变化矩阵    │  大部分信息冗余
+│                        │
+└────────────────────────┘
+
+分解为 B (512 × 8) × A (8 × 512):
+┌────────┐  ┌────────────────────────┐
+│        │  │                        │
+│ 512×8  │× │         8×512          │  8,192 个参数
+│  (B)   │  │          (A)           │  信息等价
+│        │  │                        │
+└────────┘  └────────────────────────┘
+     ↑ 8 = rank (秩)：捕获变化方向的维度数
+</div>
+
+<h3>2.4 为什么低秩有效：内在维度</h3>
+
+<p>Aghajanyan et al. (2020) 的研究发现：预训练模型的权重更新具有<strong>极低的内在维度（Intrinsic Dimensionality）</strong>：</p>
+
+<ul>
+<li>预训练已经学到了丰富的通用知识，微调只是在一个<strong>低维子空间</strong>中调整</li>
+<li>ΔW 的有效秩远小于矩阵的满秩 —— 实验表明 r = 4 ~ 8 就能捕获大部分更新信号</li>
+<li>这与 NLP 中 Transformer 权重矩阵的<strong>奇异值快速衰减</strong>现象一致</li>
+</ul>
+
+<div class="highlight">微调时的权重变化 ΔW 的「有效秩」很低 —— 虽然 ΔW 是 512×512 的矩阵，但它的大部分信息可以用 8 个基向量来表达。LoRA 就是找到这 8 个基向量。</div>
+
+<div class="intuition-box"><p>预训练模型好比一个"万能基座"，微调相当于在基座上放一个"方向盘"。方向盘的自由度（r）不需要很大，就能有效引导模型的输出方向。</p></div>
+</div>
+
+<!-- Section 3 -->
+<div class="section" id="s3">
+<h2>三、工程实现</h2>
+
+<div class="intuition-box">
+<p>三个参数决定 LoRA 的成败：<span class="term">秩 r</span> 决定旁路能表达多复杂的变化，<span class="term">缩放因子 α</span> 决定这份变化以多大权重叠回主干，<span class="term">target_modules</span> 决定改动发生在哪些层。前两个是容量旋钮，第三个才是效果差异的主要来源——注意力投影全都挂上，通常比把 r 调大更划算。</p>
+</div>
+
+<h3>3.1 使用 PEFT 工具包</h3>
+
+<pre><code>from peft import LoraConfig, get_peft_model
+from transformers import AutoModelForCausalLM
+
+# 1. 加载预训练模型（冻结）
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Llama-2-7b")
+
+# 2. 配置 LoRA
+lora_config = LoraConfig(
+    r=8,                          # 秩：低秩矩阵的维度
+    lora_alpha=32,                # 缩放因子：通常设为 4×r
+    target_modules=["q_proj",     # 指定要适配的线性层
+                    "v_proj",
+                    "k_proj",
+                    "o_proj"],
+    lora_dropout=0.05,            # Dropout 防止过拟合
+    bias="none",                  # 不训练偏置项
+    task_type="CAUSAL_LM"
+)
+
+# 3. 封装模型 —— 自动插入 LoRA 层
+model = get_peft_model(model, lora_config)
+
+# 4. 查看可训练参数
+model.print_trainable_parameters()
+# 输出: trainable params: 4,194,304 || all params: 6,742,609,920 || trainable%: 0.0622%</code></pre>
+
+<h3>3.2 关键参数说明</h3>
+
+<table>
+<tr><th>参数</th><th>含义</th><th>推荐值</th><th>影响</th></tr>
+<tr><td><strong>r (rank)</strong></td><td>低秩矩阵的维度</td><td>8~16</td><td>越大表达能力越强，但参数更多</td></tr>
+<tr><td><strong>lora_alpha</strong></td><td>缩放因子</td><td>4 × r</td><td>控制 LoRA 更新的幅度</td></tr>
+<tr><td><strong>target_modules</strong></td><td>要适配的线性层</td><td>q_proj, v_proj</td><td>注意力层效果最好</td></tr>
+<tr><td><strong>lora_dropout</strong></td><td>LoRA 层的 Dropout</td><td>0.05~0.1</td><td>防止小数据集过拟合</td></tr>
+</table>
+
+<h3>3.3 应用在哪些模块：target_modules</h3>
+
+<p>LoRA 可以应用到 Transformer 中任意线性层。常见选择：</p>
+
+<table>
+<tr><th>目标模块</th><th>参数名示例</th><th>说明</th></tr>
+<tr><td><strong>Q (Query)</strong></td><td><code>q_proj</code></td><td>最常用，捕获"关注什么"的变化</td></tr>
+<tr><td><strong>K (Key)</strong></td><td><code>k_proj</code></td><td>与 Q 配合控制注意力模式</td></tr>
+<tr><td><strong>V (Value)</strong></td><td><code>v_proj</code></td><td>影响实际信息传递</td></tr>
+<tr><td><strong>O (Output)</strong></td><td><code>o_proj</code></td><td>控制多头拼接后的投影</td></tr>
+<tr><td><strong>FFN (gate/up/down)</strong></td><td><code>gate_proj, up_proj, down_proj</code></td><td>参数量大，可选择性添加</td></tr>
+</table>
+
+<div class="highlight">实践经验：<strong>最小方案</strong>是 <code>["q_proj", "v_proj"]</code>（原始论文推荐）；LLaMA 系列<strong>推荐方案</strong>为 <code>["q_proj", "k_proj", "v_proj", "o_proj"]</code>；追求极限性能时再加上 FFN 的 <code>gate_proj</code>、<code>up_proj</code>、<code>down_proj</code>（但显存显著增加）。</div>
+
+<h3>3.4 缩放因子 α/r</h3>
+
+<p>LoRA 引入了一个<strong>缩放因子 α（lora_alpha）</strong>来控制 LoRA 更新的强度：</p>
+
+<div class="arch-diagram">h = W₀x + (α / r) · BAx</div>
+
+<ul>
+<li><strong>α / r</strong> 是实际的缩放比例（类似于学习率的调节器）</li>
+<li>当 <strong>α = r</strong> 时，缩放因子为 1（等价于不缩放）</li>
+<li>常见设置：<strong>α = 2r ~ 4r</strong>（如 r=8, α=16~32），LoRA 更新被相应放大</li>
+<li>α 越大 → 更新越激进；α 越小 → 更新越保守</li>
+</ul>
+
+<div class="highlight">为什么不直接调学习率？α/r 缩放使得切换不同的 r 值时，<strong>不需要重新调整学习率</strong>。例如 r 从 8 变为 16，只需 α 从 16 变为 32，学习率保持不变。这就是 α/r 的工程价值。</div>
+
+<h3>3.5 初始化策略</h3>
+
+<ul>
+<li><strong>A 矩阵：高斯随机初始化</strong>（<code>nn.init.kaiming_uniform_</code> 或正态分布）</li>
+<li><strong>B 矩阵：全零初始化</strong>（<code>nn.init.zeros_</code>）</li>
+</ul>
+
+<p>这样初始化的巧妙之处：训练开始时 <strong>BA = 0</strong>，LoRA 分支的输出为零，模型行为<strong>完全等价于冻结的预训练模型</strong>。训练过程是从预训练模型出发逐步学习增量。</p>
+
+<h3>3.6 推理时合并</h3>
+
+<div class="arch-diagram">
+训练时:  y = W·x + B·A·x         (W 冻结，只训练 A 和 B)
+
+推理时:  W' = W + B·A             (合并回原矩阵)
+         y = W'·x                 (无额外推理开销！)
+</div>
+
+<p>合并时会带上 α/r 缩放：<strong>W_merged = W₀ + (α / r) · BA</strong>。</p>
+
+<pre><code># HuggingFace PEFT 合并示例
+from peft import PeftModel
+
+model = PeftModel.from_pretrained(base_model, lora_path)
+merged_model = model.merge_and_unload()  # 合并 LoRA → 原始模型
+merged_model.save_pretrained("merged_output")</code></pre>
+
+<div class="highlight">LoRA 在推理时零开销 —— 因为可以将 B×A 合并回原始权重矩阵 W，得到新的 W'，推理速度和不微调完全相同。<strong>不合并的优势</strong>：可以动态切换/叠加多个 LoRA adapter，支持热切换（见第七章）。</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section" id="s4">
+<h2>四、优势特性</h2>
+
+<h3>4.1 模块化存储</h3>
+
+<table>
+<tr><th>存储方式</th><th>大小</th><th>说明</th></tr>
+<tr><td>全量微调副本</td><td>~14 GB</td><td>7B 模型的完整权重</td></tr>
+<tr><td>LoRA 适配器</td><td>~16 MB</td><td>仅保存 A 和 B 矩阵</td></tr>
+</table>
+
+<p>存储成本降低约 <strong>1000 倍</strong>。</p>
+
+<h3>4.2 原模型冻结</h3>
+
+<p>基础模型的参数完全不变，LoRA 只训练附加的低秩矩阵。这意味着：</p>
+<ul>
+<li>基础模型的通用能力不受影响</li>
+<li>可以在同一个基础模型上叠加多个 LoRA 适配器</li>
+<li>不存在灾难性遗忘的问题</li>
+</ul>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>从 r=8 开始实验，按需调大</li>
+<li>优先适配注意力层（q_proj, v_proj）</li>
+<li>lora_alpha 设为 4×r</li>
+<li>用小学习率（1e-4 ~ 3e-4）</li>
+<li>推理时合并权重以消除额外开销</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要对所有层都做 LoRA（选关键层）</li>
+<li>不要在大模型上设太高的 rank（浪费参数）</li>
+<li>不要忽略 lora_alpha 的缩放效果</li>
+<li>不要在推理时忘记合并权重</li>
+<li>不要用全量微调的学习率（会过大）</li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section" id="s5">
+<h2>五、QLoRA：4-bit 量化微调</h2>
+
+<h3>5.1 核心思想</h3>
+
+<p><strong>QLoRA (Quantized LoRA)</strong> = 量化基座 + LoRA 微调。由 Dettmers et al. (2023) 提出，核心创新是在<strong>4-bit 量化</strong>的冻结基座模型上进行 LoRA 微调，实现单张消费级 GPU 微调大模型。</p>
+
+<h3>5.2 三大技术创新</h3>
+
+<p><strong>① NF4 (NormalFloat 4-bit) 量化</strong></p>
+<ul>
+<li>专为正态分布权重设计的<strong>信息论最优</strong>数据类型</li>
+<li>将每个权重量化为 4-bit（16 个量化级别）</li>
+<li>量化级别基于正态分布的分位数选取，比均匀量化更准确</li>
+<li>比 FP4 和 INT4 在相同位宽下<strong>保留更多信息</strong></li>
+</ul>
+
+<p><strong>② 双重量化 (Double Quantization)</strong></p>
+<ul>
+<li>第一层量化：权重 FP16 → NF4（每 64 个权重共享一个 FP32 缩放因子）</li>
+<li>第二层量化：对缩放因子本身再做 FP32 → FP8 量化</li>
+<li>额外内存节省：约 <strong>0.37 bit/参数</strong></li>
+<li>对 65B 模型节省约 <strong>3 GB</strong> 显存</li>
+</ul>
+
+<p><strong>③ 分页优化器 (Paged Optimizers)</strong></p>
+<ul>
+<li>利用 NVIDIA 统一内存机制，在 GPU 显存不足时<strong>自动转移到 CPU 内存</strong></li>
+<li>类似操作系统的虚拟内存分页</li>
+<li>处理长序列导致的<strong>显存尖峰</strong>，避免 OOM</li>
+<li>对训练速度有一定影响（CPU ↔ GPU 数据传输），但保证了可行性</li>
+</ul>
+
+<h3>5.3 显存对比</h3>
+
+<table>
+<tr><th>模型规模</th><th>全参数 FP16</th><th>LoRA FP16</th><th>QLoRA NF4</th><th>可用 GPU</th></tr>
+<tr><td>7B</td><td>~120 GB</td><td>~16 GB</td><td><strong>~6 GB</strong></td><td>RTX 3060 12G</td></tr>
+<tr><td>13B</td><td>~200 GB</td><td>~30 GB</td><td><strong>~10 GB</strong></td><td>RTX 3090 24G</td></tr>
+<tr><td>33B</td><td>~530 GB</td><td>~70 GB</td><td><strong>~20 GB</strong></td><td>RTX 4090 24G</td></tr>
+<tr><td>65B</td><td>~840 GB</td><td>~140 GB</td><td><strong>~40 GB</strong></td><td>A100 80G 单卡</td></tr>
+</table>
+
+<h3>5.4 QLoRA 代码示例</h3>
+
+<pre><code>import torch
+from transformers import AutoModelForCausalLM, BitsAndBytesConfig
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+
+# 4-bit 量化配置
+bnb_config = BitsAndBytesConfig(
+    load_in_4bit=True,
+    bnb_4bit_quant_type="nf4",           # NF4 量化
+    bnb_4bit_compute_dtype=torch.bfloat16,
+    bnb_4bit_use_double_quant=True,       # 双重量化
+)
+
+# 加载量化模型
+model = AutoModelForCausalLM.from_pretrained(
+    "meta-llama/Llama-2-7b-hf",
+    quantization_config=bnb_config,
+    device_map="auto",
+)
+model = prepare_model_for_kbit_training(model)
+
+# LoRA 配置
+lora_config = LoraConfig(
+    r=16, lora_alpha=32, lora_dropout=0.05,
+    target_modules=["q_proj","k_proj","v_proj","o_proj"],
+    task_type="CAUSAL_LM",
+)
+model = get_peft_model(model, lora_config)</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>QLoRA 三大创新：<strong>NF4 量化</strong>（信息论最优 4-bit）、<strong>双重量化</strong>（压缩缩放因子）、<strong>分页优化器</strong>（防 OOM）</li>
+<li>梯度计算流程：前向 NF4 → 反量化为 BF16 → 计算梯度 → 只更新 LoRA 参数（FP16/BF16）</li>
+<li>实践中 QLoRA 效果与 16-bit LoRA 基本持平，<strong>精度几乎无损</strong>，但显存节省 10 倍以上</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section" id="s6">
+<h2>六、LoRA 变体与进阶</h2>
+
+<table>
+<tr><th>变体</th><th>核心改进</th><th>额外开销</th><th>适用场景 / 效果</th></tr>
+<tr><td><strong>QLoRA</strong></td><td>4-bit 量化基础模型 + LoRA</td><td>量化/反量化略降速</td><td>单卡微调 65B 模型（详见第五章）</td></tr>
+<tr><td><strong>DoRA</strong></td><td>分解为方向 + 幅度两个分量</td><td>极小（多一个 m 向量）</td><td>更精细的权重调控，+1~3%</td></tr>
+<tr><td><strong>rsLoRA</strong></td><td>调整缩放因子为 α/√r</td><td>无</td><td>高 rank 时更稳定</td></tr>
+<tr><td><strong>LoRA+</strong></td><td>A 和 B 使用不同学习率</td><td>无</td><td>提升收敛速度，+1~2%</td></tr>
+<tr><td><strong>PiSSA</strong></td><td>SVD 主成分初始化</td><td>初始化时一次 SVD</td><td>收敛快 + 效果好</td></tr>
+<tr><td><strong>AdaLoRA</strong></td><td>动态自适应秩分配</td><td>训练略慢</td><td>同参数预算下更优</td></tr>
+</table>
+
+<h3>6.1 DoRA — 权重分解 LoRA</h3>
+
+<p><strong>DoRA (Weight-Decomposed Low-Rank Adaptation)</strong> 将权重矩阵分解为<strong>幅度 (magnitude)</strong> 和<strong>方向 (direction)</strong> 两个分量：</p>
+
+<div class="arch-diagram">W' = m · (W₀ + BA) / ‖W₀ + BA‖_c</div>
+
+<ul>
+<li><strong>m</strong>：可训练的幅度向量（每列/行一个标量），<strong>BA</strong> 为低秩更新（与 LoRA 相同）</li>
+<li>灵感来自 <strong>Weight Normalization</strong>：解耦了"走多远"和"往哪走"</li>
+<li>在多个基准上比 LoRA <strong>提升 1-3%</strong>，接近全参数微调效果</li>
+</ul>
+
+<h3>6.2 rsLoRA — 秩稳定缩放</h3>
+
+<p>标准 LoRA 的缩放为 α/r，但随着 r 增大，<strong>每个分量的贡献被过度缩小</strong>。rsLoRA 使用 √r 替代 r 作为分母（α/r → α/√r），保持<strong>不同秩下更新幅度的稳定性</strong>。当 r 较大（32/64）时效果改善尤为明显。已集成到 HuggingFace PEFT：<code>use_rslora=True</code>。</p>
+
+<h3>6.3 LoRA+ — 差异学习率</h3>
+
+<ul>
+<li><strong>B 矩阵</strong>（零初始化）需要更大的学习率来"启动"</li>
+<li><strong>A 矩阵</strong>（高斯初始化）可以用较小的学习率</li>
+<li>建议：<strong>lr_B ≈ 2× ~ 16× lr_A</strong>，简单修改即可带来 1-2% 的性能提升</li>
+</ul>
+
+<h3>6.4 PiSSA — 奇异值分解初始化</h3>
+
+<ul>
+<li>对 W₀ 进行 SVD 分解：W₀ = UΣVᵀ，用<strong>前 r 个主奇异值/向量</strong>初始化 A 和 B</li>
+<li>冻结的是"残差"部分（不重要的方向），而非原始权重</li>
+<li>收敛更快，最终效果优于随机初始化的 LoRA</li>
+</ul>
+
+<h3>6.5 AdaLoRA — 自适应秩分配</h3>
+
+<ul>
+<li>使用<strong>奇异值分解参数化</strong>：W = W₀ + PΛQ</li>
+<li>训练过程中动态<strong>裁剪不重要的奇异值</strong>（设为零）</li>
+<li>重要层分配更多秩，不重要层分配更少秩，在总参数预算相同的情况下效果优于均匀分配</li>
+</ul>
+
+<h3>命名由来</h3>
+
+<p><strong>LoRA</strong> = <strong>Lo</strong>w <strong>R</strong>ank <strong>A</strong>daptation（低秩适配）。名称源自线性代数中的「低秩矩阵分解」—— 一个大矩阵可以被分解为两个小矩阵的乘积，只要它的秩（rank）足够低。</p>
+</div>
+
+<!-- Section 7 -->
+<div class="section" id="s7">
+<h2>七、多 LoRA 服务与多任务热切换</h2>
+
+<div class="intuition-box">
+<p>多适配器服务的关键取舍是"合并"还是"动态加载"：<span class="term">合并</span>把旁路乘回主干，推理零额外开销但一个进程只能服务一个任务；动态加载让所有任务共享同一份常驻主干、按请求挂载各自的适配器，代价是每步要多做一次小矩阵运算。请求量分散在很多任务上时，后者几乎总是更省。</p>
+</div>
+
+<h3>7.1 多任务热切换</h3>
+
+<div class="arch-diagram">
+基础模型 (LLaMA-2-7B) ← 只加载一次
+    │
+    ├── + LoRA-客服    (16 MB) → 客服场景
+    ├── + LoRA-代码    (16 MB) → 代码生成
+    ├── + LoRA-翻译    (16 MB) → 翻译任务
+    └── + LoRA-医疗    (16 MB) → 医疗问答
+
+切换任务：只需替换 16 MB 的 LoRA 权重，无需重新加载 14 GB 的基础模型
+</div>
+
+<p>每个任务拥有独立的 LoRA adapter（仅数十 MB），共享同一份基座模型，按需加载/卸载；多租户场景中每个用户/任务可以有自己的 LoRA。adapter 还可以<strong>版本管理、快速分发、A/B 测试</strong>。相比全参数微调（每个任务一份完整模型，存储和切换成本极高），这是 LoRA 的杀手级优势。</p>
+
+<h3>7.2 合并 vs 动态加载</h3>
+
+<table>
+<tr><th>策略</th><th>做法</th><th>优点</th><th>缺点</th></tr>
+<tr><td><strong>合并 (Merge)</strong></td><td>W = W₀ + BA，存为完整模型</td><td>推理零开销；部署简单</td><td>每个 LoRA 一份完整模型；无法动态切换</td></tr>
+<tr><td><strong>动态加载</strong></td><td>推理时按请求加载 LoRA adapter</td><td>共享基座节省显存；支持热切换</td><td>需要框架支持；有少量计算开销</td></tr>
+</table>
+
+<p>还有一种<strong>融合用法</strong>：将多个 LoRA 加权合并（W' = W + α₁B₁A₁ + α₂B₂A₂），实现多能力融合。</p>
+
+<h3>7.3 S-LoRA：服务数千个适配器</h3>
+
+<p><strong>S-LoRA (Serving thousands of LoRA adapters)</strong> 解决大规模 LoRA 服务的核心挑战：</p>
+
+<ul>
+<li><strong>统一分页管理</strong>：将 LoRA adapter 存储在统一的内存池，按需加载到 GPU</li>
+<li><strong>异构批处理</strong>：同一 batch 内不同请求可以使用不同的 LoRA adapter</li>
+<li><strong>定制 CUDA 内核</strong>：高效的 batched LoRA 计算（避免逐个计算）</li>
+<li>可在单 GPU 上同时服务<strong>数千个 LoRA adapter</strong></li>
+</ul>
+
+<h3>7.4 Punica：SGMV 内核</h3>
+
+<ul>
+<li><strong>SGMV (Segmented Gather Matrix-Vector)</strong> 内核将不同 LoRA 的计算<strong>融合为一个 GPU kernel</strong>，避免多次 kernel launch</li>
+<li>每个请求映射到对应的 LoRA 参数段</li>
+<li>实现了近乎线性的吞吐量扩展</li>
+</ul>
+
+<h3>7.5 vLLM 多 LoRA 支持</h3>
+
+<p><strong>vLLM</strong> 作为目前最流行的 LLM 推理框架，原生支持多 LoRA 服务：</p>
+
+<pre><code># vLLM 多 LoRA 服务示例
+from vllm import LLM, SamplingParams
+from vllm.lora.request import LoRARequest
+
+llm = LLM(model="base_model", enable_lora=True,
+          max_loras=4, max_lora_rank=64)
+
+# 不同请求使用不同 LoRA
+output1 = llm.generate("Hello", sampling_params,
+    lora_request=LoRARequest("adapter_1", 1, "path/to/lora1"))
+output2 = llm.generate("你好", sampling_params,
+    lora_request=LoRARequest("adapter_2", 2, "path/to/lora2"))</code></pre>
+
+<ul>
+<li>支持在连续批处理（continuous batching）中混合不同 LoRA 请求</li>
+<li><code>max_loras</code>：GPU 同时驻留的最大 LoRA 数量；<code>max_lora_rank</code>：支持的最大秩</li>
+<li>LoRA 权重在 GPU 显存和 CPU 内存之间<strong>按需换入换出</strong></li>
+</ul>
+
+<div class="interview-box">
+<ul>
+<li><strong>Merge</strong> 简单但笨重；<strong>动态加载</strong>灵活但需要框架支持</li>
+<li><strong>S-LoRA</strong> 用统一分页 + 异构批处理实现数千 LoRA 并发；<strong>Punica</strong> 的 SGMV 内核将多 LoRA 计算融合为单次 kernel launch</li>
+<li><strong>vLLM</strong> 支持多 LoRA + continuous batching，是生产环境首选</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 8 -->
+<div class="section" id="s8">
+<h2>八、其他 PEFT 方法</h2>
+
+<h3>8.1 Prefix Tuning</h3>
+
+<p>在每层 Transformer 的 Key 和 Value 前拼接一组<strong>可训练的连续前缀向量</strong>：</p>
+
+<ul>
+<li>每层都有独立的前缀参数（而非只在输入层）</li>
+<li>前缀长度通常 10 ~ 100 个虚拟 token</li>
+<li>通过一个小型 MLP 重参数化前缀，训练更稳定</li>
+<li>可训练参数极少（~0.1%），但在生成任务表现良好</li>
+</ul>
+
+<h3>8.2 Prompt Tuning 与 P-Tuning</h3>
+
+<ul>
+<li><strong>Prompt Tuning</strong>（Lester et al.）：只在<strong>输入 embedding 层</strong>前拼接可训练向量，比 Prefix Tuning 更简单；随模型规模增大，效果趋近全参数微调</li>
+<li><strong>P-Tuning v1</strong>：用 LSTM/MLP 生成连续提示嵌入，弥补直接优化 embedding 的不稳定性</li>
+<li><strong>P-Tuning v2</strong>：类似 Prefix Tuning，在每层都加可训练前缀，规模更大的模型上效果更好</li>
+</ul>
+
+<h3>8.3 Adapter</h3>
+
+<p>在 Transformer 的 FFN 后（或注意力层后）<strong>插入小型瓶颈网络</strong>：</p>
+
+<div class="arch-diagram">h = h + f(h · W_down) · W_up
+W_down ∈ ℝ^(d×m), W_up ∈ ℝ^(m×d), m ≪ d（瓶颈维度通常 64 ~ 256）</div>
+
+<ul>
+<li>残差连接保证初始输出不变</li>
+<li>缺点：增加了<strong>串行计算路径</strong>，有少量推理延迟，且无法合并进原始权重</li>
+</ul>
+
+<h3>8.4 IA³</h3>
+
+<ul>
+<li>学习三个<strong>缩放向量</strong>（标量乘法）：分别作用于 K、V 和 FFN</li>
+<li>可训练参数极少（仅为向量），远少于 LoRA</li>
+<li>适合 few-shot 场景，但在复杂任务上表现可能不如 LoRA</li>
+</ul>
+
+<h3>8.5 各方法对比</h3>
+
+<table>
+<tr><th>方法</th><th>修改位置</th><th>可训练参数</th><th>推理延迟</th><th>可 merge</th><th>效果</th></tr>
+<tr><td><strong>LoRA</strong></td><td>注意力/FFN 线性层</td><td>0.1~1%</td><td>无增加</td><td>✅</td><td>⭐⭐⭐⭐⭐</td></tr>
+<tr><td><strong>Adapter</strong></td><td>FFN 后插入</td><td>0.5~3%</td><td>略增加</td><td>❌</td><td>⭐⭐⭐⭐</td></tr>
+<tr><td><strong>Prefix Tuning</strong></td><td>每层 KV 前缀</td><td>0.1~0.5%</td><td>略增加</td><td>❌</td><td>⭐⭐⭐</td></tr>
+<tr><td><strong>Prompt Tuning</strong></td><td>输入 embedding</td><td>0.01~0.1%</td><td>无增加</td><td>❌</td><td>⭐⭐⭐</td></tr>
+<tr><td><strong>P-Tuning v2</strong></td><td>每层前缀</td><td>0.1~1%</td><td>略增加</td><td>❌</td><td>⭐⭐⭐⭐</td></tr>
+<tr><td><strong>IA³</strong></td><td>KV + FFN 缩放</td><td>&lt;0.01%</td><td>无增加</td><td>✅</td><td>⭐⭐⭐</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li><strong>Prefix Tuning</strong> 在每层加前缀；<strong>Prompt Tuning</strong> 仅在输入层加前缀</li>
+<li><strong>Adapter</strong> 增加串行模块 → 有推理延迟；<strong>LoRA</strong> 可合并 → 无推理延迟</li>
+<li>P-Tuning v2 ≈ Prefix Tuning 的改进版，适合 NLU 任务</li>
+<li>LoRA 是目前最流行的 PEFT 方法，<strong>效果、效率、灵活性</strong>的最佳平衡</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 9 -->
+<div class="section" id="s9">
+<h2>九、LoRA vs 全参数微调</h2>
+
+<h3>9.1 性能差距</h3>
+
+<ul>
+<li>简单任务（分类、摘要）：LoRA ≈ 全参数微调（差距 &lt; 1%）</li>
+<li>复杂任务（数学推理、代码生成）：LoRA 可能落后 1~3%，但通过增大 r 可以缩小差距</li>
+<li>数据量大 + 任务复杂 → 全参数微调仍有优势</li>
+<li>实践中 QLoRA 在 65B 模型上的表现可以<strong>匹敌</strong>在 16-bit 全参数微调的 ChatGPT 级别模型</li>
+</ul>
+
+<h3>9.2 效率对比</h3>
+
+<table>
+<tr><th>维度</th><th>全参数微调</th><th>LoRA</th><th>QLoRA</th></tr>
+<tr><td><strong>可训练参数</strong></td><td>100%</td><td>~0.1-1%</td><td>~0.1-1%</td></tr>
+<tr><td><strong>显存 (7B)</strong></td><td>~120 GB</td><td>~16 GB</td><td>~6 GB</td></tr>
+<tr><td><strong>训练速度</strong></td><td>1×</td><td>~1.2-1.5×</td><td>~0.6-0.8× (量化反量化)</td></tr>
+<tr><td><strong>存储 (adapter)</strong></td><td>整个模型</td><td>~数十 MB</td><td>~数十 MB</td></tr>
+<tr><td><strong>推理延迟</strong></td><td>基准</td><td>合并后无增加</td><td>合并后无增加</td></tr>
+</table>
+
+<h3>9.3 如何选择</h3>
+
+<table>
+<tr><th>维度</th><th>选择 LoRA</th><th>选择全参数微调</th></tr>
+<tr><td><strong>计算资源</strong></td><td>GPU 资源有限</td><td>充足的计算资源</td></tr>
+<tr><td><strong>数据量</strong></td><td>中等（1K ~ 100K）</td><td>大（100K+）</td></tr>
+<tr><td><strong>任务分布</strong></td><td>与预训练分布相近</td><td>与预训练分布差异大</td></tr>
+<tr><td><strong>迭代需求</strong></td><td>快速迭代实验、多任务切换</td><td>追求极限性能、单一任务专用部署</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>LoRA 在多数任务上可达全参数微调 <strong>95~99%</strong> 的性能</li>
+<li>LoRA 的核心价值不只是省资源，更在于<strong>多任务热切换</strong>能力</li>
+<li>QLoRA 训练速度稍慢（量化/反量化开销），但显存节省巨大</li>
+<li>LoRA adapter 仅数十 MB → 可版本管理、快速分发、A/B 测试</li>
+</ul>
+</div>
+</div>
+
+<div class="section" id="s10">
+<h2>生产案例</h2>
+<div class="intuition-box">
+<p><strong>生产验证：</strong>某企业用 LoRA（r=8）微调 Llama 2 7B 做客服对话，相比全量微调：(1) 训练显存从 <strong>80GB</strong>（单卡 A100）降至 <strong>16GB</strong>（消费级 RTX 4090 即可），硬件成本降低 <strong>80%</strong>；(2) 训练时间从 3 天缩短至 <strong>4 小时</strong>（可训练参数从 7B 降至 4.2M，减少 99.94%）；(3) 推理质量：在领域对话评测上，LoRA（r=8）得分 <strong>87.3</strong>/100，全量微调 89.1/100，差距仅 <strong>2%</strong>。关键发现：r 从 4 增至 8 时质量提升显著（+5 分），但从 8 增至 16 仅提升 0.8 分 — 说明 r=8 是"甜点值"。QLoRA（4-bit 量化 + LoRA）进一步将显存需求降至 <strong>6GB</strong>，在 RTX 3060 上即可微调 7B 模型。</p>
+</div>
+</div>
+
+<!-- Q&A -->
+<div class="qa-section" id="qa">
+<h2>高频问答</h2>
+
+<details>
+<summary>LoRA 的参数量减少 97%，为什么效果不会大幅下降？</summary>
+<div class="answer">因为微调时的权重变化量 ΔW 具有低秩特性。研究表明，预训练模型已经学到了一个好的初始化点，微调只需要在少数几个方向上做小幅调整。ΔW 的有效信息集中在一个低维子空间中，用 r=8 的秩就能捕获大部分信息。实验证明，LoRA (r=8) 在大多数下游任务上能达到全量微调 95%+ 的效果。</div>
+</details>
+
+<details>
+<summary>为什么 target_modules 通常选择注意力层？</summary>
+<div class="answer">注意力层（q_proj, v_proj, k_proj, o_proj）是 Transformer 中最核心的计算组件，它们直接控制模型「看什么」和「怎么组合信息」。微调本质上是调整模型的注意力模式，因此对注意力层做 LoRA 效果最显著。原始论文的最小方案是仅对 q_proj + v_proj 做适配，推荐方案是 QKVO 四个投影全上。对 FFN 层做 LoRA 收益相对较小，但参数开销更大。如果资源充足，可以加上 gate_proj 和 up_proj 来进一步提升效果。</div>
+</details>
+
+<details>
+<summary>LoRA 推理时的额外开销是多少？</summary>
+<div class="answer">零额外开销。LoRA 的核心优势之一：训练完成后，可以将 B×A 合并回原始权重矩阵（W' = W + B×A），推理时直接使用 W' 做矩阵乘法，和不微调的模型推理完全相同。这意味着 LoRA 只在训练阶段节省了资源，推理阶段的延迟和吞吐量不受影响。</div>
+</details>
+
+<details>
+<summary>rank 设多大合适？怎么选择？</summary>
+<div class="answer">经验法则：(1) 简单任务（分类、格式化输出）r=4~8 足够；(2) 复杂任务（创意写作、多步推理）r=16~32 更好；(3) 不建议超过 64，收益递减且容易过拟合。选择方法：先用 r=8 做基线，如果效果不够，逐步增大到 16、32，观察验证集指标变化。如果 r 从 8 增到 16 效果提升很小，说明 8 已经足够。如需自动分配秩，可用 AdaLoRA：它以 SVD 形式（PΛQ）参数化 LoRA，训练中动态裁剪不重要的奇异值，自动给不同层分配不同的有效秩，在总参数预算相同的条件下比统一秩分配效果更好。使用大 r 时建议搭配 rsLoRA（α/√r 缩放）。</div>
+</details>
+
+<details>
+<summary>QLoRA 和 LoRA 有什么区别？</summary>
+<div class="answer">QLoRA = 量化（Quantization）+ LoRA。具体做法：(1) 将基础模型量化为 4-bit（NF4 量化），大幅减少显存占用；(2) 在此基础上做 LoRA 微调（LoRA 参数仍用 FP16/BF16）。QLoRA 的三大技术创新：NF4 量化（基于正态分布分位数的信息论最优 4-bit 方案，比 INT4/FP4 更匹配预训练权重分布）、双重量化（对量化缩放因子再做 FP32→FP8 量化，额外节省 ~0.37 bit/参数）、分页优化器（GPU 显存不足时自动将优化器状态分页到 CPU 内存，防止 OOM）。效果：单张 24GB 显存的 GPU 就能微调 65B 参数的模型，而全量微调需要 780GB 显存。精度损失很小（~1-2%），但显存节省 10 倍以上。</div>
+</details>
+
+<details>
+<summary>多个 LoRA 适配器能同时使用吗？</summary>
+<div class="answer">可以。因为基础模型参数冻结不变，不同的 LoRA 适配器（A₁B₁, A₂B₂...）是独立的。有两种使用方式：(1) 动态切换 —— 根据请求类型加载不同的 LoRA，基础模型只加载一次；(2) 融合使用 —— 将多个 LoRA 加权合并（W' = W + α₁A₁B₁ + α₂A₂B₂），实现多能力融合。S-LoRA（统一分页 + 异构批处理，单 GPU 服务数千 adapter）与 Punica（SGMV 内核将多 LoRA 计算融合为单次 kernel 调用）等系统已把多 LoRA 服务推向生产级；SGLang、vLLM 等推理框架也已原生支持 LoRA 动态加载。</div>
+</details>
+
+<details>
+<summary>LoRA 中 A 和 B 矩阵的初始化策略是什么？为什么这样设计？</summary>
+<div class="answer">A 用高斯随机初始化，B 用全零初始化。这样保证训练起始时 BA = 0，LoRA 分支输出为零，模型完全等价于冻结的预训练模型。训练过程是从预训练权重出发，逐步学习增量更新，避免了初始扰动导致的不稳定性。这个设计灵感类似于残差学习：学习的是"改变量"而非"完整映射"。</div>
+</details>
+
+<details>
+<summary>LoRA 的 α（lora_alpha）参数有什么作用？怎么选？</summary>
+<div class="answer">α/r 作为 LoRA 更新的缩放因子，控制更新强度。工程价值：解耦了 r 和学习率 —— 当改变 r 时，只需等比例调整 α，无需重新搜索学习率。常见设置：α = 2r ~ 4r（如 r=8, α=16~32）。α 越大更新越激进，越小越保守。rsLoRA 变体使用 α/√r 替代 α/r，在大秩场景下表现更稳定。</div>
+</details>
+
+<details>
+<summary>DoRA 和 LoRA 的核心区别是什么？</summary>
+<div class="answer">DoRA 在 LoRA 基础上引入了权重分解：将权重矩阵的更新分解为幅度 (magnitude) 和方向 (direction) 两个独立分量。公式：W' = m · (W₀ + BA) / ‖W₀ + BA‖_c，其中 m 是可训练的幅度向量。灵感来源于 Weight Normalization 技术。这种解耦使得模型可以独立调整"更新多大"和"往哪更新"，在多个基准上比标准 LoRA 提升 1~3%，接近全参数微调效果。</div>
+</details>
+
+<details>
+<summary>Adapter 和 LoRA 的主要区别是什么？各自优劣？</summary>
+<div class="answer">Adapter：在 Transformer 层中插入额外的瓶颈网络（串行路径），增加了推理延迟，不能合并到原始权重中。LoRA：在现有权重矩阵旁添加并行的低秩分支，训练后可以 merge 回原始权重，推理零开销。LoRA 的优势：可合并、无推理延迟、多任务切换方便；Adapter 的优势：结构灵活，可以加入非线性激活函数，理论表达能力更强。实践中 LoRA 因其"推理零开销"特性而成为主流选择。</div>
+</details>
+
+<details>
+<summary>Prefix Tuning 和 Prompt Tuning 有什么区别？</summary>
+<div class="answer">Prompt Tuning：只在输入 embedding 层前拼接可训练的连续向量，参数极少，简单高效。Prefix Tuning：在每一层 Transformer 的 Key 和 Value 前都拼接可训练前缀，参数更多，表达能力更强。P-Tuning v1：用 LSTM/MLP 生成输入层的连续提示，解决直接优化 embedding 的不稳定问题；P-Tuning v2：类似 Prefix Tuning，在每层加深层前缀，效果接近全参数微调。这些方法在大模型上效果接近，但都不如 LoRA 灵活（无法 merge、推理有开销）。</div>
+</details>
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

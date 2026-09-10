@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>D06 · PDF 数据清洗（RAG 场景）</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.interview-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 关键要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:var(--surface,#161b22);border-right:1px solid var(--border,#30363d);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{display:block;font-size:.95rem;font-weight:700;color:var(--accent,#58a6ff);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent,#58a6ff);background:rgba(88,166,255,.07);border-left-color:var(--accent,#58a6ff);text-decoration:none}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 1rem;padding-left:0}}
+
+/* 标准组件体系 */
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid #3fb950;border-radius:8px;padding:1rem 1.4rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:#3fb950;margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic}
+.arch-diagram{background:#1c2128;border:1px solid #30363d;border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:#79c0ff;white-space:pre;overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid #3fb950;border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:#3fb950;margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid #ff7b72;border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:#ff7b72;margin-bottom:.4rem}
+.term{background:rgba(240,136,62,.12);color:#f0883e;padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、PDF 数据清洗概述</a>
+<a href="#s2">二、常规 PDF 的处理流水线</a>
+<a href="#s3">三、水印与广告清洗（有文本层的 PDF）</a>
+<a href="#s4">四、表格提取</a>
+<a href="#s5">五、扫描版 PDF 处理</a>
+<a href="#s6">六、扫描版 PDF + 水印/广告/导航栏</a>
+<a href="#s7">七、代码块识别与保护</a>
+<a href="#s8">八、多栏布局与阅读顺序恢复</a>
+<a href="#s9">九、语义分块（面向 RAG）</a>
+<a href="#s10">十、工程实践与设计原则</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>D06 · PDF 数据清洗（RAG 场景）</h1>
+<p class="subtitle">PDF Data Cleaning for RAG — 从原始 PDF 到高质量结构化文本的完整链路</p>
+
+<!-- Section 1 -->
+<div class="section">
+<h2 id="s1">一、PDF 数据清洗概述</h2>
+<div class="intuition-box">
+<p>PDF 难在它是给打印机看的，不是给程序看的。整套清洗工作说到底只在做一件事：把"坐标加字符"重新猜回"标题、段落、表格、代码"。</p>
+</div>
+
+
+<h3>为什么 PDF 清洗是 RAG 的核心难题</h3>
+<p>PDF 是"显示格式"而非"语义格式"——它只描述"在坐标(x,y)用字体F画字符C"，没有段落、标题、表格的显式语义标记。直接提取文本会丢失结构、引入噪声，导致 RAG 检索精度急剧下降。</p>
+
+<h3>PDF 文档的 5 种典型场景</h3>
+<table>
+<tr><th>场景</th><th>特征</th><th>清洗难度</th><th>典型来源</th></tr>
+<tr><td>常规 PDF</td><td>有文本层、无干扰元素</td><td>⭐</td><td>Word/LaTeX 导出</td></tr>
+<tr><td>PDF + 水印/广告</td><td>有文本层，含遮罩/Banner/水印</td><td>⭐⭐⭐</td><td>网络下载的技术书</td></tr>
+<tr><td>含表格的 PDF</td><td>表格结构复杂，需恢复行列关系</td><td>⭐⭐⭐</td><td>报告、论文、规格书</td></tr>
+<tr><td>扫描版 PDF</td><td>整页是位图，无文本对象层</td><td>⭐⭐⭐⭐</td><td>扫描件、拍照件</td></tr>
+<tr><td>扫描版 + 水印/广告/导航栏</td><td>位图上叠加广告像素或矢量层</td><td>⭐⭐⭐⭐⭐</td><td>网络流传的扫描书</td></tr>
+</table>
+
+<p class="highlight">核心原则：宁可少提取，不引入噪声。所有清洗操作应仅打标志，不直接删除数据，保留用户手动恢复的可能性。</p>
+
+<div class="interview-box">
+<ul>
+<li>PDF 为什么比 HTML 难解析？ — PDF 是面向渲染的格式，没有 DOM 树，文字块之间无父子/兄弟关系</li>
+<li>数据清洗在 RAG Pipeline 中的位置：PDF → <strong>清洗/去噪</strong> → Markdown → 分块 → Embedding → 向量库</li>
+<li>"文本零损失"原则：清洗只打标记不删内容，最终输出时才按标记过滤，确保误判可逆</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 2 -->
+<div class="section">
+<h2 id="s2">二、常规 PDF 的处理流水线</h2>
+<div class="intuition-box">
+<p>十个阶段听着复杂，其实只做两件事：先给每个文字块贴标签（标题 / 正文 / 代码 / 噪声），再按标签决定输出什么。这样拆开之后，中间任何一步判错，下一步都还有机会兜回来。</p>
+</div>
+
+
+<h3>10 阶段处理流水线</h3>
+<table>
+<tr><th>#</th><th>阶段</th><th>输入</th><th>输出</th><th>核心逻辑</th></tr>
+<tr><td>1</td><td>PDF 渲染</td><td>PDF 文件</td><td>页面 PNG</td><td>高 DPI 渲染，用于后续 Debug 可视化</td></tr>
+<tr><td>2</td><td>文字提取</td><td>PDF Page</td><td>TextBlock[]</td><td>PyMuPDF get_text("dict")，保留字体/颜色/bbox</td></tr>
+<tr><td>3</td><td>布局分类</td><td>TextBlock[]</td><td>BlockType 标签</td><td>统计字体频率，启发式判断 TITLE/HEADING/CODE/PARAGRAPH</td></tr>
+<tr><td>4</td><td>噪声检测</td><td>PageData[]</td><td>噪声标志</td><td>多策略去噪（水印/页眉/广告/重复文本）</td></tr>
+<tr><td>5</td><td>遮罩恢复</td><td>PageData</td><td>overlay 标志</td><td>识别覆盖矩形，保护被遮挡的文字</td></tr>
+<tr><td>6</td><td>阅读顺序</td><td>PageData</td><td>reading_order</td><td>多栏检测，按列排序</td></tr>
+<tr><td>7</td><td>跨页合并</td><td>PageData[]</td><td>合并后 PageData[]</td><td>检测跨页断句并拼接</td></tr>
+<tr><td>8</td><td>Markdown 生成</td><td>DocumentData</td><td>output.md</td><td>按 reading_order 输出，跳过噪声块</td></tr>
+<tr><td>9</td><td>语义分块</td><td>Markdown</td><td>chunks.json</td><td>按标题切块，代码块不拆分</td></tr>
+<tr><td>10</td><td>Debug 可视化</td><td>PNG + PageData</td><td>标注图像</td><td>叠加彩色 bbox 标注用于调试</td></tr>
+</table>
+
+<h3>流水线的数据流与兜底关系</h3>
+<div class="arch-diagram">
+  input.pdf
+      │
+      ├──► ① 渲染        page.png (高 DPI，仅供 Debug 叠框)
+      │
+      ▼
+  ② 文字提取   get_text("dict")  ──►  TextBlock[]
+                                       text / font / size / bbox
+                                       + is_bold / is_mono
+      │
+      ▼
+  ③ 布局分类   字体频率统计  ──►  TITLE / HEADING / CODE
+                                  LIST_ITEM / PARAGRAPH
+      │
+      ▼
+  ④ 噪声检测   7 策略打标志  ──►  is_advertisement / is_header
+                                  is_footer / is_watermark
+      │                            ▲
+      │                            │ 第 7 策略：正文保护
+      │                            └── CODE/TITLE/HEADING 一律清除噪声标志
+      ▼
+  ⑤ 遮罩恢复   get_drawings()  ──►  is_overlay_recovered
+                                    (只标记，绝不进过滤条件)
+      │
+      ▼
+  ⑥ 阅读顺序   多栏检测 + 排序  ──►  reading_order
+      │
+      ▼
+  ⑦ 跨页合并   断句检测         ──►  合并后的 PageData[]
+      │                              CODE / HEADING 不参与
+      ▼
+  ⑧ Markdown  按 reading_order 输出，跳过带噪声标志的块
+      │
+      ▼
+  ⑨ 语义分块   标题驱动 + 代码保护  ──►  chunks.json
+      │
+      └──► ⑩ Debug 可视化：把各类 bbox 用不同颜色叠回 page.png
+
+  贯穿全程的一条规则:
+      ②③④⑤ 全部只在 TextBlock 上增删布尔字段，
+      真正决定"丢什么"的只有第 ⑧ 步一处。
+      所以任何一步误判，改的都只是一个 flag，原文始终在。
+</div>
+
+<h3>启发式布局分类算法</h3>
+<pre><code>1. 统计全文档所有字体大小出现次数
+2. 水印过滤：出现页数 ≥ 总页数×70% AND 字体 >20pt → 排除
+3. 正文字体 = 出现次数最多的非水印字体
+4. 标题判定：
+     ≥1.8× 正文字体 → TITLE（# 一级标题）
+     ≥1.4× 正文字体 → HEADING（## 二级标题）
+5. 代码块：等宽字体 OR 字体名匹配 monospace 白名单
+6. 列表项：以 • - （ 数字 等起头
+7. 其余 → PARAGRAPH</code></pre>
+
+<h3>文字提取核心实现</h3>
+<p>文字提取基于 PyMuPDF（import fitz）：调用 <code>page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)</code> 直接从 PDF 对象层读取，得到 blocks → lines → spans 的嵌套结构。过滤掉非文本块（type != 0）后，遍历到 span 粒度，记录每段文字的文本、字体名、字号与 bbox。由于读取的是"字符流"而非"渲染结果"，这一步不受任何视觉遮罩影响，随提取附带的元数据则是后续布局分类与噪声检测的基础。</p>
+<p>封装 TextBlock 时，从原始字段派生出两个布尔标志，它们是整个下游链路的起点：</p>
+<table>
+<tr><th>实现要点</th><th>说明</th></tr>
+<tr><td><code>get_text("dict")</code> 模式</td><td>保留字体名/字号/bbox 元数据，是布局分类的输入；<code>TEXT_PRESERVE_WHITESPACE</code> 保留空白以便对齐判断</td></tr>
+<tr><td>过滤 <code>type != 0</code></td><td>dict 结构中 type 0 才是文本块，图像块直接跳过（另行处理）</td></tr>
+<tr><td>三级迭代 blocks → lines → spans</td><td>span 是携带字体信息的最小单元，在此层停下可保留最大灵活性</td></tr>
+<tr><td>加粗判断</td><td>检查 <code>span["font"]</code> 是否含 "Bold"，作为标题识别的辅助信号</td></tr>
+<tr><td>等宽判断</td><td><code>span["flags"]</code> 第 3 位为等宽标志（<code>flags &amp; (1 &lt;&lt; 3)</code>），是代码块识别的第一道防线</td></tr>
+</table>
+<pre><code>text_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+for block_data in text_dict.get("blocks", []):
+    if block_data.get("type") != 0:   # 仅保留文本块
+        continue
+    for line in block_data.get("lines", []):
+        for span in line.get("spans", []):
+            # text/font/size/bbox + 加粗/等宽标志</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>为什么用 <code>get_text("dict")</code> 而非 <code>get_text("text")</code>？ — dict 模式保留字体名/大小/bbox 等元数据，是后续布局分类的基础</li>
+<li>启发式布局分类 vs AI 模型分类的 trade-off：启发式零依赖、速度快、可解释，但对复杂版面力不从心</li>
+<li>为什么正文字体定义为"出现次数最多的字体"？ — 统计假设：正文占文档绝大多数内容</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 3 -->
+<div class="section">
+<h2 id="s3">三、水印与广告清洗（有文本层的 PDF）</h2>
+<div class="intuition-box">
+<p>广告盖住正文只是渲染层面的事。<span class="term">文本对象</span> 和 <span class="term">绘图对象</span> 在文件里各存各的，你读字符流的时候，那块遮罩根本不存在。</p>
+</div>
+
+
+<h3>核心原理：PDF 是分层文件</h3>
+<p>PDF 内部有三类独立对象：</p>
+<table>
+<tr><th>对象类型</th><th>包含信息</th><th>提取 API</th></tr>
+<tr><td>文本对象 (Text Spans)</td><td>字符串 + 字体 + 字号 + bbox + 颜色</td><td><code>page.get_text("dict")</code></td></tr>
+<tr><td>绘图对象 (Drawings)</td><td>矩形/路径 + 填充色 + 透明度</td><td><code>page.get_drawings()</code></td></tr>
+<tr><td>图像对象 (Images)</td><td>嵌入位图 + bbox + 尺寸</td><td><code>page.get_images(full=True)</code></td></tr>
+</table>
+
+<p class="highlight">"广告盖住正文" = 上层绘图对象（深色/半透明矩形）画在下层文本对象之上。视觉上覆盖，但在文件层面两个对象各自独立存在，文字永远不会因为上面有遮罩而消失。</p>
+
+<h3>页面对象的叠放次序与各自的读取口</h3>
+<div class="arch-diagram">
+渲染时看到的 (自下而上叠放):
+
+     ┌────────────────────────────────────────┐
+     │  z=3  文本对象：广告文案 "扫码进群"       │  ← 要去掉的是它
+     ├────────────────────────────────────────┤
+     │  z=2  绘图对象：半透明深色矩形 (Banner)   │  ← 视觉上的遮挡来自它
+     ├────────────────────────────────────────┤
+     │  z=1  文本对象：正文与代码                │  ← 要保住的是它
+     ├────────────────────────────────────────┤
+     │  z=0  图像对象：底纹 / 插图               │
+     └────────────────────────────────────────┘
+                       ▼ 光栅化
+              ┌──────────────────┐
+              │ 人眼看到：代码被    │
+              │ 一块横幅盖住了     │
+              └──────────────────┘
+
+解析时分三个口子各读各的，彼此互不影响:
+
+     page.get_text("dict")      ──►  z=1 与 z=3 的全部文字
+                                     (z=2 那块矩形对它完全不可见)
+     page.get_drawings()        ──►  z=2 的矩形：bbox / 填充色 / 透明度
+     page.get_images(full=True) ──►  z=0 的位图
+
+比对之后各自的归宿:
+
+     z=3 广告文案   多页重复 + 固定位置  ──► is_advertisement = True  ──► 输出时丢弃
+     z=2 遮罩矩形   宽度超过页宽 50%     ──► 记为 overlay 区域
+     z=1 被盖正文   与 overlay 相交      ──► is_overlay_recovered = True
+                                              ▲
+                    这个标志故意不写进输出层的过滤条件里 ───┘
+                    所以被盖住的正文照常输出，一个字都不少。
+</div>
+
+<h3>7 策略噪声检测</h3>
+<table>
+<tr><th>策略</th><th>方法</th><th>判断条件</th><th>标志</th></tr>
+<tr><td>① 重复文本</td><td>统计同文本出现频次</td><td>≥30% 页的页边区域出现</td><td>is_advertisement</td></tr>
+<tr><td>② 固定位置</td><td>同文本+同 bbox</td><td>≥30% 页同位置出现（±10px）</td><td>is_advertisement</td></tr>
+<tr><td>③ 页眉页脚</td><td>位置 + 内容判定</td><td>顶部 12% 或底部 8% + 导航特征</td><td>is_header / is_footer</td></tr>
+<tr><td>④ 水印</td><td>字体大小 + 出现频率</td><td>字体 >1.5× 正文 + ≥50% 页出现</td><td>is_watermark</td></tr>
+<tr><td>⑤ 遮罩/Banner</td><td>绘图对象分析</td><td>宽 >50% 页宽 + 半透明/深色/鲜艳</td><td>is_overlay_recovered</td></tr>
+<tr><td>⑥ 高频兜底</td><td>同文本+同位置</td><td>≥80% 页出现（前面未命中时）</td><td>is_advertisement</td></tr>
+<tr><td>⑦ 正文保护</td><td>白名单机制</td><td>CODE/TITLE/HEADING 永远清除噪声标志</td><td>清除误标</td></tr>
+</table>
+
+<h3>Overlay 恢复的三道保险</h3>
+<p>恢复被广告盖住的正文，其实不需要任何"恢复"操作——文字自始至终独立存在于文本层。工程上的做法是设计三道保险，确保正文在任何一个环节都不会被误删：</p>
+<table>
+<tr><th>保险层</th><th>做法</th><th>关键点</th></tr>
+<tr><td>1. 解析层</td><td>用 <code>page.get_text("dict")</code> 直接读字符流</td><td>遮罩只影响渲染，对文字提取毫无影响</td></tr>
+<tr><td>2. 检测层</td><td>对被遮罩覆盖的块只打 <code>is_overlay_recovered = True</code> 标志，绝不删除文字</td><td>检测结论只是一个 flag，数据原封不动</td></tr>
+<tr><td>3. 输出层</td><td>过滤条件只检查 <code>is_advertisement / is_header / is_footer / is_watermark</code></td><td><code>is_overlay_recovered</code> 故意不在过滤条件里 → 被遮盖正文照样输出，只有广告文本本身被过滤</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>广告完全盖住代码为什么还能恢复？ — PDF 文本层与绘图层独立，读文本层不受视觉遮挡影响</li>
+<li>噪声检测中"正文保护"为什么必须最后执行？ — 前置策略可能误标正文，最后兜底清除确保不丢内容</li>
+<li><code>is_overlay_recovered</code> 为什么不放在过滤条件里？ — 被覆盖的是正文，应该保留；覆盖它的广告文本才应该去除</li>
+<li>如何区分"广告文字"和"被广告盖住的正文"？ — 广告文字高频重复，正文唯一；结合位置+频率+内容特征综合判断</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 4 -->
+<div class="section">
+<h2 id="s4">四、表格提取</h2>
+<div class="intuition-box">
+<p>表格提取的难点不是找到表格，是判断"这一格属于哪一行哪一列"：有线条时靠几何求交点，没线条时靠 x 坐标聚类，两者都失效时才轮到 AI 版面模型出场。</p>
+</div>
+
+
+<h3>PDF 表格的典型场景</h3>
+<table>
+<tr><th>场景</th><th>特征</th><th>推荐方案</th></tr>
+<tr><td>纯文本伪表格</td><td>无线条，靠空白对齐</td><td>基于 bbox 列对齐聚类</td></tr>
+<tr><td>完整网格表</td><td>横竖线全有</td><td>线条几何网格重建</td></tr>
+<tr><td>半边框表</td><td>仅标题分隔线（学术风格）</td><td>线条 + bbox 联合判断</td></tr>
+<tr><td>跨页表</td><td>一表跨多页</td><td>见 <a href="../rag/cross_page_table_processing.html">G15 · 跨页表格处理全流程</a></td></tr>
+<tr><td>合并单元格</td><td>rowspan / colspan</td><td>AI 版面模型 + 结构识别</td></tr>
+<tr><td>扫描版表</td><td>位图无文本层</td><td>OCR + PP-Structure 表格识别</td></tr>
+</table>
+
+<h3>方案 A：线条几何网格重建</h3>
+<pre><code>def detect_grid(drawings, page_w, page_h):
+    """利用 PDF 矢量绘图对象中的线段构建表格网格"""
+    h_lines = [d for d in drawings if d.bbox.height < 2]  # 水平线
+    v_lines = [d for d in drawings if d.bbox.width < 2]   # 垂直线
+    rows = cluster_y_coordinates(h_lines)  # 行边界
+    cols = cluster_x_coordinates(v_lines)  # 列边界
+    return rows, cols</code></pre>
+
+<h3>方案 B：文本 bbox 列对齐（无线条场景）</h3>
+<pre><code>def detect_implicit_columns(blocks, eps_x=10):
+    """纯文本伪表格：靠 x 坐标聚类找列"""
+    xs = [b.bbox.x0 for b in blocks]
+    clusters = simple_1d_cluster(xs, eps_x)
+    return sorted(set(clusters))</code></pre>
+
+<h3>方案 C：使用 pdfplumber 提取（最划算的 MVP）</h3>
+<p>不想自建线条几何分析时，<code>pdfplumber</code> 是最划算的起步方案：<code>pdfplumber.open(pdf_path)</code> 打开文档后，逐页调用 <code>page.extract_tables()</code> 直接得到 <code>List[List[str]]</code> 的行列数据，再交给 <code>render_markdown_table()</code> 输出 GFM 表格。它内部封装了 lattice（靠线条）与 stream（靠空白对齐）两种策略，能覆盖大多数常规表格场景，适合先跑通 MVP 再决定是否自建。</p>
+<table>
+<tr><th>步骤</th><th>做法</th><th>关键点</th></tr>
+<tr><td>打开文档</td><td><code>pdfplumber.open(pdf_path)</code> 上下文管理器</td><td>自动释放资源，逐页遍历 <code>pdf.pages</code></td></tr>
+<tr><td>表格检测</td><td><code>page.extract_tables()</code></td><td>返回 List[List[str]]，每张表一个元素</td></tr>
+<tr><td>渲染输出</td><td><code>render_markdown_table(table)</code></td><td>直接对接 Markdown 生成阶段</td></tr>
+</table>
+
+<h3>Markdown 表格的局限与应对</h3>
+<table>
+<tr><th>输入类型</th><th>Markdown 输出方式</th></tr>
+<tr><td>简单网格表</td><td>标准 GFM <code>| ... |</code> 表格</td></tr>
+<tr><td>含合并单元格</td><td>降级输出内联 HTML <code>&lt;table&gt;</code></td></tr>
+<tr><td>cell 含多行/列表</td><td>用 <code>&lt;br&gt;</code> 或内联 HTML</td></tr>
+<tr><td>极复杂表格</td><td>平铺为自然语言："int 类型大小为 4，默认值是 0"</td></tr>
+</table>
+
+<p class="highlight">RAG 特殊考量：Embedding 模型对 Markdown 表格效果差（结构信息被 tokenizer 切碎），建议把每行拆为独立句子喂 embedding，保留原始结构化数据作 metadata。</p>
+
+<div class="interview-box">
+<ul>
+<li>为什么 PDF 表格提取比 HTML 表格难？ — PDF 没有 <code>&lt;table&gt;&lt;tr&gt;&lt;td&gt;</code> 标签，所有 cell 内容是散落的独立文字块</li>
+<li>pdfplumber 的 lattice 与 stream 模式区别：lattice 依赖线条，stream 靠空白对齐</li>
+<li>表格内容如何最优地进入 RAG 向量库？ — 逐行平铺为句子（"类型int，大小4"）效果远优于直接嵌入 Markdown 表格</li>
+<li>跨页表处理：识别信号、拼表修复与行级切块的完整方案见 <a href="../rag/cross_page_table_processing.html">G15 · 跨页表格处理全流程</a></li>
+</ul>
+</div>
+</div>
+
+<!-- Section 5 -->
+<div class="section">
+<h2 id="s5">五、扫描版 PDF 处理</h2>
+<div class="intuition-box">
+<p>扫描件的分流判断只有一句话：这一页有没有字符对象。没有字符只有图，就必须走 OCR；而从这一步开始，数据质量的上限由图像质量决定，不再由后面的算法决定。</p>
+</div>
+
+
+<h3>扫描版 PDF 的特征识别</h3>
+<p>扫描版判定是流水线的分流点，判断信号是两个 API 的组合：先用 <code>page.get_text("dict")</code> 检查页面是否存在 type 0 文本块，再用 <code>page.get_images(full=True)</code> 统计嵌入图像数量。"无文本层 + 有图像"同时成立，说明整页是位图，需要走 OCR 路径。判定逐页进行，混合文档（部分页原生、部分页扫描）按页分别分流。</p>
+<table>
+<tr><th>信号</th><th>API 判断</th><th>含义</th></tr>
+<tr><td>无文本层</td><td><code>get_text("dict")</code> 中不存在 type 0 块（has_text = False）</td><td>PDF 未存储任何字符对象</td></tr>
+<tr><td>有图像</td><td><code>get_images(full=True)</code> 返回非空</td><td>页面内容以位图形式存在</td></tr>
+<tr><td>结论</td><td><code>not has_text and len(images) &gt; 0</code> → 扫描页</td><td>进入 OCR 链路，否则走原生文本链路</td></tr>
+</table>
+
+<h3>OCR 处理链路</h3>
+<table>
+<tr><th>步骤</th><th>操作</th><th>工具</th></tr>
+<tr><td>1. 图像预处理</td><td>二值化、去噪、倾斜校正、分辨率增强</td><td>OpenCV</td></tr>
+<tr><td>2. 版面分析</td><td>识别文档区域（标题/正文/表格/图片）</td><td>PP-StructureV2 / DocLayout-YOLO</td></tr>
+<tr><td>3. 文字识别</td><td>OCR 识别 + 置信度输出</td><td>PaddleOCR / Tesseract</td></tr>
+<tr><td>4. 结果结构化</td><td>OCR 结果包装为统一 TextBlock 格式</td><td>自定义转换</td></tr>
+<tr><td>5. 后续流水线</td><td>进入与原生 PDF 相同的下游处理</td><td>通用 pipeline</td></tr>
+</table>
+
+<h3>PaddleOCR 集成示例</h3>
+<p>PaddleOCR 在启动时初始化为全局单例——<code>PaddleOCR(use_angle_cls=True, lang='ch', use_gpu=False)</code>：use_angle_cls 开启文字方向分类以应对倒置/侧置扫描件，lang='ch' 加载中文模型，use_gpu 按硬件条件开关。模型加载是高成本操作，单例复用避免逐页重复加载。对每页图像调用 <code>ocr.ocr(page_image_path, cls=True)</code>，返回的每一行结果是"四点 bbox + (text, confidence)"结构。</p>
+<p>集成层的核心工作是把 OCR 输出包装成与原生 PDF 同结构的 TextBlock，让下游流水线对来源透明：</p>
+<table>
+<tr><th>实现要点</th><th>说明</th></tr>
+<tr><td>初始化参数</td><td><code>use_angle_cls=True</code> 处理旋转，<code>lang='ch'</code> 中文场景，<code>use_gpu</code> 控制推理速度</td></tr>
+<tr><td>bbox 转换</td><td>四点坐标 <code>[[x1,y1],...,[x4,y4]]</code> → 取左上/右下两点构成轴对齐矩形，与原生 PDF 坐标系统一</td></tr>
+<tr><td>置信度保留</td><td><code>line[1][1]</code> 是识别置信度，留作低质量区域（如半透明水印）标记的依据</td></tr>
+<tr><td>统一结构</td><td>封装为与原生 TextBlock 相同的 text/bbox/confidence 字段，下游不区分 OCR 还是原生来源</td></tr>
+</table>
+<pre><code>ocr = PaddleOCR(use_angle_cls=True, lang='ch', use_gpu=False)
+result = ocr.ocr(page_image_path, cls=True)
+for line in result[0]:
+    bbox, (text, confidence) = line[0], line[1]
+    # 包装为统一 TextBlock：轴对齐 bbox + 置信度</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>如何判断一个 PDF 是扫描版？ — <code>page.get_text()</code> 为空 + <code>page.get_images()</code> 非空 → 扫描版</li>
+<li>OCR 精度如何保障？ — 图像预处理（去噪/二值化/校正）+ 高 DPI 渲染 + 后处理纠错</li>
+<li>扫描版 PDF 走完 OCR 后如何与原生 PDF 统一？ — OCR 结果包装成同结构 TextBlock（含 bbox），下游逻辑不区分来源</li>
+<li>PaddleOCR vs Tesseract：中文场景 PaddleOCR 精度显著更高；Tesseract 多语言覆盖广</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 6 -->
+<div class="section">
+<h2 id="s6">六、扫描版 PDF + 水印/广告/导航栏</h2>
+<div class="intuition-box">
+<p>扫描件上的广告能不能去掉，只取决于它还是不是一个独立图层。是，那只是排版问题；已经压进同一张位图，就是 <span class="term">信息论</span> 意义上的不可逆——这时诚实地标出缺失区域，比用 inpainting 编一段出来强得多。</p>
+</div>
+
+
+<h3>四种子情况与恢复可能性</h3>
+<table>
+<tr><th>子情况</th><th>物理状态</th><th>恢复可能</th><th>方案</th></tr>
+<tr><td>A. 广告已 flatten 进位图</td><td>像素覆盖，信息损毁</td><td>❌ 不可逆</td><td>标记 + 人工补录</td></tr>
+<tr><td>B. 多个 image XObject 叠加</td><td>背景图和广告是独立图层</td><td>✅ 可救</td><td>图像层分离，仅 OCR 底图</td></tr>
+<tr><td>C. 扫描底图 + 矢量广告</td><td>底图是位图，广告是矢量绘图层</td><td>✅ 可救</td><td>OCR 底图，矢量层不进 OCR</td></tr>
+<tr><td>D. 半透明水印覆盖</td><td>OCR 部分能看见底层文字</td><td>⚠️ 低准确率</td><td>OCR + 低置信度标记</td></tr>
+</table>
+
+<h3>图像层分离方案（处理子情况 B+C）</h3>
+<p>当 <code>page.get_images(full=True)</code> 返回多张图像时，说明广告与底图以独立图层存在，可以做物理分离。思路非常直观：用 <code>page.get_image_rects()</code> 取每张图的包围矩形，按 <code>get_area()</code> 降序排序——面积最大的一张视为底图（正文载体），其余视为广告/Logo/横幅等覆盖层；然后只对底图做 OCR，从源头切断广告像素对识别的干扰；最后把 OCR 结果与覆盖层区域逐一比对，<code>bbox.intersects()</code> 命中的文本打上 <code>is_overlay_obscured</code> 标记，交给下游按不确定内容处理。</p>
+<table>
+<tr><th>步骤</th><th>做法</th><th>关键点</th></tr>
+<tr><td>枚举图层</td><td><code>get_images(full=True)</code> + <code>get_image_rects()</code></td><td>取得全部 image XObject 及其页面位置</td></tr>
+<tr><td>识别底图</td><td>按矩形面积降序，取最大者</td><td>底图覆盖页面大部分区域，小图多为广告/Logo</td></tr>
+<tr><td>选择性 OCR</td><td><code>ocr_provider.recognize(base_image)</code> 仅识别底图</td><td>广告图层不进入 OCR 输入，噪声源头隔离</td></tr>
+<tr><td>不确定标记</td><td>与 overlay 矩形相交 → <code>is_overlay_obscured = True</code></td><td>宁可保守标记可能受影响的区域，不盲目信任</td></tr>
+</table>
+
+<h3>扫描页的分流与图层分离</h3>
+<div class="arch-diagram">
+逐页分流:
+
+   page
+     │
+     ├── get_text("dict") 里有 type 0 块 ?
+     │        │是                          │否
+     │        ▼                            ▼
+     │   原生文本链路              get_images(full=True) 非空 ?
+     │   (第二章流水线)                     │是
+     │                                     ▼
+     │                                 扫描页链路
+     │
+     └── 混合文档按页各走各的，同一份 PDF 可以两条链路并存
+
+扫描页内部再按图层数分流:
+
+   get_image_rects() 数量
+        │
+   ┌────┴────────────────────────────┐
+   │ = 1                             │ ＞ 1
+   ▼                                 ▼
+ 已 flatten                     多图层，可分离
+   │                                 │
+   ▼                                 ▼
+ 像素级启发式                  ┌──────────────────────────┐
+ BGR → HSV                     │ 按 bbox 面积降序排列        │
+ inRange 取高饱和              │  ┌──────────────────────┐ │
+ findContours 取外轮廓         │  │ 最大者 = 底图 (正文载体)│ │
+ boundingRect 过滤 0.5%~50%    │  ├──────────────────────┤ │
+   │                           │  │ 其余 = 广告 / Logo    │ │
+   ▼                           │  └──────────────────────┘ │
+ 圈出可疑矩形，打标记            └───────────┬──────────────┘
+ 不删任何像素                                ▼
+   │                            只把底图送进 OCR，广告图层根本不参与
+   ▼                                         │
+ 输出占位提示                                 ▼
+ [此处可能因遮挡丢失内容]         OCR 结果与 overlay 矩形逐一比对
+                                 相交者 is_overlay_obscured = True
+                                             │
+                                             ▼
+                              统一封装为 TextBlock (text/bbox/confidence)
+                              下游流水线完全不区分它来自 OCR 还是原生
+</div>
+
+<h3>像素级广告检测（处理子情况 A）</h3>
+<p>对已经 flatten 进位图的广告，只能靠图像级启发式。核心洞察是：广告通常使用高饱和度的鲜艳色块，而正文多为黑白——于是先用 <code>cv2.cvtColor()</code> 转到 HSV 色彩空间，用 <code>cv2.inRange()</code> 提取高饱和、高亮度像素形成掩码，再用 <code>cv2.findContours()</code>（RETR_EXTERNAL 只取外轮廓）提取连通块，最后用 <code>cv2.boundingRect()</code> 加页面面积比过滤出候选广告矩形。注意：检测只负责"圈出可疑区域"并打标记，不删除任何像素，与文本零损失原则保持一致。</p>
+<table>
+<tr><th>步骤</th><th>API</th><th>关键点</th></tr>
+<tr><td>色彩空间转换</td><td><code>cv2.cvtColor(img, cv2.COLOR_BGR2HSV)</code></td><td>饱和度通道在 HSV 中比 BGR 更易分离</td></tr>
+<tr><td>饱和度掩码</td><td><code>cv2.inRange(hsv, (0,80,80), (180,255,255))</code></td><td>只保留高饱和、高亮度像素</td></tr>
+<tr><td>轮廓提取</td><td><code>cv2.findContours()</code> + RETR_EXTERNAL + CHAIN_APPROX_SIMPLE</td><td>只取最外层轮廓，避免嵌套干扰</td></tr>
+<tr><td>面积过滤</td><td><code>cv2.boundingRect()</code>，保留面积占页面 0.5%~50% 的矩形</td><td>过小是装饰、过大是底图，适中矩形才是疑似广告</td></tr>
+</table>
+
+<h3>导航栏清洗</h3>
+<p>导航栏（目录栏、侧边栏）是扫描书常见噪声源，识别策略：</p>
+<ul>
+<li><strong>位置启发式</strong>：固定出现在页面左侧/右侧 15% 区域，或顶部/底部 10% 区域</li>
+<li><strong>内容特征</strong>：含 URL、页码模式（"第X页"、"Page N"）、章节目录样式</li>
+<li><strong>频率检测</strong>：同位置同内容在 ≥80% 页面重复出现</li>
+<li><strong>面积比</strong>：占页面面积 <15% 且位于页边</li>
+</ul>
+
+<p class="highlight">信息论限制：广告像素已 flatten 进位图时，被覆盖的原文真的丢失了。正确做法是标记缺失区域告知用户，而非用 inpainting 猜测（猜出来的 OCR 结果几乎是垃圾）。</p>
+
+<div class="interview-box">
+<ul>
+<li>如何判断 PDF 是"多图层叠加"还是"已 flatten"？ — <code>page.get_images(full=True)</code> 返回多个 image → 多图层；仅 1 个 → 大概率 flatten</li>
+<li>为什么不推荐用 inpainting 恢复被覆盖文字？ — inpainting 填充的是"视觉合理"的像素，不是真实文字；OCR 识别出来是乱码</li>
+<li>导航栏与正文的区分困难在哪？ — 目录型导航可能含有正文内容的标题，需结合位置+频率+内容综合判断</li>
+<li>最佳实践：标记 + 人工确认 — 对无法恢复的区域，输出 <code>[此处可能因遮挡丢失内容]</code> 占位符</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 7 -->
+<div class="section">
+<h2 id="s7">七、代码块识别与保护</h2>
+<div class="intuition-box">
+<p>代码块被误删不是因为算法差，是因为 <code>}</code> 和 <code>return 0;</code> 在统计特征上和页脚长得一模一样。所以保护代码靠的不是更聪明的判断，而是更多层的兜底。</p>
+</div>
+
+
+<h3>代码块的 6 层识别链路</h3>
+<p>技术类 PDF 中代码块容易被切碎、被噪声检测误标为广告。需要从识别到输出的全链路保护：</p>
+<table>
+<tr><th>层</th><th>位置</th><th>作用</th></tr>
+<tr><td>Layer 1</td><td>PDF 解析</td><td>从 FontDescriptor.Flags 第 3 位读取等宽标志</td></tr>
+<tr><td>Layer 2</td><td>布局分类</td><td>等宽字体 + 字号 ≤ 正文 → BlockType.CODE</td></tr>
+<tr><td>Layer 3</td><td>噪声保护</td><td>代码模式（<code>{</code>/<code>}</code>/<code>return</code>/关键字）跳过噪声检测</td></tr>
+<tr><td>Layer 4</td><td>跨页合并保护</td><td>CODE 块永不参与跨页段落拼接</td></tr>
+<tr><td>Layer 5</td><td>Markdown 重构</td><td>连续 CODE 块合并为单一 ``` 围栏</td></tr>
+<tr><td>Layer 6</td><td>语义分块保护</td><td>永不在代码围栏中间切 chunk</td></tr>
+</table>
+
+<h3>代码模式识别（防误删）</h3>
+<p>噪声检测依赖"高频重复"启发式，而 <code>}</code>、<code>return 0;</code> 这类代码短行天然容易被误标。解法是在噪声检测前加一道"代码特征豁免"判断（looks_like_code），识别三类特征，命中即跳过全部噪声策略：</p>
+<table>
+<tr><th>特征类别</th><th>判断方式</th><th>典型例子</th></tr>
+<tr><td>孤立代码标点</td><td>strip 后与标点集合全等匹配</td><td><code>{</code>、<code>}</code>、<code>};</code>、<code>);</code>、<code>*/</code>、<code>//</code></td></tr>
+<tr><td>C/C++ 注释行</td><td>以 <code>// </code>、<code>/* </code>、<code>* </code> 开头</td><td><code>// initialize variables</code></td></tr>
+<tr><td>含关键字的短行</td><td>行长度 ≤ 40 且包含编程关键字</td><td><code>int </code>、<code>return</code>、<code>#include</code>、<code>class </code>、<code>def </code>、<code>import </code>、<code>struct </code>、<code>for (</code></td></tr>
+</table>
+<p>设计意图：40 字符阈值保证"只豁免短行"——包含关键字的长段正文（如讲解编程概念的段落）不会被跳过，避免豁免机制本身成为漏检盲区。</p>
+
+<h3>连续代码块合并输出</h3>
+<p>PyMuPDF 常把一段代码切成 N 个 block（每行一个），输出时需要一个"围栏状态机"把它们重新合并：维护布尔标志 <code>in_code_block</code>，按阅读顺序遍历块，状态只在 CODE/非 CODE 的边界处切换——进入时开围栏、离开时关围栏。这样 N 个连续 CODE 块被合并为单一 fenced code block，普通文本照常输出。</p>
+<table>
+<tr><th>当前状态</th><th>遇到的块</th><th>动作</th></tr>
+<tr><td>围栏外</td><td>CODE 块</td><td>先输出 ``` 开围栏，再追加行内容（rstrip 去尾空白）</td></tr>
+<tr><td>围栏内</td><td>CODE 块</td><td>直接追加行内容，状态不变</td></tr>
+<tr><td>围栏内</td><td>非 CODE 块</td><td>先输出 ``` 关围栏，再输出普通文本</td></tr>
+<tr><td>围栏外</td><td>非 CODE 块</td><td>直接输出普通文本</td></tr>
+</table>
+<pre><code>if block.block_type == BlockType.CODE:
+    if not in_code_block:
+        lines.append("```")       # 进入围栏的转换
+        in_code_block = True
+    lines.append(block.text.rstrip())
+elif in_code_block:
+    lines.append("```")           # 离开围栏的转换
+    in_code_block = False</code></pre>
+
+<div class="interview-box">
+<ul>
+<li>为什么代码容易被噪声检测误标？ — 代码短行（<code>}</code>/<code>return 0;</code>）在多页重复出现，触发"重复=广告"启发式</li>
+<li>Layer 3 的 <code>_looks_like_code()</code> 覆盖哪些场景？ — 孤立标点、注释行、含关键字短行、以 <code>;</code>/<code>{</code>/<code>}</code> 结尾的行</li>
+<li>为什么 CODE 块不参与跨页合并？ — 避免一段代码被错误粘到上一页的散文里</li>
+<li>chunking 时为什么哪怕超出 max_chunk_size 也不在代码中间切？ — 半段代码无法理解，对 RAG 检索无意义</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 8 -->
+<div class="section">
+<h2 id="s8">八、多栏布局与阅读顺序恢复</h2>
+<div class="intuition-box">
+<p>多栏 PDF 里肉眼一秒就能看出的阅读顺序，程序必须从坐标里重新推导。这一步一旦推错，后面所有的分块和检索，都建立在一段被打乱的文字上，且从结果里几乎看不出原因。</p>
+</div>
+
+
+<h3>多栏检测算法</h3>
+<p>多栏检测采用最简单有效的"页面中线二分"启发式：为每个文字块计算 x 中心点 <code>(bbox.x0 + bbox.x1) / 2</code>，与页面中线比较后分到左栏/右栏；宽度超过 70% 页宽的块视为全宽块（跨栏标题、分隔线等），不参与分栏。分栏完成后各栏内按 <code>bbox.y0</code> 排序，按左栏 → 右栏拼接，全宽块再按自身 y 坐标插入合并序列的正确位置，最终把序号写回每个块的 <code>reading_order</code> 字段，供 Markdown 输出阶段直接使用。</p>
+<table>
+<tr><th>步骤</th><th>做法</th><th>关键点</th></tr>
+<tr><td>块分类</td><td>x 中心点与页面中线比较</td><td>中线左侧入左栏，右侧入右栏</td></tr>
+<tr><td>全宽识别</td><td><code>block_width &gt; page_width × 0.7</code></td><td>跨栏内容不进任何一栏，单独处理</td></tr>
+<tr><td>栏内排序</td><td>各栏按 <code>bbox.y0</code> 升序</td><td>恢复垂直阅读顺序</td></tr>
+<tr><td>全宽插入</td><td>按 y 坐标插入合并序列</td><td>保证跨栏内容与双栏内容的相对位置正确</td></tr>
+<tr><td>序号写回</td><td><code>block.reading_order = i</code></td><td>输出阶段按此字段顺序生成 Markdown</td></tr>
+</table>
+
+<h3>跨页文本合并</h3>
+<p>条件（同时满足才合并）：</p>
+<ul>
+<li>第 N 页最后一个内容块不以句号/感叹号/问号结尾</li>
+<li>第 N+1 页第一个内容块以小写字母或接续标点开头</li>
+<li>两个块均为 PARAGRAPH 类型（CODE/HEADING/TITLE 不参与）</li>
+</ul>
+
+<div class="interview-box">
+<ul>
+<li>多栏检测的核心启发式是什么？ — 按文字块的 x 中心点与页面中线比较聚类</li>
+<li>全宽块（如跨栏标题）如何处理？ — 宽度 >70% 页宽视为全宽，按 y 坐标插入正确位置</li>
+<li>两栏以上（杂志三栏）的局限：简单中线二分法失效，需更复杂的 x 坐标 DBSCAN 聚类</li>
+<li>跨页合并为什么排除 CODE/HEADING？ — 代码不应跨页拼接，标题是独立语义单元</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 9 -->
+<div class="section">
+<h2 id="s9">九、语义分块（面向 RAG）</h2>
+<div class="intuition-box">
+<p>面向 RAG 的分块要认一个优先级：<span class="term">结构边界</span> 永远压过长度边界。标题和代码围栏是作者亲手划下的语义分界线，而 max_chunk_size 只是防止块过大的兜底约束。</p>
+</div>
+
+
+<h3>分块规则</h3>
+<table>
+<tr><th>规则</th><th>说明</th><th>目的</th></tr>
+<tr><td># 或 ## 标题</td><td>遇到标题立即开启新 chunk</td><td>保持主题一致性</td></tr>
+<tr><td>代码块 ```</td><td>永不在代码块中间切割</td><td>保持代码完整性</td></tr>
+<tr><td>超出最大长度</td><td>在段落边界（空行）切割</td><td>控制 chunk 大小</td></tr>
+<tr><td>过短 chunk</td><td><100字合并入前一个 chunk</td><td>避免碎片化</td></tr>
+</table>
+
+<h3>分块实现</h3>
+<p>分块器实现为一个行级状态机（SemanticChunker 类，构造参数 <code>max_chunk_size=1500</code>）：逐行扫描 Markdown，每一行经过一条固定顺序的判断链，"结构边界"的优先级始终高于"长度边界"——标题和代码围栏都是天然的语义边界，长度超限只是兜底手段。</p>
+<table>
+<tr><th>判断顺序</th><th>触发条件</th><th>动作</th></tr>
+<tr><td>1. 围栏状态跟踪</td><td>行以 ``` 开头</td><td>翻转 <code>in_code_block</code> 状态，本行直接收录</td></tr>
+<tr><td>2. 代码保护</td><td>当前处于围栏内</td><td>本行直接收录，不参与任何切分判断</td></tr>
+<tr><td>3. 标题边界</td><td>行以 <code># </code> 或 <code>## </code> 开头</td><td>已有内容打包为 chunk（_make_chunk），以该标题开启新 chunk</td></tr>
+<tr><td>4. 普通收录</td><td>以上均不满足</td><td>追加行内容，然后检查长度</td></tr>
+<tr><td>5. 长度兜底</td><td>累计长度超过 <code>max_chunk_size</code></td><td><code>_find_paragraph_boundary()</code> 找最近的段落边界（空行）切割，不在段落中间下刀</td></tr>
+</table>
+<p>两个最容易忽略的细节：围栏状态用"遇到 ``` 就翻转"而非计数，天然支持"关闭后再开启"的多代码块场景；标题判断发生在收录之前，保证标题是 chunk 的首行，检索时利于 chunk 主题的表达。"标题驱动 + 代码保护 + 段落边界兜底"的组合，是零外部依赖下的 RAG 分块通用配方；对无标题的长文本则需回退到语义相似度分块（见下方要点）。</p>
+
+<div class="interview-box">
+<ul>
+<li>为什么用标题驱动分块？ — 标题天然是语义边界，一个标题下的内容主题一致</li>
+<li>max_chunk_size 为什么设 1500 字？ — 平衡：太小丢上下文，太大降检索精度；匹配主流 Embedding 模型输入长度</li>
+<li>代码块不拆分会不会导致超大 chunk？ — 会。但半段代码无意义，宁可超限也不切碎代码</li>
+<li>这种分块策略的缺点？ — 依赖标题结构，对无标题的长文本效果差，此时应回退到语义相似度分块</li>
+</ul>
+</div>
+</div>
+
+<!-- Section 10 -->
+<div class="section">
+<h2 id="s10">十、工程实践与设计原则</h2>
+<div class="intuition-box">
+<p>整套系统其实只靠一条原则撑着：<span class="term">文本零损失</span>——检测只打标记，不删数据。误判了还能改回来，删掉了就真没了。</p>
+</div>
+
+
+<h3>核心设计原则</h3>
+<table>
+<tr><th>原则</th><th>实现</th><th>收益</th></tr>
+<tr><td>文本零损失</td><td>所有检测仅打标志，不删数据</td><td>误判可逆，不丢正文</td></tr>
+<tr><td>多重防御</td><td>单层判错时下一层兜底</td><td>整体鲁棒性</td></tr>
+<tr><td>保守策略</td><td>宁可保留噪声也不误删正文</td><td>用户可手动清理，丢失无法恢复</td></tr>
+<tr><td>原始不可变</td><td>编辑结果存独立文件</td><td>随时一键 revert</td></tr>
+<tr><td>统一数据模型</td><td>OCR/原生 PDF 输出同结构</td><td>下游逻辑不区分来源</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<strong>检测结论一律写成布尔字段</strong>
+<p>让"判断"和"删除"分处两个阶段，真正决定丢什么的只有输出层一处。改判定规则时不用担心已经被删掉的内容找不回来。</p>
+</div>
+<div class="do">
+<strong>把 Debug 叠框图当成一等公民</strong>
+<p>把各类 bbox 按颜色画回渲染图，一眼就能看出是版面分类错了还是噪声策略过激。没有它，调参基本靠猜。</p>
+</div>
+<div class="do">
+<strong>OCR 与原生解析输出同一种结构</strong>
+<p>统一封装成带 bbox 和置信度的 TextBlock，下游的去噪、排序、分块全部复用同一套代码，扫描件和原生 PDF 只在入口分叉一次。</p>
+</div>
+<div class="dont">
+<strong>别用 inpainting 去"恢复"被覆盖的文字</strong>
+<p>填出来的是视觉上合理的像素，不是原来的字。OCR 读出来是似是而非的乱码，比留个空位危害大得多——错误答案比没有答案更难被发现。</p>
+</div>
+<div class="dont">
+<strong>别把噪声阈值调到"看起来很干净"</strong>
+<p>噪声标记率超过 15% 通常意味着正文在被误删。宁可留下几行页眉，也不要丢掉一段代码。</p>
+</div>
+<div class="dont">
+<strong>别把用户的修改直接写回原文件</strong>
+<p>编辑结果存成独立文件（如 output.edited.md），原始产物保持不可变。这样任何时候都能 diff 和一键回滚。</p>
+</div>
+</div>
+
+<h3>质量验证指标</h3>
+<ul>
+<li><strong>文字完整度</strong>：输出 Markdown 字数 vs 原文预估字数（不应过度缩减）</li>
+<li><strong>噪声过滤率</strong>：被标记噪声的文字块占比（正常 5%-15%，过高说明误标）</li>
+<li><strong>代码块完整性</strong>：所有 ``` 围栏正确配对闭合</li>
+<li><strong>分块均匀度</strong>：chunk 长度标准差，过大说明分块不均</li>
+<li><strong>人工抽检得分</strong>：随机抽取 chunks 对照原 PDF 评分</li>
+</ul>
+
+<h3>性能考量</h3>
+<table>
+<tr><th>场景</th><th>瓶颈</th><th>优化手段</th></tr>
+<tr><td>300+ 页 PDF</td><td>Debug 图像生成</td><td>asyncio.to_thread() 移出事件循环</td></tr>
+<tr><td>OCR 处理</td><td>逐页识别耗时</td><td>GPU 加速 / 多进程并行</td></tr>
+<tr><td>大批量文档</td><td>Pipeline 串行</td><td>任务队列（Celery/RQ）+ 并发 worker</td></tr>
+</table>
+
+<div class="interview-box">
+<ul>
+<li>为什么"原始文件不可变"？ — 用户编辑存独立文件（output.edited.md），方便 diff 和 revert</li>
+<li>如何评估 PDF 清洗质量？ — 文字完整度 + 噪声过滤率 + 代码完整性 + 人工抽检</li>
+<li>异步架构的必要性：同步 Pipeline 会阻塞 event loop，导致 WebSocket 心跳超时、UI 卡死</li>
+<li>设计一个生产级 PDF 清洗服务需要考虑什么？ — 异步处理 + 进度推送 + 断点续传 + 幂等性 + 监控</li>
+</ul>
+</div>
+</div>
+
+<!-- Q&A Section -->
+<div class="qa-section">
+<h2 id="qa">Q&amp;A（Top 10）</h2>
+
+<details>
+<summary>PDF 文档有文本层和扫描版两种，它们的清洗策略有何本质区别？</summary>
+<p class="answer">有文本层的 PDF 可以直接通过 API（如 PyMuPDF 的 get_text("dict")）读取字符流，文字在对象层面始终完整，即使被广告遮盖也能恢复。扫描版 PDF 整页是位图，必须先 OCR 才能得到文字，且如果广告像素直接覆盖了正文像素，信息在物理上已经损毁，无法恢复。策略差异：原生 PDF 重点在去噪和结构恢复；扫描版重点在 OCR 精度和图层分离。</p>
+</details>
+
+<details>
+<summary>广告完全盖住了正文代码，为什么还能恢复？请解释 PDF 的分层原理。</summary>
+<p class="answer">PDF 内部是分层结构：文本对象、绘图对象、图像对象各自独立存在。"广告盖住正文"在文件层面 = 一个绘图对象（半透明/深色矩形）的 z-order 在文本对象之上。用 get_text("dict") 直接读字符流时，完全绕过了绘图层的遮盖效果。关键实现：解析层读文本流（不受影响）→ 检测层从绘图层识别遮罩并打标记 → 输出层不过滤 is_overlay_recovered 的文字块。三道保险确保文字零损失。</p>
+</details>
+
+<details>
+<summary>设计一个 PDF 噪声检测系统，你会用哪些策略？如何防止误删正文？</summary>
+<p class="answer">7 策略：①重复文本检测（同文本≥30%页出现）；②固定位置检测（同文本同位置）；③页眉页脚（位置区域+导航内容特征）；④水印（超大字体+高频出现）；⑤遮罩/Banner（绘图对象的颜色/透明度/面积分析）；⑥高频兜底（≥80%页同文本同位置）；⑦正文保护（白名单+区域保护）。防误删核心：所有检测只打标志不删数据；CODE/TITLE/HEADING 块永远清除噪声标志；最后一步 _protect_body_text 兜底。宁可漏检不误删。</p>
+</details>
+
+<details>
+<summary>技术类 PDF 中代码块为什么容易被误判为噪声？如何解决？</summary>
+<p class="answer">原因：代码短行如 <code>}</code>、<code>return 0;</code> 在多页重复出现，触发"重复=广告"启发式；代码常落在页面底部，触发页脚检测。解决方案是 6 层防御：①从 PDF 字体 flag 读等宽位；②布局分类标记为 CODE；③噪声检测遇代码模式跳过；④跨页合并拒绝 CODE 参与；⑤Markdown 输出合并连续 CODE 为单一围栏；⑥分块永不在代码内切割。设计理念：层层递进，任一层出错下一层兜底。</p>
+</details>
+
+<details>
+<summary>扫描版 PDF 有广告覆盖时，什么情况可以恢复，什么情况不可以？</summary>
+<p class="answer">可恢复：①多 image XObject 叠加（广告和底图是独立图层），分离后只 OCR 底图；②扫描底图+矢量广告层，矢量层不进 OCR 输入。不可恢复：广告已 flatten 进位图（像素覆盖=信息损毁，信息论意义上不可逆）。判断方法：page.get_images() 返回多张图→可救；仅1张→已 flatten。不推荐 inpainting：填充的是"视觉合理"的像素而非真实文字，OCR 结果是乱码。最佳实践：标记缺失区域 + 让用户手动补录。</p>
+</details>
+
+<details>
+<summary>PDF 表格提取有哪些方案？各适用什么场景？</summary>
+<p class="answer">6 种方案：A.线条几何网格重建（适合完整网格表、半边框表）；B.文本 bbox 列对齐（适合无线条伪表格）；C.pdfplumber extract_tables（最划算 MVP，覆盖 70% 场景）；D.AI 版面模型+结构识别（工业级，覆盖合并单元格/嵌套表）；E.跨页表合并（检测相邻页表格连续性）；F.扫描表 OCR + PP-Structure。推荐路径：先上 pdfplumber 解决大多数场景，再按需引入 AI 模型处理复杂表格。RAG 场景建议额外做"表格平铺"：逐行转为自然语言句子，提升 embedding 效果。</p>
+</details>
+
+<details>
+<summary>启发式布局分类是如何工作的？与 AI 版面模型相比各有什么优劣？</summary>
+<p class="answer">启发式方法：统计全文档字体大小频率，最高频为正文字体；≥1.8x 正文=TITLE，≥1.4x=HEADING；等宽字体+小字号=CODE；以列表符号开头=LIST_ITEM。优点：零外部依赖、速度极快（纯 CPU 毫秒级）、完全可解释可调试。缺点：对复杂版面（杂志、混合图文）效果差，无法识别表格区域。AI 版面模型（DocLayout-YOLO/LayoutParser）能处理任意复杂版面，但需要 GPU、模型文件、推理耗时。折中方案：启发式为默认，AI 模型为可选增强。</p>
+</details>
+
+<details>
+<summary>如何设计 RAG 场景下的语义分块策略？需要考虑哪些约束？</summary>
+<p class="answer">核心策略：以标题（#/##）为自然切分点开新 chunk；代码围栏内不切割（保持完整性）；超出 max_size 在段落边界切割；过短 chunk 合并入前一个避免碎片化。约束考量：①Embedding 模型最大输入长度（通常 512-8192 tokens）；②检索精度（chunk 越小越精确但丢上下文）；③内容完整性（代码/表格不可拆）；④与索引粒度匹配。进阶优化：Parent-Child 策略（小块检索+大块返回）、chunk overlap 防信息切断、metadata 保留（heading/来源/页码）辅助过滤。</p>
+</details>
+
+<details>
+<summary>多栏 PDF 的阅读顺序如何恢复？有什么边界情况？</summary>
+<p class="answer">核心算法：按文字块 x 中心点与页面中线比较，分为左栏/右栏/全宽块；各栏内按 y 排序；全宽块按 y 坐标插入正确位置；最终合并为 左栏→右栏 的阅读序。边界情况：①跨栏标题/图片（宽度>70%页宽视为全宽）；②三栏以上版面（中线二分法失效，需 DBSCAN 聚类）；③侧边注释/脚注（位置在边栏但不是主内容流）；④表格跨栏（整个表格宽度可能横跨两栏）。当前主流开源方案大多只支持 1-2 栏，杂志级复杂版面仍需 AI 辅助。</p>
+</details>
+
+<details>
+<summary>如果让你从零设计一个面向 RAG 的 PDF 清洗系统，架构如何设计？</summary>
+<p class="answer">分层架构：①解析层：PyMuPDF 提取文本/绘图/图像三类对象，检测 is_scanned 分流；②布局层：启发式分类（默认）或 AI 版面模型（可选），输出 BlockType；③去噪层：多策略检测 + 正文保护白名单，所有操作仅打标志；④结构恢复层：阅读顺序排序 + 跨页合并 + 表格重建；⑤输出层：按标志过滤噪声，生成结构化 Markdown；⑥分块层：标题驱动+代码保护+大小控制，输出 chunks.json。工程保障：异步处理+WebSocket进度推送+原始文件不可变+编辑层隔离+Debug可视化+质量评分。技术栈：FastAPI + PyMuPDF + PaddleOCR(可选) + asyncio + 文件存储。</p>
+</details>
+
+</div>
+
+</div>
+
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+  </body>
+</html>

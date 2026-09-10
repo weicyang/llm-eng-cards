@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST23 · MQ 消费者分配策略：RocketMQ 与 Kafka 的负载均衡设计</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、问题定义：队列-消费者绑定规则</a>
+<a href="#s2">二、RocketMQ 四种分配策略</a>
+<a href="#s3">三、Kafka：客户端算账，服务端跑腿</a>
+<a href="#s4">四、选举的反差：董事会级严谨与先到先得</a>
+<a href="#s5">五、选型与落地</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<div class="container">
+
+<h1>ST23 · MQ 消费者分配策略：RocketMQ 与 Kafka 的负载均衡设计</h1>
+<p class="subtitle">队列-消费者绑定规则 / RocketMQ 四策略演进 / 一致性哈希与虚拟节点 / Coordinator + Consumer Leader / KRaft 选举 / Rebalance 治理</p>
+
+<div class="intuition-box">
+<p>MQ 负载均衡的本质是给"队列 ↔ 消费者"画一张绑定账本：RocketMQ 让每个消费者用同一算法各自算出自己那份，Kafka 让一个组长统一算、服务端只负责分发。所有策略演进（切段 → 环形 → 一致性哈希 → 同机房）都在追求同一件事——让"重画账本"的代价越来越小。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、问题定义：队列-消费者绑定规则</h2>
+
+<p>消息中间件为了扛住高并发，会把一个 Topic 物理切分：RocketMQ 叫 <span class="term">MessageQueue（消息队列）</span>，Kafka 叫 <span class="term">Partition（分区）</span>。消费端则把多个消费者实例组成一个 <span class="term">Consumer Group（消费者组）</span> 共同消费。<strong>负载均衡要回答的问题只有一个：哪个队列归哪个消费者？</strong></p>
+
+<div class="arch-diagram">
+Topic: order-topic (6 个队列)                Consumer Group: order-service
+──────────────────────────                    ────────────────────────────
+  Q0 ──────────────────────────────────────►  C1
+  Q1 ──────────────────────────────────────►  C1
+  Q2 ──────────────────────────────────────►  C2
+  Q3 ──────────────────────────────────────►  C2
+  Q4 ──────────────────────────────────────►  C3
+  Q5 ──────────────────────────────────────►  C3
+
+绑定规则：
+  ① 同组内，一个队列同一时刻只能绑定给 1 个消费者（不抢活）
+  ② 一个消费者可同时绑定多个队列（能者多劳）
+  ③ 不同消费者组各自拿到全量消息（组间发布-订阅，互不影响）
+  ④ 消费者数 ＞ 队列数 → 多出来的消费者空转，收不到任何消息
+</div>
+
+<p>"同组一队列单消费者"是铁律：若两个消费者同时读同一队列，offset（消费位点）会互相踩踏，重复消费与乱序随之而来。RocketMQ 该规则只约束集群消费模式，广播模式下人人拿全量、无需分配。</p>
+
+<table>
+<tr><th>维度</th><th>RocketMQ</th><th>Kafka</th></tr>
+<tr><td>绑定单元</td><td>MessageQueue</td><td>Partition</td></tr>
+<tr><td>单消费者规则</td><td>同组内一个队列同时只归一个消费者</td><td>同组内一个分区同时只归一个消费者</td></tr>
+<tr><td>谁来计算分配</td><td>去中心化：每个消费者各自独立计算</td><td>中心化：Consumer Leader 统一算，Coordinator 分发</td></tr>
+<tr><td>重平衡节奏</td><td>每 20s 周期性主动执行一次</td><td>事件驱动：成员/订阅变化即触发</td></tr>
+<tr><td>并行度上限</td><td>队列数（超出则消费者空转）</td><td>分区数（超出则消费者空转）</td></tr>
+</table>
+
+<p>建立/变更这张绑定表的过程就是 <span class="term">Rebalance（重平衡）</span>。它不是免费的：重平衡期间消费暂停、可能重复消费、位点回退。两家框架的触发条件高度相似，但执行节奏不同。</p>
+
+<table>
+<tr><th>触发事件</th><th>RocketMQ</th><th>Kafka</th></tr>
+<tr><td>消费者加入 / 退出</td><td>✓</td><td>✓（JoinGroup / LeaveGroup）</td></tr>
+<tr><td>消费者宕机 / 心跳超时</td><td>✓（Broker 感知连接断开）</td><td>✓（session.timeout.ms 判死）</td></tr>
+<tr><td>队列 / 分区数量变化</td><td>✓（Topic 扩缩队列）</td><td>✓（Topic 加分区）</td></tr>
+<tr><td>订阅关系变化</td><td>✓（订阅 Topic 集合变化）</td><td>✓（subscribe 列表变化）</td></tr>
+<tr><td>执行方式</td><td>每 20s 定时检查，发现不一致即重算</td><td>事件驱动，Coordinator 发起</td></tr>
+<tr><td>典型代价</td><td>队列易主后重复消费一段</td><td>Eager 协议下全组 stop-the-world</td></tr>
+</table>
+
+<div class="highlight">
+<strong>重平衡的代价是量出来的：</strong>一个持有数百个分区的大型消费者组，一次传统（Eager）重平衡可以让全组停顿数秒乃至数分钟；期间消费吞吐归零，消费延迟（lag）按锯齿状飙升。重平衡不是"系统抖动"，而是每次成员变更都要支付的一笔账。
+</div>
+
+<div class="intuition-box">
+<p>绑定表就是消费的账本：账本清晰则不抢活、不漏活；账本频繁重画（重平衡风暴），重复消费和延迟堆积就会接踵而至。</p>
+</div>
+
+<div class="intuition-box">
+<p>评估一个分配策略，先算两笔账：一次"重画账本"要花多久（停顿与重复消费），成员变更有多频繁——策略的总代价 = 单次代价 × 变更频率，后文所有策略差异都是在这两个乘数上做文章。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、RocketMQ 四种分配策略</h2>
+
+<p>RocketMQ 是去中心化设计：<strong>同组每个消费者拿到"排序后的队列全量列表 + 排序后的消费者列表"，独立运行同一个分配算法</strong>，算出属于自己的子集。输入相同、算法相同，结果天然一致，不需要中央裁判。内置四种策略正好构成一条演进链：绝对公平 → 物理摊险 → 最小变更 → 拓扑感知。</p>
+
+<table>
+<tr><th>策略实现类</th><th>一句话原理</th><th>解决什么</th><th>留下什么</th></tr>
+<tr><td>AllocateMessageQueueAveragely（默认）</td><td>队列切段，按消费者顺序分段领取</td><td>简单、绝对平均</td><td>物理单点故障</td></tr>
+<tr><td>AllocateMessageQueueAveragelyByCircle</td><td>像发扑克牌一样一人一张轮流发</td><td>风险跨 Broker 摊平</td><td>成员变化即全局抖动</td></tr>
+<tr><td>AllocateMessageQueueConsistentHash</td><td>队列和消费者上哈希环，顺时针就近归属</td><td>增减成员只迁移局部</td><td>环上拥挤导致倾斜（需虚拟节点）</td></tr>
+<tr><td>AllocateMachineRoomNearby</td><td>同机房队列优先绑定同机房消费者</td><td>消灭跨城拉取延迟</td><td>依赖机房元信息配置</td></tr>
+</table>
+
+<h3>切段平均分配 AllocateMessageQueueAveragely —— 默认选择与它的物理单点</h3>
+
+<div class="formula">
+8 队列 ÷ 3 消费者 = 2 余 2 → 前 (余数=2) 个消费者各多拿 1 个：C1 拿 3、C2 拿 3、C3 拿 2
+</div>
+
+<div class="arch-diagram">
+队列物理布局：  q0  q1  q2  q3  │  q4  q5  q6  q7
+                ─── broker-a ───│─── broker-b ───
+
+切段分配结果（按顺序切成连续的段）：
+  C1 ──► q0 q1 q2        ◄── 三个队列全在 broker-a 上！
+  C2 ──► q3 q4 q5
+  C3 ──► q6 q7
+
+broker-a 宕机时：
+  C1 ──► [全部不可用] 直接空转      ◄── 物理单点故障
+  C2 ──► q4 q5        （丢 q3，压力 +50%）
+  C3 ──► q6 q7        （不受影响）
+</div>
+
+<p>切段法数学上最平均，但队列在物理上按 Broker 聚集。连续的段容易整体落在同一台 Broker 上，一台机器故障就让对应消费者"断粮"，而别的消费者却完好无损——逻辑平均掩盖了物理不均。</p>
+
+<table>
+<tr><th>优点</th><th>缺点</th><th>适用</th></tr>
+<tr><td>实现极简、分配绝对平均、结果稳定可复现</td><td>队列段与 Broker 强绑定，单 Broker 故障打瘫对应消费者</td><td>单机房、Broker 数量多且队列交错分布的场景</td></tr>
+</table>
+
+<h3>环形分配 AllocateMessageQueueAveragelyByCircle —— 摊平风险与全局抖动</h3>
+
+<div class="arch-diagram">
+像发扑克牌：q0→C1, q1→C2, q2→C3, q3→C1, q4→C2, q5→C3, q6→C1, q7→C2
+
+  C1 ──► q0(broker-a)  q3(broker-a)  q6(broker-b)
+  C2 ──► q1(broker-a)  q4(broker-b)  q7(broker-b)
+  C3 ──► q2(broker-a)  q5(broker-b)
+
+broker-a 宕机 → 每个消费者只失去 3 个队列中的 1 个，风险被均匀摊薄
+但：新加一个 C4 → 发牌轮次全变 → 所有绑定关系推倒重来 → 全局抖动
+</div>
+
+<p>环形法把每个消费者的队列打散到不同 Broker 上，任何一台机器故障，所有消费者等比例受损而非某一家阵亡。代价是它对成员变化零容忍：人数一变，发牌序列整体重排，每个队列的归属几乎全变，全员进入重平衡停顿。</p>
+
+<table>
+<tr><th>优点</th><th>缺点</th><th>适用</th></tr>
+<tr><td>队列跨 Broker 交错，物理风险均匀摊平</td><td>增减消费者导致全量绑定重排，全局抖动</td><td>成员稳定、看重故障均匀分布的场景</td></tr>
+</table>
+
+<h3>一致性哈希 AllocateMessageQueueConsistentHash —— 局部迁移与虚拟节点</h3>
+
+<p><span class="term">一致性哈希（Consistent Hashing）</span> 把 0 ~ 2³²−1 的哈希值空间首尾相接成一个环：消费者 ID 哈希后作为节点钉在环上，队列哈希后落在环上某点，从该点顺时针走，遇到的第一个消费者就是它的归属。它的目标不是"分得更公平"，而是"变化的时候动得更少"。</p>
+
+<div class="arch-diagram">
+                      0°
+                       │
+              C3 ●     │     ● C1
+                 ╲     │     ╱
+           q5 →   ╲    │    ╱   ← q1
+                   ╲   │   ╱
+             q4 →   ● C2    ← q2
+                       │
+                     180°
+
+规则：队列从落点顺时针走，遇到的第一个消费者即归属
+  q1 → 顺时针遇 C1 → 归 C1        q4 → 顺时针遇 C2 → 归 C2
+
+新加 C4（落在 C3 与 C1 之间的弧上）：
+  只有 "C3 → C4" 弧段内的队列改归 C4
+  其余队列归属纹丝不动 → 迁移范围 ≈ 队列总数 / 消费者数
+对比切段/环形：成员一变，近乎 100% 绑定重排
+</div>
+
+<p>但一致性哈希有个软肋：消费者在环上的位置是哈希决定的，若几个消费者挤在环的一侧，某段巨大的弧只归一个消费者管——队列分布稍微不均，就会出现"一个消费者扛 90% 队列"的倾斜。解药是 <span class="term">虚拟节点（Virtual Node）</span>：每个物理消费者在环上克隆出多个虚拟节点均匀散开，队列先归虚拟节点，再映射回物理消费者。RocketMQ 的该策略默认每个消费者挂 10 个虚拟节点，工程上常见取值是 100~512 个。</p>
+
+<div class="formula">
+负载偏差 ≈ O(1/√T)，T 为虚拟节点数：T=256 时，95% 置信度下每个节点负载落在期望值 ±6% 内
+</div>
+
+<table>
+<tr><th>虚拟节点数 T</th><th>均匀度</th><th>元数据/查找开销</th><th>故障时负载去向</th></tr>
+<tr><td>1（裸环）</td><td>差，偏差可达平均值的 2~3 倍</td><td>最低</td><td>全部压给顺时针下一个邻居（连环故障风险）</td></tr>
+<tr><td>10（RocketMQ 默认）</td><td>明显改善</td><td>低</td><td>分摊给多个邻居</td></tr>
+<tr><td>100~512（工程常用）</td><td>接近理想均匀</td><td>中等</td><td>几乎均摊到全环</td></tr>
+</table>
+
+<table>
+<tr><th>优点</th><th>缺点</th><th>适用</th></tr>
+<tr><td>增减成员只迁移约 1/N 的队列，局部变更、抖动最小</td><td>无虚拟节点时易倾斜；实现复杂度最高</td><td>频繁扩缩容、弹性伸缩的消费组</td></tr>
+</table>
+
+<h3>同机房分配 AllocateMachineRoomNearby —— 跨城双活的必修课</h3>
+
+<div class="arch-diagram">
+      北京机房 BJ                                 上海机房 SH
+┌──────────────────────────────┐      26ms      ┌──────────────────────────────┐
+│ broker-bj-1  broker-bj-2     │ ◄──跨城专线──► │ broker-sh-1  broker-sh-2     │
+│ 队列 q4 q5 q6 q7             │     RTT        │ 队列 q0 q1 q2 q3             │
+│ 消费者 C-bj-1  C-bj-2        │                │ 消费者 C-sh-1                │
+└──────────────────────────────┘                └──────────────────────────────┘
+
+默认切段分配（按队列名排序切段）：
+  C-bj-1 ──► q0 q1 q2     ◄── 全在上海！每次拉消息先付 26ms 跨城往返
+  C-bj-2 ──► q3 q4 q5     ◄── 1 个本地 + 2 个跨城
+  C-sh-1 ──► q6 q7        ◄── 全在北京！
+
+AllocateMachineRoomNearby：
+  第一步：同机房内先配对（内部包一个 Averagely 策略）
+    C-bj-1 ──► q4 q5      C-bj-2 ──► q6 q7      C-sh-1 ──► q0 q1 q2 q3
+  第二步：某机房消费者死光时，剩余队列兜底分给其他机房（降级保底）
+</div>
+
+<p>跨城专线往返通常在 20~30ms 量级，是同机房网络延迟（亚毫秒）的几十倍。拉取频率一高，跨城延迟会把消费吞吐和端到端延迟一起拖垮——算法再精妙也救不了物理距离。该策略要求实现一个 MachineRoomResolver，告诉框架"队列属于哪个机房（按 brokerName 前缀解析）"和"消费者部署在哪个机房（按 clientID 前缀解析）"。另有更严格的 AllocateMessageQueueByMachineRoom：直接配置 consumeridcs，消费者只消费指定机房的队列，其余队列不分配（无兜底）。</p>
+
+<div class="highlight">
+<strong>生产案例 · 跨城拉取消除：</strong>某金融系统京沪双活，16 个队列跨两机房、5 个消费者，默认切段分配下跨机房拉取占比约 50%，单次拉取往返 p99 达 28ms，消费端到端延迟 p99 约 1.8s。切换 AllocateMachineRoomNearby 后，正常态跨机房拉取占比降为 0，拉取往返 p99 降至 1.2ms，消费延迟 p99 从 1.8s 回落到约 120ms；且单机房消费者全挂时，队列可自动被另一机房兜底接管。
+</div>
+
+<table>
+<tr><th>优点</th><th>缺点</th><th>适用</th></tr>
+<tr><td>消灭跨城拉取延迟，兼有故障兜底</td><td>需自行维护机房解析逻辑与命名规范</td><td>同城双活 / 异地多活部署</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>四种策略是一条演进链：切段追求"分得平均"，环形追求"坏得均匀"，一致性哈希追求"改得最少"，同机房追求"离得最近"——每一代都在补上一代的致命伤。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、Kafka：客户端算账，服务端跑腿</h2>
+
+<p>Kafka 的分配策略（Range / RoundRobin / Sticky / CooperativeSticky，甚至可以自己写）全部实现在客户端。分区数据明明在服务端，"怎么分"却由客户端说了算——这套机制靠三个角色配合完成：<span class="term">Coordinator（协调者）</span> 是 Broker 侧对接某个消费者组的秘书，<span class="term">Consumer Leader（组长）</span> 是消费者侧被临时点出来的算账人，Controller 则在幕后掌管集群元数据（下一节展开）。</p>
+
+<div class="arch-diagram">
+  消费者 C1          消费者 C2          消费者 C3
+     │                 │                 │
+     │ ① JoinGroup     │ ① JoinGroup     │ ① JoinGroup
+     ▼                 ▼                 ▼
+  ┌────────────────────────────────────────────────────┐
+  │        Group Coordinator（某个 Broker 担任）        │
+  │   定位公式：__consumer_offsets[ hash(groupId) % 50 ] │
+  │              该分区的 Leader 即 Coordinator          │
+  └────────────────────────────────────────────────────┘
+     │ ② 第一个 JoinGroup 的 C1 被点为组长（Consumer Leader）
+     │ ③ 下发全组成员的订阅信息 + 相关 Topic 的分区元数据
+     ▼
+  C1 在本地执行分区分配算法（partition.assignment.strategy）
+     │ ④ SyncGroup：把整张分配表带回给 Coordinator
+     ▼
+  Coordinator 在每个人的 SyncGroup 响应里，
+  只塞回"属于你自己的那份"分配结果 → 全组达成一致
+</div>
+
+<table>
+<tr><th>角色</th><th>所在位置</th><th>职责</th><th>不做什么</th></tr>
+<tr><td>Coordinator</td><td>Broker 侧（按 groupId 哈希固定到某分区 Leader）</td><td>收 JoinGroup/Heartbeat，发起重平衡，转发分配结果</td><td>不计算分配方案，也不懂全集群分区布局</td></tr>
+<tr><td>Consumer Leader</td><td>消费者侧（第一个加入的成员）</td><td>拉取元数据，本地算出整张分配表</td><td>不做持久化，挂了下次重平衡换人重算</td></tr>
+<tr><td>普通成员</td><td>消费者侧</td><td>发心跳、等结果、按分配表拉消息</td><td>不参与计算</td></tr>
+<tr><td>Controller</td><td>Broker 侧（全集群唯一）</td><td>提供分区元数据的权威来源</td><td>不介入消费组的具体分配</td></tr>
+</table>
+
+<div class="formula">
+Coordinator 定位：coordinator = Leader( __consumer_offsets[ abs(hash(groupId)) % 50 ] ) —— 问任何 Broker 都会指路到同一个节点
+</div>
+
+<p>为什么把最核心的"分蛋糕权"放在客户端？这是刻意的解耦设计。对比两种放置方式：</p>
+
+<table>
+<tr><th>维度</th><th>分配逻辑放服务端</th><th>分配逻辑放客户端（Kafka 现状）</th></tr>
+<tr><td>换一种分配算法</td><td>停机升级整个 Kafka 集群</td><td>改业务代码，重启自己的消费者即可</td></tr>
+<tr><td>算法出 bug</td><td>全公司所有消费组陪葬</td><td>只影响自家应用，回滚即恢复</td></tr>
+<tr><td>服务端复杂度</td><td>要理解一切业务语义（同机房、粘性、机架感知……）</td><td>只需当"跑腿的"，协议稳定</td></tr>
+<tr><td>策略不一致风险</td><td>不存在</td><td>同组成员策略需一致（由 groupId 内的约定保证）</td></tr>
+<tr><td>演进成本</td><td>每次迭代动集群</td><td>客户端各自演进，服务端无感</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>"客户端算账，服务端跑腿"是一次权力的开源：服务端只保证"账本分发到位"，把"怎么算账"的权力让渡给业务方，换来的是服务端协议的长期稳定。</p>
+</div>
+
+<p>补充一个演进方向：Kafka 4.x 时代引入的新消费者协议（KIP-848）开始把分配计算挪回服务端的 Group Coordinator，用服务端 assignor 换取"重平衡不再全组停顿"。注意这并不推翻上面的设计逻辑——它换掉的是经典协议里"每次重平衡都全员重新算账"的低效环节，而不是要把业务定制权收回去。</p>
+
+<div class="intuition-box">
+<p>对照来看：RocketMQ 走"分布式各算各的"，靠排序保证输入一致；Kafka 走"组长统算、服务端分发"，靠 Coordinator 保证结果一致。殊途同归——都避免了让服务端承担业务分配逻辑。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、选举的反差：董事会级严谨与先到先得</h2>
+
+<p>同样是"选一个管事的"，Kafka 服务端选 <span class="term">Controller（控制器）</span> 极尽严谨，客户端选 Consumer Leader 却随意到只有四个字：<strong>先到先得</strong>——谁第一个向 Coordinator 发出 JoinGroup，谁就是组长。反差背后是资产价值的差异。</p>
+
+<h3>服务端 Controller：从抢临时节点到 Raft 董事会</h3>
+
+<div class="arch-diagram">
+旧时代（依赖 ZooKeeper）：
+  Broker-1 ─┐
+  Broker-2 ─┼──► 争相创建 ZK 临时节点 /controller
+  Broker-3 ─┘    谁先建成谁当 Controller（ZK 强一致性保证唯一）
+                 会话约 18s：失联 → 节点消失 → 全员重新抢
+                 新 Controller 必须从 ZK 全量重建元数据（几十万分区要分钟级）
+
+新时代（KRaft，Kafka 4.0 起唯一模式）：
+  ┌─── 元数据仲裁组（3 或 5 个 Controller）───┐
+  │  C1 ◄──Raft 投票──► C2 ◄──Raft 投票──► C3 │
+  │  多数派选出 Active Controller（日志最新者） │
+  │  其余为热备，持续追 __cluster_metadata 日志 │
+  └───────────────────────────────────────────┘
+  元数据即日志：写入走 Raft 多数派确认 → 强一致
+  Leader 故障 → 热备秒级接班（无需重建，<1s）
+</div>
+
+<p>老架构里所有 Broker 像抢椅子一样扑向 ZooKeeper 的 <code>/controller</code> 临时节点，集群一大，几百节点同时抢就是网络风暴；而且新 Controller 上任要从 ZK 全量拉元数据，分区一多恢复以分钟计。<span class="term">KRaft</span>（Kafka 自研的 Raft 元数据模式）干脆干掉 ZooKeeper：挑 3 或 5 个节点组成"董事会"，用 Raft 投票选出 Active Controller，元数据存进内部 Topic <code>__cluster_metadata</code>，热备节点全程追日志，接班不需要重建任何东西。</p>
+
+<table>
+<tr><th>指标</th><th>ZooKeeper 模式</th><th>KRaft 模式</th></tr>
+<tr><td>部署形态</td><td>Kafka + ZK 两套系统</td><td>Kafka 单套系统</td></tr>
+<tr><td>Controller 选举</td><td>抢 /controller 临时节点，先到先得（ZK 保证唯一）</td><td>3/5 节点 Raft 多数派投票（3 容忍挂 1，5 容忍挂 2）</td></tr>
+<tr><td>元数据存储</td><td>ZK 树状节点 + 一次性 Watch 通知（有丢失窗口）</td><td>内部 Topic 日志复制，同步拉取</td></tr>
+<tr><td>故障接班耗时</td><td>全量重建，秒级~分钟级</td><td>热备追日志，亚秒级（<1s）</td></tr>
+<tr><td>集群启动</td><td>分钟级（等 ZK 会话）</td><td>秒级</td></tr>
+<tr><td>分区规模上限</td><td>约 20 万分区</td><td>百万级（实测可达 200 万）</td></tr>
+<tr><td>元数据操作延迟</td><td>受 ZK 网络往返拖累</td><td>较 ZK 模式下降 50% 以上</td></tr>
+</table>
+
+<h3>客户端 Consumer Leader：先到先得，以及为什么敢这么随意</h3>
+
+<table>
+<tr><th>维度</th><th>服务端 Controller 选举</th><th>客户端 Consumer Leader 选举</th></tr>
+<tr><td>守护的资产</td><td>全集群元数据：分区 Leader、ISR、Topic 配置</td><td>一次分配计算（临时结果）</td></tr>
+<tr><td>选错的后果</td><td>元数据脑裂 → 数据丢失 / 双写</td><td>无所谓：重平衡重算一遍即可</td></tr>
+<tr><td>状态性</td><td>有状态，必须持久化且可恢复</td><td>无状态：成员+订阅+分区 → 确定性输出</td></tr>
+<tr><td>选举方式</td><td>ZK 抢节点 → KRaft Raft 投票</td><td>先到先得（首个 JoinGroup 者）</td></tr>
+<tr><td>选举频率</td><td>极低（只在故障时）</td><td>每次重平衡都选</td></tr>
+<tr><td>能承受的开销</td><td>昂贵也值得（几年一遇）</td><td>必须廉价（一天可能发生几十次）</td></tr>
+<tr><td>组长挂了怎么办</td><td>—</td><td>Coordinator 发起新一轮重平衡，自动换新组长</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>选举的严谨程度与它守护的资产价值成正比：Controller 管着集群的"房产证"，必须 Raft 公证；Consumer Leader 只是临时会计，账算错了重算就是，先到先得反而是最优解。</p>
+</div>
+
+<div class="highlight">
+<strong>同一框架内的刻意反差：</strong>服务端为选 Controller 引入了完整共识协议，把故障接班从分钟级压到亚秒级；却对客户端组长选举零投入。因为组长的产出（分配表）可由确定性输入重新推导，任何"严谨选举"带来的收益都会被重平衡的高频率稀释成负收益。
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、选型与落地</h2>
+
+<h3>按场景选策略</h3>
+
+<table>
+<tr><th>场景</th><th>推荐</th><th>理由</th></tr>
+<tr><td>RocketMQ 单机房、成员稳定</td><td>默认切段平均</td><td>简单、平均；成员不变则绑定不变</td></tr>
+<tr><td>RocketMQ 看重 Broker 故障均匀受损</td><td>环形分配</td><td>每个消费者跨 Broker 持有队列</td></tr>
+<tr><td>RocketMQ 频繁扩缩容 / 弹性伸缩</td><td>一致性哈希（带虚拟节点）</td><td>增减成员只迁移约 1/N 队列</td></tr>
+<tr><td>RocketMQ 跨城双活 / 异地多活</td><td>AllocateMachineRoomNearby</td><td>同机房优先 + 故障兜底，消灭跨城拉取</td></tr>
+<tr><td>Kafka 常规消费</td><td>默认 Range / RoundRobin</td><td>够用即可，别为不存在的抖动买单</td></tr>
+<tr><td>Kafka 滚动发布 / 自动扩缩容</td><td>CooperativeStickyAssignor + 静态成员</td><td>增量重平衡，只有被移动的分区停顿</td></tr>
+<tr><td>Kafka 重处理逻辑（写库/调外部接口）</td><td>调小 max.poll.records + 处理移出 poll 线程</td><td>防 poll 超时被踢，连锁触发重平衡风暴</td></tr>
+</table>
+
+<h3>关键参数速查</h3>
+
+<table>
+<tr><th>参数</th><th>默认值</th><th>作用与调优方向</th></tr>
+<tr><td>RocketMQ Rebalance 周期</td><td>20s</td><td>定时重算分配；队列易主最迟 20s 内生效</td></tr>
+<tr><td>Kafka heartbeat.interval.ms</td><td>3s</td><td>心跳频率；建议不超过 session 超时的 1/3</td></tr>
+<tr><td>Kafka session.timeout.ms</td><td>10s（新版 45s）</td><td>判死窗口；太小误杀慢消费者，太大故障接管慢</td></tr>
+<tr><td>Kafka max.poll.interval.ms</td><td>5min</td><td>两次 poll 最大间隔；超过即被踢出组——重处理必调</td></tr>
+<tr><td>Kafka partition.assignment.strategy</td><td>RangeAssignor</td><td>客户端分配算法；同组成员必须一致</td></tr>
+<tr><td>Kafka group.instance.id</td><td>空</td><td>静态成员身份；容器重启在超时窗口内回来不触发重平衡</td></tr>
+</table>
+
+<h3>生产案例 · 重平衡风暴：扩容反而让延迟涨得更快</h3>
+
+<div class="arch-diagram">
+lag（积压）
+3.5M ┤                                      ╭── 锯齿状：每 ~5min 一轮重平衡
+2.1M ┤                         ╭────────────╯
+800k ┤             ╭───────────╯
+ 20k ┼─────────────╯
+     └─────┬───────┬───────┬───────┬───────┬──► 时间
+        正常运行   发布变更  扩容20→40  风暴持续   止血稳定
+                  (+1次DB调用)  (越扩越糟)  (T+45min) (T+90min)
+</div>
+
+<div class="highlight">
+<strong>背景 → 问题 → 根因 → 止血 → 效果：</strong>某订单管道（Kafka → 消费者 → 数据库写入），一次发布让每条消息多了一次数据库调用，单批处理时间从 2s 涨到 380s，超过 max.poll.interval.ms 默认 300s，消费者被逐个踢出组。值班同学按直觉扩容 20 → 40 实例，数据库连接池被进一步打满，组状态在 STABLE 与 REBALANCING 之间反复横跳：每轮 Eager 重平衡全组撤销分区、吞吐归零，2 小时内消费延迟从 2 万条涨到 350 万条，有效吞吐不足正常时的 10%。止血动作按序执行：① 停止继续扩容；② max.poll.records 从 500 调到 50，把重处理挪出 poll 线程；③ 分配器换成 CooperativeStickyAssignor（Kafka 2.4+，只移动真正要换主的分区，其余消费者不停）；④ 配置 group.instance.id 静态成员，滚动重启不再触发重平衡。T+90min 组稳定，积压 4 小时内消化归零。
+</div>
+
+<h3>落地清单</h3>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>让队列/分区数是消费者数的整数倍，避免"能者过劳"</li>
+<li>扩缩容、发布前确认分配策略与重平衡协议（Kafka 优先 Cooperative）</li>
+<li>重处理逻辑移出 poll 线程，按业务耗时留足 max.poll.interval.ms</li>
+<li>跨城多活为 RocketMQ 配同机房分配并维护好机房命名规范</li>
+<li>监控消费延迟曲线：锯齿状上升 = 重平衡风暴的指纹</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要部署多于队列数的消费者（纯空转，浪费资源）</li>
+<li>不要在延迟上涨时盲目加消费者——可能把故障扩成风暴</li>
+<li>不要在频繁滚动发布的组上沿用 Eager 重平衡且无静态成员</li>
+<li>不要在单次 poll 里同步做分钟级耗时操作</li>
+<li>不要同组混用不同分配策略，或在发布中途改 group.id</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>治理重平衡的心法只有一条：先让"变化"变少（静态成员、粘性分配），再让每次变化"动得少"（增量协议、一致性哈希），最后才轮到调超时参数兜底。</p>
+</div>
+
+<div class="intuition-box">
+<p>选型的终极标准不是"哪个策略更高级"，而是"变更频率 × 单次变更代价"哪个组合对你的业务最便宜：成员常年不动就用最简单的切段，天天扩缩容才值得上一致性哈希与增量协议。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么同组内一个队列同一时刻只能被一个消费者消费？两个一起消费会怎样？</summary>
+<div class="answer">队列是顺序追加的日志，消费进度由一个 offset 标记。若同组两个消费者同时读同一队列，两者会各自推进自己的位点，要么互相覆盖 offset 导致位点混乱，要么对同一条消息各处理一次造成重复消费；如果业务依赖队列内顺序（如同一订单的状态流转），并发消费还会打乱处理顺序。所以"一队列单消费者"是消费正确性的底线约束，而不是性能优化的选择。需要更高并行度时，正确做法是增加队列数，而不是让多个消费者挤一个队列。</div>
+</details>
+
+<details>
+<summary>消费者数量超过队列数会发生什么？怎么提升并行度？</summary>
+<div class="answer">多出来的消费者分不到任何队列，处于完全空转状态——不拉消息、不产生吞吐，只是白白占着进程和连接。因为绑定的最小单元是队列，组内有效并行度的上限就是队列数。提升并行度有三条路：给 Topic 扩队列（注意 Kafka 分区只能增不能减，且会破坏按 key 的分区序）；提高单个消费者的消费线程数（RocketMQ 的 consumeThreadMin/Max）；或增大批量消费大小。扩队列前先确认瓶颈确实在消费侧而不是下游依赖。</div>
+</details>
+
+<details>
+<summary>一致性哈希为什么比取模稳定？为什么还要虚拟节点？</summary>
+<div class="answer">取模是 hash(key) % N，N 一变，几乎所有 key 的归属全变（约 (N-1)/N 的映射失效）；一致性哈希把消费者钉在 0~2³²-1 的哈希环上，队列顺时针找最近的消费者，增减成员只会让环上一小段弧的归属易主，迁移量约 1/N。但裸环有个隐患：消费者位置由哈希随机决定，若挤在环的一侧，某个消费者会管到远超平均的弧段，造成负载倾斜。虚拟节点让每个物理消费者在环上克隆多个分身（RocketMQ 默认 10 个，工程上常用 100~512 个）均匀散开，负载偏差收敛到 O(1/√T)；节点故障时其负载也能分摊到多个邻居而非压垮单个后继。</div>
+</details>
+
+<details>
+<summary>Kafka 为什么把分配策略写在客户端？同组成员策略不一致会不会乱套？</summary>
+<div class="answer">这是刻意的解耦设计：分配逻辑放服务端意味着每次换算法、修 bug 都要停机升级整个 Kafka 集群，一个业务的坏算法会拖垮共享集群；放客户端后，业务改几行代码重启自己的消费者即可生效，服务端只需维持稳定的 JoinGroup/SyncGroup 协议当"跑腿的"。至于不一致风险：分配表由组长统一计算并经由 Coordinator 分发，只要同组成员配置的 partition.assignment.strategy 不一致，组内就会出现按错误假设计算的分配，因此约定同组统一策略是使用前提，Kafka 也靠这个约定而非服务端强制来维持秩序。</div>
+</details>
+
+<details>
+<summary>Kafka 的 Consumer Leader 是怎么产生的？它挂了怎么办？</summary>
+<div class="answer">没有任何选举算法——第一个向 Coordinator 发出 JoinGroup 请求的消费者就被指定为组长，纯粹的先到先得。Coordinator 把全组成员的订阅信息和相关分区元数据发给组长，组长在本地用配置的分配策略算出整张分配表，再通过 SyncGroup 交回，Coordinator 把结果拆成每人一份下发。组长挂了不用抢救：Coordinator 感知成员变化后发起新一轮重平衡，在剩余成员里重新点一个组长，基于同样的输入重算一遍——因为分配计算是无状态的确定性函数，重算成本低到不值得为选举投入任何复杂度。</div>
+</details>
+
+<details>
+<summary>为什么 Controller 选举要用 ZooKeeper/Raft 这么重的机制，而 Consumer Leader 先到先得？</summary>
+<div class="answer">两者守护的资产价值完全不同。Controller 掌管全集群元数据（分区 Leader 归属、ISR、Topic 配置），这是有状态的、唯一的权威来源：一旦选错或脑裂，可能出现双写、数据丢失，所以必须靠 ZK 强一致性或 Raft 多数派来保证唯一与正确，且选举罕见、开销可以昂贵。Consumer Leader 只产出一次分配计算，输入（成员、订阅、分区列表）完全可复得，输出可确定性重算，错了重来即可，且每次重平衡都要选一次，必须廉价快速。严谨程度匹配资产价值，这正是同一框架内两种选举反差巨大的原因。</div>
+</details>
+
+<details>
+<summary>哪些操作会触发 Kafka 重平衡？如何把停顿降到最低？</summary>
+<div class="answer">四类事件：新消费者加入、消费者退出或崩溃（心跳超过 session.timeout.ms 未达，或两次 poll 间隔超过 max.poll.interval.ms 被踢）、订阅的 Topic 集合变化、Topic 分区数增加。降低停顿的手段按优先级：① 换 CooperativeStickyAssignor，从"全组撤销重来"变成"只移动需要换主的分区"，扰动从秒级降到毫秒级；② 配置 group.instance.id 静态成员，容器滚动重启在超时窗口内回来不触发重平衡；③ 调大 max.poll.interval.ms 并把重处理移出 poll 线程，避免被误踢；④ 优雅关闭（主动 LeaveGroup）代替进程硬杀，免去等待会话超时的十几秒空窗。</div>
+</details>
+
+<details>
+<summary>跨城双活部署，RocketMQ 和 Kafka 分别该怎么避免跨机房消费？</summary>
+<div class="answer">RocketMQ 用 AllocateMachineRoomNearby：实现 MachineRoomResolver 告诉框架队列属于哪个机房（解析 brokerName 前缀）、消费者在哪个机房（解析 clientID 前缀），策略先在同机房内配对（内部可包一个 Averagely），某机房消费者死光时再把队列兜底给其他机房，避免跨城专线 20~30ms 的往返延迟吃掉吞吐。Kafka 的思路类似但走机架感知：给消费者设置 client.rack，配合 follower fetching（KIP-392），让消费拉取优先命中同机架/同机房的副本，跨城场景下把拉取流量锁在本地机房。两者的共性是：分配算法必须感知物理拓扑，纯逻辑平均在跨城部署里是负优化。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

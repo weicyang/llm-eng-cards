@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEC13 · AI Agent 沙箱与安全执行</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0d1117;--surface:#161b22;--border:#30363d;--text:#e6edf3;--accent:#58a6ff;--accent2:#79c0ff;--green:#3fb950;--orange:#f0883e;--purple:#bc8cff;--red:#ff7b72;--cyan:#39d353}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#8b949e;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#1c2128;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.8rem;margin-bottom:2rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#c9d1d9}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#c9d1d9}
+.arch-diagram{background:#1c2128;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#1c2128;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(88,166,255,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(63,185,80,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(240,136,62,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(240,136,62,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(63,185,80,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(255,123,114,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(240,136,62,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(88,166,255,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(88,166,255,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#8b949e}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:#0d1117;border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#8b949e;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(88,166,255,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、Agent 为什么需要沙箱</a>
+<a href="#s2">二、物理机 vs 虚拟机 vs 容器</a>
+<a href="#s3">三、MicroVM — 精简版虚拟机</a>
+<a href="#s4">四、CubeSandbox — 腾讯云开源云沙箱</a>
+<a href="#s5">五、选型决策与最佳实践</a>
+<a href="#s6">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>SEC13 · AI Agent 沙箱与安全执行</h1>
+<p class="subtitle">Agent 死循环风险 → 沙箱概念 → 物理机/虚拟机/容器对比 → MicroVM → CubeSandbox 架构与优化</p>
+
+
+<div class="intuition-box">
+<p>Agent 早晚会执行危险命令——不是"如果"而是"何时"。沙箱的意义不是让 Agent 不犯错，而是让它犯错了也炸不到自家：把高风险操作关进一个随时可以丢弃的隔离环境，Agent 才敢真正跑生产业务。</p>
+</div>
+
+<!-- ==================== 1. 为什么需要沙箱 ==================== -->
+<div class="section">
+<h2 id="s1">一、Agent 为什么需要沙箱</h2>
+
+<p>Agent 的运行机制本质上是一个<strong>死循环</strong>：组装上下文 → 模型推理 → 执行工具 → 结果塞回上下文 → 进入下一轮。这个循环一旦转起来，就没有人能保证它永远不跑偏。循环次数过多时，上下文会超过模型窗口被截断，早期设定的任务目标可能整个被截掉，模型随之进入<span class="term">目标偏移</span>（Goal Drift，模型在多轮执行后"忘记"原始目标，开始做无意义甚至危险的操作）状态。</p>
+
+<p>偏移状态下的 Agent 可能执行 <code>rm -rf /</code> 这类不可恢复的命令。而<span class="term">沙箱</span>（Sandbox，专门划分出来的、用于执行高风险操作的隔离环境，内部无论发生什么都不影响外部主环境）就是为此准备的兜底设施。</p>
+
+<div class="arch-diagram">
+┌─────────────────── Agent 主循环 ───────────────────┐
+│  组装上下文 → 模型推理 → 选择工具 → 执行 → 结果回写  │
+│       ↑____________________________________↓       │
+│        循环 N 轮后：上下文截断 → 目标偏移            │
+└───────────────────────┬────────────────────────────┘
+                        ↓ 高风险操作（执行代码 / 跑命令）
+        ┌───────────────────────────────────┐
+        │          沙箱（隔离环境）           │
+        │  rm -rf / ？ → 只炸沙箱内部        │
+        │  死循环？    → 超时即整体销毁       │
+        └───────────────┬───────────────────┘
+                        ↓ 仅返回执行结果
+               Agent 主环境完好无损
+</div>
+
+<table>
+<tr><th>风险阶段</th><th>发生什么</th><th>后果</th></tr>
+<tr><td>循环过多</td><td>上下文超过模型窗口被截断</td><td>早期目标丢失</td></tr>
+<tr><td>目标偏移</td><td>模型"忘记"自己在做什么</td><td>无意义或危险操作</td></tr>
+<tr><td>执行危险命令</td><td><code>rm -rf</code>、<code>drop table</code></td><td>生产环境不可恢复的损失</td></tr>
+</table>
+
+<div class="highlight">
+核心思想：让 Agent 执行命令确实有风险，但只要不是<strong>在我的环境</strong>里执行，那就约等于没风险。沙箱就是那个"别人的环境"——炸了也就炸了一个随时可以重建的临时空间。
+</div>
+
+<div class="intuition-box">
+<p>给 Agent 配沙箱，就像给拆弹专家配防爆罐：不指望他永远失手，而是保证失手时没人受伤。</p>
+</div>
+
+</div>
+
+<!-- ==================== 2. 三种隔离方案 ==================== -->
+<div class="section">
+<h2 id="s2">二、物理机 vs 虚拟机 vs 容器</h2>
+
+<p>隔离环境不是新需求，业界早有三种成熟方案，但对 Agent 场景来说各有各的硬伤。</p>
+
+<table>
+<tr><th>维度</th><th>物理机</th><th>虚拟机 (VM)</th><th>容器 (Docker)</th></tr>
+<tr><td>隔离级别</td><td>物理隔离</td><td>独立操作系统内核</td><td>共享宿主机内核</td></tr>
+<tr><td>安全性</td><td>最高</td><td>高（内核完全独立）</td><td>中（内核漏洞可逃逸）</td></tr>
+<tr><td>启动速度</td><td>N/A</td><td>慢（分钟级）</td><td>快（秒级）</td></tr>
+<tr><td>资源开销</td><td>100%</td><td>大（完整 OS）</td><td>小（进程级）</td></tr>
+<tr><td>适合做沙箱？</td><td>浪费</td><td>安全但太慢</td><td>快但有逃逸风险</td></tr>
+</table>
+
+<p>这里的关键概念是<span class="term">容器逃逸</span>（Container Escape，容器内的进程利用共享内核的漏洞突破隔离边界，进而影响甚至控制整台宿主机的攻击方式）。容器为了快，省掉了独立内核这道最硬的防线——多个容器共用宿主机的同一个内核，一个内核漏洞就能让隔离形同虚设。</p>
+
+<div class="warn-box">
+核心矛盾：虚拟机安全但启动慢（分钟级），容器快但隔离不彻底（共享内核）。而 Agent 的需求是"用户发一句话就要立刻跑代码"——<strong>既安全又快</strong>，两者缺一不可。
+</div>
+
+<div class="intuition-box">
+<p>物理机是"一人一栋楼"，虚拟机是"一人一套房"，容器是"一间屋打满隔断的合租房"——合租房出事最容易串门。</p>
+</div>
+
+</div>
+
+<!-- ==================== 3. MicroVM ==================== -->
+<div class="section">
+<h2 id="s3">三、MicroVM — 精简版虚拟机</h2>
+
+<p><span class="term">MicroVM</span>（微型虚拟机）是专门为"轻量、快速、高密度"场景设计的虚拟机形态。它在传统虚拟机的基础上做了一次大刀阔斧的精简：砍掉兼容各种历史设备的模块（USB、显卡、老式磁盘控制器等），只保留跑应用真正需要的虚拟硬件，形成极简的操作系统内核。</p>
+
+<div class="arch-diagram">
+传统 VM：                      MicroVM：
+┌──────────────────┐          ┌──────────────────┐
+│ 应用              │          │ 应用              │
+│ 完整 OS 内核      │          │ 极简内核          │
+│ GB 级 / 分钟级启动 │          │ MB 级 / 百毫秒级  │
+├──────────────────┤          ├──────────────────┤
+│ Hypervisor       │          │ 精简 Hypervisor   │
+│ 模拟全套硬件      │          │ 只留必要虚拟设备   │
+└──────────────────┘          └──────────────────┘
+砍掉的：USB / 显卡 / 老式磁盘控制器等兼容模块
+保留的：独立内核 = 硬件级安全边界（与 VM 同级）
+</div>
+
+<table>
+<tr><th>维度</th><th>传统 VM</th><th>MicroVM</th></tr>
+<tr><td>内核</td><td>完整（兼容所有设备）</td><td>极简（只保留必要模块）</td></tr>
+<tr><td>启动速度</td><td>分钟级</td><td>百毫秒级</td></tr>
+<tr><td>安全边界</td><td>独立内核</td><td>独立内核（同等安全）</td></tr>
+<tr><td>内存开销</td><td>GB 级</td><td>MB 级</td></tr>
+</table>
+
+<p>这条路线最有力的背书来自工业界：AWS 于 2018 年开源的 <span class="term">Firecracker</span>（基于 KVM 的 MicroVM 监视器，用 Rust 编写，是 AWS Lambda 与 Fargate 的底层执行环境）官方数据显示，启动一个 MicroVM 的开销低于 125ms，内存开销低于 5MB。它每天支撑着 Lambda 上海量的函数调用，证明了"安全不打折、速度提几个数量级"是可以同时做到的。</p>
+
+<div class="intuition-box">
+<p>MicroVM 的精髓：安全边界在独立内核，不在设备模拟。砍掉兼容性包袱，安全一分不少，启动快了几个数量级。</p>
+</div>
+
+</div>
+
+<!-- ==================== 4. CubeSandbox ==================== -->
+<div class="section">
+<h2 id="s4">四、CubeSandbox — 腾讯云开源云沙箱</h2>
+
+<p><span class="term">CubeSandbox</span> 是腾讯云开源的云沙箱方案，专为 AI Agent 设计，负责沙箱的创建、隔离和回收全生命周期管理。它对外提供兼容 <span class="term">E2B</span>（一家提供 Agent 代码执行沙箱云服务的公司，其 API 已成为该领域广泛使用的事实接口标准）的接口，意味着已经在用 E2B 的应用迁移过来只需改个地址。</p>
+
+<h3>4.1 架构：控制面 + 工作节点</h3>
+
+<div class="arch-diagram">
+┌──────────── 控制面 ─────────────────────┐
+│  Cube API（兼容 E2B 接口）               │
+│  Cube Master（调度管理）                 │
+└──────────────────┬──────────────────────┘
+                   │ 消息通信
+┌──────────────────▼──────────────────────┐
+│  Node（裸金属服务器）                    │
+│  Cubelet（接收命令）                     │
+│    ↓ 驱动 KVM                           │
+│  MicroVM 沙箱 × N（实际运行代码）        │
+└─────────────────────────────────────────┘
+Agent → 调 API → Master 调度 → Cubelet 起 MicroVM → 跑代码 → 结果返回
+</div>
+
+<h3>4.2 三大性能优化</h3>
+
+<table>
+<tr><th>优化</th><th>原理</th><th>效果</th></tr>
+<tr><td><strong>快照克隆</strong></td><td>先启动一次 MicroVM，装好环境，保存为模板快照；新请求直接从快照克隆</td><td>启动时延压到几十 ms</td></tr>
+<tr><td><strong>写时复制 (CoW)</strong></td><td>沙箱内存和磁盘初始指向同一份底层页面，只有真正写入时才复制新页</td><td>单个沙箱内存仅几 MB</td></tr>
+<tr><td><strong>E2B 兼容接口</strong></td><td>Cube API 兼容 E2B 接口</td><td>迁移只需改地址</td></tr>
+</table>
+
+<p><span class="term">快照克隆</span>（Snapshot Clone，把一台"装修完毕"的 MicroVM 的完整状态拍照存档，后续新沙箱直接从照片复制而非从零安装）解决的是冷启动问题；<span class="term">写时复制</span>（Copy-on-Write，多个克隆体初始共享同一份内存/磁盘页面，谁先写哪一页才给谁单独复制一页）解决的是密度问题——100 个克隆出来的沙箱，只要没各自大量写入，底层其实共享着同一份数据。</p>
+
+<h3>4.3 压测数据</h3>
+
+<table>
+<tr><th>指标</th><th>数值</th></tr>
+<tr><td>50 并发下创建沙箱 P99 延迟</td><td>约 150ms</td></tr>
+<tr><td>单沙箱内存开销（CoW 下）</td><td>几 MB</td></tr>
+<tr><td>冷启动（快照克隆后）</td><td>几十 ms</td></tr>
+</table>
+
+<div class="highlight">
+<strong>案例 · 腾讯元宝与 MiniMax 的沙箱底座：</strong>
+背景：腾讯元宝的"在线编程"功能与 MiniMax Agent 的强化学习训练，都需要海量、短命的代码执行环境——用户每发一次编程请求，就要起一个干净环境跑代码。
+问题：传统虚拟机分钟级冷启动扛不住高频创建，纯容器方案又存在内核共享的逃逸风险，多租户场景下不可接受。
+方案：采用 CubeSandbox——以 MicroVM 为隔离底座，用预热模板 + 快照克隆消除环境安装耗时，用写时复制压低单沙箱内存。
+效果：50 并发下创建沙箱的 P99 延迟控制在 150ms 左右，单沙箱内存仅几 MB，同一台裸金属服务器可承载的沙箱密度提升一个数量级。
+</div>
+
+<div class="note-box">
+CubeSandbox vs E2B：功能定位相同（都是 Agent 云沙箱），但 CubeSandbox 开源、产品化更好、自建成本更低。对数据合规敏感、需要私有化部署的团队尤其友好。
+</div>
+
+<div class="intuition-box">
+<p>快照克隆 = 把"装修好的样板间"拍照，新客人直接拎包入住；写时复制 = 100 个住客共用一本菜单，谁要改菜才给他单独印一页。</p>
+</div>
+
+</div>
+
+<!-- ==================== 5. 选型与最佳实践 ==================== -->
+<div class="section">
+<h2 id="s5">五、选型决策与最佳实践</h2>
+
+<div class="arch-diagram">
+Agent 要执行不可信代码 / 命令
+        │
+        ├─ 只读分析、无副作用 ──→ 主环境直接跑（配合人工审批）
+        └─ 有副作用 / 不确定 ──→ 必须隔离
+               │
+               ├─ 内网可信负载、秒级启动可接受 ──→ 容器 + 严格权限
+               └─ 要求快 + 强隔离 ──→ MicroVM（Firecracker / CubeSandbox）
+                      │
+                      └─ 高并发多租户 ──→ 快照克隆 + CoW + 用完即销
+</div>
+
+<table>
+<tr><th>你的场景</th><th>推荐方案</th><th>理由</th></tr>
+<tr><td>本地跑可信脚本</td><td>无需沙箱 + 审批确认</td><td>成本最低，风险可控</td></tr>
+<tr><td>CI 里跑内部构建</td><td>容器</td><td>内网可信环境，图快图省事</td></tr>
+<tr><td>SaaS 执行用户提交的代码</td><td>MicroVM</td><td>多租户必须强隔离，防止逃逸</td></tr>
+<tr><td>Agent 强化学习训练环境</td><td>MicroVM + 快照克隆</td><td>高频创建销毁，冷启动是瓶颈</td></tr>
+</table>
+
+<div class="highlight">
+<strong>案例 · AWS Lambda 的超大规模验证：</strong>
+背景：Serverless 平台要为每一次函数调用提供独立的执行环境，AWS Lambda 的调用量是海量级别的。
+问题：用传统虚拟机，分钟级启动意味着用户每次调用都要干等；用容器，多租户共享内核在公有云上安全不可接受。
+方案：AWS 自研 MicroVM 监视器 Firecracker 并于 2018 年开源——精简设备模型、独立内核边界，配合快速恢复机制。
+效果：官方数据启动开销低于 125ms、内存开销低于 5MB，成为 Lambda 与 Fargate 两大服务的统一底座，验证了 MicroVM 路线在超大规模生产环境的可行性。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+  <li>高风险命令必须在沙箱内执行</li>
+  <li>选择 MicroVM 方案（安全 + 快速）</li>
+  <li>用快照克隆优化冷启动</li>
+  <li>限制沙箱最大内存和 CPU</li>
+  <li>任务完成后立即销毁沙箱</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+  <li>不要在 Agent 主环境中执行不确定命令</li>
+  <li>不要用纯 Docker 做高风险操作（内核共享可逃逸）</li>
+  <li>不要用传统 VM（启动太慢，Agent 等不起）</li>
+  <li>不要让沙箱长期驻留（用完即销）</li>
+  <li>不要忽略上下文截断导致的目标偏移</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>沙箱选型就是一道两选题：负载可信就图快（容器），负载不可信就图稳（MicroVM）——Agent 场景下，答案几乎总是后者。</p>
+</div>
+
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section">
+<h2 id="s6">Q&A</h2>
+
+<details>
+<summary>AI Agent 为什么需要沙箱？沙箱解决了什么核心问题？</summary>
+<div class="answer">Agent 本质是一个死循环：组装上下文 → 推理 → 执行工具 → 结果回写上下文 → 继续循环。循环次数过多会导致上下文截断，进而引发目标偏移——模型"忘记"原始目标后可能执行 rm -rf 之类的危险命令。沙箱是专门划出来的隔离执行环境，在其中即使执行了破坏性操作，也不影响 Agent 的主环境。它的核心价值是把风险关进笼子：不是让 Agent 不犯错，而是让犯错的代价变成"销毁一个临时环境"。没有沙箱的执行型 Agent，本质上是在拿生产环境做实验。</div>
+</details>
+
+<details>
+<summary>虚拟机、容器和 MicroVM 做沙箱各有什么优缺点？</summary>
+<div class="answer">虚拟机拥有独立的操作系统内核，安全级别最高，但启动要分钟级、资源开销 GB 级，跟不上 Agent 毫秒级响应的需求。容器（Docker）是进程级隔离，启动快（秒级）、开销小，但所有容器共享宿主机内核，一旦内核存在漏洞就可能发生容器逃逸，波及整台宿主机。MicroVM 是精简版虚拟机：保留独立内核这条硬安全边界，砍掉 USB、显卡等不必要的硬件兼容模块，启动压到百毫秒级、内存降到 MB 级。结论很清晰：Agent 沙箱首选 MicroVM，它同时拿到了虚拟机的安全和接近容器的速度。</div>
+</details>
+
+<details>
+<summary>CubeSandbox 的快照克隆和写时复制是什么优化？</summary>
+<div class="answer">快照克隆解决冷启动问题：先启动一次 MicroVM，完成环境安装、依赖下载等慢操作，把此时的完整状态保存为模板快照，后续新请求直接从快照克隆而非从零启动，冷启动时延从秒级压到几十 ms。写时复制（Copy-on-Write）解决密度问题：所有克隆出的沙箱初始内存和磁盘都指向同一份底层页面，只有某个沙箱真正写入某页时才复制一份新页，这让单个沙箱的内存开销从 GB 级降到几 MB。两者组合实现了"快启动 + 低内存"，50 并发下创建沙箱的 P99 延迟可以控制在 150ms 左右。</div>
+</details>
+
+<details>
+<summary>CubeSandbox 的控制面和工作节点架构是怎样的？</summary>
+<div class="answer">CubeSandbox 把服务器分为两类角色。控制面包含 Cube API 和 Cube Master：API 对外提供兼容 E2B 的接口，Master 负责调度管理，把请求分发到合适的工作节点。工作节点（Node）是裸金属服务器，上面跑着 Cubelet 和多个 MicroVM 沙箱：Cubelet 接收 Master 的命令，驱动 KVM 创建 MicroVM，代码在 MicroVM 内执行后把结果经 API 返回。对 Agent 来说，整个底层细节被屏蔽了——它只需要调用 CubeSandbox 的 API，就能在隔离环境中安全执行代码。</div>
+</details>
+
+<details>
+<summary>为什么上下文截断会导致 Agent 目标偏移？如何防范？</summary>
+<div class="answer">Agent 的死循环中，每一轮都往上下文追加工具执行结果。循环次数过多，上下文超过模型窗口上限就会被截断，而最早设定的任务目标往往位于上下文开头——一旦被截掉，模型就"忘记"了自己为什么出发，可能产生无意义甚至危险的操作。防范要四层一起做：沙箱隔离保证即使偏移执行了危险命令也不伤主环境；上下文管理定期总结压缩历史，控制长度；安全检查对 rm、drop 类命令设置拦截或确认机制；最后给循环设置次数上限，防止无限空转。沙箱是兜底的最后一层，不是唯一一层。</div>
+</details>
+
+<details>
+<summary>沙箱和人工审批（如 Claude Code 的确认弹窗）是什么关系？</summary>
+<div class="answer">两者是纵深防御的不同层级，解决的是不同阶段的问题。人工审批是事前防线：Agent 要执行命令前，先把计划展示给用户请求确认，把明显的危险操作拦在执行之前。沙箱是事中兜底：即使命令被批准执行了，破坏范围也被限制在隔离环境内。单靠审批不够，因为用户可能误点同意，也可能看不出命令的隐蔽风险；单靠沙箱也不够，因为沙箱保护不了需要写回主环境的正常操作。成熟的方案是组合使用——低风险操作直接放行，高风险操作先审批、再在沙箱内执行、最后把结果有选择地同步回主环境。</div>
+</details>
+
+<details>
+<summary>为什么说"没有沙箱的执行型 Agent 是在拿生产环境做实验"？</summary>
+<div class="answer">执行型 Agent 的本质是一个会调用 shell、文件系统、网络等真实系统能力的循环。只要它能执行命令，就存在两类不可完全消除的风险：一是模型幻觉导致的误操作，比如把清理临时目录理解成清理根目录；二是上下文截断引发的目标偏移，循环跑久了原始目标被截掉，模型可能执行与初衷相悖的危险指令。这两类风险都无法靠提示词或审批彻底杜绝——提示词约束不了概率性输出，审批也拦不住用户没看出的隐蔽命令。沙箱的作用不是消灭风险，而是把风险的爆炸半径限制在一个可随时销毁的临时环境里：出错的最坏代价是丢掉一个克隆出来的 MicroVM，而不是污染宿主机或生产数据。这正是"隔离执行"相对于"相信模型不会犯错"的根本优势——前者是工程上可承受的失败，后者是不可承受的赌博。</div>
+</details>
+
+<details>
+<summary>MicroVM 相比容器，安全性提升的根本原因是什么？</summary>
+<div class="answer">根本原因在于内核边界。容器（Docker）本质是宿主机上的隔离进程，所有容器共享同一个宿主机操作系统内核——隔离靠的是 namespace 和 cgroup 这类内核机制，而非硬件边界。这意味着一旦内核本身存在漏洞，攻击者可能利用它实现容器逃逸，从一个容器跳到宿主机，进而波及同机所有容器。MicroVM 则保留了独立内核这条硬安全边界：每个 MicroVM 有自己的精简内核，通过 KVM 等硬件虚拟化技术与宿主机和其他 MicroVM 隔开，即使 guest 内核被攻破，攻击仍被锁在该 MicroVM 内部。MicroVM 的优化在于"精简"而非"放弃隔离"——砍掉 USB、显卡等不必要的硬件兼容模块，把启动压到百毫秒级、内存降到 MB 级，于是同时拿到了虚拟机的安全强度和接近容器的启动速度，这正是它成为 Agent 沙箱首选的原因。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV14sorBiEgP" target="_blank">AI Agent 的沙箱是什么？它和Docker/虚拟机有什么区别</a> · <span class="up-name">小白debug</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>
