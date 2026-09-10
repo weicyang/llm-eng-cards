@@ -4,7 +4,7 @@
 
 **From Attention to Production.** Decision cards for engineers who already know how to call a model API.
 
-给已经会调模型 API 的工程师：先懂它为什么这样算，再把它做成能力，最后按延迟、成本、安全把系统撑住。
+一套给工程师读的大模型工程知识卡片。覆盖基础原理、RAG / Agent 应用能力、部署与安全；每张卡讲清边界和反例。
 
 > 建议先走主干 36，再按主题进入三个板块的完整目录。
 
