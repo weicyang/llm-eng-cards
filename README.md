@@ -2,13 +2,17 @@
 
 **在线阅读：** [weicyang.github.io/llm-eng-cards](https://weicyang.github.io/llm-eng-cards/)
 
-**From Attention to Production.** Decision cards for engineers who already know how to call a model API.
+**From Attention to Production.**
 
-一套给工程师读的大模型工程知识卡片。覆盖基础原理、RAG / Agent 应用能力、部署与安全；每张卡讲清边界和反例。
+给已经会调模型 API 的工程师。不追热点，先理解机制，再做成应用，最后解决生产问题。
 
-> 建议先走主干 36，再按主题进入三个板块的完整目录。
+> **291 张卡，36 张先学。** 每张卡回答一个判断：什么时候用，什么时候不要用。
 
-## 三层路径
+[从第 01 张开始](./cards/transformer/tensor_fundamentals.html) · [主干路径](./LEARNING_PATH.md) · [在线阅读](https://weicyang.github.io/llm-eng-cards/)
+
+## 为什么有这个库
+
+不是百科，不是 Prompt 技巧合集，也不是刷题清单。
 
 ```
 原理  它凭什么成立
@@ -18,47 +22,45 @@
 生产  上线后哪个旋钮先动、什么情况关掉
 ```
 
-当前公开 **基础原理 / 应用能力 / 生产工程** 共 291 张卡，另有 [主干路径 36](./LEARNING_PATH.md)。不含前沿实践、面试速成页和源码深潜。
+## 从这里开始
 
-## 怎么读
+先走 [36 张主干](./LEARNING_PATH.md)，不要按 `cards/` 文件夹乱点。文件夹是存放结构，不是学习顺序。
 
-1. 打开 [LEARNING_PATH.md](./LEARNING_PATH.md)，按编号往下走，不要按文件夹乱点。
-2. 每张卡开头有层级、难度、前置卡、后续卡。前置没读完就先回去。
-3. 应用卡会指回原理，生产卡会指回它依赖的能力。交叉引用是故意的。
-4. 卡末尾的「什么时候不要用」比正文更值得收藏。
+### 按目标选
 
-## 仓库结构
-
-```
-index.html             主干路径 36 + 三个板块完整目录
-catalog.js             完整目录数据
-LEARNING_PATH.md       主干编号与链接
-cards/neural-networks/ 神经网络
-cards/transformer/     Transformer
-cards/llm/             大模型
-cards/training/        训练
-cards/reinforcement/   强化学习
-cards/rag/             RAG
-cards/agent/           Agent
-cards/memory/          记忆
-cards/data/            数据
-cards/database/        向量库
-cards/engineering/     工程
-cards/architecture/    架构
-cards/deploy/          部署与推理
-cards/security/        安全
-cards/audit/           审计与治理
-notebooks/             手撕类最小可运行片段
-```
+| 我想… | 先读 |
+|---|---|
+| 理解 LLM | 01–12 |
+| 做 RAG | 13–19、25 |
+| 做 Agent | 14、20–24、26、36 |
+| 把 AI 上生产 | 27–36 |
 
 ## 卡片约定
 
 每张公开卡必须能单独被转发，并满足：
 
-- 说清边界：这张卡管什么、不管什么、和哪张卡不重复
-- 数字可分清：`示例场景` 与论文 / 官方实测分开写，不把构造数据写成结论
-- 有反例：什么情况下不要用这个方案
+- What / Why / How：这张卡管什么
+- When / When not：什么情况下不要用
+- 数字可分清：`示例场景` 与论文 / 官方实测分开写
 - 有出处：关键数字和机制能指到论文、官方文档或可复核的实现
+
+## 知识地图
+
+- 基础原理 66
+- 应用能力 140
+- 生产工程 85
+
+不含前沿实践、面试速成页和源码深潜。
+
+## 仓库结构
+
+```
+index.html             学习入口：36 张主干 + 目标入口 + 完整目录
+catalog.js             完整目录数据
+LEARNING_PATH.md       主干编号与链接
+cards/                 按主题存放，便于维护，不是阅读顺序
+notebooks/             手撕类最小可运行片段
+```
 
 ## 授权
 
