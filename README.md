@@ -8,7 +8,7 @@
 
 > 每张卡回答一个判断：什么时候用，什么时候不要用。
 
-[从 Attention 开始](./cards/transformer/attention_from_scratch.html) · [主干路径](./LEARNING_PATH.md) · [在线阅读](https://weicyang.github.io/llm-eng-cards/)
+[在线阅读](https://weicyang.github.io/llm-eng-cards/) · [主干路径](./LEARNING_PATH.md)
 
 ## 为什么有这个库
 
@@ -24,16 +24,16 @@
 
 ## 从这里开始
 
-先走 [36 张主干](./LEARNING_PATH.md)，不要按 `cards/` 文件夹乱点。文件夹是存放结构，不是学习顺序。
+已经会调 API、只想补某一段：按目标走主干里对应的卡。
 
-### 按目标选
-
-| 我想… | 先读 |
+| 卡住的是 | 先读 |
 |---|---|
-| 理解 LLM | 01–12 |
-| 做 RAG | 13–19、25 |
-| 做 Agent | 14、20–24、26、36 |
-| 把 AI 上生产 | 27–36 |
+| LLM 原理 | 01–12 |
+| RAG | 13–19、25 |
+| Agent | 14、20–24、26、36 |
+| 上生产 | 27–36 |
+
+想完整从头学：按 [原理 → 应用 → 生产](https://weicyang.github.io/llm-eng-cards/#paths) 一层层读，不要按 `cards/` 文件夹乱点。文件夹是存放结构，不是学习顺序。
 
 ## 卡片约定
 
