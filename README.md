@@ -6,7 +6,7 @@
 
 给已经会调模型 API 的工程师。不追热点，先理解机制，再做成应用，最后解决生产问题。
 
-> **291 张卡，36 张先学。** 每张卡回答一个判断：什么时候用，什么时候不要用。
+> 每张卡回答一个判断：什么时候用，什么时候不要用。
 
 [从第 01 张开始](./cards/transformer/tensor_fundamentals.html) · [主干路径](./LEARNING_PATH.md) · [在线阅读](https://weicyang.github.io/llm-eng-cards/)
 
