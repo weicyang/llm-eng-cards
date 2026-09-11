@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP23 · 多 LoRA / Adapter 推理</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、训练一张 LoRA 和服务一百张不是同一件事</a>
+<a href="#s2">二、S-LoRA / Punica / 框架内置 LoRA 的差别</a>
+<a href="#s3">三、前缀缓存键必须包含 adapter 身份</a>
+<a href="#s4">四、热加载、显存水位与批内混适配器</a>
+<a href="#s5">五、质量回归：底座一变，所有 LoRA 一起坏</a>
+<a href="#s6">六、默认策略与关闭条件</a>
+<a href="#ref">七、延伸阅读</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>DP23 · 多 LoRA / Adapter 推理</h1>
+<p class="subtitle">一张底座服务多适配器 / S-LoRA 与分页 / 缓存键含 adapter id / 热加载与显存水位 / 底座升级的连坐回归</p>
+
+<div class="intuition-box">
+<p>LoRA 训练省的是参数量；多 LoRA 服务省的是「不要为每个客户起一个模型副本」。省错地方——把不同适配器的 KV 当同一段前缀——会在正确的底座上给出别人的风格。</p>
+</div>
+
+<p>LoRA 怎么训、α/r 怎么设，见 <a href="../llm/lora_finetuning.html">L09</a>。连续批处理见 <a href="./continuous_batching_scheduling.html">DP11</a>，前缀缓存机制见 <a href="../llm/prompt_cache_mechanism.html">L11</a>。本卡只讲 Serving：一张基座、很多适配器、请求级切换。</p>
+
+<div class="section" id="s1">
+<h2>一、训练一张 LoRA 和服务一百张不是同一件事</h2>
+<p>训练时一张 LoRA 独占一次前向。服务时同一 batch 里可能混着客户 A 的法律适配器和客户 B 的客服适配器。朴素做法是每个 LoRA 一份合并后的权重，显存随客户数线性涨，多租户立刻破产。正确做法是底座权重一份，适配器按请求挂上，计算走分批的低秩乘。</p>
+<table>
+<tr><th>做法</th><th>显存</th><th>切换</th><th>何时够用</th></tr>
+<tr><td>每 LoRA 一个副本</td><td>线性爆炸</td><td>进程级</td><td>适配器个位数且不共卡</td></tr>
+<tr><td>请求前合并进底座</td><td>底座×N 或频繁合并税</td><td>秒级</td><td>几乎不切换</td></tr>
+<tr><td>运行时挂载（本卡）</td><td>底座 + 适配器分页</td><td>请求级</td><td>多租户默认</td></tr>
+</table>
+<div class="arch-diagram">多租户默认形态
+
+  GPU 上：Base W  （一份）
+           LoRA 页：A1 B1 / A2 B2 / ...  （按需驻留）
+  请求：  tenant=A  →  只把 A 的低秩乘叠到这一行
+          tenant=B  →  同 batch 另一行用 B
+  禁止：  把 A 的 KV 前缀拿给 B 的下一 token 接着用
+</div>
+<div class="intuition-box">
+<p>适配器是权重上的补丁，也是 KV 上的身份。只补权重、不隔离 KV，等于让租户共享「已经想过的上下文」。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、S-LoRA / Punica / 框架内置 LoRA 的差别</h2>
+<p><span class="term">Punica</span> 一类工作证明：自定义 CUDA 核可以把不同 LoRA 的低秩乘在同一 batch 里做完。<span class="term">S-LoRA</span> 再加上统一分页：适配器权重像 KV 一样按页换入换出，于是「同时服务的适配器数」可以大于「同时放下的适配器数」。vLLM 等框架后来把 LoRA 做成一等公民，生产上优先用框架内置，而不是自己链一篇论文的算子。</p>
+<table>
+<tr><th>能力</th><th>要问框架的问题</th></tr>
+<tr><td>批内多适配器</td><td>同一 step 能否混不同 lora_id</td></tr>
+<tr><td>分页换入</td><td>适配器能否像 KV 一样 evict</td></tr>
+<tr><td>与 CUDA Graph</td><td>切换 lora 是否打断 graph 捕获</td></tr>
+<tr><td>与量化底座</td><td>INT4/FP8 底座上 LoRA 算在哪种精度</td></tr>
+</table>
+<div class="intuition-box">
+<p>论文名用来理解机制；容量规划以你用的框架版本实测为准。S-LoRA 的「上千适配器」是分页故事，不是「上千适配器同时算」。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、前缀缓存键必须包含 adapter 身份</h2>
+<p>同一段系统提示，接上不同 LoRA，KV 就不是同一段记忆。前缀缓存若只哈希 token，就会串味：法律助手的前缀被客服接着 decode。规则与 MLA（DP22）相同——键是身份元组，不只是文本。</p>
+<div class="arch-diagram">键 = 模型版本 + adapter_id + prompt_tokens + 采样无关的位置信息
+
+  命中： 同一租户、同一适配器、同一前缀
+  禁止命中：token 相同但 adapter 不同
+  热切换适配器后：旧前缀立即失效，不要「先用着」
+</div>
+<table>
+<tr><th>漏进键的字段</th><th>事故</th></tr>
+<tr><td>adapter_id / 版本</td><td>串租户风格与知识</td></tr>
+<tr><td>lora 权重校验和</td><td>热更新后仍用旧 KV</td></tr>
+<tr><td>底座权重版本</td><td>底座升级后所有 LoRA 的旧前缀全错</td></tr>
+</table>
+<div class="highlight">
+<strong>示例场景：</strong>多租户网关开了自动前缀缓存，键只有 token。两个租户共用同一套系统提示模板，命中率很好看。客户投诉「突然开始用另一家的口吻」。按 adapter_id 拆键后命中率下降，串味消失。命中率下降是功能恢复，不是性能回退。
+</div>
+<div class="intuition-box">
+<p>前缀缓存的命中率在多 LoRA 下必然低于单模型。用单模型的命中率当 SLO，会逼着人把键删简，直到串味。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、热加载、显存水位与批内混适配器</h2>
+<p>热加载要把适配器文件当成不可信输入：校验大小、dtype、rank、目标层名是否匹配底座。显存水位要同时算 KV 页和 LoRA 页，只盯 KV 会在「客户突然都上线」时 OOM。批内混适配器能提高 GPU 利用率，但 kernel 会变慢；适配器极多且每个 QPS 极低时，分页换入的延迟可能高过混批的收益——这时按租户粘在少量 worker 上更划算。</p>
+<table>
+<tr><th>负载</th><th>倾向</th></tr>
+<tr><td>少适配器、高 QPS</td><td>常驻 GPU，混批</td></tr>
+<tr><td>多适配器、低 QPS</td><td>分页 + 租户粘滞，减少换入</td></tr>
+<tr><td>突发新适配器</td><td>先 CPU 校验再异步预热，避免首请求卡 TTFT</td></tr>
+</table>
+<div class="arch-diagram">显存两本账，不要合成一个「GPU 利用率」
+
+  ┌──────── KV 页（所有租户的上下文）────────┐  先保这条水位
+  └────────────────────────────────────────┘
+  ┌──────── LoRA 页（热适配器集合）──────────┐  用剩余，允许 evict
+  └────────────────────────────────────────┘
+
+  风暴：40 个冷适配器同时首次命中
+    → LoRA 换入打满 PCIe，TTFT 崩，KV 其实还没满
+    → 告警若只看 GPU util，会误判成流量高峰去加副本
+</div>
+<div class="highlight">
+<strong>示例场景：</strong>早高峰同时加载 40 个从未预热的适配器，TTFT 从 200ms 窜到秒级，看起来像模型挂了。改为按租户名单预热 Top-N，长尾第一次请求允许慢、并计入单独 SLO 后，高峰 P95 回到常驻适配器的水平。
+</div>
+<p>热加载流水线建议拆成校验、驻留、服务三步。校验在 CPU：文件大小、dtype、rank、目标层名。驻留在空闲 worker 上预热，不要用正在打满 decode 的卡做第一次 <code>load_lora</code>。服务只接受已经校验过的 <code>lora_id</code>，拒绝请求体里客户端自报的路径。</p>
+</div>
+
+<div class="section" id="s5">
+<h2>五、质量回归：底座一变，所有 LoRA 一起坏</h2>
+<p>LoRA 贴在特定底座检查点上。底座量化档位、tokenizer、对话模板一变，所有适配器一起偏移。发布底座必须跑<strong>适配器抽样回归</strong>，不能只跑底座自己的 eval。租户 LoRA 还要版本冻结：底座候选先在影子适配器集上过门（EV09），再允许热切。</p>
+<table>
+<tr><th>变更</th><th>LoRA 侧动作</th></tr>
+<tr><td>底座小版本</td><td>抽样生成对比；失败则禁该 LoRA 或回滚底座</td></tr>
+<tr><td>模板 / 特殊 token</td><td>视为不兼容，要求重训或 adapter 映射</td></tr>
+<tr><td>量化档位</td><td>重新测；有的 LoRA 对 INT4 底座更脆</td></tr>
+</table>
+<div class="intuition-box">
+<p>多 LoRA 把「一次底座发布」变成「一次连坐考试」。没有抽样门禁，就是在生产上给所有客户同时 A/B。</p>
+</div>
+<p>抽样集不要只用官方 demo 适配器。至少覆盖：流量 Top-N、最近七天新上传、以及历史上对底座敏感的那几张。门禁失败要能指出是哪一张 LoRA，而不是整集群红灯后让所有租户一起回滚。</p>
+</div>
+
+<div class="section" id="s6">
+<h2>六、默认策略与关闭条件</h2>
+<div class="practice-grid">
+<div class="do">
+<p>用框架内置 LoRA；键含 adapter 与底座版本。</p>
+<p>显存水位把 LoRA 页算进去；Top 适配器预热。</p>
+<p>底座升级跑适配器抽样，失败禁止切流量。</p>
+</div>
+<div class="dont">
+<p>不要为每个客户 fork 一份 70B。</p>
+<p>不要用单模型 prefix 命中率考核多 LoRA 集群。</p>
+<p>不要在未校验层名和 rank 的情况下热加载用户上传的适配器。</p>
+</div>
+</div>
+<p>什么时候不要上多 LoRA 服务：只有一两张适配器、切换以天计——合并进底座更简单。适配器之间差到需要不同 tokenizer 时，不是 LoRA 问题，该拆模型。</p>
+<p>发布检查单：适配器文件校验、键空间含 adapter 与底座版本、Top-N 预热名单、抽样回归集、LoRA 页与 KV 页的联合水位告警。缺任一项，都不要把「多租户 LoRA」写进对外 SLO。</p>
+<p>观测上把 <code>lora_id</code> 当成和 <code>model</code> 同级的维度。平均 TTFT 会掩盖长尾适配器换入。P95 按热/冷适配器分桶，冷桶允许单独的首次加载预算。</p>
+<p>权限上 lora_id 必须来自鉴权上下文，禁止请求体里客户端随便填。否则多租户隔离在权重层被绕开，A49 的记忆隔离也会显得「莫名其妙地串了」。</p>
+</div>
+
+<div class="section" id="ref">
+<h2>七、延伸阅读</h2>
+<p>训练侧 PEFT 见 <a href="../llm/lora_finetuning.html">L09</a>。调度见 <a href="./continuous_batching_scheduling.html">DP11</a>。前缀机制见 <a href="../llm/prompt_cache_mechanism.html">L11</a>。租户记忆隔离见 <a href="../agent/multi_tenant_memory_isolation.html">A49</a>，不要和权重层隔离当成同一套 ACL。</p>
+<p>S-LoRA / Punica 用来理解分页与核融合；容量数字以所用框架版本的实测为准。</p>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+<details>
+<summary>L09 写过热切换，为什么还要 DP23？</summary>
+<div class="answer">L09 站在训练与 PEFT 谱系，热切换是能力点到为止。DP23 站在调度器：分页、混批、缓存键、OOM、底座连坐。把训练卡里的一句「可以热切」当成容量方案，会在前缀串味和显存水位上翻车。</div>
+</details>
+<details>
+<summary>同一请求能叠多个 LoRA 吗？</summary>
+<div class="answer">有的研究做多适配器组合，生产默认不要。组合空间无法回归，权限和风格会纠缠。需要组合时，在训练侧合成一张，服务侧仍是单 lora_id。</div>
+</details>
+<details>
+<summary>CUDA Graph 和频繁切 LoRA 冲突怎么办？</summary>
+<div class="answer">Graph 喜欢静态形状和静态适配器集合。高频切换时缩小 graph 捕获范围，或按「适配器集合分桶」捕获多张 graph。为切 LoRA 强行关 graph 之前，先测切的频率是不是真的高。</div>
+</details>
+<details>
+<summary>量化底座上 LoRA 用 FP16 算可以吗？</summary>
+<div class="answer">常见且更稳，但要确认框架不会在静默中把 LoRA 也量化坏。精度策略写进发布清单，和底座档位一起回归。</div>
+</details>
+<details>
+<summary>租户自己上传 LoRA 安全吗？</summary>
+<div class="answer">按不可信权重处理：大小上限、层名白名单、在隔离 GPU 池加载、先跑红队与输出过滤。LoRA 可以携带训练时的数据痕迹，也是供应链面。不要和官方适配器共用热路径。</div>
+</details>
+<details>
+<summary>和 MCP 多租户隔离是一层吗？</summary>
+<div class="answer">不是。A49 / SEC14 管记忆和检索权限。本卡管权重补丁和 KV 身份。两边都漏，才会出现「检索隔离做了、生成风格却串了」。</div>
+</details>
+<details>
+<summary>多少张 LoRA 该拆集群？</summary>
+<div class="answer">看同时热驻留的集合，不看注册表总数。热集合塞满 LoRA 页把 KV 挤爆时就拆。注册一万张、同时热二十张，单集群可以；反过来四十张全热且上下文很长，先加卡。</div>
+</details>
+<details>
+<summary>LoRA 页和 KV 页抢同一块显存怎么切？</summary>
+<div class="answer">先保证 KV 的水位线（否则所有租户一起 OOM），LoRA 页用剩余预算并允许换出。告警要分两项：KV 占用、LoRA 驻留集合大小。把它们加总成一个「GPU 利用率」会在适配器风暴时误判为流量高峰。</div>
+</details>
+<details>
+<summary>同一 adapter 升级权重后要不要重建前缀？</summary>
+<div class="answer">要。键里应含权重校验和或版本号。只改文件不改键，等于继续用旧 KV 接新低秩乘，logits 会漂且很难归因。热更新的正确顺序是：新版本用新键冷启动，旧键到期淘汰，不要原地覆盖。</div>
+</details>
+</div>
+
+</div>
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

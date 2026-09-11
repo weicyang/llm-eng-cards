@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>T24 · SSM / Mamba 与混合注意力</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、线性复杂度为什么没赢过 FlashAttention</a>
+<a href="#s2">二、SSM / Mamba 实际在缓存什么</a>
+<a href="#s3">三、混合架构：注意力层负责精确检索，递推层负责吞吐</a>
+<a href="#s4">四、服务差异：状态池不是 KV 页</a>
+<a href="#s5">五、什么任务不该换混合模型</a>
+<a href="#s6">六、和现有卡的边界</a>
+<a href="#ref">七、延伸阅读</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>T24 · SSM / Mamba 与混合注意力</h1>
+<p class="subtitle">纯线性注意力为何没成为默认 / 状态空间模型的递推状态 / 混合层设计 / 服务侧状态池 / 何时仍用满注意力</p>
+
+<div class="intuition-box">
+<p>O(N²) 吓人，但 FlashAttention 把墙从「算不起」挪到「显存和工程核」。纯线性模型赢在渐近式，输在质量与生态。2026 年真正进生产的，是「若干层仍用注意力、其余用 SSM / 线性递推」的混合，而不是再赌一遍全换线性。</p>
+</div>
+
+<p>RNN 门控见 <a href="../neural-networks/rnn_lstm_gru_guide.html">N06</a>。高效注意力与长文本见 <a href="./efficient_attention.html">T20</a>、<a href="./long_context_optimization.html">T21</a>。面试速答「线性注意力为什么没人用」见 IL-11，结论停在 FlashAttention 更实用——本卡把后续的混合路线补上，并不重复 Kimi K3 的训练稳定性（<a href="../llm/kimi_k3_technology.html">L16</a>）。</p>
+
+<div class="section" id="s1">
+<h2>一、线性复杂度为什么没赢过 FlashAttention</h2>
+<p>Softmax 注意力的理论成本是序列长度的平方。线性注意力、核方法、RNN 式递推都承诺 O(N)。实验室里图表好看，默认栈却仍是 Transformer，原因有三：质量上精确检索（「文档第 37 段那句话」）线性核经常糊；工程上 FlashAttention 把平方项做进 SRAM，短中长度上墙不在 FLOPs；生态上工具调用、投机解码、前缀缓存全按 KV 张量写就。</p>
+<table>
+<tr><th></th><th>Softmax Attention</th><th>纯线性 / 纯 SSM</th></tr>
+<tr><td>训练稳定生态</td><td>极厚</td><td>薄，超参更刁</td></tr>
+<tr><td>任意位置精确召回</td><td>强</td><td>弱，状态会遗忘细节</td></tr>
+<tr><td>KV 增长</td><td>随 N 线性涨显存</td><td>状态大小近似常数</td></tr>
+<tr><td>2024 前的生产默认</td><td>是</td><td>否</td></tr>
+</table>
+<div class="arch-diagram">两堵墙，不是一堵
+
+  理论墙：O(N²) 算力  →  FlashAttention 把计算留在 SRAM，短中序列够用
+  显存墙：KV 随 N 涨  →  这才是超长上下文的真问题
+  纯线性解决显存墙，但把「精确召回」也一起线性化掉了
+</div>
+<div class="intuition-box">
+<p>FlashAttention 没有取消平方，它取消了「平方必须走 HBM」的那部分。线性模型取消的是机制本身，所以质量账要另算。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、SSM / Mamba 实际在缓存什么</h2>
+<p><span class="term">SSM</span>（State Space Model）把序列看成对隐状态的递推，Mamba 一类工作让状态更新变成输入相关的选择性扫描。服务时缓存的不是全体过去 token 的 K/V，而是每层一份固定宽度的 <span class="term">递推状态</span>。长度从 8k 拉到 128k，状态体积几乎不涨——这是显存故事。代价是：状态是有损压缩，不能保证还能点名很早以前的某个 token。</p>
+<div class="formula">Attention：每步读（或近似读）过去所有 KV<br>SSM：每步只更新固定大小的 h_t，h_t 必须独自代表「到目前为止的历史」</div>
+<table>
+<tr><th>缓存物</th><th>随长度</th><th>失败模式</th></tr>
+<tr><td>KV 张量</td><td>线性涨</td><td>OOM、前缀键错误</td></tr>
+<tr><td>SSM 状态</td><td>近似常数</td><td>细节遗忘、状态污染后无法「翻页找回」</td></tr>
+</table>
+<div class="intuition-box">
+<p>SSM 的状态更像 LSTM 的隐状态，不像注意力的索引。你不能对它做「只踢掉中间 2k token」这种 KV 手术，污染了往往要整段重算。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、混合架构：注意力层负责精确检索，递推层负责吞吐</h2>
+<p>Jamba、后续混合栈、以及部分国产/创业公司长上下文模型的共同选择：多数层用 SSM 或线性递推摊成本，少数层保留满注意力或局部窗口注意力，专门做「精确对齐」。Kimi 路线里的线性注意力混合属于同一家族：不是废除 QK，而是让部分层不再存全量 KV。</p>
+<div class="arch-diagram">混合层示意（层数配比依模型，不要背具体分数）
+
+  [SSM][SSM][Attn][SSM][SSM][Attn] ...
+           ▲                    ▲
+           精确检索、全局依赖     再对齐一次
+
+  服务：Attn 层仍有 KV 页；SSM 层只有状态槽
+  调度器必须两种池子都会管
+</div>
+<table>
+<tr><th>层类型</th><th>给质量</th><th>给服务</th></tr>
+<tr><td>满注意力 / 窗口注意力</td><td>针点召回、复制精确片段</td><td>仍要 KV，但层数少</td></tr>
+<tr><td>SSM / 线性递推</td><td>流畅、局部模式、长程「大意」</td><td>状态常数，长序列才划算</td></tr>
+</table>
+<div class="highlight">
+<strong>示例场景：</strong>客服摘要 2k token，混合模型相对 GQA Transformer 无明显延迟优势，因为注意力层仍在、核又少优化。合同库 64k 检索问答上，KV 显存下降才让并发上去。同一张混合模型，短请求不省钱、长请求才省——要用长度分桶的 SLO，不要全局平均。
+</div>
+<div class="intuition-box">
+<p>混合不是「免费的线性」。短请求可能更慢，因为你同时养了两套算子。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、服务差异：状态池不是 KV 页</h2>
+<p>vLLM 一类运行时给混合模型单独做状态槽。连续批处理时，SSM 状态要随请求走，抢占/换出比 KV 页更烦：状态不能只丢一半。前缀缓存对 SSM 层意味着「复用状态快照」，键同样要包含模型版本与适配器身份（DP23）。</p>
+<table>
+<tr><th>操作</th><th>KV 页</th><th>SSM 状态</th></tr>
+<tr><td>抢占</td><td>页可卸载到 CPU</td><td>整份快照卸载，恢复必须完整</td></tr>
+<tr><td>前缀命中</td><td>拼页</td><td>加载对应长度的状态，对不齐就重算</td></tr>
+<tr><td>推测解码</td><td>按接受长度回滚 KV</td><td>状态回滚更脆，很多栈直接不支持</td></tr>
+</table>
+<div class="arch-diagram">调度器要两套池
+
+  Attn 层：KV 页  →  可按 token 截断、可半页驱逐
+  SSM  层：状态槽 →  整份快照换入换出，对不齐就整段重算
+
+  前缀命中：Attn 拼页 + SSM 加载「该长度」的状态快照
+  快照长度对不上 token 前缀：禁止命中，不要各用各的
+</div>
+<div class="highlight">
+<strong>示例场景：</strong>把 Llama 服务手册上的「开投机解码、前缀缓存、半页驱逐」原样套到混合检查点。Attn 层看起来正常，SSM 状态在拒绝草稿后没有回滚，后续 token 开始胡言。关掉投机解码并禁止半页驱逐后恢复。加速比从手册里的 1.8× 变成 1.0×——这是能力清单问题，不是模型质量问题。
+</div>
+<div class="intuition-box">
+<p>选混合模型等于选一套更少文档的服务路径。投机解码、某些量化、某些前缀技巧要逐项确认，不要从 Llama 服务手册抄。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、什么任务不该换混合模型</h2>
+<table>
+<tr><th>任务</th><th>倾向</th><th>原因</th></tr>
+<tr><td>短指令、工具密集 Agent</td><td>标准 Decoder-only</td><td>长度吃不满 SSM 的显存优势，生态核更熟</td></tr>
+<tr><td>超长文档「找一句原话」</td><td>满注意力或检索 + 短生成</td><td>SSM 容易记大意不记原句</td></tr>
+<tr><td>超长上下文生成、日志/代码库浏览</td><td>混合值得测</td><td>KV 墙真实存在</td></tr>
+<tr><td>需要投机解码打满吞吐</td><td>先确认栈</td><td>状态回滚可能缺失</td></tr>
+</table>
+<div class="practice-grid">
+<div class="do">
+<p>按请求长度分桶看收益；短请求单独对照基线。</p>
+<p>评测加「精确复制 / 引用原文」集，不要只用困惑度。</p>
+<p>服务前确认状态池、前缀、投机三条路径。</p>
+</div>
+<div class="dont">
+<p>不要用 IL-11 的旧结论直接宣判混合路线死亡。</p>
+<p>不要把 SSM 状态当 KV 做半页驱逐。</p>
+<p>不要在工具调用主路径上为了「架构新」替换成熟 Transformer。</p>
+</div>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、和现有卡的边界</h2>
+<p>N06 停在 LSTM/GRU 门控，不讲选择性扫描。T20 讲 FlashAttention、MQA/GQA/MLA、Ring，不讲 SSM 状态池。L16 讲某代模型怎么稳住训练，不讲何时该换架构。本卡只回答：纯线性为什么没成为默认、混合为什么在长上下文服务里出现、服务时多了一类必须完整换入换出的状态。</p>
+<div class="highlight">
+<strong>引用口径：</strong>具体层配比、基准分数随模型发行变化，落地前读该检查点的技术报告。本卡不把某一代 Jamba / Mamba / 线性混合的跑分当定律。
+</div>
+<p>阅读顺序：先接受「纯线性没成为默认」的工程事实，再看混合层是否解决你的 KV 墙，最后才改服务栈。跳过中间步、直接换模型，会把工具调用主路径置于文档更少的运行时上。</p>
+<p>与 MLA 同时出现在同一技术报告里时，分别记账：MLA 改注意力存储，SSM 改层机制。不要把「我们上了长上下文优化」写成一个开关。</p>
+<p>选型实验至少准备两套评测：短指令工具调用、超长精确引用。只赢其中一套就不要全局替换默认模型。</p>
+<p>把混合检查点当「更长上下文的 Llama」上架之前，先列一张能力差异表：投机解码、半页驱逐、chunked prefill、量化 KV。缺哪条就从 SLO 里拿掉哪条，不要用旧手册的数字填新架构。</p>
+</div>
+
+<div class="section" id="ref">
+<h2>七、延伸阅读</h2>
+<p>RNN 门控停在 <a href="../neural-networks/rnn_lstm_gru_guide.html">N06</a>。高效注意力与 MLA 在 <a href="./efficient_attention.html">T20</a>。面试速答 IL-11 只覆盖「纯线性为什么没赢」，不含混合服务。</p>
+<p>层配比与基准以具体检查点技术报告为准，本卡不把某一代混合模型的分数写成定律。</p>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+<details>
+<summary>IL-11 说线性注意力没人用，现在还成立吗？</summary>
+<div class="answer">对「整个模型都换成核线性注意力、取代 softmax」大体仍成立：质量与生态没有打赢 FlashAttention + GQA/MLA。不成立的是「所有线性/递推思想都死了」。混合层把递推用在多数层、把注意力留给精确检索，这是另一条产品线。</div>
+</details>
+<details>
+<summary>MLA 和 SSM 都省 KV，怎么选？</summary>
+<div class="answer">MLA 仍是注意力，精确召回机制还在，省的是每头存储。SSM 换机制，状态常数但有损。要兼容现有注意力工具链，优先 MLA 或 GQA。要挑战百万级上下文且接受引用不准，再评估混合 SSM。两者不是同一旋钮的两档。</div>
+</details>
+<details>
+<summary>Mamba 是不是新 RNN？</summary>
+<div class="answer">血缘上更近：都是递推状态。训练并行（扫描）和选择性更新让它比 LSTM 更像能 scale 的层。不要用 N06 的「RNN 不能并行」直接否决，也不要认为它自动拥有注意力那种任意位置寻址。</div>
+</details>
+<details>
+<summary>混合模型的 KV Cache 公式怎么改？</summary>
+<div class="answer">只对仍是注意力的层用 DP08 的 GQA/MLA 公式，再加所有 SSM 层的状态字节。用「全部层都按注意力算」会高估；用「没有 KV」会低估注意力层。容量规划必须按层类型拆开加总。</div>
+</details>
+<details>
+<summary>Agent 场景适合混合模型吗？</summary>
+<div class="answer">工具调用短、来回多，通常不适合作为默认。上下文被工具结果反复改写时，SSM 状态更易脏，回滚也难。长日志分析、一次性超长阅读可以试点。用评测集里的「精确引用」卡住质量，不要只看能跑多长。</div>
+</details>
+<details>
+<summary>为什么投机解码在 SSM 上更麻烦？</summary>
+<div class="answer">拒绝草稿要回滚状态。KV 可以按 token 截断；SSM 状态是融合过的，回滚需要存快照或重放。很多服务栈没做这条路径，于是投机解码直接不可用。叠加前当缺失能力，不当默认加速比。</div>
+</details>
+<details>
+<summary>训练从 Transformer 蒸馏到混合模型靠谱吗？</summary>
+<div class="answer">可以当冷启动，但不能假设教师的「精确复制」能力会完整迁过来。蒸馏后必须用引用类评测，而不是只看教师-学生 KL。质量坑往往在长程针点，不在短句流畅。</div>
+</details>
+<details>
+<summary>前缀缓存对混合模型该怎么做键？</summary>
+<div class="answer">键里同时要能找回 Attn 页和 SSM 快照，缺一边就整段重算。长度对不齐时禁止命中。适配器身份、模型版本与 DP23 相同，必须进键。不要假设「SSM 状态常数所以前缀一定更便宜」——错配一次，重算比 GQA 更疼。</div>
+</details>
+<details>
+<summary>短请求平均延迟更差，还能宣传「更长更省」吗？</summary>
+<div class="answer">可以，但必须分桶。把 2k 和 64k 混成一个 P95，销售数字会好看、容量计划会破产。对外 SLO 写成长度分档；对内看板把 SSM 状态换入失败和 Attn KV OOM 分开。平均指标在混合架构上几乎总是谎言。</div>
+</details>
+</div>
+
+</div>
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

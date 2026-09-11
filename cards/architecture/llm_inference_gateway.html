@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S08 · LLM 推理网关</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、业务代码里的 SDK 会把密钥和账单打散</a>
+<a href="#s2">二、虚拟钥、项目预算与统一协议</a>
+<a href="#s3">三、多厂商熔断、超时分层与 fallback</a>
+<a href="#s4">四、网关级语义缓存何时有害</a>
+<a href="#s5">五、和 MCP 网关、Agent 路由的职责切分</a>
+<a href="#s6">六、落地顺序与关闭条件</a>
+<a href="#ref">七、延伸阅读</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>S08 · LLM 推理网关</h1>
+<p class="subtitle">虚拟钥与项目预算 / 统一协议与供应商适配 / 熔断 fallback / 网关语义缓存的版本隔离 / 与 MCP 网关分家</p>
+
+<div class="intuition-box">
+<p>推理网关不是「又一个反向代理」。它是把概率性的模型调用收成一层确定性外壳：谁能花多少钱、超时怎么切、失败切到谁、同一问句能不能复用旧答案。</p>
+</div>
+
+<p>整后端怎么切、限流队列怎么接消息中间件、Agent 内部怎么按难度选模型，分别见 <a href="./llm_backend_design.html">S01</a>、<a href="../engineering/rocketmq_litertopic_rate_limiting.html">ST22</a>、<a href="../agent/model_routing_hybrid.html">A63</a>、<a href="../engineering/caching_strategies.html">ST06</a>。本卡只讲<strong>模型调用这一跳</strong>做成产品时多出来的旋钮，以及什么时候不该做网关。</p>
+
+<div class="section" id="s1">
+<h2>一、业务代码里的 SDK 会把密钥和账单打散</h2>
+<p>每个服务直接持有厂商 API Key，看起来少一跳延迟，三个月后一定出现：密钥无法按项目吊销、账单无法按团队切、重试策略各写各的、A 厂商挂了 B 业务跟着死。网关要收走的不是流量，而是<strong>密钥生命周期、配额、失败语义、观测字段</strong>这四样横切物。</p>
+<table>
+<tr><th>散落在业务里</th><th>收到网关后</th></tr>
+<tr><td>厂商 Key 进环境变量</td><td>只有网关持有；业务拿虚拟钥</td></tr>
+<tr><td>各服务自己 retry/timeout</td><td>按错误码分层：超时、限流、内容过滤分开</td></tr>
+<tr><td>账单月底对发票</td><td>按虚拟钥 / 项目 / 模型实时累计</td></tr>
+<tr><td>日志格式十种</td><td>统一 trace：模型、token、缓存命中、fallback 次数</td></tr>
+</table>
+<div class="arch-diagram">收口之前 / 之后
+
+【之前】  服务A ──Key1──► 厂商X
+          服务B ──Key2──► 厂商X
+          服务C ──Key3──► 厂商Y     吊销要改三个仓库
+
+【之后】  服务A/B/C ──虚拟钥──► 推理网关 ──厂商Key──► X / Y
+          吊销虚拟钥即可；厂商 Key 轮转对业务不可见
+</div>
+<div class="intuition-box">
+<p>延迟多一毫秒通常换得回来；密钥散落通常换不回来。网关的第一笔 ROI 是事故半径，不是 QPS。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、虚拟钥、项目预算与统一协议</h2>
+<p><span class="term">虚拟钥</span>是发给业务的内部令牌：绑定项目、环境（dev/stage/prod）、允许的模型名单、日预算、是否允许流式。网关把 OpenAI 兼容表面留给业务，背后适配各家差异（工具调用字段、思考 token 计费、缓存命中折扣）。业务禁止感知「今天走的是哪一家」——感知了，fallback 就写不成。</p>
+<table>
+<tr><th>绑定项</th><th>作用</th><th>绑错的后果</th></tr>
+<tr><td>项目 / 环境</td><td>账单与密钥隔离</td><td>prod 密钥被 stage 打爆</td></tr>
+<tr><td>模型白名单</td><td>贵模型不能被实验流量误用</td><td>一次循环 Agent 烧完月预算</td></tr>
+<tr><td>日/月预算</td><td>硬顶，超了失败关闭或降级</td><td>只有告警没有闸</td></tr>
+<tr><td>数据驻留标记</td><td>合规流量禁止出域</td><td>fallback 到境外模型</td></tr>
+</table>
+<div class="formula">允许调用 = 虚拟钥有效 ∧ 模型∈白名单 ∧ 预算未爆 ∧ 驻留策略允许该 provider</div>
+<div class="intuition-box">
+<p>统一协议的目标不是「兼容所有 SDK 特性」，而是让 90% 的调用能换厂商而不改业务代码。剩下 10% 的专有字段走显式开关，不要偷偷透传。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、多厂商熔断、超时分层与 fallback</h2>
+<p>模型调用的失败不是一种。把所有错误都 retry 三次，会把内容过滤和余额不足打成风暴。分层：</p>
+<div class="arch-diagram">错误分层（网关必须分开处理）
+
+  超时 / 5xx / 网络     → 对同类 provider 短重试，再 fallback
+  429 限流              → 按 Retry-After 排队或切备用，禁止打爆
+  4xx 请求错误          → 不重试，直接回业务
+  内容过滤 / 安全拒绝   → 不 fallback 到「更松」的模型，除非策略显式允许
+  余额 / 鉴权失败       → 熔断该 provider，告警人工
+</div>
+<table>
+<tr><th>策略</th><th>适合</th><th>不要用于</th></tr>
+<tr><td>同模型多区域</td><td>可用性</td><td>合规驻留流量</td></tr>
+<tr><td>同级开源备援</td><td>阅读、分类</td><td>强约束的函数调用格式</td></tr>
+<tr><td>降级到小模型</td><td>摘要、路由</td><td>高风险生成（合同、医疗）</td></tr>
+<tr><td>失败关闭</td><td>写操作建议、支付话术</td><td>「先随便答一句」</td></tr>
+</table>
+<div class="highlight">
+<strong>示例场景：</strong>主厂商连续 8 分钟 5xx，三个业务方各写各的重试，聚合 QPS 把备用厂商也打到 429。网关按虚拟钥做令牌桶 + 熔断半开后，故障窗口内备用厂商错误率从 41% 回到个位数，主厂商恢复后半开探测 30s 再切回。业务代码零修改。
+</div>
+<div class="intuition-box">
+<p>Fallback 是可用性工具，不是质量工具。切过去必须记录「这次答的是备援」，评测和审计才能解释为什么同一问句风格突变。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、网关级语义缓存何时有害</h2>
+<p>网关很适合做 <span class="term">语义缓存</span>：embedding 近邻命中则跳过模型。ST06 讲过收益与版本隔离。这里只强调网关层特有的坑：缓存键如果不含<strong>模型 ID、系统提示哈希、工具定义哈希、温度</strong>，就会把「旧 Prompt 跑在新模型上」的答案送给用户。</p>
+<table>
+<tr><th>键里必须有</th><th>漏了会怎样</th></tr>
+<tr><td>模型版本（全名，不是别名）</td><td>供应商升级后仍吐旧 completion</td></tr>
+<tr><td>系统提示 / 工具 schema 哈希</td><td>改了规则仍命中旧政策</td></tr>
+<tr><td>租户或权限标签</td><td>A 租户的答案泄漏给 B</td></tr>
+<tr><td>温度与采样参数</td><td>T=0 的缓存被 T=0.8 复用</td></tr>
+</table>
+<p>什么问句不该进语义缓存：带时间的事实、带用户私有数据、工具结果刚变过的后续轮。命中率不是 KPI；错误命中才是事故。</p>
+<div class="highlight">
+<strong>示例场景：</strong>客服网关语义缓存命中率做到 38%，token 账单明显下降。一次系统提示修订「退货窗口从 7 天改为 15 天」后，因为键里没有提示哈希，三天内约 1/5 的命中仍在引用 7 天。加上提示哈希并在发布时主动使该前缀失效后，错误命中在灰度中降到可忽略，命中率回落到 31%——这是正确的，少掉的那 7 个点本来就不该命中。
+</div>
+<div class="intuition-box">
+<p>缓存的正确性条件比命中率重要一个数量级。宁可 20% 命中全对，不要 50% 命中里掺政策错误。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、和 MCP 网关、Agent 路由的职责切分</h2>
+<div class="arch-diagram">三层路由，不要写成一个上帝服务
+
+  Agent 运行时
+    │  A63：这个任务用快模型还是思考模型（业务语义）
+    ▼
+  LLM 推理网关（本卡）
+    │  虚拟钥、预算、厂商熔断、语义缓存、统一 trace
+    ▼
+  模型供应商 / 自建推理
+
+  工具调用 ──► MCP 网关（SEC15）──► 内部 API
+               身份衰减、秒级票、失败关闭
+</div>
+<table>
+<tr><th></th><th>A63 混合路由</th><th>本卡推理网关</th><th>SEC15 工具网关</th></tr>
+<tr><td>决策依据</td><td>任务难度、成本质量</td><td>配额、可用性、合规</td><td>身份、scope、副作用</td></tr>
+<tr><td>失败默认</td><td>改走更强或更弱模型</td><td>fallback 或排队</td><td>拒绝执行</td></tr>
+<tr><td>重试</td><td>换策略</td><td>仅瞬时错误</td><td>写操作默认不重试</td></tr>
+</table>
+<div class="intuition-box">
+<p>Agent 决定「要不要思考」；推理网关决定「思考调用能不能花这笔钱、挂了切哪家」；工具网关决定「这只手能不能碰付款按钮」。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、落地顺序与关闭条件</h2>
+<div class="practice-grid">
+<div class="do">
+<p>先收密钥与预算，再做 fallback，最后才做语义缓存。</p>
+<p>虚拟钥按环境拆；prod 禁止共用 dev 预算。</p>
+<p>fallback 写入 trace，评测按「实际模型」切片。</p>
+</div>
+<div class="dont">
+<p>不要让业务 SDK 直连厂商「再抄一份到网关」双轨长期并存。</p>
+<p>不要对内容安全拒绝做跨厂商重试。</p>
+<p>不要把工具调用重试策略套用到模型调用上，或反过来。</p>
+</div>
+</div>
+<p>什么时候不要上：单厂商、单应用、QPS 很低、合规也不要求密钥集中。多一个网关就多一个故障域。出现第二个厂商、第二个团队抢同一把 Key、或账单开始说不清时，再收口。</p>
+<p>观测字段最小集：虚拟钥、项目、请求 ID、实际模型版本、prompt/completion token、缓存命中、fallback 次数与原因、驻留策略是否拒绝。缺「实际模型」时，EV09 的在线分无法按供应商切片，故障会记在「模型变笨」而不是「切到了备援」。</p>
+<p>网关自身要有失败关闭：网关挂了不能让业务自动改回直连厂商 Key。直连是逃生舱，应走一次性破玻流程，而不是藏在 SDK 默认配置里。</p>
+<p>容量上把「网关 CPU」和「下游 TPM」分开告警。网关被自己的 JSON 日志或同步鉴权拖死时，下游看起来还很空，业务却全超时。扩模型副本解决不了这一层。</p>
+</div>
+
+<div class="section" id="ref">
+<h2>七、延伸阅读</h2>
+<p>限流与队列见 <a href="../engineering/rocketmq_litertopic_rate_limiting.html">ST22</a>；调用方重试见 <a href="../engineering/api_stability.html">ST03</a>；缓存版本隔离见 <a href="../engineering/caching_strategies.html">ST06</a>。工具身份不在本卡，见 <a href="../security/agent_identity_delegation.html">SEC15</a>。</p>
+<p>网关产品形态（LiteLLM / 云厂商 AI 网关等）只作对照，本卡不绑定某一开源仓库的配置项。</p>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+<details>
+<summary>S01 已经有 API Gateway，为什么还要 LLM 推理网关？</summary>
+<div class="answer">S01 的网关是通用流量门：鉴权、限流、SSE。LLM 推理网关多出来的是模型协议适配、思考 token 与缓存命中的计费口径、按模型的熔断、语义缓存键。用 Nginx 也能转发 HTTPS，但不会帮你在 Prompt 变更时主动失效缓存，也不会把「内容过滤」从「可重试 5xx」里拆出来。</div>
+</details>
+<details>
+<summary>虚拟钥泄漏了怎么办？</summary>
+<div class="answer">吊销这一把，厂商主 Key 不用动。这就是收口的意义。虚拟钥还应绑 IP / 工作负载身份、短 TTL 轮转。泄漏后看该钥的预算消耗曲线，能把爆炸半径限制在一个项目而不是全公司。</div>
+</details>
+<details>
+<summary>Fallback 会不会让评测失效？</summary>
+<div class="answer">会，除非 trace 记录实际命中的模型版本。在线评测（EV09）必须按实际模型切片，否则「主模型变差」会被备援的稳定发挥掩盖，或反过来。Fallback 是运维动作，要当实验因素，不当噪音滤掉。</div>
+</details>
+<details>
+<summary>语义缓存在多轮对话里能做吗？</summary>
+<div class="answer">仅当键包含截至本轮的对话哈希或明确的「可缓存前缀」。多轮里用户纠正了上一句，近邻命中上一轮答案是事故。实操是：只缓存单轮、无工具、无个性化的 FAQ 类；带工具或带记忆的请求默认不走语义缓存。</div>
+</details>
+<details>
+<summary>自建 vLLM 还要不要这层网关？</summary>
+<div class="answer">要，只要你还有云 API 或第二集群。网关对内把自建当成又一个 provider：健康检查、排队、与云 API 的 spillover。纯内网单集群可以先做薄适配（虚拟钥+预算），不必上语义缓存。</div>
+</details>
+<details>
+<summary>和 ST03 的 API 稳定性是重复的吗？</summary>
+<div class="answer">ST03 讲调用方怎么做重试、熔断、结果缓存。本卡讲这些策略作为共享基础设施如何按厂商错误码统一落地，避免每个服务抄一遍抄歪。应用仍要处理网关返回的业务错误；瞬时重试不应再写在每个服务里。</div>
+</details>
+<details>
+<summary>延迟敏感的语音链路能过网关吗？</summary>
+<div class="answer">能，但要单独的低延迟池：禁语义缓存、禁长队列、超时比文字更短，必要时旁路到就近推理。不要和批处理摘要共用一个令牌桶。语音的正确性对延迟过敏，见 A74。</div>
+</details>
+<details>
+<summary>网关要不要做内容安全过滤？</summary>
+<div class="answer">输入输出的基础过滤可以做，但不要替代业务策略。网关过滤应失败关闭并留下原因码；不要把过滤失败 fallback 到「更松的模型」。高风险域把最终策略放在业务 PEP，网关只做明显违规的第一刀。</div>
+</details>
+<details>
+<summary>虚拟钥按人发还是按服务发？</summary>
+<div class="answer">按工作负载发：每个服务一个钥，人的身份走业务鉴权。按人发会让桌面调试钥流进生产。需要到人的账单时，在请求头传 actor，由网关记日志，不要把人当 provider 客户。</div>
+</details>
+</div>
+
+</div>
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

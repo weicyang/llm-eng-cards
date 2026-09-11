@@ -205,6 +205,12 @@ window.CATALOG = {
           "title": "残差网络 / 超连接 / MHC",
           "tagline": "ResNet保底信号 / HC多通道扩展 / 梯度爆炸 / MHC双随机矩阵约束。",
           "href": "./cards/transformer/llm_residual_hyperconnection.html"
+        },
+        {
+          "code": "T24",
+          "title": "SSM / Mamba 与混合注意力",
+          "tagline": "纯线性为何没赢 FlashAttention / 递推状态 vs KV / 混合层分工 / 服务侧状态池 / 短请求可能更慢。",
+          "href": "./cards/transformer/ssm_mamba_hybrid.html"
         }
       ]
     },
@@ -1369,6 +1375,12 @@ window.CATALOG = {
           "title": "AI 应用四层监控体系",
           "tagline": "流量门禁 / 行为围栏 / 状态雷达 / 价值天平 —— 每层拦什么、阈值怎么定。",
           "href": "./cards/architecture/ai_app_monitoring_layers.html"
+        },
+        {
+          "code": "S08",
+          "title": "LLM 推理网关",
+          "tagline": "虚拟钥与项目预算 / 多厂商熔断 fallback / 语义缓存必须含模型与提示哈希 / 与 MCP 网关分家。",
+          "href": "./cards/architecture/llm_inference_gateway.html"
         }
       ]
     },
@@ -1502,6 +1514,18 @@ window.CATALOG = {
           "href": "./cards/deploy/speculative_decoding_production.html"
         },
         {
+          "code": "DP22",
+          "title": "MLA 推理服务",
+          "tagline": "packed latent 缓存形态 / FlashMLA 后端 / prefix cache 何时必须关 / 与 PD 分离和 FP8 KV 叠加。",
+          "href": "./cards/deploy/mla_serving.html"
+        },
+        {
+          "code": "DP23",
+          "title": "多 LoRA / Adapter 推理",
+          "tagline": "一张底座多适配器 / 缓存键必须含 adapter id / 热加载与显存水位 / 底座升级的连坐回归。",
+          "href": "./cards/deploy/multi_lora_serving.html"
+        },
+        {
           "code": "DP25",
           "title": "GPU 执行模型与存储层次",
           "tagline": "Kernel/Grid/Block/Warp 到硬件的映射 / SM 与 warp 调度器 / 寄存器-SRAM-L2-HBM 阶梯 / Occupancy 的真实定义 / 访存合并与 bank conflict / 四类瓶颈定位。",
@@ -1577,6 +1601,12 @@ window.CATALOG = {
           "title": "Agent 评估体系八大核心要素",
           "tagline": "Trial、Task、Grader、Suite 到 Eval Run 与 Dashboard，搭建可追踪、可回归、可持续演进的评估底座。",
           "href": "./cards/agent/agent_evaluation_system.html"
+        },
+        {
+          "code": "EV09",
+          "title": "在线评测与发布门禁",
+          "tagline": "离线金标 vs 线上抽样 / observation 级 judge / shadow 与 canary 晋升 / Judge 漂移与成本账。",
+          "href": "./cards/engineering/online_eval_release_gate.html"
         }
       ]
     },
@@ -1732,6 +1762,12 @@ window.CATALOG = {
           "title": "AI 编程稳定交付工作流",
           "tagline": "Git 检查点 / AGENTS.md / MVP 边界 / Demo 决策 / 自测插件 / 人工验收。",
           "href": "./cards/engineering/ai_stable_delivery_workflow.html"
+        },
+        {
+          "code": "ST26",
+          "title": "规约驱动开发",
+          "tagline": "规格作为跨会话长期上下文 / 提案-设计-任务-验收 / 规格漂移治理 / 何时不要上四件套。",
+          "href": "./cards/engineering/spec_driven_development.html"
         }
       ]
     },
@@ -1838,6 +1874,12 @@ window.CATALOG = {
           "title": "RAG 多租户细粒度权限管控",
           "tagline": "分片夹带 / 权限放大 / 推理泄密 —— 从切分到生成的全链路权限闭环。",
           "href": "./cards/security/rag_multi_tenant_permission.html"
+        },
+        {
+          "code": "SEC15",
+          "title": "Agent 身份与多跳委托",
+          "tagline": "人 → Agent → 工具的身份链 / RFC 8693 衰减 / MCP Gateway 作为 PEP / 秒级票与撤销级联。",
+          "href": "./cards/security/agent_identity_delegation.html"
         }
       ]
     },
