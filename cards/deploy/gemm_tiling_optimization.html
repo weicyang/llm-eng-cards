@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP26 · GEMM 与 Tiling 分块优化</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#a8a29e;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、GEMM 在 Transformer 里占多少</a>
+<a href="#s2">二、naive GEMM 的访存账</a>
+<a href="#s3">三、两级分块：把算术强度提上去</a>
+<a href="#s4">四、Tensor Core 的形状约束</a>
+<a href="#s5">五、流水线：双缓冲、split-K 与 TMA</a>
+<a href="#s6">六、cuBLAS / CUTLASS / OpenAI Triton 的分工</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>DP26 · GEMM 与 Tiling 分块优化</h1>
+<p class="subtitle">Transformer 的矩阵形状与 FLOPs 账 / naive GEMM 为什么必然访存受限 / shared memory tile 与 register tile 的定量推导 / MMA 与 wgmma 形状约束 / double buffering 与 split-K / TMA / cuBLAS 与 CUTLASS 与 OpenAI Triton 的分工</p>
+
+<div class="intuition-box">
+GEMM 的 FLOPs 是 O(MNK)，而数据量只有 O(MK + KN + MN)。这个差值就是全部优化空间——分块做的唯一一件事，就是把"每搬一个字节能算几次"从 0.5 提到几十上百，让计算单元而不是显存带宽成为瓶颈。分块不是技巧，它是这个差值的必然产物。
+</div>
+
+<!-- ==================== 一、GEMM 占比 ==================== -->
+<div class="section" id="s1">
+<h2>一、GEMM 在 Transformer 里占多少</h2>
+
+<p>优化之前先算账：如果 GEMM 只占 20% 的时间，把它加速一倍也只换来 10% 的端到端收益。所以先把 Transformer 的矩阵乘拆开，看清每一个的形状和 FLOPs 权重。<span class="term">GEMM</span>（General Matrix Multiply，通用矩阵乘，形式为 <code>C = αAB + βC</code>）在 Transformer 里出现在三个地方：注意力的 QKV 与输出投影、FFN 的三个线性层、以及最后的词表投影 lm_head。</p>
+
+<h3>以 Llama-3-8B 为例，逐个算 FLOPs</h3>
+
+<p>取公开配置：hidden 4096、FFN 中间层 14336、32 层、32 个查询头配 8 个 KV 头（GQA，head_dim 128）、词表 128256。单 token 一次前向的乘加按 2 FLOPs 计，<code>M</code> 是 token 数（prefill 时是 batch × 序列长度，decode 时就是 batch）：</p>
+
+<table>
+<tr><th>GEMM</th><th>形状（K × N，单 token）</th><th>单层 FLOPs / token</th><th>×32 层</th><th>占比</th></tr>
+<tr><td>Q 投影</td><td>4096 × 4096</td><td>33.6 M</td><td>1.07 G</td><td>7.2%</td></tr>
+<tr><td>K、V 投影（GQA 收窄）</td><td>4096 × 1024 各一个</td><td>16.8 M</td><td>0.54 G</td><td>3.6%</td></tr>
+<tr><td>输出投影 O</td><td>4096 × 4096</td><td>33.6 M</td><td>1.07 G</td><td>7.2%</td></tr>
+<tr><td>FFN gate + up</td><td>4096 × 14336 各一个</td><td>234.9 M</td><td>7.52 G</td><td><strong>50.1%</strong></td></tr>
+<tr><td>FFN down</td><td>14336 × 4096</td><td>117.4 M</td><td>3.76 G</td><td><strong>25.0%</strong></td></tr>
+<tr><td colspan="2"><strong>逐层线性层合计</strong></td><td>436.2 M</td><td>13.96 G</td><td>93.0%</td></tr>
+<tr><td>lm_head（只算一次）</td><td>4096 × 128256</td><td>—</td><td>1.05 G</td><td>7.0%</td></tr>
+<tr><td colspan="2"><strong>全部 GEMM 合计</strong></td><td>—</td><td><strong>15.01 G</strong></td><td>100%</td></tr>
+</table>
+
+<p>这张表有两处值得停下来看。第一，<strong>FFN 吃掉了约四分之三的 GEMM FLOPs</strong>（50.1% + 25.0% = 75.1%），注意力的四个投影合起来只有 18%。这解释了为什么 MoE 把专家放在 FFN 位置——那里才是算力真正花掉的地方。第二，把 15.01 GFLOPs 和"每 token 约 2N FLOPs"的经验公式对一下：模型 8.03 B 参数减去 0.525 B 的 embedding（embedding 是查表，不产生 FLOPs），剩 7.5 B，乘 2 正好 15.0 GFLOPs，两条路算出同一个数，说明账没算错。</p>
+
+<p>注意力分数本身（<code>QKᵗ</code> 和 <code>PV</code>）没有列进上表，因为它的 FLOPs 依赖序列长度：每层每 token 是 4 × S × 4096 FLOPs。S = 2048 时全模型约 1.07 GFLOPs，相当于总量的 6.7%；但它随 S 线性增长，S = 32768 时会涨到约 17 GFLOPs，反超所有线性层之和。这也是长上下文优化的全部动机所在（见 <a href="../transformer/long_context_optimization.html">T21 · Transformer 长文本优化技术</a>）。</p>
+
+<div class="arch-diagram">   一层 Transformer 里的 GEMM（方框宽度 ≈ FLOPs 占比）
+
+  输入 x  [M × 4096]
+     │
+     ├─► Q 投影  [4096×4096]  ████                7.7%
+     ├─► K 投影  [4096×1024]  █                   1.9%
+     ├─► V 投影  [4096×1024]  █                   1.9%
+     │         （GQA 把 K/V 的 N 从 4096 压到 1024）
+     ▼
+   注意力核心 QKᵗ·softmax·PV  ░░░  ← 形状依赖 S，见 T20
+     │
+     ├─► O 投影  [4096×4096]  ████                7.7%
+     ▼
+   ┌── FFN（SwiGLU，三个矩阵）────────────────────────────┐
+   │  gate 投影 [4096×14336]  ██████████████       26.9% │
+   │  up   投影 [4096×14336]  ██████████████       26.9% │
+   │  down 投影 [14336×4096]  ██████████████       26.9% │
+   └─────────────────────────────────────────────────────┘
+     ▼
+  输出 [M × 4096]  ──（最后一层之后）──► lm_head [4096×128256]
+
+  ★ FFN ≈ 单层线性层 FLOPs 的 80.8%，注意力投影 ≈ 19.2%
+  ★ 所有这些矩阵的 K 和 N 都是 1024 的倍数 —— 不是巧合，是刻意设计</div>
+
+<h3>M 维度决定这个 GEMM 是什么性质的问题</h3>
+
+<p>同一组权重矩阵，在训练、prefill、decode 三个场景下是完全不同的计算问题，区别只在 <code>M</code>：</p>
+
+<table>
+<tr><th>场景</th><th>M 的量级</th><th>矩阵形态</th><th>瓶颈性质</th><th>分块还有用吗</th></tr>
+<tr><td>训练 / prefill</td><td>数千到数万（batch × 序列长度）</td><td>三个维度都大，标准 GEMM</td><td>算力受限，Tensor Core 是主角</td><td>这是分块的主战场</td></tr>
+<tr><td>decode，batch 大</td><td>数十到数百</td><td>瘦长矩阵（M ≪ K, N）</td><td>介于两者之间，M 越大越靠算力侧</td><td>有用，但 M 方向的 tile 用不满</td></tr>
+<tr><td>decode，batch = 1</td><td>1</td><td>退化为 GEMV（矩阵乘向量）</td><td><strong>纯访存受限</strong>，权重读一次只算一次</td><td>基本无用，要靠 batching 和量化</td></tr>
+</table>
+
+<p>最后一行是整个大模型推理经济学的根源：batch = 1 的 decode 每读一个权重只做两次浮点运算，算术强度约 0.5，而 H100 的屋顶线拐点在 295 附近（拐点的推导和各代卡的数值见 <a href="./gpu_compute_optimization.html">DP19 · GPU 算力瓶颈与优化</a>），差了近三个数量级。<strong>所以 decode 阶段再怎么优化 GEMM kernel 都是徒劳，唯一的出路是提高 M（连续批处理）或减少搬运量（量化）</strong>，前者见 <a href="./inference_performance_bottleneck.html">DP10 · 大模型推理性能瓶颈分析</a>，后者见 <a href="./quantization_guide.html">DP13 · 模型量化</a>。本文后面讨论的所有分块技术，默认针对的是训练与 prefill 这类 M 足够大的场景。</p>
+
+<div class="intuition-box">
+先算账再优化：Transformer 的 GEMM FLOPs 里 FFN 占约四分之三，注意力投影不到两成。但 FLOPs 占比大不等于时间占比大——M = 1 的 decode 里，FLOPs 最多的 FFN 反而跑得离峰值最远，因为它的瓶颈根本不是算力。
+</div>
+</div>
+
+<!-- ==================== 二、naive 访存账 ==================== -->
+<div class="section" id="s2">
+<h2>二、naive GEMM 的访存账</h2>
+
+<p>现在写一个最直白的 GEMM：每个线程负责输出矩阵 C 的一个元素，沿 K 方向循环累加。这份代码功能完全正确，性能却只有 cuBLAS 的百分之几。原因不在指令效率，而在一笔可以精确算出来的访存账。</p>
+
+<pre><code>// naive GEMM：每线程算一个 C 元素（这是反面教材）
+int row = blockIdx.y * blockDim.y + threadIdx.y;
+int col = blockIdx.x * blockDim.x + threadIdx.x;
+float acc = 0.f;
+for (int k = 0; k &lt; K; ++k)
+    acc += A[row * K + k] * B[k * N + col];   // 两次全局访存，两次浮点运算
+C[row * N + col] = acc;</code></pre>
+
+<h3>算术强度只有 O(1)</h3>
+
+<p><span class="term">算术强度</span>（Arithmetic Intensity，每从内存搬运 1 字节数据所能完成的浮点运算次数）是判断瓶颈归属的核心量，定义与屋顶线模型的关系见 DP19，这里直接用。对上面这段代码，单个输出元素的账是：</p>
+
+<div class="formula">算术强度 = 2K FLOPs ÷ (2K × 元素字节数) = 1 / 元素字节数</div>
+
+<p>FP16 是 2 字节，代入得 <strong>0.5 FLOP/Byte</strong>；FP32 是 <strong>0.25 FLOP/Byte</strong>。注意这个结果里<strong>没有 K</strong>——循环再长也没用，因为每多一次迭代，既多两次运算也多两次访存，比值恒定。这就是"算术强度只有 O(1)"的准确含义：它是常数，不随问题规模改善。而 H100 的屋顶线拐点约在 295 FLOP/Byte，0.5 距离它差了约 590 倍。<strong>结论不是"这份代码写得不够好"，而是"任何不做数据复用的 GEMM 实现都必然访存受限"</strong>——这是算法结构决定的，不是编码水平决定的。</p>
+
+<h3>换成总搬运量看，浪费更直观</h3>
+
+<p>取一个 4096³ 的 FP16 GEMM，三种口径的 HBM 搬运量对比如下：</p>
+
+<table>
+<tr><th>实现方式</th><th>HBM 搬运量</th><th>相对理论下限</th><th>算术强度</th><th>在 H100 上的性质</th></tr>
+<tr><td>naive（每输出元素独立读 A、B 各一行/列）</td><td>2 × 4096³ × 2 B ≈ <strong>275 GB</strong></td><td>约 2750×</td><td>0.5</td><td>严重访存受限</td></tr>
+<tr><td>128×128 block tile</td><td>2 × 4096³ / 128 × 2 B ≈ <strong>2.15 GB</strong></td><td>约 21×</td><td>64</td><td>仍在带宽斜坡上，但已大幅改善</td></tr>
+<tr><td>理论下限（三个矩阵各读写一次）</td><td>3 × 4096² × 2 B ≈ <strong>100 MB</strong></td><td>1×</td><td>1365</td><td>算力受限（理想）</td></tr>
+</table>
+
+<p>275 GB 是个什么概念？H100 的 HBM 带宽 3.35 TB/s，光搬这些数据就要 82 ms，而这个 GEMM 的计算量 2 × 4096³ = 137 GFLOPs，在 989 TFLOPS 的 BF16 Tensor Core 上只需要 0.14 ms。<strong>算 0.14 毫秒的活，搬了 82 毫秒的数据，差了约 590 倍——这个比值和"拐点 295 除以算术强度 0.5"算出来的完全一致</strong>，两条路互相验证。</p>
+
+<div class="arch-diagram">    naive GEMM 的重复读取：同一行被读了 N 次
+
+        B (K×N)                     每个线程读：
+     ┌─────────────┐                  A 的一整行（K 个元素）
+     │  ↓  ↓  ↓  ↓ │                  B 的一整列（K 个元素）
+  A  │             │   C
+ ┌───┤             │ ┌─────────────┐
+ │→→→│             │ │ ● ● ● ● ● ● │  ← C 的第 0 行有 N 个元素
+ │→→→│             │ │ ● ● ● ● ● ● │    它们全都要读 A 的第 0 行
+ │→→→│             │ │ ● ● ● ● ● ● │    → A 的每个元素被读了 N 次
+ └───┘             │ └─────────────┘    → B 的每个元素被读了 M 次
+     └─────────────┘
+
+  总搬运量 = M·K·N + K·N·M = 2MNK 个元素
+  理论下限 = M·K + K·N + M·N 个元素
+  4096³ 时比值 = 2×4096³ / (3×4096²) = 2731 倍
+
+  ★ L1/L2 能帮你捡回一部分，但缓存容量远小于工作集，命中率不可控
+  ★ 唯一可靠的办法：自己把数据搬到 shared memory，并规定它被用几次</div>
+
+<div class="intuition-box">
+naive GEMM 的问题不是"慢"，是"重复搬"。A 的每个元素被从显存读了 N 次，B 的每个元素被读了 M 次。把它想成从仓库取零件：每装一个成品就跑一趟仓库拿一颗螺丝，而不是先搬一整箱螺丝到工位旁边。分块就是"搬一箱到工位旁"。
+</div>
+</div>
+
+<!-- ==================== 三、两级分块 ==================== -->
+<div class="section" id="s3">
+<h2>三、两级分块：把算术强度提上去</h2>
+
+<p>分块的思路一句话就能说完：<strong>把输出矩阵切成小块，每块的计算所需的输入数据一次性搬到更快的存储里，在那里被复用多次</strong>。关键在于 GPU 的存储层次有两级需要分别对付（层次的容量与延迟阶梯见 <a href="./gpu_execution_model.html">DP25 · GPU 执行模型与存储层次</a>），所以分块也是两级的：<span class="term">shared memory tile</span> 治 HBM 流量，<span class="term">register tile</span> 治 shared memory 流量。CUTLASS 把这套结构写成了一个五层嵌套的循环，从外到内依次是 threadblock tile、warp tile、instruction tile，每一层对应硬件的一个并发层级。</p>
+
+<h3>第一级：block tile 把 HBM 流量降到 1/BM + 1/BN</h3>
+
+<p>设 threadblock 负责输出的一块 <code>BM × BN</code>，沿 K 方向按 <code>BK</code> 分步推进。因为 A 的一个 tile 被这一行上的 <code>N/BN</code> 个 block 各读一次、B 的一个 tile 被这一列上的 <code>M/BM</code> 个 block 各读一次，总元素搬运量是 <code>MNK × (1/BM + 1/BN)</code>，于是：</p>
+
+<div class="formula">HBM 侧算术强度 = 2 ÷ [(1/BM + 1/BN) × 元素字节数]</div>
+
+<p>代入几组常用配置（FP16，2 字节）就能看出 tile 尺寸的杠杆有多大：</p>
+
+<table>
+<tr><th>block tile（BM × BN）</th><th>HBM 侧算术强度</th><th>相对 naive</th><th>tile 的 shared memory 用量（BK=32，双缓冲）</th><th>H100 上能驻留几个 block</th></tr>
+<tr><td>1 × 1（即 naive）</td><td>0.5</td><td>1×</td><td>0</td><td>受其他限制</td></tr>
+<tr><td>32 × 32</td><td>16</td><td>32×</td><td>(32+32)×32×2 B×2 = 8 KB</td><td>28</td></tr>
+<tr><td>64 × 64</td><td>32</td><td>64×</td><td>16 KB</td><td>14</td></tr>
+<tr><td><strong>128 × 128</strong></td><td><strong>64</strong></td><td><strong>128×</strong></td><td>32 KB</td><td>7</td></tr>
+<tr><td>256 × 128</td><td>85.3</td><td>171×</td><td>48 KB</td><td>4</td></tr>
+<tr><td>256 × 256</td><td>128</td><td>256×</td><td>64 KB</td><td>3</td></tr>
+</table>
+
+<p>三条结论从这张表里直接读出来。第一，<strong>tile 越大算术强度越高，但增长是次线性的</strong>——从 32 到 128 提升 4 倍，从 128 到 256 只提升 2 倍。第二，<strong>tile 越大能驻留的 block 越少</strong>，H100 的 228 KB shared memory 在 128×128 双缓冲配置下只够 7 个 block；再加上寄存器压力（累加器 128×128 个 FP32 要分摊到 block 的所有线程上），实际 occupancy 会相当低。这正是 CUTLASS 文档指出的现象：GEMM 的累加器占掉线程寄存器预算的一半以上，导致 GEMM 的 occupancy 天生比别的负载低——但这不是问题，因为 Tensor Core 不需要很多 warp 就能喂饱（见 DP25 第四节）。第三，也是最容易被忽略的一点：<strong>128×128 给出的 64 FLOP/Byte 仍然低于 H100 的 295 拐点</strong>。那为什么实测的 cuBLAS 大 GEMM 能跑到峰值的八九成？答案是这个公式假定了"所有 tile 都从 HBM 读"，而现实里 L2（50 MB）会捕获大量跨 block 的复用——这就把话题引到了 block 的排布顺序上。</p>
+
+<h3>threadblock 的排布顺序：让 L2 帮上忙</h3>
+
+<p>block 的执行顺序决定了同时在跑的那批 block 是否共享输入 tile。默认的行主序排布会让一波 block 横扫输出矩阵的一整行，它们共享 A 的 tile 但 B 的 tile 全不相同；改成把若干行"打包成组"再换列（CUTLASS 叫 <span class="term">threadblock rasterization</span>，OpenAI Triton 教程里叫 grouped ordering），同时在跑的 block 就会聚成一个方块，A 和 B 的 tile 都能复用。Triton 官方矩阵乘教程给了一个非常清晰的算例：<strong>一个 9×9 块的矩阵乘，按行主序算出前 9 个输出块需要加载 90 个输入块，按分组顺序只需要 54 个</strong>——降低 40%，代码改动只有几行下标算术。</p>
+
+<h3>第二级：register tile 把 shared memory 流量再降一个量级</h3>
+
+<p>数据搬进 shared memory 之后，还有第二笔账：每个线程从 shared memory 取操作数的次数。如果一个线程只负责一个输出元素，那它每走一步 K 就要读 A、B 各一个元素做一次乘加，shared memory 侧的算术强度又回到了 0.5。解法同构：<strong>让每个线程负责一小块 <code>TM × TN</code> 的输出，把这块的累加器全部放在寄存器里</strong>。此时一步 K 里读 <code>TM + TN</code> 个元素，却能做 <code>TM × TN</code> 次乘加：</p>
+
+<div class="formula">Shared memory 侧算术强度 = 2 × TM × TN ÷ [(TM + TN) × 元素字节数]</div>
+
+<table>
+<tr><th>register tile（TM × TN）</th><th>每步 K 的 smem 读取</th><th>每步 K 的乘加次数</th><th>smem 侧算术强度（FP16）</th><th>每线程累加器寄存器数</th></tr>
+<tr><td>1 × 1</td><td>2</td><td>1</td><td>0.5</td><td>1</td></tr>
+<tr><td>4 × 4</td><td>8</td><td>16</td><td>2.0</td><td>16</td></tr>
+<tr><td><strong>8 × 8</strong></td><td>16</td><td>64</td><td><strong>4.0</strong></td><td>64</td></tr>
+<tr><td>8 × 16</td><td>24</td><td>128</td><td>5.3</td><td>128</td></tr>
+<tr><td>16 × 16</td><td>32</td><td>256</td><td>8.0</td><td>256（<strong>超出单线程 255 上限</strong>）</td></tr>
+</table>
+
+<p>最后一行是个硬边界：单线程最多 255 个寄存器，16×16 的累加器就已经把预算吃光，一定 spill。这就是两级分块的调优本质——<strong>block tile 的上限由 shared memory 容量决定，register tile 的上限由寄存器预算决定，两个都是硬墙，调 tile 尺寸就是在两面墙之间找那个既有足够复用度、又不撞墙的点</strong>。</p>
+
+<div class="arch-diagram">        两级分块的数据走位与三级 tile 的嵌套关系
+
+  HBM ──① block tile (BM×BN×BK)──► Shared Memory ──② register tile──► 寄存器
+        每个 tile 被 block 内所有       128×128×32        每线程 8×8
+        warp 共享，复用 BM 或 BN 次      = 32 KB (双缓冲)   累加器常驻
+
+  ┌──────────── CUTLASS 的三层 tile 嵌套（对应硬件三级并发）───────────┐
+  │                                                                    │
+  │  ① threadblock tile  128×128×32   ← 一个 block，对应一个 SM        │
+  │     ┌──────────┬──────────┐        数据放 shared memory            │
+  │     │ warp tile│ warp tile│                                        │
+  │     │  64×64   │  64×64   │  ② warp tile 64×64                     │
+  │     ├──────────┼──────────┤     ← 一个 warp，数据放寄存器 fragment  │
+  │     │ warp tile│ warp tile│        从 smem 经 ldmatrix 装载         │
+  │     │  64×64   │  64×64   │                                        │
+  │     └──────────┴──────────┘                                        │
+  │          每个 warp tile 再切成 ③ instruction tile 16×8×16           │
+  │          ← 一条 mma.sync 指令，Tensor Core 直接吃                   │
+  └────────────────────────────────────────────────────────────────────┘
+
+  算术强度的三级跃升（FP16）：
+    HBM 侧   0.5 ──(128×128 block tile)──► 64      提升 128×
+    smem 侧  0.5 ──(8×8 register tile)───► 4       提升 8×
+    再叠加 L2 捕获的跨 block 复用（分组排布可再降 40% 输入块加载）</div>
+
+<p>把极简的分块骨架写出来，就三行关键逻辑（省略边界处理与同步细节）：</p>
+
+<pre><code>// 两级分块的骨架：外层搬 tile，内层在寄存器里算
+for (kt = 0; kt &lt; K; kt += BK) {
+    load_tile(sA, A + kt);  load_tile(sB, B + kt);  __syncthreads();
+    for (k = 0; k &lt; BK; ++k)                        // smem → 寄存器
+        for (i = 0; i &lt; TM; ++i) for (j = 0; j &lt; TN; ++j)
+            acc[i][j] += sA[i][k] * sB[k][j];       // 累加器全程不落地
+    __syncthreads();
+}</code></pre>
+
+<div class="highlight">
+<strong>示例场景：一次 tile 尺寸调优的完整账本。</strong>某团队为一个 W8A8 量化 GEMM 写 Triton kernel，初版沿用了教程默认的 64×64×32 tile 配置，实测在 <code>[M=4096, K=4096, N=14336]</code> 这个 FFN 形状上只跑到 BF16 cuBLAS 的 54%。Nsight Compute 显示 DRAM Throughput 72%、SM Throughput 48%——偏访存侧，说明复用度不够。按第三节的公式算：64×64 的 HBM 侧算术强度是 32，而 128×128 能到 64。于是把 tile 提到 128×128×32，shared memory 用量从 16 KB 涨到 32 KB（双缓冲），每 SM 驻留 block 从 14 降到 7，实测 occupancy 从 43% 掉到 22%——但 kernel 快了 1.6 倍，因为 DRAM Throughput 降到 41%、SM Throughput 升到 79%，瓶颈成功从访存侧转到算力侧。第二轮再把 <code>GROUP_SIZE_M</code> 从 1 改成 8 启用分组排布，L2 命中率上升，又快了 9%。第三轮尝试 256×128（算术强度 85），驻留 block 降到 4，这次反而慢了 4%——说明已经越过了那个平衡点。最终配置停在 128×128×32 + GROUP_SIZE_M=8，达到 cuBLAS 的 91%。这组数字是构造的示例，但这个调优路径（先用公式估算术强度、再用两个 Speed of Light 确认瓶颈是否转移、最后靠实测找平衡点）可以直接照用，<strong>关键是别把中途 occupancy 的下降当成退步</strong>。
+</div>
+
+<div class="intuition-box">
+两级分块是同一个动作做了两遍：第一遍把数据从仓库（HBM）搬到工位旁的料架（shared memory），第二遍把料架上的零件抓到手里（寄存器）再拼装。每一级都在问同一个问题——"搬一次能用几回"。答案从 0.5 变成 64，性能就从百分之几变成八九成。
+</div>
+</div>
+
+<!-- ==================== 四、Tensor Core 形状约束 ==================== -->
+<div class="section" id="s4">
+<h2>四、Tensor Core 的形状约束</h2>
+
+<p>分块讲完了复用，还剩最内层那个问题：tile 里的乘加到底用什么指令做。走 CUDA Core 的标量 FFMA，一条指令一个 warp 只有 64 FLOPs；走 Tensor Core 的矩阵指令，一条就是几千 FLOPs（对比数据见 DP25 第二节）。代价是 Tensor Core 只吃固定形状的输入，<strong>而这个形状约束会一路向上传导，最终变成"你的 hidden_size 必须是某个数的倍数"这种模型设计层面的要求</strong>。</p>
+
+<h3>两代指令的形状规则</h3>
+
+<table>
+<tr><th>指令族</th><th>架构</th><th>执行范围</th><th>形状约束</th><th>操作数来源</th></tr>
+<tr><td><code>mma.sync.aligned.m16n8k16</code></td><td>SM80+（Ampere 起）</td><td>1 个 warp（32 线程），同步</td><td>M=16, N=8 固定；K 由数据类型定（FP16/BF16 为 16，FP8 为 32，MXFP4 为 64）</td><td>A、B、C 全在寄存器，靠 <code>ldmatrix</code> 从 shared memory 装载成规定的 fragment 布局</td></tr>
+<tr><td><code>wgmma.mma_async.m64nNk16</code></td><td>SM90a（Hopper）</td><td>1 个 warpgroup（4 warp / 128 线程），<strong>异步</strong></td><td><strong>M 固定为 64</strong>；N 为 8 的倍数，取值 8~256；K 固定为 32 字节（FP16/BF16 → 16，FP8/INT8 → 32）</td><td>B 必须来自 shared memory（经 64 位矩阵描述符），A 可来自 shared memory 或寄存器；累加器在寄存器</td></tr>
+</table>
+
+<p>Hopper 这一代的变化很值得说清楚：<strong>MMA 从"warp 同步"变成了"warpgroup 异步"</strong>。<code>wgmma</code> 由 128 个线程协作发射，发射后不阻塞，需要用 <code>fence → commit_group → wait_group</code> 三段式原语来排序，而且操作数可以直接从 shared memory 取、不必先经 <code>ldmatrix</code> 搬进寄存器。这两点合起来，才让第五节要讲的"搬运和计算真正并行"成为可能。M 被固定在 64 的原因也不神秘：固定的 M 让操作数到 Tensor Core 输入端的映射变成静态布线，省掉了昂贵的动态路由。</p>
+
+<h3>为什么矩阵维度要对齐到 8 或 16 的倍数</h3>
+
+<p>这里有三个不同层次的约束，经常被混成一句"要对齐到 8"，其实后果完全不同：</p>
+
+<table>
+<tr><th>约束层次</th><th>具体要求</th><th>不满足的后果</th><th>权威出处</th></tr>
+<tr><td><strong>① 内存对齐</strong></td><td>矩阵维度与 leading dimension 乘以元素字节数后能被 16 整除；A/B/C 指针也 16 字节对齐。FP16 即维度为 8 的倍数</td><td>cuBLAS 11.0 之后仍可用 Tensor Core，但走不了最宽的向量化访存路径，效率下降；<strong>FP8 是硬性要求</strong></td><td>cuBLAS 文档「Tensor Core Usage」列出的 9 条对齐条件</td></tr>
+<tr><td><strong>② Tile 量化</strong></td><td>输出维度能被 threadblock tile 尺寸整除，实践上取 64 的倍数、理想 128~256 的倍数</td><td>边缘那一排 tile 做了全量计算却只产出部分有用数据，算力按比例白扔</td><td>NVIDIA《Matrix Multiplication Background User's Guide》</td></tr>
+<tr><td><strong>③ Wave 量化</strong></td><td>tile 总数是 SM 数的整数倍（A100 为 108，H100 SXM5 为 132）</td><td>最后一"波"只有部分 SM 在干活，其余空转</td><td>同上，及 GTC「Tensor Core Performance Guide」</td></tr>
+</table>
+
+<p>NVIDIA 的官方口径在这里有过一次演进，值得说明以免读到旧资料时困惑：cuBLAS 11.0 / cuDNN 7.6.3 <strong>之前</strong>，维度对齐是使用 Tensor Core 的<strong>硬性前提</strong>，不满足就直接退回 CUDA Core，实测有 2~4 倍的落差；之后放宽成"不对齐也能用 Tensor Core，但对齐了效率更好"。所以今天的正确表述是：<strong>对齐不再是开关，而是效率系数</strong>。官方建议是按 16 字节对齐（FP16 即 8 个元素），做不到时退而对齐到更小的 2 的幂仍有帮助；A100 上甚至可以进一步对齐到 128 字节（FP16 即 64 个元素）以获得更高效率。</p>
+
+<h3>padding 的代价，其实小得出乎意料</h3>
+
+<p>面对不对齐的维度，工程上的标准做法是 padding 到对齐边界。很多人担心"补零不是白算吗"，算一下就知道这笔账极其划算：</p>
+
+<table>
+<tr><th>场景</th><th>原始维度</th><th>padding 后</th><th>多算的 FLOPs</th><th>换来的收益</th></tr>
+<tr><td>GPT-2 系词表</td><td>50257（质数）</td><td>50304 = 128 × 393</td><td><strong>+0.09%</strong></td><td>lm_head 从"最差 tile 量化"变成完美整除</td></tr>
+<tr><td>hidden 非对齐</td><td>4090</td><td>4096 = 128 × 32</td><td>+0.15%</td><td>所有投影层同时受益</td></tr>
+<tr><td>batch × seq 非对齐</td><td>1000</td><td>1024</td><td>+2.4%</td><td>消除 M 方向的 tile 量化</td></tr>
+<tr><td>FFN 中间层</td><td>11000</td><td>11008 = 128 × 86</td><td>+0.07%</td><td>gate/up/down 三个矩阵全部对齐</td></tr>
+</table>
+
+<p>第一行是最经典的例子：50257 是质数，任何 tile 尺寸都除不尽，最后一排 tile 几乎全是浪费；补到 50304 只多算 0.09% 的 FLOPs，却把词表投影这个占总 GEMM 量 7% 的大矩阵从最差情况变成了完美对齐。反过来看现代大模型的配置表——Llama-3 的 4096、14336、1024，Qwen 系的 hidden 与 intermediate，全都是 128 甚至 256 的倍数。<strong>这不是审美，是被 Tensor Core 的形状约束反向倒逼出来的设计规范。</strong></p>
+
+<div class="highlight">
+<strong>示例场景：一个 +7 就废掉三成算力的维度。</strong>某团队做领域自适应时给词表新增了 7 个特殊 token，词表从 32000 变成 32007，模型其余配置不动。训练吞吐下降了约 18%，而 FLOPs 只增加了 0.02%。用 Nsight Compute 单独看 lm_head 这个 GEMM：SM Throughput 从 82% 掉到 61%，而且 kernel 选择从 128×256 的大 tile 退到了 64×64 的小 tile（cuBLAS 为了减少量化损失主动选了更小的 tile，代价是算术强度从 85 掉到 32）。根因是 32007 = 3 × 47 × 227，既不满足 16 字节对齐（FP16 需要 8 的倍数），也无法被任何常见 tile 尺寸整除。修法是把词表补到 32128（= 128 × 251），多出的 121 个位置在词表里置为永不采样的占位符，同时给 logits 对应位置加 <code>-inf</code> 掩码保证分布不变。吞吐恢复到基线的 99%，多算的 FLOPs 是 0.4%。这组数字是构造的示例，但"维度加几个就掉一大截吞吐"是真实且高频的故障模式，排查入口就是单独 profile 那个维度异常的 GEMM 看它选了多大的 tile。
+</div>
+
+<div class="intuition-box">
+Tensor Core 是一台只接受固定尺寸模具的液压机。维度对齐不是为了"让它能用"（现在的库不对齐也能用），而是为了"让它别在边角上空压"。补几个零的代价通常在千分之一以下，而不补的代价可能是两成吞吐——这是性价比最高的一类优化，改一行配置就完事。
+</div>
+</div>
+
+<!-- ==================== 五、流水线 ==================== -->
+<div class="section" id="s5">
+<h2>五、流水线：双缓冲、split-K 与 TMA</h2>
+
+<p>分块解决了"搬得少"，形状对齐解决了"算得快"，还剩最后一个问题：<strong>搬的时候能不能同时在算</strong>。如果每轮循环都是"搬 tile → 等搬完 → 算 → 等算完 → 搬下一块"，那搬运时间和计算时间是相加的；理想情况应该是两者重叠，总时间等于两者的最大值。这就是流水线要做的事。</p>
+
+<h3>双缓冲：用两份缓冲区换来重叠</h3>
+
+<p><span class="term">双缓冲</span>（double buffering，也叫软件流水，在 shared memory 里开两份 tile 缓冲区轮换使用）是最基础的手段。CUTLASS 在两个尺度上同时做这件事：</p>
+
+<ul>
+<li><strong>block 尺度</strong>：shared memory 里分配两块 tile，一块正在被计算消费，另一块同时在接收下一轮从 HBM 来的数据。</li>
+<li><strong>warp 尺度</strong>：寄存器里分配两份 matrix fragment，一份正在被 Tensor Core 消费，另一份同时在接收从 shared memory 来的数据。</li>
+</ul>
+
+<p>CUTLASS 文档给出的动机说得很直接：GEMM 的累加器占掉线程寄存器预算的一半以上，导致 occupancy 天生偏低，<strong>因此 GPU 靠"切换到别的 warp"来掩盖延迟的能力也就弱，只能靠单线程内部的软件流水来自救</strong>。这句话解释了一个重要的因果关系——GEMM 之所以必须精心做流水线，恰恰是因为它没法靠高 occupancy 蒙混过去。Ampere 引入 <code>cp.async</code> 之后，缓冲级数可以从 2 提到 3~5 级（CUTLASS 的 <code>Stages</code> 参数），代价是 shared memory 用量按级数线性增长。</p>
+
+<div class="arch-diagram">        单缓冲 vs 双缓冲 vs Hopper 的 warp 专精化
+
+  ┌─ 单缓冲：搬和算严格串行 ─────────────────────────────────────┐
+  │ 搬运  ████        ████        ████                           │
+  │ 计算      ██████      ██████      ██████                     │
+  │ 总时间 = Σ(搬 + 算)                                          │
+  └──────────────────────────────────────────────────────────────┘
+
+  ┌─ 双缓冲：搬下一块的同时算这一块 ─────────────────────────────┐
+  │ 搬运  ████ ████ ████ ████        ← 写 buffer A / B 交替       │
+  │ 计算      ██████████████████     ← 读 buffer B / A 交替       │
+  │ 总时间 ≈ max(Σ搬, Σ算) + 一轮启动开销                        │
+  │ 代价：shared memory 用量翻倍                                 │
+  └──────────────────────────────────────────────────────────────┘
+
+  ┌─ Hopper：warp 专精化 + TMA + 异步 wgmma ─────────────────────┐
+  │ 生产者 warpgroup（DMA）：发 TMA 指令，等 buffer 空 → 填满     │
+  │   TMA  ░░░░ ░░░░ ░░░░ ░░░░ ░░░░ ░░░░   ← 硬件自己算地址      │
+  │ 消费者 warpgroup（MMA）：等 buffer 满 → 发 wgmma → 标记空     │
+  │   MMA  ████████████████████████████                          │
+  │        └── 异步屏障（mbarrier）在两组之间传递满/空信号 ──┘    │
+  │ 关键差别：搬运不再占用计算 warp 的指令发射带宽                │
+  └──────────────────────────────────────────────────────────────┘</div>
+
+<h3>Hopper 的 TMA 带来了什么</h3>
+
+<p><span class="term">TMA</span>（Tensor Memory Accelerator，张量内存加速器，Hopper 新增的专用搬运引擎）解决的是一个之前被忽视的开销：<strong>在 Ampere 上，即使用了 <code>cp.async</code> 异步拷贝，地址计算本身仍然要由计算 warp 的指令发射带宽来承担</strong>——每个线程都得算自己那份地址、做边界判断。多维张量的地址算术相当啰嗦，这部分指令挤占的正是本该发给 Tensor Core 的发射槽。</p>
+
+<p>TMA 把这件事整个搬到硬件里：软件只需要构造一个描述符（说明张量的形状、步长、目标 tile 的坐标与 swizzle 模式），然后由<strong>单个线程</strong>发一条指令，硬件就会自动完成整块多维 tile 的 global ↔ shared memory 搬运，包括所有地址生成和越界处理。配合 CUTLASS 3.0 引入的 <span class="term">warp 专精化</span>（warp specialization，把 block 内的 warp 分成专职搬运的生产者组和专职计算的消费者组，用异步屏障传递"缓冲区满/空"信号），搬运和计算才真正跑在两套互不抢占的资源上。</p>
+
+<table>
+<tr><th>能力</th><th>Ampere（<code>cp.async</code> + <code>mma.sync</code>）</th><th>Hopper（TMA + <code>wgmma</code>）</th></tr>
+<tr><td>地址生成</td><td>由计算 warp 的指令逐线程算</td><td><strong>硬件完成</strong>，单线程发一条指令即可</td></tr>
+<tr><td>搬运粒度</td><td>按线程的向量化拷贝</td><td>整块多维 tile，含边界处理</td></tr>
+<tr><td>MMA 发射</td><td>warp 同步，发射后即占用</td><td>warpgroup 异步，fence / commit / wait 三段式</td></tr>
+<tr><td>MMA 操作数</td><td>必须先 <code>ldmatrix</code> 进寄存器</td><td>B 直接从 shared memory 取，A 可选</td></tr>
+<tr><td>同步原语</td><td><code>__syncthreads()</code> + <code>cp.async</code> 组提交</td><td>异步屏障 mbarrier，生产者/消费者解耦</td></tr>
+<tr><td>典型调度</td><td>多级流水（Stages = 3~5）</td><td>warp 专精化的 cooperative / pingpong 调度</td></tr>
+</table>
+
+<h3>split-K：当 K 很大而 M、N 很小</h3>
+
+<p>前面所有讨论都假定 M 和 N 足够大，能切出足够多的 block 填满 GPU。但有一类形状会破坏这个假设：<strong>M 和 N 都小、K 却很大</strong>。此时 block 总数 = (M/BM) × (N/BN) 可能只有个位数，132 个 SM 里绝大多数在空转——不是算力不够，是活没铺开。</p>
+
+<p><span class="term">split-K</span>（把归约维度 K 切成若干段，交给不同的 block 并行计算部分和，最后再归约相加）就是为此设计的。CUTLASS 的实现需要<strong>两个 kernel</strong>：先跑一个 partitionedK GEMM 算出各段的部分和写进 workspace，再跑一个 batched reduction kernel 沿 K 方向求和。文档给的例子是 m=128, n=128, k=4096 切成 20 份，前 19 份各取 k=204、最后一份取 k=220。还有一个变体叫 sliced-K，把切分放在 block 内部的 warp 之间，归约成本更低但并行度增益也更小。Hopper 之后 CUTLASS 又提供了 Stream-K 调度器，把工作量按 SM 数均匀摊平，能同时缓解 tile 量化和 wave 量化。</p>
+
+<table>
+<tr><th>场景特征</th><th>推荐策略</th><th>额外成本</th><th>典型出现位置</th></tr>
+<tr><td>M、N、K 都大</td><td>标准分块 + 多级流水，不用 split-K</td><td>无</td><td>训练、长 prefill</td></tr>
+<tr><td>M、N 小，K 大（block 数 &lt; SM 数）</td><td>split-K（跨 block 归约）</td><td>需 workspace 显存 + 第二个归约 kernel</td><td>小 batch decode 的投影层、LoRA 的低秩矩阵</td></tr>
+<tr><td>M、N 中等，K 大，想省一次 kernel 启动</td><td>sliced-K（跨 warp 归约）</td><td>block 内一次小归约</td><td>中等 batch 的注意力投影</td></tr>
+<tr><td>tile 数不是 SM 数整数倍，尾波浪费明显</td><td>Stream-K 调度器</td><td>实现复杂度，部分 tile 需跨 SM 归约</td><td>形状不规则的生产负载</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景：LoRA 推理里被 split-K 救回来的两个瘦矩阵。</strong>某团队把 LoRA 适配器合进在线推理路径，rank 取 16。合并前的两个 GEMM 形状是 <code>[M=8, K=4096, N=16]</code> 和 <code>[M=8, K=16, N=4096]</code>，profile 显示这两个 kernel 合起来占了单步延迟的 31%，而它们的 FLOPs 只占全模型的不到 0.5%。原因一眼可见：第一个 GEMM 按 128×128 tile 只能切出 1 个 block，H100 的 132 个 SM 里 131 个在空转，SM Throughput 2%、DRAM Throughput 也只有 19%——两个 Speed of Light 都低，典型的"活没铺开"（这个判据见 <a href="./gpu_execution_model.html">DP25</a> 第六节）。处理方式有两条并行：一是对 K=4096 那个 GEMM 启用 split-K 切 32 份，把 block 数提到 32；二是把同一 batch 内多个请求的 LoRA 调用合成一次 grouped GEMM 把 M 撑起来。两项合计后这两个 kernel 的占比从 31% 降到 6%，单步延迟降低约 21%。数字是构造的，但"低秩矩阵在大卡上因为 block 数太少而严重低效"是 LoRA 与 MoE 路由场景里非常真实的问题，split-K 和 grouped GEMM 是标准解法。
+</div>
+
+<div class="intuition-box">
+流水线优化的三个阶段刚好对应三个问题：双缓冲问"搬的时候能不能同时算"；TMA 问"搬运能不能别占用算的人手"；split-K 问"活是不是根本没铺开"。前两个是让忙的人更高效，第三个是让闲的人有活干——诊断时要先分清是哪一类，否则方向就反了。
+</div>
+</div>
+
+<!-- ==================== 六、库的分工 ==================== -->
+<div class="section" id="s6">
+<h2>六、cuBLAS / CUTLASS / OpenAI Triton 的分工</h2>
+
+<p>前五节讲的全部机制，在生产中绝大多数时候你不需要亲手实现——它们已经被封装在三层工具里。这一节讲清每层的边界，以及那个真正值钱的判断：<strong>什么时候才轮到自己写 kernel</strong>。</p>
+
+<h3>先辨析一个高频混淆：两个「Triton」完全无关</h3>
+
+<div class="intuition-box">
+技术圈里有两个叫 Triton 的东西，出自不同公司、解决完全不同的问题，唯一的共同点是名字。<strong>OpenAI Triton 是一门写 GPU kernel 的 Python DSL</strong>（本节讨论的就是它）；<strong>NVIDIA Triton Inference Server 是一个模型服务框架</strong>，管的是 HTTP/gRPC 接口、动态批处理和多模型编排，跟写 kernel 毫无关系。看到「Triton」二字，先确认语境里说的是"用什么写算子"还是"用什么起服务"。
+</div>
+
+<table>
+<tr><th>对比项</th><th>OpenAI Triton</th><th>NVIDIA Triton Inference Server</th></tr>
+<tr><td>出品方</td><td>OpenAI（现为独立开源项目 triton-lang）</td><td>NVIDIA</td></tr>
+<tr><td>是什么</td><td>编写 GPU kernel 的 Python 嵌入式 DSL + 编译器</td><td>推理服务框架 / 模型服务器</td></tr>
+<tr><td>解决的问题</td><td>不写 CUDA C++ 也能拿到接近手写的 kernel 性能</td><td>把训练好的模型以服务形式高吞吐地对外提供</td></tr>
+<tr><td>抽象层级</td><td>block 级（你写 tile 逻辑，编译器管线程映射、访存合并、寄存器分配）</td><td>服务级（管请求队列、动态批处理、多模型与多框架后端）</td></tr>
+<tr><td>典型接触方式</td><td><code>import triton</code>，写 <code>@triton.jit</code> 函数；PyTorch 2.x 的 <code>torch.compile</code> 默认用它生成融合算子</td><td>起一个容器，配 <code>config.pbtxt</code>，走 HTTP/gRPC 调用</td></tr>
+<tr><td>本文相关性</td><td><strong>本节讨论的对象</strong></td><td>与本卡主题无关，属于服务化部署范畴</td></tr>
+</table>
+
+<h3>三层工具的边界</h3>
+
+<table>
+<tr><th>工具</th><th>抽象层级</th><th>你需要自己决定什么</th><th>能做到什么</th><th>做不到什么</th></tr>
+<tr><td><strong>cuBLAS / cuBLASLt</strong></td><td>函数调用</td><td>只管传形状、数据类型、leading dimension</td><td>标准 GEMM 在常见形状上接近峰值，启发式自动选 kernel</td><td>无法把自定义的前后处理融进 GEMM；非标准量化格式和特殊 epilogue 不支持</td></tr>
+<tr><td><strong>CUTLASS / CuTe</strong></td><td>C++ 模板库</td><td>tile 尺寸、流水级数、warp 布局、epilogue、调度策略</td><td>覆盖几乎全部形状与精度组合，可深度定制 epilogue，能拿到 cuBLAS 级性能</td><td>C++ 模板学习曲线陡；编译慢；改一个 tile 参数就要重新实例化</td></tr>
+<tr><td><strong>OpenAI Triton</strong></td><td>Python DSL（block 级）</td><td>tile 尺寸、program id 到 tile 的映射、autotune 搜索空间</td><td>几十行写出带分组排布的 matmul；自动处理线程映射、访存合并、双缓冲；对融合极其友好</td><td>最底层的硬件特性（如手工 swizzle、特定 wgmma 变体）控制力弱于 CUTLASS</td></tr>
+<tr><td><strong>手写 CUDA / PTX</strong></td><td>指令级</td><td>一切</td><td>理论上限；能用库还没暴露的新指令</td><td>开发与维护成本极高，换一代卡可能要重写</td></tr>
+</table>
+
+<p>Triton 的官方矩阵乘教程是理解它定位的最好材料：教程明确把四件事列为要点——block 级矩阵乘、多维指针算术、<strong>为提高 L2 命中率而重排 program 顺序</strong>、以及自动性能调优。注意第三条正是第三节讲的 threadblock rasterization，Triton 把它做成了几行下标算术（那个"90 个块降到 54 个块"的算例就出自这里）。<strong>这就是 Triton 的价值定位：把 tile 划分和排布顺序这些真正影响性能的决策留给你，把线程映射、访存合并、寄存器分配这些机械但繁琐的部分交给编译器。</strong></p>
+
+<div class="arch-diagram">          从一个矩阵乘需求到最终 kernel 的决策路径
+
+  需要做一个矩阵乘
+        │
+  ┌─────▼─────────────────────────────────────────┐
+  │ 是标准 GEMM 吗（无融合、常见精度、形状规整）？ │
+  └─────┬───────────────────────┬─────────────────┘
+     是 │                    否 │
+        ▼                       ▼
+   ┌─────────┐      ┌───────────────────────────────────┐
+   │ cuBLAS  │      │ 需求是"GEMM + 前后处理融合"吗？    │
+   │ 收工    │      └────┬──────────────────┬───────────┘
+   └─────────┘        是 │                否│
+                         ▼                  ▼
+             ┌────────────────────┐  ┌──────────────────────┐
+             │ 先试 torch.compile │  │ 形状极端（M 小 K 大）│
+             │ / OpenAI Triton    │  │ 或需要特殊 epilogue？│
+             │ 几十行搞定融合     │  └───┬──────────────────┘
+             └─────────┬──────────┘      │
+                       │ 性能不够        ▼
+                       ▼            ┌─────────────────────┐
+             ┌──────────────────┐    │ CUTLASS：调 tile、  │
+             │ CUTLASS 深度定制 │◄───┤ 流水级数、split-K、 │
+             └─────────┬────────┘    │ Stream-K 调度       │
+                       │ 仍不够      └─────────────────────┘
+                       ▼
+             ┌──────────────────────────────┐
+             │ 手写 CUDA / PTX（极少数情况）│
+             └──────────────────────────────┘
+
+  ★ 每往下一层，性能上限提高一点，开发与维护成本提高一个量级
+  ★ 先量化收益再决定下潜：这个 kernel 占端到端多少时间？</div>
+
+<h3>什么时候才轮到自己写 kernel</h3>
+
+<p>判断标准只有一条：<strong>现成库解决不了的需求，且这个 kernel 在端到端时间里占比足够大</strong>。具体落到四类场景：</p>
+
+<table>
+<tr><th>该自己写的场景</th><th>为什么库搞不定</th><th>推荐入口</th></tr>
+<tr><td>需要把 GEMM 和相邻算子融成一个 kernel（如 GEMM + SwiGLU + 量化）</td><td>cuBLAS 的 epilogue 能力有限，拆成多个 kernel 会多几轮 HBM 往返</td><td>先 OpenAI Triton，不够再 CUTLASS 自定义 epilogue</td></tr>
+<tr><td>非标准量化格式（分组量化、W4A16、per-channel scale 与 GEMM 交织）</td><td>库只支持标准精度组合，自定义反量化必须写在内循环里</td><td>CUTLASS（有成熟的混合精度 GEMM 范式）</td></tr>
+<tr><td>形状极端（M=1 的 GEMV、低秩矩阵、MoE 的 grouped GEMM）</td><td>库的启发式对这些形状选不出好 kernel，见第五节的 split-K 案例</td><td>Triton 做 grouped GEMM，CUTLASS 做 split-K / Stream-K</td></tr>
+<tr><td>新硬件特性刚出、库还没覆盖</td><td>时间差窗口</td><td>CUTLASS / CuTe，必要时内联 PTX</td></tr>
+</table>
+
+<p>反过来，有三类情况<strong>不该</strong>自己写：形状规整的标准 GEMM（cuBLAS 已经接近峰值，你赢不了）、占端到端时间不到 5% 的算子（优化上限就是 5%）、以及团队没有 Nsight 调优能力时（写得出来但调不动，维护成本会失控）。至于融合本身该怎么设计、哪些算子值得融，见 <a href="./kernel_fusion_optimization.html">DP27 · 算子融合与 Kernel 优化实战</a>；如果目标是让编译器自动完成这些，则属于推理编译栈的范畴，见 <a href="./tensorrt_compilation_stack.html">DP28 · TensorRT 与推理编译栈</a>。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先算这个 GEMM 占端到端多少时间，再决定要不要优化它</li>
+<li>模型配置里的 hidden、intermediate、词表一律取 128（至少 64）的倍数</li>
+<li>维度不对齐时直接 padding，代价通常在千分之一以下</li>
+<li>block tile 的选择同时看 shared memory 容量和累加器寄存器数两面墙</li>
+<li>M、N 小而 K 大时启用 split-K，或把多次调用合成 grouped GEMM</li>
+<li>标准 GEMM 直接用 cuBLAS；有融合需求先试 OpenAI Triton</li>
+<li>说「Triton」时明确是 OpenAI 的 DSL 还是 NVIDIA 的推理服务器</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要指望分块能救 batch=1 的 decode，它的瓶颈是带宽不是算力</li>
+<li>不要为了提 occupancy 而缩小 tile，那会直接降低算术强度</li>
+<li>不要把 register tile 开到 16×16，累加器会超过单线程 255 个寄存器上限</li>
+<li>不要随手给词表或 hidden 加几个奇数，一次维度失配可能吃掉两成吞吐</li>
+<li>不要在没 profile 的情况下手写 GEMM 去和 cuBLAS 比，标准形状上你赢不了</li>
+<li>不要为占端到端不到 5% 的算子投入手写 kernel 的工程量</li>
+<li>不要把 tile 数刚好卡在 SM 数的非整数倍上，尾波会白扔算力</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+工具选择的逻辑和分块本身一样是算账：每往下一层，性能上限提高一点，开发与维护成本提高一个量级。所以顺序永远是"先量占比，再选层级"——一个占 3% 时间的 kernel，就算你手写到极致也只能换来 3% 的收益，而代价是一个永久的维护负担。
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>为什么 naive GEMM 的算术强度是 O(1)，一定访存受限？</summary>
+<div class="answer">
+<p>naive 实现里每个线程负责一个输出元素，沿 K 方向循环：每次迭代读 A 的一个元素和 B 的一个元素（共 2 个元素），做一次乘加（2 FLOPs）。所以算术强度 = 2 FLOPs ÷ (2 × 元素字节数) = 1 / 元素字节数，FP16 是 0.5 FLOP/Byte，FP32 是 0.25。注意这个结果里<strong>不含 K</strong>——循环再长也不改善，因为每多一次迭代既多两次运算也多两次访存，比值恒定。这就是"O(1)"的含义：它是常数，不随问题规模变好。而 H100 的屋顶线拐点约在 295 FLOP/Byte（推导见 DP19），差约 590 倍，所以任何不做数据复用的 GEMM 实现都必然落在带宽斜坡上。换成总搬运量看更直观：4096³ 的 FP16 GEMM，naive 要从 HBM 搬约 275 GB（A 的每个元素被读 N 次、B 的每个元素被读 M 次），理论下限只要 100 MB，差 2750 倍。以 H100 的 3.35 TB/s 算，搬这 275 GB 要 82 ms，而计算本身在 989 TFLOPS 的 Tensor Core 上只要 0.14 ms。</p>
+</div>
+</details>
+
+<details>
+<summary>shared memory tile 和 register tile 分别解决什么问题？</summary>
+<div class="answer">
+<p>它们治的是存储层次上两段不同的流量，所以必须都做。shared memory tile（block tile）治 HBM 流量：让一个 threadblock 负责 BM×BN 的输出块，把所需输入一次搬进 shared memory 供 block 内所有 warp 共享，HBM 侧算术强度变成 2 ÷ [(1/BM + 1/BN) × 元素字节数]，128×128 的 tile 在 FP16 下是 64 FLOP/Byte，比 naive 的 0.5 提升 128 倍。register tile 治 shared memory 流量：如果一个线程只算一个输出元素，它每步 K 要从 shared memory 读两个元素做一次乘加，smem 侧算术强度又回到 0.5；让每个线程负责 TM×TN 的小块、累加器全放寄存器，每步 K 读 TM+TN 个元素却做 TM×TN 次乘加，算术强度变成 2×TM×TN ÷ [(TM+TN) × 字节数]，8×8 是 4.0，提升 8 倍。两级的上限来自不同的硬墙：block tile 受 shared memory 容量限制（H100 每 SM 228 KB），register tile 受寄存器预算限制（单线程最多 255 个，16×16 的累加器就已超标）。调 tile 尺寸本质上就是在这两面墙之间找平衡点。</p>
+</div>
+</details>
+
+<details>
+<summary>128×128 的 tile 算出来算术强度只有 64，低于 H100 的 295 拐点，为什么 cuBLAS 还能跑到接近峰值？</summary>
+<div class="answer">
+<p>因为那个公式假定了"所有 tile 都必须从 HBM 读"，而现实中 L2 缓存会捕获大量跨 block 的复用。H100 有 50 MB L2，同时在跑的那批 block 如果访问的输入 tile 有重叠，第二个及之后的 block 就能从 L2 命中，不必回 HBM。所以真实的 HBM 流量介于"tile 公式给出的值"和"三个矩阵各读一次的理论下限"之间。这也解释了为什么 threadblock 的<strong>排布顺序</strong>会影响性能：默认的行主序排布让一波 block 横扫输出矩阵的一整行，它们共享 A 的 tile 但 B 的 tile 全不相同；改成把若干行打包成组再换列（CUTLASS 叫 threadblock rasterization，Triton 叫 grouped ordering），同时在跑的 block 聚成方块，A 和 B 都能复用。Triton 官方矩阵乘教程给的算例是：一个 9×9 块的矩阵乘，行主序算出前 9 个输出块要加载 90 个输入块，分组顺序只需 54 个，降低 40%，代码改动只有几行下标算术。所以"提高算术强度"实际上是三件事叠加：block tile、register tile、以及让 L2 帮上忙的排布顺序。</p>
+</div>
+</details>
+
+<details>
+<summary>Tensor Core 的形状约束具体是什么，为什么矩阵维度要对齐？</summary>
+<div class="answer">
+<p>指令层面：Ampere 起的 <code>mma.sync.aligned.m16n8k16</code> 由一个 warp（32 线程）同步执行，M=16、N=8 固定，K 由数据类型决定（FP16/BF16 为 16，FP8 为 32）；Hopper 的 <code>wgmma.mma_async.m64nNk16</code> 由一个 warpgroup（128 线程）异步执行，<strong>M 固定为 64</strong>，N 是 8 的倍数且取值 8 到 256，K 固定为 32 字节。维度对齐的要求分三个层次，后果完全不同。第一层是内存对齐：cuBLAS 文档要求矩阵维度与 leading dimension 乘元素字节数后能被 16 整除、指针也 16 字节对齐，FP16 即维度为 8 的倍数；cuBLAS 11.0 之前这是使用 Tensor Core 的硬性前提（不满足有 2~4 倍落差），之后放宽成"不对齐也能用但效率更低"，FP8 仍是硬性要求。第二层是 tile 量化：输出维度要能被 threadblock tile 尺寸整除，官方建议取 64 的倍数、理想 128~256 的倍数，否则边缘那排 tile 做了全量计算却只产出部分有用数据。第三层是 wave 量化：tile 总数最好是 SM 数的整数倍（A100 是 108，H100 SXM5 是 132），否则最后一波只有部分 SM 在干活。padding 的代价通常极小——GPT-2 的词表 50257 是质数，补到 50304（128 × 393）只多算 0.09% 的 FLOPs。</p>
+</div>
+</details>
+
+<details>
+<summary>double buffering 为什么对 GEMM 特别重要？</summary>
+<div class="answer">
+<p>因为 GEMM 恰恰是最没法靠高 occupancy 掩盖延迟的那类 kernel。CUTLASS 文档把因果说得很清楚：分块结构要求每个线程持有大量累加器，累加器通常占掉线程寄存器预算的一半以上，因此 GEMM 能驻留的 warp、block 数相对其他负载明显偏低，GPU"切换到别的 warp"来掩盖访存延迟的能力也就弱——只能靠单个线程内部的软件流水来自救。double buffering 就是这个自救手段：在 shared memory 里开两块 tile 缓冲区，一块正被计算消费、另一块同时在接收下一轮从 HBM 来的数据；在寄存器层面同样开两份 matrix fragment 轮换。这样总时间从"搬运时间加计算时间"变成"两者取最大值"。Ampere 引入 <code>cp.async</code> 后缓冲级数可以提到 3~5 级（CUTLASS 的 Stages 参数），代价是 shared memory 用量按级数线性增长。Hopper 进一步用 TMA 加 warp 专精化把生产者和消费者彻底解耦，搬运不再占用计算 warp 的指令发射带宽。</p>
+</div>
+</details>
+
+<details>
+<summary>什么时候需要 split-K？</summary>
+<div class="answer">
+<p>当 M 和 N 都小、K 却很大的时候。标准分块按输出矩阵切 block，block 总数是 (M/BM) × (N/BN)；M、N 小时这个数可能只有个位数，而 H100 有 132 个 SM，绝大多数在空转——问题不是算力不够，是活没铺开。这种情况的识别特征很明确：Nsight Compute 里 SM Throughput 和 DRAM Throughput <strong>两个都很低</strong>。split-K 把归约维度 K 切成若干段，交给不同 block 并行算部分和，最后再归约相加，从而把 block 数提上去。CUTLASS 的实现需要两个 kernel：partitionedK GEMM 把各段部分和写进 workspace，再跑一个 batched reduction 沿 K 求和，所以额外成本是 workspace 显存加一次 kernel 启动。文档给的例子是 m=128、n=128、k=4096 切 20 份，前 19 份各取 k=204、最后一份 k=220。还有个变体 sliced-K 把切分放在 block 内部的 warp 之间，归约更便宜但并行度增益更小。典型触发场景是 LoRA 的低秩矩阵、小 batch decode 的投影层、MoE 路由后的小专家矩阵。另一条并行的解法是把多次小调用合成 grouped GEMM 把 M 撑起来，两者常常一起用。</p>
+</div>
+</details>
+
+<details>
+<summary>OpenAI Triton 和 NVIDIA Triton Inference Server 是什么关系？</summary>
+<div class="answer">
+<p>没有任何关系，只是重名。OpenAI Triton（现为独立开源项目 triton-lang）是一门<strong>写 GPU kernel 的 Python 嵌入式 DSL</strong> 加配套编译器，抽象层级在 block 级：你写 tile 的逻辑，编译器负责线程映射、访存合并、寄存器分配和软件流水。PyTorch 2.x 的 <code>torch.compile</code> 默认就是用它来生成融合算子的，FlashAttention 也有 Triton 实现版本。NVIDIA Triton Inference Server 是一个<strong>模型服务框架</strong>，管的是 HTTP/gRPC 接口、请求队列、动态批处理、多模型与多框架后端编排，你和它打交道的方式是起一个容器、配一份 <code>config.pbtxt</code>。一个解决"算子怎么写得快"，一个解决"模型怎么对外提供服务"，处在技术栈完全不同的两层。实际读资料时判断语境很简单：讨论 tile、autotune、<code>@triton.jit</code>、<code>tl.dot</code> 的是 OpenAI Triton；讨论 instance group、dynamic batching、model repository 的是 NVIDIA 的推理服务器。</p>
+</div>
+</details>
+
+<details>
+<summary>什么情况下才该自己写 GEMM kernel，而不是用 cuBLAS？</summary>
+<div class="answer">
+<p>判断标准只有一条：现成库解决不了你的需求，<strong>并且</strong>这个 kernel 在端到端时间里占比足够大。具体有四类该写的场景。一是需要把 GEMM 和相邻算子融成一个 kernel（比如 GEMM 接 SwiGLU 再接量化），cuBLAS 的 epilogue 能力有限，拆成多个 kernel 会多几轮 HBM 往返，这时先试 OpenAI Triton，不够再用 CUTLASS 的自定义 epilogue。二是非标准量化格式，比如分组量化、W4A16、per-channel scale 与 GEMM 交织，反量化必须写在内循环里，库不支持，CUTLASS 有成熟的混合精度 GEMM 范式可以借。三是形状极端，比如 M=1 的 GEMV、LoRA 的低秩矩阵、MoE 的 grouped GEMM，库的启发式对这些形状选不出好 kernel。四是新硬件特性刚出、库还没覆盖的时间差窗口。反过来有三类不该写：形状规整的标准 GEMM（cuBLAS 已接近峰值，你赢不了）、占端到端时间不到 5% 的算子（优化上限就是 5%）、以及团队没有 Nsight 调优能力时（写得出来但调不动，会变成永久的维护负担）。</p>
+</div>
+</details>
+
+<details>
+<summary>这张卡和 T20 讲的 FlashAttention 分块是什么关系？</summary>
+<div class="answer">
+<p>本卡讲的是<strong>通用矩阵乘</strong>的分块机制，它是 FlashAttention 得以成立的前置知识，而不是它的重复。两者共享同一个核心思想——把工作集搬进 shared memory（SRAM）复用、减少 HBM 往返——但处理的问题不同。通用 GEMM 的分块要解决的是 C = AB 这个纯粹的三重循环怎么映射到 threadblock / warp / instruction 三级硬件并发，难点在算术强度的定量推导、Tensor Core 的形状约束、以及流水线与 split-K 这些调度问题。FlashAttention 面对的是一个额外的困难：softmax 需要整行的最大值和求和，天然不可分块，所以它必须引入 online softmax（维护 running max 和 running sum，每处理一个新 tile 就用修正因子回溯修正之前的部分结果）才能在分块的前提下拿到和标准注意力逐位一致的结果。那套推导以及 FlashAttention-2/3 的改进在 <a href="../transformer/efficient_attention.html">T20 · 高效注意力</a> 里已有完整展开，本卡不重复。阅读顺序上，先看本卡理解"分块为什么必须做、怎么算收益"，再看 T20 理解"注意力这个特殊算子怎么克服 softmax 的不可分块性"。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; GEMM 与 Tiling 分块优化 &middot; DP26</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

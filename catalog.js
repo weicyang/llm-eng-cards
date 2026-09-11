@@ -1500,6 +1500,30 @@ window.CATALOG = {
           "title": "投机解码的生产落地",
           "tagline": "接受率与接受长度 / EAGLE-3 与 Medusa-2 选型 / 草稿长度动态调节 / 长上下文退化 / vLLM 与 SGLang 踩坑。",
           "href": "./cards/deploy/speculative_decoding_production.html"
+        },
+        {
+          "code": "DP25",
+          "title": "GPU 执行模型与存储层次",
+          "tagline": "Kernel/Grid/Block/Warp 到硬件的映射 / SM 与 warp 调度器 / 寄存器-SRAM-L2-HBM 阶梯 / Occupancy 的真实定义 / 访存合并与 bank conflict / 四类瓶颈定位。",
+          "href": "./cards/deploy/gpu_execution_model.html"
+        },
+        {
+          "code": "DP26",
+          "title": "GEMM 与 Tiling 分块优化",
+          "tagline": "Transformer 的矩阵形状与 FLOPs 账 / naive GEMM 为何必然访存受限 / shared memory tile 与 register tile 定量推导 / MMA 与 wgmma 形状约束 / double buffering 与 split-K / TMA。",
+          "href": "./cards/deploy/gemm_tiling_optimization.html"
+        },
+        {
+          "code": "DP27",
+          "title": "算子融合与 Kernel 优化实战",
+          "tagline": "融合省的是 HBM 往返不是 FLOPs / 三类融合 / Inductor 与 TensorRT 与 TVM 的能力边界 / graph break / occupancy 与寄存器压力 / Nsight Compute 排查顺序。",
+          "href": "./cards/deploy/kernel_fusion_optimization.html"
+        },
+        {
+          "code": "DP28",
+          "title": "TensorRT 与推理编译栈",
+          "tagline": "编译式与解释式执行 / 构建流水线五阶段 / INT8 标定与 tactic 选优 / engine 强绑定与 CI 约束 / TensorRT-LLM 的 in-flight batching / ONNX opset 与动态 shape 的坑。",
+          "href": "./cards/deploy/tensorrt_compilation_stack.html"
         }
       ]
     },

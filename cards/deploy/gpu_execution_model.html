@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP25 · GPU 执行模型与存储层次</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#a8a29e;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、从一次 Kernel 启动看全链路</a>
+<a href="#s2">二、SM 内部：SIMT 与 warp 调度器</a>
+<a href="#s3">三、存储层次阶梯：容量、带宽与延迟</a>
+<a href="#s4">四、Occupancy 到底是什么</a>
+<a href="#s5">五、访存合并与 shared memory bank conflict</a>
+<a href="#s6">六、四类典型瓶颈的定位路径</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>DP25 · GPU 执行模型与存储层次</h1>
+<p class="subtitle">Kernel/Grid/Block/Warp 到硬件的映射 / SM 与 warp 调度器 / 寄存器-SRAM-L2-HBM 阶梯 / Occupancy 的真实定义 / 访存合并 / bank conflict / 瓶颈定位</p>
+
+<div class="intuition-box">
+你写下的 <code>kernel&lt;&lt;&lt;grid, block&gt;&gt;&gt;</code> 只有两个参数，硬件却要把它翻译成"哪些 block 落到哪个 SM、每个 SM 同时驻留几个 block、每条指令的操作数从存储层次的哪一级取"。这三件事决定了同一份算法为什么能差一个数量级——而它们全都不出现在你的源码里。
+</div>
+
+<!-- ==================== 一、全链路 ==================== -->
+<div class="section" id="s1">
+<h2>一、从一次 Kernel 启动看全链路</h2>
+
+<p>一个能把 GPU 用好的工程师和一个只会调库的工程师，差别往往就在这一节：前者看到 <code>&lt;&lt;&lt;1024, 256&gt;&gt;&gt;</code> 时脑子里浮现的是 132 个 SM 上的驻留情况，后者看到的只是两个数字。<a href="./gpu_infrastructure.html">DP14 · GPU 基础设施</a> 已经把 grid / block / warp 这套词汇表建立起来了，这里要做的是把它们和硬件的调度行为一一对应，讲清"谁是调度单位、谁是执行单位、谁只是个编号"。</p>
+
+<h3>五个层级，各自的身份完全不同</h3>
+
+<p><span class="term">kernel</span>（在 GPU 上并行执行的一个函数）被启动时，运行时把它包装成一次 grid launch 提交给 GPU 的工作分发器。<span class="term">grid</span>（一次 kernel 启动产生的全部线程块的集合）本身只是一个逻辑集合，不对应任何硬件实体。真正被调度的是 <span class="term">block</span>（也叫 CTA，Cooperative Thread Array，一组能通过 shared memory 互相通信并做栅栏同步的线程）——工作分发器把 block 整体分配给某一个 <span class="term">SM</span>（Streaming Multiprocessor，GPU 的基本计算单元），而且<strong>一旦分配就不再迁移</strong>，直到这个 block 的所有线程都退出。这条"不迁移"的性质是很多性能现象的根源：它意味着 block 所需的寄存器和 shared memory 必须在 SM 上被完整预留，也意味着一个执行特别慢的 block 会一直占着 SM 的资源槽位。</p>
+
+<p>block 进入 SM 后被切成 <span class="term">warp</span>（32 个连续编号的线程，GPU 的指令发射与执行单位）。warp 才是硬件真正"执行"的对象：一条指令被发射给一个 warp，32 个线程同步走同一条指令。thread 本身既不是调度单位也不是执行单位，它只是 warp 里的一条 lane 加上一份私有寄存器。Hopper 之后还多了一层可选的 <span class="term">thread block cluster</span>（线程块簇，一组被保证同时调度到同一个 GPC 内的 block，可以互相访问对方的 shared memory），把"能协作的范围"从单个 SM 扩大到了一小群 SM。</p>
+
+<table>
+<tr><th>编程模型概念</th><th>对应硬件</th><th>调度性质</th><th>H100 SXM5 上的数量级</th></tr>
+<tr><td>grid</td><td>整块 GPU（无专属硬件）</td><td>一次 launch 的逻辑边界</td><td>block 数可达百万量级</td></tr>
+<tr><td>cluster（Hopper 可选）</td><td>一个 GPC 内的若干 SM</td><td>被保证同时驻留，可跨 SM 访问 shared memory</td><td>最多 16 个 block/cluster（可移植上限 8）</td></tr>
+<tr><td>block / CTA</td><td>被整体分配到<strong>一个</strong> SM</td><td><strong>资源分配与驻留单位</strong>，分配后不迁移</td><td>每 SM 最多 32 个驻留 block</td></tr>
+<tr><td>warp</td><td>SM 内一个处理分区的执行槽</td><td><strong>指令发射与执行单位</strong></td><td>每 SM 最多 64 个驻留 warp</td></tr>
+<tr><td>thread</td><td>warp 内一条 lane + 私有寄存器</td><td>只是编号，不被独立调度</td><td>每 SM 最多 2048 个驻留线程</td></tr>
+</table>
+
+<div class="arch-diagram">        一次 kernel 启动到底发生了什么（H100 SXM5，132 个 SM）
+
+  kernel&lt;&lt;&lt;1024, 256&gt;&gt;&gt;(...)
+        │
+        ▼
+  ┌─ GigaThread 工作分发器 ────────────────────────────────────────┐
+  │  待发射队列：1024 个 block，每个 256 线程（= 8 个 warp）        │
+  └───────────────┬──────────────┬──────────────┬─────────────────┘
+                  ▼              ▼              ▼        …共 132 路
+            ┌── SM #0 ──┐  ┌── SM #1 ──┐  ┌── SM #131 ─┐
+            │ 驻留上限： │  │           │  │            │
+            │ 2048 线程 │  │           │  │            │
+            │ 64 warp   │  │           │  │            │
+            │ 32 block  │  │           │  │            │
+            │ 寄存器 64K│  │           │  │            │
+            │ smem 228KB│  │           │  │            │
+            └───────────┘  └───────────┘  └────────────┘
+
+  ★ 1024 ÷ 132 = 7.75  →  前 124 个 SM 各拿 8 个 block，其余只拿 7 个
+     最后那"零点七五波"就是 wave quantization：尾波算力被浪费掉
+  ★ block 进 SM 后不再迁移；它的寄存器与 shared memory 被整块预留
+  ★ 真正被发射指令的是 warp：1024 × 8 = 8192 个 warp 排队等执行槽</div>
+
+<h3>两块卡的 SM 级预算</h3>
+
+<p>下表是后面几节所有推导的基础数据。注意 <strong>SM 数量决定并行宽度，SM 内的预算决定并行深度</strong>——前者你只能靠买卡改变，后者是你写 kernel 时天天在花的钱。</p>
+
+<table>
+<tr><th>SM 级资源</th><th>A100 SXM（CC 8.0）</th><th>H100 SXM5（CC 9.0）</th><th>为什么这个数字重要</th></tr>
+<tr><td>SM 数量</td><td>108</td><td>132</td><td>决定并行宽度与 wave quantization 的周期</td></tr>
+<tr><td>FP32 CUDA Core / SM</td><td>64</td><td>128</td><td>决定一条 warp 级 FP32 指令的发射节拍</td></tr>
+<tr><td>Tensor Core / SM</td><td>4（第 3 代）</td><td>4（第 4 代）</td><td>矩阵乘的全部算力都在这里</td></tr>
+<tr><td>32 位寄存器 / SM</td><td>65,536（256 KB）</td><td>65,536（256 KB）</td><td>寄存器用超就 spill，是 occupancy 的头号限制项</td></tr>
+<tr><td>寄存器 / 线程上限</td><td>255</td><td>255</td><td>超过就必然溢出到 local memory</td></tr>
+<tr><td>L1 + shared memory / SM</td><td>192 KB（合并池）</td><td>256 KB（合并池）</td><td>tiling 的可用工作台面积</td></tr>
+<tr><td>shared memory 可配上限 / SM</td><td>164 KB</td><td>228 KB</td><td>直接决定 tile 能开多大</td></tr>
+<tr><td>驻留线程 / warp / block 上限</td><td>2048 / 64 / 32</td><td>2048 / 64 / 32</td><td>occupancy 分母就是这里的 64</td></tr>
+<tr><td>L2 缓存（全卡共享）</td><td>40 MB</td><td>50 MB</td><td>跨 block 复用的唯一硬件兜底</td></tr>
+</table>
+
+<p>数据来源：NVIDIA Ampere / Hopper 架构白皮书与 CUDA Hopper Tuning Guide。其中 shared memory 上限那一行特别值得记住——H100 的 228 KB 比 A100 的 164 KB 大了 39%，这不是营销数字，它直接决定了 GEMM 和注意力 kernel 能开多大的分块，具体怎么花见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+
+<div class="intuition-box">
+把 SM 当成一间车间：block 是"一整个订单连人带料一起进车间，进了就不许换车间"，warp 是"车间里 32 人一组、同步做同一道工序的班组"，thread 只是班组里的工位号。你调 block size，本质上是在决定"每个订单要占多少料架和多少工位"——占太多，车间里就放不下第二个订单。
+</div>
+</div>
+
+<!-- ==================== 二、SM 内部 ==================== -->
+<div class="section" id="s2">
+<h2>二、SM 内部：SIMT 与 warp 调度器</h2>
+
+<p>SM 不是一个大而无当的核心池，它内部被切成 4 个对称的<span class="term">处理分区</span>（processing block / SM sub-partition）。每个分区有自己的 warp 调度器、指令分发单元、一份寄存器堆分片和 L0 指令缓存。理解这个切分是理解"为什么 block size 最好是 128 的倍数"的关键：block 里的 warp 会被轮流派到 4 个分区上，如果 warp 数不是 4 的倍数，就一定有分区空转。</p>
+
+<div class="arch-diagram">              一个 SM 的内部结构（H100，示意）
+
+  ┌─────────────────────── SM ──────────────────────────────────┐
+  │  L1 指令缓存                                                │
+  │ ┌── 分区 0 ──┐┌── 分区 1 ──┐┌── 分区 2 ──┐┌── 分区 3 ──┐  │
+  │ │ Warp 调度器││ Warp 调度器││ Warp 调度器││ Warp 调度器│  │
+  │ │ 分发单元   ││ 分发单元   ││ 分发单元   ││ 分发单元   │  │
+  │ │ 寄存器 16K ││ 寄存器 16K ││ 寄存器 16K ││ 寄存器 16K │  │
+  │ │ 32×FP32    ││ 32×FP32    ││ 32×FP32    ││ 32×FP32    │  │
+  │ │ 16×FP64    ││ 16×FP64    ││ 16×FP64    ││ 16×FP64    │  │
+  │ │ 1×TensorCore││1×TensorCore││1×TensorCore││1×TensorCore│  │
+  │ │ LD/ST · SFU││ LD/ST · SFU││ LD/ST · SFU││ LD/ST · SFU│  │
+  │ └────────────┘└────────────┘└────────────┘└────────────┘  │
+  │  ══════ 256 KB 合并 L1 数据缓存 / Shared Memory ══════      │
+  │  （shared 部分可配 0/8/16/32/64/100/132/164/196/228 KB）    │
+  │  Tensor Memory Accelerator（TMA，Hopper 新增的搬运引擎）    │
+  └─────────────────────────────────────────────────────────────┘
+
+  ★ 每个调度器每周期从"自己名下的驻留 warp"里挑一个 eligible warp 发一条指令
+  ★ 一个 block 的 8 个 warp 会被摊到 4 个分区上（每区 2 个）
+  ★ block size 不是 128 的倍数 → 某些分区分到的 warp 更少 → 调度器空转</div>
+
+<h3>warp 调度器做的唯一一件事：挑一个不在等待的 warp</h3>
+
+<p>每个 warp 调度器每个时钟周期做一次选择：在它管辖的驻留 warp 里，找出<span class="term">eligible warp</span>（所有操作数就绪、没有在等内存或等同步的 warp），发射它的下一条指令。<strong>这就是 GPU 掩盖延迟的全部机制</strong>——CPU 靠乱序执行和分支预测，GPU 靠"手上有几十个 warp 可以随时换"。所以当一个 warp 因为访存卡住几百个周期时，只要还有别的 warp 可发，SM 的执行单元就不会闲着；反过来，如果驻留 warp 太少，调度器就会陷入"每个周期都无人可发"的状态，这时 SM 的利用率会崩，但纸面算力一点没变。</p>
+
+<p>发射节拍也值得算一下。A100 每个分区有 16 个 FP32 CUDA Core，而一个 warp 是 32 个线程，所以一条 warp 级 FP32 乘加要占用该分区 2 个周期才发射完；H100 把每分区的 FP32 单元加到 32 个，同一条指令只要 1 个周期。这解释了为什么 H100 的非 Tensor FP32 峰值大约是 A100 的两倍多，而 SM 数只多了 22%。</p>
+
+<h3>为什么恰好是 32 个线程一束</h3>
+
+<p>warp 宽度 32 是一个工程折中，从 Tesla 架构沿用至今，三个方向的压力刚好在这里平衡：</p>
+
+<table>
+<tr><th>如果 warp 更窄（如 8）</th><th>如果 warp 更宽（如 128）</th><th>选 32 得到什么</th></tr>
+<tr><td>取指、译码、调度的固定开销摊不薄，控制逻辑占芯片面积比例上升</td><td>一次分支发散要串行执行的路径更多，惩罚成倍放大</td><td>一次取指译码摊给 32 条 lane，控制开销可接受</td></tr>
+<tr><td>需要更多调度器才能填满执行单元</td><td>寄存器堆的读写端口压力剧增，单个 warp 的寄存器占用变大</td><td>4 个调度器足以喂饱一个 SM</td></tr>
+<tr><td>访存请求碎片化，合并效率低</td><td>一个 warp 的访存请求跨度太大，很难落进少量缓存行</td><td>32 线程 × 4 字节 = 128 字节，正好是 4 个 32 字节 sector</td></tr>
+</table>
+
+<p>最后那一行是个很漂亮的巧合，也是硬件设计的自洽之处：warp 宽度、shared memory 的 bank 数（32 个）、以及一次理想合并访存的 sector 数（4 个 32 字节），全都咬合在 32 这个数上。第五节讲访存合并和 bank conflict 时，这三个 32 会同时出现。</p>
+
+<h3>SIMT 与分支发散</h3>
+
+<p><span class="term">SIMT</span>（Single Instruction, Multiple Thread，单指令多线程）是 GPU 的执行模型：一条指令发给整个 warp，32 条 lane 各自处理自己的数据。它和 CPU 的 SIMD 的区别在于每条 lane 有独立的寄存器和程序计数器视图，可以走不同分支——但代价是<strong>同一个周期里，一个 warp 只能执行一条路径</strong>。当 warp 里的线程走进 <code>if/else</code> 的两侧时，硬件会先执行一侧（另一侧的 lane 被掩码屏蔽），再执行另一侧，两段时间相加。Volta 之后引入的独立线程调度让发散后的重新收敛更灵活，也让 warp 内线程可以互相等待，但"发散会让有效算力打折"这条结论没有变。</p>
+
+<div class="intuition-box">
+warp 调度器不是在"优化"什么，它只是在每个周期问一句"谁现在能干活"。GPU 的延迟掩盖能力，等于你留给它多少个可以随时换手的 warp。驻留 warp 不足时，一个几百周期的访存延迟就会直接变成执行单元的几百周期空转。
+</div>
+
+<h3>CUDA Core 与 Tensor Core：不是快慢之分，是接口之分</h3>
+
+<p>这两类单元最常见的误解是"Tensor Core 就是更快的 CUDA Core"。它们真正的区别在<strong>指令的粒度</strong>：CUDA Core 执行的是标量指令（一条 FFMA 让每条 lane 做一次 <code>a×b+c</code>），Tensor Core 执行的是矩阵指令（一条 <code>mma</code> 让整个 warp 协作完成一次小矩阵乘加）。把两者的单指令产出算出来，差距一目了然：</p>
+
+<table>
+<tr><th>单元与指令</th><th>执行范围</th><th>操作数来源</th><th>单条指令 FLOPs</th><th>相对 FFMA</th></tr>
+<tr><td>CUDA Core · <code>FFMA</code></td><td>1 个 warp（32 lane）</td><td>寄存器</td><td>32 × 2 = 64</td><td>1×</td></tr>
+<tr><td>Tensor Core · <code>mma.sync.m16n8k16</code>（SM80+）</td><td>1 个 warp</td><td>寄存器（经 <code>ldmatrix</code> 装载）</td><td>2 × 16 × 8 × 16 = 4,096</td><td><strong>64×</strong></td></tr>
+<tr><td>Tensor Core · <code>wgmma.mma_async.m64n256k16</code>（SM90）</td><td>1 个 warpgroup（4 warp / 128 线程）</td><td>可直接从 shared memory 取</td><td>2 × 64 × 256 × 16 = 524,288</td><td>约 2048×（按每 warp 折算）</td></tr>
+</table>
+
+<p>指令粒度的差别直接反映在峰值算力上：H100 SXM5 的 FP32（走 CUDA Core）约 67 TFLOPS，而 BF16 Tensor Core 稠密算力约 989 TFLOPS，差约 15 倍。所以工程上的分工非常清晰——<strong>能写成矩阵乘的都要想办法喂给 Tensor Core，剩下的逐元素运算、归约、索引、类型转换、softmax 的指数与除法留给 CUDA Core</strong>。这也是为什么大模型里 LayerNorm、GELU、RoPE 这类算子即使 FLOPs 极少也可能占掉可观的时间：它们根本用不上那 989 TFLOPS，只能在 CUDA Core 和显存带宽的双重限制下慢慢走，而这正是算子融合要解决的问题（见 <a href="./kernel_fusion_optimization.html">DP27 · 算子融合与 Kernel 优化实战</a>）。</p>
+
+<div class="intuition-box">
+CUDA Core 是"一次拧一颗螺丝的电动螺丝刀"，Tensor Core 是"一次压一整块面板的液压机"。液压机不是更快的螺丝刀——你没法用它拧螺丝。所以判断一个算子快不快，先问它的形状能不能被塞进液压机的模具里。
+</div>
+</div>
+
+<!-- ==================== 三、存储层次 ==================== -->
+<div class="section" id="s3">
+<h2>三、存储层次阶梯：容量、带宽与延迟</h2>
+
+<p>GPU 存储层次的核心事实只有一句：<strong>每往下走一级，容量涨两三个数量级，延迟也涨接近一个数量级</strong>。所有 kernel 优化本质上都是在这条阶梯上做同一件事——把数据往上搬，然后在上面多用几次。下面这张表把量级钉死，后面所有判断都靠它。</p>
+
+<table>
+<tr><th>层级</th><th>A100 容量</th><th>H100 容量</th><th>作用域</th><th>访问延迟（周期，实测）</th><th>谁来管</th></tr>
+<tr><td>寄存器</td><td>256 KB / SM<br>（每线程 ≤ 255 个）</td><td>256 KB / SM</td><td>单线程私有</td><td>约 1（可与运算重叠）</td><td>编译器</td></tr>
+<tr><td>Shared Memory（SRAM）</td><td>可配至 164 KB / SM</td><td>可配至 228 KB / SM</td><td>单 block（Hopper 可跨 cluster）</td><td>约 23（load）/ 19（store）</td><td><strong>程序员显式管理</strong></td></tr>
+<tr><td>L1 数据缓存</td><td>与 shared 共用 192 KB 池</td><td>与 shared 共用 256 KB 池</td><td>单 SM</td><td>约 33（命中）</td><td>硬件</td></tr>
+<tr><td>L2 缓存</td><td>40 MB</td><td>50 MB</td><td>全卡共享（分区）</td><td>约 200~218（本分区）/ 379（跨分区）</td><td>硬件（可设驻留策略）</td></tr>
+<tr><td>HBM 显存</td><td>80 GB HBM2e</td><td>80 GB HBM3</td><td>全卡 + 主机可见</td><td>约 290~385（A100）/ 554（H100）</td><td>程序员 / 运行时</td></tr>
+</table>
+
+<p><strong>数据口径说明（很重要）：</strong>容量数字来自 NVIDIA 官方白皮书与 CUDA Tuning Guide，可以直接引用；<strong>延迟数字来自公开微基准测试论文，不是官方规格</strong>——A100 的 shared 23 / L1 33 / L2 200 / 全局 290 周期来自《Demystifying the Nvidia Ampere Architecture through Microbenchmarking》（arXiv:2208.11174），A100/H100 的 L2 与 DRAM 分区延迟（A100 本地 218 / 远端 379、DRAM 385 / 546；H100 L2 295 / 470、DRAM 554 / 728）来自 DGNA 的 NUMA 微基准。不同论文的测量方法差异会带来几十周期的偏差，<strong>把它们当数量级参照用，不要当作可以做精确预算的规格值</strong>。</p>
+
+<div class="arch-diagram">     延迟阶梯：每下一级贵一个数量级（A100 微基准，单位=时钟周期）
+
+  寄存器      ▏≈1                                          256 KB/SM
+  Shared      ▏▏▏≈23                                    ≤164 KB/SM
+  L1 命中     ▏▏▏▏≈33                                  与 shared 同池
+  L2 本分区   ▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏≈218               40 MB/卡
+  L2 跨分区   ▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏≈379
+  HBM 本地    ▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏≈385     80 GB
+  HBM 远端    ▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏▏≈546
+
+  ★ 从 shared 到 HBM，延迟差约 17 倍；从寄存器到 HBM 差约 380 倍
+  ★ 掩盖一次 HBM 延迟需要的并行度：385 周期 ÷ 每周期能发的指令数
+     → 这就是"为什么需要几十个驻留 warp"的定量来源
+  ★ 注意 L2 和 HBM 都是分区的：跨分区访问额外多付约 160 周期
+     这解释了为什么 threadblock 的排布顺序（rasterization）会影响性能</div>
+
+<h3>带宽：官方规格能给到哪一层</h3>
+
+<p>延迟决定"单次访问多久回来"，带宽决定"单位时间能搬多少"。官方只公布 HBM 带宽，其余各级要么给的是每周期字节数，要么只能靠推算。下表把可信度分开标注：</p>
+
+<table>
+<tr><th>层级</th><th>带宽</th><th>来源与算法</th></tr>
+<tr><td>Shared Memory（全卡聚合）</td><td>A100 约 19 TB/s</td><td>推算：32 bank × 4 B / 周期 / SM × 108 SM × 1.41 GHz</td></tr>
+<tr><td>L2 读带宽</td><td>A100 5120 字节/周期（约 7 TB/s）</td><td><strong>官方</strong>：Ampere 白皮书明确给出 5120 B/clk（V100 为 2048）</td></tr>
+<tr><td>HBM</td><td>A100 80GB：2.0 TB/s；H100 SXM：3.35 TB/s</td><td><strong>官方规格</strong></td></tr>
+<tr><td>HBM ↔ shared 的搬运通路</td><td>Hopper 起由 TMA 硬件负责地址生成</td><td>官方：Hopper 架构新增 Tensor Memory Accelerator</td></tr>
+</table>
+
+<p>把这几个数并排看，结论就很直白：<strong>片上 SRAM 的聚合带宽比 HBM 高一个数量级左右，L2 大约在两者之间</strong>。所以一个算法只要能把工作集塞进 shared memory 并在里面复用，它面对的就不再是 3.35 TB/s 的墙，而是十几 TB/s 的墙。FlashAttention 之所以能把注意力从访存受限救回来，机制正是这一条（推导见 <a href="../transformer/efficient_attention.html">T20 · 高效注意力</a>）；通用矩阵乘怎么系统性地做这件事，见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+
+<h3>寄存器不是免费的：spill 的代价</h3>
+
+<p>初学者最容易忽略的是<strong>寄存器是有硬预算的共享资源</strong>。每个 SM 只有 65,536 个 32 位寄存器，单线程上限 255 个。编译器会尽力把变量放在寄存器里，但当 kernel 需要的寄存器超出预算时，多出来的变量会被放进 <span class="term">local memory</span>（逻辑上线程私有、<strong>物理上位于 HBM</strong> 的存储空间）——这就是<span class="term">寄存器溢出</span>（register spill）。名字里的"local"只描述作用域，不描述位置，所以一次 spill 访问的延迟和访问全局显存是同一个量级。</p>
+
+<div class="highlight">
+<strong>示例场景：一次被 spill 吃掉的"优化"。</strong>某团队手写了一个融合 kernel，把 RMSNorm、RoPE 和 QKV 切分合进一个 kernel，逻辑上少了两轮 HBM 往返，预期能快三成。上线后实测只快了不到 5%。用 <code>nvcc --resource-usage</code> 一看，每线程用了 168 个寄存器，编译器报告有 40 字节的 spill store 和 spill load；同时 Nsight Compute 显示 achieved occupancy 只有 12.5%，limiter 是寄存器。根因是把整段中间结果都留在了寄存器里，寄存器预算 65,536 ÷ (256 线程 × 168) 只够驻留 1 个 block，延迟完全无法掩盖，而 spill 又把省下的那两轮 HBM 往返以另一种形式还了回去。处理方式是把中间结果显式挪到 shared memory（用掉 24 KB，仍能驻留多个 block）并对 kernel 加 <code>__launch_bounds__</code> 约束寄存器上限，寄存器降到 72 个/线程、spill 归零、occupancy 回到 50%，融合的收益才真正兑现。这个案例的数字是构造的，但"融合导致寄存器压力上升、反而变慢"是极常见的真实故障模式，排查顺序（先看 resource-usage 的 spill，再看 occupancy limiter）可以直接照用。
+</div>
+
+<div class="intuition-box">
+存储层次不是"缓存自动帮你搞定"的东西。硬件只自动管 L1 和 L2；寄存器由编译器管，shared memory 完全由你管，HBM 的搬运时机也由你管。写 kernel 的手艺，八成就是在决定"哪块数据什么时候搬到哪一级、在那里被用几次"。
+</div>
+</div>
+
+<!-- ==================== 四、Occupancy ==================== -->
+<div class="section" id="s4">
+<h2>四、Occupancy 到底是什么</h2>
+
+<p>Occupancy 是被误用最多的 GPU 指标，误用方式有两种：一种是把它当成"GPU 利用率"，另一种是把"提到 100%"当成优化目标。两个都错，而且错得方向相反。先把定义钉死——CUDA 官方文档的原话是：<strong>occupancy 是活跃 warp 数与 SM 支持的最大活跃 warp 数之比</strong>。它衡量的是"你给 warp 调度器留了多少可换手的余量"，不衡量算力有没有被用上。</p>
+
+<div class="formula">Occupancy = 每 SM 活跃 warp 数 ÷ 每 SM 最大可驻留 warp 数（A100/H100 均为 64）</div>
+
+<h3>四个限制项，取最小值</h3>
+
+<p>每个 SM 能同时驻留几个 block，由四个约束同时决定，实际驻留数是四者的最小值。下面用 H100（CC 9.0）做一次完整推演，block size 取 256 线程（8 个 warp）：</p>
+
+<table>
+<tr><th>限制项</th><th>SM 侧预算</th><th>本 kernel 的用量</th><th>推出的驻留 block 数</th></tr>
+<tr><td>每 SM 驻留线程上限</td><td>2048 线程</td><td>256 线程 / block</td><td>2048 ÷ 256 = 8</td></tr>
+<tr><td>每 SM 驻留 block 上限</td><td>32 个</td><td>—</td><td>32</td></tr>
+<tr><td>寄存器堆</td><td>65,536 个 32 位寄存器</td><td>64 个 / 线程 → 16,384 / block</td><td>65,536 ÷ 16,384 = <strong>4</strong></td></tr>
+<tr><td>Shared Memory</td><td>228 KB / SM</td><td>48 KB / block</td><td>⌊228 ÷ 48⌋ = <strong>4</strong></td></tr>
+</table>
+
+<p>取最小值得到 4 个 block，即 4 × 8 = 32 个活跃 warp，<strong>理论 occupancy = 32 / 64 = 50%</strong>。同一个 kernel，如果把每线程寄存器压到 32 个、shared memory 用量压到 24 KB，寄存器限制和 shared memory 限制都放宽到 8 个以上，此时线程数限制（2048 ÷ 256 = 8）成为新的短板，occupancy 升到 8 × 8 / 64 = 100%。这就是 <code>--maxrregcount</code> 和 <code>__launch_bounds__</code> 起作用的原理：<strong>它们不是在加速指令，而是在换取驻留深度</strong>。代价是可能引入 spill，所以这是一笔需要实测的交易，不是稳赚的优化。</p>
+
+<h3>理论 occupancy 与实测 occupancy</h3>
+
+<p><span class="term">理论 occupancy</span>（theoretical occupancy）由启动配置和资源用量算出来，是上限；<span class="term">实测 occupancy</span>（achieved occupancy）是运行时统计的平均值，Nsight Compute 里对应的指标是 <code>sm__warps_active.avg.pct_of_peak_sustained_active</code>。两者差距大通常意味着三类问题：grid 太小填不满所有 SM、block 之间执行时间不均导致尾部只剩少数 warp、或者 <code>__syncthreads()</code> 让大量 warp 长期处于等待态（等待中的 warp 仍是活跃 warp，但它不 eligible，所以 occupancy 高而算力照样闲着）。</p>
+
+<h3>为什么 occupancy 不等于 GPU 利用率</h3>
+
+<p>这是本节最重要的一段。工程上有三个名字很像、含义完全不同的量，混用它们会导致完全错误的优化决策：</p>
+
+<table>
+<tr><th>指标</th><th>准确含义</th><th>取值 100% 时说明什么</th><th>取值 100% 时<strong>不</strong>说明什么</th></tr>
+<tr><td><code>nvidia-smi</code> 的 utilization.gpu</td><td>采样周期内"有至少一个 kernel 在执行"的时间占比</td><td>GPU 没有空窗，一直有活在跑</td><td>不说明用了几个 SM、算力用了几成——<strong>一个只占 1 个 SM 的 kernel 也能报 100%</strong></td></tr>
+<tr><td>Achieved Occupancy</td><td>活跃 warp 数 / 最大可驻留 warp 数</td><td>调度器手上随时有 64 个 warp 可换</td><td>不说明这些 warp 在干有用的事，也不说明执行单元被用满</td></tr>
+<tr><td>SM Throughput（Speed of Light）</td><td><code>sm__throughput.avg.pct_of_peak_sustained_elapsed</code>，最忙的 SM 执行资源相对峰值的占用</td><td>某条流水线确实接近打满</td><td>不说明打满的是你想打满的那条流水线</td></tr>
+</table>
+
+<p>把这三者的区别落到一句可操作的话：<strong><code>nvidia-smi</code> 的利用率只能用来判断"卡有没有闲着"，任何关于"算力用了几成"的结论都不能从它得出。</strong>它的官方定义就是时间占比——一个占着 SM 却在等 HBM 的访存 kernel，和一个把 Tensor Core 打到 95% 的 GEMM，在 <code>nvidia-smi</code> 里都是 100%。训练场景下换用 MFU 来量的做法在 <a href="./gpu_infrastructure.html">DP14 · GPU 基础设施</a> 里有完整算例，这里补的是 kernel 级别的对应关系。</p>
+
+<h3>高 occupancy 不是目标：GEMM 的反例</h3>
+
+<p>更反直觉的是：<strong>写得最好的 kernel 往往 occupancy 很低。</strong>CUTLASS 官方文档直接指出，GEMM 的累加器通常要占掉一个线程寄存器预算的一半以上，所以 GEMM kernel 的 occupancy 相对其他类型负载天生就低；Hopper 与 Blackwell 上的高性能 GEMM 甚至常常运行在个位数百分比的 occupancy。原因很清楚：Tensor Core 的算力密度太高，少数几个 warp 就足以把它喂饱，多留 warp 不但没收益，还会挤掉寄存器和 shared memory 这些真正稀缺的资源。NVIDIA 的 Nsight Compute 三级排查指南也把这条写成了明确的例外——"实测 occupancy 低于 60% 才值得关注，<strong>除非负载以 Tensor Core 为主，或者 compute / memory 的 Speed of Light 已经很高</strong>"。</p>
+
+<div class="highlight">
+<strong>示例场景：把 occupancy 提到 100% 之后变慢了。</strong>某团队为一个自研的分组量化 GEMV kernel 做优化，Nsight Compute 报告实测 occupancy 只有 18.75%，limiter 是 shared memory。团队按"提 occupancy"的思路把 tile 从 128×64 缩到 64×32，shared memory 用量从 40 KB 降到 12 KB，occupancy 顺利涨到 75%。结果 kernel 耗时反而增加了约 22%。复盘发现：tile 缩小后每个 block 的数据复用次数减半，DRAM Throughput 从 61% 涨到 89%，kernel 从"接近算力受限"退回了明确的访存受限——occupancy 涨了，但每个 warp 干的有用功变少了，总搬运量翻倍。正确的读法是：<strong>occupancy 是"是否暴露了足够并行度"的证据，不是分数</strong>。只有在 compute 和 memory 两个 Speed of Light 都偏低（说明确实是延迟暴露不足）时，提 occupancy 才是对症的。这里的数字是构造的示例，但"缩 tile 提 occupancy 反而变慢"是分块类 kernel 上非常典型的翻车路径。
+</div>
+
+<div class="intuition-box">
+Occupancy 像餐厅的"候补客人数量"：候补太少，一有客人上厨房就闲着；但候补排到爆棚，也不代表厨房出菜快——它只说明前厅不缺人。真正要看的是灶台在不在动（compute SOL）和后厨进货跟不跟得上（memory SOL）。
+</div>
+</div>
+
+<!-- ==================== 五、访存合并与 bank conflict ==================== -->
+<div class="section" id="s5">
+<h2>五、访存合并与 shared memory bank conflict</h2>
+
+<p>这一节讲的是本文里最能立刻换来性能的两件事，而且它们的共同特点是：<strong>算法一个字没改、FLOPs 一个都没多，仅仅因为访问顺序不同，性能就差一个数量级</strong>。理解它们需要的全部前提，就是第二节末尾提到的那三个 32。</p>
+
+<h3>全局访存合并：把 warp 的 32 个请求压成几个 sector</h3>
+
+<p><span class="term">访存合并</span>（coalescing）是硬件把一个 warp 内 32 个线程的访存请求合并成尽量少的内存事务的过程。CUDA C++ Best Practices Guide 对计算能力 6.0 及以上的表述非常干脆：<strong>一个 warp 的并发访问会被合并成"服务这 32 个线程所需的 32 字节事务个数"</strong>。这句话是可以直接拿来算账的：</p>
+
+<ul>
+<li><strong>理想情况</strong>：32 个线程访问连续的 4 字节元素，覆盖 128 字节连续区间 = 4 个 32 字节 sector。<strong>每次请求 4 个 sector</strong>，取回来的每一个字节都被用到，带宽效率 100%。</li>
+<li><strong>最坏情况</strong>：32 个线程访问的地址两两跨越 32 字节以上（典型是按列访问行主序矩阵），每个线程各自触发一个 sector。<strong>每次请求 32 个 sector</strong>，每个 32 字节 sector 里只有 4 字节被用到，<strong>87.5% 的带宽被浪费</strong>。</li>
+</ul>
+
+<p>NVIDIA 技术博客给出过一组同一 kernel 的实测对照，两个版本发出的请求数完全相同（8,388,608 次），合并版消耗 33,554,432 个 sector，非合并版消耗 268,435,456 个 sector——sector/request 分别是 4 和 32，正好 8 倍。这也给了一个非常好用的判据：<strong>在 Nsight Compute 里看 sectors per request，理想值是 4（4 字节元素），越接近 32 越糟。</strong></p>
+
+<table>
+<tr><th>访问模式</th><th>代码形态（4 字节元素）</th><th>sector / request</th><th>有效带宽</th><th>常见出处</th></tr>
+<tr><td>完全合并</td><td><code>A[blockIdx.x*blockDim.x + threadIdx.x]</code></td><td>4</td><td>100%</td><td>行主序按行遍历</td></tr>
+<tr><td>合并但未对齐</td><td>起始地址不是 32 字节对齐</td><td>5</td><td>约 80%</td><td>带 offset 的切片、非对齐 padding</td></tr>
+<tr><td>跨度 2</td><td><code>A[2 * tid]</code></td><td>8</td><td>50%</td><td>交错存储的复数、AoS 布局</td></tr>
+<tr><td>跨度 ≥ 8（4 字节元素）</td><td><code>A[8 * tid]</code></td><td>32</td><td>12.5%</td><td>按列访问行主序矩阵</td></tr>
+<tr><td>全 warp 同址</td><td><code>A[0]</code></td><td>1（广播）</td><td>不浪费</td><td>读标量参数、共享常量</td></tr>
+</table>
+
+<h3>Shared memory 的 bank 结构与冲突</h3>
+
+<p>Shared memory 为了支持并发访问被切成 <strong>32 个 bank，每个 bank 宽 4 字节，连续的 32 位字依次落在连续的 bank 上</strong>。于是相隔 32 × 4 = <strong>128 字节的地址映射到同一个 bank</strong>。Best Practices Guide 的规则是：一次访问如果落在 n 个不同 bank 上，就能并行完成，有效带宽是单 bank 的 n 倍；<strong>但如果一次请求里多个地址映射到同一个 bank，访问会被串行化</strong>，硬件把它拆成若干个无冲突的请求，有效带宽按拆分数成比例下降。唯一的例外是多个线程访问<strong>同一个地址</strong>——那会走广播/多播通路，不算冲突。</p>
+
+<div class="arch-diagram">   bank 映射与最经典的 32 路冲突（float 数组，行长 32）
+
+  bank:      0    1    2    3   ...  30   31
+  地址:    +0   +4   +8  +12   ...+120 +124      ← 第 0 行（128 B）
+          +128 +132 +136 ...                     ← 第 1 行，又从 bank0 开始
+          +256 ...                               ← 第 2 行
+
+  ┌─ 按行访问 tile[ty][tx]（tx = 0..31）───────────────────────┐
+  │  32 个线程 → bank 0,1,2,...,31   全部命中不同 bank          │
+  │  → 1 次事务完成，无冲突                                     │
+  └─────────────────────────────────────────────────────────────┘
+
+  ┌─ 按列访问 tile[tx][ty]（行长 32 个 float = 128 B）─────────┐
+  │  线程 0 → 偏移 0     → bank 0                               │
+  │  线程 1 → 偏移 128   → bank 0   ← 撞了                      │
+  │  线程 2 → 偏移 256   → bank 0   ← 又撞                      │
+  │        …                                                    │
+  │  线程 31→ 偏移 3968  → bank 0                               │
+  │  → 32 路冲突，串行 32 次，有效带宽掉到 1/32                 │
+  └─────────────────────────────────────────────────────────────┘
+
+  ┌─ 修复：行长 padding 到 33 个 float（132 B）────────────────┐
+  │  线程 k → 偏移 132k → bank (33k mod 32) = bank k            │
+  │  → 32 个线程重新散到 32 个 bank，冲突归零                   │
+  │  代价：shared memory 多用 1/32 ≈ 3.1%                       │
+  └─────────────────────────────────────────────────────────────┘</div>
+
+<p>这就是矩阵转置类 kernel 的经典陷阱：把 tile 读进 shared memory 时按行（合并、无冲突），写出去时按列（为了让全局写也合并），而按列读 shared memory 恰好构成 32 路冲突。修法有三条，代价和适用面各不相同：</p>
+
+<table>
+<tr><th>修法</th><th>做法</th><th>代价</th><th>适用场景</th></tr>
+<tr><td>Padding</td><td>把行长从 32 改成 33（或 +1 个元素）</td><td>多用约 3% shared memory；索引算术略复杂</td><td>手写 kernel，最简单直接</td></tr>
+<tr><td>Swizzle（异或重排）</td><td>用 <code>col ^ row</code> 之类的位运算打散列到 bank 的映射</td><td>不额外占内存，但索引推导容易写错</td><td>CUTLASS / CuTe 的标准做法，tile 较大时更省</td></tr>
+<tr><td>换指令绕过</td><td>用 <code>ldmatrix</code> 直接装载 Tensor Core 需要的 fragment；Hopper 用 TMA + wgmma 从 shared 直取</td><td>要遵守硬件规定的布局与 swizzle 模式</td><td>Tensor Core GEMM，现代高性能 kernel 的主流路径</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景：一次纯访存顺序的重写。</strong>某团队为自研的 KV Cache 布局转换写了一个 kernel，把 <code>[层, 头, 位置, 维度]</code> 重排成推理引擎需要的分页布局。初版按目标布局的下标顺序循环，Nsight Compute 报告 sectors per request 为 28.4（理想 4）、DRAM Throughput 88%、SM Throughput 9%——典型的纯访存受限且访存效率极差。改法只做了两件事：让读侧沿最内维连续（把 <code>threadIdx.x</code> 绑到 head_dim 而不是 position），并把中间转置放进 shared memory、行长 padding 一个元素。结果 sectors per request 降到 4.3、bank conflict 归零，kernel 耗时从 3.1 ms 降到 0.42 ms，约 7.4 倍。算法一个字没改，FLOPs 一个都没多。这组数字是构造的，但"7~8 倍"这个量级和第一性原理算出来的 32/4 = 8 倍带宽浪费上限是吻合的，实际收益通常落在 4~8 倍之间。
+</div>
+
+<div class="intuition-box">
+把一次 warp 访存想成 32 个人同时去 32 个取件柜取快递。合并访存 = 32 个人的包裹刚好塞在相邻的 4 个格子里，一趟搬完；非合并 = 32 个包裹散在 32 个格子里，每趟只能拿一个格子还得整格搬走。bank conflict 则是 32 个人挤在同一个柜门前排队——柜子里东西不多，但门只有一个。
+</div>
+</div>
+
+<!-- ==================== 六、瓶颈定位 ==================== -->
+<div class="section" id="s6">
+<h2>六、四类典型瓶颈的定位路径</h2>
+
+<p>前五节的量现在可以连起来了。一个 kernel 跑得慢，原因一定落在四类里，而<strong>区分它们靠的是两个 Speed of Light 指标的组合，不是靠猜</strong>。这里有一个必须先说清的分工：<strong>算术强度与屋顶线模型（判断"这个算子的理论天花板在哪"）在 <a href="./gpu_compute_optimization.html">DP19 · GPU 算力瓶颈与优化</a> 里已有完整推导和拐点数据，本文直接把它当已知结论用</strong>。本节讲的是另一半——拿到一个具体 kernel 之后，怎么用硬件指标把它归类到四个抽屉里，以及每个抽屉对应本文哪一节的机制。</p>
+
+<table>
+<tr><th>瓶颈类型</th><th>Nsight Compute 上的表征</th><th>典型成因</th><th>对应本文机制</th><th>处理方向</th></tr>
+<tr><td><strong>访存受限</strong></td><td>Memory SOL 高（&gt; 80%）、SM SOL 低；DRAM Throughput 接近峰值</td><td>算术强度天生低（逐元素、归约、decode 阶段 GEMV）</td><td>第三节：HBM 是最慢的一级</td><td>算子融合、提高分块复用、量化减少搬运量</td></tr>
+<tr><td><strong>算力受限</strong></td><td>SM SOL 高（&gt; 80%）、Memory SOL 明显更低；某条具体流水线（如 Tensor Core）饱和</td><td>大矩阵乘、大 batch 前向</td><td>第二节：Tensor Core 的指令粒度</td><td>换更低精度、确保走 Tensor Core、对齐形状</td></tr>
+<tr><td><strong>延迟受限</strong></td><td><strong>两个 SOL 都低（&lt; 60%）</strong>，但 kernel 就是慢</td><td>依赖链长、同步过多、warp 大量处于 stall</td><td>第二节：调度器无 eligible warp</td><td>增加并行度、减少 <code>__syncthreads()</code>、指令级流水</td></tr>
+<tr><td><strong>占用率受限</strong></td><td>实测 occupancy 低且 limiter 明确（寄存器 / shared memory），同时两个 SOL 都不高</td><td>寄存器 spill、shared memory 开太大、block 太小</td><td>第四节：四个限制项取最小</td><td>压寄存器、调 block size、重划 tile</td></tr>
+</table>
+
+<p>NVIDIA 的 Nsight Compute 排查指南给了可以直接照抄的阈值：把 <code>sm__throughput.avg.pct_of_peak_sustained_elapsed</code> 和 <code>gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed</code> 放在一起看，<strong>低于约 60% 算低（处于延迟风险区间），高于约 80% 算高（接近硬件上限区间）</strong>；两者都低就往延迟受限方向查，一高一低就按高的那个定性，两者都高说明已经贴着这个算法在这块硬件上的极限了。</p>
+
+<div class="arch-diagram">        拿到一个慢 kernel 之后的定位顺序（可照抄）
+
+  ① 先看两个 Speed of Light
+     ncu --metrics sm__throughput.avg.pct_of_peak_sustained_elapsed,\
+                   gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed
+                        │
+     ┌──────────────────┼──────────────────┬─────────────────┐
+     ▼                  ▼                  ▼                 ▼
+  Mem 高 SM 低      SM 高 Mem 低      两者都低         两者都高
+  【访存受限】      【算力受限】     【延迟/占用率】    【贴近极限】
+     │                  │                  │                 │
+     ▼                  ▼                  ▼                 ▼
+  ② 查访存效率      ② 查是哪条流水线   ② 查 occupancy    ② 换算法
+  sectors/request   Tensor 还是 FP32?  与 limiter        或换精度
+  理想=4，越接近                       低且 limiter 明确
+  32 越糟                              → 占用率受限
+     │                  │              两个都低且 occ 不低
+     ▼                  ▼              → 延迟受限
+  ③ 修合并 / 修 bank  ③ 对齐形状      ③ 压寄存器 / 调 tile
+     conflict / 融合      喂饱 Tensor Core
+
+  ★ 屋顶线模型回答"这个算子的天花板在哪"（见 DP19），
+    本流程回答"这次跑得慢是哪一环"——两者配合用，不要互相替代
+  ★ 顺序不能倒：没确认瓶颈类型就调参数，等于抽签</div>
+
+<h3>一个容易忽略的第五类：算力和带宽都没打满，因为活儿没铺开</h3>
+
+<p>严格说这不算瓶颈，而是启动配置的问题，但它在生产中出现频率很高，值得单列。第一节算过 1024 个 block 落在 132 个 SM 上的"零点七五波"——当 block 总数不是 SM 数的整数倍时，最后一波只有部分 SM 在干活，其余空转。block 数远小于 SM 数时更极端：一个只启动了 8 个 block 的 kernel，在 H100 上最多用到 8/132 ≈ 6% 的 SM，而 <code>nvidia-smi</code> 依然报告 100% 利用率。这类问题在小 batch 推理、逐层调用的小算子上尤其常见，修法通常不在 kernel 内部，而在把多个小 kernel 合成一个（<a href="./kernel_fusion_optimization.html">DP27 · 算子融合与 Kernel 优化实战</a>）或用 CUDA Graph 消掉 launch 开销。GEMM 场景下这个现象有专门的名字叫 wave quantization，处理办法见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>block size 取 128 的倍数，让 4 个处理分区都分到整数个 warp</li>
+<li>先用两个 Speed of Light 指标定性，再决定往哪个方向优化</li>
+<li>用 <code>nvcc --resource-usage</code> 检查寄存器用量与 spill，这是最便宜的一次体检</li>
+<li>看 sectors per request 判断访存效率，4 是理想值</li>
+<li>shared memory 的二维数组习惯性 padding 一个元素，或直接用成熟库的 swizzle 布局</li>
+<li>判断"算力用了几成"一律用 Speed of Light 或 MFU，不用 <code>nvidia-smi</code></li>
+<li>确认 block 总数至少是 SM 数的若干倍，避免尾波浪费</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要把 <code>nvidia-smi</code> 的 100% 利用率当成算力被用满</li>
+<li>不要把 occupancy 提到 100% 当作优化目标——高性能 GEMM 常跑在个位数</li>
+<li>不要为了提 occupancy 而缩小 tile，那通常是用复用度换驻留深度的亏本交易</li>
+<li>不要在没看 limiter 的情况下加 <code>--maxrregcount</code>，可能换来 spill</li>
+<li>不要让 warp 按列访问行主序数据，那是 8 倍带宽浪费的标准写法</li>
+<li>不要假设 shared memory 一定快——32 路 bank conflict 会让它慢过 L2</li>
+<li>不要用一堆小 kernel 表达逻辑，SM 铺不满时纸面算力完全无意义</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+四类瓶颈其实对应四个不同的问句：访存受限问"数据够不够快地送来"，算力受限问"计算单元还有没有余量"，延迟受限问"有没有足够多的活可以随时切换"，占用率受限问"是不是资源预算把并行度掐死了"。搞错问句，后面所有努力都在答错题。
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>block、warp、thread 三者到底谁是调度单位？</summary>
+<div class="answer">
+<p>三者身份完全不同。block（CTA）是<strong>资源分配与驻留单位</strong>：工作分发器把一个 block 整体分配给某一个 SM，分配之后不会迁移到别的 SM，它需要的寄存器和 shared memory 会在这个 SM 上被整块预留，直到 block 内所有线程退出才释放。warp 是<strong>指令发射与执行单位</strong>：block 进入 SM 后被切成 32 线程一组的 warp，一条指令发给一个 warp，32 条 lane 同步执行同一条指令；SM 内的 4 个 warp 调度器每周期各自挑一个操作数就绪的 warp 发射指令。thread 既不是调度单位也不是执行单位，它只是 warp 里的一条 lane 加一份私有寄存器。这个区分有实际后果：因为 block 不迁移，所以一个 block 的资源需求过大会直接压低 SM 的驻留数；因为 warp 是执行单位，所以 block size 应该是 32 的倍数（最好是 128 的倍数，让 4 个处理分区都分到整数个 warp）。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么 warp 宽度是 32 而不是 8 或 128？</summary>
+<div class="answer">
+<p>32 是三个方向压力的折中点。往窄了走，取指、译码和调度的固定开销摊不薄，控制逻辑会占掉更多芯片面积，而且需要更多调度器才能喂饱同样多的执行单元，访存请求也会碎片化。往宽了走，一次分支发散需要串行执行的路径更多、惩罚成倍放大，寄存器堆的读写端口压力剧增，而且一个 warp 的访存地址跨度太大，很难落进少量缓存行。选 32 还额外得到一个很整齐的对齐关系：32 个线程各访问 4 字节正好是 128 字节，等于 4 个 32 字节 sector（一次完美合并访存）；shared memory 也正好是 32 个 bank。warp 宽度、bank 数、理想 sector 数这三者咬合在同一个数上，不是巧合，而是硬件设计自洽的结果。</p>
+</div>
+</details>
+
+<details>
+<summary>Shared memory、L1 和 L2 有什么本质区别？</summary>
+<div class="answer">
+<p>区别在"谁来管"和"作用域多大"，不只是快慢。shared memory 和 L1 数据缓存在物理上是同一块 SRAM（A100 每 SM 共 192 KB，H100 共 256 KB），由 carveout 配置切分比例——H100 支持把 shared 部分配成 0/8/16/32/64/100/132/164/196/228 KB 中的一档。但两者的语义完全不同：shared memory 由<strong>程序员显式分配和读写</strong>，作用域是一个 block（Hopper 的 cluster 可以跨 SM 访问），数据什么时候进来什么时候出去完全由你决定，所以它是 tiling 的工作台；L1 由硬件自动管理，你只能影响它而不能指挥它。L2 是全卡共享的最后一级片上缓存（A100 40 MB，H100 50 MB），也由硬件管理，但 Ampere 之后开放了驻留策略控制。延迟上大致是 shared 约 23 周期、L1 命中约 33 周期、L2 约 200 周期（均为 A100 微基准值），差距接近一个数量级。实践含义是：跨 block 的数据复用只能靠 L2 兜底，而 block 内的复用必须靠你自己搬进 shared memory。</p>
+</div>
+</details>
+
+<details>
+<summary>occupancy 是什么？为什么把它提到 100% 不一定更快？</summary>
+<div class="answer">
+<p>occupancy 的官方定义是每个 SM 的活跃 warp 数除以该 SM 支持的最大活跃 warp 数（A100 和 H100 都是 64）。它衡量的是你给 warp 调度器留了多少可以随时换手的余量，也就是掩盖访存延迟的能力，而不是算力有没有被用上。实际驻留数由四个约束取最小值决定：每 SM 线程上限（2048）、block 上限（32）、寄存器堆（65,536 个 32 位寄存器）、shared memory 容量。提高 occupancy 通常要付代价：压寄存器可能引入 spill（溢出到物理在 HBM 上的 local memory），缩小 tile 会降低数据复用度、把 kernel 从算力受限推回访存受限。更关键的是，高性能 kernel 常常本就不需要高 occupancy——CUTLASS 文档指出 GEMM 的累加器要占掉线程寄存器预算的一半以上，所以 GEMM occupancy 天生偏低，Hopper 和 Blackwell 上的高性能 GEMM 甚至运行在个位数百分比，因为少数几个 warp 就足以喂饱 Tensor Core。正确的用法是把 occupancy 当作"是否暴露了足够并行度"的证据：只有当 compute 和 memory 两个 Speed of Light 都偏低时，提 occupancy 才是对症的。</p>
+</div>
+</details>
+
+<details>
+<summary><code>nvidia-smi</code> 显示 GPU 利用率 100%，是不是说明算力已经跑满了？</summary>
+<div class="answer">
+<p>不是，这是最常见也最昂贵的误读。<code>nvidia-smi</code> 的 utilization.gpu 定义是"采样周期内有至少一个 kernel 在 GPU 上执行的时间占比"，它只回答"卡有没有闲着"这一个问题。它不区分用了几个 SM——一个只启动 8 个 block 的 kernel 在 132 个 SM 的 H100 上最多用到约 6% 的 SM，依然会报 100%；它也不区分执行单元在干什么——一个占着 SM 却在等 HBM 返回数据的访存 kernel，和一个把 Tensor Core 打到 95% 的 GEMM，读数完全一样。要判断算力用了几成，kernel 级别应该看 Nsight Compute 的 Speed of Light 指标（<code>sm__throughput</code> 与 <code>gpu__compute_memory_throughput</code> 的 pct_of_peak），训练全局应该看 MFU（实际模型 FLOPs 除以峰值 FLOPs 乘时间）。用 <code>nvidia-smi</code> 的利用率做容量规划或判断优化是否见效，方向从一开始就是错的。</p>
+</div>
+</details>
+
+<details>
+<summary>什么是访存合并？不合并到底损失多少？</summary>
+<div class="answer">
+<p>访存合并是硬件把一个 warp 内 32 个线程的访存请求合并成尽量少的内存事务的过程。CUDA C++ Best Practices Guide 对计算能力 6.0 以上的规则是：一个 warp 的并发访问会被合并成"服务全部 32 个线程所需的 32 字节事务个数"。理想情况下 32 个线程访问连续的 4 字节元素，覆盖 128 字节连续区间，正好是 4 个 32 字节 sector，取回的每个字节都被用到；最坏情况是 32 个线程的地址两两跨越超过 32 字节（典型写法就是按列访问行主序矩阵），每个线程各触发一个 sector，一次请求消耗 32 个 sector，而每个 sector 里只有 4 字节有用，<strong>87.5% 的带宽被白白搬运掉，效率相差 8 倍</strong>。NVIDIA 技术博客给过一组实测对照：同一 kernel 两个版本发出的请求数都是 8,388,608 次，合并版消耗 33,554,432 个 sector，非合并版消耗 268,435,456 个，sector/request 分别是 4 和 32。所以 Nsight Compute 里的 sectors per request 是判断访存效率最直接的指标，4 是理想值，越接近 32 越糟。</p>
+</div>
+</details>
+
+<details>
+<summary>shared memory bank conflict 是怎么产生的，怎么修？</summary>
+<div class="answer">
+<p>shared memory 被切成 32 个 bank，每个 bank 宽 4 字节，连续的 32 位字依次映射到连续的 bank，因此相隔 128 字节（32 × 4）的地址会落在同一个 bank 上。一次访问如果落在 n 个不同 bank 上就能并行完成；但如果多个地址映射到同一个 bank，硬件会把请求拆成若干个无冲突的请求串行执行，有效带宽按拆分数成比例下降（多个线程访问完全相同的地址是例外，会走广播通路）。最经典的触发方式是对行长为 32 个 float 的二维数组按列访问：每行正好 128 字节，于是 32 个线程全部落在 bank 0 上，构成 32 路冲突，有效带宽掉到 1/32。修法有三条：一是 padding，把行长从 32 改成 33 个元素，让每个线程的偏移变成 132k、bank 索引变成 (33k mod 32) = k，重新散开，代价是多用约 3% 的 shared memory；二是 swizzle，用异或之类的位运算打散列到 bank 的映射，不额外占内存但索引推导容易写错，这是 CUTLASS/CuTe 的标准做法；三是换指令绕过，用 <code>ldmatrix</code> 直接装载 Tensor Core 需要的 fragment，或在 Hopper 上用 TMA 配 wgmma 从 shared memory 直取，代价是必须遵守硬件规定的布局与 swizzle 模式。</p>
+</div>
+</details>
+
+<details>
+<summary>拿到一个跑得慢的 kernel，应该按什么顺序排查？</summary>
+<div class="answer">
+<p>先定性，再动手，顺序不能倒。第一步用 Nsight Compute 同时取两个 Speed of Light 指标：<code>sm__throughput.avg.pct_of_peak_sustained_elapsed</code>（计算侧）和 <code>gpu__compute_memory_throughput.avg.pct_of_peak_sustained_elapsed</code>（内存侧）。NVIDIA 的排查指南给的阈值是低于约 60% 算低、高于约 80% 算高。内存侧高而计算侧低是访存受限，接着查 sectors per request 和 bank conflict，修访问模式或做算子融合；计算侧高而内存侧低是算力受限，接着确认饱和的是哪条流水线（Tensor Core 还是 FP32），方向是降精度和对齐形状让 Tensor Core 吃满；两者都低说明延迟暴露不足或者被资源掐住了并行度，这时再去看实测 occupancy 和它的 limiter——occupancy 低且 limiter 明确（寄存器或 shared memory）属于占用率受限，occupancy 不低但依然慢就是延迟受限，要查依赖链和同步；两者都高则说明已经贴着这个算法在这块硬件上的极限，只能换算法或换精度。另外要单独确认一件事：block 总数是否远小于 SM 数或不是 SM 数的整数倍，这种"活儿没铺开"的情况两个 SOL 也会都低，但修法在启动配置和 kernel 合并上，不在 kernel 内部。</p>
+</div>
+</details>
+
+<details>
+<summary>这张卡和 DP19、DP14 的分工是什么？</summary>
+<div class="answer">
+<p>三张卡处在不同的抽象层，配合使用而不是互相替代。<a href="./gpu_infrastructure.html">DP14 · GPU 基础设施</a> 建立词汇表并给出选卡与集群视角：主流卡型参数对比、NVLink 与 InfiniBand 互联、集群拓扑与存储、云 GPU 计费，以及 grid/block/warp 的层次图和 CUDA 编程入门。<a href="./gpu_compute_optimization.html">DP19 · GPU 算力瓶颈与优化</a> 回答"这个算子的理论天花板在哪"：算术强度的定义、屋顶线模型与各代卡的拐点数值、访存墙的由来，以及从精度、算子、通信三层榨算力的清单。本卡回答的是中间那一层——硬件到底怎么调度你写的 kernel、数据在存储层次里怎么流动、以及某些写法为什么天然就慢：调度单位与执行单位的区别、SM 内部的处理分区与 warp 调度器、存储层次的定量阶梯、occupancy 的准确定义与它和利用率的差别、访存合并与 bank conflict 的机制。实践上的用法是：用 DP19 判断这个算子值不值得优化、上限在哪，用本卡判断这次为什么没跑到上限，用 <a href="./gemm_tiling_optimization.html">DP26</a> 和 <a href="./kernel_fusion_optimization.html">DP27</a> 落到具体手段上。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; GPU 执行模型与存储层次 &middot; DP25</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

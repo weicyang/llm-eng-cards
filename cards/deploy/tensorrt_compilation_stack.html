@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP28 · TensorRT 与推理编译栈</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#a8a29e;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、编译式与解释式：先 build 再跑换来了什么</a>
+<a href="#s2">二、TensorRT 构建流水线的五个阶段</a>
+<a href="#s3">三、engine 为什么不可移植</a>
+<a href="#s4">四、TensorRT 与 TensorRT-LLM 的关系</a>
+<a href="#s5">五、与运行时调度式方案的定位与共存</a>
+<a href="#s6">六、ONNX 作为中间表示的坑</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>DP28 · TensorRT 与推理编译栈</h1>
+<p class="subtitle">编译式 vs 解释式执行 / parse 与图优化 / INT8 calibration / tactic 自动选优与构建可复现 / engine 强绑定与 CI 约束 / TensorRT-LLM 的 in-flight batching 与 paged KV / ONNX opset 与动态 shape / 精度漂移排查</p>
+
+<div class="intuition-box">
+编译式推理的交易条款只有一句：<strong>把"每次跑都要做的决策"提前到构建期做一次，做得比运行时更好；代价是产物变成一块绑死了硬件、驱动和版本的二进制</strong>。所以评估 TensorRT 从来不是"它快不快"，而是"这块二进制在你的机型矩阵、发布节奏和运维体系里，养不养得起"。
+</div>
+
+<!-- ==================== 一、编译式 vs 解释式 ==================== -->
+<div class="section" id="s1">
+<h2>一、编译式与解释式：先 build 再跑换来了什么</h2>
+
+<p>TensorRT 官方文档把它的工作模型拆得非常干净，两句话就能概括：<strong>构建期</strong>由 builder 编译你的网络，为目标 GPU 上的每一层挑出最快的可用 kernel，产出一个序列化的二进制，叫 <span class="term">engine</span>（也叫 plan file）；<strong>运行期</strong>由 runtime 把 engine 载入进程并在 GPU 上执行。理解这两段的分工，就理解了编译式推理的全部得失。</p>
+
+<h3>三种执行模型，差别在"决策发生在什么时候"</h3>
+
+<p>解释式执行（PyTorch eager 是典型）在每次调用时才决定这一步要做什么：dispatch 到哪个 kernel、用什么精度、内存从哪来。好处是灵活性免费——shape 随便变、加个 <code>print</code> 也能跑、想改哪层就改哪层。代价是每一步都要付一次调度开销，而且<strong>系统在任何时刻都只知道当前这一个算子</strong>，看不到相邻算子，因此天然无法做跨算子的优化。</p>
+
+<p>编译式执行把这些决策全部前移。因为构建期能看到整张图，它可以做只有全局视野才能做的事：把相邻层融掉、把可静态求值的子图折叠成常量、为每层实测挑选 kernel、统一规划显存复用、给每个张量分配精度。运行期剩下的只是"按计划执行"，dispatch 开销被彻底消掉。</p>
+
+<p>JIT 编译（<code>torch.compile</code>）是中间档：首次调用时编译、装上守卫（guard），shape 或结构变化就重编译。它保留了大部分 Python 灵活性，但优化深度不如 AOT——它没有"为这台具体的卡实测每层所有候选实现"的预算。</p>
+
+<table>
+<tr><th>维度</th><th>解释式（PyTorch eager）</th><th>JIT（<code>torch.compile</code>）</th><th>编译式（TensorRT engine）</th></tr>
+<tr><td>决策时机</td><td>每次调用</td><td>首次调用时编译，之后复用</td><td>离线构建期一次性完成</td></tr>
+<tr><td>可见范围</td><td>单个算子</td><td>一段被成功抓取的子图</td><td>整张网络</td></tr>
+<tr><td>kernel 选择依据</td><td>固定的 dispatch 规则</td><td>启发式 + 可选 autotune</td><td><strong>在目标 GPU 上实测计时</strong>后选最快</td></tr>
+<tr><td>shape 灵活性</td><td>完全自由</td><td>自由，但变化会触发重编译</td><td>必须预先声明优化档位（min/opt/max）</td></tr>
+<tr><td>准备耗时</td><td>0</td><td>秒级到分钟级</td><td><strong>分钟级到小时级</strong></td></tr>
+<tr><td>产物形态</td><td>无（权重 + 代码）</td><td>进程内缓存（可持久化）</td><td>独立的二进制 engine，需要版本化管理</td></tr>
+<tr><td>可调试性</td><td>最好（能打断点、能 print）</td><td>中（需要专门工具看编译产物）</td><td><strong>最差</strong>——engine 内部是黑盒，只能靠日志与逐层比对</td></tr>
+<tr><td>可移植性</td><td>跟着框架版本走</td><td>跟着框架版本走</td><td>绑定 OS、CPU 架构、GPU 型号、TensorRT 版本</td></tr>
+</table>
+
+<div class="arch-diagram">           构建期 / 运行期的责任切分（编译式的核心结构）
+
+  ┌──────────────── 构建期（离线，一次） ────────────────┐
+  │  网络定义 (ONNX / API)                                │
+  │        ↓                                              │
+  │  图优化：常量折叠、层融合、消除死层                     │
+  │        ↓                                              │
+  │  精度分配 + 标定（FP16 / INT8 / TF32 / FP8）           │
+  │        ↓                                              │
+  │  tactic 选优：为每层实测候选实现，挑最快的那个           │
+  │        ↓                                              │
+  │  显存规划 + 序列化 ⇒  engine（plan file）              │
+  │     内含：图结构、已编译的 CUDA tactic、               │
+  │           plugin 调用指针、其他状态                     │
+  └───────────────────────┬──────────────────────────────┘
+                          │ 产物落地，需要版本化 + 分发
+  ┌───────────────────────▼──────────────────────────────┐
+  │  运行期（在线，每进程）                                │
+  │  IRuntime::deserializeCudaEngine → 载入进程            │
+  │        ↓                                              │
+  │  createExecutionContext → enqueueV3 逐次执行           │
+  │  这里已经没有"选 kernel"这件事了，只有"按计划跑"        │
+  └──────────────────────────────────────────────────────┘
+
+  ★ 所有编译式方案的得失都源于这道竖线：
+    线左边多做的每一分工作，都换来线右边少做的一份决策；
+    也同时换来一份"产物必须与环境严格匹配"的约束。</div>
+
+<h3>付出的代价里有一项容易被忽略：engine 是可执行的原生代码</h3>
+
+<p>TensorRT 文档对此有一段措辞相当强硬的说明：序列化的 engine 里包含已编译的 CUDA tactic 和 plugin 调用指针，<strong>反序列化一个来源不可信的 engine，等价于在 GPU 和主机上执行不可信的原生代码，而这个文件格式没有任何沙箱</strong>。因此官方的要求是：只加载自己构建的 engine，或者通过可信且经过认证的通道收到的 engine；绝不加载来自第三方、公网、用户上传等不受端到端控制的 plan 文件。多租户部署应在可信主机上构建，再通过带签名和完整性校验的通道把 engine 送到推理主机。文档还特别补了一句：跨版本兼容路径（如 8.x 到 10.x、10.x 到 11.x）<strong>不放宽</strong>这条要求——那条路径是给你自己用旧工具链构建的 engine 用的，不是用来接受外部 engine 的。</p>
+
+<div class="intuition-box">
+解释式执行像现场点菜：每道菜都要问一次厨房、等一次回复，灵活但每次都有沟通成本。编译式执行像宴席定制：提前把全部菜单、火候、上菜顺序敲定并排练一遍，当天只管出菜，快得多——但菜单一旦印好，换厨房、换灶台、换季节食材都得重新排一遍。这就是 engine 不可移植的根源，不是实现缺陷，是这套交易的必然条款。
+</div>
+
+<p>把 TensorRT 放进整个部署栈的位置（引擎层 vs 服务框架层）见 <a href="./model_serving.html">DP04 · 模型部署与 Serving</a>，本卡不重复那一层的定位介绍，只讲编译流程内部与由此带来的工程代价。</p>
+</div>
+
+<!-- ==================== 二、构建流水线 ==================== -->
+<div class="section" id="s2">
+<h2>二、TensorRT 构建流水线的五个阶段</h2>
+
+<p>构建期做的事可以拆成五段：解析、图优化、精度标定、tactic 选优、序列化。这五段各有各的失败方式，而且失败点越靠后越难排查，所以值得逐段看清它在做什么。</p>
+
+<div class="arch-diagram">        TensorRT 构建流水线：每一段的输入、动作与常见翻车点
+
+ ① parse ─────────────────────────────────────────────────
+    ONNX 文件 / INetworkDefinition API
+    动作：把外部表示翻译成内部网络定义
+    翻车：算子不在支持列表 → 需要 plugin 或改写模型
+                    ↓
+ ② 图优化 ────────────────────────────────────────────────
+    动作：常量折叠 → 层融合（按模式目录）→ 消除死层
+    "融合检测受支持的操作模式，把多层合并成一层，
+      并启用该层内部那些创建网络时无法直接访问的选项"
+    翻车：期望的融合没出现（精度/架构约束没满足），
+          日志里能看到，不看日志就只会觉得"怎么没变快"
+                    ↓
+ ③ 精度标定 ──────────────────────────────────────────────
+    动作：INT8 隐式量化走 calibrator 求每个激活张量的 scale
+          （或走显式 Q/DQ 路径，scale 已在模型里）
+    翻车：标定集不代表真实分布 → 精度掉点；
+          两条路径混用（显式 Q/DQ 又给 calibration table）→ 报错
+                    ↓
+ ④ tactic 选优 ───────────────────────────────────────────
+    动作：为每层枚举候选实现，逐个实测计时，取最快
+    翻车：构建极慢（层多/拓扑复杂）；
+          计时噪声导致同一份输入两次构建选出不同 tactic
+                    ↓
+ ⑤ 序列化 ────────────────────────────────────────────────
+    产出 engine（plan file）：图结构 + 已编译 tactic
+                             + plugin 调用指针 + 其他状态
+    翻车：把 engine 当成"跨环境可搬运的模型文件"（见第三节）</div>
+
+<h3>阶段二：图优化的两件事</h3>
+
+<p><span class="term">常量折叠</span>（constant folding）把构建期就能算出结果的子图预先算掉，运行时不再重复计算。<span class="term">层融合</span>（layer fusion）是 TensorRT 的招牌能力，官方描述值得原样理解：<strong>融合把网络变成更简单的形式但保持整体行为不变；许多层实现内部带有创建网络时无法直接访问的额外参数和选项，融合优化步骤检测受支持的操作模式，把多层合并成一层并配上内部选项集</strong>。换句话说，融合不只是"少启动几次 kernel"，它是在把你的图映射到 TensorRT 内部那些更强、但外部 API 触达不到的层实现上。</p>
+
+<p>关键在于这份模式目录是<strong>带条件的</strong>。以官方 Layer Fusion Catalog 里几条为例：<code>Conv → ReLU</code> 要求激活正好是 ReLU；<code>Conv → GELU</code> 要求输入输出精度相同且同为 FP16 或 INT8，并且需要 Turing 及更新架构；深度可分离卷积融合要求两个卷积精度都是 INT8 且计算能力不低于 7.2。所以<strong>同一张图在不同卡、不同精度设置下会融出不同结果</strong>——"换了张卡性能对不上"这类现象，很多时候根源就在这里。核对方式只有一个：把日志级别开到 <code>kINFO</code>，或者用 engine inspector 看构建后的层结构，确认预期的融合真的发生了。融合本身为什么能省时间、省的是什么，见 <a href="./kernel_fusion_optimization.html">DP27 · 算子融合与 Kernel 优化实战</a>。</p>
+
+<h3>阶段三：INT8 标定在解一个什么问题</h3>
+
+<p>INT8 只有 256 个可表示的值，把一个浮点激活张量映射进去必须选一个 <span class="term">scale</span>（缩放因子）。TensorRT 文档把这件事的难点讲得很清楚：<strong>选 scale 不是精确科学，它要在两类误差之间取平衡</strong>——<span class="term">离散化误差</span>（representable 范围越大，每个量化格子代表的区间越宽，误差越大）与<span class="term">截断误差</span>（范围外的值被夹到边界上）。范围放宽，离散化误差涨；范围收紧，截断误差涨。正因为没有唯一最优解，TensorRT 提供了多个用不同方式计算 scale 的 calibrator。</p>
+
+<table>
+<tr><th>量化路径</th><th>scale 从哪来</th><th>关键约束</th><th>适用</th></tr>
+<tr><td><strong>隐式量化</strong>（calibration）</td><td>喂一批代表性数据，由 calibrator 统计激活分布后算出</td><td>默认在<strong>层融合之前</strong>标定；不能同时提供显式 Q/DQ</td><td>手上只有 FP32 模型、没有量化训练流程</td></tr>
+<tr><td><code>IInt8EntropyCalibrator2</code></td><td>熵标定：选择使量化后张量的信息论内容最优的 scale</td><td>官方推荐的熵标定器；DLA 场景必须用它；标定 batch size 会影响结果</td><td>通用首选，对 CNN 类网络官方明确推荐</td></tr>
+<tr><td><code>IInt8MinMaxCalibrator</code></td><td>直接取观测到的最小/最大值</td><td>对离群值敏感——一个极端值就能把范围撑大、把有效精度摊薄</td><td>激活分布本身较紧、或已知无离群值</td></tr>
+<tr><td><strong>显式量化</strong>（Q/DQ）</td><td>模型里已经带 <code>QuantizeLinear</code>/<code>DequantizeLinear</code> 节点，scale 是模型的一部分</td><td><strong>不能再提供 calibration table</strong>，否则报错</td><td>做过量化感知训练、或用外部量化工具产出的模型</td></tr>
+</table>
+
+<p>标定缓存的可移植性有一条容易踩的规则：<strong>只要标定发生在层融合之前，标定缓存就可以跨设备复用</strong>（使用 <code>IInt8EntropyCalibrator2</code>、<code>IInt8MinMaxCalibrator</code>，或显式设置 <code>QuantizationFlag::kCALIBRATE_BEFORE_FUSION</code> 时成立）。这个特性很实用——可以在装了独立显卡的机器上生成标定表，再拿到嵌入式平台上复用。原因也很直白：<strong>融合在不同平台、不同设备上不保证一致，所以在融合之后标定得到的缓存必然不可移植</strong>。但要注意另一条：标定缓存<strong>一般不能跨 TensorRT 版本</strong>复用。量化方案本身的精度权衡与选型见 <a href="./quantization_guide.html">DP13 · 模型量化</a>。</p>
+
+<p>还有一个常被误解的点：精度标志 FP16、INT8、TF32 是<strong>独立开关</strong>，而且开了不等于一定用。官方说明是 <strong>TensorRT 仍然会选择更高精度的 kernel，只要它跑得更快，或者压根不存在低精度实现</strong>。所以"我开了 INT8 但看日志某些层还是 FP16"通常不是配置错了，而是 builder 判断这样更快或别无选择。</p>
+
+<h3>阶段四：tactic 选优——性能的来源，也是不确定性的来源</h3>
+
+<p><span class="term">tactic</span> 指的是某一层的一个具体 kernel 实现。builder 会为每层枚举可用 tactic 并<strong>逐个实测计时</strong>，选出最快的组合成最终 plan。这是 TensorRT 性能优势的主要来源——它不是靠启发式猜，而是在你的这块卡上真的跑过。代价有两个。</p>
+
+<p>第一个代价是<strong>构建时间</strong>。官方直言：层数多或拓扑复杂时构建时间可能很长。控制手段有三层：<code>ITimingCache</code> 缓存逐层计时信息，重复的层可以跳过实测直接复用（缓存内容与目标设备、CUDA 版本、TensorRT 版本以及会改变层实现的 <code>BuilderConfig</code> 参数如 <code>kTF32</code>、<code>kREFIT</code> 绑定；JIT 编译产物构成的 compilation cache 默认也序列化在里面）；<strong>builder 优化级别</strong>默认为 3，调低可以显著加快构建但引擎可能更差，调高则构建更慢、有机会找到更好的 tactic。</p>
+
+<p>第二个代价更隐蔽：<strong>构建不是确定性的</strong>。官方原文是——builder 用计时来找最快 kernel，而计时会受噪声影响，例如 GPU 上有其他工作、GPU 时钟频率波动；<strong>计时噪声意味着连续几次构建可能选出不同的实现</strong>。对需要可复现构建的场景，TensorRT 提供了 <span class="term">Editable Timing Cache</span>：首次构建时打开 <code>BuilderFlag::kEDITABLE_TIMING_CACHE</code> 并保留日志与缓存文件，日志会给出每层的名字、key、可用 tactic 与最终选中的 tactic；下次构建时用 <code>ITimingCache::update</code> 为指定层钉死 tactic，builder 就会用你指定的那一个（每层只能钉一个）。</p>
+
+<div class="highlight">
+<strong>示例场景：构建不可复现把一次发布拖成了两天。</strong>某团队的 CV 排序模型走 TensorRT 部署，CI 里每次合并都重新构建 engine 并跑一遍延迟门禁（P99 ≤ 12ms）。上线前一周出现"同一个 commit 有时过门禁、有时不过"的怪现象：连续构建 5 次，四次 P99 落在 10.4–10.7ms，第五次却是 11.9ms，几乎顶到阈值。开 <code>kINFO</code> 日志逐层比对后发现，某个卷积层在那次构建里选到了另一个 tactic，单层耗时高出约 1.2ms——构建机上当时有另一个任务在抢 GPU，计时被污染。修法分三步：构建时独占 GPU 并锁定时钟；引入 <code>ITimingCache</code> 后构建时间从约 22 分钟降到约 4 分钟；对少数敏感层用 Editable Timing Cache 钉死 tactic，之后 20 次构建的 P99 波动收敛到 0.3ms 以内。<strong>可迁移的结论是：只要门禁比对的是延迟数字，构建环境就必须和测试环境一样被当作受控变量。</strong>这里的具体毫秒数是构造的示例场景，用于说明排查链路，不可直接搬用。
+</div>
+
+<table>
+<tr><th>构建期配置项</th><th>作用</th><th>取值取错的后果</th></tr>
+<tr><td>builder 优化级别（默认 3）</td><td>控制搜索 tactic 的时间预算</td><td>调到 0 构建飞快但引擎明显更慢；调很高则 CI 构建时间失控</td></tr>
+<tr><td><code>ITimingCache</code></td><td>复用逐层计时结果，跳过重复实测</td><td>跨设备/跨 CUDA/跨 TensorRT 版本复用会失效（缓存本身带这些维度）</td></tr>
+<tr><td><code>kEDITABLE_TIMING_CACHE</code></td><td>为指定层钉死 tactic，换取可复现构建</td><td>钉死后硬件或版本升级时可能锁在一个不再最优的实现上</td></tr>
+<tr><td>精度标志 FP16 / INT8 / TF32</td><td>各自独立开启，允许 builder 使用该精度</td><td>误以为"开了就一定用"；实际 builder 会在更快或无低精度实现时选高精度</td></tr>
+<tr><td>优化档位（optimization profile）</td><td>声明动态 shape 的 min / opt / max</td><td>档位太宽则处处平庸，太窄则真实流量在运行时被拒</td></tr>
+<tr><td><code>kWORKSPACE</code> 上限</td><td>限制构建期可用的临时显存</td><td>给太小会让 builder 放弃需要大 workspace 的高性能 tactic；注意它只管构建期，运行期的 enqueue 显存由 <code>getDeviceMemorySizeV2()</code> 另算</td></tr>
+</table>
+
+<div class="intuition-box">
+tactic 选优本质上是构建期替你跑了一轮小规模压测：把每层的所有候选实现在你这块卡上都试一遍，留最快的。理解这一点，两件怪事就都通了——为什么构建这么慢（它真的在跑），以及为什么两次构建结果会不同（跑的时候被别人干扰了）。想要可复现，就得像对待压测环境一样对待构建环境。
+</div>
+</div>
+
+<!-- ==================== 三、engine 不可移植 ==================== -->
+<div class="section" id="s3">
+<h2>三、engine 为什么不可移植</h2>
+
+<p>这是编译式方案在工程上最贵的一条约束，而且它常常在上线前一周才被发现。TensorRT 文档写得毫不含糊：<strong>默认情况下，序列化的 engine 只保证在与序列化时相同的 OS、CPU 架构、GPU 型号和 TensorRT 版本下正确工作。</strong></p>
+
+<h3>四个绑定维度，各自的失效方式不同</h3>
+
+<table>
+<tr><th>绑定维度</th><th>为什么会绑</th><th>变了会怎样</th><th>官方给的缓解手段</th></tr>
+<tr><td><strong>GPU 型号 / 架构</strong></td><td>tactic 是为具体架构实测选出并编译进 engine 的；可用融合模式本身也随计算能力变化</td><td>反序列化失败，或能跑但性能与预期严重不符</td><td>Hardware Compatibility（硬件兼容模式），以放弃架构专属优化为代价</td></tr>
+<tr><td><strong>TensorRT 版本</strong></td><td>engine 内含已编译 tactic 与 plugin 调用指针，其格式与实现随版本演进</td><td>反序列化失败</td><td>Version Compatibility + lean / dispatch runtime</td></tr>
+<tr><td><strong>OS 与 CPU 架构</strong></td><td>engine 里含主机侧状态，且构建依赖工具链</td><td>反序列化失败</td><td>无——只能在目标平台上重建</td></tr>
+<tr><td><strong>驱动 / CUDA 版本</strong></td><td>tactic 依赖特定 CUDA 运行时与驱动能力；timing cache 显式包含 CUDA 版本维度</td><td>加载或执行异常；缓存复用失效</td><td>把驱动与 CUDA 版本纳入基础镜像并锁定</td></tr>
+</table>
+
+<p>值得单独说的是 TensorRT 提供的三档运行时，它们正是"版本兼容"这条缓解手段的实现方式：默认运行时是主库 <code>libnvinfer</code>；<strong>lean runtime</strong>（<code>libnvinfer_lean</code>）体积更小，只包含运行版本兼容 engine 所需的代码；<strong>dispatch runtime</strong>（<code>libnvinfer_dispatch</code>）是一层很小的 shim，能加载 lean runtime 并转发调用，还能加载<strong>更旧版本</strong>的 lean runtime，从而在新版 TensorRT 与旧 plan 文件之间提供兼容性。</p>
+
+<p>但这条路要付一笔明确的性能费用，官方讲得很直接：<strong>lean runtime 包含的算子实现比默认运行时少，而 TensorRT 是在构建期选定算子实现的，所以你必须在构建时就声明"这个 engine 是给 lean runtime 用的"（启用版本兼容），而这样构建出的 engine 可能比为默认运行时构建的更慢</strong>。也就是说，版本兼容不是免费的向后兼容，它是<strong>用性能换运维弹性</strong>的一档权衡。</p>
+
+<div class="arch-diagram">      构建矩阵：engine 不是一个文件，是一族文件
+
+  你以为的产物：            实际需要的产物：
+  ┌──────────┐             ┌────────────────────────────────────┐
+  │ model.   │             │ key = (GPU 架构, TRT 版本, 精度组合,│
+  │ engine   │      ⇒      │        optimization profile)        │
+  └──────────┘             │                                     │
+                           │ A100 × TRT-A × FP16 × prof-短        │
+   "构建一次，                │ A100 × TRT-A × INT8 × prof-短        │
+    到处部署"               │ A100 × TRT-A × FP16 × prof-长        │
+     ← 这个假设             │ L40S × TRT-A × FP16 × prof-短        │
+       在这里失效           │ L40S × TRT-A × INT8 × prof-短        │
+                           │ ...                                  │
+                           └────────────────────────────────────┘
+
+  矩阵规模 ≈ 机型数 × 版本数 × 精度组合数 × 档位数
+  每格都要：构建 → 精度验证 → 延迟门禁 → 入产物仓库（按 key 寻址）
+
+  ⚠ 两条运维推论：
+   ① 灰度与回滚需要"新旧两版 engine 同时在仓库里"，
+      否则回滚时无 engine 可用 —— 回滚变成重新构建，耗时以分钟/小时计
+   ② 升级基础镜像（驱动/CUDA/TRT）= 整个矩阵重建 + 重跑精度验证，
+      不是一次镜像替换，要按"发版"来排期</div>
+
+<h3>由此产生的 CI 与运维约束</h3>
+
+<table>
+<tr><th>约束</th><th>具体表现</th><th>工程做法</th></tr>
+<tr><td>构建是流水线的一等公民</td><td>engine 不能手工在某人机器上生成后拷进镜像</td><td>CI 里按机型矩阵构建，产物入仓库、按 (机型, 版本, 精度, 档位) 寻址</td></tr>
+<tr><td>构建机必须有目标卡</td><td>为 H100 构建就得有 H100，不能用别的卡代劳</td><td>构建集群按机型分池；小众机型至少留一台构建机</td></tr>
+<tr><td>构建环境要受控</td><td>计时噪声会让延迟门禁变成抽奖（见第二节案例）</td><td>构建时独占 GPU、锁时钟；用 timing cache 与 editable timing cache 稳定结果</td></tr>
+<tr><td>冷启动时间变长</td><td>启动要反序列化 engine 并可能预热 CUDA Graph</td><td>把这段时间算进弹性扩容的 SLA 预算，别指望秒级扩容</td></tr>
+<tr><td>异构车队会放大矩阵</td><td>A100 + L40S + H100 混部时矩阵成倍增长</td><td>要么按机型分组路由、每组一套 engine；要么牺牲性能用硬件兼容模式收敛矩阵</td></tr>
+<tr><td>故障恢复只能重启进程</td><td>异步 CUDA 错误发生后，C++ 层返回错误码<strong>不会清掉底层 CUDA 驱动状态</strong>，同进程后续 CUDA 调用会持续观测到同一错误或其衍生错误，直到进程退出或设备复位</td><td>官方给的唯一安全软恢复是终止并重启推理进程，由 systemd / K8s 存活探针之类的守护者拉起新进程；<code>cudaDeviceReset()</code> 虽然能刷新驱动状态，但<strong>通常会使已反序列化的 engine 失效</strong></td></tr>
+<tr><td>engine 分发要当代码分发对待</td><td>反序列化不可信 engine 等于执行不可信原生代码，格式无沙箱</td><td>只加载自建或经可信认证通道获得的 engine；多租户下在可信主机构建、签名后传输</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景：一次"只换了机型"的扩容事故。</strong>某在线服务原本全量跑在 A100 上，engine 由 CI 统一构建。为应对流量增长，运维加了一批 L40S 节点进同一个部署，镜像和 engine 文件都没动。结果新节点全部启动失败——engine 反序列化直接报错，因为 GPU 型号不匹配。临时方案是把 L40S 节点从负载均衡里摘掉，代价是那天的扩容窗口白等。补齐方案分三步：一是把机型加进 engine 的产物 key，构建矩阵从 3 格（1 机型 × 3 精度组合）扩到 6 格，CI 单次全量构建时间从约 35 分钟涨到约 70 分钟（引入 timing cache 后回落到约 25 分钟）；二是给 Deployment 按 <code>nodeSelector</code> 分机型分组，各组挂各自的 engine；三是在启动探针里加一道"engine 与本机 GPU 型号是否匹配"的前置校验，让不匹配在启动时就明确报错，而不是等到第一个请求。<strong>这里的教训不是某个数字，而是：机型必须是 engine 的一部分身份，不是部署时的实现细节。</strong>具体构建时长强依赖模型规模与构建机配置。
+</div>
+
+<div class="intuition-box">
+把 engine 当成"编译好的可执行文件"而不是"模型权重文件"，所有约束就都顺理成章了：你不会指望一个为 x86 编译的二进制在 ARM 上跑，也不会把它从一个陌生人那里下载下来直接执行。engine 就是这种东西——它不是数据，它是代码。
+</div>
+</div>
+
+<!-- ==================== 四、TRT vs TRT-LLM ==================== -->
+<div class="section" id="s4">
+<h2>四、TensorRT 与 TensorRT-LLM 的关系</h2>
+
+<p>一句话概括：TensorRT 是通用推理编译器与运行时，它的世界观里一次前向就是一次完整的推理；而自回归大模型把这个世界观的三条前提全部打破了，TensorRT-LLM 就是为补上这三条而存在的。</p>
+
+<h3>LLM 打破了哪三条前提</h3>
+
+<table>
+<tr><th>TensorRT 的原始假设</th><th>LLM 推理的真实情况</th><th>不补会怎样</th></tr>
+<tr><td>输入 shape 在一次执行内固定</td><td>解码每一步序列长度都在增长</td><td>要么为每个长度准备档位，要么按最大长度 padding，两条路都极浪费</td></tr>
+<tr><td>请求之间无状态，一次前向算完一个请求</td><td>每个请求带自己的 KV 状态，要跨几十上百步持续存在</td><td>无处安放 KV，只能每步重算全部历史，成本爆炸</td></tr>
+<tr><td>一个 batch 里所有样本同进同出</td><td>请求在不同步到达和结束，batch 成分每一步都在变</td><td>整批必须等最慢的那条走完，GPU 大量空转</td></tr>
+</table>
+
+<h3>TensorRT-LLM 补上的四件事</h3>
+
+<p><strong>其一，<span class="term">in-flight batching</span></strong>（在官方文档里也称 continuous batching 或 iteration-level batching）：让处于 context 阶段（预填充）的序列与处于 generation 阶段（解码）的序列<strong>在同一次前向里一起处理</strong>，目的是更好地交错请求，既降延迟又提高 GPU 利用率。有一条实现约束值得记住——出于效率原因，<strong>in-flight batching 要求输入张量是 packed 的（无 padding）</strong>，这也解释了为什么它不能简单地套在一个普通 TensorRT engine 上。</p>
+
+<p><strong>其二，chunked context</strong>：原本 context 阶段是一次性处理全部输入 token，这个特性把 context 切成若干 chunk，使 chunk 能与 generation 阶段的 token 一起组批，从而提高整体吞吐，同时<strong>解除了对输入长度的限制</strong>。启用它需要同时开启 FMHA 的 paged KV cache，且除最后一个 chunk 外，每个 chunk 的大小必须是 KV cache 块大小的整数倍。</p>
+
+<p><strong>其三，<span class="term">paged KV cache</span></strong>：把 KV cache 拆成固定大小的块，由 cache manager 在处理过程中分配给不同请求——它跟踪各序列、从池里分配新块、并在需要时回收。TensorRT-LLM 里<strong>每个 Transformer 层各有一份 KV cache</strong>，层数就是 cache 数。配置上关键是 <code>kv_cache_type=paged</code>、<code>tokens_per_block</code>（取 2 的幂）与 <code>enable_block_reuse</code>（开启块复用即前缀复用）。分页与前缀复用的原理和显存账见 <a href="./kv_cache_optimization.html">DP09 · KV Cache 显存优化</a>，迭代级调度的机制见 <a href="./continuous_batching_scheduling.html">DP11 · Continuous Batching 与推理调度策略</a>，本节只说 TensorRT-LLM 侧的形态。</p>
+
+<p><strong>其四，两级调度器 + 多卡并行</strong>。调度分两步走：<code>CapacityScheduler</code> 先判断资源（主要是 KV cache 容量）够不够，输出 <code>fitting_requests</code> 与 <code>paused_requests</code>；<code>MicroBatchScheduler</code> 再从中挑出这一步真正要跑的 <code>context_requests</code> 和 <code>generation_requests</code>。多卡侧提供张量并行、流水线并行、专家并行等切分方式，配合针对 Transformer 手写的注意力 kernel 与 FP8/INT4 支持。</p>
+
+<div class="arch-diagram">     TensorRT-LLM 的执行循环（PyExecutor，每个 rank 一个后台循环）
+
+  ┌───────────────────────── 每一步迭代 ─────────────────────────┐
+  │                                                              │
+  │ ① 取请求      从内部请求队列拉新请求（如果有）                 │
+  │      ↓                                                       │
+  │ ② 调度        CapacityScheduler：KV cache 等资源装得下吗？    │
+  │               → fitting_requests / paused_requests           │
+  │               MicroBatchScheduler：这一步跑哪些？             │
+  │               → context_requests + generation_requests       │
+  │      ↓            （两类混在同一次前向里 = in-flight batching）│
+  │ ③ 备资源      KVCacheManager.prepare_resources               │
+  │               从块池分配 KV 块；已完成的请求归还块             │
+  │      ↓                                                       │
+  │ ④ 前向        ModelEngine.forward 一次单步前向                │
+  │      ↓                                                       │
+  │ ⑤ 采样        Decoder / Sampler 产出下一个 token              │
+  │      ↓                                                       │
+  │ ⑥ 出结果      更新各请求的部分输出；完成的请求返回用户         │
+  │                                                              │
+  └──────────────────────────────────────────────────────────────┘
+
+  两项额外优化（官方文档提到）：
+   · overlap scheduling：不等第 n 步的结果在 CPU 侧处理完，
+     就先把第 n+1 步发出去 → CPU 做停止条件判断/组装响应的同时 GPU 已在算
+   · CUDA Graph padding：batch 尺寸向上取到最近的已捕获图尺寸，
+     提高图命中率（代价是有少量 padding 浪费）
+
+  ★ 注意这已经不是"一个 TensorRT engine 被调用"的形态了——
+    调度、KV 管理、采样都在这个 executor 循环里，
+    TensorRT-LLM 是一个完整的 LLM 运行时，不只是 TensorRT 的封装层。</div>
+
+<table>
+<tr><th>对比项</th><th>TensorRT</th><th>TensorRT-LLM</th></tr>
+<tr><td>面对的模型</td><td>通用网络：CV、排序、编码器、判别式模型</td><td>自回归 Transformer 解码器</td></tr>
+<tr><td>执行粒度</td><td>一次执行 = 一次完整推理</td><td>一次执行 = 一个解码步；一个请求要走几十到几千步</td></tr>
+<tr><td>请求状态</td><td>无状态</td><td>每请求持有跨步的 KV 状态，由 cache manager 分页管理</td></tr>
+<tr><td>批处理</td><td>静态 batch，同进同出</td><td>in-flight batching，context 与 generation 混批，逐步进出</td></tr>
+<tr><td>调度</td><td>无（由上层服务框架负责）</td><td>内置两级调度器（容量 + 微批）</td></tr>
+<tr><td>多卡</td><td>主要靠上层切分</td><td>内置张量并行、流水线并行、专家并行</td></tr>
+<tr><td>与 TensorRT 的关系</td><td>—</td><td>使用 TensorRT 的编译与 kernel 能力，但外面套了一整个 executor 运行时</td></tr>
+</table>
+
+<div class="intuition-box">
+TensorRT 像一台把整条产线预先排布好的自动化设备：料进去、成品出来，节拍固定。LLM 的解码却是"每个客人点了不定量的菜、还要一口一口上"，节拍不固定、每桌都有自己的进度。TensorRT-LLM 补的正是这套"排队叫号 + 每桌记账 + 拼桌上菜"的机制——它保留了设备本身的加工能力，在外面加了一个调度大厅。
+</div>
+</div>
+
+<!-- ==================== 五、与运行时调度式方案共存 ==================== -->
+<div class="section" id="s5">
+<h2>五、与运行时调度式方案的定位与共存</h2>
+
+<p>vLLM、SGLang 这类方案常被摆在 TensorRT-LLM 对面做二选一，但这个问法本身在过时。各框架的功能矩阵与横向对比已经在 <a href="./inference_framework_selection.html">DP05 · 大模型推理框架选型</a> 里完整给过，本节不重复，只讲一件它不覆盖的事：<strong>编译式与运行时调度式在优化目标上的根本差异，以及它们在同一套系统里怎么共处。</strong></p>
+
+<h3>两条路线优化的不是同一个量</h3>
+
+<p>这是最容易被"谁更快"的口水战掩盖的一点。编译式方案（把整张图交给构建期）主攻的是<strong>单次前向的执行时间</strong>：融合、tactic 实测选优、显存规划、精度分配，全都在压这一个数。运行时调度式方案主攻的是<strong>GPU 上有效工作的占比</strong>：每个解码步该让谁进 batch、KV 显存怎么分页复用、抢占和排队怎么排——它压的是"有多少时间在做有用的事"。</p>
+
+<div class="formula">端到端产能 ≈ 单次前向效率（编译期能改善） × 有效工作占比（运行时调度能改善）</div>
+
+<p>两个因子相乘，所以哪一侧是短板就该补哪一侧。一个连 continuous batching 都没有的系统，单次前向再快也填不满 GPU；反过来，调度已经把 GPU 排得很满时，单步前向的每一点效率都直接折成吞吐。</p>
+
+<h3>现实是两条路线在互相靠近</h3>
+
+<p>这一点让"选路线"这个决策变得没那么重要了。编译式一侧补了大量本属运行时调度的能力——上一节列的 in-flight batching、paged KV cache、两级调度器，本来都是运行时调度的活。运行时调度式一侧则补了本属编译期的能力：接入 <code>torch.compile</code> 做图捕获与融合、做 CUDA Graph 捕获消灭启动开销、内置手写融合 kernel。<strong>结果是两边的能力集大幅重叠，真正的差异退回到工程属性上：构建期投入是否划算、产物管理成本你付不付得起、迭代速度要多快。</strong></p>
+
+<table>
+<tr><th>判断维度</th><th>倾向编译式（构建期投入）</th><th>倾向运行时调度式</th></tr>
+<tr><td>模型结构稳定度</td><td>已冻结，几个月不动</td><td>还在改结构、换基座、试新变体</td></tr>
+<tr><td>硬件同构度</td><td>单一机型或少数几种</td><td>异构车队、机型经常变动</td></tr>
+<tr><td>shape 分布</td><td>集中、可用少数几个优化档位覆盖</td><td>长尾分散，档位难以收敛</td></tr>
+<tr><td>发布节奏</td><td>周级/月级发版，能容纳构建与验证窗口</td><td>天级甚至小时级迭代</td></tr>
+<tr><td>团队能力</td><td>有构建流水线、产物仓库、精度验证体系</td><td>希望"拉起来就能服务"，不想维护构建矩阵</td></tr>
+<tr><td>延迟敏感度</td><td>P99 卡得极紧，愿意为最后 10~20% 付工程代价</td><td>吞吐优先，延迟有余量</td></tr>
+</table>
+
+<h3>四种共存形态，选一个或几个</h3>
+
+<ul>
+<li><strong>分层共存</strong>：编译式引擎当后端，服务框架管调度、多模型、版本灰度与观测——这是生产里最常见的形态，引擎负责"算多快"，服务框架负责"能不能安全换版本、同时服务几个模型"。这一层的分工在 <a href="./model_serving.html">DP04 · 模型部署与 Serving</a> 里有完整展开。</li>
+<li><strong>分流量共存</strong>：结构冻结、流量大、延迟卡得紧的主力模型走编译式，吃它单次前向的优势；迭代频繁的实验模型和长尾小模型走运行时调度式，吃它零构建成本与灵活性。两类模型共用同一套网关、鉴权与观测。</li>
+<li><strong>分阶段共存</strong>：预填充与解码分离部署时，两侧的瓶颈完全不同（一侧算力密集、一侧带宽密集），因此可以各选各的实现，只要中间的 KV 传递协议对齐。</li>
+<li><strong>影子共存</strong>：同一模型两条实现并行部署，用同一套压测口径与同一份数据集比对延迟分位数与精度。这是唯一靠得住的选型证据，做法见 <a href="./inference_benchmark_methodology.html">DP16 · 推理服务压测方法论</a>——跨方案比数字之前必须先对齐指标公式和测量点，否则比的是工具差异不是方案差异。</li>
+</ul>
+
+<div class="intuition-box">
+别问"该选编译式还是调度式"，问"我现在的短板是单步算得不够快，还是 GPU 有一半时间在空转"。前者补编译，后者补调度。而且两边这几年一直在抄对方的作业，能力集越来越像——最后决定选型的往往不是性能，是你养不养得起一个构建矩阵。
+</div>
+</div>
+
+<!-- ==================== 六、ONNX 的坑 ==================== -->
+<div class="section" id="s6">
+<h2>六、ONNX 作为中间表示的坑</h2>
+
+<p><span class="term">ONNX</span>（Open Neural Network Exchange）是训练框架与推理编译器之间的通用语：一张计算图，加上一套按 <span class="term">opset</span> 版本演进的算子集合。它让"PyTorch 训练、TensorRT 部署"这条链路成立。但它同时是整条链路上最容易出问题的一段，因为它是<strong>翻译</strong>——而翻译有两头，两头都可能不认。</p>
+
+<div class="arch-diagram">      PyTorch → ONNX → TensorRT：三道独立的关卡，别只过第一道
+
+  PyTorch 模型
+      │
+      │  ① 导出关：exporter 能不能发出这个算子？
+      │     失败长相：UnsupportedOperatorError: Exporting the operator
+      │              'aten::xxx' to ONNX opset version N is not supported
+      ▼
+  ONNX 图（带 opset 版本 + 输入是否声明为动态）
+      │
+      │  ② 消费关：下游（TensorRT / ONNX Runtime）认不认这个算子和这个 opset？
+      │     失败长相：构建 engine 时报不支持的算子 / 需要 plugin；
+      │              或运行时 [ShapeInferenceError] 之类的类型/形状推断失败
+      ▼
+  TensorRT engine
+      │
+      │  ③ 精度关：数值和任务指标还对不对？
+      │     失败长相：能跑、不报错、logits 余弦相似度看着也高，
+      │              但下游任务指标掉点 —— 最难发现的一类
+      ▼
+  上线
+
+  ★ 最危险的误解："导出没报错" ≈ "转换成功"。
+    第 ① 关过了只说明 exporter 写出了一个文件，
+    第 ② ③ 关完全独立，必须各自设验证。</div>
+
+<h3>坑一：算子不支持，而且有两层含义</h3>
+
+<p>第一层是 exporter 发不出来。典型报错就是 <code>UnsupportedOperatorError: Exporting the operator 'aten::erfc' to ONNX opset version 18 is not supported</code>。处理方式有三条：用 <code>custom_translation_table</code>（新 dynamo 路径）或 <code>register_custom_op_symbolic</code>（旧路径）配合 onnxscript 给这个算子写一个 ONNX 实现；把它拆解成受支持的原语组合；或者在下游写 plugin 顶上。</p>
+
+<p>第二层是下游认不出来。exporter 成功写出的图，TensorRT 或 ONNX Runtime 未必能构建——这是两套独立的支持列表。更阴的是<strong>注册了自定义符号函数、导出也没报错，但产出的图在运行时挂在形状/类型推断上</strong>，报出类似 <code>[ShapeInferenceError] ... Input 0 expected to have type but instead is null</code> 的错。PyTorch 文档对此有一条明确建议：为自定义算子注册符号函数时，<strong>强烈建议同时用 <code>setType</code> 补上形状推断</strong>，否则导出图在某些极端情况下会有错误的形状推断。所以"导出没报错"绝不能当作验证通过。</p>
+
+<h3>坑二：动态 shape 要声明两次，而且两套 API 别混</h3>
+
+<p>PyTorch 文档说得很直接：tracer 记录的是<strong>示例输入的 shape</strong>，默认导出的模型里所有输入输出 shape 会与 <code>args</code> 完全一致。要让某些轴在运行时才确定，必须显式声明。这里有个高频错误：新的 dynamo 路径（<code>dynamo=True</code>）用 <code>dynamic_shapes</code>，旧的 trace 路径（<code>dynamo=False</code>）用 <code>dynamic_axes</code>——<strong>两者不能混用</strong>，配错的表现是"我明明声明了动态，导出的还是固定 shape"。</p>
+
+<p>声明完 ONNX 侧只是第一步，TensorRT 侧还要配<strong>优化档位</strong>（optimization profile，给出 min / opt / max 三组 shape）。关键机制是：<strong>tactic 是针对 <code>opt</code> 那组 shape 实测选出来的</strong>，离 <code>opt</code> 越远的 shape 跑在并非为它挑选的 tactic 上。于是形成一个真实的权衡——档位开得太宽，各处都平庸；开得太窄，真实流量里超出范围的请求在运行时被直接拒。实践上的做法是先统计生产流量的 shape 分布，用几个档位分段覆盖，把 <code>opt</code> 放在各段的密集区。</p>
+
+<h3>坑三：opset 版本是一个三方交集</h3>
+
+<p><code>opset_version</code> 该怎么定，官方给的原则是：<strong>按你打算用来运行这个模型的运行时后端或编译器所支持的 opset 版本来设</strong>。这意味着可选范围是三个集合的交集——exporter 支持的范围、下游（TensorRT / ONNX Runtime）支持的范围、以及你的模型实际需要的算子在哪个版本才有。三者取交集之后往往只剩一两个可选值。</p>
+
+<p>还有一个容易忽略的风险：<strong>升级 opset 可能改变某个算子的语义或属性</strong>。同名算子在新版本里的行为、默认属性、支持的类型都可能变化，所以 opset 升级要按"改了模型"来验证，不能按"改了个参数"来对待。</p>
+
+<h3>坑四：精度漂移，最难发现的一类</h3>
+
+<p>转换链路上有好几处会合法地改变数值，累积起来就是漂移。它们全都不报错：</p>
+
+<table>
+<tr><th>漂移来源</th><th>机制</th><th>什么时候暴露</th></tr>
+<tr><td>导出期常量折叠</td><td><code>do_constant_folding</code> 在 exporter 的精度下预先求值子图，结果被写死成常量</td><td>与原模型逐层比对时才看得出</td></tr>
+<tr><td>层融合改变累加顺序</td><td>融合后的层内部累加顺序与逐层执行不同，浮点不满足结合律</td><td>逐层输出比对；单看端到端 logits 容易被掩盖</td></tr>
+<tr><td>FP16 下的溢出/下溢</td><td>Softmax 前的 reduce、方差计算、指数运算在 FP16 动态范围内可能溢出</td><td>特定输入（长序列、极端取值）才触发，抽样测不到</td></tr>
+<tr><td>INT8 标定集不代表真实分布</td><td>scale 是从标定集统计出来的；标定集偏窄则截断误差在真实流量上放大</td><td>上线后在长尾流量上掉点</td></tr>
+<tr><td>不同后端的累加类型不同</td><td>同一个 ONNX 算子在 ONNX Runtime 与 TensorRT 里可能用不同的中间累加精度</td><td>换后端对比时才发现</td></tr>
+<tr><td>Python 控制流被 trace 固化</td><td><code>forward</code> 里依赖输入值的分支（如 <code>if seq_len &gt; 512</code>）在 trace 时只保留走过的那条</td><td>换一类输入后行为静默变错，不报错</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景：余弦相似度 0.999，任务指标掉了 2.3 个点。</strong>某意图分类模型从 FP32 ONNX 转 FP16 engine 上线，转换后团队按惯例比对了 logits 的余弦相似度，200 条样本平均 0.9992，判定"数值无差异"就发了版。灰度一天后离线评估显示准确率从 94.1% 掉到 91.8%。定位过程是逐层导出中间输出比对：前面几十层的相对误差都在 1e-3 量级，到某个 Softmax 之前的 reduce 层突然出现若干 <code>inf</code>——该层在 FP16 下对长文本样本溢出了。把这一层用精度约束回 FP32（其余仍走 FP16）后准确率恢复到 94.0%，延迟只上升约 3%。<strong>教训有两条：一是余弦相似度对"少数样本严重错、多数样本正确"极不敏感，验收指标必须是任务级指标而不是张量相似度；二是精度验证的样本必须覆盖长尾（最长输入、极端取值、特殊字符），因为溢出恰恰只在长尾上发生。</strong>这里的百分比是构造的示例场景，用于说明排查方法。
+</div>
+
+<table>
+<tr><th>验证阶段</th><th>该验什么</th><th>怎么验</th></tr>
+<tr><td>导出后（ONNX 在手）</td><td>图结构完整、输入输出名与动态轴符合预期、能通过 ONNX 检查</td><td>用 ONNX 的检查工具跑一遍；打印输入输出签名核对动态轴</td></tr>
+<tr><td>ONNX 推理</td><td>ONNX Runtime 上的输出与 PyTorch 在同一批固定输入上是否对齐</td><td>固定一组黄金输入（含长尾样本），逐输出设容差比对</td></tr>
+<tr><td>engine 构建后</td><td>预期的融合是否发生、每层实际用了什么精度</td><td><code>kINFO</code> 日志 + engine inspector 看层结构与精度分配</td></tr>
+<tr><td>engine 推理</td><td>逐层中间输出与 ONNX 侧的相对误差；出现 <code>inf</code>/<code>nan</code> 的层</td><td>逐层输出比对工具；对可疑层做精度约束再复测</td></tr>
+<tr><td>上线前</td><td><strong>任务级指标</strong>（准确率、召回、生成质量），不是张量相似度</td><td>用完整评估集跑离线评估，与 FP32 基线对齐；容差按输出分别定义</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>固定一组黄金输入（含最长、最短、极端取值样本）贯穿全链路比对</li>
+<li>动态轴按新旧路径分别用 <code>dynamic_shapes</code> 或 <code>dynamic_axes</code>，不混用</li>
+<li>先统计生产 shape 分布，再定优化档位，把 <code>opt</code> 放在密集区</li>
+<li>opset 版本取"exporter × 下游 × 模型需求"的交集，并锁进构建配置</li>
+<li>构建后用 <code>kINFO</code> 日志核对预期融合与每层精度是否落地</li>
+<li>验收用任务级指标，容差按输出分别定义</li>
+<li>engine 按 (机型, TRT 版本, 精度, 档位) 入产物仓库，灰度期新旧都留着</li>
+<li>构建时独占 GPU、锁时钟，并用 timing cache 稳定结果</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要把"导出没报错"当成转换成功——后面还有两道独立关卡</li>
+<li>不要用 logits 余弦相似度当精度验收指标，它掩盖少数样本的严重错误</li>
+<li>不要在 <code>forward</code> 里留依赖输入值的 Python 分支后直接 trace 导出</li>
+<li>不要把优化档位开成一个覆盖全部可能长度的超宽范围</li>
+<li>不要把 engine 当模型权重文件跨机型、跨版本分发</li>
+<li>不要加载来源不可信的 engine——那等于执行不可信原生代码</li>
+<li>不要指望版本兼容运行时是免费的，它用性能换弹性</li>
+<li>不要在标定集里只放"干净好看"的样本</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+ONNX 的坑几乎全部来自一个错觉：以为它是一种"保存格式"。它不是，它是一次<strong>翻译</strong>——有源语言的表达能力、目标语言的接受能力、还有译者对上下文（shape、精度、控制流）的假设。翻译能顺利产出一份文件，完全不代表读者能读懂，更不代表意思没变。所以导出、消费、精度三道关必须各自设验收。
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>为什么 TensorRT 要先 build 再跑，这样换来了什么？</summary>
+<div class="answer">
+<p>因为很多优化只有在能看到整张图、并且知道目标硬件是哪块卡的时候才做得出来。TensorRT 的工作分两段：构建期由 builder 编译网络、为目标 GPU 上每一层挑出最快的可用 kernel，产出序列化的 engine；运行期由 runtime 载入 engine 执行。构建期换来的是四类能力：跨层融合（把多层合并成一层，并启用那些创建网络时外部 API 触达不到的内部选项）、常量折叠、按实测计时选 kernel（不是靠启发式猜，而是在你这块卡上真跑一遍）、以及统一的显存规划与精度分配。同时运行期的 dispatch 决策被彻底消掉。付出的代价是构建时间（分钟到小时级）、shape 灵活性（必须预先声明优化档位）、可调试性（engine 内部是黑盒）、以及产物与环境强绑定。所以这是一笔明确的交易，不是单方面的性能提升。</p>
+</div>
+</details>
+
+<details>
+<summary>engine 为什么不能拷到另一台机器上用？</summary>
+<div class="answer">
+<p>TensorRT 文档的原话是：默认情况下，序列化的 engine 只保证在与序列化时相同的 OS、CPU 架构、GPU 型号和 TensorRT 版本下正确工作。原因在于 engine 里装的不是权重数据，而是<strong>已经为特定架构编译好的 CUDA tactic、plugin 调用指针和主机侧状态</strong>——它更像一个编译好的可执行文件而不是一个模型文件。你不会指望为 x86 编译的二进制在 ARM 上跑，engine 也是同理。官方提供了两条放宽路径：Hardware Compatibility 用放弃架构专属优化换取跨 GPU 型号可用；Version Compatibility 配合 lean runtime（只含运行版本兼容 engine 所需代码）或 dispatch runtime（能加载更旧版本的 lean runtime）换取跨 TensorRT 版本可用。但这两条都要付性能费用——官方明确说 lean runtime 包含的算子实现比默认运行时少，而 TensorRT 是构建期选实现的，所以为 lean runtime 构建的 engine 可能更慢。OS 和 CPU 架构变化则没有缓解手段，只能在目标平台重建。</p>
+</div>
+</details>
+
+<details>
+<summary>同一份模型两次构建 engine，性能不一样正常吗？</summary>
+<div class="answer">
+<p>正常，而且官方明确解释过原因。builder 是通过<strong>实测计时</strong>来找每层最快的 kernel 的，而计时会受噪声影响——GPU 上有其他任务在跑、GPU 时钟频率波动都会干扰。文档原话是：计时噪声意味着同一个实现在连续几次构建里可能被不同地选中。所以两次构建可能给某些层选出不同的 tactic，进而导致端到端延迟有差异。要让构建可复现，有三层手段：一是把构建当受控实验对待，独占 GPU 并锁定时钟频率；二是用 <code>ITimingCache</code> 复用逐层计时结果（注意缓存内容与目标设备、CUDA 版本、TensorRT 版本以及会改变层实现的 BuilderConfig 参数绑定）；三是用 Editable Timing Cache——首次构建时打开 <code>kEDITABLE_TIMING_CACHE</code> 并保留日志与缓存，日志会给出每层的可用 tactic 与选中项，之后用 <code>ITimingCache::update</code> 为指定层钉死一个 tactic。如果 CI 里有延迟门禁，第一条几乎是必须做的，否则门禁会变成抽奖。</p>
+</div>
+</details>
+
+<details>
+<summary>INT8 calibration 到底在算什么，为什么标定集这么重要？</summary>
+<div class="answer">
+<p>它在为每个激活张量求一个缩放因子（scale），把浮点范围映射到 INT8 仅有的 256 个可表示值上。TensorRT 文档把难点讲得很清楚：选 scale 不是精确科学，它要在两类误差间平衡——离散化误差（可表示范围越大，每个量化格子代表的区间越宽）和截断误差（范围外的值被夹到边界）。范围放宽则前者涨，收紧则后者涨，没有唯一最优解，所以 TensorRT 提供了多个用不同方式算 scale 的 calibrator。<code>IInt8EntropyCalibrator2</code> 是官方推荐的熵标定器，它优化量化后张量的信息论内容、通常会抑制离群值，DLA 场景必须用它，对 CNN 类网络官方也明确推荐；<code>IInt8MinMaxCalibrator</code> 直接取观测最小最大值，对离群值敏感。标定集重要，是因为 scale 完全由标定集的统计量决定：标定集偏窄，真实流量里超出范围的值就被截断；标定集里全是"干净好看"的样本，长尾流量上就会掉点。还有一条工程细节：只要标定发生在层融合之前（用上述两个 calibrator 或设 <code>kCALIBRATE_BEFORE_FUSION</code>），标定缓存可以跨设备复用，因为融合在不同平台上不保证一致；但标定缓存一般不能跨 TensorRT 版本复用。</p>
+</div>
+</details>
+
+<details>
+<summary>TensorRT 和 TensorRT-LLM 是什么关系，后者补了什么？</summary>
+<div class="answer">
+<p>TensorRT 是通用推理编译器与运行时，它的假设是"一次前向 = 一次完整推理、请求无状态、batch 同进同出"。自回归 LLM 把这三条全部打破：序列长度每步都在增长、每个请求持有跨步的 KV 状态、请求在不同步到达和结束使 batch 成分每步都变。TensorRT-LLM 就是为补这三条而生的，主要补了四件事。第一是 in-flight batching（官方也称 continuous batching 或 iteration-level batching），让处于 context 阶段的序列与处于 generation 阶段的序列在同一次前向里一起处理；出于效率原因它要求输入张量是 packed 的、无 padding。第二是 chunked context，把预填充切成块与解码 token 一起组批，从而解除输入长度限制；启用它需要同时开 FMHA paged KV cache，且除最后一块外每块大小必须是 KV cache 块大小的整数倍。第三是 paged KV cache，由 cache manager 从块池分配、跟踪序列并回收，支持块复用即前缀复用；TensorRT-LLM 里每个 Transformer 层各有一份 KV cache。第四是两级调度器（CapacityScheduler 判断资源装不装得下，MicroBatchScheduler 挑这一步跑哪些）加上张量/流水线/专家并行。值得注意的是，加了这一整套之后它已经是一个完整的 LLM 运行时，而不只是 TensorRT 的一层封装。</p>
+</div>
+</details>
+
+<details>
+<summary>编译式方案和 vLLM 这类运行时调度式方案该怎么共存？</summary>
+<div class="answer">
+<p>先认清两者优化的不是同一个量：编译式主攻单次前向的执行时间（融合、tactic 选优、显存规划、精度分配），运行时调度式主攻 GPU 上有效工作的占比（每步谁进 batch、KV 怎么分页复用、抢占排队怎么排）。端到端产能大致是这两个因子的乘积，所以补短板才有意义——调度都没做好时单步再快也填不满 GPU，调度已经排满时单步效率就直接折成吞吐。而且这几年两条路线在互相靠近：编译式一侧补了 in-flight batching、paged KV、两级调度器（本属运行时的活），运行时调度式一侧补了图捕获融合、CUDA Graph、手写融合 kernel（本属编译期的活），能力集大幅重叠。共存有四种形态：分层共存（编译式引擎当后端，服务框架管调度与多模型灰度）、分流量共存（结构冻结的主力模型走编译式，迭代频繁的实验模型走运行时调度式，共用网关与观测）、分阶段共存（预填充与解码分离部署时两侧各选各的实现，对齐 KV 传递协议）、以及影子共存（同一模型两条实现并行，用统一压测口径比延迟分位数与精度）。具体框架的功能矩阵对比见 DP05，本卡不重复。</p>
+</div>
+</details>
+
+<details>
+<summary>ONNX 导出没报错，为什么 engine 还是构建不出来？</summary>
+<div class="answer">
+<p>因为"能导出"和"能被消费"是两套独立的支持列表，中间还隔着形状与类型推断。第一道关是 exporter 能不能发出这个算子，失败长相是 <code>UnsupportedOperatorError: Exporting the operator 'aten::xxx' to ONNX opset version N is not supported</code>。第二道关是下游能不能构建：TensorRT 和 ONNX Runtime 各有自己的算子支持范围与 opset 支持范围，exporter 成功写出的图，下游未必认——这一关的失败在构建 engine 时才暴露，可能提示不支持某算子或需要 plugin。还有一种更阴的情况：你给不支持的算子注册了自定义符号函数，导出确实不报错了，但产出的图在运行时挂在形状/类型推断上，报出类似 <code>[ShapeInferenceError] Input 0 expected to have type but instead is null</code> 的错。PyTorch 文档对此的建议是注册自定义符号函数时用 <code>setType</code> 补上形状推断，否则导出图在某些情况下会有错误的形状推断。所以正确心态是：导出成功只说明生成了一个文件，消费关和精度关必须各自设独立验证。</p>
+</div>
+</details>
+
+<details>
+<summary>动态 shape 该怎么正确处理？</summary>
+<div class="answer">
+<p>要在两个地方分别声明，而且 ONNX 侧有两套不能混用的 API。PyTorch 的 tracer 记录的是示例输入的 shape，默认导出的模型所有输入输出 shape 与 <code>args</code> 完全一致，所以必须显式声明动态轴：新的 dynamo 路径（<code>dynamo=True</code>）用 <code>dynamic_shapes</code>，旧的 trace 路径（<code>dynamo=False</code>）用 <code>dynamic_axes</code>，配错的典型症状是"明明声明了动态，导出的还是固定 shape"。ONNX 侧声明完之后，TensorRT 侧还要配优化档位，给出 min / opt / max 三组 shape。这里有个关键机制：tactic 是针对 <code>opt</code> 那组 shape 实测选出来的，离 <code>opt</code> 越远的 shape 就跑在并非为它挑选的 tactic 上。于是形成一个真实权衡——档位开得太宽，所有 shape 都平庸；开得太窄，超出范围的真实请求在运行时被直接拒。实践做法是先统计生产流量的 shape 分布，用几个档位分段覆盖，每段的 <code>opt</code> 放在该段的密集区。另外要检查 <code>forward</code> 里有没有依赖输入值的 Python 分支（比如按序列长度走不同路径），trace 会把走过的那一条固化下来，换一类输入后行为静默变错且不报任何错。</p>
+</div>
+</details>
+
+<details>
+<summary>精度漂移怎么排查，验收该看什么指标？</summary>
+<div class="answer">
+<p>转换链路上有六处会合法地改变数值，且都不报错：导出期常量折叠在 exporter 精度下预先求值子图；层融合改变了累加顺序而浮点不满足结合律；FP16 下 Softmax 前的 reduce、方差、指数运算可能溢出；INT8 标定集不代表真实分布导致截断误差在长尾放大；同一个 ONNX 算子在不同后端可能用不同的中间累加精度；以及 Python 控制流被 trace 固化。排查方法是逐层比对：固定一组黄金输入，把 PyTorch、ONNX Runtime、TensorRT engine 的逐层中间输出拉出来算相对误差，找第一个误差跳变或出现 <code>inf</code>/<code>nan</code> 的层，对该层做精度约束（其余层保持低精度）再复测。验收指标这里有个关键陷阱：<strong>不要用 logits 的余弦相似度</strong>——它对"少数样本严重错、多数样本正确"极不敏感，可能出现平均相似度 0.999 而下游任务准确率掉两三个点的情况。验收必须用任务级指标（准确率、召回、生成质量），在完整评估集上与 FP32 基线对齐，容差按输出分别定义。同时精度验证的样本必须覆盖长尾（最长输入、极端取值、特殊字符），因为 FP16 溢出这类问题恰恰只在长尾上触发。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; TensorRT 与推理编译栈 &middot; DP28</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

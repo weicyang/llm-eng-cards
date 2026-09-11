@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DP27 · 算子融合与 Kernel 优化实战</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#a8a29e;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、算子边界在哪：省下的是 HBM 往返，不是 FLOPs</a>
+<a href="#s2">二、三类融合：链式、epilogue、算法重写</a>
+<a href="#s3">三、编译栈的融合能力边界</a>
+<a href="#s4">四、手写 kernel 的性能账</a>
+<a href="#s5">五、怎么测：Nsight Compute 与"改了但没变快"的排查顺序</a>
+<a href="#s6">六、什么时候不该手写</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>DP27 · 算子融合与 Kernel 优化实战</h1>
+<p class="subtitle">算术强度与访存边界 / element-wise 链式融合 / GEMM epilogue / Inductor 与 graph break / occupancy 与寄存器压力 / bank conflict / Nsight Compute 排查顺序 / 手写 kernel 的收益上限</p>
+
+<div class="intuition-box">
+融合几乎从不让 GPU 少算一次乘加。它让同一批数据少在显存和芯片之间跑几趟。这句话是全卡的地基：一旦某段计算已经把算力打满，融合就没什么可省的；反过来，只要一段计算的时间主要花在搬数据，融合就是最便宜的加速手段——而且它不改数值结果。
+</div>
+
+<!-- ==================== 一、算子边界 ==================== -->
+<div class="section" id="s1">
+<h2>一、算子边界在哪：省下的是 HBM 往返，不是 FLOPs</h2>
+
+<p>"融合了 13 个算子，快了一倍"这句话经常被理解成"少算了一半"。事实完全不是。融合前后的浮点运算次数<strong>逐位相同</strong>，某些情况下融合版本甚至<strong>多算</strong>（FlashAttention 的反向就靠重算换访存）。要看懂融合，得先看清"算子边界"在物理上到底是什么东西。</p>
+
+<h3>算子边界就是一次强制的显存往返</h3>
+
+<p>GPU 上一次 kernel 调用的生命周期是固定的三段：从 <span class="term">HBM</span>（High Bandwidth Memory，显卡上那块几十 GB、<code>nvidia-smi</code> 里显示的显存）把输入读进来，在流处理器里算，再把输出写回 HBM。在 PyTorch 这类 eager 框架里，每个算子都要返回一个真实存在的 Tensor，这个"返回值必须落在 HBM 里"的契约，就是算子边界的全部物理含义。</p>
+
+<p>问题在于 HBM 比片上的 <span class="term">SRAM</span>（Static RAM，指寄存器与共享内存所在的片上高速存储，容量只有几十到几百 KB，但带宽比 HBM 高一个数量级）慢得多。Dao 等人在 FlashAttention 论文里给的 A100 数字是：片上 SRAM 约 19 TB/s，而 HBM 约 1.5–2.0 TB/s。更要紧的是算力和带宽的比值——现代 GPU 每从 HBM 读进 1 个字节，能配套做上百次浮点运算。于是一个判据自然浮现出来：<span class="term">算术强度</span>（arithmetic intensity，一段计算的 FLOP 数除以它必须搬运的字节数）如果远低于这个比值，这段计算就不可能吃满算力，它一定在等内存。</p>
+
+<div class="formula">算术强度 = FLOPs ÷ 必须搬运的字节数 &nbsp;&nbsp;vs&nbsp;&nbsp; 硬件比值 = 峰值 FLOPS ÷ HBM 带宽</div>
+
+<p>把这个尺子往逐元素算子上一量，结论相当刺眼。Horace He 在《Making Deep Learning Go Brrrr From First Principles》里算过：一个一元逐元素算子（比如 <code>torch.cos()</code>）对每个元素只做 1 次浮点运算，却要为它读 4 字节、写 4 字节（FP32），算术强度是 <strong>0.125 FLOP/byte</strong>——比硬件比值低两三个数量级。这类算子的耗时几乎全部是搬运时间，计算单元在旁边闲着。</p>
+
+<h3>三个瓶颈区间，决定了优化该往哪走</h3>
+
+<p>同一篇文章提出的三分法是所有 kernel 级优化的分诊入口：一段计算要么受算力限制，要么受带宽限制，要么受"框架和启动的固定开销"限制。<strong>三种情况的解法完全不同，而融合只对后两种有效。</strong></p>
+
+<table>
+<tr><th>瓶颈类型</th><th>时间花在哪</th><th>典型算子</th><th>融合能带来什么</th><th>该用的其他手段</th></tr>
+<tr><td><strong>compute-bound</strong>（算力受限）</td><td>计算单元真的在满负荷做乘加</td><td>大 GEMM、卷积、长序列的注意力主体</td><td>基本没有——数据本来就被高度复用</td><td>换更低精度、上 Tensor Core、换更好的分块策略</td></tr>
+<tr><td><strong>memory-bound</strong>（带宽受限）</td><td>等数据从 HBM 到片上</td><td>激活函数、LayerNorm/RMSNorm、残差相加、逐元素缩放、类型转换</td><td><strong>最大收益区</strong>：直接按省下的往返次数成比例加速</td><td>提高精度密度（FP16/BF16 减少字节）、改数据布局</td></tr>
+<tr><td><strong>overhead-bound</strong>（固定开销受限）</td><td>Python 调度、kernel launch、参数打包</td><td>大量微小算子、小 batch 解码步</td><td>有效：算子数变少即启动次数变少</td><td>CUDA Graph 捕获、批量化、增大每 kernel 的工作量</td></tr>
+</table>
+
+<p>这里有一个反直觉但极其重要的推论：<strong>非矩阵乘算子在 FLOP 账本里几乎不占份额，却能吃掉相当可观的运行时间</strong>。BERT 这类模型里 LayerNorm 和激活函数只占总 FLOPs 的千分之几，但它们是带宽受限的，运行时占比远高于 FLOPs 占比。这就是为什么"融合一堆看起来不起眼的小算子"能撬动端到端性能——你砍掉的不是它们的计算，是它们的搬运。</p>
+
+<h3>一条链式融合的账，逐字节算一遍</h3>
+
+<p>用最小的例子把账算清楚：<code>x.cos().cos()</code>。</p>
+
+<div class="arch-diagram">              未融合 vs 融合：同样的 FLOPs，一半的 HBM 流量
+
+【未融合：两次 kernel 调用】
+  HBM ──读 x──► [kernel A: cos]  ──写 tmp──► HBM
+  HBM ──读 tmp─► [kernel B: cos] ──写 y────► HBM
+  HBM 访问次数：4（读 x、写 tmp、读 tmp、写 y）
+  FLOPs：2N     启动次数：2
+
+【融合：一次 kernel 调用】
+  HBM ──读 x──► [kernel AB: cos → 中间值留在寄存器 → cos] ──写 y──► HBM
+  HBM 访问次数：2（读 x、写 y）
+  FLOPs：2N     启动次数：1
+       ▲
+       └── 计算量一字不差，搬运量减半 ⇒ 带宽受限时约 2× 加速
+
+★ 关键：tmp 之所以必须落 HBM，不是因为算法需要它，
+  而是因为"算子必须返回一个 Tensor"这个框架契约需要它。
+  融合的全部工作，就是识别出"没有第二个消费者"的中间结果并取消它的落地。</div>
+
+<p>这个账也直接给出了融合的<strong>收益上限公式</strong>：融合最多只能拿走"中间结果的 HBM 流量"这部分时间。如果一段子图里中间结果的搬运只占该段耗时的 30%，那么无论融合做得多漂亮，这段最多快 30%；如果这段子图本身只占整个前向的 5%，端到端最多快 1.5%。<strong>先量这两个比例，再决定要不要动手</strong>，是本卡后面几节反复回到的纪律。</p>
+
+<div class="intuition-box">
+把每个算子想成一个只会"从仓库取料、加工、送回仓库"的工位。工位之间的搬运车才是瓶颈，加工本身很快。融合不是让工人手更快，而是把相邻几道工序挪到同一张案板上，让半成品别再来回坐车。仓库（HBM）和案板（片上 SRAM）之间的车程差一个数量级，这就是全部收益的来源。
+</div>
+
+<p>计算图与算子的基础概念、以及编译器视角下的图级优化，在 <a href="./llm_neural_network_optimization.html">DP18 · 神经网络与大模型性能优化</a> 里已经讲过，本卡不重复；显存层次、SM 结构、warp 与 occupancy 的硬件定义见 <a href="./gpu_execution_model.html">DP25 · GPU 执行模型与存储层次</a>；矩阵乘本身的分块与数据复用策略见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+</div>
+
+<!-- ==================== 二、三类融合 ==================== -->
+<div class="section" id="s2">
+<h2>二、三类融合：链式、epilogue、算法重写</h2>
+
+<p>"算子融合"是一个被过度压缩的词，底下至少有三种难度和收益完全不同的做法。分不清它们，就会出现两类典型误判：明明编译器能自动搞定的事去手写，或者明明必须重写算法的事指望编译器。</p>
+
+<h3>第一类：element-wise 链式融合——编译器的主场</h3>
+
+<p>把一串逐元素算子接成一个 kernel，中间值只在寄存器里传递。TorchInductor 官方文档把这条称作"inductor 做的最重要的一项优化"。它有三个常见变体，方向不一样：</p>
+
+<ul>
+<li><strong>纵向融合</strong>（vertical / pointwise fusion）：生产者-消费者关系的逐元素链，就是上一节 <code>cos().cos()</code> 的形态，省的是中间结果的往返。</li>
+<li><strong>规约融合</strong>（reduction fusion）：把逐元素的生产者吃进一个规约算子里。<code>(x * scale).sum()</code> 融合后不需要先物化 <code>x * scale</code>。规约只能当"汇点"——它可以吸收前面的逐元素算子，但不能反过来把自己融进后面的算子。</li>
+<li><strong>横向融合</strong>（horizontal / combo kernel）：把彼此独立、没有数据依赖的若干小 kernel 合成一次启动。这里省的<strong>不是访存而是启动开销</strong>，所以它专治 overhead-bound，在小 batch 解码这类场景才明显。TorchInductor 里由 <code>config.combo_kernels</code> 控制。</li>
+</ul>
+
+<h3>第二类：GEMM + epilogue 融合——"顺手做掉"</h3>
+
+<p><span class="term">epilogue 融合</span>指的是把矩阵乘之后紧跟的逐元素操作，塞进矩阵乘 kernel 的收尾阶段完成。这类融合的逻辑和第一类不同，值得单独理解：矩阵乘本身是 compute-bound 的，它的输出分块<strong>本来就在寄存器或共享内存里</strong>，而且<strong>本来就要写一次 HBM</strong>。既然如此，在写出去之前顺手给这个分块加上 bias、过一遍 GELU、再乘一个量化 scale，额外成本接近于零——省下的是"再读一遍输出、再写一遍输出"这一整趟往返。</p>
+
+<p>反方向叫 <strong>prologue 融合</strong>：在把权重加载进片上时顺手做反量化。INT4/INT8 权重量化推理之所以能真的变快而不是先解压成 FP16 再算，靠的就是这个——这部分与 <a href="./quantization_guide.html">DP13 · 模型量化</a> 的精度侧讨论互补。</p>
+
+<div class="arch-diagram">          GEMM 输出分块的生命周期：epilogue 融合塞在哪一步
+
+  ┌──────────────── 一个 GEMM kernel ────────────────┐
+  │                                                   │
+  │  [prologue] 从 HBM 载入 A/B 分块 → 共享内存        │
+  │      └─ 可顺手做：反量化、类型转换、转置            │
+  │                     │                             │
+  │  [main loop] 沿 K 维累加，累加器常驻寄存器          │
+  │      └─ 这里是 compute-bound，融合帮不上忙          │
+  │                     │                             │
+  │  [epilogue] 累加器还在寄存器里，此刻可顺手做：       │
+  │      + bias      + 残差相加     + GELU / SiLU      │
+  │      + scale     + clamp        + 转 FP8/INT8      │
+  │                     │                             │
+  │              一次性写回 HBM                        │
+  └───────────────────────────────────────────────────┘
+
+  不融合的代价：GEMM 写出 M×N → 逐元素 kernel 再读 M×N、写 M×N
+                = 多出 2×M×N 的 HBM 流量，纯浪费
+
+  ✗ 但不是什么都能当 epilogue：
+    需要跨分块规约的操作（例如对整行做 softmax）拿不到全行数据，
+    只能另起一个 kernel，或者进入第三类——重写算法。</div>
+
+<table>
+<tr><th>能当 epilogue 融进 GEMM</th><th>为什么可以</th><th>不能当 epilogue</th><th>为什么不行</th></tr>
+<tr><td>bias / 残差相加</td><td>逐元素，只需要当前分块和同位置的另一个张量</td><td>对输出整行做 softmax</td><td>归一化因子依赖全行，单个分块看不全</td></tr>
+<tr><td>GELU / SiLU / ReLU / clamp</td><td>逐元素纯函数</td><td>LayerNorm（对输出做）</td><td>需要全行的均值与方差，是跨分块规约</td></tr>
+<tr><td>输出量化到 FP8 / INT8</td><td>逐元素乘 scale 加取整</td><td>跨 batch 的排序 / top-k</td><td>需要全局比较，分块内无法定序</td></tr>
+<tr><td>转置 / reshape（布局变换）</td><td>只改写出地址，不改值</td><td>下一个 GEMM</td><td>两个矩阵乘无法在同一 kernel 里流水（分块策略冲突）</td></tr>
+</table>
+
+<h3>第三类：整体算法重写——FlashAttention 是极致案例</h3>
+
+<p>当"不落地中间结果"这件事被算法本身阻挡时，机械融合就走到尽头，必须换算法。注意力就是最典型的一例：标准实现要算出 N×N 的分数矩阵、对它按行做 softmax、再乘 V。softmax 把一整行耦合在了一起——不看完全行就不知道归一化因子，所以你没法简单地把三个 kernel 串起来让中间值留在片上。</p>
+
+<p><span class="term">FlashAttention</span>（Dao 等，NeurIPS 2022）的做法是把算法结构改掉：分块遍历 K/V，配合<strong>在线 softmax</strong>——维护逐行的运行最大值与运行和，边走边重新缩放已累积的输出，从而在任何时刻都不需要完整的一行。反向传播不再读回巨大的中间矩阵，而是存下 softmax 的归一化因子、在片上<strong>重算</strong>。整套操作被写进一个 CUDA kernel，N×N 矩阵从头到尾没有在 HBM 里出现过。</p>
+
+<div class="highlight">
+<strong>来源引用 · FlashAttention 论文（Dao et al., NeurIPS 2022）：</strong>论文报告注意力计算本身获得最高 <strong>7.6×</strong> 加速（GPT-2 上，对比 PyTorch 实现）；端到端 GPT-2（序列长 1K）训练加速 <strong>3×</strong>；BERT-large（序列长 512）比 MLPerf 1.1 训练速度记录快 <strong>15%</strong>；显存占用从序列长度的二次变为<strong>线性</strong>。最值得记住的一点是：这套算法输出的是<strong>精确注意力</strong>而非近似，FLOPs 与标准实现同阶（O(N²d)），反向因为重算甚至更多——它快，纯粹是因为 HBM 访问次数被大幅削减。论文同时指出，此前五年大量"降 FLOPs 的近似注意力"在真实硬件上并没有换来 wall-clock 加速，因为它们优化的不是绑定项。注意力机制本身的原理与各类高效变体见 <a href="../transformer/efficient_attention.html">T20 · 高效注意力</a>，本卡只把它当作融合思路的上限案例引用。
+</div>
+
+<table>
+<tr><th>融合类型</th><th>改动范围</th><th>收益来源</th><th>谁能自动做</th><th>主要风险</th></tr>
+<tr><td>element-wise 链式（纵向）</td><td>零——纯编译器行为</td><td>取消中间结果的 HBM 往返</td><td>Inductor / TensorRT / TVM 都能</td><td>被 graph break 打断，收益静默消失</td></tr>
+<tr><td>横向（combo kernel）</td><td>零到少量配置</td><td>减少 kernel 启动次数</td><td>Inductor（需开配置）</td><td>只在 overhead-bound 时有效，否则白忙</td></tr>
+<tr><td>GEMM + epilogue</td><td>零（用库）到中（自己写 epilogue）</td><td>省掉输出张量的一整趟读+写</td><td>TensorRT 按模式表融、CUTLASS 提供 epilogue 接口</td><td>模式不匹配就不融，且是否融合随精度与架构变化</td></tr>
+<tr><td>prologue（权重反量化）</td><td>中——通常靠现成量化 kernel</td><td>省掉解压后的中间权重张量</td><td>量化推理库内置</td><td>数值口径要与量化方案严格对齐</td></tr>
+<tr><td>整体算法重写</td><td>大——要重新设计计算顺序与数值稳定性</td><td>把二次的中间矩阵彻底消灭</td><td><strong>没有编译器能自动做</strong></td><td>数值正确性、shape 覆盖、反向实现全部自己兜</td></tr>
+</table>
+
+<div class="intuition-box">
+三类融合的难度差别，用"做菜"打个比方：第一类是把切、拌、调味挪到同一块案板上，谁都会；第二类是炒菜起锅前顺手撒盐——因为锅本来就在手上，几乎不花时间；第三类是重新设计一道菜的做法，让某个必须冷藏的半成品干脆不存在。前两类可以交给工具，第三类只能靠人重新想。
+</div>
+</div>
+
+<!-- ==================== 三、编译栈边界 ==================== -->
+<div class="section" id="s3">
+<h2>三、编译栈的融合能力边界</h2>
+
+<p>三条主流编译路径都会做融合，但它们"能融什么"由各自的中间表示和融合规则严格限定。搞清边界的价值很实在：知道边界在哪，才能判断某段代码没变快是"编译器该融但被挡住了"，还是"编译器结构上就融不了"——这两种情况的处理方式完全相反。</p>
+
+<h3><code>torch.compile</code> / TorchInductor：规则清楚，但怕被打断</h3>
+
+<p>它的流水线是四段：TorchDynamo 在字节码层面抓取计算图 → AOTAutograd 顺带把反向图也 trace 出来 → TorchInductor 降级到自己的 IR 并在<strong>调度阶段</strong>决定融合 → 生成代码（GPU 上生成 OpenAI Triton kernel，CPU 上生成 C++）。融合的核心判据是调度器里的 <code>can_fuse(node1, node2)</code>：一次融合必须<strong>合法</strong>（不在依赖图里引入环）且<strong>有益</strong>（真的减少了开销）。它支持的融合种类与上一节对应：逐元素融合（要求迭代域 <code>numel</code> 相同）、规约融合（共享输入与规约维）、混序规约（对同一张量不同维度的规约，仅 Triton 后端支持）、以及横向的 combo kernel。融合完成后 Inductor 还会自动尝试 CUDA Graph 捕获，把启动开销一并干掉。</p>
+
+<p>这条路径最常见的失效模式不是"融得不好"，而是 <span class="term">graph break</span>（图断裂：Dynamo 遇到无法 trace 的东西时，把已抓到的部分先编译，剩下的退回 eager 执行）。官方 FAQ 直说：<strong>用了 dynamo 却没看到期望加速，主要原因就是过多的 graph break。</strong>它的杀伤力有两层，第二层经常被忽略：</p>
+
+<ol>
+<li><strong>断点处的代码退回 eager</strong>——这部分只是回到原来的速度，损失有限。</li>
+<li><strong>断点把编译区域切成了碎片</strong>——横跨断点的那些融合机会全部消失，而且整段不再满足 CUDA Graph 捕获条件。真正的损失发生在"接缝"上：本该留在寄存器里的中间张量，现在要多走两趟 HBM。</li>
+</ol>
+
+<div class="arch-diagram">        graph break 为什么比"这行慢一点"严重得多
+
+【无断裂：一个编译区域】
+  Dynamo ──► 一整张图 ──► Inductor 调度 ──► 融合成 3 个 kernel
+                                            ──► CUDA Graph 捕获 ✅
+  中间张量：只有 3 个真正落 HBM
+
+【有一处断裂：例如中间调用了 .item() 或未注册的自定义算子】
+  Dynamo ──► 图 1 ──►│ eager 段 │──► 图 2
+                     │  断点     │
+  Inductor 只能分别调度图 1、图 2：
+    · 跨断点的融合机会 → 全部作废
+    · 断点两侧必须各自把边界张量物化到 HBM → 多出读+写
+    · CUDA Graph 捕获资格 → 丧失（整段回到逐 kernel 启动）
+
+  诊断：torch._dynamo.explain(fn)(*inputs)  → 列出每个断点与原因
+  卡死：torch.compile(fn, fullgraph=True)   → 遇到第一个断点就报错，
+        用在 CI 里当门禁，防止有人无声地把断点提交进主干</div>
+
+<table>
+<tr><th>graph break 常见触发</th><th>为什么 Dynamo 过不去</th><th>处理方向</th></tr>
+<tr><td>数据相关的控制流（<code>if x.sum() &gt; 0</code>、<code>.item()</code>、<code>.tolist()</code>）</td><td>分支走向取决于张量的<strong>值</strong>，编译期不可知</td><td>改成掩码/<code>torch.where</code> 的无分支写法；或把该判断挪出热路径</td></tr>
+<tr><td>用 <code>torch.library.custom_op</code> 注册的自定义 kernel</td><td><strong>设计如此</strong>：Dynamo 把它当不透明边界，不会去 trace C++ 扩展</td><td>这是正确的集成方式，但要接受它必然形成边界——所以自定义 kernel 的收益必须大于它摧毁的融合</td></tr>
+<tr><td>对 view 做原地操作、复杂 aliasing</td><td>别名关系无法安全建模，还会破坏 CUDA Graph 捕获</td><td>改成 out-of-place；先用 <code>fullgraph=True</code> 把 aliasing 错误提前暴露</td></tr>
+<tr><td>不支持的 Python 结构、打印与日志、外部库调用</td><td>有副作用或超出 trace 能力</td><td>移出热路径，或用 <code>torch.compiler.disable()</code> 显式排除该区域</td></tr>
+<tr><td>动态 shape 反复变化</td><td>触发重复编译与守卫失效，表现为"每次都慢"</td><td>对齐/分桶输入尺寸；确认动态维声明正确</td></tr>
+</table>
+
+<div class="highlight">
+<strong>示例场景：一个断点吃掉了大半收益。</strong>某团队给自研的 RMSNorm + SiLU 段写了 CUDA 扩展，按官方推荐用 <code>torch.library.custom_op</code> 注册，随后在整个 decoder 层上开 <code>torch.compile</code>。压测发现单步耗时几乎没变。用 <code>torch._dynamo.explain</code> 一看，自定义算子在每层中间形成一个不透明边界，把原本一整张的 decoder 图切成了前后两段；前后两段各自要把边界张量物化回 HBM，而这些张量原本会被 Inductor 融进相邻的逐元素链里，同时整层丧失 CUDA Graph 捕获资格、退回逐 kernel 启动。把自定义算子撤掉、让 Inductor 自己生成融合 kernel 后，单步耗时明显下降。<strong>结论不是"别写自定义算子"，而是：自定义算子必须自己赚回它摧毁的那部分融合，否则净收益为负。</strong>具体幅度强依赖模型结构、序列长度与 PyTorch 版本，此处只给可复现的排查链路，不给可搬用的数字。
+</div>
+
+<h3>TensorRT：按模式表融合，融不融还取决于精度和卡型</h3>
+
+<p>TensorRT 在<strong>构建期</strong>做融合，官方文档描述得很直接：构建阶段的第一件事就是"尽可能把层融掉"，方式是<strong>检测受支持的操作模式，把多层合并成一个带内部选项集的层</strong>。它维护一份公开的层融合目录（Layer Fusion Catalog），里面每一条都带约束——这几条约束特别能说明问题：</p>
+
+<ul>
+<li><code>Conv → ReLU</code>：激活必须正好是 ReLU；</li>
+<li><code>Conv → GELU</code>：输入输出精度必须相同且同为 FP16 或 INT8，且需要 Turing 及更新架构；</li>
+<li>深度可分离卷积融合：两个卷积精度必须都是 INT8，且计算能力 ≥ 7.2。</li>
+</ul>
+
+<p>也就是说，<strong>同一张图在不同卡、不同精度下会融出不同的结果</strong>——这直接解释了"换了张卡性能对不上"这类现象。TensorRT 的融合决策可以通过 <code>kINFO</code> 级日志和 engine inspector 查看，这是 TensorRT 侧唯一靠得住的核对方式。它的能力边界也很清晰：目录里没有的模式就不融，需要新模式只能写 plugin（而 plugin 本身又成了一个优化屏障）。构建流程的完整拆解、tactic 自动选优与 engine 不可移植性，见 <a href="./tensorrt_compilation_stack.html">DP28 · TensorRT 与推理编译栈</a>。</p>
+
+<h3>TVM：把算子按"可融合类型"分类，规则可以完整背下来</h3>
+
+<p>TVM 的做法最形式化，也最适合用来理解"融合规则"这件事本身。它给每个算子标一个 <code>OpPatternKind</code>，然后按类型跑三阶段融合：</p>
+
+<table>
+<tr><th>OpPatternKind</th><th>含义</th><th>代表算子</th><th>融合角色</th></tr>
+<tr><td><code>kElemWise</code>(0)</td><td>逐元素，输入输出一一对应</td><td><code>add</code>、<code>relu</code>、<code>exp</code></td><td>最灵活，每一阶段都参与，可融进任何 injective 或 reduction 的汇点</td></tr>
+<tr><td><code>kBroadcast</code>(1)</td><td>广播，输出轴按序映射到输入轴</td><td><code>bias_add</code></td><td>与 elemwise 同等待遇（注意 <code>transpose</code> 不算广播，因为它换了轴序）</td></tr>
+<tr><td><code>kInjective</code>(2)</td><td>每个输出元素只依赖一个输入元素，但映射可以不平凡</td><td><code>reshape</code>、<code>concatenate</code>、<code>transpose</code></td><td>只在全路径都是 injective 或更简单时才融</td></tr>
+<tr><td><code>kCommReduce</code>(3)</td><td>可交换规约</td><td><code>sum</code>、<code>max</code>、<code>mean</code></td><td><strong>只能当汇点</strong>：能吸收前面的算子，永不向后融</td></tr>
+<tr><td><code>kOutEWiseFusable</code>(4)</td><td>复杂算子，输出端可以接逐元素后继</td><td><code>conv2d</code>、<code>matmul</code>、<code>dense</code></td><td>第 0 阶段优先处理；<strong>两个此类算子永远不能互相融合</strong></td></tr>
+<tr><td><code>kOpaque</code>(8)</td><td>不可融合</td><td>外部函数调用、有副作用的操作</td><td>融合屏障（作用等价于 PyTorch 侧的 graph break）</td></tr>
+</table>
+
+<p>三阶段的顺序本身就是一条设计经验：<strong>先给复杂算子（conv/matmul）配好它们的逐元素后继，再处理纯 injective 的融合</strong>，否则 <code>reshape</code> 之类的算子会抢先把链条切开，让 <code>conv2d + bias_add + relu</code> 这种最值钱的组合融不上。TVM 论文报告图级融合带来 <strong>1.2× 到 2×</strong> 的加速，量级与"取消中间结果往返"的理论预期一致。</p>
+
+<table>
+<tr><th>能力维度</th><th>torch.compile / Inductor</th><th>TensorRT</th><th>TVM</th></tr>
+<tr><td>融合决策时机</td><td>运行时首次触发编译（JIT）</td><td>离线构建 engine（AOT）</td><td>离线编译（AOT）</td></tr>
+<tr><td>融合依据</td><td>调度器启发式 <code>can_fuse</code>（合法 + 有益）</td><td>固定的层融合模式目录</td><td><code>OpPatternKind</code> 分类 + 三阶段支配树规则</td></tr>
+<tr><td>逐元素链式</td><td>强，且能生成任意长度的链</td><td>按目录条目，受精度与架构约束</td><td>强，规则明确可预测</td></tr>
+<tr><td>GEMM/Conv epilogue</td><td>部分（可调用带 epilogue 的模板）</td><td>强，是它的主要卖点之一</td><td>支持（<code>kOutEWiseFusable</code> 机制）</td></tr>
+<tr><td>跨规约的算法重写</td><td>❌</td><td>❌</td><td>❌</td></tr>
+<tr><td>典型失败信号</td><td>graph break、反复重编译</td><td>日志里预期的融合没出现、换卡后性能变化</td><td><code>kOpaque</code> 算子当中切断了融合组</td></tr>
+<tr><td>逃生口</td><td><code>torch._dynamo.explain</code> 定位后消除断点；实在不行手写 kernel</td><td>写 plugin（但 plugin 本身是屏障）</td><td>自定义 pattern / 手写 TE 调度</td></tr>
+</table>
+
+<div class="intuition-box">
+三个编译栈都只会做"保证等价的机械合并"，没有一个能替你重新设计算法。所以看到某段没被融合，先问的不是"编译器行不行"，而是"这个融合在数学上是否需要跨规约"。需要跨规约的，编译器天然做不到，别等；不需要的，那就是被屏障挡住了，去找屏障——PyTorch 侧叫 graph break，TVM 侧叫 opaque 算子，TensorRT 侧叫模式没匹配上。
+</div>
+</div>
+
+<!-- ==================== 四、手写 kernel 的性能账 ==================== -->
+<div class="section" id="s4">
+<h2>四、手写 kernel 的性能账</h2>
+
+<p>决定自己写一个 kernel，就等于接下四笔账：占用率与寄存器的权衡、分支发散、共享内存复用、以及全局访存合并。这四笔账互相拉扯，几乎没有"全都最优"的配置——手写 kernel 的技艺，主要就体现在为具体 shape 找到那个折中点。</p>
+
+<h3>先把两个 Triton 分清楚，否则后面全乱</h3>
+
+<p>这一节和下一节会频繁出现"Triton"，而这个名字在 AI 工程里指两个毫不相干的东西。误认会导致查错文档、做错架构决策，所以先钉死。</p>
+
+<div class="intuition-box">
+说"我在用 Triton"永远是一句歧义句。看两个特征就能分辨：代码里写 <code>import triton</code> / <code>@triton.jit</code> 的，是 <strong>OpenAI Triton</strong>——一个写 GPU kernel 的 Python DSL，属于"怎么算得快"；部署里跑 <code>nvcr.io/nvidia/tritonserver</code> 容器、配 <code>config.pbtxt</code> 的，是 <strong>NVIDIA Triton Inference Server</strong>——一个多模型服务框架，属于"怎么把模型稳定地服务出去"。本卡从头到尾说的都是前者。
+</div>
+
+<table>
+<tr><th>对比项</th><th>OpenAI Triton（<code>triton-lang</code>）</th><th>NVIDIA Triton Inference Server</th></tr>
+<tr><td>它是什么</td><td>写 GPU kernel 的 Python DSL + JIT 编译器</td><td>模型服务框架（多模型、多后端、版本管理）</td></tr>
+<tr><td>解决的问题</td><td>不写 CUDA C++ 也能拿到接近手调的 kernel 性能</td><td>让一堆模型在同一台机器上被有序调用、灰度、观测</td></tr>
+<tr><td>使用形态</td><td><code>pip install triton</code>，<code>@triton.jit</code> 装饰核函数</td><td>拉容器镜像，放 model repository，走 gRPC/HTTP</td></tr>
+<tr><td>在本站的位置</td><td>本卡第四、六节</td><td><a href="./model_serving.html">DP04 · 模型部署与 Serving</a> 第五节</td></tr>
+<tr><td>名字为什么撞</td><td>Tillet 在 MAPL 2019 论文里定名 Triton，当时 NVIDIA 那款产品还叫 TensorRT Inference Server</td><td>约一年后 NVIDIA 把它改名为 Triton Inference Server；DSL 一方因论文已被引用等原因选择不改名（<code>triton-lang/triton</code> issue #156）</td></tr>
+</table>
+
+<h3>occupancy 与寄存器压力：不是越高越好，但太低一定出事</h3>
+
+<p><span class="term">occupancy</span>（占用率，SM 上活跃 warp 数与硬件支持的最大活跃 warp 数之比）的硬件定义见 <a href="./gpu_execution_model.html">DP25 · GPU 执行模型与存储层次</a>，这里只谈它在调 kernel 时怎么用。Nsight Compute 文档给了一句非常精准的表述：<strong>更高的占用率并不总带来更高性能，但低占用率一定削弱隐藏延迟的能力</strong>。理论占用率由每线程寄存器数、每 block 共享内存、block 槽位、warp 槽位、barrier 等资源共同封顶；实测占用率则是运行时收集的 <code>sm__warps_active.avg.pct_of_peak_sustained_active</code>。</p>
+
+<p>寄存器是这里最常见的封顶项。每个 SM 有一块固定大小的寄存器文件，每线程用得越多，能同时驻留的 warp 就越少。更糟的情况是<strong>寄存器溢出</strong>：编译器把放不下的变量挪到 local memory，而 local memory 物理上在 DRAM 里——本来想少访存，结果凭空多出一堆访存。调节手段是 <code>--maxrregcount</code>、<code>__launch_bounds__</code>，以及缩短变量的活跃区间。</p>
+
+<p>但真正要理解的是<strong>反向权衡</strong>：一个分块良好的 GEMM kernel 会故意把大块累加器常驻寄存器，因此寄存器用量高、占用率低——而这往往是对的，因为累加器常驻正是数据复用的来源。Nsight Compute 的 triage 指南把这种情况明确列为一个象限：<strong>低占用率 + 高流水线利用率时，再加 warp 是反效果</strong>，因为已经饱和的流水线吸收不了更多工作，此时该优化的是那条热流水线本身，不是占用率。</p>
+
+<div class="arch-diagram">        占用率 × 流水线利用率：四个象限对应四种完全不同的动作
+
+                 SM 流水线利用率
+                 低 (&lt;60%)              高 (≥60%)
+              ┌────────────────────┬────────────────────┐
+    低        │ 填充不足 / 启动资源 │ 少量 warp 已把流水线 │
+  占用  (&lt;60%)│ 受限：先查 waves    │ 打满 → 再加 warp 反效果│
+  率          │ per SM，再查寄存器/ │ → 优化热流水线或改算法 │
+              │ 共享内存封顶        │ （分块 GEMM 常在这里）│
+              ├────────────────────┼────────────────────┤
+    高        │ warp 在但不发指令   │ SM 已饱和 → 只能减少  │
+       (≥60%) │ = 延迟受限          │ 最忙流水线的指令数或  │
+              │ → 查 warp stall 原因│ 重构算法              │
+              └────────────────────┴────────────────────┘
+
+  实测占用率明显低于理论占用率 ⇒ 不是资源封顶问题，
+  而是负载不均、尾部效应或调度开销（官方文档原话：
+  "理论与实测占用率的巨大差距通常指向高度不均衡的工作负载"）
+
+  封顶项定位：launch__occupancy_limit_* →
+    register limited / shared-mem limited / CTA-slot limited / warp-slot limited</div>
+
+<h3>warp divergence：32 个线程必须走同一条路</h3>
+
+<p>一个 warp 里的 32 个线程共享取指与发射。当它们因为条件分支走向不同路径时，硬件只能<strong>串行执行各条路径</strong>，代价与分歧路径数成正比。CUDA C++ Best Practices Guide 把控制流放在"指令优化"一章单独讨论，实践上的关键是<strong>让分支的粒度对齐 warp 边界</strong>：如果分支条件是 <code>threadIdx.x / 32</code> 这种整 warp 一致的量，就没有发散；如果是 <code>threadIdx.x % 2</code>，每个 warp 内部都要走两遍。对很短的分支体，编译器会用<strong>分支预测化</strong>（branch predication）把分支变成带条件的指令，代价从"串行两条路径"降为"多执行几条被丢弃结果的指令"。</p>
+
+<p>Nsight Compute 侧对应的信号是 <code>branch_resolving</code> 停顿——注意官方对它的定义很克制：这是"等待程序计数器为分支更新"的簿记时间，<strong>不是</strong>"决定走哪条分支"的时间。减少不必要的跳转和控制流发散能压低它。</p>
+
+<h3>共享内存复用与 bank conflict</h3>
+
+<p>共享内存是手写 kernel 的主要武器：把一块数据从 HBM 载入一次，让 block 内多个线程反复取用。但它有一个硬性陷阱——共享内存被切成 32 个 bank，当一个 warp 里多个线程访问<strong>同一 bank 的不同地址</strong>时就发生 <span class="term">bank conflict</span>，硬件把请求拆成若干次无冲突访问串行完成，有效带宽按拆分份数成比例下降。bank 的地址映射规则、32 路冲突的逐线程推演、以及 padding 到 33 为什么能修好它，在 <a href="./gpu_execution_model.html">DP25 · GPU 执行模型与存储层次</a> 第五节有完整图解，这里只讲它在融合场景下的特殊表现。</p>
+
+<p>融合 kernel 比普通 kernel 更容易踩到这件事，因为<strong>融合经常顺手改变了共享内存的访问方向</strong>：上游算子按行把 tile 写进共享内存，被融进来的下游算子却要按列把它读出来。这类改动既不增加 FLOPs 也不增加 HBM 流量，端到端的访存账算下来还是省的，所以从计算图层面看不出任何异常；但只要 tile 的行宽正好是 32 个 float，列方向访问就会整齐地全部落进同一个 bank。这正是"融合做对了、流量也确实降了、kernel 却没变快"的一类典型成因。常规解法是把行宽 padding 错开映射或做地址 swizzle，分块矩阵乘里这类布局设计的完整讨论见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+
+<h3>访存合并：官方标注的"高优先级"事项</h3>
+
+<p>全局内存的读写会被硬件<span class="term">合并</span>（coalescing，把一个 warp 的访存尽可能凑成最少的事务）。CUDA C++ Best Practices Guide 把"确保访存合并"标为 <strong>High Priority</strong>。破坏合并的三种典型写法是未对齐起点、跨步访问、以及完全随机访问。指南还补了一条容易忽略的运维细节：在 GDDR 显存上<strong>开启 ECC 时，分散写入的开销会被进一步放大</strong>。</p>
+
+<table>
+<tr><th>kernel 级代价</th><th>物理机制</th><th>典型代价量级</th><th>Nsight Compute 里的信号</th><th>常规解法</th></tr>
+<tr><td>寄存器溢出</td><td>放不下的变量挪到 local memory，而它在 DRAM 上</td><td>把片上访问变成显存访问，量级跳一档</td><td>占用率被 register 封顶；<code>long_scoreboard</code> 上升</td><td><code>__launch_bounds__</code>、缩短活跃区间、减小分块</td></tr>
+<tr><td>occupancy 过低</td><td>驻留 warp 不足，没有足够独立工作隐藏延迟</td><td>延迟无法重叠，流水线出现空转</td><td>实测占用率低 + <code>smsp__issue_active</code> 低</td><td>调 block size、降寄存器/共享内存用量；但先确认流水线没饱和</td></tr>
+<tr><td>warp divergence</td><td>warp 内路径不一致 → 串行执行各路径</td><td>与分歧路径数成正比</td><td><code>branch_resolving</code> 占比升高、分支效率下降</td><td>让分支粒度对齐 32 线程边界；短分支交给预测化</td></tr>
+<tr><td>bank conflict</td><td>同 warp 访问同 bank 的不同地址 → 请求被拆分串行</td><td>有效带宽降为 1/n，列访问最坏可达 32 路</td><td><code>short_scoreboard</code> 占比高、报告直接给出冲突数</td><td>padding 到 33、swizzle、转置共享内存布局</td></tr>
+<tr><td>访存不合并</td><td>一个 warp 的访存拆成多个 HBM 事务</td><td>实际搬运字节数远超有效字节数</td><td>内存工作负载分析里 sector/request 比值偏高</td><td>改数据布局（AoS→SoA）、对齐起点、消除跨步</td></tr>
+</table>
+
+<table>
+<tr><th>手写路径</th><th>表达能力</th><th>上手成本</th><th>适合场景</th><th>明显短板</th></tr>
+<tr><td><strong>OpenAI Triton</strong></td><td>block 级编程：你划分块，编译器管块内调度、共享内存分配与合并</td><td>低——纯 Python，几十行能写出一个可用 kernel</td><td>逐元素融合链、自定义规约、注意力变体的快速迭代</td><td>warp 级原语、异步拷贝、Tensor Core 精细排布等底层能力受限</td></tr>
+<tr><td><strong>CUDA C++</strong></td><td>全部硬件能力</td><td>高——线程/warp/block 三层都要自己安排</td><td>需要精细控制访存流水与同步的场景</td><td>代码量与维护成本最高，可移植性最差</td></tr>
+<tr><td><strong>CUTLASS / CuTe 模板</strong></td><td>为 GEMM 类计算提供分块与 epilogue 的组合式模板</td><td>中高——概念多，但不必从零写 GEMM</td><td>需要自定义 epilogue 或特殊精度组合的矩阵乘</td><td>非 GEMM 形态的算法套不进去</td></tr>
+</table>
+
+<div class="intuition-box">
+这四笔账本质上是同一份预算的四种花法：SM 上的寄存器、共享内存、发射槽位是定量的，你把资源多给一个线程（换取更多复用），能同时跑的线程就变少（换来更弱的延迟隐藏）。所以别问"占用率该调到多少"，要问"我这段计算是缺并行度，还是缺数据复用"——缺并行度就降资源用量，缺复用就反过来。
+</div>
+</div>
+
+<!-- ==================== 五、怎么测 ==================== -->
+<div class="section" id="s5">
+<h2>五、怎么测：Nsight Compute 与"改了但没变快"的排查顺序</h2>
+
+<p>kernel 优化最常见的浪费不是改错方向，而是<strong>没有判据就开始改</strong>：随手把 block size 调大、把循环展开、把某个循环搬进共享内存，跑一下，快了就留着、慢了就再试一个。这条路的问题是，你永远不知道自己离上限还有多远。Nsight Compute 提供的是判据，而它的官方 Compute Triage Guide 提供的是<strong>顺序</strong>——顺序比单个指标更重要。</p>
+
+<h3>先认几个 section，再谈指标</h3>
+
+<table>
+<tr><th>Nsight Compute section</th><th>回答什么问题</th><th>关键指标</th><th>怎么读</th></tr>
+<tr><td><strong>SpeedOfLight</strong>（GPU 光速吞吐）</td><td>这个 kernel 到底受算力限制还是受访存限制</td><td><code>sm__throughput</code> vs <code>gpu__compute_memory_throughput</code>（均为峰值百分比）</td><td>官方阈值：低于约 60% 算低（延迟风险区），高于约 80% 算高（接近上限区）</td></tr>
+<tr><td><strong>LaunchStats</strong>（启动统计）</td><td>网格是否连一轮都填不满 SM</td><td><code>launch__waves_per_multiprocessor</code></td><td>小于 1 说明工作量太小，先加并行度，别调 kernel 内部</td></tr>
+<tr><td><strong>Occupancy</strong>（占用率）</td><td>驻留 warp 够不够，被什么资源卡住</td><td><code>sm__warps_active.avg.pct_of_peak_sustained_active</code>、<code>launch__occupancy_limit_*</code></td><td>实测低于 60% 需要解释（除非受 Tensor Core 主导或 SOL 已高）；实测远低于理论 → 负载不均或尾部效应</td></tr>
+<tr><td><strong>SchedulerStats</strong>（调度器统计）</td><td>warp 有没有在发指令</td><td><code>smsp__issue_active.avg.pct_of_peak_sustained_active</code>、eligible warps 比值</td><td>发射活跃度低于约 20% 是严重饥饿；健康 kernel 大致在 0.5 指令/周期/调度器</td></tr>
+<tr><td><strong>WarpStateStats</strong>（warp 状态统计）</td><td>warp 卡在什么原因上</td><td><code>smsp__average_warps_issue_stalled_*_per_issue_active</code></td><td>只在调度器发不出指令时才看；单一原因占比超过约 30% 才值得追</td></tr>
+<tr><td><strong>MemoryWorkloadAnalysis</strong>（访存分析）</td><td>流量落在哪一层、有多少是浪费</td><td>DRAM / L2 / L1TEX 吞吐、sector 与 request 比值、bank conflict 计数</td><td>吞吐高但 DRAM 低 → 流量其实走了 sysmem 或 peer 通道</td></tr>
+<tr><td><strong>SourceCounters</strong>（源码计数器）</td><td>停顿发生在哪几行</td><td>分支效率、warp stall 采样</td><td>停顿样本记在<strong>消费指令</strong>上，不是生产指令上</td></tr>
+</table>
+
+<h3>官方 triage 顺序：这就是"改了但没变快"的排查表</h3>
+
+<p>NVIDIA 的 Compute Triage Guide 把整个流程组织成一棵决策树，从"数据可信吗"开始，一路收敛到具体动作。把它当成排查清单逐条走，能避免绝大多数无效改动：</p>
+
+<div class="arch-diagram">        Nsight Compute 官方分诊顺序（"改了但没变快"照这个走）
+
+  ① 指标可信吗？
+     kernel 时长与 Nsight Systems 的 wall-time 偏差超过约 2× → 先查
+     时钟锁定 / 缓存控制 / replay 模式，别急着看别的
+     （利用率略超 100% 通常是多趟采集的伪影，不是错误）
+                     │ 可信
+                     ▼
+  ② 工作量够大吗？  waves per SM &lt; 1 ⇒ 网格连一轮都填不满所有 SM
+     → 此时任何 kernel 内部优化都可能被"填充不足"掩盖，
+       先加并行度（增大 grid / 合并调用 / 横向融合）
+                     │ 够大
+                     ▼
+  ③ 受延迟限制还是受吞吐限制？  比较 SM 计算吞吐 与 内存吞吐
+     ├─ 两者都低 (&lt;60%)  → 延迟受限，进 ④
+     ├─ 计算 ≫ 内存      → 查哪条计算流水线是限制项
+     ├─ 内存 ≫ 计算      → 查哪一级访存机制主导（DRAM / L2 / 共享内存）
+     └─ 两者都高 (&gt;80%)  → 已接近该算法的硬件上限，只能换算法
+                     │
+                     ▼
+  ④ 为什么发不出指令？  发射活跃度 &lt; 约 20% = 严重饥饿
+     看 warp stall 分解，任一原因占比 &gt; 约 30% 才追：
+       long_scoreboard  → 等 L1TEX（全局/局部）访存 ⇒ 访存"延迟"受限
+                          （注意：这与"带宽受限"不是一回事，
+                            解法是改合并 / 加 ILP / 预取进共享内存）
+       short_scoreboard → 等 MIO，多数是共享内存 ⇒ 查 bank conflict
+       math_pipe_throttle → 计算流水线被过订阅 ⇒ 其实是计算受限
+       lg_throttle / mio_throttle → 指令队列满 ⇒ 少量宽访存代替大量窄访存
+       barrier / drain  → 同步等待 / 收尾大量写回，看尾部效应
+       branch_resolving → 控制流发散过多
+                     │
+                     ▼
+  ⑤ 占用率被什么封顶？ launch__occupancy_limit_* →
+     register / shared-mem / CTA-slot / warp-slot 四种之一，对症减压
+
+  ★ 两条官方护栏，值得抄在便签上：
+    · 优化目标是"提高发射槽利用率"，不是"把停顿数降到零"
+    · 只有 kernel 时长同时改善，才算这次停顿优化成功</div>
+
+<p>第 ④ 步里那条区分特别值钱：<code>long_scoreboard</code> 主导意味着 kernel 是<strong>访存延迟受限</strong>，这和"访存带宽吃紧"是两种不同的病。前者的解法是隐藏延迟（改善合并、增加指令级并行、预取到共享内存、提高缓存命中），后者的解法才是减少总字节数。把延迟问题当带宽问题治，改一堆布局却毫无收益，是这一层最常见的误诊。</p>
+
+<div class="highlight">
+<strong>示例场景："融合成功了，但端到端没变快"的三种真实死法。</strong>某推理服务把一段 RMSNorm + 残差 + SiLU 手工融成一个 kernel，微基准里该 kernel 单独测确实比原来三个 kernel 之和快了一截，但整层耗时几乎没动。按上面的顺序逐条走，暴露出三层各自独立的原因：其一，Nsight Compute 显示 waves per SM 小于 1——这个 kernel 在实际 batch 下网格太小，连一轮都填不满 SM，快慢基本被启动与填充掩盖；其二，融合后的 kernel 为了把三步的中间量都留在寄存器里，寄存器用量上升，实测占用率被 register 封顶压低，而这个 kernel 又是延迟受限的（发射活跃度低、<code>long_scoreboard</code> 占主导），占用率下降正好削掉了延迟隐藏能力；其三，该 kernel 以自定义算子形式注册，在 <code>torch.compile</code> 区域里形成不透明边界，把整层切成两段并使其丧失 CUDA Graph 捕获资格——微基准量不到这项损失，因为微基准里根本没有编译区域。<strong>可迁移的教训有两条：微基准与端到端必须都测，且当两者结论矛盾时，答案通常在"这个 kernel 之外"</strong>。服务级别的指标口径与压测方法见 <a href="./inference_benchmark_methodology.html">DP16 · 推理服务压测方法论</a>，推理侧瓶颈的整体归因见 <a href="./inference_performance_bottleneck.html">DP10 · 大模型推理性能瓶颈分析</a>。
+</div>
+
+<h3>测量本身也要有纪律</h3>
+
+<table>
+<tr><th>纪律</th><th>不遵守的后果</th></tr>
+<tr><td>锁定 GPU 时钟后再测（或至少记录时钟状态）</td><td>Boost 频率波动会让同一份代码的测量结果反复横跳，改动的真实效果被噪声吞掉</td></tr>
+<tr><td>先跑几轮预热再采集</td><td>首轮包含 JIT 编译、CUDA Graph 捕获、缓存冷启动，会污染均值</td></tr>
+<tr><td>与 Nsight Systems 的 wall-time 交叉核对</td><td>profiler 的 replay 机制可能让 kernel 时长脱离真实值，官方把这条列为分诊第 0 步</td></tr>
+<tr><td>用真实 shape，不用"好看"的 shape</td><td>2 的整数次幂 shape 会掩盖尾部效应与对齐问题，而生产流量里 shape 往往不整</td></tr>
+<tr><td>每次只改一个变量，并记录数值容差比对结果</td><td>融合改变累加顺序会引入合法的数值差异；不设容差基准就无法区分"算错了"和"精度漂移在预期内"</td></tr>
+<tr><td>改完必须回到端到端复测</td><td>微基准变快而整体不变，说明收益被填充不足、编译屏障或上游布局转换吃掉了</td></tr>
+</table>
+
+<div class="intuition-box">
+Nsight Compute 不是"找红色告警然后修掉"的工具。它先帮你回答一个二选一的问题：这个 kernel 是没活干（延迟受限）还是活干不完（吞吐受限）。前者要给它更多可并行的独立工作，后者要减少它必须做的工作。搞反方向，两边都会越改越慢。
+</div>
+</div>
+
+<!-- ==================== 六、什么时候不该手写 ==================== -->
+<div class="section" id="s6">
+<h2>六、什么时候不该手写</h2>
+
+<p>手写 kernel 的技术门槛是显性的，它的<strong>持有成本</strong>是隐性的——而后者才是多数团队真正付不起的部分。这一节讲怎么在动手之前把账算完。</p>
+
+<h3>先算收益上限，这一步不能省</h3>
+
+<p>能拿到的加速被两个比例锁死：目标区段占端到端时长的比例，以及这段里"中间结果搬运"占该段的比例。</p>
+
+<div class="formula">端到端收益上限 ≈ 该区段耗时占比 × 该区段可省的访存时间占比</div>
+
+<p>举个再简单不过的算术：某段逐元素链占单步耗时 8%，其中中间结果往返大约占这段的一半，那么把它融到理论最优，端到端上限约 4%。如果这段已经被 <code>torch.compile</code> 融过一轮、只剩两成余量，上限就掉到 1.6% 以下。<strong>先把这个数算出来，再决定它值不值一个人两周</strong>。这条纪律能筛掉大部分手写冲动，因为多数"看起来很多小算子"的地方，占比其实很小。</p>
+
+<h3>四类明确不该手写的情形</h3>
+
+<table>
+<tr><th>情形</th><th>为什么手写会亏</th><th>该做什么</th></tr>
+<tr><td>目标区段已是 compute-bound</td><td>大 GEMM 的性能来自厂商多年积累的分块策略与 tactic 库，个人手写几乎不可能超过</td><td>换精度、开 Tensor Core、调分块参数；或用 CUTLASS 模板而非从零写</td></tr>
+<tr><td>收益上限低于个位数百分比</td><td>持有成本（维护、回归、人员绑定）会持续消耗，而收益是一次性的</td><td>先去找占比更大的瓶颈，或先把 graph break 清干净</td></tr>
+<tr><td>shape 与 dtype 还在频繁变化</td><td>手写 kernel 是对具体 shape/精度的特化，模型一改就要重调或回退</td><td>等结构稳定；或用 OpenAI Triton 写一个带 autotune 的版本降低重调成本</td></tr>
+<tr><td>团队里只有一个人能改它</td><td>单点故障；这个人休假期间没人敢升级框架版本</td><td>要么两人以上能维护 + 有测试，要么不写</td></tr>
+</table>
+
+<h3>版本与硬件绑定：手写 kernel 真正的长期成本</h3>
+
+<p>一个手写 kernel 实际上是把一批假设焊死在代码里，其中任何一条变化都可能让它从"最快"变成"最慢"：</p>
+
+<ul>
+<li><strong>硬件绑定</strong>：每 SM 的寄存器文件大小、共享内存容量、SM 数量、Tensor Core 支持的形状与精度，跨代都在变。为某代卡精心调过的分块，在新一代上可能不再是好配置，需要重新扫参。</li>
+<li><strong>框架绑定</strong>：自定义算子按官方推荐用 <code>torch.library.custom_op</code> 注册后，Dynamo 会把它当不透明边界处理——这是正确设计，但意味着<strong>每一个手写 kernel 都自带一个 graph break</strong>。它必须先赚回自己摧毁的那部分融合，才谈得上净收益。</li>
+<li><strong>反向自己兜</strong>：训练路径上手写前向就要配套手写反向，还要保证数值与自动微分一致，测试面翻倍。</li>
+<li><strong>数值口径</strong>：融合改变累加顺序，输出与未融合版本会有合法的微小差异。没有事先约定的容差基准，之后每次精度波动都会变成一场"是不是 kernel 写错了"的拉锯。</li>
+</ul>
+
+<h3>阶梯式路线：手写永远是最后一档</h3>
+
+<div class="arch-diagram">        优化阶梯：从上往下，成本递增、可维护性递减
+
+  ① 清掉 graph break                     成本最低、收益常常最大
+     torch._dynamo.explain 定位 → 消除数据相关控制流与不必要边界
+     CI 里用 fullgraph=True 当门禁，防止断点被无声提交
+                    │ 还不够
+                    ▼
+  ② 让编译器多做一点
+     开更激进的编译模式与 autotune；确认 CUDA Graph 真的捕获成功；
+     对齐/分桶输入 shape，避免反复重编译
+                    │ 还不够
+                    ▼
+  ③ 换用现成的融合实现
+     FlashAttention 系列、框架自带的 fused RMSNorm / fused 优化器、
+     带 epilogue 的 GEMM 库（CUTLASS 模板）
+     —— 别人已经付过维护成本，且通常已适配多代硬件
+                    │ 仍有明确且够大的缺口
+                    ▼
+  ④ 用 OpenAI Triton 手写
+     Python 里几十行，编译器接管块内调度与共享内存分配；
+     配 autotune 后跨硬件重调成本可控
+                    │ Triton 表达不了（warp 级原语 / 异步拷贝 /
+                    │ Tensor Core 精细排布 / 极致流水）
+                    ▼
+  ⑤ CUDA C++ / CUTLASS 从底层写
+     能力天花板最高，持有成本也最高：绑硬件、绑版本、绑人
+
+  ★ 每下一档之前先回答两个问题：
+    上一档真的做尽了吗？这一档的收益上限算过吗？</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>动手前先量两个比例：区段占端到端多少、其中访存占该区段多少</li>
+<li>先用官方 triage 顺序确认瓶颈类型，再决定改什么</li>
+<li>把"清掉 graph break"当第一优化项，它通常最便宜</li>
+<li>能用现成融合库就用，别人已经替你付了跨代适配成本</li>
+<li>手写优先选 OpenAI Triton，只有表达不了才下到 CUDA C++</li>
+<li>为每个手写 kernel 配 shape 覆盖测试与明确的数值容差基准</li>
+<li>微基准与端到端两条线都测，结论矛盾时去 kernel 外面找原因</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要说"融合减少了计算量"——FLOPs 通常一字不变</li>
+<li>不要在 waves per SM 小于 1 的情况下调 kernel 内部参数</li>
+<li>不要把占用率当成越高越好的指标去优化</li>
+<li>不要把访存延迟受限（<code>long_scoreboard</code> 主导）当带宽问题去治</li>
+<li>不要以停顿计数下降为验收标准，要看 kernel 时长是否真的缩短</li>
+<li>不要在 compute-bound 的大矩阵乘上手写 kernel 去挑战厂商库</li>
+<li>不要在模型结构与 shape 还在变的阶段特化 kernel</li>
+<li>不要让一个 kernel 只有一个人能维护</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+判断该不该手写，只需要一个问题问三遍：这段代码的时间到底花在哪？如果花在等数据、而编译器又结构性地融不了（需要跨规约的算法重写），那手写是对的。如果花在算力上，或者编译器本来能融、只是被一个断点挡住了，那手写就是在用最贵的方式解决一个便宜的问题。
+</div>
+
+<p>如果你的结论是"不该手写，但需要把整张图交给一个更强的编译器"，那么下一站是编译式推理方案：构建期做完全部图优化与 kernel 选优，用编译时间换运行时性能，代价是产物与硬件、驱动、版本强绑定——完整讨论见 <a href="./tensorrt_compilation_stack.html">DP28 · TensorRT 与推理编译栈</a>。如果结论是"kernel 没问题，是调度和批处理没做好"，那该看 <a href="./continuous_batching_scheduling.html">DP11 · Continuous Batching 与推理调度策略</a> 与 <a href="./kv_cache_optimization.html">DP09 · KV Cache 显存优化</a>；框架层面的整体选型见 <a href="./inference_framework_selection.html">DP05 · 大模型推理框架选型</a>。</p>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>算子融合到底省下了什么，为什么说不是省计算？</summary>
+<div class="answer">
+<p>省的是中间结果在显存（HBM）和片上存储之间的往返次数，计算量基本一字不变。GPU 上每次 kernel 调用都要把输入从 HBM 读进来、算完写回 HBM，因为框架契约要求每个算子返回一个真实存在的 Tensor。融合的本质是识别出"没有第二个消费者"的中间结果，让它只留在寄存器或共享内存里，不再落地。以 <code>x.cos().cos()</code> 为例：未融合需要 4 次 HBM 访问（读 x、写中间、读中间、写结果），融合后只需 2 次，浮点运算次数完全相同 2N，但在带宽受限时耗时约减半。FlashAttention 更极端——它的反向传播为了不读回中间矩阵而选择在片上重算，FLOPs 反而<strong>增加</strong>了，却仍然快得多。所以"融合减少计算量"这个说法是错的，正确的说法是"融合提高了算术强度"。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么有的地方融合了几乎没提速？</summary>
+<div class="answer">
+<p>有四种常见原因，对应四种不同的处置。第一种是这段计算本来就是 compute-bound（比如大矩阵乘），时间花在真实的乘加上，中间结果的搬运本来占比就低，没什么可省。第二种是工作量太小：Nsight Compute 的 waves per SM 小于 1，说明网格连一轮都填不满所有 SM，此时快慢主要由填充不足和启动开销决定，kernel 内部怎么改都被掩盖。第三种是融合把寄存器用量推高，压低了占用率，而这个 kernel 恰好是延迟受限的——省下的访存收益被削弱的延迟隐藏能力抵消掉了。第四种最隐蔽：融合以自定义算子形式注册进 PyTorch，形成了 graph break，把编译区域切碎、丧失 CUDA Graph 捕获资格，微基准量不到这项损失，因为微基准里没有编译区域。判断方法是按官方 triage 顺序走一遍，并且微基准和端到端两条线都测。</p>
+</div>
+</details>
+
+<details>
+<summary>OpenAI Triton 和 NVIDIA Triton Inference Server 是什么关系？</summary>
+<div class="answer">
+<p>没有任何关系，只是名字撞了。OpenAI Triton（<code>triton-lang</code>）是一个写 GPU kernel 的 Python DSL 加 JIT 编译器：你用 <code>@triton.jit</code> 写块级程序，编译器负责块内调度、共享内存分配和访存合并，它也是 TorchInductor 在 GPU 上生成代码的后端。NVIDIA Triton Inference Server 是一个模型服务框架，负责多模型加载、版本管理、动态批处理、gRPC/HTTP 接口，运行形态是拉容器镜像加配置 model repository。一个解决"怎么算得快"，一个解决"怎么把模型稳定服务出去"，处在技术栈的完全不同层次。撞名的原因是：Tillet 在 2019 年 MAPL 论文里给这个 DSL 定名 Triton 时，NVIDIA 那款产品还叫 TensorRT Inference Server，约一年后 NVIDIA 才改名为 Triton Inference Server，而 DSL 一方因为论文已被引用、PyPI 名字已占用等原因选择不改名（见 <code>triton-lang/triton</code> issue #156）。实践上的辨认方法：看到 <code>import triton</code> 就是 DSL，看到 <code>tritonserver</code> 容器就是服务框架。</p>
+</div>
+</details>
+
+<details>
+<summary>graph break 为什么会伤害性能，怎么定位？</summary>
+<div class="answer">
+<p>graph break 是 TorchDynamo 遇到无法 trace 的代码时的行为：把已抓到的图先编译，剩下的退回 eager 执行。伤害有两层，第二层更重。第一层是断点处的代码回到原速度，损失有限。第二层是断点把编译区域切成碎片，横跨断点的融合机会全部作废，断点两侧必须各自把边界张量物化到 HBM，同时整段丧失 CUDA Graph 捕获资格、退回逐 kernel 启动——真正的损失发生在"接缝"上。PyTorch 官方 FAQ 明确指出，用了 dynamo 却看不到期望加速，主因就是过多的 graph break。定位工具是 <code>torch._dynamo.explain(fn)(*inputs)</code>，它会聚合列出所有断点及其原因；<code>torch.compile(fn, fullgraph=True)</code> 会在遇到第一个断点时直接报错，适合放进 CI 当门禁。常见触发包括数据相关的控制流（<code>.item()</code>、按张量值分支）、用 <code>torch.library.custom_op</code> 注册的自定义算子（这是设计如此的不透明边界）、对 view 的原地操作与复杂 aliasing、以及不支持的 Python 结构。</p>
+</div>
+</details>
+
+<details>
+<summary>占用率（occupancy）应该调到多少？</summary>
+<div class="answer">
+<p>没有目标值，只有配合流水线利用率一起看才有意义。Nsight Compute 官方文档的表述是：更高的占用率并不总带来更高性能，但低占用率一定削弱隐藏延迟的能力。实践上用一个二维判断：占用率低而流水线利用率高，说明少量 warp 已经把某条流水线打满，再加 warp 是反效果，该优化的是那条热流水线或换算法——分块良好的 GEMM kernel 常常就落在这个象限，它故意把大块累加器常驻寄存器，寄存器用量高、占用率低，但这正是数据复用的来源。占用率高而流水线利用率低，说明 warp 在但发不出指令，属于延迟受限，该去看 warp stall 原因。两者都低是填充不足或启动资源受限。两者都高则说明已接近该算法的硬件上限。另外还有一条独立信号：实测占用率明显低于理论占用率时，问题不在资源封顶，而是负载不均、尾部效应或调度开销——官方原话是"理论与实测的巨大差距通常指向高度不均衡的工作负载"。</p>
+</div>
+</details>
+
+<details>
+<summary>融合把中间结果留在了共享内存里，为什么反而更慢了？</summary>
+<div class="answer">
+<p>先排除两个常见误判：一是融合后的 kernel 寄存器用量涨上去触发了 spill，中间结果名义上在共享内存、实际有一部分被挤到了 local memory（走 HBM），这时 DRAM 流量不降反升；二是共享内存用量涨了导致每个 SM 的驻留 block 数下降，延迟暴露不足。这两类在 Nsight Compute 里分别体现为 local memory 流量出现和占用率的 limiter 变成 shared memory。如果两者都排除了，最可能的就是 <strong>bank conflict</strong>——融合往往改变了共享内存的访问方向，上游按行写、下游按列读，端到端流量确实降了，但列访问会把一个 warp 的 32 个线程整齐地送进同一个 bank，请求被拆成多次串行。它的信号是 <code>short_scoreboard</code> 停顿占比偏高（等 MIO 操作，主要来自共享内存），访存分析 section 也会直接给出冲突计数。bank 映射规则与修复手法见 <a href="./gpu_execution_model.html">DP25 · GPU 执行模型与存储层次</a> 第五节。这三类原因的共同点是：它们都不在计算图这一层，所以只看融合前后的算子数量和理论访存量永远发现不了，必须落到 profiler。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么 FlashAttention 不能靠编译器自动做出来？</summary>
+<div class="answer">
+<p>因为它不是机械融合，而是换了算法。编译器做的融合必须保证逐步等价：它能把生产者-消费者关系的逐元素算子串起来让中间值留在寄存器，也能把逐元素算子吸收进一个规约里，但它不会重新设计计算顺序。注意力的障碍在于 softmax 把一整行耦合在一起——不看完整行就不知道归一化因子，所以你没法简单地把"算分数、做 softmax、乘 V"三个 kernel 拼成一个而不物化 N×N 矩阵。FlashAttention 的解法是引入在线 softmax：维护逐行的运行最大值与运行和，分块遍历 K/V 时边走边重新缩放已累积的输出，从而任何时刻都不需要完整一行；反向不再读回中间矩阵，而是存下归一化因子在片上重算。这套改造涉及数值稳定性设计和反向的重新推导，属于人类算法设计范畴，没有编译器能自动完成。这也给出一条实用判据：某个融合如果需要跨规约，就别等编译器；如果不需要，那它没被融合就一定是被某个屏障挡住了，去找屏障。</p>
+</div>
+</details>
+
+<details>
+<summary>怎么判断一段代码值不值得手写 kernel？</summary>
+<div class="answer">
+<p>先算收益上限，再算持有成本。收益上限约等于"该区段占端到端耗时的比例"乘以"该区段里可省的访存时间比例"。比如某段逐元素链占单步 8%，其中中间结果往返约占该段一半，理论上限就是 4%；如果这段已经被 <code>torch.compile</code> 融过一轮只剩两成余量，上限掉到 1.6% 以下。持有成本包括：手写 kernel 是对具体 shape 与精度的特化，模型一改就要重调；跨硬件代际的寄存器文件、共享内存、Tensor Core 形状都在变，需要重新扫参；用 <code>torch.library.custom_op</code> 注册后它自带一个 graph break，必须先赚回被摧毁的融合；训练路径还要配套手写反向并保证数值一致。四类明确不该手写的情形是：目标区段已是 compute-bound（挑战不过厂商 GEMM 库）、收益上限只有个位数百分比、shape 与 dtype 仍在频繁变化、以及团队里只有一个人能维护它。正确顺序是阶梯式的：先清 graph break，再让编译器多做一点，再换用现成融合库，然后才是用 OpenAI Triton 手写，最后才下到 CUDA C++。</p>
+</div>
+</details>
+
+<details>
+<summary>Inductor、TensorRT、TVM 的融合能力差在哪？</summary>
+<div class="answer">
+<p>差在决策时机和决策依据。TorchInductor 在运行时首次触发编译，靠调度器的启发式 <code>can_fuse</code> 判断——一次融合必须合法（不引入依赖环）且有益（真的减少开销），支持逐元素融合（要求迭代域相同）、规约融合（共享输入与规约维）、混序规约（仅 Triton 后端）和横向 combo kernel，融合后还会自动尝试 CUDA Graph 捕获；它最大的敌人是 graph break。TensorRT 在离线构建期融合，依据是一份固定的层融合模式目录，每条都带约束——比如 <code>Conv → GELU</code> 要求输入输出同为 FP16 或 INT8 且需要 Turing 及更新架构，深度可分离卷积融合要求 INT8 且计算能力不低于 7.2——这意味着同一张图在不同卡、不同精度下会融出不同结果，目录外的模式只能写 plugin，而 plugin 本身又是优化屏障。TVM 最形式化：给每个算子标 <code>OpPatternKind</code>（elemwise / broadcast / injective / commReduce / outEWiseFusable / opaque），按三阶段跑，规约只能当汇点、两个 outEWiseFusable 永不互融、opaque 是屏障；先处理 conv/matmul 的逐元素后继再处理纯 injective，就是为了不让 <code>reshape</code> 抢先切断 <code>conv2d + bias_add + relu</code> 这种最值钱的组合。三者的共同上限是：都只做保证等价的机械合并，没有一个能替你重新设计算法。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; 算子融合与 Kernel 优化实战 &middot; DP27</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>
