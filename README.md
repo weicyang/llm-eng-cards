@@ -6,7 +6,7 @@
 
 > 每张卡回答一个判断：什么时候用，什么时候不要用。别人讲「RAG 是什么」，这里讲「什么时候该上 RAG，什么时候不要上」。
 
-291 张卡片 · 36 张主干 · 原理 → 应用 → 生产
+295 张卡片 · 36 张主干 · 原理 → 应用 → 生产
 
 **[在线阅读](https://weicyang.github.io/llm-eng-cards/)** · **[主干 36](https://weicyang.github.io/llm-eng-cards/#start)**
 
