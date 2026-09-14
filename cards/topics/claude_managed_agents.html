@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HC09 · Claude Managed Agents：决策与执行分离</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"🎯 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid rgba(21,128,61,.25);border-radius:8px;padding:1rem 1.2rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid rgba(185,28,28,.25);border-radius:8px;padding:1rem 1.2rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.warn-box{background:rgba(194,65,12,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 阅读提醒";display:block;font-weight:700;color:var(--orange);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.source-link{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.4rem;margin-bottom:2rem;font-size:.92rem}
+.source-link p{margin:.2rem 0}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:768px){.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#sec-1">一、演进线：Agent 的跑法怎么变的</a>
+<a href="#sec-2">二、旧架构三宗罪：一个容器扛所有</a>
+<a href="#sec-3">三、核心架构：大脑与双手拆开</a>
+<a href="#sec-4">四、三资源模型：Agents / Environments / Sessions</a>
+<a href="#sec-5">五、拆开之后到底赚到了什么</a>
+<a href="#sec-6">六、一手教训：harness 追着模型脾气改</a>
+<a href="#sec-7">七、谁该用 Managed Agents</a>
+<a href="#sec-8">八、参考来源</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+<h1>HC09 · Claude Managed Agents：决策与执行分离</h1>
+<p class="subtitle">Managed Agents — 从朴素 API 到托管 harness / 大脑·双手·会话三层解耦 / append-only 事件流 / 凭证隔离 / TTFT 大降 / harness 该外包</p>
+
+<div class="intuition-box">
+<strong>一句话本质：</strong>Managed Agents 最值钱的设计只有一个决定——<strong>把负责推理的"大脑"（harness）和负责执行的"双手"（sandbox）拆开，中间用一条只追加、不修改的 session 事件流连接</strong>。拆开之后，安全、延迟、可恢复性这些生产难题同时松动。即使你不用这个产品，"推理与执行解耦 + append-only 日志"也值得抄进自己的 Agent 架构。
+</div>
+
+<!-- ==================== 一 ==================== -->
+<div class="section">
+<h2 id="sec-1">一、演进线：Agent 的跑法怎么变的</h2>
+
+<p>要理解 Managed Agents 解决了什么，先看我们是从哪一步走过来的。这条演进线的主语一直是同一个：<span class="term">harness</span>——Agent 的"外壳"，即模型之外负责循环、调度、工具路由的那层系统。变化的不是模型，而是<strong>这层外壳由谁来写、由谁来扛</strong>。</p>
+
+<div class="arch-diagram">
+Agent 运行方式的演进线
+┌─────────────────────────────────────────────────────┐
+│ 2023 · 朴素 API                                      │
+│   tokens in → 模型思考 → tokens out                   │
+│   harness 100% 开发者自建（循环/工具/文件系统全自己搭）   │
+├─────────────────────────────────────────────────────┤
+│ 2025 · Claude Code + Agent SDK                       │
+│   官方打磨的 harness 以 SDK 形式开放                    │
+│   开发者不再手写 Agent 循环，但运行/伸缩/安全仍自己扛      │
+├─────────────────────────────────────────────────────┤
+│ 2026 · Managed Agents                                │
+│   harness + 整套生产基础设施一起托管                     │
+│   你只写 Agent 逻辑与领域知识，脏活累活交给平台           │
+└─────────────────────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>阶段</th><th>官方提供什么</th><th>开发者还要自己扛什么</th><th>从原型到上线</th></tr>
+<tr><td>朴素 API（2023）</td><td>只有模型推理：tokens in, tokens out</td><td>Agent 循环、工具调用、状态管理、文件系统、部署运维全部</td><td>数月起步</td></tr>
+<tr><td>Claude Code + Agent SDK（2025）</td><td>打磨过的 harness（"想—做—看结果—再想"闭环）</td><td>运行环境、伸缩、安全、故障恢复</td><td>数周量级</td></tr>
+<tr><td>Managed Agents（2026）</td><td>harness + 沙箱 + 会话持久化 + 安全 + 伸缩全套托管</td><td>Agent 逻辑与领域知识本身</td><td>官方口径：几天</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>每一步演进都在回答同一个问题："上一代里开发者被迫自建的东西，哪些其实不产生差异化？"答案不断变长，被外包出去的层不断变厚——直到连 harness 本身也被认定是"可交出去的开销"。</p>
+</div>
+</div>
+
+<!-- ==================== 二 ==================== -->
+<div class="section">
+<h2 id="sec-2">二、旧架构三宗罪：一个容器扛所有</h2>
+
+<p>Managed Agents 之前的第一版实现非常直觉：session、harness、sandbox 全部塞进<strong>同一个容器</strong>。文件编辑就是本地 syscall，没有服务边界要设计，起步很爽。但一上规模，问题集体冒出来——官方用了一个精准的词：他们收养了一只<span class="term">宠物服务器</span>（pets vs cattle 里的"宠物"：一个有名有姓、死不起、只能精心伺候的个体）。</p>
+
+<div class="arch-diagram">
+旧架构：三合一容器的"宠物"困境
+┌──────────────────── 单一容器 ────────────────────┐
+│                                                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────────┐ │
+│  │ harness   │  │ session   │  │ sandbox      │ │
+│  │ (大脑)    │  │ (状态)    │  │ (双手+现场代码)│ │
+│  └──────────┘  └──────────┘  └──────────────┘ │
+│   ⚠️ API key / 数据库密码 与 Agent 现场生成的代码  │
+│      同处一室 = 把钥匙和陌生人锁在一个屋           │
+└────────────────────────────────────────────────┘
+  容器一崩 → session 全丢，进度归零，无法恢复
+  容器卡死 → 只能"抢救"，无法直接替换
+</div>
+
+<table>
+<tr><th>问题</th><th>具体表现</th><th>后果</th></tr>
+<tr><td>启动慢</td><td>每跑一个 Agent 都要冷启动一个完整容器</td><td>用户等待时间里大头不是模型在想，而是容器在启动</td></tr>
+<tr><td>凭证暴露</td><td>密钥与模型现场生成的、不可完全信任的代码同处一室</td><td>一次成功的提示注入就可能升级为凭证窃取，整个容器都是爆炸半径</td></tr>
+<tr><td>挂了就全丢</td><td>session 状态在容器内，容器崩 = 状态蒸发</td><td>长任务无法恢复，只能从头再来</td></tr>
+<tr><td>无法调试</td><td>harness 的 bug、事件流丢包、容器掉线在 WebSocket 流上呈现为同一种表象；进容器开 shell 又会碰到用户数据</td><td>故障定位基本靠猜，等于"没有调试能力"</td></tr>
+<tr><td>部署假设写死</td><td>harness 默认"Claude 干活的资料就在本容器里"</td><td>客户想连自己的 VPC 时，要么网络对穿，要么整个 harness 搬进客户环境</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>"宠物"的本质是<strong>状态与算力焊死在一起</strong>：你不敢让任何一只死，所以每只都要人肉看护。解法永远是同一个方向——把状态挪出去，让算力变成随时可丢弃、可替换的"牲口"。</p>
+</div>
+</div>
+
+<!-- ==================== 三 ==================== -->
+<div class="section">
+<h2 id="sec-3">三、核心架构：大脑与双手拆开</h2>
+
+<p>Managed Agents 的解法很干脆：把三样东西拆成三个独立接口——<strong>大脑</strong>（Claude + harness，负责推理与调度）、<strong>双手</strong>（sandbox 与工具，负责执行动作）、<strong>会话</strong>（session，记录一切发生过的事）。三者各自可以独立失败、独立替换，谁也不依赖谁的内部实现。官方明确说这是在抄操作系统的作业：几十年前 OS 把硬件虚拟化成 process、file 这类足够通用的抽象，<code>read()</code> 不关心底下是 70 年代的磁盘组还是今天的 SSD——<strong>上层抽象稳定，底层实现随便换</strong>。</p>
+
+<div class="arch-diagram">
+核心架构：大脑 / 双手 / 会话 三层解耦
+┌───────────────┐      append-only 事件流       ┌───────────────┐
+│   大脑 Brain    │ ── 记录每次模型调用/工具调用 ──► │  会话 Session  │
+│  Claude+harness│ ◄── 崩溃后从日志恢复重建状态 ── │ （服务端持久化） │
+│  无状态、可重启  │                               │ 只追加、不修改  │
+└───────┬───────┘                               └───────────────┘
+        │ execute(name, input)  统一接口
+        ▼
+┌─────────────────────────────────────────────┐
+│               双手 Hands                      │
+│  sandbox 容器 · 自定义工具 · MCP server        │
+│  （三者对大脑长得一模一样，都是 execute()）      │
+│  短生命周期、可随时销毁重建、不碰长效凭证        │
+└─────────────────────────────────────────────┘
+</div>
+
+<p>连接大脑与双手的，是这条 <span class="term">append-only session</span> 事件流：每一次模型调用、每一次工具调用、每一个返回结果，都作为事件<strong>只追加、不修改</strong>地写进日志，且日志存在 harness 之外。这带来一个关键性质——<strong>harness 里没有任何东西需要在崩溃中幸存</strong>。大脑挂了，重启一个新实例，调用 <code>wake(sessionId)</code> 唤回任务，用 <code>getSession(id)</code> 拿回完整事件日志，从最后一个事件继续；期间新发生的一切继续 append 进日志。</p>
+
+<pre><code># 崩溃恢复：从事件日志重建（示意）
+session = wake(session_id)        # 唤回任务
+log     = get_session(session_id) # append-only 事件流
+for event in replay(log):         # 重放日志重建状态
+    harness.apply(event)
+harness.run_from_last_event()     # 从最后一个事件继续
+# 之后每个新事件继续 session.append(...)，只增不改</code></pre>
+
+<table>
+<tr><th>组件</th><th>职责</th><th>状态性</th><th>挂了怎么办</th></tr>
+<tr><td>大脑（harness + Claude）</td><td>推理、规划、把工具调用路由到双手</td><td>无状态：全部状态外置于 session 日志</td><td>直接重启新实例，从日志恢复，无需抢救</td></tr>
+<tr><td>双手（sandbox / 工具 / MCP）</td><td>执行代码、编辑文件、调用外部能力</td><td>短生命周期执行环境</td><td>销毁重建，代价极低</td></tr>
+<tr><td>会话（session）</td><td>append-only 事件日志，Agent 的外部记忆</td><td>服务端持久化，可观察、可恢复、可回看</td><td>持久层保障，是整个架构的"事实源"</td></tr>
+</table>
+
+<div class="highlight">
+<strong>长效知识点：append-only 日志为什么是关键支点。</strong>只追加不修改意味着：①日志天然是完整审计轨迹，任何时刻都能回答"Agent 当时为什么这么做"；②任何组件都能从日志重建状态，"恢复"从特殊能力变成默认属性；③大脑可以放心做成无状态——因为状态从来不在它身上。这与数据库 WAL、事件溯源（event sourcing）是同一族设计，只是这次被抬到了整个 Agent 运行架构的层面。
+</div>
+
+<div class="intuition-box">
+<p>把 session 想成 Agent 的"黑匣子 + 外接硬盘"：大脑只是一个可以随时更换的处理器，真正的"记忆"和"事实"都在那条只增不改的日志里。容器从"宠物"变回"牲口"，靠的就是这次状态外置。</p>
+</div>
+</div>
+
+<!-- ==================== 四 ==================== -->
+<div class="section">
+<h2 id="sec-4">四、三资源模型：Agents / Environments / Sessions</h2>
+
+<p>拆开大脑和双手之后，整套系统自然长成了三种资源。理解这三个名词，就理解了 Managed Agents 的 API 形状——这也是"配置 / 环境 / 运行"三层分离的直接产物：</p>
+
+<table>
+<tr><th>资源</th><th>是什么</th><th>包含什么</th><th>类比</th></tr>
+<tr><td>Agents（智能体）</td><td>配置</td><td>用哪个模型、什么系统提示词、能调哪些工具、有哪些护栏</td><td>岗位说明书：职责与权限边界</td></tr>
+<tr><td>Environments（环境）</td><td>执行上下文</td><td>sandbox 容器规格、预装好的依赖包、网络与资源策略</td><td>工位与设备：干活用的物理条件</td></tr>
+<tr><td>Sessions（会话）</td><td>一次具体的运行</td><td>完整事件历史存于服务端，可实时观察、可中断后恢复</td><td>一次具体的任务执行记录</td></tr>
+</table>
+
+<p>这三层分离的价值在于<strong>复用与隔离的正交性</strong>：同一个 Agent 配置可以跑在不同的 Environment 里（测试环境用小规格、生产用大规格）；同一个 Environment 可以同时承载多个 Session；Session 之间互不可见，各自的事件流独立持久化。任何一层变更都不需要动另外两层。</p>
+
+<div class="intuition-box">
+<p>这就是容器编排时代的"镜像 / 运行时 / 实例"三分法在 Agent 世界的复刻——历史一再证明，把"定义、环境、运行"拆开，是规模化系统的成人礼。</p>
+</div>
+</div>
+
+<!-- ==================== 五 ==================== -->
+<div class="section">
+<h2 id="sec-5">五、拆开之后到底赚到了什么</h2>
+
+<p>解耦不是为了架构好看，而是逐个清偿旧架构的债。四笔收益里，每一笔都对应三宗罪中的一条：</p>
+
+<h3>1. 凭证安全：钥匙不再和陌生人锁一屋</h3>
+
+<div class="arch-diagram">
+凭证隔离链路
+  你的密钥 ──► 存前【信封加密】 ──► Vault（保险库，独立于执行环境）
+                                      │
+      需要取用时：必须携带【签了名的请求 token】
+                                      │
+                                      ▼
+              双手 sandbox：拿到的只是"刚好够用的授权"
+              Agent 现场写的代码再怎么折腾，也碰不到原始密钥
+</div>
+
+<p>三层防御叠在一起：<span class="term">vault</span>（保险库）把凭证物理隔离出执行环境；<span class="term">信封加密</span>（envelope encryption）保证存进去之前就已加密、密钥之钥另处保管；取出时还要带<span class="term">签名的请求 token</span>，请求合法性可验证。叠加"大脑与双手之间以受控接口通信、敏感 token 不进 sandbox"的设计，一次提示注入的爆炸半径被压缩到"这一次执行的产出"，而不再是"你的全部凭证"。</p>
+
+<h3>2. 延迟大降：用户等的本来就不是模型</h3>
+
+<div class="highlight">
+<strong>生产数据（官方博客口径）：</strong>拆掉"每次都冷启动容器"的开销后，<span class="term">TTFT</span>（time-to-first-token，首 token 时间）中位数（p50）下降约 <strong>60%</strong>，最慢的一批（p95）下降 <strong>90% 以上</strong>。这个数字揭示了一个尴尬的事实——过去用户感受到的"Agent 很慢"，很大一部分根本不是模型在想，而是容器在启动。
+</div>
+
+<table>
+<tr><th>分位</th><th>TTFT 改善</th><th>含义</th></tr>
+<tr><td>p50（中位数）</td><td>约 -60%</td><td>一半以上的请求体验直接改善</td></tr>
+<tr><td>p95（长尾）</td><td>-90% 以上</td><td>最糟糕的等待基本被冷启动消除，长尾收敛</td></tr>
+</table>
+
+<h3>3. 会话可持久、可恢复</h3>
+<p>session 是持续的事件流：你可以实时看到 Agent 干活的每一步，也可以在任意时刻把某个 session 接着跑下去。容器崩了不再等于从头再来——<code>wake(sessionId)</code> 唤回、重放日志、继续执行，恢复是架构自带的默认能力而非补丁。</p>
+
+<h3>4. 部署灵活：托管或自托管</h3>
+<p>既可以用平台托管的云容器图省心，也可以把 sandbox 放进你自己的 <span class="term">VPC</span> 自托管，满足合规与"数据不出域"的要求。旧架构里"harness 假设资料在本地容器"的写死假设被拆除后，双手长在哪里变成了一个可配置项。</p>
+
+<table>
+<tr><th>维度</th><th>旧架构（三合一容器）</th><th>Managed Agents（三层解耦）</th></tr>
+<tr><td>启动开销</td><td>每个任务冷启动完整容器</td><td>大脑无状态热启动，双手按需供给</td></tr>
+<tr><td>凭证位置</td><td>与生成代码同室</td><td>vault + 信封加密 + 签名 token 隔离</td></tr>
+<tr><td>崩溃后果</td><td>session 全丢，从头再来</td><td>从 append-only 日志恢复续跑</td></tr>
+<tr><td>故障模型</td><td>宠物：只能抢救</td><td>牲口：直接替换重启</td></tr>
+<tr><td>部署形态</td><td>网络对穿或整体搬迁</td><td>托管云容器 / 客户 VPC 自托管</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>四条收益看似各不相干，其实都从同一个决定里长出来：状态外置 + 执行隔离。架构上真正的杠杆，往往是这种"一个决定清偿多笔债"的决定。</p>
+</div>
+</div>
+
+<!-- ==================== 六 ==================== -->
+<div class="section">
+<h2 id="sec-6">六、一手教训：harness 追着模型脾气改</h2>
+
+<p>官方博客里有一段特别值得拎出来：<strong>harness 编码的是"模型当前做不到什么"的假设，而这些假设会随着模型进化过期</strong>。官方举了一个具体的例子链：</p>
+
+<div class="arch-diagram">
+一段优化从"救命补丁"到"死重"的一生
+┌──────────────────────────────────────────────┐
+│ Sonnet 4.5 时代：模型感到快碰到上下文末尾时      │
+│ 会"赶工"——急急忙忙草草收尾（context anxiety）   │
+│        ▼                                      │
+│ harness 补丁：加入【上下文重置】（context reset）│
+│ 在接近上限前主动清理并接力，问题解决 ✅          │
+│        ▼                                      │
+│ 下一代模型：赶工行为自然消失                     │
+│        ▼                                      │
+│ 那段重置优化变成死重（dead weight），还得删 ❌    │
+└──────────────────────────────────────────────┘
+</div>
+
+<p>这件事戳中的现实是：<strong>如果你自己维护 harness，你就得永远追着模型的脾气改</strong>——这一代模型有某个怪癖你补一段，下一代变了你再删一段，删晚了它就是负担，删早了问题复发。而 Managed Agents 的产品逻辑正建立在这一点上：这些跟着模型版本来回横跳的优化，平台替你扛；对外的接口（session / harness / sandbox 三个抽象）保持稳定，背后的实现随模型进化自由更换。</p>
+
+<table>
+<tr><th>维度</th><th>自建自维护 harness</th><th>托管 harness</th></tr>
+<tr><td>升级跟随</td><td>每次模型换代人工评估、改补丁、回归测试</td><td>平台跟随模型同步演进</td></tr>
+<tr><td>补丁腐化风险</td><td>高：为旧模型弱点打的补丁容易在新模型上变死重</td><td>由平台统一清理</td></tr>
+<tr><td>工程精力去向</td><td>大量耗在"伺候 Agent 怎么跑"</td><td>集中到领域知识与上下文组织</td></tr>
+<tr><td>失败模式知识</td><td>自己踩坑自己攒</td><td>平台跨客户沉淀</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>这与著名的 Bitter Lesson 同源：利用"计算与模型持续变强"这一事实的方法，长期总赢过"手工编码智能假设"的方法。harness 里每一行为模型短板打的补丁，都暗中标好了过期日期。</p>
+</div>
+</div>
+
+<!-- ==================== 七 ==================== -->
+<div class="section">
+<h2 id="sec-7">七、谁该用 Managed Agents</h2>
+
+<p>官方给了一个很清醒的判断：<strong>对绝大多数团队来说，维护一套 harness 是"不产生差异化"的纯开销</strong>。你的产品凭什么赢？是你的领域知识、你对上下文的组织能力，而不是你的 Agent 循环写得比别人精巧。基础设施这层能交出去就交出去，把精力留给真正拉开差距的地方。当然，前提是先回答更上游的问题：你的场景到底需不需要一个长时运行的 Agent，还是一个固定 workflow 就够了。</p>
+
+<div class="warn-box">
+以下客户数字来自<strong>厂商侧口径或第三方转述</strong>，属于营销性材料，理解量级即可，不建议作为选型论证的硬证据。
+</div>
+
+<table>
+<tr><th>客户</th><th>厂商口径的效果</th><th>备注</th></tr>
+<tr><td>Notion</td><td>自定义 Agent 把"约 12 小时的活压到约 20 分钟"</td><td>具体任务类型未详述</td></tr>
+<tr><td>Sentry</td><td>调试 + 自动生成 PR 的 Agent，单个工程师几周做出过去要几个月的成果</td><td>口径为效率对比</td></tr>
+<tr><td>Rakuten / Asana / Atlassian</td><td>跨部门铺开 Agent，约一周即可上线（第三方另有 Rakuten 任务周转 24 天→5 天的转述）</td><td>强调部署速度而非效果</td></tr>
+</table>
+
+<p>除核心架构外，平台还带了一组生产级特性：Memory 与 Dreaming（定时回顾 session、从中提炼模式、整理记忆）、Outcomes（Agent 按评分标准给自己的产出打分）、多 Agent 编排、权限策略、webhook，以及用 MCP tunnel 连接私网内的服务器。</p>
+
+<div class="highlight">
+<strong>一个可对照的生产数字（非营销口径）：</strong>本节真正值得带走的是第五节的 TTFT 数据——p50 降约 60%、p95 降 90% 以上。它是架构变更与可测指标之间的直接因果，也是"解耦赚到真钱"的最硬证据；上面的客户案例只是佐证方向。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>把 Agent 的"定义 / 环境 / 运行"在概念上先拆开，即使暂时不用托管平台</li>
+<li>自己实现 Agent 状态时，优先选 append-only 事件日志，恢复能力免费送</li>
+<li>把凭证放进独立 vault，执行环境只拿短时、最小够用的授权</li>
+<li>长任务设计成"可从最后一个事件续跑"，而不是"祈祷别断"</li>
+<li>评估自建 vs 托管时，把"跟随模型换代改 harness"的隐性成本算进去</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>别把密钥与模型现场生成的代码放在同一个执行环境里</li>
+<li>别用可变的状态快照当 Agent 记忆——崩溃恢复与审计都会变脆</li>
+<li>别为当前模型的怪癖写死过重的补丁，忘了给它标"过期日期"</li>
+<li>别拿厂商客户案例的数字当选型硬证据，认准可复测的指标</li>
+<li>别跳过"到底需不需要 Agent"的判断直接上重型基础设施</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>整条产品线的叙事其实只有一句话：把开发者从"伺候 Agent 怎么跑"里解放出来，让你只管"Agent 该干什么"。而这一切的技术支点，就是那个朴素的决定——把大脑和双手拆开。</p>
+</div>
+</div>
+
+<!-- ==================== 八 ==================== -->
+<div class="section">
+<h2 id="sec-8">八、参考来源</h2>
+<div class="source-link">
+<p><strong>参考来源：</strong></p>
+<p>1. <a href="https://www.anthropic.com/engineering/managed-agents" target="_blank">Anthropic 工程博客：Scaling Managed Agents — Decoupling the brain from the hands（2026-04）</a></p>
+<p>2. <a href="https://claude.com/blog/building-with-claude-managed-agents" target="_blank">Anthropic 官方博客：building with Claude Managed Agents</a></p>
+<p>3. <a href="https://notes.kamacoder.com/llm/claude/managed_agents.html" target="_blank">卡码笔记：Claude Managed Agents 详解（抓取于 2026-08-09）</a></p>
+<p>4. 第三方解读：clauder-navi（TTFT 数据与 execute(name, input) 接口）、epsilla（Brain/Hands/Session 安全分析）</p>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么把 harness 和 sandbox 放在同一个容器里是错的？</summary>
+<div class="answer">
+<p>三个层面的错误：安全上，你的长效凭证与模型现场生成的不可信代码同处一室，一次提示注入就可能升级为凭证窃取，整个容器都是爆炸半径；可靠性上，session 状态焊在容器里，容器一崩进度全丢，长任务无法恢复；运维上，容器成了"宠物"，卡死只能抢救不能替换，且故障表象混在一起难以定位。正确做法是把推理（大脑）、执行（双手）、状态（session）拆成独立接口，各自可失败、可替换。</p>
+</div>
+</details>
+
+<details>
+<summary>append-only 事件流凭什么成为整个架构的支点？</summary>
+<div class="answer">
+<p>只追加不修改带来三个性质：一是完整的审计轨迹，任何时刻都能重放"Agent 当时为什么这么做"；二是任何组件都能从日志重建状态，崩溃恢复从特殊能力变成默认属性——大脑挂了重启一个、wake(sessionId) 唤回、重放到最后一条事件继续跑；三是大脑可以放心做成无状态，横向扩展不再有状态同步负担。这与数据库 WAL、事件溯源是同一族设计，本质是把"事实"集中到一条不可变日志里，其他组件都退化成可丢弃的缓存。</p>
+</div>
+</details>
+
+<details>
+<summary>TTFT 为什么能降 p50 约 60%、p95 降 90% 以上？</summary>
+<div class="answer">
+<p>旧架构下每个任务都要冷启动一个完整容器（含 harness、sandbox、依赖），这段时间用户只能干等，而它被错误地记在了"模型慢"头上。拆开之后，大脑是无状态服务可以常驻热启动，双手按需供给，冷启动不再是每次会话的固定税。p95 降幅远大于 p50，说明原先的长尾主要就是冷启动排队造成的。这提醒我们：优化 Agent 延迟时，先量"模型外"的开销，往往比调模型本身收益大。</p>
+</div>
+</details>
+
+<details>
+<summary>Sonnet 4.5 的"赶工"案例说明了什么工程道理？</summary>
+<div class="answer">
+<p>它说明 harness 里的很多优化本质是"为某个模型版本的某个行为缺陷打的补丁"，这类补丁有隐含的过期日期：Sonnet 4.5 快碰到上下文末尾会急着草草收尾，团队加了上下文重置来治；下一代模型行为消失，那段优化就成了死重，还得人工删。自维护 harness 意味着永远追着模型脾气改。推论有二：补丁要写得可拆卸、可度量（能证明它还有没有用）；如果你没有精力长期跟随模型换代，把这层交给随模型同步演进的平台是理性选择。</p>
+</div>
+</details>
+
+<details>
+<summary>Agents、Environments、Sessions 三个资源为什么要分开建模？</summary>
+<div class="answer">
+<p>因为它们的变化节奏与复用方式不同：Agents 是配置（模型、提示词、工具、护栏），随业务策略调整；Environments 是执行上下文（容器规格、依赖），随资源与合规需求调整；Sessions 是一次次具体运行，天然只增。分开后获得正交性：同一个 Agent 可跑在测试/生产不同 Environment，同一个 Environment 可并发承载多个互不可见的 Session，任何一层变更不影响另外两层。这是"定义/环境/运行"三分法在 Agent 领域的标准应用，与容器时代的镜像/运行时/实例同构。</p>
+</div>
+</details>
+
+<details>
+<summary>凭证安全的三层设计分别防什么？</summary>
+<div class="answer">
+<p>vault 防的是"物理同室"：凭证被移出执行环境，Agent 现场代码根本接触不到密钥本体；信封加密防的是"静态泄露"：数据入库前已加密，加密数据的密钥又另行保管，拿到存储也解不开；签名请求 token 防的是"冒领取用"：每次取凭证都要带可验证合法性的签名请求，非法调用者无法冒领。三层叠加后，即使发生提示注入，攻击者能影响的也只是当前这一次执行的产出，而不是你的长效凭证体系。</p>
+</div>
+</details>
+
+<details>
+<summary>我的团队该自建 harness 还是用托管平台？</summary>
+<div class="answer">
+<p>三个判据：一看差异化——你的竞争力在领域知识与上下文组织，而 harness 属于"不产生差异化"的开销时，倾向托管；二看维护力——自建的隐性成本大头是"跟随模型换代改补丁"，没有专人长期跟进就会积累死重与隐患；三看约束——数据不出域、合规审计等硬性要求下，确认平台是否支持 VPC 自托管这类形态。例外情况：你的产品本身就是 Agent 基础设施，或对编排有极特殊的定制需求，自建才划算。上任何重型方案前，先回答"是否真的需要长时 Agent 而非固定 workflow"。</p>
+</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

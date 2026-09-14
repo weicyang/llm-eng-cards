@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GE03 · 从 Prompt 到 Graph 的工程范式实践</title>
+<style>
+/* 项目标准 CSS */
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、范式转型：Loop 时代结束</a>
+<a href="#s2">二、五大设计层级：从指令到拓扑</a>
+<a href="#s3">三、六大必设计对象：图的骨架</a>
+<a href="#s4">四、可靠性五大约束机制</a>
+<a href="#s5">五、能力边界与协作策略</a>
+<a href="#s6">六、实施路径：护栏而非疫苗</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>GE03 · 从 Prompt 到 Graph 的工程范式实践</h1>
+<p class="subtitle">五大设计层级 / 六大必设计对象 / 五大约束机制 / Graph 的能力边界</p>
+
+<div class="intuition-box">
+<p>Prompt 控制一次回答，Loop 控制一个节点的行为，Graph 控制整个系统的拓扑。可靠性从来不是模型给不了的，而是控制流没有显性化——把"接下来做什么"从模型脑子里搬进一张可检查、可恢复、可审批的图里。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、范式转型：Loop 时代结束</h2>
+
+<p>2023 年以来的 AI 工程经历了多次层级跃迁：从 <span class="term">Prompt Engineering</span>（写好一次指令）到 Context Engineering（管好模型能看到的信息），再到 <span class="term">Harness Engineering</span>（设计智能体运行的约束环境），再到 2026 年 6 月由 Peter Steinberger、Boris Cherny、Addy Osmani 几乎同周点燃的 Loop Engineering（设计自动提示智能体的循环系统）。而仅仅一个月后，2026 年 7 月，Peter Steinberger 公开宣布 Loop Engineering 时代结束——他的依据是 LongGraph 类图编排引擎的内部使用量已超过 <strong>6500 万次</strong>：当图的运行时已经成为基础设施，"循环"就不再是架构，而只是图里的一个节点。</p>
+
+<div class="highlight">
+<strong>规模信号：</strong>LangGraph 自 2024 年 1 月发布以来已成为图编排的事实标准，月下载量达数千万级，被 Klarna、Replit、Elastic 等公司用于生产；Gartner 数据显示，使用多智能体编排框架的企业 AI 项目占比从 2023 年的 12% 升至 2025 年的 45%。行业分析同时指出，<strong>30%~40% 被放弃的 agentic AI 项目源于编排与架构失败，而非模型能力不足</strong>——这正是范式从 Loop 转向 Graph 的根本动力。
+</div>
+
+<h3>本质关系：Loop 是 Graph 的子集</h3>
+
+<p>这不是简单的"新一代替代旧一代"。从图论角度看，一个自修正循环就是一个<strong>带自环的有向图</strong>——只有一个节点、一条指回自己的边。Loop 没有消失，它被收编了：在 Graph 工程里，循环成为某个节点内部的局部机制，而节点之间的调度、分支、汇合、暂停由图的拓扑统一管理。</p>
+
+<div class="arch-diagram">
+   Loop 时代：单节点自环                Graph 时代：拓扑统管一切
+ ┌─────────────────────┐          ┌────────┐  条件边  ┌──────────┐
+ │  提示 Prompt         │          │ 规划节点 │ ───────▶ │ 执行节点A │
+ │    ↓                │          └───┬────┘          └────┬─────┘
+ │  执行 Act            │              │               ┌────┴─────┐
+ │    ↓                │    ───▶      │               │ 执行节点B │ 并行扇出
+ │  观察 Observe        │          ┌───▼────┐          └────┬─────┘
+ │    ↓                │          │ 验证节点 │ ◀─────────────┘
+ │  重复（while True）   │          └───┬────┘
+ └─────────────────────┘              │ 通过 ──▶ 审批节点(Interrupt) ──▶ END
+   控制流藏在循环体里                    控制流显式声明在边上
+          Loop ⊂ Graph：循环只是图中的一条自环边
+</div>
+
+<h3>Loop 为什么撑不住：复合失败的数学</h3>
+
+<p>Loop 在小任务上工作得很好，但当任务步骤变多时，三种结构性缺陷会同时爆发。第一是<strong>状态不透明</strong>：循环反复原地修改同一个上下文对象，五轮之后没人能回答"第 3 步为什么选了工具 X"，因为那段信息已被第 4 步覆盖。第二是<strong>隐式分支</strong>：散落在循环体里的 if 语句制造出十几条隐藏路径，你以为有一个工作流，实际有十七个，且一个都没测过。第三是<strong>重试纠缠</strong>：循环体内的副作用（数据库写入、消息发送）会随重试再执行一遍。</p>
+
+<p>更致命的是复合失败的概率账：假设单步成功率高达 95%，五步流水线的整体成功率只剩约 77%，十步降到 60%，二十步跌破 36%。这就是生产环境中复杂任务失败率远超团队预期的原因——它不是模型问题，是概率论问题。</p>
+
+<div class="formula">
+端到端成功率 = (单步成功率)<sup>步骤数</sup><br>
+0.95⁵ ≈ 77% ｜ 0.95¹⁰ ≈ 60% ｜ 0.95²⁰ &lt; 36%
+</div>
+
+<table>
+<tr><th>维度</th><th>Loop 工程</th><th>Graph 工程</th></tr>
+<tr><td>控制流</td><td>隐式：while 循环 + 散落 if</td><td>显式：拓扑声明，边即规则</td></tr>
+<tr><td>状态</td><td>单一上下文对象被原地变异</td><td>带类型的 State，唯一真相源</td></tr>
+<tr><td>分支</td><td>隐藏路径，无法枚举测试</td><td>条件边集中管理，可遍历验证</td></tr>
+<tr><td>故障恢复</td><td>从头重跑，重付全部成本</td><td>Checkpoint 断点续跑</td></tr>
+<tr><td>人工介入</td><td>阻塞进程等输入</td><td>Interrupt 持久暂停 + 恢复</td></tr>
+<tr><td>可观测性</td><td>读日志猜迭代位置</td><td>每个超步快照可回放、可分叉</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>Loop 问的是"下一步做什么"，Graph 回答的是"什么依赖什么"。前者把逻辑藏在顺序里，后者把逻辑声明在拓扑上——这个差别就是全部的产品价值。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、五大设计层级：从指令到拓扑</h2>
+
+<p>Graph 工程不是凭空出现的第五层，而是叠在既有四层之上的封顶结构。理解它的关键是：<strong>前面的层没有消失，而是被逐层包裹继续生效</strong>——图里的每个节点内部仍然有 Prompt、有 Context 注入、有自己的 Harness 约束、甚至有自己的 Loop。</p>
+
+<table>
+<tr><th>层级</th><th>功能</th><th>技术实现</th><th>控制对象</th></tr>
+<tr><td><strong>Prompt</strong></td><td>定义任务目标</td><td>模型指令、输出格式约束、少样本示例</td><td>单次模型响应</td></tr>
+<tr><td><strong>Context</strong></td><td>提供信息上下文</td><td>RAG 检索注入、工具 Schema、记忆读取</td><td>模型能看到什么</td></tr>
+<tr><td><strong>Loop</strong></td><td>自主修正循环</td><td>提示→执行→检查→反馈四步循环</td><td>单节点内的行为</td></tr>
+<tr><td><strong>Harness</strong></td><td>运行时约束</td><td>条件下沉、预算、超时、权限白名单</td><td>节点的执行环境</td></tr>
+<tr><td><strong>Graph</strong></td><td>节点拓扑管理</td><td>状态流控制、确定性路由、检查点持久化</td><td>整个系统</td></tr>
+</table>
+
+<div class="arch-diagram">
+                    ┌─────────────────┐
+                    │      Graph      │  节点拓扑 / 状态流 / 全局预算
+                  ┌─┴─────────────────┴─┐
+                  │        Loop         │  单节点自修正循环（提示→执行→检查→反馈）
+                ┌─┴─────────────────────┴─┐
+                │         Harness         │  运行时约束：条件下沉 / 超时 / 权限
+              ┌─┴─────────────────────────┴─┐
+              │          Context            │  数据注入：检索 / 工具 Schema / 记忆
+            ┌─┴─────────────────────────────┴─┐
+            │             Prompt              │  任务目标定义：指令 / 格式约束
+            └─────────────────────────────────┘
+         五层是包裹关系而非替代关系：上层约束下层，下层支撑上层
+</div>
+
+<h3>各层解决什么失灵</h3>
+
+<p>每一层的出现都对应一种具体的失灵模式。Prompt 层解决"模型不知道该干什么"；Context 层解决"模型知道该干什么但手头没材料"；Loop 层解决"一次做不对"——生成器自评倾向于自我表扬，因此 Loop 的核心设计是生成/评估分离，让独立的怀疑者角色去挑刺；Harness 层解决"做的时候越界"——把散落在提示词里的软约束下沉为运行时的硬约束，例如工具白名单、单次调用 token 上限；Graph 层解决的是前面四层都碰不到的问题：<strong>多个节点之间的顺序、依赖、并行、汇合与恢复</strong>。</p>
+
+<div class="highlight">
+<strong>生产注脚：</strong>Loop 层的规模化代表是 Stripe 的自动合并流水线——每周合并超过 1300 个机器编写的 PR，靠的就是"发现任务→派发→验证→合并"的自运行循环。但这条流水线本身就是一个被 Harness 严格约束的图：验证不通过的 PR 走错误边回退，合并动作前有审批门。层级越高，约束越硬。
+</div>
+
+<div class="intuition-box">
+<p>五层的关系像俄罗斯套娃：Prompt 是最里面那层，Graph 是最外面那层。你没法跳过里层直接做外层——一个节点内部的 Prompt 写不好，图设计得再漂亮也只是把错误调度得更快。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、六大必设计对象：图的骨架</h2>
+
+<p>一张生产级 Graph 有六个必须显式设计的对象：<span class="term">State</span>（状态）、<span class="term">Node</span>（节点）、<span class="term">Edge</span>（边）、<span class="term">Reducer</span>（合并器）、<span class="term">Checkpoint</span>（检查点）、<span class="term">Interrupt</span>（中断）。它们分别回答六个问题：信息放在哪、活由谁干、下一步去哪、并行写入怎么合并、崩了从哪续、什么时候停下来等人。</p>
+
+<div class="arch-diagram">
+            ┌──────────── State：图内唯一真相源（先于节点定义）────────────┐
+            │   带类型 Schema：user_request / task_plan / evidence / ...  │
+            ▼                                                             │
+ START ──▶ [Node 判断] ──── Edge：确定性路由条件 ────▶ [Node 执行A] ──────┤
+            │  写局部更新                        写局部更新 │              │
+            └────────── Reducer：并行写入合并策略 ◀─────────┘              │
+                            │                                             │
+                    每个超步结束 ──▶ Checkpoint：快照落盘（崩溃恢复）        │
+                            │                                             │
+                  [Node 审批] ── Interrupt：暂停等人 ── resume ────────────┘
+</div>
+
+<table>
+<tr><th>对象</th><th>职责</th><th>典型框架实现</th><th>缺失后果</th></tr>
+<tr><td>State</td><td>唯一真相源，带类型 Schema</td><td>TypedDict / Pydantic 模型</td><td>节点各说各话，隐式传参失控</td></tr>
+<tr><td>Node</td><td>按可验收性划分的执行单元</td><td>函数 / 子智能体 / 子图</td><td>巨型节点无法单独测试与定位</td></tr>
+<tr><td>Edge</td><td>确定性路由条件</td><td>普通边 / 条件边 / Send 动态扇出</td><td>分支靠模型即兴发挥，不可复现</td></tr>
+<tr><td>Reducer</td><td>并行写入的合并策略</td><td>追加合并 / 覆盖 / 自定义合并函数</td><td>并行分支互相覆盖，结果丢失</td></tr>
+<tr><td>Checkpoint</td><td>崩溃恢复与时间旅行</td><td>SQLite / Postgres 检查点存储</td><td>第 18 步崩溃，前 17 步成本全部重付</td></tr>
+<tr><td>Interrupt</td><td>人工审批节点建模</td><td>interrupt() + Command(resume=)</td><td>高风险操作无人把关或进程僵死</td></tr>
+</table>
+
+<h3>State：先于节点定义的唯一真相源</h3>
+
+<p>State 是贯穿整个图的共享记录，必须在画任何节点之前先定义。它把节点的输入输出全部显性化：谁读了什么、谁写了什么，在 Schema 上一目了然。工程上的黄金法则是"<strong>不在 State 里的东西就等于不存在</strong>"——禁止全局变量、禁止隐藏上下文，节点只通过合并局部更新（patch）的方式修改 State。这样做的直接收益是减少把完整对话历史塞给每个节点的需要，从源头抑制上下文膨胀。</p>
+
+<pre><code>class WorkflowState(TypedDict):
+    user_request: str
+    task_plan: list[str]
+    evidence: Annotated[list[str], operator.add]  # Reducer：追加合并
+    draft: str                                    # 默认 Reducer：覆盖
+    retry_count: int
+</code></pre>
+
+<h3>Node：按可验收性划分，而不是按功能划分</h3>
+
+<p>节点是有限界的执行单元，内容可以是一次 LLM 调用、一个完整的工具使用智能体、一个纯 Python 函数、一次数据库查询、一套测试，甚至是一次人工审批请求。划分节点的核心标准是<strong>可验收性</strong>：一个节点必须能独立回答"它做对了吗"。判断发票金额是否超过审批阈值不需要 LLM，用确定性代码即可；判断一封邮件是不是退款请求才需要模型。已知业务规则留在确定性节点里，只在需要语义理解、生成、规划或处理歧义的地方才引入 LLM 节点。</p>
+
+<h3>Edge：优先用代码做路由</h3>
+
+<p>边定义节点之间的依赖与控制规则，常见类型包括直接边、条件边、并行边、回环边、错误边、人工控制边和事件触发边。路由函数本质上是 <code>State → 下一条边名</code> 的纯函数。关键设计原则：<strong>能用确定性代码判断的路由，绝不用模型判断</strong>——"测试失败走修复节点、构建成功走发布节点"这类条件是纯代码逻辑；只有语义级的分流（这个问题属于退款还是技术支持）才交给 LLM 分类器。每多一处模型路由，就多一处不可复现的分支。</p>
+
+<ul>
+<li><strong>直接边 / 条件边</strong>：固定流程与规则分支的骨架，条件边是 State 到边名的纯函数映射</li>
+<li><strong>并行边 / 动态扇出（Send）</strong>：把一批子任务同时派发给多个执行节点，配合 Reducer 汇合</li>
+<li><strong>回环边</strong>：验证不过就回炉重做——这正是被收编进图里的 Loop，且带次数上限</li>
+<li><strong>错误边</strong>：重试耗尽后进入降级或人工兜底路径，阻断失败级联</li>
+<li><strong>人工控制边 / 事件触发边</strong>：衔接 Interrupt 审批与外部事件（Webhook、定时器）</li>
+</ul>
+
+<h3>Reducer：并行扇出的合并规则</h3>
+
+<p>当图做<span class="term">扇出/扇入</span>（fan-out/fan-in，把一路并行拆成多路再汇合）时，多个节点会在同一个超步里写同一个 State 键。没有 Reducer 时默认行为是覆盖——后写的赢，前面分支的成果凭空消失。以 LangGraph 为例，每个 State 键可以挂独立的 Reducer：标注 <code>Annotated[list, operator.add]</code> 的键会追加合并（适合证据列表、消息流），普通键则覆盖（适合草稿、计数器终值）。自定义 Reducer 还能实现去重、取最大值、按优先级合并等策略。</p>
+
+<h3>Checkpoint：把"重头再来"变成"断点续跑"</h3>
+
+<p>Checkpoint 在每个<span class="term">超步</span>（super-step，图中一批可并行节点完成一次状态提交的执行单位）结束时把 State 快照落盘，按 thread_id 组织成线程。它一次解锁四种能力：崩溃后从最后成功步骤恢复；人工审批的持久暂停；时间旅行调试——回放任意历史步骤；以及在任意检查点分叉状态探索替代路径。更精细的机制是<strong>待写入保留</strong>：若某超步中一个节点失败，同一超步里已成功节点的写入会被保存，恢复时不重跑它们。</p>
+
+<div class="highlight">
+<strong>生产案例（成本账）：</strong>一个复杂智能体工作流要做 20 次 LLM 调用，每次 0.05 美元。没有 Checkpoint 时，进程在第 18 步崩溃意味着重跑全部 20 次调用，白白烧掉 1 美元；有 Checkpoint 时从第 18 步恢复，只为剩余 2 次调用付 0.1 美元。国内某 Agent 团队落地"检查点恢复 + 状态机快照"后，<strong>故障重启恢复时间从分钟级降至秒级</strong>；另一套分层超时 + 断点续跑方案把系统可用性从 78% 提升到 99.5%。
+</div>
+
+<h3>Interrupt：把人工审批建模成一等公民</h3>
+
+<p>高风险操作（对外付款、删除数据、给客户发邮件）前必须有人类把关，但"等人"可能持续数小时甚至数天，进程不可能一直阻塞。Interrupt 的解法是：节点内调用 <code>interrupt(payload)</code>，运行时把当前 State 通过 Checkpointer 落盘后无限期等待；审批人通过外部系统做出决定后，用 <code>Command(resume=决定)</code> 重新唤起图，interrupt 调用就地返回该决定，流程继续。Oracle 公开的差旅审批工作流就是这个模式：生成审批摘要 → checkpoint 到数据库 → interrupt 等审批人 → 用同一 thread_id 恢复并写入最终业务记录。</p>
+
+<p>Interrupt 的工程规则有四条，全部指向同一个本质——它不是"暂停一个函数"，而是持久状态机上的检查点：不要把 interrupt 调用包进 try/except（暂停机制依赖异常传播）；不要调换同一节点内多个 interrupt 的顺序（恢复时按顺序重放）；payload 保持 JSON 可序列化、不传复杂对象；interrupt 之前已执行的副作用必须幂等（恢复时节点会在中断点之前重新执行）。</p>
+
+<h3>框架实现对照：六对象并非某一框架的私产</h3>
+
+<p>六大对象是图/工作流工程的通用抽象层，在不同运行时里有对应实现，选框架本质上是在选持久化形态与生态绑定。</p>
+
+<table>
+<tr><th>框架</th><th>State</th><th>Checkpoint</th><th>Interrupt / 人工介入</th><th>典型定位</th></tr>
+<tr><td>LangGraph</td><td>TypedDict/Pydantic + Reducer</td><td>SQLite/Postgres 检查点存储</td><td>interrupt() + Command(resume=)</td><td>LLM 原生的图编排，快速迭代</td></tr>
+<tr><td>Temporal</td><td>工作流代码内状态</td><td>事件历史自动持久化</td><td>Signal / 等待机制</td><td>通用持久化执行，超大规模</td></tr>
+<tr><td>AWS Step Functions</td><td>JSON 状态机</td><td>托管服务快照</td><td>回调 / 等待令牌模式</td><td>与云服务深度集成</td></tr>
+<tr><td>Azure Durable Functions</td><td>代码优先的编排状态</td><td>事件历史自动重放</td><td>外部事件等待</td><td>Serverless 长任务</td></tr>
+</table>
+
+<p>差异在抽象侧重：LangGraph 围绕 LLM 节点做了深度优化（消息流、流式 token、模型分层），Temporal 带着微服务世界的持久化执行基因（付费客户已超 3000 家，含 Nvidia、Netflix），云托管服务则用灵活性换运维成本。六对象的设计方法是可移植的——用其中任何一家把图设计清楚，迁移到另一家主要是机械翻译工作。</p>
+
+<div class="intuition-box">
+<p>六大对象的记忆锚点：State 是账本，Node 是工人，Edge 是路线图，Reducer 是仲裁员，Checkpoint 是存档点，Interrupt 是门禁。账本不先立，其余五样全是乱账。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、可靠性五大约束机制</h2>
+
+<p>Graph 提供了骨架，可靠性来自约束。生产实践收敛出五大约束机制，前两条管"结果可信"，后三条管"过程可控"。</p>
+
+<table>
+<tr><th>约束机制</th><th>解决的问题</th><th>落地要点</th></tr>
+<tr><td>验收证据回溯</td><td>"做完了"不等于"做对了"</td><td>每个节点产出可验证证据（测试结果/校验记录），验收节点按证据回溯而非听信自述</td></tr>
+<tr><td>节点类型隔离</td><td>生成者自评必然自我表扬</td><td>判断 / 执行 / 验证三类节点物理分离，验证节点由独立的怀疑者角色承担</td></tr>
+<tr><td>幂等性保障</td><td>重试造成重复副作用</td><td>请求级幂等键（UUID 贯穿全程）；无法幂等的外部调用走 outbox 表 + 补偿事务</td></tr>
+<tr><td>资源预算限制</td><td>循环失控烧穿 Token 与时间</td><td>次数上限（递归限制）、时间超时（分层超时）、Token 预算（单步约为模型上限的 70%）</td></tr>
+<tr><td>State-Context 分离</td><td>上下文膨胀拖垮每一跳</td><td>State 只存结构化事实，长文档/原始材料放外部存储，按需注入</td></tr>
+</table>
+
+<h3>验收证据回溯与节点类型隔离</h3>
+
+<p>验收证据回溯要求每个执行节点的产出都附带可查验的证据——测试通过记录、编译日志、Schema 校验结果——验收节点依据证据链做判断，而不是采信执行者的自我陈述。判断/执行/验证三类节点隔离的经验依据来自生成器/评估器分离：让智能体给自己的输出打分时，它会系统性地倾向于自我表扬；而调教一个独立的怀疑者评估器，比让生成器变得自我批判容易得多。这就是验证节点必须与生成节点物理分离、而不是写在同一个提示词里当"自检步骤"的原因。</p>
+
+<h3>幂等性：重试的前提条件</h3>
+
+<p>图引擎的容错依赖重试，但重试只在节点<span class="term">幂等</span>（idempotency，同一操作执行一次与执行多次产生相同结果）时才安全。生产系统通常三层设防：给每次调用携带由图运行 ID + 步骤号派生的确定性幂等键，服务端先查键再执行；对不支持幂等的外部 API 采用 outbox 模式——先把调用意图写入本地表，由独立处理器发出并记录结果，崩溃也不丢不重；对天然不可逆的动作（已发出的邮件）准备同样幂等的补偿动作（发更正通知）。Saga 编排模式在月处理超千万次智能体交互的系统中验证了这套组合拳。</p>
+
+<h3>执行层保障：Loop 级与 Graph 级双层防线</h3>
+
+<div class="arch-diagram">
+┌──────────────────────── Graph 级：多节点拓扑管理 ────────────────────────┐
+│   并行调度 · 错误边回退 · 全局预算 · Checkpoint 恢复 · Interrupt 审批      │
+│                                                                          │
+│   ┌──────────── Loop 级：单节点内自修正 ────────────┐                     │
+│   │   提示 ──▶ 执行 ──▶ 检查 ──▶ 反馈               │                     │
+│   │     ▲                    │                     │                     │
+│   │     └──── 未达标则重跑（retry_count 上限 N）◀──┘                     │
+│   └────────────────────────────────────────────────┘                     │
+│                                                                          │
+│   Node1(含Loop) ──▶ Node2(含Loop) ──▶ 验证节点 ──▶ 审批 ──▶ END          │
+└──────────────────────────────────────────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>层级</th><th>职责</th><th>典型机制</th><th>失守后果</th></tr>
+<tr><td>Loop 级</td><td>单节点内把活干对</td><td>提示→执行→检查→反馈循环、独立评估器、重试上限</td><td>节点产出质量差，污染下游所有节点</td></tr>
+<tr><td>Graph 级</td><td>多节点之间不出乱子</td><td>确定性路由、并行合并、容错回退、状态快照、预算熔断</td><td>复合失败级联，局部错误放大为全局事故</td></tr>
+</table>
+
+<p>两层防线各管一段、互为兜底：Loop 级保证单点质量，Graph 级保证单点质量不够时系统不崩。一个常见的误区是把所有可靠性都压给 Loop——在节点内疯狂加自检——结果循环越套越深，提示词膨胀到四千 token、单步延迟 45 秒，最后还是靠图级的错误边和预算熔断才稳住。经验数据：分层超时策略（工具调用级、节点思考级、任务级三层独立超时）配合图级熔断，是可用性提升最显著的单点改造。</p>
+
+<div class="intuition-box">
+<p>可靠性公式：单节点质量决定下限，图的约束决定上限。Loop 级管"一次做对"，Graph 级管"错了也不炸"。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、能力边界与协作策略</h2>
+
+<p>Graph 工程是控制流工程，不是智能本身。它的能力范围非常清晰：<strong>管控确定性流程</strong>——节点调度顺序、状态转移、并行汇合、重试回退、预算熔断，这些全部是图的领地；而<strong>模型固有缺陷——幻觉、数据偏见、推理错误——图无法消除</strong>，只能验证与兜底。把 Graph 当成提升模型智商的手段，是这一范式最常见的误用。</p>
+
+<table>
+<tr><th>问题类型</th><th>确定性</th><th>交给谁</th><th>具体手段</th></tr>
+<tr><td>节点执行顺序 / 依赖</td><td>确定</td><td>Graph</td><td>拓扑声明、普通边</td></tr>
+<tr><td>规则化路由（金额阈值、测试成败）</td><td>确定</td><td>Graph（代码）</td><td>条件边纯函数实现</td></tr>
+<tr><td>语义理解 / 意图分类</td><td>非确定</td><td>模型</td><td>LLM 节点 / 分类器边</td></tr>
+<tr><td>内容生成 / 规划</td><td>非确定</td><td>模型</td><td>生成节点 + 独立验证节点</td></tr>
+<tr><td>幻觉抑制</td><td>混合</td><td>双重保险</td><td>模型侧检索增强 + 图侧证据验证门</td></tr>
+<tr><td>数据偏见</td><td>—</td><td>模型 / 数据层</td><td>Graph 无能为力，需训练与数据治理</td></tr>
+</table>
+
+<h3>Graph 护栏 vs 纯模型：可靠性的量化对比</h3>
+
+<p>回到复合失败的数学。纯模型驱动的 Loop 里，每一步的成功率就是模型当次的发挥，十步任务的端到端成功率约为 0.95 的十次方 ≈ 60%。Graph 护栏做的事情是提高"有效单步成功率"：节点失败后有受控重试（如最多 3 次、指数退避），重试仍失败走错误边进入降级路径或人工兜底，而不是级联崩溃。假设受控重试把单步有效成功率从 95% 提到 99.5%，同样的十步任务端到端成功率就从 60% 回到 95% 以上——这就是护栏的价值：不改变模型，改变失败的传播方式。</p>
+
+<div class="highlight">
+<strong>生产案例（护栏效果）：</strong>行业调研显示 57% 的组织已有某种形态的生产级智能体，但工程负责人对各组件成熟度评分时，可观测性始终垫底——系统"平均表现好、边缘死得惨"。引入图级约束（每超步快照、全链路追踪、预算熔断）的团队，故障定位从"翻日志猜迭代"变为"回放指定检查点"，配合分层超时将可用性从 78% 提升至 99.5% 的案例已在多个团队复现。
+</div>
+
+<h3>双重保险：确定性给 Graph，非确定性给模型</h3>
+
+<p>正确的协作策略是分工而非二选一：凡是能写成规则的——顺序、阈值、重试次数、审批门槛、预算——全部下沉到图里用代码表达；凡是需要理解与创造的——读懂需求、写方案、解释歧义——留给模型节点。两边互为保险：图保证模型即使犯错也在受控范围内传播（错误边 + 验证门拦截），模型的语义能力弥补图无法处理模糊地带的缺口。这条边界也决定了 Graph 工程的职业定位：它不替代模型工程，它是模型能力进入生产环境的准入安检。</p>
+
+<div class="intuition-box">
+<p>Graph 治不了模型的病，但能防止病扩散。确定性逻辑交给图是免费午餐，非确定性推理留给模型是必要成本，双重保险才是生产级。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、实施路径：护栏而非疫苗</h2>
+
+<p>图工程对行业的定位要清醒：<strong>它是系统护栏，不是万能疫苗</strong>。护栏的意思是——车（模型）本身必须能开，护栏只保证冲出路面时不坠崖；指望 Graph 拯救一个能力不达标的模型，只会得到一个更精密地生产错误答案的系统。</p>
+
+<table>
+<tr><th>阶段</th><th>动作</th><th>验收标准</th></tr>
+<tr><td>① 画拓扑</td><td>先设计 Graph 再实现 Edge：列出全部节点与分支，画出完整流程图</td><td>任何一次真实任务都能在图上走完一条路径</td></tr>
+<tr><td>② 立 State</td><td>定义带类型 Schema，明确每个键的读写方与 Reducer</td><td>节点间零隐式传参，"不在 State 即不存在"</td></tr>
+<tr><td>③ 拆节点</td><td>按可验收性划分判断 / 执行 / 验证节点，确定性逻辑用代码节点</td><td>每个节点可独立测试、可独立判定对错</td></tr>
+<tr><td>④ 接持久化</td><td>挂 Checkpointer（开发用 SQLite、生产用 Postgres），高风险点插 Interrupt</td><td>杀进程后能从最后检查点续跑；审批可跨天恢复</td></tr>
+<tr><td>⑤ 收紧约束</td><td>从 Prompt 到 Graph 逐级收紧：加预算、幂等键、证据回溯、错误边</td><td>单步预算熔断生效；重复执行无重复副作用</td></tr>
+</table>
+
+<p>"先设计 Graph 再实现 Edge"是这一路径中最反直觉也最重要的一条：多数团队的失败路径是先写节点、边跑边补路由，最后拓扑是长出来的而不是设计出来的，隐藏分支遍地。正确顺序是先穷举节点与分支（此时边只是纸上的线），确认覆盖所有真实路径后，再逐条把边实现为确定性函数。"分层约束逐级收紧"则意味着不要一步到位：先靠 Prompt 层跑通，观察哪里失灵，再在失灵处叠加 Loop、Harness、Graph 层的约束——每加一层都应对应一个已观测到的具体失败模式。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>State Schema 先于一切节点代码落笔</li>
+<li>规则化路由一律用纯函数条件边</li>
+<li>高风险副作用节点前插 Interrupt 审批</li>
+<li>每个 LLM 节点设 Token/次数/时间三重预算</li>
+<li>生产 Checkpointer 用 Postgres 等持久存储</li>
+<li>验证节点与生成节点物理隔离、角色对立</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在 while 循环里堆 if 分支制造隐式拓扑</li>
+<li>不要让模型决定可以写成代码的路由</li>
+<li>不要在没有 Reducer 的键上做并行扇出</li>
+<li>不要用内存 Checkpointer 跑生产环境</li>
+<li>不要把完整对话历史塞进每个节点（State-Context 不分）</li>
+<li>不要指望 Graph 修复幻觉——它只能拦截，不能根治</li>
+</ul>
+</div>
+</div>
+
+<p>最后算一笔护栏的投资回报账。图工程的成本有三项：前期设计（画拓扑、立 State）、运行时开销（检查点存储、验证节点的额外调用）、认知负担（团队需理解图语义）。对应的收益是：崩溃重跑成本从全量降到剩余步骤、故障定位从小时级翻日志变为分钟级回放检查点、高风险操作获得完整审计链。经验阈值是：当系统满足"单任务步骤数 ≥10、单次运行成本达美元级、含外部副作用"三条中的任意一条时，收益端就开始明显压过成本端；三条全不满足时，先用 Loop + Harness 把问题跑出来再说。</p>
+
+<div class="intuition-box">
+<p>实施顺序口诀：先画图、再立账（State）、后招工（Node）、修路（Edge）、设卡（Checkpoint/Interrupt）、收网（约束）。护栏是给会开的车装的，不是给不会开的车装的。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+<details>
+<summary>Loop 工程和 Graph 工程是代际替代关系吗？</summary>
+<div class="answer">不是替代，是收编。从图论角度看，一个自修正循环就是一个带自环边的单节点有向图，所以 Loop 天然是 Graph 的子集。Graph 工程出现后，循环没有消失，而是退居为节点内部的局部机制；节点之间的调度、分支、汇合、暂停则上收到图的拓扑层统一管理。实践中五层架构（Prompt/Context/Loop/Harness/Graph）是包裹关系：图里的每个节点内部仍然跑着自己的 Prompt、上下文注入和自修正循环。</div>
+</details>
+<details>
+<summary>为什么 State 必须先于节点定义？</summary>
+<div class="answer">因为 State 是图内唯一真相源，节点的输入输出契约全写在 State Schema 上。先定义 State 能带来三个直接收益：一是把节点间的信息流全部显性化，禁止全局变量和隐式传参，"不在 State 里的东西就等于不存在"；二是让每个节点只通过局部更新合并的方式改状态，避免多节点原地变异同一个对象造成状态混乱；三是从源头抑制上下文膨胀——节点按需读取 State 中的结构化事实，而不是每个节点都背着完整对话历史。反过来先写节点再补 State，得到的 Schema 必然是迁就实现的流水账。</div>
+</details>
+<details>
+<summary>边（Edge）的路由为什么优先用代码而不是模型判断？</summary>
+<div class="answer">因为路由是整个系统里被遍历次数最多的决策点，它的不确定性会被每一跳放大。"测试失败走修复节点、金额超阈值走审批节点"这类条件是纯确定性逻辑，用纯函数实现可复现、可单测、零成本；交给模型判断则每次路由都是一次采样，分支不可复现、调试无从下手。只有语义级分流（用户意图属于退款还是咨询）才值得引入 LLM 分类器。工程经验是：每把一处确定性路由替换成模型路由，就多一个无法枚举测试的隐藏分支。</div>
+</details>
+<details>
+<summary>Reducer 主要解决什么问题？纯串行图需要它吗？</summary>
+<div class="answer">Reducer 解决并行写入冲突：当图做扇出/扇入时，多个节点在同一个超步里写同一个 State 键，默认覆盖语义会让后写的分支抹掉先写分支的成果。框架里每个 State 键可以挂独立 Reducer——追加合并适合证据列表和消息流，覆盖适合草稿这类"只留最新"的字段，还可以自定义去重、取极值等策略。纯串行图确实很少触发写冲突，但显式声明 Reducer 仍是好习惯：一是拓扑将来大概率会演化出并行分支，二是它强制你思考每个键的合并语义，避免"默认覆盖"埋雷。</div>
+</details>
+<details>
+<summary>Checkpoint 的存储怎么选？不做 Checkpoint 的实际代价是什么？</summary>
+<div class="answer">选型按环境分：开发调试用内存或 SQLite 检查点即可，生产必须用 Postgres 等持久化存储，并保证 checkpoint 写入与业务数据同库或同事务边界，方便审计。不做 Checkpoint 的代价可以直接算钱：一个 20 次 LLM 调用、单次 0.05 美元的工作流，在第 18 步崩溃后只能从头重跑，浪费 1 美元；有检查点则只重付剩余 2 次的 0.1 美元。此外 Checkpoint 还是人工审批、时间旅行调试、状态分叉的共同前提——它是图工程里投入产出比最高的单一组件。</div>
+</details>
+<details>
+<summary>Interrupt 和"阻塞等待用户输入"有什么本质区别？</summary>
+<div class="answer">阻塞等待要求进程活着并占用资源，审批等待数小时到数天完全不可行；Interrupt 是持久化暂停——触发时运行时把当前 State 经 Checkpointer 落盘，进程可以直接退出，图无限期挂起；审批人在外部系统做出决定后，用同一个 thread_id 携带恢复指令重新唤起，interrupt 调用就地返回审批结果继续执行。所以 Interrupt 必须建模为图的一等对象并与 Checkpoint 绑定：没有检查点的中断无法跨进程恢复，没有中断的检查点则缺少人类把关的入口。两者合起来才构成完整的 human-in-the-loop。</div>
+</details>
+<details>
+<summary>Graph 工程能消除模型幻觉吗？</summary>
+<div class="answer">不能消除，只能拦截与兜底。Graph 是控制流工程，管的是节点调度、状态转移、重试回退这类确定性问题；幻觉和数据偏见是模型内部的生成缺陷，图结构碰不到。图能做的是双重保险里的那一重：设置独立的验证节点按证据回溯、在高风险副作用前插人工审批、用错误边把可疑输出导入降级路径。正确预期是——Graph 让幻觉造成的损害可控、可回滚、可追责，但根治幻觉仍要靠检索增强、模型选型与数据治理。</div>
+</details>
+<details>
+<summary>什么情况下不值得上 Graph 工程？</summary>
+<div class="answer">三类情况不值得。一是任务步骤少（三五步以内）、单步失败重跑成本低，此时一个带重试的 Loop 加 Harness 约束就够了，上 Graph 属于过度设计；二是需求极不稳定、流程本身每周都在变，过早固化拓扑反而成为迭代负担，应先用 Loop 快速试错；三是底层模型能力明显不达标——图是护栏不是疫苗，节点里的模型干不好活，图设计得再精密也只是更稳定地输出错误。判断标准很朴素：只有当复合失败率、崩溃重跑成本、人工审批需求中至少一项真实出现时，Graph 的投入才开始回本。</div>
+</details>
+<details>
+<summary>Graph 工程和传统工作流引擎（Airflow、BPMN）有什么区别？</summary>
+<div class="answer">两者思想同源——把控制流显式化——但设计目标不同。传统工作流引擎假设每个步骤的执行体是确定性的（SQL 任务、数据管道），状态轻量、失败模式单一。图工程框架为 LLM 工作流而生：节点执行时间跨度从秒到小时、输出非确定、人工审批可能等待数天、token 成本需要逐步计量。因此图框架提供了传统引擎没有的一等公民能力——非确定输出的 Reducer 合并、可跨进程暂停恢复的 Interrupt、消息流式输出、模型分层调度。工程经验是可迁移的：熟悉 Airflow 或 Step Functions 的团队，可以把图工程理解为"工作流引擎加上 LLM 原生扩展"。</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>

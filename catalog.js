@@ -1159,6 +1159,65 @@ window.CATALOG = {
       ]
     },
     {
+      "label": "III · Agent 工程范式 (Harness / Loop / Graph)",
+      "cards": [
+        {
+          "code": "HH01",
+          "title": "Harness 架构",
+          "tagline": "Three-Agent Harness (Planner/Generator/Evaluator)、Brain/Hands/Session、Context Resets、Sprint Contracts。",
+          "href": "./cards/topics/harness_architecture.html"
+        },
+        {
+          "code": "HH02",
+          "title": "Agent Harness 工程方法",
+          "tagline": "Agent = Model + Harness：四层架构、上下文重置、对抗性架构、三智能体协作。6h/$200 vs 20min/$9 的质量差距。",
+          "href": "./cards/topics/harness_architecture_deep.html"
+        },
+        {
+          "code": "HH03",
+          "title": "Harness Engineering 概念、实战与争议",
+          "tagline": "Harness定义 / 四层工程栈 / Tool-use vs Harness / CC/Amp/Hermes对比。",
+          "href": "./cards/topics/harness_engineering.html"
+        },
+        {
+          "code": "HH04",
+          "title": "Harness 与 Prompt / Context Engineering 的关系",
+          "tagline": "PE→CE→Harness演进 / 三维度对比 / Skills归属 / 全栈能力融合。",
+          "href": "./cards/topics/harness_vs_prompt_engineering.html"
+        },
+        {
+          "code": "LP01",
+          "title": "Loop Engineering 概念与架构",
+          "tagline": "从 Prompt Engineering 到 Loop Engineering：AI 工程的第四代范式。核心循环（意图→上下文→行动→观察→调整）、六大要素（自动触发、并行隔离、技能文件、连接器、子Agent、持久记忆）、五种 Loop 模式。",
+          "href": "./cards/topics/loop_engineering_concepts.html"
+        },
+        {
+          "code": "LP02",
+          "title": "生产级 Agent Loop 工程",
+          "tagline": "从 while loop 到三层架构（Loop/Skill/Orchestrator）。持久执行、step 级检查点、模型路由（60-80% 降本）、自我进化（Agent 构建自己的 Skill）、可观察性（信任层）。",
+          "href": "./cards/topics/loop_engineering_production.html"
+        },
+        {
+          "code": "GE01",
+          "title": "Graph Engineering 核心概念",
+          "tagline": "Job/Edge/State 三要素 / Fake Edge 虚假依赖 / Fork 钻石模式与独立验证 / Stop Rule 与 Human Gate / 实施七原则与三大业务落地。",
+          "href": "./cards/topics/graph_engineering_concepts.html"
+        },
+        {
+          "code": "GE02",
+          "title": "从 Loop 到 Graph 的 AI 工程演进",
+          "tagline": "五层技术堆栈演进（Prompt→Context→Harness→Loop→Graph）/ Org Graph vs Work Graph / 三大爆发因素 / 控制论四大警告与 5 节点判定。",
+          "href": "./cards/topics/loop_to_graph_evolution.html"
+        },
+        {
+          "code": "GE03",
+          "title": "从 Prompt 到 Graph 的工程范式实践",
+          "tagline": "五大设计层级 / 六大必设计对象（State/Node/Edge/Reducer/Checkpoint/Interrupt）/ 五大约束机制 / 能力边界与模型分工策略。",
+          "href": "./cards/topics/prompt_to_graph_engineering.html"
+        }
+      ]
+    },
+    {
       "label": "IV · 记忆系统 (Memory Systems)",
       "cards": [
         {
@@ -1969,6 +2028,107 @@ window.CATALOG = {
           "title": "数据隐私与脱敏",
           "tagline": "PII 检测与脱敏、差分隐私、联邦学习、GDPR / 个保法合规、训练数据溯源。",
           "href": "./cards/audit/data_privacy.html"
+        }
+      ]
+    },
+    {
+      "label": "VIII · Agent 框架案例 (Framework Case Studies)",
+      "cards": [
+        {
+          "code": "HC01",
+          "title": "Claude Code 架构设计",
+          "tagline": "五层架构拆解、八种上下文注入、六种编排模式、Task/Goal 状态外置、Compaction 与 System Reminder。三篇文章合并，从设计哲学到工程实践全覆盖。",
+          "href": "./cards/topics/claude_code_source_architecture.html"
+        },
+        {
+          "code": "HC02",
+          "title": "Claude Code 源码实现决策",
+          "tagline": "从源码实现讲透 7 个核心模块：三段启动链路、进程/交互状态分层、QueryDeps 最小接口、7 种 transition 恢复、5 种 Agent 类型、fork vs fresh、三级压缩管道。",
+          "href": "./cards/topics/claude_code_source_decisions.html"
+        },
+        {
+          "code": "HC03",
+          "title": "Claude Code 架构进化",
+          "tagline": "设计哲学、渐进式披露、工具设计教训、提示缓存优化 — 从 Claude Code 迭代中提炼 Agent 框架设计心法。",
+          "href": "./cards/topics/claude_code_evolution.html"
+        },
+        {
+          "code": "HC04",
+          "title": "Agentic Coding 模式",
+          "tagline": "Claude Code 架构揭秘 / Cursor vs Windsurf / CLAUDE.md 约定 / Background Agent / Subagent 并行。",
+          "href": "./cards/topics/agentic_coding_patterns.html"
+        },
+        {
+          "code": "HC05",
+          "title": "Agent 时代的 CLI 路线：命令行工具演进",
+          "tagline": "Terminal/Shell/CLI 三概念辨析 / Agent 时代 CLI 回归的工程原因 / GUI 没有输 / Agent 友好 CLI 设计六条清单 / 窄腰层与三层分工。",
+          "href": "./cards/topics/claude_code_cli_history.html"
+        },
+        {
+          "code": "HC06",
+          "title": "CLAUDE.md 编写规范：项目记忆与上下文管理",
+          "tagline": "与 README/Prompt/Memory 的区别 / 四级存放位置 / 该写六类与不该写五类 / 短准硬写法正反例 / 大项目拆分与上下文算账。",
+          "href": "./cards/topics/claude_md_writing_guide.html"
+        },
+        {
+          "code": "HC07",
+          "title": "Anthropic 大规模代码迁移方法论",
+          "tagline": "规模与结果 / 为什么代码迁移适合多 Agent / 先造机械裁判 / 六步迁移流水线 / 成本收益算账 / 别修代码，修产生代码的循环。",
+          "href": "./cards/topics/claude_code_large_migration.html"
+        },
+        {
+          "code": "HC08",
+          "title": "Claude Code 动态工作流：运行时生成 Harness",
+          "tagline": "单上下文三大失败模式 / 工作流是真代码不是提示词 / 六种可复用编排模式 / 触发、监控、恢复与沉淀 / 适用边界与 token 成本。",
+          "href": "./cards/topics/claude_code_dynamic_workflows.html"
+        },
+        {
+          "code": "HC09",
+          "title": "Claude Managed Agents：决策与执行分离",
+          "tagline": "Agent 跑法演进 / 旧架构三宗罪 / 大脑与双手拆开 / Agents·Environments·Sessions 三资源模型 / harness 追着模型改的一手教训。",
+          "href": "./cards/topics/claude_managed_agents.html"
+        },
+        {
+          "code": "HC10",
+          "title": "Claude Code 入门指南",
+          "tagline": "安装配置 / 核心命令 / 自定义命令 / CLAUDE.md / 模型选择 / 高级用法。",
+          "href": "./cards/topics/claude_code_complete_guide.html"
+        },
+        {
+          "code": "HC11",
+          "title": "Claude Code 长时自治运行与 GLM 5.2",
+          "tagline": "子代理拆解 / 自动压缩 / 后台长任务 / 记忆沉淀 / 运行时决定长跑上限。",
+          "href": "./cards/topics/claude_code_glm52_long_run.html"
+        },
+        {
+          "code": "HC12",
+          "title": "Claude Code Tool Search 动态工具加载",
+          "tagline": "延迟加载名单 / 三步取回 schema / 提示词缓存保全 / 与 RAG 式工具检索的取舍。",
+          "href": "./cards/topics/claude_code_tool_search.html"
+        },
+        {
+          "code": "HM01",
+          "title": "Hermes Agent 架构与实现",
+          "tagline": "KEPA 闭环、四层记忆、10 层提示词组装、ToolEntry 厚数据模型、五层纵深防御、Harness 运行时。从源码到设计思维的完整拆解。",
+          "href": "./cards/topics/hermes_agent_architecture.html"
+        },
+        {
+          "code": "HD01",
+          "title": "DeerFlow 架构",
+          "tagline": "ByteDance 开源 Super Agent Harness：LangGraph 图编排、11 层中间件、Sub-Agent 并行调度、Skills 渐进式加载、三层记忆、沙箱执行。",
+          "href": "./cards/topics/deerflow_architecture.html"
+        },
+        {
+          "code": "HD02",
+          "title": "DeerFlow 源码实现",
+          "tagline": "逐模块源码拆解：Config 17 子配置 + 热重载、14 层 Middleware 洋葱模型、10 层 System Prompt 解剖、SubAgent 6 种状态并发引擎、Sandbox 三层抽象、三级记忆架构、断点续跑五层机制。",
+          "href": "./cards/topics/deerflow_source_deep.html"
+        },
+        {
+          "code": "HO01",
+          "title": "OpenClaw 架构与实现",
+          "tagline": "源码级深度拆解：四层架构、三级记忆系统（工作/情景/语义）、Gateway-Pi 执行链路（云端大脑+本地肢体）、Cell Isolation 沙箱、混合搜索（向量+BM25+MMR）、多 Agent 7 层路由、自进化机制、架构优势与挑战。",
+          "href": "./cards/topics/openclaw_architecture_deep.html"
         }
       ]
     }

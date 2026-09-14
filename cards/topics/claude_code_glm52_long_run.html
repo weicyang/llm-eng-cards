@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HC11 · Claude Code 长时自治运行与 GLM 5.2</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(194,65,12,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(67,56,202,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#78716c}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、这场13小时实测证明了什么</a>
+<a href="#s2">二、全流程：需求分析 → 任务拆解 → 开发 → 测试</a>
+<a href="#s3">三、长时执行的六个工程方法</a>
+<a href="#s4">四、模型与运行时的分工</a>
+<a href="#s5">五、为什么长上下文能力决定 Agent 上限</a>
+<a href="#s6">六、演示：OpenClaw 的能力与边界</a>
+<a href="#s7">七、长时执行工程清单</a>
+<a href="#s8">八、相关知识点延伸</a>
+<a href="#s9">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>HC11 · Claude Code 长时自治运行与 GLM 5.2</h1>
+<p class="subtitle">按字幕重构：GLM 5.2 真正抬高的，是 Claude Code 的长时工程可用性；长时任务的上限，最终由运行时、任务拆解和上下文治理决定。</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>长时执行不是"让模型多聊一会儿"，而是一个系统工程问题：把任务拆成可验收的最小单元、把进度外置到文件、让运行时循环驱动执行——模型只需要"够用托底"，剩下的交给工程。</p>
+</div>
+
+<!-- ========== 1. 这场13小时实测证明了什么 ========== -->
+<div class="section">
+<h2 id="s1">一、这场13小时实测证明了什么</h2>
+
+<p>本视频的核心不是"GLM 5.2 答得更好"的能力展示，而是一场完整的 <span class="term">长时执行</span>（Long-Running，智能体长时间无人值守、持续推进任务的执行模式）实测：把 GLM 5.2 接入 Claude Code，让它在 40 多万行 TypeScript 的真实项目上自动运转，全程无人值守 13 小时。</p>
+
+<table>
+<tr><th>实测数据</th><th>含义</th></tr>
+<tr><td><strong>40 万+ 行 TypeScript</strong></td><td>对象不是 demo，而是大规模真实代码库</td></tr>
+<tr><td><strong>13 小时无人值守</strong></td><td>系统具备长时间持续推进的能力</td></tr>
+<tr><td><strong>30+ 份 <span class="term">spec 文件</span></strong>（需求/设计说明文档）</td><td>不是"上来就写代码"，而是先规划、先拆解</td></tr>
+<tr><td><strong>443 个带验收标准的任务</strong></td><td>每个任务可独立检查是否完成，循环执行有"裁判"</td></tr>
+</table>
+
+<div class="highlight">这类成果的关键，不是一次性代码生成，而是让模型在非常长的时间里保持目标一致。四组数字合起来证明一件事：Agent 已经具备从"聊几轮"到"交付完整工程流程"的过渡条件——前提是工程方法跟上。</div>
+
+<div class="intuition-box">
+<p>13 小时 × 443 个任务，意味着系统平均约 1.7 分钟闭环一个任务——这不是"模型写得快"，而是"循环没停、没跑偏、没谎报完成"。</p>
+</div>
+
+</div>
+
+<!-- ========== 2. 全流程拆解 ========== -->
+<div class="section">
+<h2 id="s2">二、全流程：需求分析 → 任务拆解 → 开发 → 测试</h2>
+
+<p>视频把完整的长时执行流程抽象为四个阶段，缺一个都会让循环跑不稳：</p>
+
+<div class="arch-diagram">
+┌────────────┐   ┌────────────┐   ┌────────────┐   ┌────────────┐
+│  需求分析   │ → │  任务拆解   │ → │    开发     │ → │    测试     │
+│ 读代码库    │   │ 写 spec    │   │ go 循环     │   │ 独立评估    │
+│ 明确目标    │   │ 拆任务     │   │ 逐个执行    │   │ 不过则返工  │
+└────────────┘   └────────────┘   └────────────┘   └────────────┘
+                       │                                    │
+                       ↓                                    │
+              30+ spec、443 任务   ←── 反馈驱动修正 ─────────┘
+              （每个任务带验收标准）
+</div>
+
+<table>
+<tr><th>阶段</th><th>Agent 做什么</th><th>产出</th></tr>
+<tr><td>需求分析</td><td>阅读代码库与架构，明确迁移/开发目标</td><td>全局理解、约束清单</td></tr>
+<tr><td>任务拆解</td><td>把目标拆成最小单元，每个附上验收标准</td><td>30+ 份 spec 文件、443 个任务条目</td></tr>
+<tr><td>开发</td><td>go 循环：读进度 → 执行任务 → 更新进度</td><td>代码改动、git 提交</td></tr>
+<tr><td>测试</td><td>独立评估验收标准是否满足</td><td>通过/不通过结论 + 反馈</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>四个阶段的顺序不能颠倒：没有需求分析，拆解就会跑偏；没有拆解，开发就是一团乱麻；没有独立测试，"完成"只是 Agent 的一面之词。</p>
+</div>
+
+<p>最容易被忽略的是"测试"阶段的独立性——评估不是执行 Agent 干完活后的自我表态，而是一个独立的判断步骤：不达标就带着反馈进入下一轮。这种"执行-评估分离"是降低假阳性（谎报完成）的核心机制，也是 443 个任务能逐个闭环的原因。</p>
+
+</div>
+
+<!-- ========== 3. 长时执行的六个工程方法 ========== -->
+<div class="section">
+<h2 id="s3">三、长时执行的六个工程方法</h2>
+
+<p>13 小时能跑下来，靠的不是一句超级提示词，而是六个具体的工程方法：</p>
+
+<div class="arch-diagram">
+go 命令循环（每轮执行一次）：
+
+   ┌──────────────────────────────────────────┐
+   │  ① 读进度文件（当前哪个任务没做完）          │
+   │          ↓                                 │
+   │  ② 执行当前任务（按 spec 与验收标准）        │
+   │          ↓                                 │
+   │  ③ 独立评估（是否通过验收？）                │
+   │     ├── 未达标 → 带着反馈进入下一轮          │
+   │     └── 达标   → git commit（留检查点）      │
+   │          ↓                                 │
+   │  ④ 更新进度文件 → 回到 ①                    │
+   └──────────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>方法</th><th>具体做法</th><th>解决什么问题</th></tr>
+<tr><td>最小单元拆解</td><td>任务拆到可独立验证的粒度，每个附验收标准</td><td>模型"谎报完成"</td></tr>
+<tr><td><span class="term">进度外置</span></td><td>任务状态写入进度文件，每轮先读进度再执行</td><td>上下文压缩后状态丢失</td></tr>
+<tr><td><span class="term">go 命令</span>循环</td><td>把"读进度 → 执行 → 评估 → 更新"封装成循环命令</td><td>长时执行需要人不断推动</td></tr>
+<tr><td><span class="term">bypass permissions</span></td><td><code>shift+tab</code> 切换到 bypass permissions 模式</td><td>权限弹窗打断无人值守执行</td></tr>
+<tr><td>单行启动提示词</td><td>提示词压成单行（go 会把提示词塞进 hook 的 JSON，换行会导致格式报错）</td><td>hook JSON 解析失败</td></tr>
+<tr><td>git 检查点</td><td>每完成一个功能就 git commit</td><td>跑偏后无法回滚</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>进度外置的本质是"不信记忆，信文件"：上下文会被压缩、会话会丢，但进度文件永远在。13 小时后 Agent 还能从断点继续，靠的就是记忆放在脑子外面。</p>
+</div>
+
+<p>两个细节特别能体现工程味道：一是启动提示词必须压成单行，因为 go 命令会把提示词塞进 hook 的 JSON 数据里，换行会直接破坏格式——这种坑在任何官方文档里都找不到，只能靠踩；二是开跑前要用 <code>shift+tab</code> 切到 bypass permissions，否则每隔几分钟弹一次权限确认，13 小时无人值守就成了笑话。当然，bypass permissions 的前提是工作区隔离可控。</p>
+
+</div>
+
+<!-- ========== 4. 模型与运行时的分工 ========== -->
+<div class="section">
+<h2 id="s4">四、模型与运行时的分工</h2>
+
+<p>视频给出的结论非常工程化：长时执行能力不是模型的独角戏，而是模型与运行时的合奏。<span class="term">Context Engineering</span>（上下文工程，系统性地管理模型能看到的信息以维持其行为稳定）是两者的结合点。</p>
+
+<div class="arch-diagram">
+┌───────────────────────┐      ┌───────────────────────┐
+│     模型层（GLM 5.2）   │      │   运行时层（Claude Code）│
+│                       │      │                       │
+│  理解代码与需求         │      │  任务调度（go 循环）     │
+│  生成代码改动           │ ←──→ │  文件读写              │
+│  遵循任务指令           │      │  进度管理              │
+│  长上下文保持           │      │  验收组织              │
+│                       │      │  权限 / 检查点          │
+└───────────────────────┘      └───────────────────────┘
+     模型负责"想"                 运行时负责"管"
+
+模型能力决定下限：理解不了代码，一切无从谈起
+运行时设计决定上限：没有调度、进度、验收，
+再强的模型也只是"聊天顾问"，不是"工程师"
+</div>
+
+<table>
+<tr><th>维度</th><th>模型层职责</th><th>运行时层职责</th></tr>
+<tr><td>理解</td><td>读代码、理解需求</td><td>提供文件访问、搜索工具</td></tr>
+<tr><td>生成</td><td>写代码、写 spec</td><td>落盘、格式校验</td></tr>
+<tr><td>指令遵循</td><td>遵循验收标准与约束</td><td>把 spec 与进度注入上下文</td></tr>
+<tr><td>状态</td><td>短期工作记忆</td><td>长期进度文件、git 历史</td></tr>
+<tr><td>质量</td><td>自我检查</td><td>独立评估、反馈闭环</td></tr>
+</table>
+
+<div class="highlight">分工一句话：模型管理解/生成/遵循指令，Claude Code 管调度/文件/执行/进度/验收。模型是工程师的脑子，运行时是工程师的工位、流程和质检体系——脑子再强，没有工位和质检，交付照样不靠谱。</div>
+
+<div class="intuition-box">
+<p>不要问"哪个模型更聪明"，要问"哪个模型够用托底"。过了托底线之后，模型能力的边际收益，远低于运行时设计的边际收益。</p>
+</div>
+
+</div>
+
+<!-- ========== 5. 长上下文决定上限 ========== -->
+<div class="section">
+<h2 id="s5">五、为什么长上下文能力决定 Agent 上限</h2>
+
+<p>视频给出了一个对比鲜明的对照实验：同样的任务，旧的 200K 上下文模型跑到中途直接上下文爆炸报错，无法跑完全程；换成 GLM 5.2 后才完成全程。差距不在"200K 不够大"这个数字本身——而在于长时执行中，日志、历史对话、工具结果、规划文件会持续累积，模型在长上下文中抓重点的能力，决定了它 13 小时后还能不能做对事。</p>
+
+<table>
+<tr><th>维度</th><th>旧 200K 模型</th><th>GLM 5.2</th></tr>
+<tr><td>长时结果</td><td>中途上下文爆炸报错</td><td>13 小时跑完全程</td></tr>
+<tr><td>上下文窗口</td><td>200K，长时任务捉襟见肘</td><td>大窗口，容错空间更高</td></tr>
+<tr><td>指令遵循</td><td>长历史中容易目标漂移</td><td>有改进，能遵循 spec 与验收标准</td></tr>
+<tr><td>工程意义</td><td>只能做短任务或重度人工干预</td><td>具备长时执行托底资格</td></tr>
+</table>
+
+<div class="highlight">
+<strong>背景：</strong>作者需要在一个 40 万+ 行 TypeScript 的真实项目上完成大规模迁移与开发，预期全程由 Agent 自动完成。<br>
+<strong>问题：</strong>旧的 200K 上下文模型执行到中途就报上下文爆炸错误——任务拆解好了，却跑不到终点，长时执行半途而废。<br>
+<strong>方案：</strong>换用 GLM 5.2（大窗口 + 指令遵循改进），并配套任务拆解、进度外置、go 循环、bypass permissions、单行提示词、git 检查点六件套。<br>
+<strong>效果：</strong>13 小时无人值守，产出 30+ 份 spec 文件和 443 个带验收标准的任务，全程跑完无需人工接管。
+</div>
+
+<div class="intuition-box">
+<p>"名义窗口大小"和"长任务中的真实可用性"是两回事：前者是装得下多少，后者是装完之后还能不能找到重点。旧模型爆炸不是因为装不下，而是因为装完后丢了焦点。</p>
+</div>
+
+</div>
+
+<!-- ========== 6. 能力与边界演示 ========== -->
+<div class="section">
+<h2 id="s6">六、演示：OpenClaw 的能力与边界</h2>
+
+<p>视频的演示环节把 Python 版 OpenClaw 接入网页对话，具体展示了"Agent 能做什么、边界在哪里"：</p>
+
+<table>
+<tr><th>能力</th><th>演示表现</th><th>背后机制</th></tr>
+<tr><td>长期记忆</td><td>记得自己叫"小白虾"，叫用户"老板"</td><td>记忆模块持久化人设</td></tr>
+<tr><td>工具调用</td><td>能查天气</td><td>接了天气 MCP 插件</td></tr>
+<tr><td>技能扩展</td><td>能用 skill 生成图片、读写文件</td><td>加载了对应 Skill</td></tr>
+<tr><td><strong>能力边界</strong></td><td><strong>答不出今天日期</strong></td><td>没装日期插件——是工具缺失，不是模型不行</td></tr>
+</table>
+
+<div class="highlight">
+<strong>背景：</strong>演示中 Agent 接了记忆模块（人设：自己叫"小白虾"，叫用户"老板"）和天气 MCP 插件，还能用 skill 生成图片、读写文件。<br>
+<strong>问题：</strong>用户问"今天几号"，Agent 答不出来——很多人第一反应是"模型太笨"。<br>
+<strong>方案：</strong>真实原因是只装了天气插件、没装日期插件；模型本身不知道实时日期，工具集里也没有能查日期的工具。<br>
+<strong>效果：</strong>这个案例精确划出了 Agent 的能力边界：能力 = 模型能力 × 工具配置，缺一个就露怯。补一个日期 MCP 插件即可解决，完全不需要升级模型。
+</div>
+
+<p>视频也诚实指出了 GLM 5.2 的能力边界：它仍是<strong>纯文本模型</strong>，页面审美偏弱，无法靠截图定位前端 bug。这意味着视觉验证环节仍然需要人参与——长时执行自动化的是"可验证"的部分，"不可验证"的部分要交还给人。</p>
+
+<div class="intuition-box">
+<p>日期问题的本质：Agent 的能力边界 = 模型能力 × 工具配置。别把工具缺失怪到模型头上，也别指望模型硬扛工具该干的事。</p>
+</div>
+
+</div>
+
+<!-- ========== 7. 工程清单 ========== -->
+<div class="section">
+<h2 id="s7">七、长时执行工程清单</h2>
+
+<table>
+<tr><th>方法</th><th>字幕传达的核心含义</th></tr>
+<tr><td>先规划再执行</td><td>先整理代码库与架构，再进入迁移与开发，不让模型"直接开写"</td></tr>
+<tr><td>任务必须可验收</td><td>每个任务有明确完成标准，否则循环执行容易漂移</td></tr>
+<tr><td>进度必须外置</td><td>让模型从任务文件读取未完成项，而不是只依赖聊天上下文记忆</td></tr>
+<tr><td>执行必须闭环</td><td>完成后要验证，未达标则带着反馈进入下一轮修正</td></tr>
+<tr><td>长上下文决定上限</td><td>真正的长任务能力，取决于长时间保持注意力的能力</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先把复杂任务拆成几十上百个可验收的小任务</li>
+<li>把 spec、任务状态、验收标准写入外部文件</li>
+<li>每完成一个功能就 git commit，留回滚检查点</li>
+<li>用长上下文能力维持目标一致性</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要把长时执行能力理解成"模型更会聊天"</li>
+<li>不要只看参数和窗口大小，忽略长时可用性</li>
+<li>不要省略规划、验收与恢复机制</li>
+<li>不要在非隔离环境开 bypass permissions</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>长时执行 = 可验收的任务 + 外置的进度 + 闭环的评估 + 可控的权限。四样缺一样，模型再强也会中途趴窝。</p>
+</div>
+
+</div>
+
+<!-- ========== 8. 相关知识点 ========== -->
+<div class="section">
+<h2 id="s8">八、相关知识点延伸</h2>
+
+<p>本页引用的已有知识点，可继续扩展阅读：</p>
+
+<table>
+<tr><th>知识点</th><th>与本页的关联</th></tr>
+<tr><td><a href="./claude_code_complete_guide.html">Claude Code 从零到一完整指南</a></td><td>本页所有运行时能力（权限模式、上下文管理）的基础</td></tr>
+<tr><td><a href="../topics/claude_code_source_architecture.html">Claude Code 源码架构解析</a></td><td>理解 go 循环、hook 等运行时机制的底层实现</td></tr>
+<tr><td><a href="../memory/claude_code_memory_system.html">Claude Code 记忆系统</a></td><td>与"进度外置"互补：内置记忆 vs 外部文件</td></tr>
+<tr><td><a href="../topics/claude_code_source_decisions.html">Claude Code 关键设计决策</a></td><td>理解模型层与运行时层为何这样分工</td></tr>
+<tr><td><a href="../topics/claude_code_evolution.html">Claude Code 演进路径</a></td><td>从对话工具到长时执行运行时的演化脉络</td></tr>
+<tr><td><a href="../llm/open_source_llm.html">开源大模型选型</a></td><td>GLM 5.2 等开源模型的选型依据</td></tr>
+<tr><td>Agent / LLM 评测方法</td><td>如何科学评估长时执行效果，而非只看演示</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>这一页是"实战案例"，上述知识点是"原理底座"：先看案例建立直觉，再回底座追问为什么，学习闭环就成了。</p>
+</div>
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s9">Q&A</h2>
+
+<details>
+<summary>这场 13 小时实测本质上证明了什么？</summary>
+<div class="answer">它证明的不是"GLM 5.2 答得更好"，而是"GLM 5.2 足以支撑 Claude Code 持续完成真实工程任务"。关键证据有三组：① 对象是 40 万+ 行 TypeScript 的真实项目，不是 demo；② 过程是 13 小时无人值守的循环执行，不是聊几轮；③ 产出是 30+ 份 spec 文件和 443 个带验收标准的任务，接近完整的软件工程流程。换句话说，开源模型的价值正在从"陪聊"转向"给 Agent 托底"，而托底的关键是长上下文与指令遵循，不是跑分。</div>
+</details>
+
+<details>
+<summary>为什么要把进度外置到文件，而不是依赖聊天记录？</summary>
+<div class="answer">聊天记录是不可靠的长期记忆：Claude Code 在上下文超过 95% 时会触发自动压缩，历史细节被总结成摘要，会话也可能因各种意外中断。如果 Agent 只靠聊天记忆知道自己"做到哪了"，压缩之后状态就丢了，循环会重复做已完成的任务或漏掉未完成的。把任务状态写入外部进度文件，每轮先读进度再执行，即使上下文被压缩、会话重启，下一轮依然能从断点精确继续。这是 13 小时长时执行能成立的关键设计。</div>
+</details>
+
+<details>
+<summary>go 命令循环是怎么工作的？为什么需要独立评估？</summary>
+<div class="answer">go 命令封装了一个闭环：① 读进度文件，拿到当前未完成的任务；② 按 spec 和验收标准执行任务；③ 独立评估验收标准是否满足；④ 未达标就带着反馈进入下一轮，达标就更新进度并 git commit，然后回到 ① 处理下一个任务。之所以需要独立评估，是因为执行任务的 Agent 很容易"自我感觉良好"——它主观认为做完了，但客观上未必。把执行和评估分开，只有通过验收才算完成，这是降低假阳性（谎报完成）的核心机制。</div>
+</details>
+
+<details>
+<summary>为什么要把启动提示词压成单行？</summary>
+<div class="answer">这是实践中踩出来的坑：go 命令会把启动提示词塞进 hook 的 JSON 数据结构里，而 JSON 字符串对换行敏感——带换行的提示词会直接破坏格式导致报错。所以作者把提示词压成单行。这类问题在任何官方文档里都查不到，它只存在于具体工程实现的接缝处。这也提醒我们：长时执行系统由很多这样的脆弱接缝组成，每一个接缝的鲁棒性都决定整体能不能跑满 13 小时。</div>
+</details>
+
+<details>
+<summary>长时执行为什么要切到 bypass permissions？有什么风险？</summary>
+<div class="answer">Claude Code 默认在修改文件、执行命令等敏感操作前请求确认。人机交互时这是安全网，但 13 小时无人值守场景下，每隔几分钟弹一次确认就意味着没人点、执行停摆。所以开跑前用 shift+tab 切到 bypass permissions 模式，让 Agent 完全自主执行。风险也很明显：Agent 可以执行任意危险操作。因此前提是工作区隔离可控（容器、虚拟机、一次性目录），并配合 git 检查点随时回滚。存有重要数据的主力机绝不能这么干。</div>
+</details>
+
+<details>
+<summary>为什么说长上下文能力决定 Agent 的上限？</summary>
+<div class="answer">因为长时执行中，日志、历史对话、工具结果、规划文件会持续累积进上下文。视频的对照实验说得很清楚：旧的 200K 模型在同一任务上中途上下文爆炸报错，而 GLM 5.2 靠更大的窗口和指令遵循改进跑完了全程。这说明名义窗口大小不等于长时可用性——前者是装得下多少，后者是装完之后还能不能找到重点。模型在长历史中丢失焦点，就会做错误的事，此时运行时调度再完美也救不回来。所以长上下文能力是上限，不是起点。</div>
+</details>
+
+<details>
+<summary>GLM 5.2 的能力边界在哪？哪些事必须留给人？</summary>
+<div class="answer">视频诚实指出了三条边界：① GLM 5.2 仍是纯文本模型，看不懂截图，无法靠截图定位前端 bug；② 页面审美偏弱，生成的 UI 需要人来把关；③ 能力受工具配置约束——演示中 Agent 答不出今天日期，是因为只装了天气 MCP 插件、没装日期插件。所以长时执行自动化的是"可验证"的部分（代码、测试、进度），而"不可验证"的部分（视觉效果、审美判断）要交还给人。人机分工的边界，就是"可验证性"的边界。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1kxLD6HEYN/" target="_blank">Claude Code如何全自动跑13小时？GLM 5.2开源天花板实测</a></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HH04 · Harness 与 Prompt / Context Engineering 的关系</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.warn-box{background:rgba(194,65,12,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 注意";display:block;font-weight:700;color:var(--orange);margin-bottom:.3rem}
+.note-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.note-box::before{content:"📝 补充说明";display:block;font-weight:700;color:var(--accent);margin-bottom:.3rem}
+.video-source{background:rgba(67,56,202,.04);border:1px solid var(--border);border-radius:8px;padding:1rem 1.4rem;margin:2rem 0 1rem;font-size:.9rem;color:#78716c}
+.video-source a{color:var(--accent)}
+.video-source .up-name{color:var(--purple);font-weight:600}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn">⌂ 首页</a>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、三代工程的层层递进</a>
+<a href="#s2">二、Prompt Engineering：把一句话说清楚</a>
+<a href="#s3">三、Context Engineering：管好所有输入信息</a>
+<a href="#s4">四、Harness Engineering：驾驭整个系统</a>
+<a href="#s5">五、AI IDE 差异的本质：Harness 质量之争</a>
+<a href="#s6">六、为什么 AI 程序员仍需人类</a>
+<a href="#s7">Q&A</a>
+</aside>
+<div class="container">
+
+<h1>HH04 · Harness 与 Prompt / Context Engineering 的关系</h1>
+<p class="subtitle">PE/CE/HE 层层递进 → AI IDE 差异本质 → AI程序员仍需人类的原因 → 驾驭系统全景</p>
+
+
+<!-- 顶部直觉 -->
+<div class="intuition-box">
+<p>三代"工程"是三个同心圆：Prompt Engineering 管好一句话，Context Engineering 管好所有输入，Harness Engineering 管好整个系统的运行与迭代——HE ⊃ CE ⊃ PE，外层包含内层，范围越大越接近真正的系统工程。</p>
+</div>
+
+<!-- ========== 1. 三代工程的层层递进 ========== -->
+<div class="section">
+<h2 id="s1">一、三代工程的层层递进</h2>
+
+<p>大模型本质是预测下一个字词的统计模型，给它的指令越精准、上下文越丰富，输出就越靠谱。围绕"如何让输出更靠谱"这件事，工程界的关注范围经历了三次扩张，形成了三代"工程"。</p>
+
+<table>
+<tr><th>概念</th><th>关注范围</th><th>核心动作</th><th>局限</th></tr>
+<tr><td><span class="term">Prompt Engineering</span></td><td>单次对话的提示词</td><td>角色设定 / 背景补充 / 历史引用 / 参考文档 / 输出格式</td><td>只调一次对话，管不了多步任务</td></tr>
+<tr><td><span class="term">Context Engineering</span></td><td>所有输入信息的系统化管理</td><td>RAG 检索 / Memory / 摘要压缩 / 工具选择</td><td>只管理信息输入，管不了执行与校验</td></tr>
+<tr><td><span class="term">Harness Engineering</span></td><td>整个 AI 应用系统</td><td>模型 + 工具 + 流程 + 评估 + 反馈 + 编排</td><td>无（本身就是系统工程方法论）</td></tr>
+</table>
+
+<div class="arch-diagram">
+              三代工程的包含关系与决策路径
+
+      ┌───────────────────────────────────────────────┐
+      │            Harness Engineering                │
+      │   ┌───────────────────────────────────────┐   │
+      │   │        Context Engineering            │   │
+      │   │   ┌───────────────────────────────┐   │   │
+      │   │   │    Prompt Engineering         │   │   │
+      │   │   └───────────────────────────────┘   │   │
+      │   └───────────────────────────────────────┘   │
+      └───────────────────────────────────────────────┘
+                    HE ⊃ CE ⊃ PE
+
+      症状 → 该补哪一层：
+      输出格式不稳、风格漂移 ──→ 补 PE（提示词/示例/格式约束）
+      答非所问、幻觉、知识过期 ──→ 补 CE（检索/记忆/压缩）
+      多步任务不可靠、出错没人兜底 ──→ 上 HE（工具/护栏/评估/反馈）
+</div>
+
+<div class="intuition-box">
+<p>判断该用哪代工程，看症状就够了：说错话是 PE 的事，记不住事是 CE 的事，办不成事还闯祸，就该 HE 出场了。</p>
+</div>
+
+<div class="highlight">
+简记：PE = 调一句话说得好；CE = 管所有信息管得好；HE = 驾驭整个系统跑得好。三者是包含关系：HE ⊃ CE ⊃ PE。
+</div>
+
+<p>需要强调的是，"包含"意味着做好 HE 的团队一定同时精通 PE 和 CE——提示词和上下文管理是 Harness 的输入层，是整套系统的地基。跳过地基直接搭上层建筑，是实践中最常见的失败模式。</p>
+
+</div>
+
+<!-- ========== 2. Prompt Engineering：把一句话说清楚 ========== -->
+<div class="section">
+<h2 id="s2">二、Prompt Engineering：把一句话说清楚</h2>
+
+<p>PE 是最早被系统化的方向，核心命题只有一个：如何在一轮对话内，让模型准确理解你的意图并稳定输出。它的所有技巧都围绕"单次输入的质量"展开。</p>
+
+<div class="intuition-box">
+<p>PE 的本质是"降低单次沟通的歧义"——你给模型的每一个字都在压缩它的猜测空间，猜测空间越小，输出越稳定。</p>
+</div>
+
+<table>
+<tr><th>手段</th><th>做法</th><th>解决什么问题</th></tr>
+<tr><td>角色设定</td><td>"你是资深后端工程师，熟悉 Go 与分布式系统"</td><td>输出风格与专业度漂移</td></tr>
+<tr><td><span class="term">Few-shot</span>（少样本示例）</td><td>给 2~3 个"输入→输出"样例再提问</td><td>格式不稳定、理解偏差</td></tr>
+<tr><td>输出格式约束</td><td>指定 JSON Schema、Markdown 结构、字段清单</td><td>下游程序解析失败</td></tr>
+<tr><td>思维链引导</td><td>"先分析约束条件，再给出结论"</td><td>复杂推理跳步出错</td></tr>
+<tr><td>边界声明</td><td>"不知道就说不知道，不要编造"</td><td>幻觉、过度自信</td></tr>
+</table>
+
+<p>PE 的天花板也很明显：它只作用于"这一轮对话"。一旦任务跨越多轮、需要外部知识、或要调用工具执行，再精妙的提示词也无能为力——这时就需要把关注范围从"一句话"扩大到"所有输入信息"。</p>
+
+<div class="note-box">
+PE 没有过时：即使到了 Harness 时代，System Prompt 依然是 Harness 输入层的核心组件。区别在于，PE 时代它是"全部"，HE 时代它只是"五分之一"。
+</div>
+
+</div>
+
+<!-- ========== 3. Context Engineering：管好所有输入信息 ========== -->
+<div class="section">
+<h2 id="s3">三、Context Engineering：管好所有输入信息</h2>
+
+<p>当任务复杂到单次提示词装不下时，工程重心转向了"进入模型窗口的一切信息"：哪些该检索进来、哪些该记住、哪些该压缩、哪些工具描述该挂载。这就是 Context Engineering 的战场。</p>
+
+<div class="intuition-box">
+<p>上下文窗口是模型的"工作记忆"，CE 就是这份工作记忆的调度员——不是塞得越满越好，而是在有限预算内装入当前任务最需要的信息。</p>
+</div>
+
+<div class="arch-diagram">
+              上下文装配流水线（CE 核心机制）
+
+  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐
+  │ RAG 检索 │  │ 长期记忆 │  │ 工具结果 │  │ 历史摘要 │
+  │ 外部知识 │  │ Memory │  │ 函数返回 │  │ 压缩旧对话│
+  └───┬────┘  └───┬────┘  └───┬────┘  └───┬────┘
+      └──────┬────┴──────┬────┴──────┬────┘
+             ▼           ▼           ▼
+      ┌──────────────────────────────────────┐
+      │   上下文装配器：筛选 → 排序 → 压缩 → 截断   │
+      └──────────────────┬───────────────────┘
+                         ▼
+      ┌──────────────────────────────────────┐
+      │  最终 Prompt：窗口预算内的最优信息组合    │
+      └──────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>机制</th><th>管理对象</th><th>典型手段</th></tr>
+<tr><td>RAG 检索</td><td>外部知识（文档、代码库）</td><td>向量检索 + 关键词检索 + 重排</td></tr>
+<tr><td>Memory</td><td>跨会话的用户偏好与事实</td><td>摘要存储、按需召回</td></tr>
+<tr><td>压缩</td><td>过长的对话历史</td><td>滚动摘要、滑动窗口、重要性筛选</td></tr>
+<tr><td>工具筛选</td><td>工具/函数描述清单</td><td>只挂载当前任务可能用到的工具</td></tr>
+</table>
+
+<p>CE 兴起的直接原因是<span class="term">Lost in the Middle</span>（中间迷失）现象：上下文越长，模型对中间位置信息的利用率越低。窗口从 4K 涨到 200K 并没有让问题消失——把 10 万字全塞进去，效果往往不如精选 3000 字。所以 CE 的核心动作永远是"筛选"而不是"堆砌"。</p>
+
+</div>
+
+<!-- ========== 4. Harness Engineering：驾驭整个系统 ========== -->
+<div class="section">
+<h2 id="s4">四、Harness Engineering：驾驭整个系统</h2>
+
+<p>PE 管一句话、CE 管所有输入，但当 Agent 要连续执行几十步、调用十几个工具时，光管好输入仍然不够——执行过程谁来约束？输出错了谁来发现？发现了怎么改进？这些问题催生了 Harness Engineering：把模型、工具、流程、评估、反馈组装成一个可控的整体。</p>
+
+<div class="intuition-box">
+<p>如果 PE 是"写一封好信"、CE 是"整理好全部材料"，HE 就是"运营一家公司"——材料只是输入，公司还要有流程、有质检、有复盘，才能持续稳定地交付。</p>
+</div>
+
+<div class="arch-diagram">
+┌──────────────────────── Harness 系统全景 ────────────────────────┐
+│                                                                 │
+│  输入层 ──→ ┌──────────┐  ┌──────────┐                          │
+│            │ 提示词模板  │  │ 上下文装配 │   ← PE + CE 的主场       │
+│            └─────┬────┘  └─────┬────┘                          │
+│                  └──────┬──────┘                                │
+│                         ▼                                       │
+│  执行层 ──→      ┌─────────────┐                                │
+│            │   大模型推理    │                                │
+│            └──────┬──────┘                                │
+│                   ▼                                             │
+│            ┌─────────────┐   ┌─────────────┐                   │
+│            │ 工具调用/沙箱 │ → │ 权限护栏/审批 │                   │
+│            └─────────────┘   └─────────────┘                   │
+│                                                                 │
+│  编排层 ──→  Agent 工作流 / 状态机 / 子任务拆分 / 自动重试          │
+│                                                                 │
+│  评估层 ──→  Eval 测试集 / A/B 实验 / 线上指标监控                 │
+│                                                                 │
+│  反馈层 ──→  失败案例回流 → 修正提示词/上下文/工具 → 下一轮循环      │
+└─────────────────────────────────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>层级</th><th>包含内容</th><th>对应的工程传统</th></tr>
+<tr><td>输入层</td><td>提示词模板、上下文装配</td><td>PE + CE（前两代的积累）</td></tr>
+<tr><td>执行层</td><td>模型推理、工具调用、沙箱、权限审批</td><td>传统软件安全工程</td></tr>
+<tr><td>编排层</td><td>工作流、状态机、重试、子任务拆分</td><td>分布式系统与流程引擎</td></tr>
+<tr><td>评估层</td><td>Eval 集、A/B 实验、监控告警</td><td>质量工程与可观测性</td></tr>
+<tr><td>反馈层</td><td>失败回流、自动修正、人工标注入库</td><td>闭环控制与持续集成</td></tr>
+</table>
+
+<p>注意这张全景图的结构：PE 和 CE 并没有被抛弃，而是被"收编"为 Harness 的输入层。Harness 真正新增的，是执行层的护栏、编排层的工作流、以及评估层与反馈层构成的<span class="term">Agent Loop</span>（智能体循环，Agent 感知—决策—执行—复盘的持续运转闭环）。</p>
+
+</div>
+
+<!-- ========== 5. AI IDE 差异的本质 ========== -->
+<div class="section">
+<h2 id="s5">五、AI IDE 差异的本质：Harness 质量之争</h2>
+
+<p>很多开发者有过同样的体验：同一个模型（比如 Claude Sonnet），在裸 API 里表现平平，换到 Cursor 或 Claude Code 里却像换了个脑子。差异不在模型本身，而在于 IDE 提供的 Harness 质量不同。</p>
+
+<div class="intuition-box">
+<p>AI IDE 本质上就是一个打包好的 Harness 系统——它替你预装了提示词模板、上下文管理、工具集成和护栏。你感受到的"IDE 差异"，其实是"别人家 Harness 设计水平"的差异。</p>
+</div>
+
+<table>
+<tr><th>差异点</th><th>说明</th><th>用户的直接感知</th></tr>
+<tr><td>System Prompt 设计</td><td>不同 IDE 的内置提示词质量不同</td><td>回答风格、稳定性、遵循指令的程度</td></tr>
+<tr><td>上下文管理策略</td><td>有的自动压缩与筛选，有的靠手动管理</td><td>长会话是否"降智"、跨文件修改准不准</td></tr>
+<tr><td>工具集成能力</td><td>MCP Server 支持程度、终端/浏览器接入深度</td><td>能不能真正动手改文件、跑命令</td></tr>
+<tr><td>代码理解深度</td><td>项目级索引 vs 文件级索引、符号解析能力</td><td>大型重构是否靠谱</td></tr>
+<tr><td>护栏与确认机制</td><td>危险操作拦截、diff 预览、回滚能力</td><td>敢不敢放手让它连续执行</td></tr>
+</table>
+
+<h3>5.1 主流 AI IDE 的 Harness 侧写</h3>
+
+<table>
+<tr><th>IDE</th><th>Harness 核心手段</th><th>定位特点</th></tr>
+<tr><td>Claude Code</td><td>CLAUDE.md 项目约定 + 权限分级确认 + Hooks 钩子</td><td>终端原生、约定驱动、可脚本化扩展</td></tr>
+<tr><td>Cursor</td><td>.cursor/rules 规则文件 + 全项目索引 + Tab 智能补全</td><td>IDE 深度集成、编辑体验顺滑</td></tr>
+<tr><td>Cline</td><td>MCP 生态 + Plan/Act 双模式 + 逐步确认</td><td>开源免费、可自托管、社区活跃</td></tr>
+</table>
+
+<div class="highlight">
+<strong>案例：OpenAI Codex 团队的 Harness 实践。</strong>背景：Codex 团队让 Agent 成为代码库的主要贡献者。问题：同一个模型在"裸调用"和"有组织的系统"中产出质量天差地别，直接放手必然失控。方案：构建完整 Harness——AGENTS.md 沉淀项目约定、linter 与 CI 充当自动审查官、Eval 集度量每次变更。效果：5 个月内产出近 <strong>100 万行代码</strong>，几乎全部由 Agent 生成并通过自动校验。这个案例说明：模型能力是公开商品，Harness 质量才是团队真正的护城河——IDE 之争的本质正在于此。
+</div>
+
+</div>
+
+<!-- ========== 6. 为什么 AI 程序员仍需人类 ========== -->
+<div class="section">
+<h2 id="s6">六、为什么 AI 程序员仍需人类</h2>
+
+<p>既然 Harness 这么强，AI 程序员会不会很快取代人类？恰恰相反——Harness 越强大，对人类工程师的要求反而越高，只是工作内容发生了迁移。</p>
+
+<div class="intuition-box">
+<p>AI 接管的是"执行"，人类保留的是"判断"：判断该建什么系统、判断结果对不对、判断出了问题谁负责——这三件事目前没有任何模型能签字画押。</p>
+</div>
+
+<table>
+<tr><th>关键环节</th><th>为什么 AI 做不了</th><th>人类做什么</th></tr>
+<tr><td>架构决策</td><td>系统设计、技术选型需要经验、权衡与担责</td><td>定方向、选技术栈、画边界</td></tr>
+<tr><td>业务理解</td><td>AI 不理解需求背后的真正意图与商业约束</td><td>澄清需求、定义验收标准</td></tr>
+<tr><td>质量把关</td><td>代码审查、安全审计需要人类的最终判断</td><td>Review 关键变更、对结果负责</td></tr>
+<tr><td>Harness 设计</td><td>搭建和优化 AI 开发系统本身就是高难度工程</td><td>设计提示词体系、工具、评估与反馈机制</td></tr>
+</table>
+
+<div class="highlight">
+<strong>案例：Anthropic 多智能体研究系统的"预算教训"。</strong>背景：Anthropic 构建了 orchestrator-worker 式多智能体系统处理复杂研究任务。问题：系统能力很强，但 token 消耗约为单 Agent 的 <strong>15 倍</strong>，若无控制会"用力过猛"烧掉预算。方案：由人类工程师设计任务分级策略——只在高价值、可并行的研究任务上启用重 Harness，并为每次运行设置预算上限与引用核查。效果：成本与收益重新对齐。启示：决定"何时用、用多重"的永远是人类的工程判断——AI 不会替你做 ROI 分析，这正是人类不可替代的位置。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>把工作重心迁移到"设计 Harness"：写清约定、建好评估、管好工具权限</li>
+<li>在架构决策、业务澄清、最终审查这三个环节保持亲力亲为</li>
+<li>用 CLAUDE.md / AGENTS.md 等约定文件沉淀团队知识，让 Agent 继承</li>
+<li>给 Agent 的每次重任务设置预算与验收标准</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要把"AI 能写代码"误解为"不需要人审查"——生成越快，审查越关键</li>
+<li>不要只做提示词调优员：PE 技巧的半衰期很短，系统能力才保值</li>
+<li>不要在没有验收标准的情况下让 Agent 长时间自主运行</li>
+<li>不要指望模型自己判断"这个任务值不值得花 15 倍成本"</li>
+</ul>
+</div>
+</div>
+
+<div class="highlight">
+AI 程序员不是替代程序员，而是让程序员的工作重心从"写代码"转向"驾驭 AI 写代码"——这恰恰就是 Harness Engineering 的核心思想。
+</div>
+
+</div>
+
+<!-- ========== Q&A ========== -->
+<div class="qa-section">
+<h2 id="s7">Q&A</h2>
+
+<details>
+<summary>PE、CE、HE 三者的关系是什么？</summary>
+<div class="answer">三者是层层递进的包含关系（HE ⊃ CE ⊃ PE）：①Prompt Engineering 关注单次对话的提示词设计（角色/背景/格式/约束）；②Context Engineering 关注所有输入信息的系统化管理（RAG 检索、Memory、摘要压缩、工具筛选）；③Harness Engineering 关注整个 AI 应用系统的设计（模型+工具+流程+评估+反馈+编排）。PE 解决"怎么把一句话说清楚"，CE 解决"怎么管理所有信息"，HE 解决"怎么让整个系统可靠运行"。做好 HE 的团队必然同时精通 PE 和 CE，因为输入层是整套系统的地基。</div>
+</details>
+
+<details>
+<summary>为什么同样的大模型在不同 AI IDE 中效果差很多？</summary>
+<div class="answer">因为差异不在模型本身，而在 IDE 提供的 Harness 质量：①System Prompt 设计质量不同（内置提示词越好，模型表现越稳定）；②上下文管理策略不同（有的自动压缩筛选，有的靠手动）；③工具集成能力不同（MCP 支持程度、终端与浏览器接入深度）；④代码理解能力不同（项目级索引 vs 文件级索引）。AI IDE 本质上是一个打包好的 Harness 系统，它替你预装了提示词模板、上下文管理、工具集成和护栏。你感受到的"IDE 差异"，其实是各家 Harness 设计水平的差异。</div>
+</details>
+
+<details>
+<summary>实践中怎么判断该补 PE、CE 还是 HE？</summary>
+<div class="answer">看症状就行：如果问题是"输出格式不稳、风格漂移、不遵循指令"，补 PE——加角色设定、Few-shot 示例和格式约束；如果问题是"答非所问、编造事实、知识过期、长对话降智"，补 CE——上 RAG 检索、记忆管理和历史压缩；如果问题是"多步任务中途跑偏、工具调用出错没人兜底、改了 A 坏了 B"，那就必须上 HE——加工具护栏、工作流编排、Eval 评估和失败回流。多数真实系统是三层问题叠加，正确的做法是从内向外逐层补齐，而不是跳过 PE/CE 直接堆多智能体。</div>
+</details>
+
+<details>
+<summary>"AI IDE 本质是 Harness 系统"这句话怎么理解？</summary>
+<div class="answer">裸模型 API 只提供"推理"这一个动作，而 IDE 要解决的是"如何帮用户可靠地完成开发任务"——这中间的差值全部由 Harness 填充：预装的 System Prompt、项目索引与上下文装配、终端/文件/浏览器工具、权限确认与 diff 预览、以及错误恢复机制。所以 IDE 之间的竞争，表面上是产品体验之争，底层是 Harness 工程质量之争。这也解释了为什么同一模型换个 IDE 像换了个脑子：模型没变，变的是包裹模型的那整套缰绳。对用户的启示是：评估 IDE 时不要只看它接了哪个模型，要看它的约定文件、索引深度和护栏机制。</div>
+</details>
+
+<details>
+<summary>既然 HE 包含 PE 和 CE，是不是可以跳过前两者直接做 Harness？</summary>
+<div class="answer">不可以，这是实践中最常见的失败模式。PE 和 CE 构成 Harness 的输入层：提示词质量差，模型连单步指令都执行不稳，再好的编排也只是把错误放大到整个流程；上下文管理差，Agent 每一步都在错误的信息上做决策，护栏和评估只能事后收拾残局。正确的路径是从内向外逐层搭建：先让单次输出稳定（PE），再让输入信息精准（CE），然后加工具与护栏（执行层），最后建评估与反馈（HE 的增量价值所在）。地基不牢时，上层建筑越复杂，崩塌得越彻底。</div>
+</details>
+
+<details>
+<summary>AI 程序员越来越强，人类工程师的工作重心会怎么变？</summary>
+<div class="answer">工作重心会从"写代码"迁移到"驾驭 AI 写代码"，具体落在四个位置：①架构决策——系统设计、技术选型需要经验与担责，AI 给不了最终判断；②业务理解——澄清需求背后的真实意图、定义验收标准；③质量把关——审查关键变更、做安全审计、对结果签字负责；④Harness 设计——这本身就是高难度工程，包括提示词体系、工具权限、评估集和反馈机制的搭建。Anthropic 多智能体系统的案例很能说明问题：系统 token 消耗是单 Agent 的 15 倍，决定"何时值得用、预算多少"的永远是人类的 ROI 判断。生成越快，审查与设计能力越值钱。</div>
+</details>
+
+</div>
+
+<div class="video-source">📺 来源：<a href="https://www.bilibili.com/video/BV1dpQTB3EXg" target="_blank">Harness Engineering 是什么？和提示词工程/上下文工程关系</a> · <span class="up-name">小白debug</span></div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

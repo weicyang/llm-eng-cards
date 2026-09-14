@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HC08 · Claude Code 动态工作流：运行时生成 Harness</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"🎯 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid rgba(21,128,61,.25);border-radius:8px;padding:1rem 1.2rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid rgba(185,28,28,.25);border-radius:8px;padding:1rem 1.2rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.warn-box{background:rgba(194,65,12,.08);border:1px solid var(--orange);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0}
+.warn-box::before{content:"⚠️ 时效提醒";display:block;font-weight:700;color:var(--orange);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+.source-link{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.4rem;margin-bottom:2rem;font-size:.92rem}
+.source-link p{margin:.2rem 0}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:768px){.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#sec-1">一、默认 harness 只为写代码调优</a>
+<a href="#sec-2">二、单上下文的三大失败模式</a>
+<a href="#sec-3">三、工作流是真代码，不是提示词</a>
+<a href="#sec-4">四、六种可复用的编排模式</a>
+<a href="#sec-5">五、触发、监控、恢复与沉淀</a>
+<a href="#sec-6">六、时效敏感的操作细节</a>
+<a href="#sec-7">七、适用边界：别滥用，很烧 token</a>
+<a href="#sec-8">八、参考来源</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+<h1>HC08 · Claude Code 动态工作流：运行时生成 Harness</h1>
+<p class="subtitle">Dynamic Workflows — 单上下文三大失败模式 / agent·parallel·pipeline 三原语 / 六种编排模式 / 触发·监控·恢复·沉淀 / 适用边界</p>
+
+<div class="intuition-box">
+<strong>一句话本质：</strong>动态工作流不是"更聪明的提示词"，而是 Claude 针对当前任务<strong>现场写一个可执行的 JavaScript harness 并真的跑起来</strong>——把一个上下文扛不动的大任务，拆给一队互相隔离、上下文干净的子 Agent，由确定性代码（而不是模型的自觉）决定什么时候算干完。
+</div>
+
+<!-- ==================== 一 ==================== -->
+<div class="section">
+<h2 id="sec-1">一、默认 harness 只为写代码调优</h2>
+
+<p><span class="term">harness</span>（直译"挽具/外壳"）指模型之外的那层编排系统：控制 Claude 读什么、什么时候动手、产出怎么验证、什么时候算完成。Claude Code 自带的 harness 打磨得很成熟，但它有个前提——<strong>它是冲着"写代码"这件事调出来的</strong>。很多任务确实长得像写代码，所以默认 harness 也能凑合用；但深度调研、安全审计、多 Agent 分工、代码评审这类任务，"最佳跑法"和写代码并不一样。</p>
+
+<p>过去要把这些任务做到极致，只有一条路：开发者在 Claude Code 之上<strong>手搓一套定制 harness</strong>——每个场景一次 bespoke 工程投入。动态工作流（Dynamic Workflows）把这件事翻转了：这套针对任务的 harness 不用你手搓，<strong>Claude 分析完任务后自己现写一套</strong>。</p>
+
+<div class="arch-diagram">
+默认模式：一套 harness 想套住所有任务
+┌────────────────────────────────────────────┐
+│   默认 Claude Code harness（为写代码定制）    │
+│  ┌──────┐  ┌──────┐  ┌──────┐  ┌──────┐   │
+│  │ 写代码 │  │ 调研  │  │ 审计  │  │ 评审  │   │
+│  └──────┘  └──────┘  └──────┘  └──────┘   │
+│     ✅ 量身     ⚠️ 将就      ⚠️ 将就    ⚠️ 将就 │
+└────────────────────────────────────────────┘
+              ↓ 动态工作流 ↓
+┌────────────────────────────────────────────┐
+│  Claude 先分析任务，再为每类任务现写外壳：     │
+│   调研任务 → harness-A（深挖 + 引用核验）     │
+│   审计任务 → harness-B（扇出 + 对抗验证）     │
+│   评审任务 → harness-C（分模块 + 汇总评分）   │
+└────────────────────────────────────────────┘
+</div>
+
+<table>
+<tr><th>任务类型</th><th>与"写代码"的差异</th><th>理想 harness 形态</th></tr>
+<tr><td>深度调研</td><td>要多路并行搜集、交叉核验，而非串行改文件</td><td>扇出多路探查 + 汇总时核对出处</td></tr>
+<tr><td>安全审计</td><td>要求全覆盖、不能"差不多就行"，还要独立复核</td><td>按文件分片并行 + 对抗验证</td></tr>
+<tr><td>多 Agent 分工</td><td>需要明确的角色划分与交接协议</td><td>按角色生成子 Agent + 栅栏汇合</td></tr>
+<tr><td>代码评审</td><td>评审者不能给自己打分</td><td>生成与验证彻底分家</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>默认 harness 是"成衣"，动态工作流是"量体裁衣"——而且裁缝就是 Claude 自己。你只负责说清楚什么算成功、信任边界在哪，剩下那套外壳它自己搭。</p>
+</div>
+</div>
+
+<!-- ==================== 二 ==================== -->
+<div class="section">
+<h2 id="sec-2">二、单上下文的三大失败模式</h2>
+
+<p>为什么非得折腾？因为默认 harness 让 Claude 在<strong>同一个上下文窗口里既做规划又做执行</strong>。短任务没问题，但任务一长、一分散、一对抗，三个失败模式会准时冒出来。动态工作流的解法不是"叮嘱模型别偷懒"，而是<strong>结构性地让偷懒、自夸、跑偏无处发生</strong>。</p>
+
+<table>
+<tr><th>失败模式</th><th>典型表现</th><th>根因</th><th>工作流的结构性解法</th></tr>
+<tr><td><span class="term">agentic laziness</span>（偷懒）</td><td>审 50 个文件，审到第 35 个就宣布"干完了"</td><td>上下文塞满后，模型把"差不多"当成"做完"</td><td>分片隔离：没有任何一个 Agent 握着整个任务，每片有独立验收标准</td></tr>
+<tr><td><span class="term">self-preferential bias</span>（自夸）</td><td>让 Claude 验自己的活，它偏向维护自己之前的结论</td><td>如同学生给自己打分，天然护短</td><td>对抗验证：验活的和干活的是两个互不通气的 Agent</td></tr>
+<tr><td><span class="term">goal drift</span>（跑偏）</td><td>对话拉长、反复压缩摘要后，边界约束被一点点丢掉</td><td>每次摘要压缩都是有损的，"不要做 X"这类约束最先丢失</td><td>短窗口 + 目标重申：每个子 Agent 的干净上下文里都重新写明目标</td></tr>
+</table>
+
+<div class="highlight">
+<strong>关键洞察：三个毛病都不是"模型坏了"，而是"单上下文"这种结构的必然产物。</strong>所以解法也必须是结构的：隔离让偷懒无处藏（每个子任务有明确的完成定义），独立验证 Agent 让自夸消失（反驳失败才算数），每个窗口都短让跑偏被摁住（目标在每个新窗口里被重申）。更重要的是——<strong>什么时候算"干完"由确定性的脚本判断，不再由模型自己宣布</strong>。
+</div>
+
+<div class="intuition-box">
+<p>这就像管理一个团队：不是反复叮嘱一个人"你要认真、要客观、要不忘初心"，而是把工作拆给互相隔离的专人，再安排一个独立的质检员。制度比自觉可靠。</p>
+</div>
+</div>
+
+<!-- ==================== 三 ==================== -->
+<div class="section">
+<h2 id="sec-3">三、工作流是真代码，不是提示词</h2>
+
+<p>很多人一听"工作流"就以为是"一段精心调过的提示词"。<strong>不是。</strong>动态工作流是 Claude 现场生成、然后<strong>真的拿去执行的 JavaScript 文件</strong>。这个文件在后台的运行时里跑，与你的对话分离——普通会话里 Claude 必须在同一个上下文里既持计划又干活；而在工作流里，<strong>计划搬进了代码</strong>：循环、分支、中间结果全活在脚本变量里，你的对话上下文最后只接收最终答案。</p>
+
+<p>脚本里只有三块基本积木（外加 JSON、Math、Array 等标准 JS 辅助数据处理）：</p>
+
+<table>
+<tr><th>原语</th><th>语义</th><th>类比</th><th>关键能力</th></tr>
+<tr><td><code>agent(prompt, opts)</code></td><td>开一个<span class="term">子 Agent</span>：给它干净独立的上下文窗口和聚焦目标</td><td>派一名专员去办一件事</td><td>可用 JSON Schema 约束输出结构；可指定用哪个档位的模型；编码任务可给独立 git worktree</td></tr>
+<tr><td><code>parallel(...)</code></td><td>一道<span class="term">栅栏</span>（barrier）：几个任务全部跑完才放行</td><td>等所有专员回来才开汇总会</td><td>并行提速，汇合点做结构化合并</td></tr>
+<tr><td><code>pipeline(items, ...)</code></td><td>让一批东西流水线式过几道工序</td><td>工厂流水线：A 项先走，B 项慢也不挡道</td><td>各项独立推进，总耗时约等于最慢单链而非所有步骤之和</td></tr>
+</table>
+
+<pre><code>// Claude 为"50 个文件安全审计"现写的工作流（示意）
+const reports = parallel(files.map(f =&gt;
+  agent(`审计 ${f} 的安全风险，按 schema 输出`,
+        { model: "sonnet", schema: FindingSchema })));
+const verdicts = parallel(reports.map(r =&gt;
+  agent(`尝试反驳这些发现：${JSON.stringify(r)}`,
+        { model: "opus" })));
+return synthesize(reports, verdicts);</code></pre>
+
+<div class="arch-diagram">
+动态工作流的运行结构
+┌──────────────────────────────────────────────────────┐
+│  你的对话上下文（保持干净，只拿最终答案）                 │
+└──────────────┬──────────────────────▲────────────────┘
+               │ 触发                  │ 最终结果
+               ▼                       │
+┌──────────────────────────────────────────────────────┐
+│  工作流运行时（后台执行 Claude 现写的 JS）               │
+│  · 循环 / 分支 / 中间结果全在脚本变量里                  │
+│  · 脚本本身【没有】文件系统/shell 权限，只负责编排        │
+│                                                      │
+│   agent() ──► 子Agent A（干净上下文·弱模型·worktree-1）│
+│   agent() ──► 子Agent B（干净上下文·强模型·worktree-2）│
+│   parallel() ─► 栅栏：全部完成再放行                    │
+│   pipeline() ─► 各项独立过工序                         │
+└──────┬───────────────┬───────────────┬───────────────┘
+       ▼               ▼               ▼
+   读文件/写文件      跑命令          验证产出
+ （真正动手的是子 Agent，不是编排脚本）
+</div>
+
+<div class="highlight">
+<strong>"是模板不是死脚本"：</strong>保存下来的工作流再次运行时，会根据当下的具体任务自适应调整（开几个子 Agent、哪步用强模型哪步用便宜模型、要不要 worktree 隔离，都由 Claude 临场决定），而不是一行不差地重放。这正是它与用 Agent SDK 或 <code>claude -p</code> 预先写死的<strong>静态工作流</strong>的本质区别。
+</div>
+
+<table>
+<tr><th>维度</th><th>静态工作流（Agent SDK / claude -p）</th><th>动态工作流</th></tr>
+<tr><td>编写者</td><td>开发者预先手写</td><td>Claude 针对当前任务现写</td></tr>
+<tr><td>覆盖面</td><td>必须兼顾所有边界情况，趋于通用</td><td>只为这一个任务定制</td></tr>
+<tr><td>类比</td><td>通用框架</td><td>为这份工作专门写的脚本</td></tr>
+<tr><td>失败模式</td><td>任务形状不合时只能削足适履</td><td>形状随任务而变</td></tr>
+<tr><td>维护成本</td><td>模型升级后编排代码可能变死重</td><td>每次现写，天然跟随模型能力</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>判断一次编排"值不值"的朴素标准：计划如果只存在于模型的脑子里，它会随上下文一起衰减；计划一旦变成代码，就获得了代码的确定性。动态工作流做的事，就是把"计划"从易碎的上下文搬进坚固的代码。</p>
+</div>
+</div>
+
+<!-- ==================== 四 ==================== -->
+<div class="section">
+<h2 id="sec-4">四、六种可复用的编排模式</h2>
+
+<p>实战里反复出现的编排被归纳成六类。这六种模式是动态工作流最长效的资产——<strong>即使你不用这个功能，"把大任务拆给一队隔离的 Claude 再汇总"的思路也值得内化</strong>：</p>
+
+<table>
+<tr><th>模式</th><th>怎么跑</th><th>适合场景</th></tr>
+<tr><td>分类即处理（classify-and-act）</td><td>先分流，再把每一类路由给专门的 Agent</td><td>工单 triage、产出归档、后台分诊</td></tr>
+<tr><td>扇出+汇总（fan-out-and-synthesize）</td><td>拆成多份并行各跑一个 Agent，栅栏处统一汇总</td><td>安全审计、跨模块独立评审、深度调研</td></tr>
+<tr><td>对抗验证（adversarial verification）</td><td>一个 Agent 提出，另一个专挑刺，两边不共享上下文</td><td>根因排查、结论复核、事实核查</td></tr>
+<tr><td>生成+筛选（generate-and-filter）</td><td>先广撒网生成一堆候选，再按标准筛掉弱的</td><td>取名、方案探索、测试用例生成</td></tr>
+<tr><td>锦标赛（tournament）</td><td>多个 Agent/模型同题竞赛，裁判两两比较选优</td><td>模型路由、方案择优（两两比较优于直接打分）</td></tr>
+<tr><td>跑到收工（loop-until-done）</td><td>反复"动手—检查—修复"，直到满足明确停止条件</td><td>开放式排查、偶现 bug 复现、清扫式发现</td></tr>
+</table>
+
+<div class="arch-diagram">
+对抗验证模式：一个结论只有在"反驳失败"之后才算数
+                                                    
+   ┌──────────────┐              ┌──────────────┐
+   │ 提出者 Agent   │   结论草稿    │ 反驳者 Agent   │
+   │ 上下文 A       │ ───────────► │ 上下文 B       │
+   │（不许看 B）    │              │（不许看 A）    │
+   └──────────────┘              └──────┬───────┘
+          ▲                             │ 反驳意见
+          │         反驳成立 → 打回重做    │
+          └─────────────────────────────┘
+                    反驳失败
+                       ▼
+              ✅ 结论成立，进入汇总
+   要点：干活的与验活的彻底分家、互不通气
+</div>
+
+<p>六种模式与三大失败模式存在清晰的对应关系，这也是选型时的第一抓手：</p>
+
+<table>
+<tr><th>你担心的问题</th><th>首选模式</th><th>原因</th></tr>
+<tr><td>覆盖不全（偷懒）</td><td>扇出+汇总</td><td>分片并行，每片独立验收，总数可核对</td></tr>
+<tr><td>结论不可信（自夸）</td><td>对抗验证 / 锦标赛</td><td>判断者不是生产者</td></tr>
+<tr><td>方向跑偏（漂移）</td><td>跑到收工</td><td>停止条件是脚本里的硬判断，不靠模型宣布</td></tr>
+<tr><td>候选质量参差</td><td>生成+筛选</td><td>宽度与严格度分开两个阶段控制</td></tr>
+</table>
+
+<div class="highlight">
+<strong>生产案例（据第三方报道）：Bun 运行时的 Zig→Rust 移植。</strong>这是动态工作流类"Agent 集群 + 对抗验证"打法被反复引用的标志性工程：整个移植产出约 <strong>75 万行 Rust 代码</strong>，测试通过率 <strong>99.8%</strong>，从启动到合并仅用 <strong>11 天</strong>。这类"几十万行级、逐模块可独立验证、需要反复回归核对"的迁移，正是单上下文绝无可能扛下、而扇出+验证编排如鱼得水的任务形状。
+</div>
+
+<div class="intuition-box">
+<p>六种模式不是六个 API，而是六种"组织形状"。选模式就是回答一个问题：这份工作的信任结构应该长什么样——谁干活、谁验收、验收不通过怎么办。</p>
+</div>
+</div>
+
+<!-- ==================== 五 ==================== -->
+<div class="section">
+<h2 id="sec-5">五、触发、监控、恢复与沉淀</h2>
+
+<p>动态工作流的完整生命周期有四个环节，理解它们才能把功能用顺：</p>
+
+<table>
+<tr><th>环节</th><th>操作方式</th><th>价值</th></tr>
+<tr><td>触发</td><td>直接说"给这个任务做一套工作流"，或在提示中带上 <code>ultracode</code> 关键词 / 把 effort 调到 ultracode 档，让 Claude 自己判断何时该上工作流</td><td>显式触发可控，自动触发省心</td></tr>
+<tr><td>监控</td><td><code>/workflows</code> 打开运行面板：每个阶段、每个子 Agent、每次工具调用和 token 消耗都可见，还能暂停、跳过卡住的、重试单个 Agent</td><td>队伍再大也有全景观测点</td></tr>
+<tr><td>恢复</td><td>每次运行有 ID，被用户操作或退出终端打断后，恢复会话即可接着跑：跑过的阶段走缓存，只补没干完的</td><td>长任务不怕中断</td></tr>
+<tr><td>沉淀</td><td>面板里按 <code>s</code> 存到 <code>~/.claude/workflows</code>；把 JS 文件丢进 Skill 文件夹即可分享给队友</td><td>一次漂亮的根因排查 → 一套"根因排查工作流"模板</td></tr>
+</table>
+
+<div class="highlight">
+<strong>沉淀的复利效应：</strong>一次漂亮的迁移可以沉淀成"迁移工作流"，一次漂亮的排查可以沉淀成"根因排查工作流"。团队层面，工作流文件就是可版本化、可评审、可分发的编排资产——这是它比"一次性调好的提示词"高一个维度的地方。
+</div>
+
+<div class="intuition-box">
+<p>注意"恢复走缓存"这个细节：阶段级缓存意味着中断的代价趋近于零，这直接改变了你对"多大的任务敢一次跑"的心理阈值——敢跑更大的活，因为失败不再等于从头再来。</p>
+</div>
+</div>
+
+<!-- ==================== 六 ==================== -->
+<div class="section">
+<h2 id="sec-6">六、时效敏感的操作细节</h2>
+
+<div class="warn-box">
+<strong>本节内容为时效敏感信息</strong>：动态工作流目前是 <span class="term">research preview</span>（研究预览）状态，与特定模型版本绑定，各项限制、开关与可用平台变动很快。下表反映的是 2026 年年中的状态，<strong>实际操作请以官方最新文档为准</strong>。本节之后的"六种模式 + 编排思想"才是长效主体。
+</div>
+
+<table>
+<tr><th>项目</th><th>已知状态（2026 年中，research preview）</th><th>说明</th></tr>
+<tr><td>发布时间</td><td>2026 年 5 月底发布，官方博客 6 月初详解</td><td>与 Claude Opus 4.8 同期推出</td></tr>
+<tr><td>绑定模型</td><td>跑在 Claude Opus 4.8 上</td><td>需要足够强的模型才"写得动"harness</td></tr>
+<tr><td>客户端要求</td><td>Claude Code v2.1.154+</td><td>CLI、桌面端、VS Code 扩展</td></tr>
+<tr><td>并发上限</td><td>同时最多 16 个子 Agent</td><td>保护本地资源</td></tr>
+<tr><td>规模上限</td><td>单次运行最多约 1,000 个 Agent</td><td>防止失控循环</td></tr>
+<tr><td>套餐默认值</td><td>Max / Team 默认开启；Enterprise 发布时默认关闭，需管理员开启</td><td>企业侧默认关闭主要出于成本与治理考虑</td></tr>
+<tr><td>可用通道</td><td>CLI / 桌面 / VS Code；另有 API、Bedrock、Vertex AI 等通道报道</td><td>各通道可用性以官方文档为准</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>把这张表当成"快照"而不是"定律"。真正不会过时的判断是：编排形态由任务决定、验证与执行分家、停止条件写在代码里——这些原则在任何版本下都成立。</p>
+</div>
+</div>
+
+<!-- ==================== 七 ==================== -->
+<div class="section">
+<h2 id="sec-7">七、适用边界：别滥用，很烧 token</h2>
+
+<p>动态工作流要协调一整队 Agent，token 消耗<strong>远高于</strong>普通单 Agent 会话。一个诚实的判断标准只有一句话：<strong>这个任务，是不是真的需要比"一个上下文窗口"更多的算力？</strong></p>
+
+<table>
+<tr><th>✅ 值得上工作流</th><th>❌ 别上工作流</th></tr>
+<tr><td>50 个文件的安全审计（要求全覆盖）</td><td>两行的 bug 修复</td></tr>
+<tr><td>上千行的排序打分（如简历/工单批量评估）</td><td>改一个文件的局部重构</td></tr>
+<tr><td>高不确定、需反复探索的深度调研</td><td>问一个有明确答案的问题</td></tr>
+<tr><td>高风险、必须独立验证的改动</td><td>一次性的临时脚本</td></tr>
+<tr><td>高复用、值得沉淀成模板的流程</td><td>你自己都说不清成功标准的活</td></tr>
+</table>
+
+<div class="highlight">
+<strong>典型成本对比（示意场景）：</strong>修复一个两行 bug，单 Agent 会话可能几百个 token、几毛钱内搞定；若误上工作流，光"生成 harness + 派生子 Agent + 验证"就是数十倍的 token 开销，收益为零。反过来，50 文件审计若硬用单上下文，常见结局是审到第 35 个文件就宣布完成——<strong>覆盖率 70% 的审计在安全上等于没审</strong>，因为攻击者只需要找到那 30% 的漏网之鱼。此时工作流多花的 token 买的是"全覆盖 + 独立复核"，是风险对价而不是浪费。
+</div>
+
+<p>它与其他编排方式的分工也可以一句话讲清：角色固定的长期协作用 Agent Teams，角色需要临场拆解的用动态工作流；而在"要不要上编排"之前，先问"到底需不需要 Agent"——这与 Agent vs Workflow 的判断一脉相承。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先写清"什么算成功、什么算完成"，再触发工作流</li>
+<li>高风险任务显式要求对抗验证："别让干活的验自己的活"</li>
+<li>把漂亮的一次运行按 <code>s</code> 沉淀成模板，分享给团队</li>
+<li>用 <code>/workflows</code> 面板盯 token 曲线，及时暂停跑偏的运行</li>
+<li>读取不可信外部内容的 Agent 与执行高权限动作的 Agent 严格分开（隔离模式）</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>别用工作流干单文件、两行改动级别的活</li>
+<li>别把保存的工作流当死脚本期待逐行重放——它是自适应模板</li>
+<li>别在成功标准模糊时启动：脚本无法判断"收工"条件会烧钱空转</li>
+<li>别忽略 research preview 状态就上生产关键路径</li>
+<li>别把预览期的并发数、版本号等细节写进长期文档</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>这条演进线值得记住：不写 Prompt 写 Loop → 平台托管 harness → 模型自己现写 harness。编排正在从"人来设计架构"挪到"模型临场决定"，人退到定义成功标准与信任边界的位置。</p>
+</div>
+</div>
+
+<!-- ==================== 八 ==================== -->
+<div class="section">
+<h2 id="sec-8">八、参考来源</h2>
+<div class="source-link">
+<p><strong>参考来源：</strong></p>
+<p>1. <a href="https://claude.com/blog/a-harness-for-every-task-dynamic-workflows-in-claude-code" target="_blank">Anthropic 官方博客：A harness for every task — dynamic workflows in Claude Code</a></p>
+<p>2. <a href="https://notes.kamacoder.com/llm/claude/dynamic_workflows.html" target="_blank">卡码笔记：Claude Code 动态工作流详解（抓取于 2026-08-09）</a></p>
+<p>3. 第三方解读：innobu《Dynamic Workflows in Claude Code》（并发/规模上限、Bun 移植案例）、alexfeel.info《Dynamic Workflows: When the Agent Writes Its Own Harness》（静态 vs 动态对比）</p>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>动态工作流和"写一段更好的提示词"本质区别在哪？</summary>
+<div class="answer">
+<p>提示词只是给模型的输入，执行计划仍然活在上下文窗口里，会随对话变长而衰减、被摘要压缩丢失；动态工作流是 Claude 现场生成并真实执行的 JavaScript 文件，循环、分支、中间结果都在脚本变量里，"是否完成"由确定性代码判断而非模型自我宣布。前者影响的是模型"怎么想"，后者改变的是任务"怎么被组织和验收"，属于两个层面的东西。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么"审 50 个文件审到 35 个就说干完了"不能靠叮嘱模型解决？</summary>
+<div class="answer">
+<p>因为这不是态度问题而是结构问题：单一上下文塞满后，模型的注意力与自我监控能力会随之下降，把"差不多"当成"做完"是长上下文的系统性倾向，再强的"请一定要认真"提示也只能边际缓解。工作流的解法是结构性的——把 50 个文件拆成独立分片交给多个上下文干净的子 Agent，每片有自己的完成定义，最后由脚本核对数量。偷懒需要的"糊弄空间"被隔离机制直接拆掉了。</p>
+</div>
+</details>
+
+<details>
+<summary>agent()、parallel()、pipeline() 该怎么选？</summary>
+<div class="answer">
+<p>三者是互补原语而非互斥选项：agent() 负责"开一个干净的专人去干一件事"，是所有编排的原子单位；parallel() 是栅栏，用于"必须等所有分支都完成才能汇总"的场景，如扇出审计后的统一合并；pipeline() 是流水线，用于"一批条目各自独立通过多道工序"的场景，各项进度互不阻塞，总耗时趋近最慢单链。典型组合是：parallel 包一批 agent 做扇出，pipeline 串多道工序做增量处理，最后再用 agent 做汇总或验证。</p>
+</div>
+</details>
+
+<details>
+<summary>对抗验证模式为什么要求两个 Agent 互不共享上下文？</summary>
+<div class="answer">
+<p>共享上下文会引入"礼貌性一致"与先入为主：反驳者一旦看到提出者的完整推理链，容易被叙述说服，退化成复述而不是独立检验。彻底分家后，反驳者只拿到结论本身，必须从证据出发独立重建判断，挑刺才是真挑刺。这与"让学生互评时先收走答卷署名"是同一个道理——程序隔离保证判断独立，结论只有在反驳失败后才算数。</p>
+</div>
+</details>
+
+<details>
+<summary>保存下来的工作流再次运行时，是逐行重放吗？</summary>
+<div class="answer">
+<p>不是。保存的工作流是"模板"而不是"死脚本"：再次运行时 Claude 会根据当下任务的具体参数重新决定开几个子 Agent、哪步用什么档位的模型、要不要 worktree 隔离等。你沉淀的是编排形状与验收标准，不是执行细节。这也意味着分享工作流给队友时，对方拿到的是会自适应的资产，而不是一个环境稍变就崩的脆弱脚本。</p>
+</div>
+</details>
+
+<details>
+<summary>什么信号出现时说明"该上工作流了"？</summary>
+<div class="answer">
+<p>五个信号：①任务量超出单窗口承载力（几十个文件、上千条记录）；②要求全覆盖而非抽样（安全审计、逐项核验）；③结论高风险、需要独立复核才敢采信；④路径高度不确定，需要反复探索试错；⑤这个流程以后还要反复跑，值得沉淀成模板。反之，两行 bug、单文件改动、成功标准说不清的任务，上工作流纯属烧钱。核心判据始终是：任务是否真的需要比一个上下文窗口更多的算力。</p>
+</div>
+</details>
+
+<details>
+<summary>动态工作流和静态工作流（Agent SDK / claude -p）如何取舍？</summary>
+<div class="answer">
+<p>静态工作流由开发者预先手写，必须覆盖所有边界情况，因此趋于通用，适合流程高度固定、需要严格可预测性的场景；动态工作流为当前任务定制，形状随任务而变，适合任务形状多变或一次一样式的复杂工作。还要考虑维护成本：模型升级后，为上一代模型弱点打的补丁可能变成死重，静态编排代码要人肉跟进，而动态工作流每次现写、天然跟随模型能力。实践中两者并存：把反复出现、已验证的形状沉淀成模板，模板内部仍允许临场自适应。</p>
+</div>
+</details>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+  </body>
+</html>
