@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DP25 · GPU 执行模型与存储层次</title>
+<title>DP24 · GPU 执行模型与存储层次</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
@@ -64,7 +64,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 </aside>
 
 <div class="container">
-<h1>DP25 · GPU 执行模型与存储层次</h1>
+<h1>DP24 · GPU 执行模型与存储层次</h1>
 <p class="subtitle">Kernel/Grid/Block/Warp 到硬件的映射 / SM 与 warp 调度器 / 寄存器-SRAM-L2-HBM 阶梯 / Occupancy 的真实定义 / 访存合并 / bank conflict / 瓶颈定位</p>
 
 <div class="intuition-box">
@@ -132,7 +132,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 <tr><td>L2 缓存（全卡共享）</td><td>40 MB</td><td>50 MB</td><td>跨 block 复用的唯一硬件兜底</td></tr>
 </table>
 
-<p>数据来源：NVIDIA Ampere / Hopper 架构白皮书与 CUDA Hopper Tuning Guide。其中 shared memory 上限那一行特别值得记住——H100 的 228 KB 比 A100 的 164 KB 大了 39%，这不是营销数字，它直接决定了 GEMM 和注意力 kernel 能开多大的分块，具体怎么花见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+<p>数据来源：NVIDIA Ampere / Hopper 架构白皮书与 CUDA Hopper Tuning Guide。其中 shared memory 上限那一行特别值得记住——H100 的 228 KB 比 A100 的 164 KB 大了 39%，这不是营销数字，它直接决定了 GEMM 和注意力 kernel 能开多大的分块，具体怎么花见 <a href="./gemm_tiling_optimization.html">DP25 · GEMM 与 Tiling 分块优化</a>。</p>
 
 <div class="intuition-box">
 把 SM 当成一间车间：block 是"一整个订单连人带料一起进车间，进了就不许换车间"，warp 是"车间里 32 人一组、同步做同一道工序的班组"，thread 只是班组里的工位号。你调 block size，本质上是在决定"每个订单要占多少料架和多少工位"——占太多，车间里就放不下第二个订单。
@@ -205,7 +205,7 @@ warp 调度器不是在"优化"什么，它只是在每个周期问一句"谁现
 <tr><td>Tensor Core · <code>wgmma.mma_async.m64n256k16</code>（SM90）</td><td>1 个 warpgroup（4 warp / 128 线程）</td><td>可直接从 shared memory 取</td><td>2 × 64 × 256 × 16 = 524,288</td><td>约 2048×（按每 warp 折算）</td></tr>
 </table>
 
-<p>指令粒度的差别直接反映在峰值算力上：H100 SXM5 的 FP32（走 CUDA Core）约 67 TFLOPS，而 BF16 Tensor Core 稠密算力约 989 TFLOPS，差约 15 倍。所以工程上的分工非常清晰——<strong>能写成矩阵乘的都要想办法喂给 Tensor Core，剩下的逐元素运算、归约、索引、类型转换、softmax 的指数与除法留给 CUDA Core</strong>。这也是为什么大模型里 LayerNorm、GELU、RoPE 这类算子即使 FLOPs 极少也可能占掉可观的时间：它们根本用不上那 989 TFLOPS，只能在 CUDA Core 和显存带宽的双重限制下慢慢走，而这正是算子融合要解决的问题（见 <a href="./kernel_fusion_optimization.html">DP27 · 算子融合与 Kernel 优化实战</a>）。</p>
+<p>指令粒度的差别直接反映在峰值算力上：H100 SXM5 的 FP32（走 CUDA Core）约 67 TFLOPS，而 BF16 Tensor Core 稠密算力约 989 TFLOPS，差约 15 倍。所以工程上的分工非常清晰——<strong>能写成矩阵乘的都要想办法喂给 Tensor Core，剩下的逐元素运算、归约、索引、类型转换、softmax 的指数与除法留给 CUDA Core</strong>。这也是为什么大模型里 LayerNorm、GELU、RoPE 这类算子即使 FLOPs 极少也可能占掉可观的时间：它们根本用不上那 989 TFLOPS，只能在 CUDA Core 和显存带宽的双重限制下慢慢走，而这正是算子融合要解决的问题（见 <a href="./kernel_fusion_optimization.html">DP26 · 算子融合与 Kernel 优化实战</a>）。</p>
 
 <div class="intuition-box">
 CUDA Core 是"一次拧一颗螺丝的电动螺丝刀"，Tensor Core 是"一次压一整块面板的液压机"。液压机不是更快的螺丝刀——你没法用它拧螺丝。所以判断一个算子快不快，先问它的形状能不能被塞进液压机的模具里。
@@ -257,7 +257,7 @@ CUDA Core 是"一次拧一颗螺丝的电动螺丝刀"，Tensor Core 是"一次�
 <tr><td>HBM ↔ shared 的搬运通路</td><td>Hopper 起由 TMA 硬件负责地址生成</td><td>官方：Hopper 架构新增 Tensor Memory Accelerator</td></tr>
 </table>
 
-<p>把这几个数并排看，结论就很直白：<strong>片上 SRAM 的聚合带宽比 HBM 高一个数量级左右，L2 大约在两者之间</strong>。所以一个算法只要能把工作集塞进 shared memory 并在里面复用，它面对的就不再是 3.35 TB/s 的墙，而是十几 TB/s 的墙。FlashAttention 之所以能把注意力从访存受限救回来，机制正是这一条（推导见 <a href="../transformer/efficient_attention.html">T20 · 高效注意力</a>）；通用矩阵乘怎么系统性地做这件事，见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+<p>把这几个数并排看，结论就很直白：<strong>片上 SRAM 的聚合带宽比 HBM 高一个数量级左右，L2 大约在两者之间</strong>。所以一个算法只要能把工作集塞进 shared memory 并在里面复用，它面对的就不再是 3.35 TB/s 的墙，而是十几 TB/s 的墙。FlashAttention 之所以能把注意力从访存受限救回来，机制正是这一条（推导见 <a href="../transformer/efficient_attention.html">T20 · 高效注意力</a>）；通用矩阵乘怎么系统性地做这件事，见 <a href="./gemm_tiling_optimization.html">DP25 · GEMM 与 Tiling 分块优化</a>。</p>
 
 <h3>寄存器不是免费的：spill 的代价</h3>
 
@@ -442,7 +442,7 @@ Occupancy 像餐厅的"候补客人数量"：候补太少，一有客人上厨�
 
 <h3>一个容易忽略的第五类：算力和带宽都没打满，因为活儿没铺开</h3>
 
-<p>严格说这不算瓶颈，而是启动配置的问题，但它在生产中出现频率很高，值得单列。第一节算过 1024 个 block 落在 132 个 SM 上的"零点七五波"——当 block 总数不是 SM 数的整数倍时，最后一波只有部分 SM 在干活，其余空转。block 数远小于 SM 数时更极端：一个只启动了 8 个 block 的 kernel，在 H100 上最多用到 8/132 ≈ 6% 的 SM，而 <code>nvidia-smi</code> 依然报告 100% 利用率。这类问题在小 batch 推理、逐层调用的小算子上尤其常见，修法通常不在 kernel 内部，而在把多个小 kernel 合成一个（<a href="./kernel_fusion_optimization.html">DP27 · 算子融合与 Kernel 优化实战</a>）或用 CUDA Graph 消掉 launch 开销。GEMM 场景下这个现象有专门的名字叫 wave quantization，处理办法见 <a href="./gemm_tiling_optimization.html">DP26 · GEMM 与 Tiling 分块优化</a>。</p>
+<p>严格说这不算瓶颈，而是启动配置的问题，但它在生产中出现频率很高，值得单列。第一节算过 1024 个 block 落在 132 个 SM 上的"零点七五波"——当 block 总数不是 SM 数的整数倍时，最后一波只有部分 SM 在干活，其余空转。block 数远小于 SM 数时更极端：一个只启动了 8 个 block 的 kernel，在 H100 上最多用到 8/132 ≈ 6% 的 SM，而 <code>nvidia-smi</code> 依然报告 100% 利用率。这类问题在小 batch 推理、逐层调用的小算子上尤其常见，修法通常不在 kernel 内部，而在把多个小 kernel 合成一个（<a href="./kernel_fusion_optimization.html">DP26 · 算子融合与 Kernel 优化实战</a>）或用 CUDA Graph 消掉 launch 开销。GEMM 场景下这个现象有专门的名字叫 wave quantization，处理办法见 <a href="./gemm_tiling_optimization.html">DP25 · GEMM 与 Tiling 分块优化</a>。</p>
 
 <div class="practice-grid">
 <div class="do">
@@ -537,13 +537,13 @@ Occupancy 像餐厅的"候补客人数量"：候补太少，一有客人上厨�
 <details>
 <summary>这张卡和 DP19、DP14 的分工是什么？</summary>
 <div class="answer">
-<p>三张卡处在不同的抽象层，配合使用而不是互相替代。<a href="./gpu_infrastructure.html">DP14 · GPU 基础设施</a> 建立词汇表并给出选卡与集群视角：主流卡型参数对比、NVLink 与 InfiniBand 互联、集群拓扑与存储、云 GPU 计费，以及 grid/block/warp 的层次图和 CUDA 编程入门。<a href="./gpu_compute_optimization.html">DP19 · GPU 算力瓶颈与优化</a> 回答"这个算子的理论天花板在哪"：算术强度的定义、屋顶线模型与各代卡的拐点数值、访存墙的由来，以及从精度、算子、通信三层榨算力的清单。本卡回答的是中间那一层——硬件到底怎么调度你写的 kernel、数据在存储层次里怎么流动、以及某些写法为什么天然就慢：调度单位与执行单位的区别、SM 内部的处理分区与 warp 调度器、存储层次的定量阶梯、occupancy 的准确定义与它和利用率的差别、访存合并与 bank conflict 的机制。实践上的用法是：用 DP19 判断这个算子值不值得优化、上限在哪，用本卡判断这次为什么没跑到上限，用 <a href="./gemm_tiling_optimization.html">DP26</a> 和 <a href="./kernel_fusion_optimization.html">DP27</a> 落到具体手段上。</p>
+<p>三张卡处在不同的抽象层，配合使用而不是互相替代。<a href="./gpu_infrastructure.html">DP14 · GPU 基础设施</a> 建立词汇表并给出选卡与集群视角：主流卡型参数对比、NVLink 与 InfiniBand 互联、集群拓扑与存储、云 GPU 计费，以及 grid/block/warp 的层次图和 CUDA 编程入门。<a href="./gpu_compute_optimization.html">DP19 · GPU 算力瓶颈与优化</a> 回答"这个算子的理论天花板在哪"：算术强度的定义、屋顶线模型与各代卡的拐点数值、访存墙的由来，以及从精度、算子、通信三层榨算力的清单。本卡回答的是中间那一层——硬件到底怎么调度你写的 kernel、数据在存储层次里怎么流动、以及某些写法为什么天然就慢：调度单位与执行单位的区别、SM 内部的处理分区与 warp 调度器、存储层次的定量阶梯、occupancy 的准确定义与它和利用率的差别、访存合并与 bank conflict 的机制。实践上的用法是：用 DP19 判断这个算子值不值得优化、上限在哪，用本卡判断这次为什么没跑到上限，用 <a href="./gemm_tiling_optimization.html">DP25</a> 和 <a href="./kernel_fusion_optimization.html">DP26</a> 落到具体手段上。</p>
 </div>
 </details>
 </div>
 
 <footer class="footer">
-  <p>AI Knowledge &middot; GPU 执行模型与存储层次 &middot; DP25</p>
+  <p>AI Knowledge &middot; GPU 执行模型与存储层次 &middot; DP24</p>
 </footer>
 </div>
 

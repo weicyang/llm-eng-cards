@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>DP26 · GEMM 与 Tiling 分块优化</title>
+<title>DP25 · GEMM 与 Tiling 分块优化</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
@@ -64,7 +64,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
 </aside>
 
 <div class="container">
-<h1>DP26 · GEMM 与 Tiling 分块优化</h1>
+<h1>DP25 · GEMM 与 Tiling 分块优化</h1>
 <p class="subtitle">Transformer 的矩阵形状与 FLOPs 账 / naive GEMM 为什么必然访存受限 / shared memory tile 与 register tile 的定量推导 / MMA 与 wgmma 形状约束 / double buffering 与 split-K / TMA / cuBLAS 与 CUTLASS 与 OpenAI Triton 的分工</p>
 
 <div class="intuition-box">
@@ -203,7 +203,7 @@ naive GEMM 的问题不是"慢"，是"重复搬"。A 的每个元素被从显存
 <div class="section" id="s3">
 <h2>三、两级分块：把算术强度提上去</h2>
 
-<p>分块的思路一句话就能说完：<strong>把输出矩阵切成小块，每块的计算所需的输入数据一次性搬到更快的存储里，在那里被复用多次</strong>。关键在于 GPU 的存储层次有两级需要分别对付（层次的容量与延迟阶梯见 <a href="./gpu_execution_model.html">DP25 · GPU 执行模型与存储层次</a>），所以分块也是两级的：<span class="term">shared memory tile</span> 治 HBM 流量，<span class="term">register tile</span> 治 shared memory 流量。CUTLASS 把这套结构写成了一个五层嵌套的循环，从外到内依次是 threadblock tile、warp tile、instruction tile，每一层对应硬件的一个并发层级。</p>
+<p>分块的思路一句话就能说完：<strong>把输出矩阵切成小块，每块的计算所需的输入数据一次性搬到更快的存储里，在那里被复用多次</strong>。关键在于 GPU 的存储层次有两级需要分别对付（层次的容量与延迟阶梯见 <a href="./gpu_execution_model.html">DP24 · GPU 执行模型与存储层次</a>），所以分块也是两级的：<span class="term">shared memory tile</span> 治 HBM 流量，<span class="term">register tile</span> 治 shared memory 流量。CUTLASS 把这套结构写成了一个五层嵌套的循环，从外到内依次是 threadblock tile、warp tile、instruction tile，每一层对应硬件的一个并发层级。</p>
 
 <h3>第一级：block tile 把 HBM 流量降到 1/BM + 1/BN</h3>
 
@@ -223,7 +223,7 @@ naive GEMM 的问题不是"慢"，是"重复搬"。A 的每个元素被从显存
 <tr><td>256 × 256</td><td>128</td><td>256×</td><td>64 KB</td><td>3</td></tr>
 </table>
 
-<p>三条结论从这张表里直接读出来。第一，<strong>tile 越大算术强度越高，但增长是次线性的</strong>——从 32 到 128 提升 4 倍，从 128 到 256 只提升 2 倍。第二，<strong>tile 越大能驻留的 block 越少</strong>，H100 的 228 KB shared memory 在 128×128 双缓冲配置下只够 7 个 block；再加上寄存器压力（累加器 128×128 个 FP32 要分摊到 block 的所有线程上），实际 occupancy 会相当低。这正是 CUTLASS 文档指出的现象：GEMM 的累加器占掉线程寄存器预算的一半以上，导致 GEMM 的 occupancy 天生比别的负载低——但这不是问题，因为 Tensor Core 不需要很多 warp 就能喂饱（见 DP25 第四节）。第三，也是最容易被忽略的一点：<strong>128×128 给出的 64 FLOP/Byte 仍然低于 H100 的 295 拐点</strong>。那为什么实测的 cuBLAS 大 GEMM 能跑到峰值的八九成？答案是这个公式假定了"所有 tile 都从 HBM 读"，而现实里 L2（50 MB）会捕获大量跨 block 的复用——这就把话题引到了 block 的排布顺序上。</p>
+<p>三条结论从这张表里直接读出来。第一，<strong>tile 越大算术强度越高，但增长是次线性的</strong>——从 32 到 128 提升 4 倍，从 128 到 256 只提升 2 倍。第二，<strong>tile 越大能驻留的 block 越少</strong>，H100 的 228 KB shared memory 在 128×128 双缓冲配置下只够 7 个 block；再加上寄存器压力（累加器 128×128 个 FP32 要分摊到 block 的所有线程上），实际 occupancy 会相当低。这正是 CUTLASS 文档指出的现象：GEMM 的累加器占掉线程寄存器预算的一半以上，导致 GEMM 的 occupancy 天生比别的负载低——但这不是问题，因为 Tensor Core 不需要很多 warp 就能喂饱（见 DP24 第四节）。第三，也是最容易被忽略的一点：<strong>128×128 给出的 64 FLOP/Byte 仍然低于 H100 的 295 拐点</strong>。那为什么实测的 cuBLAS 大 GEMM 能跑到峰值的八九成？答案是这个公式假定了"所有 tile 都从 HBM 读"，而现实里 L2（50 MB）会捕获大量跨 block 的复用——这就把话题引到了 block 的排布顺序上。</p>
 
 <h3>threadblock 的排布顺序：让 L2 帮上忙</h3>
 
@@ -295,7 +295,7 @@ for (kt = 0; kt &lt; K; kt += BK) {
 <div class="section" id="s4">
 <h2>四、Tensor Core 的形状约束</h2>
 
-<p>分块讲完了复用，还剩最内层那个问题：tile 里的乘加到底用什么指令做。走 CUDA Core 的标量 FFMA，一条指令一个 warp 只有 64 FLOPs；走 Tensor Core 的矩阵指令，一条就是几千 FLOPs（对比数据见 DP25 第二节）。代价是 Tensor Core 只吃固定形状的输入，<strong>而这个形状约束会一路向上传导，最终变成"你的 hidden_size 必须是某个数的倍数"这种模型设计层面的要求</strong>。</p>
+<p>分块讲完了复用，还剩最内层那个问题：tile 里的乘加到底用什么指令做。走 CUDA Core 的标量 FFMA，一条指令一个 warp 只有 64 FLOPs；走 Tensor Core 的矩阵指令，一条就是几千 FLOPs（对比数据见 DP24 第二节）。代价是 Tensor Core 只吃固定形状的输入，<strong>而这个形状约束会一路向上传导，最终变成"你的 hidden_size 必须是某个数的倍数"这种模型设计层面的要求</strong>。</p>
 
 <h3>两代指令的形状规则</h3>
 
@@ -415,7 +415,7 @@ Tensor Core 是一台只接受固定尺寸模具的液压机。维度对齐不�
 </table>
 
 <div class="highlight">
-<strong>示例场景：LoRA 推理里被 split-K 救回来的两个瘦矩阵。</strong>某团队把 LoRA 适配器合进在线推理路径，rank 取 16。合并前的两个 GEMM 形状是 <code>[M=8, K=4096, N=16]</code> 和 <code>[M=8, K=16, N=4096]</code>，profile 显示这两个 kernel 合起来占了单步延迟的 31%，而它们的 FLOPs 只占全模型的不到 0.5%。原因一眼可见：第一个 GEMM 按 128×128 tile 只能切出 1 个 block，H100 的 132 个 SM 里 131 个在空转，SM Throughput 2%、DRAM Throughput 也只有 19%——两个 Speed of Light 都低，典型的"活没铺开"（这个判据见 <a href="./gpu_execution_model.html">DP25</a> 第六节）。处理方式有两条并行：一是对 K=4096 那个 GEMM 启用 split-K 切 32 份，把 block 数提到 32；二是把同一 batch 内多个请求的 LoRA 调用合成一次 grouped GEMM 把 M 撑起来。两项合计后这两个 kernel 的占比从 31% 降到 6%，单步延迟降低约 21%。数字是构造的，但"低秩矩阵在大卡上因为 block 数太少而严重低效"是 LoRA 与 MoE 路由场景里非常真实的问题，split-K 和 grouped GEMM 是标准解法。
+<strong>示例场景：LoRA 推理里被 split-K 救回来的两个瘦矩阵。</strong>某团队把 LoRA 适配器合进在线推理路径，rank 取 16。合并前的两个 GEMM 形状是 <code>[M=8, K=4096, N=16]</code> 和 <code>[M=8, K=16, N=4096]</code>，profile 显示这两个 kernel 合起来占了单步延迟的 31%，而它们的 FLOPs 只占全模型的不到 0.5%。原因一眼可见：第一个 GEMM 按 128×128 tile 只能切出 1 个 block，H100 的 132 个 SM 里 131 个在空转，SM Throughput 2%、DRAM Throughput 也只有 19%——两个 Speed of Light 都低，典型的"活没铺开"（这个判据见 <a href="./gpu_execution_model.html">DP24</a> 第六节）。处理方式有两条并行：一是对 K=4096 那个 GEMM 启用 split-K 切 32 份，把 block 数提到 32；二是把同一 batch 内多个请求的 LoRA 调用合成一次 grouped GEMM 把 M 撑起来。两项合计后这两个 kernel 的占比从 31% 降到 6%，单步延迟降低约 21%。数字是构造的，但"低秩矩阵在大卡上因为 block 数太少而严重低效"是 LoRA 与 MoE 路由场景里非常真实的问题，split-K 和 grouped GEMM 是标准解法。
 </div>
 
 <div class="intuition-box">
@@ -502,7 +502,7 @@ Tensor Core 是一台只接受固定尺寸模具的液压机。维度对齐不�
 <tr><td>新硬件特性刚出、库还没覆盖</td><td>时间差窗口</td><td>CUTLASS / CuTe，必要时内联 PTX</td></tr>
 </table>
 
-<p>反过来，有三类情况<strong>不该</strong>自己写：形状规整的标准 GEMM（cuBLAS 已经接近峰值，你赢不了）、占端到端时间不到 5% 的算子（优化上限就是 5%）、以及团队没有 Nsight 调优能力时（写得出来但调不动，维护成本会失控）。至于融合本身该怎么设计、哪些算子值得融，见 <a href="./kernel_fusion_optimization.html">DP27 · 算子融合与 Kernel 优化实战</a>；如果目标是让编译器自动完成这些，则属于推理编译栈的范畴，见 <a href="./tensorrt_compilation_stack.html">DP28 · TensorRT 与推理编译栈</a>。</p>
+<p>反过来，有三类情况<strong>不该</strong>自己写：形状规整的标准 GEMM（cuBLAS 已经接近峰值，你赢不了）、占端到端时间不到 5% 的算子（优化上限就是 5%）、以及团队没有 Nsight 调优能力时（写得出来但调不动，维护成本会失控）。至于融合本身该怎么设计、哪些算子值得融，见 <a href="./kernel_fusion_optimization.html">DP26 · 算子融合与 Kernel 优化实战</a>；如果目标是让编译器自动完成这些，则属于推理编译栈的范畴，见 <a href="./tensorrt_compilation_stack.html">DP27 · TensorRT 与推理编译栈</a>。</p>
 
 <div class="practice-grid">
 <div class="do">
@@ -603,7 +603,7 @@ Tensor Core 是一台只接受固定尺寸模具的液压机。维度对齐不�
 </div>
 
 <footer class="footer">
-  <p>AI Knowledge &middot; GEMM 与 Tiling 分块优化 &middot; DP26</p>
+  <p>AI Knowledge &middot; GEMM 与 Tiling 分块优化 &middot; DP25</p>
 </footer>
 </div>
 
