@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY32 · 异步队列与生产者消费者</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么需要队列</a>
+<a href="#s2">二、Queue 的核心语义</a>
+<a href="#s3">三、工作流水线骨架</a>
+<a href="#s4">四、优雅关闭的两种做法</a>
+<a href="#s5">五、错误处理与不丢任务</a>
+<a href="#s6">六、判据与扩展</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY32 · 异步队列与生产者消费者</h1>
+<p class="subtitle">速率解耦与反压 / Queue 的核心语义 / 消费者流水线骨架 / 两种优雅关闭 / 不丢任务的错误纪律</p>
+
+<div class="intuition-box">
+<p>队列的价值不是让程序跑得更快，而是让快的那一端愿意等一等慢的那一端。这个「等」就是反压，也是一条流水线不被自己压垮的唯一机制——没有它，你只是把下游的排队搬到了自己的内存里。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、为什么需要队列：速率不匹配的代价</h2>
+
+<p>设想一个很常见的活：把 50 万条文档读出来，逐条调用 embedding 接口，再写进向量库。你手上有 <code>async def handle(doc)</code>，现在要把它跑 50 万次。最自然的写法是一个循环把所有任务建出来，然后 <code>await asyncio.gather(*tasks)</code>。这段代码能跑通，在 1000 条的样本上甚至跑得很漂亮，然后在 50 万条上把进程弄死。</p>
+
+<p>原因不在 asyncio，而在<strong>你把并发度交给了数据量</strong>。50 万个 <code>Task</code> 对象同时活着，每个都持有自己的协程帧、局部变量和那条文档的内容；同一瞬间还有 50 万个请求打向 embedding 服务。真正需要决定的那个数字——「同时处理多少条」——在这种写法里根本没有出现过，它被默认设成了「全部」。</p>
+
+<div class="arch-diagram">  同样 50 万条文档，三种写法的形状
+  ─────────────────────────────────────────────
+  A 全量并发    for x in items: create_task(work(x))
+     内存 ┃████████████████████████████  50 万个 Task 同时活着
+     下游 ┃████████████████████████████  瞬时 50 万并发打过去
+     结局 ┃内存打满，或者下游先被打挂
+
+  B 分批处理    每 500 条 gather 一次，一批做完再下一批
+     内存 ┃██                            峰值 = 批大小
+     下游 ┃██                            峰值 = 批大小
+     代价 ┃每批都要等最慢的那一条，批与批之间有空转
+
+  C 队列流水线  生产者 put，固定 N 个消费者 get
+     内存 ┃█                             峰值 ≈ maxsize + N
+     下游 ┃█                             恒定 = N，不随总量变化
+     收益 ┃生产与消费各跑各的，没有空转，也没有峰值</div>
+
+<p>B 和 C 的差别容易被低估。分批处理看着已经解决了内存问题，但它引入了一个新的浪费：<span class="term">批内木桶效应</span>。一批 500 条里有 1 条慢了 8 秒，另外 499 条做完之后就只能空等这 8 秒，谁也不能开始下一批。批越大，浪费越明显；批越小，调度开销和首尾空转的占比越高。队列流水线没有「批」这个概念，任何一个消费者一旦空出手就立刻去拿下一条，慢的那条只占住一个消费者。</p>
+
+<table>
+<tr><th>做法</th><th>内存占用峰值</th><th>下游并发压力</th><th>首个结果可用时间</th><th>主要代价</th></tr>
+<tr><td>全量并发（一次性 create_task）</td><td>随总量线性增长</td><td>瞬时等于总量，不可控</td><td>快（最快的一条立刻出）</td><td>并发度由数据量决定，规模一大就崩</td></tr>
+<tr><td>分批处理（chunk + gather）</td><td>恒定 ≈ 批大小</td><td>峰值等于批大小</td><td>慢（要等整批走完）</td><td>批内木桶效应，批间空转</td></tr>
+<tr><td>队列流水线（put / get）</td><td>恒定 ≈ maxsize + 消费者数</td><td>恒定等于消费者数</td><td>快且稳定（流式产出）</td><td>要自己处理关闭与异常，代码量最大</td></tr>
+</table>
+
+<p>所以队列干的是两件事。第一是<span class="term">速率解耦</span>：生产者按自己的节奏往里放，消费者按自己的节奏往外取，两边不必互相等待，中间那点缓冲把抖动吸收掉。第二是用容量上限提供<span class="term">反压</span>：队列满了，<code>put</code> 就停在那里，生产者被迫慢下来，这个「慢下来」会一路传导回它的上游。</p>
+
+<div class="intuition-box">
+<p>不加上限的队列不是队列，是一个正在长大的列表。它把「下游处理不过来」这个事实从一个会报错的问题，变成了一条只升不降的内存曲线。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、Queue 的核心语义：等待就是反压</h2>
+
+<p><code>asyncio.Queue</code> 的 API 面很小，一页文档就看完了，但里面有两处语义值得反复确认，因为大多数线上问题都出在这两处。</p>
+
+<h3>put 和 get 都是协程</h3>
+
+<p>第一处是：<code>put</code> 和 <code>get</code> 都必须 <code>await</code>。队列满时 <code>await put(item)</code> 会挂起当前协程，直到有消费者取走一个；队列空时 <code>await get()</code> 会挂起，直到有生产者放进一个。这个「挂起」不是实现上的妥协，它<strong>就是反压本身</strong>——把压力以「你先等着」的形式还给上游，而不是以内存增长的形式吃下来。</p>
+
+<div class="arch-diagram">  maxsize 决定缓冲区有多大，也决定反压从哪里开始
+  ────────────────────────────────────────────────
+                 队列容量 maxsize = 4
+  生产者 ──put──▶ ┌───┬───┬───┬───┐ ──get──▶ 消费者
+                 │ ● │ ● │ ● │ ● │
+                 └───┴───┴───┴───┘
+                   已满 ↑
+  此刻再 await queue.put(x)，协程就挂在这一行，
+  直到某个消费者 get 走一个，腾出位置
+       │
+       └─ 生产者被迫慢下来 = 反压（backpressure）
+          它会继续传导回生产者的上游：
+          读文件的游标停住、拉接口的循环停住、扫库的分页停住
+
+  maxsize = 0（默认）表示无上限：put 永不等待
+       └─ 没有反压。队列只管长，内存曲线只升不降，
+          进程被 OOM kill 之前不会有任何异常抛出</div>
+
+<p>所以 <span class="term">maxsize</span> 是一个设计参数，不是随手填的数。它回答的问题是：「允许多少工作量停在半空中？」这个数字越大，对抖动的容忍越好，但内存占用和「故障时丢多少」都跟着涨；越小则反压越灵敏，队列空转的概率也越高。第三节会给一个可以直接用的起点值。</p>
+
+<h3>未完成计数与 task_done / join</h3>
+
+<p>第二处是 <code>task_done()</code> 和 <code>join()</code> 这一对。队列内部维护一个<span class="term">未完成计数</span>：每次 <code>put</code> 加一，每次 <code>task_done()</code> 减一。注意减一的时机是 <code>task_done()</code>，<strong>不是 <code>get()</code></strong>——取出来只说明它离开了队列，不说明它被处理完了。<code>await join()</code> 就是「阻塞直到这个计数归零」。</p>
+
+<p>这个设计把「队列空了」和「活干完了」区分开来。队列可以是空的，但 8 个消费者手上还各自握着一条正在处理的数据，此时计数是 8，<code>join()</code> 不会返回。这正是我们想要的语义：等的是全部处理完毕，而不是全部取完。反过来，<code>task_done()</code> 调多了会直接抛 <code>ValueError</code>，这是一个有用的保护——它会在你把 <code>task_done()</code> 写重了的时候立刻报错，而不是让 <code>join()</code> 提前返回。</p>
+
+<table>
+<tr><th>成员</th><th>是协程吗</th><th>满 / 空时的行为</th><th>用在哪</th></tr>
+<tr><td><code>await put(item)</code></td><td>是</td><td>队列满则等待</td><td>生产端默认写法，要反压就用它</td></tr>
+<tr><td><code>put_nowait(item)</code></td><td>否</td><td>队列满则抛 <code>QueueFull</code></td><td>不能 await 的场合（同步回调、线程桥接）</td></tr>
+<tr><td><code>await get()</code></td><td>是</td><td>队列空则等待</td><td>消费者主循环</td></tr>
+<tr><td><code>get_nowait()</code></td><td>否</td><td>队列空则抛 <code>QueueEmpty</code></td><td>只想「顺手看看有没有」，不想挂住</td></tr>
+<tr><td><code>task_done()</code></td><td>否</td><td>调用次数超过入队数则抛 <code>ValueError</code></td><td>每次 <code>get()</code> 之后必须配一次</td></tr>
+<tr><td><code>await join()</code></td><td>是</td><td>等未完成计数归零</td><td>主协程等「活干完了」</td></tr>
+<tr><td><code>qsize()</code> / <code>empty()</code> / <code>full()</code></td><td>否</td><td>返回瞬时快照</td><td>上报积压指标；不要拿来做控制判断</td></tr>
+<tr><td><code>shutdown(immediate=False)</code></td><td>否</td><td>后续 put / get 抛 <code>QueueShutDown</code></td><td>Python 3.13 起可用的主动关闭</td></tr>
+</table>
+
+<p class="data-asof"><strong>版本说明</strong> · <code>Queue.shutdown()</code> 与 <code>QueueShutDown</code> 异常是 <strong>Python 3.13</strong> 新增的，3.12 及更早没有这两个名字。如果你的项目要兼容 3.12，关闭只能用第四节的哨兵值或 <code>join</code> + <code>cancel</code>。另外 <code>asyncio.Queue</code> 的 <code>loop</code> 参数在 <strong>3.10</strong> 已被移除。</p>
+
+<h3>它不是跨线程通信工具</h3>
+
+<p>官方文档对 <code>asyncio.Queue</code> 的表述是明确的：<strong>这个类不是线程安全的</strong>。它的等待机制建立在事件循环的 future 之上，只在自己所属的那个事件循环内部成立。3.10 移除 <code>loop</code> 参数之后它不再在构造时绑定循环，但这只是让构造更灵活，<strong>不意味着可以跨线程使用</strong>。</p>
+
+<div class="highlight">
+<p><strong>跨线程的保守结论：</strong>线程与线程之间通信，用标准库的 <code>queue.Queue</code>；协程与协程之间通信，用 <code>asyncio.Queue</code>；两者之间要打通，不要直接在别的线程里调 <code>asyncio.Queue</code> 的方法，而是经由事件循环调度过去。最常用的两个入口是 <code>loop.call_soon_threadsafe(...)</code>（把一个同步调用排到循环里执行）和 <code>asyncio.run_coroutine_threadsafe(coro, loop)</code>（从别的线程提交一个协程，返回 <code>concurrent.futures.Future</code>）。反方向——协程要用一个会阻塞的同步函数——用 <code>asyncio.to_thread(...)</code>（Python 3.9 起）。这三条之外的写法，先当成不安全。</p>
+</div>
+
+<pre><code># 工作线程里产出的数据要送进 asyncio.Queue，必须借事件循环回去
+loop = asyncio.get_running_loop()
+
+def in_worker_thread(item):        # 注意：这里是普通线程，不是协程
+    loop.call_soon_threadsafe(queue.put_nowait, item)
+    # put_nowait 在队列满时抛 QueueFull —— 这条路径上没有反压，
+    # 要么把 maxsize 放宽，要么在线程侧自己做限速</code></pre>
+
+<h3>另外两种队列</h3>
+
+<p><code>asyncio</code> 还提供 <code>LifoQueue</code> 和 <code>PriorityQueue</code>，它们和 <code>Queue</code> 的 API 完全一致，只是取出顺序不同。绝大多数流水线用 FIFO 的 <code>Queue</code> 就够了，另外两个是针对特定形状的问题。</p>
+
+<table>
+<tr><th>类</th><th>取出顺序</th><th>典型用途</th><th>要注意</th></tr>
+<tr><td><code>Queue</code></td><td>先进先出</td><td>默认选择，几乎所有流水线</td><td>公平，等待时间可预期</td></tr>
+<tr><td><code>LifoQueue</code></td><td>后进先出</td><td>深度优先爬取、栈式回溯</td><td>不公平：早入队的任务可能长期饿死</td></tr>
+<tr><td><code>PriorityQueue</code></td><td>优先级数值最小的先出</td><td>任务有 SLA 分级，高优先级要插队</td><td>元素通常是 <code>(priority, data)</code> 元组；优先级相同时会去比较 <code>data</code>，若 <code>data</code> 不可比较就抛 <code>TypeError</code>，习惯写法是插一个自增序号变成 <code>(priority, seq, data)</code></td></tr>
+</table>
+
+<div class="intuition-box">
+<p><code>get()</code> 减的是队列长度，<code>task_done()</code> 减的是未完成计数。<code>join()</code> 等的是后者。把这三句话记牢，本卡后面所有的挂死问题都能自己推出来。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、工作流水线骨架：固定消费者 + 优雅关闭</h2>
+
+<p>这一节是全卡的核心。下面这个骨架可以直接抄进项目：一个生产者、固定数量的消费者、一个明确的收尾。它的形状值得先看一眼，再看代码。</p>
+
+<div class="arch-diagram">   数据源（文件 / 接口 / 数据库游标）
+          │  一条一条产出，不一次性展开成列表
+          ▼
+   ┌──────────────┐
+   │   producer   │  await queue.put(item)
+   └──────┬───────┘         │
+          │                 └─ 队列满时挂在这里 = 反压
+          ▼
+   ┌───────────────────────────────────┐
+   │   asyncio.Queue(maxsize=64)       │  ← 唯一的共享状态
+   └──┬─────────┬─────────┬────────┬───┘
+      ▼         ▼         ▼        ▼
+   ┌─────┐   ┌─────┐   ┌─────┐  ┌─────┐
+   │ w0  │   │ w1  │   │ w2  │ …│ w7  │   固定 8 个消费者协程
+   └──┬──┘   └──┬──┘   └──┬──┘  └──┬──┘   每个都是：
+      │         │         │        │        while True:
+      │         │         │        │          item = await get()
+      │         │         │        │          handle(item)
+      └─────────┴────┬────┴────────┘          task_done()
+                     ▼
+        结果汇聚（写库 / 落文件 / 计数器）
+
+   主协程的收尾顺序，三步不能换：
+     1. 生产者跑完（此时队列里可能还有积压）
+     2. await queue.join()   → 未完成计数归零，活真的干完了
+     3. w.cancel() × 8       → 收掉还挂在 await get() 上的消费者</div>
+
+<p>消费者是这个骨架里最需要写对的部分。它是一个不会自己结束的循环，靠外部取消或哨兵值退出；处理逻辑必须整段包在异常保护里；<code>task_done()</code> 必须放在 <code>finally</code> 里。</p>
+
+<pre><code>async def consumer(name, queue, sink):
+    while True:
+        item = await queue.get()          # 队列空就在这里等
+        try:
+            sink.append(await handle(item))
+        except Exception:                 # 不兜住，这个协程就地死亡
+            log.exception("处理失败 name=%s item=%r", name, item)
+        finally:
+            queue.task_done()             # 成败都要调，漏一次 join() 永挂</code></pre>
+
+<p>这里有个容易忽略的细节：<code>await queue.get()</code> 写在 <code>try</code> <strong>外面</strong>。如果把它挪进 <code>try</code>，那么 <code>get()</code> 自己抛异常时也会走到 <code>finally</code> 里的 <code>task_done()</code>——而这一项根本没被取出来，计数就被多减了一次，最终换来一个莫名其妙的 <code>ValueError</code>。<code>get()</code> 成功之后才进入受保护区间，这个边界是刻意的。</p>
+
+<p>生产者相对简单，关键是<strong>不要先把数据源展开成列表</strong>。用异步迭代器或生成器逐条产出，反压才能真正传到源头；<a href="py_iterators_generators.html">PY12</a> 讲的惰性产出在这里是前置条件。</p>
+
+<pre><code>async def producer(queue, source):
+    async for item in source:       # 逐条产出，不要 list(source)
+        await queue.put(item)       # 队列满时在此等待，反压回到 source</code></pre>
+
+<p>主协程负责组装、等待和收尾。注意消费者任务的引用要<strong>保存在一个变量里</strong>：<code>asyncio.create_task</code> 返回的任务只被事件循环弱引用，不持有强引用的话有被提前回收的风险。</p>
+
+<pre><code>async def run(source):
+    queue = asyncio.Queue(maxsize=64)      # 缓冲上限 = 设计参数
+    sink = []
+    workers = [
+        asyncio.create_task(consumer(f"w{i}", queue, sink))
+        for i in range(8)                  # 消费者数 = 真正的并发度
+    ]</code></pre>
+
+<pre><code>    await producer(queue, source)   # 生产者结束，但队列里可能还有积压
+    await queue.join()              # 等到每一项都被 task_done()
+    for w in workers:               # 此时消费者都空闲地挂在 get() 上
+        w.cancel()
+    await asyncio.gather(*workers, return_exceptions=True)
+    return sink                     # 到这里所有资源都收干净了</code></pre>
+
+<p>最后那行 <code>gather(..., return_exceptions=True)</code> 不是可选的装饰。<code>cancel()</code> 只是打个标记，协程要等下一次被调度才真正响应；不 <code>await</code> 一下就返回，事件循环关闭时会打一串 <code>Task was destroyed but it is pending</code> 的警告。<code>return_exceptions=True</code> 则是为了让取消产生的 <code>CancelledError</code> 不要反过来打断收尾流程。</p>
+
+<table>
+<tr><th>部件</th><th>职责</th><th>写错的典型后果</th></tr>
+<tr><td>生产者</td><td>逐条产出并 <code>await put</code></td><td>先展开成列表 → 反压失效，内存峰值回到全量</td></tr>
+<tr><td>队列 <code>maxsize</code></td><td>决定缓冲量与反压灵敏度</td><td>设 0 → 无反压；设过大 → 等于无反压</td></tr>
+<tr><td>消费者数量</td><td>这就是真正的并发度</td><td>随数据量变化 → 下游压力不可控</td></tr>
+<tr><td><code>task_done()</code></td><td>递减未完成计数</td><td>不在 <code>finally</code> 里 → 异常路径漏调 → <code>join()</code> 永挂</td></tr>
+<tr><td><code>queue.join()</code></td><td>等「活干完」而不是「队列空」</td><td>换成 <code>while not queue.empty()</code> → 提前收尾，丢掉在途任务</td></tr>
+<tr><td>收尾的 <code>gather</code></td><td>确认取消真的完成了</td><td>省掉 → 一串 pending task 警告，资源可能没释放</td></tr>
+</table>
+
+<h3>maxsize 怎么选</h3>
+
+<p>没有普适的最优值，但有一个好用的起点：<strong>消费者数量的 2 到 4 倍</strong>。这个量级保证每个消费者手上有活、队列里还有几个候补，调度不空转；同时缓冲总量仍然是个小常数，内存可控。定下来之后把 <code>qsize()</code> 上报成指标，看它长期贴着 0 还是贴着上限，再决定往哪边调。</p>
+
+<table>
+<tr><th><code>maxsize</code></th><th>实际行为</th><th>什么时候合适</th></tr>
+<tr><td><code>0</code>（默认）</td><td>无上限，<code>put</code> 永不等待</td><td>数据源本身就很小且有限，或上游已有别的限流；否则不要用</td></tr>
+<tr><td><code>1</code></td><td>近似握手，生产者产一个等一个</td><td>要求严格同步、不允许任何缓冲的场合</td></tr>
+<tr><td>消费者数的 2–4 倍</td><td>小常数缓冲，能吸收抖动</td><td><strong>默认起点</strong>，多数流水线从这里开始调</td></tr>
+<tr><td>很大（如 100000）</td><td>实际接近无上限</td><td>基本没有正当理由；等于用一个大内存池换掉了反压</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>消费者的数量才是你的并发度，队列的 <code>maxsize</code> 只是缓冲垫。想让下游轻一点，改消费者数量；想让抖动更平滑一点，改 <code>maxsize</code>。这两个旋钮不要混着拧。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、优雅关闭的两种做法</h2>
+
+<p>消费者是 <code>while True</code>，它不会自己停。所以任何队列流水线都必须显式设计一个收尾路径，否则主协程跑完了，进程却因为还有 8 个永远挂在 <code>await get()</code> 上的任务而不肯退出。业界稳定的做法只有两种。</p>
+
+<div class="arch-diagram">  两种收尾方式的时序
+  ──────────────────────────────────────────────────────
+  做法一：哨兵值（sentinel）
+    producer │ put x1 … put xN │ put ⊙ ⊙ ⊙ ⊙（N 个，一人一个）
+    w0       │ 干活 ……         │ 取到 ⊙ → return，协程自然结束
+    w1       │ 干活 ……         │ 取到 ⊙ → return
+    main     │                 │ await gather(w0…w7) → 全部结束
+    易错点   │ 哨兵数 ≠ 消费者数 → 少的那几个永远挂在 get() 上
+
+  做法二：join + cancel
+    producer │ put x1 … put xN │ 结束（队列里可能还有积压）
+    main     │                 │ await queue.join() → 计数归零
+    main     │                 │ w.cancel() 逐个发出
+    w0/w1    │ 干活 ……         │ 在 await get() 处收到取消
+    main     │                 │ await gather(..., True) → 确认收干
+    易错点   │ 漏调 task_done() → join() 永远不返回，卡在第二行</div>
+
+<p><span class="term">哨兵值</span>的做法是给队列里塞一个特殊对象作为「到此为止」的信号。它必须是一个不可能和真实数据相等的东西，<code>object()</code> 实例是最省事的选择——用 <code>None</code> 或 <code>-1</code> 这类值都有和真实数据撞车的风险。</p>
+
+<pre><code>SENTINEL = object()   # 唯一对象，不可能和任何真实数据相等
+async def consumer(queue):
+    while True:
+        item = await queue.get()
+        try:
+            if item is SENTINEL:
+                return                  # 吃掉一个哨兵，自己退出
+            await handle(item)
+        finally:
+            queue.task_done()           # 哨兵也算一项，也要 task_done</code></pre>
+
+<pre><code># 生产结束后，投 N 个哨兵，N 必须等于消费者数量
+for _ in range(len(workers)):
+    await queue.put(SENTINEL)
+await asyncio.gather(*workers)   # 消费者自己 return，不需要 cancel</code></pre>
+
+<p>「一人一个」这条约束是哨兵法的全部风险所在。每个消费者取到哨兵就退出，所以它只会消费掉一个；投 7 个而有 8 个消费者，第 8 个就永远挂在 <code>get()</code> 上。更麻烦的是这个数量在代码里往往分散在两处——创建消费者的循环和投哨兵的循环，一旦有人改了其中一个就出问题。所以要么像上面那样写成 <code>len(workers)</code>，要么干脆选第二种做法。</p>
+
+<div class="highlight">
+<p><strong>两个必须刻进肌肉记忆的易错点。</strong>第一，<code>task_done()</code> 漏调一次，<code>join()</code> 就<strong>永久</strong>挂住——它等的是计数归零，不是超时。而漏调最常见的原因不是忘了写，是<strong>异常路径上没走到那一行</strong>：处理逻辑抛异常，控制流直接跳出，<code>task_done()</code> 被跳过。这就是为什么它必须放在 <code>finally</code> 里，这也是 <a href="py_context_managers.html">PY19</a> 讲的那套「获取与释放必须成对、且释放要在 <code>finally</code> 或 <code>with</code> 里」的纪律在队列上的具体形态。第二，收尾前先 <code>join()</code> 再 <code>cancel()</code>，顺序不能反。先 <code>cancel()</code> 会把正在处理的那几条活生生打断，这些数据既没处理完也不在队列里了，直接丢失。</p>
+</div>
+
+<table>
+<tr><th>维度</th><th>哨兵值</th><th><code>join</code> + <code>cancel</code></th></tr>
+<tr><td>消费者退出方式</td><td>自己 <code>return</code>，路径显式</td><td>被取消，退出点在 <code>get()</code> 处</td></tr>
+<tr><td>需要知道消费者数量吗</td><td>需要，且必须精确相等</td><td>不需要</td></tr>
+<tr><td>消费者数量动态伸缩</td><td>难支持</td><td>天然支持</td></tr>
+<tr><td>在途任务会被丢掉吗</td><td>不会（哨兵排在数据后面）</td><td>不会（<code>join</code> 先保证计数归零）</td></tr>
+<tr><td>要不要 <code>await</code> 收尾</td><td>要 <code>gather(*workers)</code></td><td>要 <code>gather(..., return_exceptions=True)</code></td></tr>
+<tr><td>最常见的错</td><td>哨兵数少于消费者数 → 有协程永挂</td><td>漏调 <code>task_done()</code> → <code>join()</code> 永不返回</td></tr>
+<tr><td>适合</td><td>消费者固定、希望退出路径出现在代码里</td><td><strong>默认选择</strong>，代码更短，伸缩更自由</td></tr>
+</table>
+
+<p>Python 3.13 起还有第三条路：<code>queue.shutdown()</code>。调用后 <code>put</code> 直接抛 <code>QueueShutDown</code>，挂在 <code>put</code> 上的协程被唤醒并抛出同样的异常；<code>get</code> 仍能把队列里剩下的取完，取空之后也开始抛 <code>QueueShutDown</code>，消费者的 <code>while True</code> 就自然结束了。它把「关闭」变成了队列自己的状态，比哨兵值干净。<code>shutdown(immediate=True)</code> 会立刻清空队列并把未完成计数按清掉的条数减掉——这会让 <code>join()</code> 在活没干完的情况下返回，官方文档也提醒了这一点，所以它只适合「不要了，赶紧停」的场景。如果你的运行环境还有 3.12，暂时用不上这条路。</p>
+
+<div class="intuition-box">
+<p>关闭是设计的一部分，不是收尾的杂活。一条流水线写完之后先问自己：谁来让消费者停？它们停之前手上那条数据怎么办？答不出来，这段代码就还没写完。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、错误处理与不丢任务</h2>
+
+<p>这一节讲的是队列流水线最阴险的一类故障，它不报错、不崩溃，只是「变慢了」。</p>
+
+<p>根源在于：消费者是一个独立的 <code>Task</code>。它的主循环里抛出未捕获异常，结果不是程序崩溃，而是<strong>这一个协程静默终止</strong>。队列还在、其他消费者还在、进程还活着，只是并发度悄悄从 8 掉到了 7。异常对象被存进那个 <code>Task</code> 里等人来取，而没有人会去取它。</p>
+
+<p>更隐蔽的是日志：asyncio 确实有一个兜底机制，会对未被取出异常的任务打印 <code>Task exception was never retrieved</code>——但这个打印发生在 <code>Task</code> 对象<strong>被垃圾回收</strong>的时候。而我们恰恰按最佳实践把所有消费者任务存在 <code>workers</code> 列表里，强引用一直在，对象永远不被回收，于是那行日志永远不会出现。「按最佳实践持有引用」和「异常兜底靠 GC 触发」这两件事叠在一起，造出了一个完全静默的故障。</p>
+
+<div class="arch-diagram">  消费者静默死亡：吞吐逐级下降，全程没有任何报错
+  ──────────────────────────────────────────────────────
+  t0   12 个消费者   吞吐 4200 条/分   队列 11/64    一切正常
+  t1   一条脏数据进来 → w3 抛 AttributeError → 协程终止
+       ├─ 异常去哪了？留在 Task 对象里，没人 await 它
+       └─ asyncio 只在 Task 被回收时才打印
+          "Task exception was never retrieved"
+          而 workers 列表还强引用着它 → 这行日志永远不出现
+
+  t2    9 个消费者   吞吐 3100 条/分   队列 64/64（满）
+  t3    4 个消费者   吞吐 1400 条/分   积压开始堆在上游
+  t4    1 个消费者   吞吐  380 条/分   积压 46 万条
+  t5    0 个消费者   吞吐    0 条/分   主协程永远停在 await join()
+
+  从外面看：日志干净、进程活着、CPU 还降了，只是「有点慢」</div>
+
+<div class="highlight">
+<p><strong>生产事故复盘：</strong>一个文档入库流水线（解析 → 切片 → embedding → 写向量库），<strong>12 个消费者协程</strong>，稳定态吞吐 <strong>4200 条/分</strong>。某次上线新增了一批来源不同的 PDF，跑了约 3 小时后吞吐掉到 <strong>380 条/分</strong>，上游积压 <strong>46 万条</strong>，而错误日志<strong>一条都没有</strong>，告警只在「吞吐低于阈值」这条规则上响了一次，值班同学当成下游 embedding 服务抖动，扩了容，没有效果。</p>
+<p>真正的原因是新来的这批 PDF 里有约 0.3% 抽不出 <code>title</code> 字段，值是 <code>None</code>，而切片函数里直接调了 <code>doc["title"].strip()</code>，抛 <code>AttributeError</code>。消费者主循环没有异常保护，撞上一条就死一个；12 个消费者在 3 小时里被逐个消耗掉，只剩 1 个还活着——380 条/分正好是单个消费者的吞吐，这个比例后来成了定位的关键线索。<strong>定位耗时 3 小时 40 分</strong>，最后是有人打了一次 <code>py-spy dump</code>，看到只剩一个消费者栈才明白过来。</p>
+<p>修复分三层，缺一不可：消费者主循环包 <code>try/except Exception</code>，失败的条目连同 traceback 写进死信表；新增 <code>consumer_alive</code> 指标并配「存活数 &lt; 配置数」告警；切片函数里的字段访问改成带默认值。修复后吞吐回到 4300 条/分，积压在 2 小时 10 分内追平，死信表里落了 1400 余条，事后单独重跑。</p>
+</div>
+
+<p>这个事故给出的纪律很清楚：<strong>消费者的主循环必须是不死的</strong>。它可以失败、可以记错误、可以把任务丢进<span class="term">死信</span>，但它自己不能退出。</p>
+
+<pre><code>async def consumer(queue, dlq):
+    while True:
+        item = await queue.get()
+        try:
+            await handle(item)
+        except Exception:          # 只兜 Exception，不碰 CancelledError
+            dlq.append((item, traceback.format_exc()))
+        finally:
+            queue.task_done()      # 放在 finally，异常路径也要算完成</code></pre>
+
+<p>为什么写 <code>except Exception</code> 而不是 <code>except BaseException</code>：<code>asyncio.CancelledError</code> 从 <strong>Python 3.8</strong> 起继承自 <code>BaseException</code> 而不是 <code>Exception</code>，所以 <code>except Exception</code> 天然放行取消信号，第四节的 <code>cancel()</code> 才能正常收掉消费者。反过来，写成 <code>except BaseException</code> 或裸 <code>except:</code> 会把取消信号也吞掉，结果是 <code>cancel()</code> 叫不停这个协程，进程退不出去。异常粒度的设计原则在 <a href="py_exception_design.html">PY24</a> 里有系统的讨论，队列这里只需要守住一条：<strong>兜住业务异常，放行取消</strong>。</p>
+
+<p>需要重试时有个坑：不要在消费者里对同一个队列 <code>await queue.put(...)</code> 重排队。队列满、且所有消费者都卡在这个 <code>put</code> 上时，没有任何人能去 <code>get</code>，整条流水线自锁死。重试要么用 <code>put_nowait</code> 并处理 <code>QueueFull</code>，要么走一个独立的重试队列。</p>
+
+<pre><code>        except Exception:
+            if tried + 1 &lt; MAX_RETRY:
+                retry_q.put_nowait((item, tried + 1))   # 独立队列，不回灌
+            else:
+                dlq.append(item)                        # 到顶了，进死信
+        finally:
+            queue.task_done()</code></pre>
+
+<p>光有异常保护还不够，因为它只保证「消费者不会因为业务异常死掉」，不保证「消费者一定活着」——协程还是可能被取消、被某个 <code>BaseException</code> 带走，或者卡在一个没有超时的下游调用上。所以要有一个能看见的指标。</p>
+
+<pre><code>async def monitor(queue, workers, interval=10):
+    while True:
+        alive = sum(not w.done() for w in workers)
+        log.info("queue=%d alive=%d/%d", queue.qsize(), alive, len(workers))
+        await asyncio.sleep(interval)   # alive 掉了就告警，别等吞吐指标</code></pre>
+
+<p>这两个数放在一起看才有意义。<code>alive</code> 下降说明消费者在死；<code>qsize</code> 长期贴着上限说明消费能力不足；<code>qsize</code> 长期贴着 0 说明瓶颈在生产端，加消费者没用。只看吞吐这一个数，就只能等它掉下来再猜原因——上面那个事故正是这么发生的。</p>
+
+<table>
+<tr><th>失败类型</th><th>该怎么处理</th><th>不这么做的后果</th></tr>
+<tr><td>瞬时失败（超时、429、连接重置）</td><td>有限次重试 + 指数退避，重试次数随任务走</td><td>要么一次就丢，要么无限重试把下游打死</td></tr>
+<tr><td>脏数据（字段缺失、编码异常）</td><td>不重试，直接进死信记录，带上 traceback</td><td>重试永远不会成功，白占吞吐和日志</td></tr>
+<tr><td>下游整体不可用</td><td><span class="term">熔断</span>：暂停 <code>get</code>，让队列积压并反压回生产端</td><td>每条都重试，日志刷爆，下游恢复瞬间雪崩</td></tr>
+<tr><td>消费者协程自身异常退出</td><td>主循环兜 <code>Exception</code>；存活数上报指标并告警</td><td>吞吐静默下降，最终 <code>join()</code> 永挂</td></tr>
+<tr><td><code>CancelledError</code></td><td>不要吞，让它往上抛</td><td>关闭流程挂住，进程无法正常退出</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li><code>task_done()</code> 一律写在 <code>finally</code> 里，和 <code>get()</code> 严格一对一</li>
+<li><code>await queue.get()</code> 放在 <code>try</code> 外面，成功取出后才进受保护区间</li>
+<li>消费者主循环兜 <code>except Exception</code>，失败进死信，协程不退出</li>
+<li>同时上报 <code>qsize</code> 和消费者存活数，两个都配告警</li>
+<li>收尾顺序固定为「生产完 → <code>join()</code> → <code>cancel()</code> → <code>gather</code>」</li>
+<li><code>maxsize</code> 从消费者数的 2–4 倍起步，再按指标调</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>用裸 <code>except:</code> 或 <code>except BaseException</code>，把取消信号一起吞掉</li>
+<li>在消费者里 <code>await</code> 同一个队列的 <code>put</code> 做重试（会自锁死）</li>
+<li>用 <code>while not queue.empty()</code> 代替 <code>await queue.join()</code></li>
+<li>先 <code>cancel()</code> 再 <code>join()</code>，把在途的那几条数据打断丢掉</li>
+<li><code>maxsize=0</code> 上生产，用内存无声地吸收下游的慢</li>
+<li>不保存 <code>create_task</code> 的返回值，让任务被弱引用着</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>一个消费者死掉不会有人喊。它表现为「系统有点慢」，而「有点慢」几乎总会被先归因到下游。所以消费者存活数必须是一个指标，不能靠日志、更不能靠吞吐反推。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、判据与扩展：什么时候该换外部消息队列</h2>
+
+<p><code>asyncio.Queue</code> 是一个内存里的对象，它的生命周期和进程完全绑定。这句话就是所有判据的来源：<strong>进程一死，队列里的东西全没了</strong>，没有持久化、没有消费确认、没有重投、也没有第二个进程能看见它。</p>
+
+<div class="arch-diagram">  进程内队列 ───────────── 分界线 ───────────── 外部消息队列
+  asyncio.Queue                        Redis Stream / RabbitMQ / Kafka
+
+  它够用的信号                          必须换掉的信号
+  · 生产和消费在同一个进程内            · 要跨进程、跨机器消费
+  · 任务丢了可以重跑（源头还在）        · 重启不能丢，必须持久化
+  · 单机吞吐够，不需要水平扩            · 要按积压量自动扩缩消费者
+  · 只需要速率解耦和反压                · 要消费确认、重投、延迟队列
+  · 队列里放的是内存对象                · 任务要序列化、可能跨语言
+  · 挂了重跑一遍成本可接受              · 任务有副作用，不能重复执行
+
+  中间形态：进程内队列 + 外部 checkpoint
+  ────────────────────────────────────
+  队列只负责速率解耦，进度单独落库；
+  重启后从 checkpoint 续跑，不引入消息中间件的运维成本。
+  一次性的批量回填任务，绝大多数停在这一档就够了。</div>
+
+<p>这里最容易犯的错是两个方向的。一个方向是明明只在一个进程里做一次性的批量处理，却先搭一套 Kafka，把两周的时间花在运维上；另一个方向是把一个需要重启不丢、需要多机消费的长期任务硬塞进 <code>asyncio.Queue</code>，然后用一层层的重试和补偿脚本去弥补它天生没有的能力。</p>
+
+<table>
+<tr><th>需求</th><th>进程内 <code>asyncio.Queue</code></th><th>外部消息队列</th></tr>
+<tr><td>跨进程 / 跨机器消费</td><td>做不到</td><td>原生支持</td></tr>
+<tr><td>进程重启后任务还在</td><td>全部丢失</td><td>持久化后不丢</td></tr>
+<tr><td>消费确认与失败重投</td><td>要自己实现</td><td>内建 ack / nack / 重投</td></tr>
+<tr><td>水平扩消费者</td><td>只能加协程，受单进程与单机限制</td><td>加实例即可</td></tr>
+<tr><td>端到端延迟</td><td>微秒级，没有网络跳和序列化</td><td>毫秒级起，多一次序列化和网络往返</td></tr>
+<tr><td>可观测性</td><td>自己埋 <code>qsize</code> 和存活数指标</td><td>自带积压、消费延迟、消费者组看板</td></tr>
+<tr><td>运维成本</td><td>零</td><td>部署、监控、容量规划、故障演练</td></tr>
+<tr><td>适合的任务形态</td><td>单进程流水线、批量回填、抓取-处理-落库</td><td>长期在线的异步作业、多服务解耦、事件驱动</td></tr>
+</table>
+
+<h3>顺手厘清几个相邻工具</h3>
+
+<p>队列常被拿来和另外两个东西比较，值得说清楚边界。<code>asyncio.Semaphore</code> 能限制同时进行的操作数，看起来也能控并发——但它控的只是并发，任务对象还是要先全部建出来，内存仍然随数据量线性增长，也没有任何缓冲和反压。<code>asyncio.TaskGroup</code>（Python 3.11 起）解决的是「一组任务的生命周期和异常传播」，它让子任务的异常不再静默丢失，这恰好补上了第五节那个坑；但它不提供速率解耦，任务数还是等于数据量。</p>
+
+<p>三者的关系不是替代，而是分工：队列决定<strong>什么时候放多少进来</strong>，消费者数量决定<strong>并发度</strong>，<code>TaskGroup</code> 决定<strong>这组协程的异常和取消怎么传播</strong>。一条成熟的流水线里三个都会出现。</p>
+
+<div class="intuition-box">
+<p>选型只看一个问题：任务丢了会怎样。答案是「重跑一遍就行」，进程内队列足够；答案是「不能丢，也不能重复执行」，那你需要的其实不是队列，是带持久化和幂等语义的消息系统——这一步的复杂度是真实的，别在不需要时提前支付。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>maxsize 到底该设多少？有没有一个能直接用的数？</summary>
+<div class="answer">起点用「消费者数量的 2 到 4 倍」，比如 8 个消费者就设 16 到 32。这个量级的含义是：每个消费者手上有一条活，队列里还躺着一两条候补，消费者几乎不会空等调度；同时缓冲总量是个小常数，内存可控。定下来之后把 <code>qsize()</code> 上报成时序指标再观察：长期贴着上限说明消费能力不够，该加消费者或优化 <code>handle</code>；长期贴着 0 说明瓶颈在生产端，加消费者一点用都没有。唯一要避开的是 <code>maxsize=0</code>——它不是「性能最好」，是「放弃反压」，队列会一直长到进程被 OOM kill，而且整个过程不抛任何异常。</div>
+</details>
+
+<details>
+<summary>task_done() 到底在计什么？漏调一次会怎样？</summary>
+<div class="answer">队列内部有一个未完成计数：每次 <code>put</code> 加一，每次 <code>task_done()</code> 减一。<code>get()</code> 不减——取出来只说明它离开了队列，不说明处理完了。<code>await join()</code> 就是等这个计数归零。所以漏调一次的后果是计数永远停在 1 以上，<code>join()</code> <strong>永久</strong>挂住，没有超时、没有报错，你只会看到程序停在那一行不动。漏调最常见的原因不是忘了写，而是异常路径跳过了它：<code>handle(item)</code> 抛异常，控制流直接跳出，后面那行 <code>task_done()</code> 根本没执行。所以它必须放在 <code>finally</code> 里。反过来调多了会抛 <code>ValueError</code>，这是好事——它让「配错了」当场暴露，而不是变成一次提前返回的 <code>join()</code>。</div>
+</details>
+
+<details>
+<summary>queue.join() 和 asyncio.gather(*workers) 有什么区别？两个都要吗？</summary>
+<div class="answer">等的是完全不同的东西，而且通常两个都要。<code>queue.join()</code> 等的是「所有入队的数据都被 <code>task_done()</code> 了」，也就是活干完了；此时消费者协程<strong>还活着</strong>，正空闲地挂在 <code>await get()</code> 上。<code>gather(*workers)</code> 等的是「这些消费者协程都结束了」。用 <code>join</code> + <code>cancel</code> 方案时，标准顺序是先 <code>await queue.join()</code> 确认活干完，再逐个 <code>cancel()</code>，最后 <code>await asyncio.gather(*workers, return_exceptions=True)</code> 确认取消真的生效——<code>cancel()</code> 只是打标记，不 <code>await</code> 一下就返回，事件循环关闭时会打一串 <code>Task was destroyed but it is pending</code> 警告。用哨兵值方案时消费者自己 <code>return</code>，就只需要 <code>gather</code>。</div>
+</details>
+
+<details>
+<summary>消费者里能不能往同一个队列再 put 东西（比如重试或递归展开）？</summary>
+<div class="answer">能，但 <code>await queue.put(...)</code> 这种写法有明确的死锁风险：队列满的时候 <code>put</code> 会等待，而如果所有消费者都正卡在这个 <code>put</code> 上，就没有任何人去 <code>get</code> 腾位置，整条流水线自锁，且不会抛任何异常。爬虫里「从页面里发现新链接再入队」是这个模式的典型场景。两条安全写法：一是用 <code>put_nowait</code> 并显式处理 <code>QueueFull</code>（丢弃、落盘、或者交给别的路径），二是让重试和新发现的任务走一个独立的队列，避免回灌。另外要留意，往同一个队列 <code>put</code> 会让未完成计数重新上升，<code>join()</code> 的结束时点也随之推后——这通常正是你想要的，但如果重试没有上限，<code>join()</code> 就可能永远等不到归零。</div>
+</details>
+
+<details>
+<summary>asyncio.Queue 能跨线程用吗？我想让线程池把结果送进来。</summary>
+<div class="answer">不能直接用。官方文档明确写着这个类不是线程安全的，它的等待机制建立在事件循环的 future 上，只在所属的那个事件循环内成立。3.10 移除 <code>loop</code> 参数让构造更灵活，但并没有改变这一点。保守可靠的做法是把跨线程这一跳交给事件循环：在别的线程里调 <code>loop.call_soon_threadsafe(queue.put_nowait, item)</code>，或者 <code>asyncio.run_coroutine_threadsafe(queue.put(item), loop)</code>（后者返回 <code>concurrent.futures.Future</code>，还能在线程侧等结果，也保留了反压）。反方向——协程需要执行一个会阻塞的同步函数——用 <code>asyncio.to_thread(...)</code>（Python 3.9 起）。纯线程之间的通信仍然用标准库 <code>queue.Queue</code>。这三条之外的写法都先当成不安全。</div>
+</details>
+
+<details>
+<summary>为什么消费者死掉了，日志里一条报错都没有？</summary>
+<div class="answer">因为消费者是独立的 <code>Task</code>，它抛出的异常不会传播到主协程，而是被存进 <code>Task</code> 对象等人来 <code>await</code> 它取走。asyncio 有一层兜底：如果一个带异常的 <code>Task</code> 最终没人取，会打印 <code>Task exception was never retrieved</code>。但这个打印是在 <code>Task</code> 对象<strong>被垃圾回收</strong>时触发的，而我们按最佳实践把所有消费者任务存在 <code>workers</code> 列表里，强引用一直在，对象永远不被回收，那行日志就永远不会出现。两件各自正确的事叠起来造出了一个完全静默的故障。解法是不要依赖这层兜底：消费者主循环自己兜住 <code>except Exception</code> 并打日志，同时把存活消费者数上报成指标；如果运行在 Python 3.11 及以上，用 <code>TaskGroup</code> 管理这些消费者也能让异常不再静默。</div>
+</details>
+
+<details>
+<summary>用 Semaphore 或 TaskGroup 限制并发，是不是就不需要队列了？</summary>
+<div class="answer">解决的层次不一样。<code>Semaphore</code> 限制的是「同时进行中的操作数」，但你仍然要先把所有任务对象创建出来——50 万条数据就是 50 万个 <code>Task</code> 挂在那里排队拿信号量，内存照样随数据量线性增长，也没有任何缓冲可以吸收抖动。<code>TaskGroup</code>（Python 3.11 起）解决的是一组任务的生命周期和异常传播，让子任务的异常不再静默丢失，但它同样不限制任务总数。队列的独特之处是<strong>它让「同时存在的任务数」和「数据总量」彻底脱钩</strong>：内存峰值是 <code>maxsize</code> 加消费者数这个常数，跟你要处理 1 万条还是 1 亿条无关。判断很简单：数据量有上限且不大，<code>Semaphore</code> 就够；数据量大、或者根本不知道有多少（流式、游标、无界输入），必须用队列。</div>
+</details>
+
+<details>
+<summary>Python 3.13 的 Queue.shutdown() 值得用吗？</summary>
+<div class="answer">如果你的运行环境能保证 3.13 及以上，值得——它比哨兵值干净得多。调用 <code>shutdown()</code> 之后队列进入关闭态：后续 <code>put</code> 抛 <code>QueueShutDown</code>，挂在 <code>put</code> 上的协程被唤醒并抛同样的异常；<code>get</code> 仍然能把队列里剩下的数据取完，取空之后才开始抛 <code>QueueShutDown</code>，消费者的 <code>while True</code> 自然结束。这就把「关闭」从一个要靠约定传递的信号（哨兵数必须等于消费者数）变成了队列自身的状态，少了一类配错的可能。但有两点要注意：<code>shutdown(immediate=True)</code> 会立刻清空队列并把未完成计数按清掉的条数减掉，于是 <code>join()</code> 会在活没干完的情况下返回，官方文档专门提醒了这一点，它只适合「不要了，赶紧停」；另外 3.12 及更早完全没有这个名字，要兼容就还得保留 <code>join</code> + <code>cancel</code> 这条路。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

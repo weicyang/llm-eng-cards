@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY28 · 事件循环与异步基础</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、异步要解决什么问题</a>
+<a href="#s2">二、事件循环是怎么转的</a>
+<a href="#s3">三、async def 与 await 的语义</a>
+<a href="#s4">四、入口与生命周期</a>
+<a href="#s5">五、谁都不许阻塞</a>
+<a href="#s6">六、观测事件循环健康度</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY28 · 事件循环与异步基础</h1>
+<p class="subtitle">线程模型的天花板 / 一轮事件循环的五步 / async 与 await 的确切语义 / asyncio.run 的生命周期 / 阻塞调用与循环延迟</p>
+
+<div class="intuition-box">
+<p>异步不让你的代码跑得更快，它只是不让你的程序在等待时闲着。想清楚这一点，后面所有的困惑——为什么加了 async 反而更慢、为什么一处同步调用能拖垮整个服务——都会有答案。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、异步要解决什么问题：等待占了绝大部分时间</h2>
+
+<p>先看一个具体的服务：一个对外的 API 网关，每个请求要查一次 Redis、读一次数据库、再调一个下游 HTTP 接口，最后把结果拼起来返回。这样一个请求的耗时构成，在生产环境里通常长这样。</p>
+
+<div class="arch-diagram">  一个典型请求的 40 毫秒都花在哪（量级示意）
+
+  Redis 查询    ├─ 0.4 ms CPU ─┤├──────── 1.6 ms 等网络 ────────┤
+  数据库查询    ├─ 0.3 ms CPU ─┤├──────── 11 ms 等数据库 ───────┤
+  下游 HTTP     ├─ 0.5 ms CPU ─┤├──────── 24 ms 等下游 ─────────┤
+  序列化 / 业务 ├─ 1.2 ms CPU ─┤
+
+  合计  CPU 真正在算：约  2.4 ms   ←  6%
+        纯粹在等待：  约 36.6 ms   ← 94%
+
+  也就是说：这个线程 94% 的生命都在 read() 上睡着，
+  它既不占 CPU，也不释放自己占的那份内存和调度位置。</div>
+
+<p>这 94% 就是异步要回收的东西。<span class="term">I/O 密集</span>型服务的特点是：CPU 早就闲下来了，但并发数上不去，因为「一个连接一个线程」的模型里，每多扛一个并发连接就要多一个线程，而线程不是免费的。</p>
+
+<h3>线程贵在哪里</h3>
+
+<p>贵在两处，而且这两处是独立叠加的。第一处是<strong>栈内存</strong>：每个操作系统线程都要预留一块连续的栈空间，Linux 上默认是 8 MB 的虚拟地址空间，实际驻留内存取决于用了多深，常见在几十 KB 到几百 KB。虚拟地址不直接消耗物理内存，但它会吃掉地址空间和内核的 <code>vm_area</code> 记账，在 32 位时代这是硬上限，在 64 位上仍然会让内存统计变得难看且难以容量规划。</p>
+
+<p>第二处是<strong>调度开销</strong>：线程切换要陷入内核、保存与恢复寄存器组、刷新部分 TLB 与缓存行。单次开销是微秒量级，听起来微不足道，但当上千个线程都在「醒来—发现没数据—再睡下」之间反复横跳时，这笔账会积成可观的 CPU 占用，而且它是纯损耗，不产生任何业务价值。</p>
+
+<table>
+<tr><th>并发连接数量级</th><th>线程模型：内存</th><th>线程模型：调度</th><th>事件循环：内存</th><th>事件循环：调度</th></tr>
+<tr><td>约 100</td><td>百 MB 级虚拟栈，驻留几十 MB</td><td>内核轻松应付</td><td>百 KB 级（每任务几 KB 起）</td><td>无感</td></tr>
+<tr><td>约 1,000</td><td>GB 级虚拟栈，驻留几百 MB</td><td>切换开始占掉可观 CPU</td><td>MB 级</td><td>就绪队列仍然很短</td></tr>
+<tr><td>约 10,000</td><td>需手工调小栈才勉强起得来</td><td>切换成为主要开销之一</td><td>几十 MB 级</td><td>单次轮询遍历的是「就绪的」而非「全部的」</td></tr>
+<tr><td>约 100,000</td><td>基本不可行</td><td>—</td><td>百 MB 级</td><td>瓶颈转移到 fd 上限与业务代码本身</td></tr>
+</table>
+
+<p>这张表是<strong>量级参考，不是基准测试结果</strong>。真实数字随内核参数、Python 版本、每个连接携带多少业务状态而大幅浮动，可能差到三五倍。但量级关系是稳定的：线程的单位成本按 MB 和微秒计，协程的单位成本按 KB 和函数调用计，中间隔着三个数量级。这个差距决定了「一万个空闲连接」在一种模型里是灾难、在另一种模型里是几十 MB 内存。</p>
+
+<div class="intuition-box">
+<p>异步的收益完全来自「等待」。如果你的服务 90% 的时间在算而不是在等，异步不但帮不上忙，还会因为额外的调度开销让你变慢。先量一量等待占比，再决定要不要走这条路。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、事件循环是怎么转的：一个线程 + 一条就绪队列 + 内核的多路复用</h2>
+
+<p>把上一节的结论反过来推：既然一个线程 94% 的时间在等，那么理论上一个线程就能同时照看十几个甚至上千个这样的「等待中」的任务——只要有办法在它们中的任何一个数据就绪时被叫醒。这个「有办法」就是操作系统提供的 <span class="term">I/O 多路复用</span>：Linux 上是 <code>epoll</code>，BSD/macOS 上是 <code>kqueue</code>，Windows 上 asyncio 默认走基于 IOCP 的 <code>ProactorEventLoop</code>（自 Python 3.8 起为 Windows 默认）。它们的共同能力是：一次系统调用，交给内核一批文件描述符，然后阻塞住，直到其中<strong>任意一个</strong>可读可写时返回，并且只把就绪的那些告诉你。</p>
+
+<p><span class="term">事件循环</span>就是围绕这个能力写的一个 <code>while True</code>。它维护一条<span class="term">就绪队列</span>（待执行的回调）、一批定时器（按到期时间排序）、一组注册在内核里的文件描述符，然后循环地在这三者之间周转。</p>
+
+<div class="arch-diagram">  一轮事件循环（asyncio 里对应 BaseEventLoop._run_once）
+
+  ┌─────────────────────────────────────────────────────────────┐
+  │                                                             │
+  │   ①  取出就绪队列里的回调                                    │
+  │       ready = [cb1, cb2, cb3, ...]                          │
+  │              │                                              │
+  │              ▼                                              │
+  │   ②  逐个执行，每个都跑到「下一个让出点」为止                 │
+  │       cb1 → 恢复某个协程 → 它跑到 await 处 → 挂起、返回      │
+  │       cb2 → ...                                             │
+  │       ★ 这一步是单线程独占的：谁不还回来，整轮就卡在这里      │
+  │              │                                              │
+  │              ▼                                              │
+  │   ③  把新产生的等待登记出去                                  │
+  │       socket 读写 → 注册进 epoll / kqueue / IOCP            │
+  │       定时等待     → 插进按到期时间排序的定时器堆             │
+  │              │                                              │
+  │              ▼                                              │
+  │   ④  阻塞在多路复用上，超时 = 最近一个定时器的剩余时间        │
+  │       events = selector.select(timeout)                     │
+  │       ★ 整个进程唯一「允许睡着」的地方就在这一行              │
+  │              │                                              │
+  │              ▼                                              │
+  │   ⑤  把就绪的 I/O 回调 + 到期的定时器回调塞回就绪队列          │
+  │       然后回到 ①                                             │
+  │                                                             │
+  └─────────────────────────────────────────────────────────────┘</div>
+
+<p>值得单独盯住的是第 ④ 步和第 ② 步的关系。第 ④ 步是「健康的等待」——进程睡在内核里，不占 CPU，任何一个 fd 有动静都会立刻被叫醒。第 ② 步是「工作时间」——这里跑的是你的 Python 代码，它必须尽快跑到下一个让出点然后交还控制权。整个异步模型的全部纪律，就是这一句：<strong>第 ② 步里的任何一段代码都不许长时间不返回</strong>。第五节会展开这句话的代价。</p>
+
+<h3>并发不等于并行</h3>
+
+<p>这是最容易被跳过、但一旦搞错就会一路错下去的区分。<span class="term">并发</span>是「同时有多件事在推进中」，<span class="term">并行</span>是「同一时刻有多件事在真正被执行」。asyncio 提供的是前者，而且只有前者。</p>
+
+<div class="highlight">
+<p><strong>异步程序里，任何时刻都只有一个线程在执行 Python 字节码。</strong>它没有变出第二个 CPU 核，也没有绕开 GIL——它连第二个线程都没有。它赚到的钱全部来自一处：<strong>把原本用来干等的那段墙钟时间，拿去跑别的任务</strong>。所以异步能把一个 I/O 密集服务的吞吐提升十倍，却一分一秒都加速不了一段矩阵乘法。</p>
+</div>
+
+<table>
+<tr><th>模型</th><th>同时执行 Python 代码的线程数</th><th>能省下等待时间吗</th><th>能吃满多核吗</th><th>典型代价</th></tr>
+<tr><td>单线程同步</td><td>1</td><td>不能</td><td>不能</td><td>并发为 1，最简单</td></tr>
+<tr><td>多线程（CPython 默认构建）</td><td>1（GIL 限制）</td><td>能</td><td>不能（纯 Python 代码）</td><td>线程成本、竞态与锁</td></tr>
+<tr><td>asyncio 事件循环</td><td>1</td><td>能</td><td>不能</td><td>全链路必须异步，阻塞即全局故障</td></tr>
+<tr><td>多进程</td><td>进程数</td><td>能</td><td>能</td><td>内存翻倍、跨进程传数据要序列化</td></tr>
+<tr><td>多进程 × 每进程一个事件循环</td><td>进程数</td><td>能</td><td>能</td><td>生产里 I/O 密集服务的常见部署形态</td></tr>
+</table>
+
+<p>最后一行是现实答案：生产上很少「纯 asyncio 单进程」，而是按核数起多个进程，每个进程内部跑一个事件循环。多进程解决并行，事件循环解决并发，两者正交，不互相替代。</p>
+
+<div class="intuition-box">
+<p>事件循环是个调度员，不是加速器。它手里只有一个工人，本事是「谁在等快递就先去干别的」，而不是「多雇几个人」。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、<code>async def</code> 与 <code>await</code> 的语义：两个被普遍误解的关键字</h2>
+
+<p><code>async def</code> 定义的不是一个「会自动并发执行的函数」，而是一个<span class="term">协程函数</span>。调用它得到的是一个<strong>协程对象</strong>，函数体里一行代码都不会执行——这一点和生成器函数完全同构，调用生成器函数只得到生成器对象，不执行函数体（PY12 讲过这套让出机制，<a href="py_iterators_generators.html">PY12</a> 里的 <code>yield</code> 正是协程挂起能力的前身）。</p>
+
+<pre><code>import asyncio
+
+async def fetch(n):
+    await asyncio.sleep(1)
+    return n
+
+c = fetch(1)            # 只得到协程对象，函数体一行都没跑
+print(type(c))          # &lt;class 'coroutine'&gt;
+print(asyncio.run(c))   # 到这里才真正执行，输出 1</code></pre>
+
+<p>忘掉最后一步会得到一条很有辨识度的告警：<code>RuntimeWarning: coroutine 'fetch' was never awaited</code>。看到它就说明某处写了 <code>fetch(1)</code> 却没有 <code>await</code>，那行代码等于什么都没做。这是异步新手最高频的一类 bug，而且它不报错、只告警，很容易在日志里被淹掉。</p>
+
+<table>
+<tr><th>写法</th><th>实际发生了什么</th></tr>
+<tr><td><code>fetch(1)</code></td><td>返回协程对象，函数体未执行；未被 await 时抛 <code>RuntimeWarning</code></td></tr>
+<tr><td><code>await fetch(1)</code></td><td>执行它，并在它内部真正等待时让出控制权，完成后拿到返回值</td></tr>
+<tr><td><code>c = fetch(1)</code> 后 <code>await c</code></td><td>同上；但一个协程对象只能被 await 一次，再 await 抛 <code>RuntimeError</code></td></tr>
+<tr><td><code>await 42</code></td><td><code>TypeError: object int can't be used in 'await' expression</code></td></tr>
+<tr><td>在普通 <code>def</code> 里写 <code>await</code></td><td><code>SyntaxError</code>，<code>await</code> 只能出现在 <code>async def</code> 内</td></tr>
+</table>
+
+<h3><code>await</code> 的准确含义</h3>
+
+<p><code>await x</code> 读作：<strong>「在这里让出控制权，直到 x 完成，然后带着它的结果继续」</strong>。「让出控制权」的对象是事件循环——当前协程被挂起并记录下现场，控制权回到第 ② 步的调用者，事件循环转而去跑就绪队列里的其它回调。这个位置就叫<span class="term">让出点</span>，是整个协作式调度的关节所在。</p>
+
+<div class="arch-diagram">  await 做的是「让出」，不是「派活」
+
+  顺序 await 两个请求（串行，总耗时 ≈ 24 + 31 = 55 ms）
+  ────────────────────────────────────────────────────
+  时间 →   0                24                 55
+  任务 A  ├── await req1 ───┤├──── await req2 ───┤
+  循环    │  空转 24 ms     ││   空转 31 ms      │
+          └ 没有别的任务可跑，事件循环只能干等
+
+  同一个循环里有两个独立任务时（并发，总耗时 ≈ max(24, 31) = 31 ms）
+  ────────────────────────────────────────────────────
+  时间 →   0                         31
+  任务 A  ├───── await req1 ─────┤
+  任务 B  ├─────── await req2 ──────┤
+  循环    │ 两个 fd 都挂在 epoll 上，谁先来先叫醒谁
+
+  差别不在 await，而在「有没有第二个任务存在」。</div>
+
+<p>所以有一句必须记牢：<strong><code>await</code> 本身不产生并发</strong>。上图第一段里连续 <code>await</code> 两个 HTTP 请求，它们是<strong>严格串行</strong>的——第二个请求要等第一个彻底完成才会发出，总耗时是两者之和，和同步写法一模一样（还多付了一点调度开销）。<code>await</code> 只保证「我等的时候别人可以跑」，它不负责「制造出那个别人」。</p>
+
+<p>要真正并发，必须<strong>显式地把协程包装成任务交给事件循环</strong>，让它们同时处于「在途」状态。创建任务、结构化并发的编排方式、以及任务的取消与超时语义，是异步这一组后续卡片的主题，本卡不展开——这里只需要建立正确的心智模型：协程对象是「一份待办工作的描述」，任务才是「已经交给循环去推进的工作」。</p>
+
+<div class="intuition-box">
+<p>把 <code>async</code> / <code>await</code> 从「让代码变并发的魔法词」改读成「标注哪里可以被打断」。<code>async def</code> 说的是「这个函数中途可能让出」，<code>await</code> 说的是「让出点在这一行」。并发是另一件事，要另外动手做。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、入口与生命周期：<code>asyncio.run()</code> 之外基本无事可做</h2>
+
+<p>同步代码和异步代码之间需要一道门：某处必须有人创建事件循环、把主协程丢进去、等它跑完、再把循环干净地关掉。这道门在现代 Python 里只有一个推荐答案——<code>asyncio.run()</code>（Python 3.7 引入）。</p>
+
+<pre><code>import asyncio
+
+async def main():
+    await asyncio.sleep(0.1)
+    return "done"
+
+if __name__ == "__main__":
+    print(asyncio.run(main()))</code></pre>
+
+<p>这八行里藏着一整套生命周期管理。<code>asyncio.run()</code> 远不止「跑一下协程」，它承担的收尾工作正是手写循环最容易漏掉的部分。</p>
+
+<div class="arch-diagram">  asyncio.run(main()) 的完整生命周期
+
+  ┌── 进入 ────────────────────────────────────────────────┐
+  │  1. 检查当前线程有没有正在运行的循环                     │
+  │       有 → 直接抛 RuntimeError（不允许嵌套）             │
+  │  2. 新建一个事件循环，设为当前线程的循环                  │
+  │  3. 如果 debug=True，打开调试模式                        │
+  └────────────────────────┬───────────────────────────────┘
+                           ▼
+  ┌── 运行 ────────────────────────────────────────────────┐
+  │  4. 把 main() 包成 Task，run_until_complete 直到它返回   │
+  │       期间循环反复执行第二节那五步                       │
+  └────────────────────────┬───────────────────────────────┘
+                           ▼
+  ┌── 收尾（无论正常返回还是抛异常都会做）────────────────────┐
+  │  5. 取消该循环上所有仍未完成的任务，并等它们响应取消       │
+  │  6. 关闭异步生成器（shutdown_asyncgens）                 │
+  │  7. 关闭默认线程池执行器（shutdown_default_executor）    │
+  │  8. loop.close()，并把当前线程的循环清空                 │
+  └────────────────────────────────────────────────────────┘
+
+  第 5～7 步是手写 new_event_loop + run_until_complete 时
+  几乎一定会漏掉的三件事，漏掉的症状是退出时冒出
+  「Task was destroyed but it is pending!」之类的告警。</div>
+
+<p>第 5 步值得特别注意：它是<strong>取消</strong>剩余任务，不是等它们跑完。主协程一返回，所有还在后台跑的任务都会收到取消，没写好清理逻辑的任务会在这里留下半成品状态。这也是「不要把重要的后台工作丢出去就不管」的技术原因之一。</p>
+
+<h3>库代码里该用什么</h3>
+
+<p>写应用入口用 <code>asyncio.run()</code>；但如果你写的是一个库或框架的内部函数，它总是运行在别人的循环里，这时需要的是「拿到当前正在运行的循环」，答案是 <code>asyncio.get_running_loop()</code>（3.7 引入）。它的好处是语义明确：没有运行中的循环就直接抛 <code>RuntimeError</code>，不会静悄悄地给你一个错的循环。</p>
+
+<pre><code>import asyncio
+
+async def deadline_in(seconds):
+    loop = asyncio.get_running_loop()   # 无运行中的循环则 RuntimeError
+    return loop.time() + seconds        # 单调时钟，不是 wall clock</code></pre>
+
+<p>与之相对的 <code>asyncio.get_event_loop()</code> 是历史包袱，它的行为随版本变化了好几轮：在协程或回调里调用时它返回运行中的循环，但在没有运行循环的场合它的语义一直在收紧——Python 3.12 起在这种情况下会发出 <code>DeprecationWarning</code>，<strong>Python 3.14 起直接抛 <code>RuntimeError</code></strong>。新代码没有理由再写它。</p>
+
+<table>
+<tr><th>API</th><th>用在哪</th><th>要点</th></tr>
+<tr><td><code>asyncio.run(coro)</code></td><td>应用 / 脚本 / 测试的唯一入口</td><td>3.7+；负责建循环、跑、取消剩余任务、关循环；<strong>不能在已有运行循环里调用</strong></td></tr>
+<tr><td><code>asyncio.Runner()</code></td><td>要在同一个循环里分多次调用 <code>run()</code></td><td>3.11+；上下文管理器，收尾逻辑与 <code>asyncio.run()</code> 一致</td></tr>
+<tr><td><code>asyncio.get_running_loop()</code></td><td>库代码、回调内部要拿循环</td><td>3.7+；没有运行中的循环直接 <code>RuntimeError</code>，这正是想要的行为</td></tr>
+<tr><td><code>asyncio.get_event_loop()</code></td><td>历史 API，维护老代码时才会遇到</td><td>3.12 起无运行循环时告警，3.14 起抛 <code>RuntimeError</code>；新代码不要用</td></tr>
+<tr><td><code>asyncio.new_event_loop()</code> + <code>run_until_complete()</code></td><td>框架层需要自定义循环时</td><td>要自己补上取消任务、<code>shutdown_asyncgens()</code>、<code>close()</code>，否则退出不干净</td></tr>
+<tr><td><code>loop.run_forever()</code></td><td>长驻服务框架内部</td><td>业务代码基本用不到，由 web 框架替你调用</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>一个高频错误：在已有循环里再调 <code>asyncio.run()</code>。</strong>典型场景是在 FastAPI 的 <code>async def</code> 路由里、或在 Jupyter 单元格里（Jupyter 本身就跑在一个循环上）写了 <code>asyncio.run(something())</code>，报错是 <code>RuntimeError: asyncio.run() cannot be called from a running event loop</code>。正确做法是在已有循环里直接 <code>await</code>，而不是再开一个循环。网上常见的「装个 <code>nest_asyncio</code> 打个补丁」是绕过而非解决——它靠给循环打猴子补丁允许重入，会让超时、取消这些语义变得难以推理，生产代码不要这么干。</p>
+</div>
+
+<div class="intuition-box">
+<p>一个进程里同步世界和异步世界之间只开一扇门，位置固定在 <code>main()</code>。门里面全程 <code>await</code>，不要在门里再造一扇门。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、协作式调度的前提：谁都不许阻塞</h2>
+
+<p>操作系统调度线程用的是<strong>抢占式</strong>：你不主动让，内核到点也会把你踢下去，所以一个死循环的线程不会让整台机器停摆。事件循环用的是<span class="term">协作式调度</span>：它<strong>没有任何手段</strong>把控制权从一段正在执行的 Python 代码里抢回来。第二节那五步里的第 ② 步执行谁，就完全指望谁自觉地跑到让出点后返回。</p>
+
+<p>这条规则的直接后果是：<strong>任何一段长时间不返回的代码，都会让整个进程的所有并发请求一起停住</strong>。不是「那个请求慢」，是「全部一起慢」。</p>
+
+<div class="arch-diagram">  一次 300 ms 的同步调用，对谁造成了什么
+
+  健康时（全部异步）
+  时间 →  0    50   100  150  200  250  300  350 ms
+  req#1  ├══┤                                        50 ms 完成
+  req#2   ├══┤                                       52 ms
+  req#3    ├═══┤                                     58 ms
+  循环    密集地在几十个任务间来回切，每次占用几十微秒
+
+  混入一处 requests.get()（同步，耗时 300 ms）
+  时间 →  0    50   100  150  200  250  300  350 ms
+  req#7  ├──────── 阻塞住整个循环 300 ms ──────┤
+  req#1  ├·······（已就绪，但排在队里没人理）·····┤═┤   355 ms
+  req#2  ├·······（同上）·························┤═┤  358 ms
+  req#3  ├·······（同上）···························┤═┤ 363 ms
+         ↑ 它们的数据早就从内核回来了，
+           只是没有任何线程能去处理——循环被 req#7 占着
+
+  排查时最要命的一点：
+  req#7 自己的日志显示「耗时 300 ms」，看起来完全正常；
+  req#1～#3 的日志显示「耗时 355 ms」，但它们什么慢操作都没做。</div>
+
+<h3>三类会卡死循环的代码</h3>
+
+<table>
+<tr><th>类型</th><th>典型写法</th><th>为什么救不了</th><th>方向</th></tr>
+<tr><td>同步阻塞 I/O</td><td><code>requests.get()</code>、同步数据库驱动、同步 Redis 客户端、大文件 <code>f.read()</code></td><td>线程整个睡在内核的 <code>read()</code> 上，事件循环这一步永远不返回</td><td>换异步驱动：<code>httpx.AsyncClient</code> / <code>aiohttp</code>、<code>asyncpg</code>、<code>redis.asyncio</code></td></tr>
+<tr><td>同步休眠与同步锁</td><td><code>time.sleep()</code>、<code>threading.Lock.acquire()</code></td><td>同上；重试退避和限流最容易误用这一类</td><td><code>await asyncio.sleep()</code>、<code>asyncio.Lock</code></td></tr>
+<tr><td>长时间纯计算</td><td>大 JSON 解析、正则灾难性回溯、图像处理、加解密、DataFrame 运算</td><td>它在执行 Python 字节码，根本不存在让出点</td><td>拆片并在片间让出；或挪去别的执行单元</td></tr>
+<tr><td>不释放 GIL 的 C 调用</td><td>某些扩展的长耗时函数（是否释放 GIL 取决于实现）</td><td>连「挪到线程」都救不了：它握着 GIL，别的线程也跑不动 Python</td><td>确认该扩展是否释放 GIL；不释放就只能换进程</td></tr>
+</table>
+
+<p>最后一行需要解释一下，因为它是唯一一个「常规解法会失效」的情况。CPython 里，一个 C 扩展函数在做长耗时的纯计算时，<em>应当</em>主动释放 GIL（NumPy、压缩库、加解密库的多数重活都这么做）。如果它没释放，那么即便你把这个调用挪到线程池里，主线程的事件循环依然抢不到 GIL，照样卡住——阻塞从「循环被占用」变成了「解释器被占用」，症状一模一样。判断办法是实测：把调用挪进线程后循环延迟是否真的回落。</p>
+
+<p>解决方向只有两条。第一条是<strong>换成异步驱动</strong>，让这段 I/O 真正进入第二节图里的第 ③ ④ 步，这是首选。第二条是<strong>把阻塞调用挪到线程池或进程池里执行</strong>，让事件循环只等一个 future——这条路涉及执行器桥接的具体 API、线程安全边界和背压控制，是异步这一组后面专门一张卡的内容，此处不展开。</p>
+
+<div class="highlight">
+<p><strong>生产事故复盘：一行 <code>requests.get()</code> 让整个服务的 P95 涨了 70 倍。</strong></p>
+<p>一个异步 HTTP 服务，单进程单事件循环，稳定承载 <strong>800 QPS</strong>，P95 <strong>45 ms</strong>，在途并发请求约 60。代码基本全异步，但下单路径上有一处风控校验是半年前从老服务原样搬过来的，用的是同步的 <code>requests.get()</code>，直接写在 <code>async def</code> 路由里。这条路径只占 <strong>3 QPS</strong>，风控接口平时响应 <strong>8 ms</strong>——事件循环为它付出的代价是每秒 24 ms，占用率 <strong>2.4%</strong>，在任何监控图上都看不出来，代码评审时也没人觉得有问题。</p>
+<p>某天风控的下游存储抖动，它的响应时间从 8 ms 劣化到 <strong>260 ms</strong>。参数只变了这一个，但账立刻就不一样了：3 QPS × 260 ms = 每秒 <strong>780 ms</strong> 的循环时间被独占，占用率从 2.4% 跳到 <strong>78%</strong>。剩下 22% 的时间要处理另外 797 QPS 的全部工作，排队迅速失控。全站 P95 从 45 ms 涨到 <strong>3.1 s</strong>，健康检查接口（只返回一个常量字符串）也开始超时，实例被负载均衡摘掉，流量打到剩余实例上又把它们一起压垮。</p>
+<p>排查花掉 <strong>50 分钟</strong>，卡点在于每个接口的链路追踪都显示「自身耗时几秒、但下游调用都很快」，看起来像是机器或网络的问题；而真正的凶手——那个下单接口——它的 trace 忠实地显示「调用风控耗时 260 ms」，完全在正常范围内，反而最不可疑。<strong>阻塞的受害者在日志里很显眼，肇事者在日志里很正常</strong>，这是这类故障最难的地方。</p>
+<p>修复是把 <code>requests</code> 换成 <code>httpx.AsyncClient</code>，改动 4 行，P95 回到 <strong>52 ms</strong>；此后即使风控再慢到 260 ms，也只影响下单接口自己。真正的长期收益来自随后加上的两件事：一个常驻的事件循环延迟指标（超过 100 ms 告警），以及一条 CI 规则——<code>async def</code> 函数体内出现 <code>requests</code>、<code>time.sleep</code> 等已知同步调用直接拒绝合并。</p>
+</div>
+
+<div class="intuition-box">
+<p>异步服务的健壮性由最慢的那一处同步调用决定，而不是由平均水平决定。一个 99.99% 的时间都很快的阻塞调用，在剩下那 0.01% 里会把整个进程一起拖下水。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、观测事件循环健康度，以及什么时候不该用 asyncio</h2>
+
+<p>上一节那场事故的根因，用任何一种常规 APM 指标都不好定位，因为「循环被占住」这件事不属于任何一个请求。要观测它，需要一个专门的视角：<span class="term">事件循环延迟</span>——从「一个回调本该被执行的时刻」到「它真的被执行的时刻」之间的差值。这个值在健康的服务里是个位数毫秒，被阻塞时会直接跳到阻塞时长的量级。</p>
+
+<h3>开发期：调试模式</h3>
+
+<p>asyncio 内置了调试模式，开启方式有四种：给 <code>asyncio.run()</code> 传 <code>debug=True</code>、设环境变量 <code>PYTHONASYNCIODEBUG=1</code>、用开发模式 <code>python -X dev</code>、或直接调 <code>loop.set_debug(True)</code>。打开后它会做几件事：报告执行时间超过阈值的回调、对未被 await 的协程给出创建位置的 traceback、以及在从错误的线程调用非线程安全的 asyncio API 时直接抛异常。</p>
+
+<pre><code>import asyncio, logging
+logging.basicConfig(level=logging.WARNING)
+
+async def main():
+    loop = asyncio.get_running_loop()
+    loop.slow_callback_duration = 0.05   # 默认 0.1 秒（100 毫秒）
+    await do_everything()
+
+asyncio.run(main(), debug=True)</code></pre>
+
+<p><code>loop.slow_callback_duration</code> 的默认值是 <strong>0.1 秒</strong>，只在调试模式下生效。默认值偏宽松：一个在热路径上阻塞 30 毫秒的调用足以毁掉高吞吐服务，却不会触发任何告警，所以排查时把它调到 0.05 甚至更低是值得的。</p>
+
+<p>但要对它的输出有正确预期。告警长这样：<code>Executing &lt;Task ... coro=&lt;main() ...&gt;&gt; took 4.005 seconds</code>——它点名的是<strong>最外层的那个 Task</strong>，不是那行阻塞代码。因为从事件循环的视角看，它只知道「刚才交出去的这一步花了 4 秒才还回来」，至于这 4 秒里嵌套调用了什么，它无从得知。调试模式是个可靠的烟雾报警器，回答「我是不是在阻塞」，但它不是地图，回答不了「阻塞在哪一行」。定位还得靠采样式 profiler 或在可疑调用两侧打点。另外调试模式本身有明显开销，属于开发与压测工具，不要常开在生产上。</p>
+
+<h3>生产期：一个常驻的延迟探针</h3>
+
+<p>生产上该常开的是延迟指标本身，原理简单到可以自己写：起一个后台任务，反复 <code>await asyncio.sleep(interval)</code>，然后比较实际流逝时间和 <code>interval</code> 的差。这个差就是循环延迟——因为 <code>sleep</code> 到期后这个任务本该立刻被唤醒，晚了多少就说明循环被别人占了多久。计时要用 <code>loop.time()</code>（单调时钟），不要用 <code>time.time()</code>，后者会被系统时间调整干扰。</p>
+
+<pre><code>async def loop_lag_probe(interval=0.05, warn=0.1):
+    loop = asyncio.get_running_loop()
+    while True:
+        t0 = loop.time()
+        await asyncio.sleep(interval)
+        lag = loop.time() - t0 - interval
+        if lag &gt; warn:
+            logger.warning("event loop lag %.3fs", lag)</code></pre>
+
+<p>采样间隔在 20～50 毫秒是个合理的起点：更密能抓到更短的卡顿但自身开销上升，更疏则只能发现大的停摆。要注意这个探针测的是<strong>上界的下界</strong>——它只能发现自己被推迟了多久，比它采样间隔更短的抖动会被漏掉。把这个 lag 作为直方图打到监控里，看它的 P99 而不是均值。</p>
+
+<table>
+<tr><th>手段</th><th>怎么开</th><th>能回答什么</th><th>代价 / 局限</th></tr>
+<tr><td>调试模式</td><td><code>asyncio.run(main(), debug=True)</code> / <code>PYTHONASYNCIODEBUG=1</code> / <code>-X dev</code></td><td>有没有慢回调、有没有漏 await 的协程、有没有跨线程误用</td><td>开销明显，只适合开发与压测；点名到 Task 级，不到行级</td></tr>
+<tr><td><code>loop.slow_callback_duration</code></td><td>运行时赋值，单位秒</td><td>调整「多慢算慢」的阈值</td><td>默认 0.1 秒；仅调试模式下生效</td></tr>
+<tr><td>事件循环延迟探针</td><td>自己起一个后台任务，用 <code>loop.time()</code> 计时</td><td>循环当下被占住的程度，这是生产上的核心指标</td><td>开销极低可常开；分辨率受采样间隔限制</td></tr>
+<tr><td><code>asyncio.all_tasks()</code></td><td>运行中调用，或在健康检查里暴露数量</td><td>在途任务数、有没有任务泄漏</td><td>只有计数和状态，看不出谁在阻塞</td></tr>
+<tr><td>采样式 profiler</td><td>按需接入</td><td>卡住的那段时间栈在哪</td><td>需要额外部署；是「找到行号」的正解</td></tr>
+</table>
+
+<h3>什么时候不该用 asyncio</h3>
+
+<p>异步不是默认选项，它是一个有明确适用条件的方案。下面三类情况里选它是净亏损。</p>
+
+<table>
+<tr><th>不该用的情形</th><th>判据</th><th>更合适的做法</th></tr>
+<tr><td>CPU 密集</td><td>等待时间占比低于一半；压测时 CPU 先打满而不是连接数先撑满</td><td>多进程；或把热点下沉到会释放 GIL 的原生扩展</td></tr>
+<tr><td>关键依赖只有同步驱动</td><td>数据库 / 消息队列 / 内部 SDK 找不到维护良好的异步客户端</td><td>同步 + 线程池模型；硬上异步只会让所有调用都得绕线程池，得不偿失</td></tr>
+<tr><td>团队尚未准备好全链路异步</td><td>没人能一眼看出某个调用是否阻塞，也没有循环延迟指标与 CI 拦截</td><td>先补观测和规范再迁；异步的故障模式是全局性的，学习成本要一次性付清</td></tr>
+<tr><td>并发量本来就低</td><td>峰值并发几十以内</td><td>同步代码，线程池就够，可读性和可调试性都更好</td></tr>
+<tr><td>短命脚本 / 批处理</td><td>跑一次几秒到几分钟，没有并发连接</td><td>同步；异步带来的复杂度没有对应收益</td></tr>
+</table>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>入口统一用 <code>asyncio.run()</code>，库代码里用 <code>asyncio.get_running_loop()</code></li>
+<li>把「事件循环延迟」作为一等指标常驻监控，P99 超阈值就告警</li>
+<li>开发和压测环境常开 <code>debug=True</code>，并把 <code>slow_callback_duration</code> 调到 0.05</li>
+<li>引入任何第三方库前先确认它有没有异步客户端</li>
+<li>用 CI 规则拦住 <code>async def</code> 里的已知同步调用（<code>requests</code>、<code>time.sleep</code> 等）</li>
+<li>按核数起多进程，每进程一个事件循环，让并发与并行各司其职</li>
+<li>选型前先量等待占比，只有 I/O 密集才走异步</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在 <code>async def</code> 里调 <code>requests</code>、<code>time.sleep</code> 或同步数据库驱动</li>
+<li>以为加上 <code>async</code> / <code>await</code> 就自动并发——顺序 await 依然是串行</li>
+<li>在已有运行循环里再调 <code>asyncio.run()</code>，或靠补丁允许循环重入</li>
+<li>新代码使用 <code>asyncio.get_event_loop()</code></li>
+<li>手工 <code>new_event_loop()</code> 却不做取消任务与 <code>shutdown_asyncgens()</code> 的收尾</li>
+<li>把调试模式常开在生产环境上</li>
+<li>指望异步能加速 CPU 密集计算</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>异步服务只需要盯一个核心指标：事件循环延迟。它正常，说明没人在偷占循环；它一跳，不用看别的，先去找那段不肯让出控制权的代码。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>我把函数都改成 async def 了，为什么反而比同步版本还慢？</summary>
+<div class="answer">最常见的原因是<strong>没有真正的并发</strong>：函数签名改了，但调用处仍然是一个接一个地 <code>await</code>，执行顺序和同步版本完全一致，却额外付出了协程创建、任务调度、以及每个让出点上的状态保存开销，所以净结果是变慢。第二个原因是链路里还留着同步调用，等于用异步的复杂度换来了同步的性能。第三个原因是工作负载本来就是 CPU 密集的——异步对这类负载没有任何帮助。判断顺序是：先确认等待时间占比是否足够高，再确认有没有真正创建出并发的任务，最后确认链路里没有残留的阻塞调用。只满足前两条时才应该期待提速。</div>
+</details>
+
+<details>
+<summary>事件循环是单线程的，那它怎么可能同时处理上千个连接？</summary>
+<div class="answer">关键在于「处理」这个词被拆成了两件事。一千个连接里，任何一瞬间真正有数据要处理的通常只有几个，其余的都在等网络。事件循环把这上千个 socket 一次性注册给内核的多路复用机制（<code>epoll</code>/<code>kqueue</code>/IOCP），然后阻塞在一次系统调用上；内核在其中任何一个就绪时把它唤醒，并且<strong>只返回就绪的那几个</strong>。于是它每一轮只需要处理少数几个真正有活的连接，处理一个连接的活又只需要几十微秒。单线程之所以够用，前提是每次处理都极短——这也解释了为什么一个 260 毫秒的阻塞调用能造成灾难：它相当于一口气吃掉了几千次正常处理的时间预算。</div>
+</details>
+
+<details>
+<summary>协程和线程到底差在哪？为什么协程这么便宜？</summary>
+<div class="answer">差在谁来调度、以及保存现场的成本。线程由操作系统内核调度，切换要陷入内核、保存完整的寄存器组和信号掩码，还要预留一整块连续的栈（Linux 上默认 8 MB 虚拟地址空间）；协程由事件循环在用户态调度，切换本质上就是恢复一个 Python 帧对象并继续执行，成本接近一次函数调用，占用的内存是这个帧以及它引用的对象，量级在 KB。另一个关键差别是<strong>抢占式与协作式</strong>：线程不让位内核也会把它换下去，协程不让位就没人能把它换下去。所以协程省下的资源，是用「必须自觉让出」这个纪律换来的。</div>
+</details>
+
+<details>
+<summary>为什么说 await 两个请求不算并发？我明明写了两个 await。</summary>
+<div class="answer">因为 <code>await</code> 的语义是「等这件事做完」，不是「把这件事派出去」。执行到第一个 <code>await</code> 时，第一个请求发出，当前协程挂起；事件循环这时确实可以去跑别的任务，但如果你的程序里根本没有别的任务，它就只能空转等着。第一个请求返回后，当前协程恢复，才执行到第二行、发出第二个请求。两个请求在时间上完全不重叠，总耗时是两者之和。要让它们重叠，必须在发出第一个请求之后<strong>不立即等它</strong>，而是把两个协程都变成正在推进中的任务，再统一等待结果。这个动作需要显式调用创建任务的 API，是后续卡片的主题。</div>
+</details>
+
+<details>
+<summary>asyncio.run() 和手动 new_event_loop() + run_until_complete() 有什么区别？</summary>
+<div class="answer">区别全在收尾。<code>asyncio.run()</code> 在主协程结束后（无论正常返回还是抛异常）会依次做四件事：取消该循环上所有未完成的任务并等待它们响应取消、关闭异步生成器、关闭默认的线程池执行器、最后关闭循环。手写版本如果只调 <code>run_until_complete()</code> 然后 <code>close()</code>，这三步清理全部缺失，症状是退出时出现「Task was destroyed but it is pending!」告警、异步生成器的 <code>finally</code> 块不执行、线程池里的任务被硬切断。这些问题在开发期往往不显形，到生产上表现为连接不释放或数据没落盘。如果确实需要在同一个循环里分多次运行，用 Python 3.11 引入的 <code>asyncio.Runner()</code>，它提供同样的收尾保证。</div>
+</details>
+
+<details>
+<summary>在 Jupyter 里调 asyncio.run() 报 "cannot be called from a running event loop"，怎么办？</summary>
+<div class="answer">Jupyter 的内核本身就运行在一个事件循环上，所以你的单元格代码已经处在循环内部，再调 <code>asyncio.run()</code> 相当于在循环里套循环，asyncio 明确禁止这件事。正确做法是直接在单元格里写 <code>await some_coro()</code>——IPython 支持顶层 <code>await</code>，它会把这个协程交给已有的循环执行。同样的道理适用于 FastAPI 的 <code>async def</code> 路由、以及任何已经运行在循环里的回调。网上流行的 <code>nest_asyncio</code> 补丁能让 <code>asyncio.run()</code> 不报错，但它靠猴子补丁允许循环重入，会让取消与超时的语义变得不可推理，只适合交互式探索，不要带进生产代码。</div>
+</details>
+
+<details>
+<summary>只有一处同步调用，影响应该很小吧？怎么判断它到底要不要改？</summary>
+<div class="answer">算一笔账就够了：<strong>这个调用的 QPS × 它的单次耗时</strong>，得到的是每秒钟被它独占的循环时间，除以 1 秒就是占用率。占用率 2% 时确实无感，但要注意这个乘积里的两个因子都会变——流量涨三倍、下游慢十倍都是常事，而占用率是它们的乘积，会涨三十倍。所以判据不是「现在影响大不大」，而是「最坏情况下这个乘积能到多少」。第五节那个例子里，平时占用率 2.4%，仅仅因为下游从 8 毫秒变成 260 毫秒就跳到 78%，全站崩了。结论是：异步服务里的同步调用应当被当作<strong>确定性的隐患</strong>处理，而不是按当前影响排优先级。</div>
+</details>
+
+<details>
+<summary>调试模式报了「Executing ... took 4 seconds」，但它指的那个 Task 里什么都没有，怎么找真凶？</summary>
+<div class="answer">这是调试模式的固有局限，不是你用错了。事件循环能观测到的最小单位是「一次把控制权交出去再收回来」，它只知道最外层那个 Task 的这一步花了 4 秒，至于这 4 秒里嵌套调用了多少层函数、卡在哪一行，循环完全看不见——等它重新拿回控制权时，内部的调用栈早就退干净了。所以把它当成「有没有阻塞」的是非题答案，别指望它给行号。定位真凶的实际手段有三种：接一个采样式 profiler 抓卡顿期间的栈；在所有可疑的第三方调用两侧加计时打点；或者做静态排查，直接搜索代码里 <code>async def</code> 函数体内出现的已知同步库调用。第三种最笨但往往最快，因为肇事者通常就是那几个眼熟的名字。</div>
+</details>
+
+<details>
+<summary>异步代码里还需要加锁吗？单线程不是天然没有竞态？</summary>
+<div class="answer">需要，只是竞态的形态变了。单线程确实消除了「一条语句执行到一半被打断」这类竞态，两个让出点之间的所有代码都是原子的。但只要一段逻辑跨越了 <code>await</code>，它就可能被打断：你在 <code>await</code> 之前读到的状态，在 <code>await</code> 之后可能已经被另一个任务改掉了。典型例子是「先检查余额够不够，再 <code>await</code> 扣款」，两个任务可以都通过检查然后都扣款。要保护的正是这种跨越让出点的临界区，用 <code>asyncio.Lock</code> 而不是 <code>threading.Lock</code>——后者会阻塞整个循环。好消息是这类临界区比多线程里少得多，而且位置是可见的：只要看哪段逻辑中间夹着 <code>await</code> 就行。资源的获取与释放配对可以交给 <code>async with</code>，上下文管理器的异步形态见 <a href="py_context_managers.html">PY19</a>。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

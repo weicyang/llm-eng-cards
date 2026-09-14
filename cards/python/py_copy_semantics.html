@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY10 · 拷贝语义与共享状态陷阱</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、赋值、浅拷贝、深拷贝</a>
+<a href="#s2">二、浅拷贝的四种写法</a>
+<a href="#s3">三、共享状态的四类事故</a>
+<a href="#s4">四、深拷贝的代价与边界</a>
+<a href="#s5">五、可变性作为设计选择</a>
+<a href="#s6">六、排查手册</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY10 · 拷贝语义与共享状态陷阱</h1>
+<p class="subtitle">赋值不是拷贝 / 浅拷贝只拷一层 / 共享状态的四类经典事故 / deepcopy 的真实代价 / 不可变优先的设计取舍</p>
+
+<div class="intuition-box">
+<p>Python 里没有「把这个值复制一份」这种默认动作。你写的每一个赋值、每一次传参、每一处返回，都只是让一个新名字指向同一个对象。所有共享状态的 bug 都源自同一个误解：以为自己拿到了副本，其实拿到的是钥匙。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、三个层次：赋值、浅拷贝、深拷贝</h2>
+
+<p>把拷贝这件事想清楚，只需要接受一个事实：Python 的变量不是盒子，是标签。<code>b = a</code> 这行代码做的全部工作是给 <code>a</code> 当前指向的那个对象再贴一张写着 <code>b</code> 的标签，对象本身一个字节都没有动。这种「多个名字指向同一对象」的状态叫 <span class="term">别名</span>，也就是 aliasing——它本身完全合法，甚至是 Python 高效的原因之一，出问题的只是当你误以为自己拿到了独立副本的时候。</p>
+
+<p>真正需要区分的是三个层次。<strong>赋值</strong>压根没拷，连外层容器都是同一个。<strong>浅拷贝</strong>新建了外层容器，逐个把原容器里的元素引用抄进去——注意抄的是引用，所以内层对象仍然是共享的。<strong>深拷贝</strong>递归地走遍整个 <span class="term">对象图</span>（对象与对象之间通过引用连成的有向图），把路上遇到的每个可变对象都新建一份。三者不是「拷贝程度不同」，而是「在对象图的第几层停手」。</p>
+
+<div class="arch-diagram">  原始结构：data = [inner, tags]，其中 inner = [1, 2]，tags = ["a"]
+
+  ① 赋值 b = data            ② 浅拷贝 b = data[:]        ③ 深拷贝 b = deepcopy(data)
+  ─────────────────────      ─────────────────────      ─────────────────────────
+   data ─┐                    data ─&gt; [ ·  · ]            data ─&gt; [ ·  · ]
+         ├─&gt; [ ·  · ]                   │  │                        │  │
+   b   ──┘     │  │           b    ─&gt; [ ·  · ]                      ▼  ▼
+               ▼  ▼                     │  │                    [1,2]  ["a"]
+           [1,2] ["a"]                  ▼  ▼
+                                    [1,2]  ["a"]            b    ─&gt; [ ·  · ]
+   外层同一个                  外层是新的                             │  │
+   内层同一个                  内层还是同一个                          ▼  ▼
+                                                              [1,2]' ["a"]'
+                                                            整棵图都是新的
+
+  验证方式（三行就能分辨自己处在哪一层）
+    b is data        → ①True   ②False  ③False   ← 外层是不是同一个
+    b[0] is data[0]  → ①True   ②True   ③False   ← 内层是不是同一个
+    b == data        → ①True   ②True   ③True    ← 值相等，分辨不出任何东西</div>
+
+<p>最后一行值得单独说。<code>==</code> 在这三种情况下全都返回 <code>True</code>，所以它对判断「有没有拷贝」毫无帮助。要确认共享关系，只能用 <code>is</code> 或 <code>id()</code>。这也是后面第六节排查手法的全部基础。</p>
+
+<h3>改外层和改内层，分别谁能看见</h3>
+
+<p>下面这张表是本卡最该记住的东西。它把「你做了什么操作」和「原对象是否被牵连」拆开对照，三列分别对应上面三个层次。</p>
+
+<table>
+<tr><th>你对 b 做的操作</th><th>赋值 <code>b = data</code></th><th>浅拷贝 <code>b = data[:]</code></th><th>深拷贝 <code>b = deepcopy(data)</code></th></tr>
+<tr><td><code>b.append(x)</code>（改外层结构）</td><td>data 也变长 ⚠️</td><td>data 不变 ✅</td><td>data 不变 ✅</td></tr>
+<tr><td><code>b[0] = 新对象</code>（重绑外层槽位）</td><td>data[0] 被换掉 ⚠️</td><td>data[0] 不变 ✅</td><td>data[0] 不变 ✅</td></tr>
+<tr><td><code>b[0].append(9)</code>（改内层对象）</td><td>data[0] 也变长 ⚠️</td><td>data[0] 也变长 ⚠️</td><td>data[0] 不变 ✅</td></tr>
+<tr><td><code>b[0] += [9]</code>（列表原地扩展）</td><td>data[0] 也变长 ⚠️</td><td>data[0] 也变长 ⚠️</td><td>data[0] 不变 ✅</td></tr>
+<tr><td><code>b[1] = b[1] + "x"</code>（不可变元素）</td><td>data[1] 被换掉 ⚠️</td><td>data[1] 不变 ✅</td><td>data[1] 不变 ✅</td></tr>
+</table>
+
+<p>表格里只有第三、四行是浅拷贝与深拷贝的分界线，而它们恰好是实际项目里最容易出现的两种写法。换句话说，绝大多数「明明拷过一份为什么还是串了」的问题，都落在这两行上：你拷的是外层，改的是内层。</p>
+
+<p>最后一行则解释了另一个常见困惑：如果容器里装的全是不可变对象（数字、字符串、元组），浅拷贝的效果和深拷贝<strong>看起来</strong>完全一样。因为不可变对象无法被原地修改，共享它毫无风险——这正是下一节里「对 tuple 拷贝没有意义」的同一个道理。关于可变与不可变的划分，<a href="py_variables_builtin_types.html">PY02 · 变量与内置类型</a> 和 <a href="py_containers_overview.html">PY03 · 容器四件套</a> 已经铺过底，这里直接拿来用。</p>
+
+<div class="intuition-box">
+<p>赋值是「再贴一张标签」，浅拷贝是「换个新篮子、原封不动把东西挪过去」，深拷贝是「连篮子里的东西也照着做一个」。判断自己在哪一层，只看 <code>is</code>，别看 <code>==</code>。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、浅拷贝的四种写法与它们的等价性</h2>
+
+<p>浅拷贝在 Python 里有好几种写法，新手常以为它们之间有深浅差别，于是在代码里混着用、或者反复叠加，指望多写一层能多拷一层。实际上对列表来说，<code>list(x)</code>、<code>x[:]</code>、<code>x.copy()</code>、<code>copy.copy(x)</code> 是完全等价的四种拼法：都新建一个列表对象，都把原列表里的元素引用逐个抄过去，都只拷一层。它们的差别仅在可读性和适用范围，不在语义。</p>
+
+<table>
+<tr><th>写法</th><th>适用类型</th><th>本质</th><th>什么时候选它</th></tr>
+<tr><td><code>x.copy()</code></td><td>list / dict / set</td><td>容器自己的浅拷贝方法</td><td><strong>首选</strong>：意图写在方法名上，读代码的人不会误会</td></tr>
+<tr><td><code>list(x)</code> / <code>dict(x)</code> / <code>set(x)</code></td><td>任何可迭代对象</td><td>用构造函数新建同类容器</td><td>需要顺便<strong>换类型</strong>时，例如把元组、生成器收成列表</td></tr>
+<tr><td><code>x[:]</code></td><td>list（及支持切片的序列）</td><td>整段切片，切片本身返回新对象</td><td>老代码里很常见，但对不熟悉的人不直观，新写别用</td></tr>
+<tr><td><code>copy.copy(x)</code></td><td>几乎任何对象</td><td>走 <code>__copy__</code> 协议的通用浅拷贝</td><td>对象类型不确定，或要拷自定义类的实例</td></tr>
+<tr><td><code>copy.deepcopy(x)</code></td><td>几乎任何对象</td><td>递归拷整个对象图</td><td>确实需要完全独立的副本，且清楚代价（见第四节）</td></tr>
+</table>
+
+<p>字典和集合没有切片语法，所以只剩 <code>dict(x)</code> / <code>x.copy()</code> 和 <code>set(x)</code> / <code>x.copy()</code> 两条路，同样都是浅的。<code>dict</code> 的浅拷贝容易给人错觉，因为很多字典的值本来就是数字或字符串，拷完怎么改都不串；但只要某个值是列表或嵌套字典，问题就立刻回来了——这是配置对象最常见的翻车方式。</p>
+
+<pre><code>import copy
+cfg = {"retry": 3, "hosts": ["a", "b"]}
+
+c1 = cfg.copy()             # 浅：hosts 是同一个列表
+c1["retry"] = 5             # 改标量，互不影响
+c1["hosts"].append("c")     # 改嵌套，cfg["hosts"] 也变成三个了
+
+c2 = copy.deepcopy(cfg)     # 深：hosts 是新列表
+c2["hosts"].append("d")     # cfg 完全不受影响</code></pre>
+
+<h3>对不可变容器拷贝没有意义</h3>
+
+<p>元组是不可变的，谁都无法原地修改它，因此「独立副本」这个需求对它不存在。Python 干脆做了优化：<code>tuple(t)</code> 和 <code>copy.copy(t)</code> 直接把原对象还给你，<code>tuple(t) is t</code> 为真。同样的道理适用于 <code>frozenset</code>、字符串、数字。这不是特例，而是可变性推出的必然结论——不能被改的东西，共享和复制没有任何可观测差别。</p>
+
+<p>但这里有个必须警惕的错位：<strong>元组不可变，指的是它的槽位不可变，不是它装的东西不可变</strong>。<code>t = ([1, 2], "x")</code> 里那个列表照样能被 append，而且因为 <code>tuple(t) is t</code>，你连「拷一份元组来隔离」这条路都走不了，只能 deepcopy。所以「用元组做常量就安全了」这个说法只在元组里装的全是不可变对象时才成立。</p>
+
+<div class="intuition-box">
+<p>四种浅拷贝写法是同一件事的四种拼法，不存在「更深一点」的那个。想确认是不是真的隔离了，别数拷了几次，去看内层的 <code>id()</code> 变不变。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、共享状态的四类经典事故</h2>
+
+<p>知道了浅拷贝只拷一层，接下来的问题是：现实代码里哪些地方会在你没意识到的时候产生共享？下面四类占了绝大多数。它们表面上毫不相干，成因却是同一个——某个可变对象<strong>只被创建了一次</strong>，却被多处引用。</p>
+
+<table>
+<tr><th>事故</th><th>典型写法</th><th>成因</th><th>修法</th></tr>
+<tr><td>(a) 乘法造多维结构</td><td><code>[[0] * 3] * 3</code>、<code>[[]] * n</code></td><td><code>*</code> 只复制引用，n 行是同一个列表</td><td>用推导式 <code>[[0] * 3 for _ in range(3)]</code></td></tr>
+<tr><td>(b) 类属性写成可变对象</td><td><code>class C: items = []</code></td><td>类属性属于类，所有实例共用一份</td><td>在 <code>__init__</code> 里建实例属性</td></tr>
+<tr><td>(c) 返回内部可变对象</td><td><code>return self._items</code></td><td>调用方拿到的是内部状态本体</td><td>返回 <code>self._items.copy()</code> 或只读视图</td></tr>
+<tr><td>(d) fromkeys 配可变默认值</td><td><code>dict.fromkeys(ks, [])</code></td><td>那个 <code>[]</code> 只求值一次，所有键共享</td><td>用推导式 <code>{k: [] for k in ks}</code></td></tr>
+</table>
+
+<p>还有第五类——可变对象作为函数默认参数，<code>def f(items=[])</code>。它的成因和 (d) 完全一样（默认值在函数定义时求值一次，之后每次调用复用同一个对象），<a href="py_functions_basics.html">PY05 · 函数入门与参数传递</a> 已经完整讲过，这里不再重复。</p>
+
+<h3>(a) 乘法造出来的「多维数组」只有一行</h3>
+
+<p>这是最容易复现、也最容易被误诊的一类。<code>[[0] * 3] * 3</code> 看起来像个 3×3 的矩阵，改一个格子却会让整列一起变。原因在于两个 <code>*</code> 的含义并不对称：内层 <code>[0] * 3</code> 复制的是不可变的整数 0，没问题；外层的 <code>* 3</code> 复制的是「那个列表的引用」，于是三行指向同一个对象。</p>
+
+<div class="arch-diagram">  grid = [[0] * 3] * 3        ← 外层乘法只复制引用
+
+  grid ──&gt; [ ·    ·    ·  ]   ← 外层列表确实有 3 个槽位
+             │    │    │
+             └────┼────┘
+                  ▼
+           [ 0,  0,  0 ]       ← 但三个槽位指向同一个内层列表！
+
+  grid[0][1] = 9  之后
+           [ 0,  9,  0 ]       ← 只有一个对象被改
+  grid 打印出来：[[0,9,0], [0,9,0], [0,9,0]]   ← 三行全变
+
+  正确写法：推导式让循环体每轮都执行一次 [0] * 3
+  grid = [[0] * 3 for _ in range(3)]
+
+  grid ──&gt; [ ·    ·    ·  ]
+             │    │    └──&gt; [0, 0, 0]   ← 三个独立对象
+             │    └───────&gt; [0, 0, 0]
+             └────────────&gt; [0, 0, 0]
+
+  自查一行：len({id(row) for row in grid}) 应该等于 len(grid)</div>
+
+<p>最后那行自查很实用：把每一行的 <code>id()</code> 收进集合，如果去重后只剩 1 个，说明所有行其实是同一个对象。这条思路可以推广到任何「一堆容器怀疑在共享」的场景。</p>
+
+<h3>(b) 类属性与实例属性：一份还是每个一份</h3>
+
+<p>写在 <code>class</code> 语句体里的赋值创建的是<strong>类属性</strong>，它在类被定义时执行一次，归类所有；写在 <code>__init__</code> 里的 <code>self.x = ...</code> 创建的是<strong>实例属性</strong>，每次实例化各建一份。类属性放常量（如 <code>MAX_RETRY = 3</code>）完全没问题，放可变对象就变成了全局共享池。</p>
+
+<pre><code>class Cart:
+    items = []              # ⚠️ 类属性：所有购物车共用一个列表
+
+class CartOK:
+    def __init__(self):
+        self.items = []     # ✅ 实例属性：每个实例一份
+
+a, b = Cart(), Cart()
+a.items.append("book")
+print(b.items)              # ['book'] —— b 凭空多了一件商品</code></pre>
+
+<p>这类 bug 的隐蔽性来自一个细节：读取时 <code>a.items</code> 和 <code>b.items</code> 都能正常工作，看不出异常；<code>a.items = []</code> 这样的<strong>重新赋值</strong>还会悄悄创建一个实例属性遮蔽掉类属性，于是现象变得时有时无——改用 <code>append</code> 就串，改用 <code>=</code> 就不串。同一段代码两种表现，排查时极易误判为「偶发」。</p>
+
+<h3>(c) 返回内部可变对象的引用</h3>
+
+<p>一个类精心用 <code>_items</code> 这样的下划线前缀表示「内部状态」，却在 getter 里直接 <code>return self._items</code>，等于把内部状态的钥匙交了出去。调用方完全可以 <code>obj.get_items().clear()</code>，绕过你所有的校验逻辑把状态清空，而且这行代码看起来相当无辜。封装在这里是失效的——私有约定只挡住了名字，没挡住引用。</p>
+
+<h3>(d) dict.fromkeys 的陷阱</h3>
+
+<p><code>dict.fromkeys(keys, [])</code> 的问题在于第二个参数是一个<strong>已经求值完毕的对象</strong>，不是「每个键各造一个空列表」的指令。<code>fromkeys</code> 只是把这同一个列表塞进每个键，于是给任意一个键 append，所有键都跟着变。表现和 (a) 完全同构，改法也一样：换成字典推导式，让 <code>[]</code> 在循环里反复执行。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某订单服务用 <code>dict.fromkeys(warehouse_ids, [])</code> 初始化「仓库 → 待发货订单」的映射，共 8 个仓库。上线后第一天，运营发现 8 个仓库的待发货列表内容完全一致，都是全量 1,240 条订单；按仓库拆单的下游任务因此重复推送了 8 次，产生 9,920 条发货指令，人工回滚耗时约 3 小时。根因是那个 <code>[]</code> 只被创建了一次，8 个键共享它。修复只有一行：改成 <code>{wid: [] for wid in warehouse_ids}</code>。事后补的回归测试也很简单——断言 <code>len({id(v) for v in mapping.values()}) == 8</code>。</p>
+</div>
+
+<div class="intuition-box">
+<p>这四类事故只有一个共同成因：某个可变对象只被创建了一次，却被当成了多份用。看到 <code>*</code>、<code>fromkeys</code>、类属性、裸 <code>return self._x</code>，就该条件反射地问一句「这里到底造了几个对象」。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、深拷贝的代价与边界</h2>
+
+<p>知道了共享的危险，很容易走向另一个极端：凡是要传出去的对象一律 <code>deepcopy</code> 一下，图个安心。这个习惯在小对象上无害，在真实系统里则是性能事故的常见来源，而且它还会把一些你根本不想复制的东西一起复制走。</p>
+
+<p><code>copy.deepcopy</code> 的工作方式是递归遍历整个对象图：每遇到一个对象就检查它在 <span class="term">备忘表</span>（memo，一个 <code>id(对象) → 新对象</code> 的字典）里有没有出现过，没有就新建一份并登记，然后继续往它的每个属性、每个元素里钻。备忘表的存在让循环引用不会导致无限递归，也保证了原图里共享的两处引用在副本里仍然指向同一个新对象——拓扑结构是被忠实保留的。代价是：耗时和内存都随对象图的<strong>节点总数</strong>增长，而不是随你关心的那几个字段增长。</p>
+
+<div class="arch-diagram">  deepcopy 在做什么：带备忘表的图遍历
+
+   原图（注意 C 被 A、B 共同引用，且 D 指回 A 形成环）
+        A ──&gt; B ──&gt; C
+        │           ▲
+        └───────────┘
+        A ──&gt; D ──&gt; A   (环)
+
+   遍历过程                         memo: {id(原) : 新}
+   ─────────────────────────       ──────────────────────
+   访问 A  → 不在 memo → 新建 A'    {A: A'}
+   访问 B  → 不在 memo → 新建 B'    {A:A', B:B'}
+   访问 C  → 不在 memo → 新建 C'    {A:A', B:B', C:C'}
+   访问 D  → 不在 memo → 新建 D'    {A:A', B:B', C:C', D:D'}
+   A 的第二条边指向 C → 命中 memo → 直接复用 C'   ← 共享关系被保留
+   D 指回 A            → 命中 memo → 直接复用 A'   ← 环不会死循环
+
+   代价 ≈ O(图中对象总数)，而不是 O(你关心的字段数)
+   一个挂着 50 万个小对象的实例，deepcopy 就要走 50 万次这个流程</div>
+
+<h3>它会连带复制你不想复制的东西</h3>
+
+<p>deepcopy 不知道你的业务语义，它只知道「这个属性引用了一个对象，那就把它也拷一份」。于是一个持有数据库连接池的服务对象被深拷贝时，连接池、底层 socket 包装、线程锁会一起进入递归。结果通常是两种：要么直接抛 <code>TypeError: cannot pickle '_thread.lock' object</code> 这类错误（很多不可复制的资源会在这一步拒绝），要么更糟——拷出一个看起来正常、实则持有失效句柄的对象，等到真正用它读写时才在完全无关的地方炸开。</p>
+
+<p>需要控制这个行为时，可以在类上定义 <code>__deepcopy__</code> 或 <code>__copy__</code>，显式声明哪些字段拷、哪些字段共享、哪些字段置空重建；<code>__reduce__</code> 则同时影响 pickle 和 copy，适合想统一序列化与复制语义的场景。实现 <code>__deepcopy__</code> 时记得把 memo 传递下去，否则会丢掉循环引用保护。</p>
+
+<pre><code>class Service:
+    def __init__(self, conn, cache):
+        self.conn, self.cache = conn, cache   # conn 共享，cache 独立
+
+    def __deepcopy__(self, memo):
+        new = object.__new__(Service)
+        memo[id(self)] = new                  # 先登记，防循环引用
+        new.conn = self.conn                  # 直接共享，不递归
+        new.cache = copy.deepcopy(self.cache, memo)
+        return new</code></pre>
+
+<h3>四种方案的代价对比</h3>
+
+<p>把「不拷 / 拷一层 / 拷整棵图 / 从源头重建」并排放在一起看，选择就清楚多了。重建这一列常被忽略，但它往往是最优解：与其深拷贝一个庞大对象，不如重新走一遍构造流程，只带上真正需要的字段。</p>
+
+<table>
+<tr><th>方案</th><th>时间代价</th><th>内存代价</th><th>隔离程度</th><th>适用场景</th></tr>
+<tr><td>赋值（不拷）</td><td>常数级</td><td>无新增</td><td>零隔离</td><td>只读传递，或明确就是要共享同一状态</td></tr>
+<tr><td>浅拷贝</td><td>与元素个数成正比</td><td>只多一个外层容器</td><td>只隔离外层</td><td>元素全是不可变对象；或只需防止外层被增删</td></tr>
+<tr><td>深拷贝</td><td>与对象图节点总数成正比</td><td>接近翻倍</td><td>完全隔离</td><td>小而复杂的嵌套结构，如配置树、测试夹具</td></tr>
+<tr><td>显式重建</td><td>取决于构造逻辑，通常远低于深拷贝</td><td>只占新对象</td><td>完全隔离且可裁剪</td><td>大对象、持有外部资源的对象、只需要部分字段时</td></tr>
+<tr><td>改成不可变</td><td>零（无需拷贝）</td><td>无新增</td><td>天然安全</td><td>常量、配置、值对象——见第五节</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某风控服务在每次请求处理前对一个「规则上下文」对象做 <code>copy.deepcopy</code>，图的是各请求互不干扰。上线初期上下文里只有十几条规则，单次深拷贝约 0.4 毫秒，毫无感知。三个月后规则库涨到 3,200 条、且每条挂着历史命中样本，同一个对象的图规模膨胀到约 47 万个节点，单次深拷贝升到 310 毫秒，P99 延迟从 45 毫秒涨到 620 毫秒，进程常驻内存也因为峰值期的副本翻倍而从 1.2 GB 冲到 2.9 GB，触发了两次 OOM 重启。修法不是优化深拷贝，而是把规则库改成加载后不再修改的不可变结构、只对每请求真正会写的那个小字典做浅拷贝；改完单次开销降到 0.02 毫秒以下。</p>
+</div>
+
+<div class="intuition-box">
+<p>deepcopy 的代价是「整张对象图的规模」，不是「你关心的那几个字段」。当你想深拷贝一个大对象时，先问问能不能改成不可变，或者干脆按需重建一个小的。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、可变性作为设计选择：如何从根上避免这类 bug</h2>
+
+<p>前面几节都在讲「怎么发现和怎么补救」，但共享状态的 bug 有个特点：补救永远是逐点的，漏一处就还会出。真正一劳永逸的做法是在设计层面减少「可以被别人改的可变对象」的数量，让这类 bug 没有生长的土壤。</p>
+
+<h3>不可变优先</h3>
+
+<p>需要一组常量时用元组而不是列表，需要一组不重复的常量时用 <code>frozenset</code> 而不是 <code>set</code>，需要一个只承载数据的值对象时给 dataclass 加上 <code>frozen=True</code>（它会让实例的属性赋值直接抛 <code>FrozenInstanceError</code>，同时自动生成 <code>__hash__</code>，于是这个对象能当字典键用）。这类选择的代价几乎为零，收益是整整一类 bug 的消失：不可变对象可以被放心地共享、缓存、当默认值、跨线程传递，因为没有任何人能改它。dataclass 的完整用法在后续讲类与数据建模的卡片里展开，这里只需要先形成「默认加 frozen，确实需要改再去掉」的直觉。</p>
+
+<h3>边界处的防御性拷贝</h3>
+
+<p><span class="term">防御性拷贝</span>指的是在模块或类的入口、出口处主动拷一份，不让外部对象和内部状态产生引用关系。它有两个方向，而且必须成对考虑：<strong>进来时拷</strong>——构造函数收到一个列表就 <code>self._items = list(items)</code>，这样调用方后续改他手上那个列表不会影响你；<strong>出去时拷</strong>——getter 返回 <code>self._items.copy()</code>，这样调用方改不到你的内部状态。只做一个方向等于没做，因为漏掉的那一侧仍然能建立引用通路。</p>
+
+<p>出去的方向还有个更轻的选择：返回<span class="term">只读视图</span>，也就是一个不复制底层数据、但禁止写操作的包装对象。标准库的 <code>types.MappingProxyType</code> 就是字典的只读视图，它的读取是零拷贝的，任何写操作抛 <code>TypeError</code>。列表没有等价的标准包装，常见做法是转成元组。</p>
+
+<pre><code>from types import MappingProxyType
+
+class Config:
+    def __init__(self, data: dict):
+        self._data = dict(data)              # 进来时拷一份
+    @property
+    def data(self):
+        return MappingProxyType(self._data)  # 出去给只读视图
+
+Config({"retry": 3}).data["retry"] = 9       # TypeError: 不支持赋值</code></pre>
+
+<p>要注意 <code>MappingProxyType</code> 只锁住最外层这一层：如果字典的值是列表，调用方照样能 <code>cfg.data["hosts"].append(...)</code>。它和浅拷贝是同一个层级的保护，想彻底封住嵌套结构，还是得让内层也是不可变的。</p>
+
+<h3>明确所有权约定</h3>
+
+<p>第三条路不写任何代码，只定规矩：每个可变对象都有一个明确的<span class="term">所有者</span>，只有所有者能改它，其他模块拿到的一律视为只读。约定通常表达为命名规范（下划线前缀）、类型注解（用 <code>Sequence</code> 而非 <code>List</code> 声明只读入参、用 <code>Mapping</code> 而非 <code>Dict</code>）、以及文档里一句明确的「本方法返回的对象请勿修改」。它的优点是零运行时开销，缺点是靠人守——所以它适合团队内部约束，不适合对外暴露的公共 API。</p>
+
+<table>
+<tr><th>取舍维度</th><th>防御性拷贝</th><th>不可变设计</th><th>所有权约定</th></tr>
+<tr><td>运行时开销</td><td>每次穿越边界都有拷贝成本</td><td>零，反而省掉拷贝</td><td>零</td></tr>
+<tr><td>安全强度</td><td>强，但漏一处边界就破</td><td>最强，语言层面拦住</td><td>弱，完全靠自觉</td></tr>
+<tr><td>改造成本</td><td>低，局部加几行即可</td><td>高，要改数据结构和写法</td><td>最低，只改文档与命名</td></tr>
+<tr><td>出错时的表现</td><td>静默——串状态但不报错</td><td>立即抛 <code>TypeError</code> 等</td><td>静默，且难追责</td></tr>
+<tr><td>最适合</td><td>已有可变代码的边界加固</td><td>配置、常量、值对象、跨线程共享</td><td>同团队内部的模块间协作</td></tr>
+<tr><td>不适合</td><td>大对象（拷贝太贵）</td><td>本身就要频繁原地增删的结构</td><td>对外公开的 API、跨团队协作</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>三条路的优先级是：能改成不可变就改成不可变，改不动就在边界处拷一份，两者都做不到才退到「靠约定」。约定是最后一道防线，不是第一选择。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、排查手册：怀疑共享状态时怎么定位</h2>
+
+<p>共享状态的 bug 有一套相当独特的指纹，认出它能省掉大量无方向的排查。核心特征是：<strong>它不是随机的，是累积的</strong>。同一个输入第一次调用完全正常，第十次开始不对，第一百次错得更厉害——因为那个被共享的对象在每次调用里都被追加了一点脏数据。</p>
+
+<table>
+<tr><th>症状</th><th>为什么指向共享状态</th><th>下一步验证</th></tr>
+<tr><td>bug 随调用次数递增、错误量越来越大</td><td>某个对象跨调用累积，没被重置</td><td>连续调用 5 次，打印可疑容器的长度看是否单调增长</td></tr>
+<tr><td>只在长跑进程（服务、worker）里出现</td><td>短命进程每次重新初始化，掩盖了共享</td><td>在同一进程里循环调用，而不是反复重启脚本</td></tr>
+<tr><td>重启就好，好几个小时又复发</td><td>进程内状态被污染，重启清空了它</td><td>别急着重启，先 dump 出可疑对象的 <code>id()</code> 和内容</td></tr>
+<tr><td>单元测试全绿，生产必炸</td><td>测试每个用例新建对象，生产是同一对象反复用</td><td>写一个「同一对象连续调用 N 次」的测试</td></tr>
+<tr><td>两个本该无关的对象内容同步变化</td><td>典型的别名或类属性共享</td><td><code>a.x is b.x</code> 直接判一下</td></tr>
+<tr><td>改成 <code>=</code> 赋值就好、改回 <code>append</code> 就坏</td><td>赋值创建了新对象/实例属性，原地修改动的是共享的那个</td><td>对比两种写法前后的 <code>id()</code></td></tr>
+</table>
+
+<h3>定位手法：让共享关系显形</h3>
+
+<p>所有手法都围绕同一件事——把「是不是同一个对象」从猜测变成观测。<code>id()</code> 返回对象在当前进程里的唯一标识（CPython 上就是内存地址），<code>is</code> 比较的正是它。注意 <code>id()</code> 只在对象存活期间唯一，对象被回收后数值可能被复用，所以要在同一时刻对比，不要跨时间点存下来比。</p>
+
+<div class="arch-diagram">  怀疑共享状态时的三步定位法
+
+  第一步：确认「是不是同一个对象」
+  ─────────────────────────────
+    print(a is b, a[0] is b[0])          ← 外层、内层分别判
+    print(len({id(x) for x in rows}))    ← 一批容器里到底有几个不同对象
+    若去重后个数 &lt; 实际元素个数 → 存在共享
+
+  第二步：找出「谁在改它」
+  ─────────────────────────────
+    在可疑对象的生命周期各关键点打同一格式的日志：
+      print(f"[after_load] id={id(ctx.items)} len={len(ctx.items)}")
+      print(f"[after_calc] id={id(ctx.items)} len={len(ctx.items)}")
+    id 不变而 len 一直涨 → 同一对象在被反复原地追加
+    id 每次都变          → 每轮新建，问题不在这里
+
+  第三步：用隔离验证因果
+  ─────────────────────────────
+    在怀疑点插入一次 copy / deepcopy，现象消失 → 确诊共享
+    注意：这只是「诊断手段」，不是最终修法
+    确诊后回到第三节四类成因，去掉那个「只创建一次」的对象</div>
+
+<p>第三步里那句提醒很重要。插一个 <code>deepcopy</code> 让现象消失，很容易被当成修复完成，但这只是把症状盖住了：真正的问题是某处存在不该有的共享，而深拷贝在热路径上还会带来第四节说的性能代价。确诊之后应该回到成因本身——把 <code>*</code> 换成推导式、把类属性挪进 <code>__init__</code>、把裸返回改成拷贝或只读视图。</p>
+
+<h3>为什么测试抓不住这类 bug</h3>
+
+<p>这是本节最值得记住的一条。典型的单元测试长这样：每个用例在 setUp 里新建一个对象，调用一次，断言结果，然后对象被丢弃。这个流程<strong>恰好绕过了共享状态的触发条件</strong>——共享要靠「同一个对象被反复使用」才显形，而测试每次都给你一个全新的。生产环境则相反：一个服务实例可能在进程里存活数天，同一个类属性、同一个模块级字典被调用几百万次。</p>
+
+<p>补救办法是针对性地写「有状态测试」：在一个用例里对同一个对象连续调用同一个方法 3 到 5 次，断言第 N 次的结果和第 1 次一致；或者直接断言对象图里不存在意外共享，例如前面用过的 <code>len({id(v) for v in mapping.values()}) == len(mapping)</code>。这类断言写起来只有一两行，却能在改动引入共享的当天就报警。异常与边界情况的测试思路可以参考 <a href="py_files_exceptions.html">PY07 · 文件读写与异常处理</a> 里的做法。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>造多维结构一律用推导式：<code>[[0] * 3 for _ in range(3)]</code></li>
+<li>可变的实例状态只在 <code>__init__</code> 里建，类属性只放常量</li>
+<li>getter 返回 <code>self._items.copy()</code> 或 <code>MappingProxyType</code> 只读视图</li>
+<li>构造函数收到外部容器时 <code>self._x = list(x)</code> 拷一份再存</li>
+<li>常量用 tuple / <code>frozenset</code>，值对象用 <code>frozen=True</code> 的 dataclass</li>
+<li>写「同一对象连续调用 N 次」的有状态测试，断言结果不漂移</li>
+<li>怀疑共享时先用 <code>is</code> / <code>id()</code> 观测，再动手改</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>用 <code>[[]] * n</code> 或 <code>dict.fromkeys(ks, [])</code> 初始化可变结构</li>
+<li>用 <code>==</code> 判断有没有拷贝——三种层次下它都返回 <code>True</code></li>
+<li>在热路径上无条件 <code>deepcopy</code> 大对象「图个安心」</li>
+<li>对持有连接、句柄、锁的对象做 <code>deepcopy</code></li>
+<li>只在入口或只在出口做防御性拷贝，漏掉另一侧</li>
+<li>插一个 <code>deepcopy</code> 让现象消失就结案，不追成因</li>
+<li>指望「记得别改这个对象」这种口头约定挡住跨团队调用</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>看到「越跑越错、重启就好、单测全绿」这三件事同时出现，几乎可以直接按共享状态立案。第一个动作不是改代码，是打一串 <code>id()</code> 看看到底有几个对象。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>b = a 和 b = a.copy() 到底差在哪？什么时候必须用 deepcopy？</summary>
+<div class="answer"><code>b = a</code> 没有创建任何新对象，只是让 <code>b</code> 这个名字也指向 <code>a</code> 指向的那个对象，之后对 <code>b</code> 的任何原地修改都会在 <code>a</code> 上看到，<code>b is a</code> 为真。<code>b = a.copy()</code> 创建了一个新的外层容器，把原容器里的元素引用逐个抄进去，所以增删 <code>b</code> 的元素不影响 <code>a</code>，但 <code>b[0] is a[0]</code> 仍然为真——内层对象是共享的。判断要不要 deepcopy 的标准很简单：容器里是否存在可变元素，以及你是否会去原地修改它们。如果容器里全是数字、字符串、元组这类不可变对象，浅拷贝就已经完全够用；只有当嵌套层里有列表、字典、自定义可变对象，并且你会去改它们时，才需要深拷贝。</div>
+</details>
+
+<details>
+<summary>为什么 [[0] * 3] * 3 改一个格子会整列一起变？</summary>
+<div class="answer">因为这里的两个 <code>*</code> 复制的东西不同。内层 <code>[0] * 3</code> 复制的是整数 0，整数不可变，共享它没有任何可观测后果。外层的 <code>* 3</code> 复制的是「内层那个列表对象的引用」，它不会帮你把列表内容再造两份，所以外层列表的三个槽位指向的是同一个对象。你写 <code>grid[0][1] = 9</code> 时，改的是那唯一一个内层列表，通过另外两个槽位看过去自然也变了。正确做法是用列表推导式 <code>[[0] * 3 for _ in range(3)]</code>，循环体每一轮都会重新执行 <code>[0] * 3</code>，于是得到三个独立对象。想验证只需一行：<code>len({id(row) for row in grid})</code> 应该等于行数。</div>
+</details>
+
+<details>
+<summary>类属性写成可变对象为什么危险？为什么有时候又看不出问题？</summary>
+<div class="answer">写在 <code>class</code> 语句体里的 <code>items = []</code> 在类定义时执行一次，这个列表归类所有，所有实例通过 <code>self.items</code> 访问到的都是它，于是任何一个实例的 <code>append</code> 都会被其他实例看到。之所以有时看不出问题，是因为读取操作完全正常，只有原地修改才会串；更迷惑的是 <code>self.items = []</code> 这种重新赋值会在实例上创建一个同名的实例属性，把类属性遮蔽掉，此后这个实例就不再共享了。结果同一段代码里用 <code>append</code> 会串、用 <code>=</code> 不会串，现象时有时无，很容易被误判为偶发问题。规则很清晰：类属性只放不可变的常量，一切可变的实例状态都在 <code>__init__</code> 里创建。</div>
+</details>
+
+<details>
+<summary>deepcopy 为什么有时特别慢，有时还直接报错？</summary>
+<div class="answer">慢的原因是它的代价取决于对象图的节点总数，而不是你关心的字段数。<code>deepcopy</code> 会递归访问对象的每个属性、容器的每个元素，每个节点都要查一次备忘表、新建一份副本并登记，所以一个挂着几十万个小对象的实例，深拷贝就要走几十万次这个流程，耗时和内存都会按规模线性上涨，内存峰值接近翻倍。报错则是因为它不区分业务语义，会把数据库连接、文件句柄、线程锁这类不该复制的资源也拖进递归，其中很多对象明确拒绝被复制，于是抛出类似 <code>TypeError: cannot pickle '_thread.lock' object</code> 的错误。更危险的情况是不报错——你得到一个持有失效句柄的副本，问题延迟到真正使用时才暴露。需要精细控制时可以实现 <code>__deepcopy__</code>，声明哪些字段共享、哪些递归拷贝。</div>
+</details>
+
+<details>
+<summary>copy.copy、list(x)、x[:]、x.copy() 有区别吗？</summary>
+<div class="answer">对列表来说这四种写法在语义上完全等价，都是浅拷贝：新建一个列表对象，把原列表的元素引用逐个抄进去，只拷一层。区别只在可读性和适用范围。<code>x.copy()</code> 最推荐，意图直接写在方法名上，dict 和 set 也有同名方法。<code>list(x)</code> 的特点是接受任意可迭代对象，所以适合需要顺便转换类型的场景，比如把生成器或元组收成列表。<code>x[:]</code> 在老代码里很常见，但对不熟悉切片的人不够直观，新代码没必要用。<code>copy.copy(x)</code> 是通用入口，会走对象的 <code>__copy__</code> 协议，适合类型不确定或者要拷自定义类实例的情况。需要强调的是，它们之中没有哪一个「拷得更深一点」，叠加使用也不会变深。</div>
+</details>
+
+<details>
+<summary>元组不可变，是不是就完全安全了？tuple(t) is t 为什么是真？</summary>
+<div class="answer">元组的不可变指的是它的槽位不可变——你不能给已有位置重新赋值，也不能增删元素。既然内容无法改变，「独立副本」这个需求就不存在了，所以 Python 直接优化成返回原对象，<code>tuple(t) is t</code> 和 <code>copy.copy(t) is t</code> 都为真，<code>frozenset</code>、字符串、数字同理。但安全性只到这一层：<code>t = ([1, 2], "x")</code> 里那个列表照样可以被 append，而且因为拷贝元组拿回的是原对象，你连「拷一份来隔离」这条路都被堵住了，只能用 deepcopy 或者一开始就不要往元组里放可变对象。所以「用元组做常量就安全」这个说法有个前提：元组里装的必须全是不可变对象。这也是为什么不可变设计要一路贯彻到底，只做最外层等于没做。</div>
+</details>
+
+<details>
+<summary>防御性拷贝和不可变设计该选哪个？</summary>
+<div class="answer">优先选不可变设计，因为它是语言层面的保障：常量用元组或 <code>frozenset</code>、值对象用 <code>frozen=True</code> 的 dataclass，一旦有人试图修改会立刻抛异常，而不是静默地污染状态。它还顺带省掉了所有拷贝开销，可以放心共享、缓存、跨线程传递。防御性拷贝适合两类情况：改造已有的可变代码，在类或模块的边界上局部加几行；以及对象本身确实需要频繁原地增删，无法改成不可变。用防御性拷贝时务必两个方向都做——进来时 <code>self._x = list(x)</code>，出去时返回 <code>copy()</code> 或只读视图，只做一侧等于没做。至于所有权约定，它零开销但完全靠自觉，适合团队内部模块协作，不适合对外公开的 API。</div>
+</details>
+
+<details>
+<summary>共享状态的 bug 为什么单元测试测不出来？该怎么补测试？</summary>
+<div class="answer">因为典型的单元测试恰好绕过了触发条件。测试通常每个用例都新建一个对象、调用一次、断言、丢弃，而共享状态要靠「同一个对象被反复使用」才会显形。生产环境正好相反：一个服务实例可能在进程里活好几天，同一个类属性、同一个模块级字典被调用几百万次，脏数据就在这几百万次里一点点累积。补测试的办法有两种，都很便宜。一是写有状态测试：在一个用例里对同一个对象连续调用同一方法三到五次，断言第 N 次的结果与第一次一致。二是直接断言不存在意外共享，比如 <code>len({id(v) for v in mapping.values()}) == len(mapping)</code>，或者 <code>a.items is not b.items</code>。这类断言只有一两行，却能在有人不小心引入共享的当天就报警。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

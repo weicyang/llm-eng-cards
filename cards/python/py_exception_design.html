@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY24 · 异常体系设计</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、异常是控制流的一部分</a>
+<a href="#s2">二、设计自定义异常层次</a>
+<a href="#s3">三、在哪一层处理</a>
+<a href="#s4">四、异常链与上下文</a>
+<a href="#s5">五、什么时候该让它崩</a>
+<a href="#s6">六、异常与可观测性</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY24 · 异常体系设计</h1>
+<p class="subtitle">异常与返回值的分工 / 自定义异常层次 / 分层处理与转译 / from 的三种形态 / 快速失败判据 / 日志与重试边界</p>
+
+<div class="intuition-box">
+<p>写 <code>try/except</code> 是为了「别崩」，设计异常体系是为了回答另一个问题：这个错误<strong>该由谁来处理</strong>。答不上来，就会长出一种既不崩也查不出问题的系统——每一层都顺手吞一点，最外层什么都不知道。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、异常是控制流的一部分，不是「出错兜底」</h2>
+
+<p>很多人对异常的心理模型停留在「正常逻辑写在 try 里，出事了在 except 里补救」。这个模型不算错，但它把异常当成了程序的边角料。实际上在 Python 里，异常是<strong>一等的控制流机制</strong>：迭代结束靠 <code>StopIteration</code>，属性查找失败靠 <code>AttributeError</code> 触发 <code>__getattr__</code> 兜底，<code>dict</code> 的 <code>setdefault</code> 语义在 C 层同样建立在「先试后补」之上。这些都不是「出错了」，而是正常流程的一部分。</p>
+
+<h3>先检查再做，还是先做再处理</h3>
+
+<p><span class="term">LBYL</span>（Look Before You Leap，先检查再跳）是先用条件判断确认操作能成功，再执行；<span class="term">EAFP</span>（Easier to Ask Forgiveness than Permission，先做再道歉）是直接执行，失败了用 <code>except</code> 接住。Python 惯用后者，理由有两条，而且都不是风格偏好。</p>
+
+<p>第一条是<strong>竞态窗口</strong>。<code>os.path.exists(p)</code> 返回 True 到 <code>open(p)</code> 真正执行之间，文件可能已经被别的进程删掉、权限可能已经被改掉。检查得出的结论在下一行就可能过期，而 <code>open</code> 本身的检查和打开是原子的。第二条是<strong>检查逻辑会扩散</strong>：每个调用点都要重复写一遍前置判断，一旦条件变了，你得找遍所有调用点。</p>
+
+<div class="arch-diagram">  主流程与异常路径在代码结构上的分离
+  ─────────────────────────────────────────────────────────────
+
+  风格 A：用返回值 / 错误码层层传递
+     caller ──&gt; f1() ──&gt; f2() ──&gt; f3()
+        │         │        │         │
+     if err?   if err?  if err?   return -1
+        │         │        │
+        └── 每一层都要写一遍判断，主流程被 if 切得七零八落
+            漏掉任何一层的判断 = 错误被当成正常值继续往下走
+
+  风格 B：异常沿调用栈自动上抛
+     caller ──&gt; f1() ──&gt; f2() ──&gt; f3()
+        │                            │
+        │                          raise UpstreamUnavailable
+        └──── except AppError &lt;──────┘
+            中间两层一行都不用写，主流程是一条直线
+            「不知道怎么处理」的层，什么都不做才是正确做法</div>
+
+<p>风格 B 的好处不在少写几行，而在<strong>阅读时主流程是连续的</strong>。你顺着读下来看到的是「取配置 → 调上游 → 解析 → 落库」，而不是「取配置 → 判断 → 调上游 → 判断 → 解析 → 判断」。异常路径被集中到一处，它和主流程在视觉上就是分开的两块。</p>
+
+<div class="intuition-box">
+<p>异常的价值不是「让程序别崩」，而是把正常路径和异常路径在代码结构上拆开，让主流程保持一条直线。中间层什么都不写，恰恰是它在正确地履行职责。</p>
+</div>
+
+<h3>但可预期的业务分支不该用异常表达</h3>
+
+<p>这是另一侧的边界，比上面那条更常被搞错。「用户没有优惠券」「搜索结果为空」「这条记录还没有备注」——这些都是<strong>完全正常</strong>的业务状态，不是错误。用 <code>raise CouponNotFound()</code> 表达它们，会带来三个具体代价：调用方被迫为正常情况写 <code>try</code>；日志里堆满不代表问题的异常，把真正的异常淹掉；监控上的「异常率」指标失去意义。</p>
+
+<p>判据可以收敛成一句话：<strong>当前这一层还能不能给出一个有意义的结果</strong>。「没有优惠券」时返回 <code>None</code> 或空列表就是有意义的结果；「数据库连不上」时返回 <code>None</code> 是在撒谎——调用方无法区分「查了，确实没有」和「根本没查成」。</p>
+
+<table>
+<tr><th>情形</th><th>用返回值（None / 空列表 / 布尔）</th><th>用异常</th></tr>
+<tr><td>查询命中为空</td><td>✅ 空是合法答案</td><td>❌ 会逼调用方写 try</td></tr>
+<tr><td>可选配置项缺失，有默认值</td><td>✅ 返回默认值</td><td>❌ 正常情况不该中断</td></tr>
+<tr><td>用户输入格式不合法（表单校验）</td><td>✅ 返回错误清单，一次性告诉用户全部问题</td><td>⚠️ 抛第一个就停，用户要改很多轮</td></tr>
+<tr><td>启动期必需的配置项缺失</td><td>❌ 用默认值兜底 = 服务行为诡异</td><td>✅ 立刻崩，见第五节</td></tr>
+<tr><td>数据库 / 上游连接失败</td><td>❌ 无法与「确实没有」区分</td><td>✅ 当前层无法继续</td></tr>
+<tr><td>不变量被破坏（余额算出负数）</td><td>❌ 继续跑会写坏数据</td><td>✅ 必须中断</td></tr>
+<tr><td>调用方传了自相矛盾的参数</td><td>❌ 静默纠正会掩盖调用方的 bug</td><td>✅ 这是编程错误，越早暴露越好</td></tr>
+</table>
+
+<p>表里第三行值得展开。表单校验抛异常在语法上没问题，但产品体验上很糟：抛出第一个错误就中断，用户填 8 个字段错了 3 个，得来回提交 3 次。这类场景更适合「收集所有错误后一次性返回」的结构。这说明一件事——<strong>该不该用异常，取决于调用方想要什么，而不只是取决于「有没有出错」</strong>。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、设计自定义异常层次：按处理方式分组，不按发生位置分组</h2>
+
+<p>基础语法那一卡（<a href="py_files_exceptions.html">PY07 · 文件读写与异常处理</a>）讲过怎么捕获内置异常。到了模块或库的规模，你会开始定义自己的异常类——这时第一个决定就决定了后面所有调用方的体验。</p>
+
+<h3>每个库、每个应用模块都该有一个根异常</h3>
+
+<p>先定义一个 <code>AppError</code>（或 <code>MyLibError</code>），让所有自定义异常从它派生。收益很直接：调用方想「兜住你抛出的一切、但不误伤别人的异常」时，只需要写一行 <code>except AppError</code>。如果没有这个根，调用方要么把你的异常一个个列出来（你加一个新异常他就漏一个），要么写 <code>except Exception</code>——那会连同 <code>KeyError</code>、<code>TypeError</code> 这些真正的代码 bug 一起吞掉。</p>
+
+<div class="arch-diagram">  一棵按「调用方怎么处理」组织的异常树
+  ─────────────────────────────────────────────────────────────
+  Exception
+   └── AppError                      ← 根：一行 except 兜住本应用全部
+        ├── ConfigError              ← 处理方式：启动期直接崩，不重试
+        │
+        ├── InputError               ← 处理方式：回 4xx，告诉调用方改请求
+        │    ├── ValidationError          重试多少次结果都一样
+        │    └── UnsupportedFormat
+        │
+        ├── UpstreamError            ← 处理方式：回 5xx / 降级，可退避重试
+        │    ├── UpstreamTimeout          retriable = True
+        │    └── UpstreamUnavailable
+        │
+        └── DataIntegrityError       ← 处理方式：立刻停，人工介入
+                                          绝不能自动重试（可能重复扣款）
+
+  判据：如果两个异常的 except 块里写的代码一模一样，
+        它们就不该是两个类——合并，或者用字段区分。</div>
+
+<p>注意这棵树的分组维度。它不是按「错误发生在哪个文件/哪个模块」分的，而是按<strong>调用方拿到它之后会做什么</strong>分的。这是异常层次设计里最容易走偏的一步，值得单独对比。</p>
+
+<table>
+<tr><th>维度</th><th>按发生位置分组</th><th>按处理方式分组</th></tr>
+<tr><td>典型类名</td><td><code>DBError</code> / <code>RedisError</code> / <code>HttpClientError</code></td><td><code>Retriable</code> / <code>InputError</code> / <code>ConfigError</code></td></tr>
+<tr><td>调用方要写什么</td><td>把所有「可能超时的组件」列一遍：<code>except (DBError, RedisError, HttpClientError)</code></td><td>一行 <code>except UpstreamError</code></td></tr>
+<tr><td>新增一个组件时</td><td>所有调用点都要补一个类名，漏一个就漏一类错误</td><td>新异常挂到已有分支下，调用方零改动</td></tr>
+<tr><td>重构（Redis 换成 Memcached）</td><td>异常类名跟着漏出去，调用方被迫改</td><td>内部换实现，对外契约不变</td></tr>
+<tr><td>什么时候仍然合理</td><td>库内部调试用的细分类型，可以作为叶子节点保留</td><td>作为对外暴露的中间层节点</td></tr>
+</table>
+
+<p>两种维度并不互斥：合理的做法是<strong>中间层节点按处理方式划分，叶子节点保留位置信息</strong>。上面那棵树里 <code>UpstreamTimeout</code> 和 <code>UpstreamUnavailable</code> 就是叶子，它们携带了更细的信息供日志使用，但调用方只需要认识父类 <code>UpstreamError</code>。</p>
+
+<h3>异常应当携带字段，而不是拼字符串</h3>
+
+<p>新手写自定义异常最常见的形态是 <code>raise AppError(f"订单 {oid} 的上游 {svc} 超时了")</code>。信息是全的，但它<strong>只能被人读，不能被程序用</strong>。上层想知道「这个错该不该重试」，只能去正则匹配消息里有没有「超时」两个字——消息一改，判断逻辑就悄悄失效。</p>
+
+<p>正确做法是把可判断的信息做成<span class="term">结构化异常字段</span>：异常对象上的属性，供上层做决策和写结构化日志，而消息字符串只负责给人看。</p>
+
+<pre><code>class AppError(Exception):
+    """本应用抛出的一切异常的共同根。"""
+
+class UpstreamError(AppError):
+    retriable = True          # 类级默认值，子类可覆盖
+
+    def __init__(self, service, *, order_id=None, user_hint="服务繁忙，请稍后重试"):
+        super().__init__(f"上游 {service} 调用失败 (order={order_id})")
+        self.service, self.order_id = service, order_id
+        self.user_hint = user_hint</code></pre>
+
+<p>有了 <code>retriable</code>，最外层的重试装饰器就能写成 <code>if getattr(e, "retriable", False)</code>，而不是猜消息内容。有了 <code>user_hint</code>，就能把「给用户看的话」和「给工程师看的话」彻底分开——后者可以包含内部服务名和订单号，前者绝不该包含。这两条信息混在同一个字符串里，几乎必然导致内部细节泄漏到用户界面。</p>
+
+<div class="intuition-box">
+<p>异常类的数量不该由「有多少种出错原因」决定，而该由「调用方有多少种不同的应对动作」决定。两个异常的 except 块写的是同一段代码，那它们就是同一个异常。</p>
+</div>
+
+<p>还有一个实现细节：自定义异常继承自 <code>Exception</code> 而不是 <code>BaseException</code>。<code>BaseException</code> 是留给 <code>KeyboardInterrupt</code>、<code>SystemExit</code> 这类「不该被业务代码拦截」的信号用的，第五节会说明为什么这条界线必须守住。继承体系相关的 MRO 规则见 <a href="py_inheritance_mro.html">PY16 · 继承、MRO 与组合优先</a>，异常类同样受它约束。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、在哪一层处理：让异常穿过不知道怎么办的层</h2>
+
+<p>「在哪捕获」比「捕获什么」更难决定，也更容易错。一个可操作的原则是：<strong>只在你真的能做点什么的那一层捕获</strong>。做不了任何有意义的事（只是打条日志然后重新抛、或者更糟，返回 <code>None</code>），那就不要捕获——让它穿过去。</p>
+
+<div class="arch-diagram">  异常在分层架构里的传播与转译
+  ─────────────────────────────────────────────────────────────
+
+  ┌─ 入口层（HTTP handler / 任务入口 / CLI main）───────────────┐
+  │  except AppError as e:  记日志(含 traceback) + 映射状态码    │  ← 唯一
+  │  except Exception as e: 记日志 + 500 + 告警                  │    兜底点
+  └────────────────────────────▲────────────────────────────────┘
+                               │ UpstreamTimeout 一路上抛
+  ┌─ 服务层（业务编排）─────────┴────────────────────────────────┐
+  │  不 catch。它不知道超时该怎么办，也不该替入口层决定           │
+  └────────────────────────────▲────────────────────────────────┘
+                               │
+  ┌─ 适配层（第三方 SDK 的包装）┴────────────────────────────────┐
+  │  except requests.Timeout as e:                               │  ← 转译
+  │      raise UpstreamTimeout("pay-api") from e                 │    发生地
+  │  职责：把外部类型翻译成自己的契约，保留因果链                 │
+  └────────────────────────────▲────────────────────────────────┘
+                               │ requests.exceptions.Timeout
+  ┌─ 第三方库 / 系统调用 ───────┴────────────────────────────────┐
+  │  只抛，不吞                                                  │
+  └──────────────────────────────────────────────────────────────┘</div>
+
+<table>
+<tr><th>层</th><th>该做什么</th><th>不该做什么</th></tr>
+<tr><td>底层（IO、系统调用、第三方库）</td><td>让原始异常自然抛出</td><td>捕获后返回 <code>None</code> 或 <code>-1</code></td></tr>
+<tr><td>适配层 / 防腐层</td><td><span class="term">异常转译</span>：捕获外部异常，包装成自己的类型并 <code>from e</code></td><td>把 <code>requests.Timeout</code> 原样漏给上层</td></tr>
+<tr><td>服务层 / 业务编排</td><td>原则上什么都不做，让异常穿过</td><td>「打个日志再 raise」——会导致同一个错误被记 4 遍</td></tr>
+<tr><td>入口层（handler / task / CLI）</td><td>统一兜底：记 traceback、映射状态码或退出码、决定用户看到什么</td><td>把内部异常消息直接返回给用户</td></tr>
+</table>
+
+<h3>为什么必须转译：避免第三方类型变成你的公开契约</h3>
+
+<p>假设你的用户服务内部用 <code>requests</code> 调支付网关，并且让 <code>requests.exceptions.ConnectionError</code> 原样抛给了调用方。这一刻起，<code>requests</code> 就成了你对外契约的一部分——调用方为了处理错误必须 <code>import requests</code>，即使他根本不用 HTTP。半年后你把客户端换成 <code>httpx</code>，异常类型全变，所有调用方一起报错，而你改的只是一个内部实现细节。</p>
+
+<p>转译就是在自己的边界上立一道墙：外面的类型进不来，出去的只有 <code>UpstreamTimeout</code> 这类你自己定义的、你能保证稳定的类型。这和上下文管理器那一卡里「把资源生命周期收进边界」是同一种思路——边界的意义在于内部可以随便改。</p>
+
+<h3>转译时必须 <code>from e</code></h3>
+
+<pre><code>try:
+    resp = client.post(url, json=payload, timeout=3)
+except requests.Timeout as e:
+    raise UpstreamTimeout("pay-api", order_id=oid) from e   # ✅ 因果链保留
+except requests.RequestException as e:
+    raise UpstreamError("pay-api", order_id=oid) from e
+
+# ❌ 反例：raise UpstreamTimeout("pay-api")
+#    原始 traceback 里「卡在连接 10.2.3.4:443 三秒」这层信息全没了</code></pre>
+
+<p>漏掉 <code>from e</code> 的代价不是少一行日志，而是<strong>原始现场彻底消失</strong>。你在日志里只能看到「上游 pay-api 调用失败」和自己这一层的调用栈，看不到究竟是 DNS 解析失败、TCP 连接超时、还是读响应超时——而这三者的处理动作完全不同。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某支付回调服务的适配层写了 12 处 <code>except ... : raise PaymentError("支付失败")</code>，全部漏了 <code>from e</code>。一次线上故障中，告警只有「支付失败」和一串指向同一行包装代码的 traceback，无法区分是证书过期、DNS 抖动还是对方限流。团队靠抓包和逐个手工复现定位，耗时约 3 小时 40 分钟。补上 <code>from e</code> 后，同类告警的日志里直接出现 <code>SSLCertVerificationError: certificate has expired</code>，下一次同类问题的定位时间压到 5 分钟以内。改动量是 12 处各加两个单词。</p>
+</div>
+
+<div class="intuition-box">
+<p>判断「这一层该不该 catch」只问一句：接住之后我能做出一个和不接住不同的决定吗？答案是否，就别接。「打条日志再抛出去」不算一个决定，它只会让同一个错误在日志里出现四遍。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、异常链与上下文：<code>from</code> 的三种形态</h2>
+
+<p>当一个异常在处理另一个异常的过程中被抛出时，Python 会把两者关联起来，这就是<span class="term">异常链</span>。链子怎么连，由你写的形式决定，一共三种，打印出来的 traceback 形态也完全不同。读不出这三种形态的区别，就会把包装层当成根因。</p>
+
+<table>
+<tr><th>写法</th><th>设置的属性</th><th>traceback 里的连接语</th><th>什么时候用</th></tr>
+<tr><td><code>raise X from e</code></td><td><code>__cause__ = e</code>（同时 <code>__suppress_context__</code> 为真）</td><td>The above exception was the <strong>direct cause</strong> of the following exception</td><td>显式转译：我知道 e，我是因为它才抛 X 的</td></tr>
+<tr><td>在 <code>except</code> 块里裸 <code>raise X</code></td><td><code>__context__ = e</code>（自动设置，你不用写）</td><td><strong>During handling</strong> of the above exception, another exception occurred</td><td>多数是意外：处理 e 的代码自己又炸了</td></tr>
+<tr><td><code>raise X from None</code></td><td><code>__suppress_context__ = True</code>，链条不打印</td><td>（无，只显示 X）</td><td>原始异常是纯实现细节，露出去只会误导</td></tr>
+</table>
+
+<p>第二行最需要留意。它多数时候不是你主动设计的，而是<strong>事故的信号</strong>：你在 <code>except KeyError</code> 里写了清理逻辑，清理逻辑自己抛了 <code>AttributeError</code>。Python 忠实地把两个异常都保留下来，于是 traceback 变成两段。此时真正需要修的往往是第二段（你的清理代码有 bug），而根因是第一段。</p>
+
+<h3>怎么读一段两层的 traceback</h3>
+
+<div class="arch-diagram">  Traceback (most recent call last):            ┐
+    File "adapter.py", line 31, in call_pay     │ ← 段 1：根因
+      resp = client.post(url, timeout=3)        │   真正发生的第一件坏事
+  requests.exceptions.ConnectTimeout:           │
+      HTTPSConnectionPool(host='pay-api')...    ┘
+
+  The above exception was the direct cause of the following exception:
+  ↑↑↑ 看到这句 = 下面那段是「包装」，上面那段才是根因（from e）
+
+  Traceback (most recent call last):            ┐
+    File "adapter.py", line 33, in call_pay     │ ← 段 2：你的包装
+      raise UpstreamTimeout("pay-api") from e   │   只告诉你「谁包的」
+    File "service.py", line 88, in place_order  │
+    File "handler.py", line 14, in post         │
+  app.errors.UpstreamTimeout: 上游 pay-api 调用失败  ┘
+
+  阅读规则
+  ───────────────────────────────────────────────────────────
+  1. 从最下面一段开始看「异常类型 + 消息」→ 知道最终抛的是什么
+  2. 往上找连接语：
+       direct cause     → 上一段是你主动声明的根因，重点看它
+       During handling  → 上一段是原始错误，下一段多半是处理逻辑的 bug
+  3. 最上面那段的最后一行，通常就是你要查的那个根因
+  4. 每段内部仍是「从下往上 = 从最内层调用往外」</div>
+
+<p>多层包装时这套结构会继续嵌套，可能出现三段四段。规则不变：<strong>最上面那一段永远是最原始的</strong>。这也是为什么 <code>from e</code> 不能省——省掉之后，最上面那段就没了，你拿到的是一段没有根的 traceback。</p>
+
+<h3><code>from None</code> 不是偷懒，是有用途的</h3>
+
+<p><code>raise X from None</code> 主动切断链条，唯一正当的理由是：<strong>原始异常属于实现细节，暴露给调用方只会误导</strong>。典型场景是你的配置加载器内部从 <code>json</code> 换成了 <code>tomllib</code>，用户传了一个坏配置，如果原样透出 <code>tomllib.TOMLDecodeError</code>，用户会以为是自己的 TOML 有问题——但他给的明明是 YAML 路径写错了。</p>
+
+<pre><code>def load_config(path):
+    try:
+        return _parse(path.read_text(encoding="utf-8"))
+    except (ValueError, OSError):
+        raise ConfigError(
+            f"配置文件无法解析: {path}（期望 UTF-8 编码的 TOML）"
+        ) from None</code></pre>
+
+<p>但要清醒地认识到代价：<code>from None</code> 之后，原始异常在日志里<strong>彻底看不到了</strong>。所以用它的前提是——你已经在异常消息里把用户需要知道的全部信息说清楚了。如果只是嫌 traceback 太长就切断，那是在给未来的自己埋雷。折中做法是切断对外的链条，同时在切断前用 <code>logger.debug(..., exc_info=True)</code> 把原始异常留在日志里。</p>
+
+<div class="intuition-box">
+<p><code>from e</code> 是「因为它，所以我」，<code>from None</code> 是「它是我的内脏，不该给你看」，而裸 <code>raise</code> 出来的 During handling 往往是「我的处理代码自己也炸了」——第三种通常不是设计，是 bug 的提示音。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、什么时候该让它崩</h2>
+
+<p>吞异常之所以有诱惑力，是因为它的收益立刻可见（服务不挂了、告警不响了），代价却推迟到未来某次故障排查时才结算。而那时候，错误已经静默扩散了几小时，根因早就被覆盖。所以需要一组事前就能用的判据。</p>
+
+<h3><span class="term">快速失败</span>的三条判据</h3>
+
+<p>快速失败指在错误刚出现、影响面还最小的时刻立刻中断，而不是带病继续运行。满足以下任意一条，就应该让它崩：</p>
+
+<ul>
+<li><strong>不变量被破坏</strong>。<span class="term">不变量</span>是程序在任何时刻都应当成立的约束，比如「库存数量非负」「订单总额等于各项之和」。它一旦不成立，说明前面某处逻辑已经错了，后面每一行代码都在错误的前提上运行。</li>
+<li><strong>继续运行会造成更大损害</strong>。写坏数据、扣错钱、发错通知——这类副作用一旦落地，回滚的成本远高于当场崩溃。崩溃只损失一个请求，写坏数据可能污染整张表。</li>
+<li><strong>在当前层无法有意义地恢复</strong>。「有意义」是关键词：返回 <code>None</code>、返回空列表、用默认值顶上，如果调用方无法区分这个结果和真实结果，那就不是恢复，是伪造。</li>
+</ul>
+
+<div class="arch-diagram">  拿到一个异常，先走这张判断流
+  ─────────────────────────────────────────────────────────────
+                      异常到达当前层
+                            │
+           ┌────────────────┴────────────────┐
+           │  我这一层能做出一个不同的决定吗？ │
+           └────────┬───────────────┬────────┘
+                   否               是
+                    │                │
+            不 catch，让它穿过        │
+            （中间层的正确姿势）      │
+                                     ▼
+                    ┌────────────────────────────────┐
+                    │ 不变量被破坏 / 会写坏数据扣错钱？│
+                    └───────┬────────────────┬───────┘
+                           是               否
+                            │                │
+                        ✅ 崩              ▼
+                     记录 + 非 0 退出   ┌─────────────────┐
+                     人工介入           │ 是瞬时性错误吗？ │
+                                        └──┬──────────┬───┘
+                                          是         否
+                                           │          │
+                                    ✅ 退避重试    ✅ 降级或
+                                    （限次数）      抛给调用方
+                                           │        决定
+                                    重试耗尽 ──&gt; 降级 or 崩
+
+  贯穿全图的一条：无论走哪个分支，都必须留下带 traceback 的日志。
+  唯一不允许的路径是「接住 ──&gt; 什么都不做 ──&gt; 继续跑」。</div>
+
+<table>
+<tr><th>场景</th><th>崩（让它抛）</th><th>降级</th><th>重试</th></tr>
+<tr><td>启动期配置缺失 / 格式错误</td><td>✅ 立刻退出，非 0 退出码</td><td>❌ 默认值会跑出行为诡异的服务</td><td>❌ 重试多少次配置也不会变对</td></tr>
+<tr><td>上游超时、连接被拒</td><td>❌ 瞬时问题不值得崩</td><td>✅ 返回缓存 / 兜底文案</td><td>✅ 指数退避，限次数</td></tr>
+<tr><td>上游返回 400 / 422（参数错）</td><td>⚠️ 抛给调用方，由它改请求</td><td>❌ 掩盖了调用方的 bug</td><td>❌ 请求不变，重试 100 次也一样</td></tr>
+<tr><td>数据校验发现余额为负</td><td>✅ 必须停，人工介入</td><td>❌ 绝不能</td><td>❌ 重试会重复扣款</td></tr>
+<tr><td>可选的推荐模块渲染失败</td><td>❌ 不该拖垮整页</td><td>✅ 这一块留空，记日志</td><td>⚠️ 至多一次，别拖慢主请求</td></tr>
+<tr><td>写入时唯一键冲突</td><td>❌ 这是可预期的并发结果</td><td>✅ 转为「已存在」语义返回</td><td>❌ 重试仍然冲突</td></tr>
+<tr><td>磁盘写满、内存耗尽</td><td>✅ 崩掉让编排系统重建实例</td><td>❌ 半残状态更难排查</td><td>❌ 资源不会自己变多</td></tr>
+</table>
+
+<p>注意第一行。启动期的配置错误是最值得崩的一类：此时还没有任何用户流量，崩溃的代价是零；而用默认值兜底跑起来的服务，可能连着三天把数据写进了默认的测试库。<strong>越早的错误越该崩得越响。</strong></p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某数据同步任务在单条记录处理外面套了 <code>except Exception: continue</code>，意图是「别让一条脏数据中断整批」。上游某次调整字段名后，解析全部失败，任务每轮照常「成功」结束，监控上的成功率是 100%。11 天后业务方发现报表数据停在半个月前，此时已累计漏同步约 240 万条记录，补数据 + 对账耗时 2 天。修复只加了两样东西：<code>continue</code> 前记录 <code>logger.exception</code>，以及「单批失败率超过 5% 就整批失败」的阈值。改动不到 10 行，但它把「静默 11 天」变成了「10 分钟内告警」。</p>
+</div>
+
+<h3>有些异常永远不该被吞</h3>
+
+<p>裸 <code>except Exception</code> 之所以比 <code>except BaseException</code> 安全，是因为 Python 特意把几个「不属于程序错误」的信号放在 <code>BaseException</code> 下面，让 <code>Exception</code> 抓不到它们：</p>
+
+<table>
+<tr><th>异常</th><th>含义</th><th>吞掉的后果</th></tr>
+<tr><td><code>KeyboardInterrupt</code></td><td>用户按了 Ctrl+C</td><td>进程杀不掉，只能 <code>kill -9</code>，跳过所有清理逻辑</td></tr>
+<tr><td><code>SystemExit</code></td><td><code>sys.exit()</code> 发出的退出请求</td><td>退出码丢失，CI 与编排系统以为你成功了</td></tr>
+<tr><td><code>GeneratorExit</code></td><td>生成器被提前关闭</td><td>资源不释放，还会触发 <code>RuntimeError</code></td></tr>
+<tr><td><code>MemoryError</code></td><td>内存分配失败</td><td>任何后续操作都可能再次失败，包括你的错误处理代码本身</td></tr>
+<tr><td><code>asyncio.CancelledError</code></td><td>任务被取消（3.8+ 起继承 <code>BaseException</code>）</td><td>取消信号被无视，超时和优雅关闭全部失效</td></tr>
+</table>
+
+<p>所以规则很简单：<strong>业务代码里永远不写 <code>except BaseException</code>，也不写 <code>except:</code>（裸 except 等价于前者）</strong>。需要「兜住一切并记录」时用 <code>except Exception</code>，它刚好放过上面这几个。</p>
+
+<h3><code>finally</code> 里 <code>return</code> 会吞掉正在传播的异常</h3>
+
+<pre><code>def load(path):
+    try:
+        return parse(path.read_text())    # 这里抛了 ValueError
+    finally:
+        return {}        # ❌ 异常被无声丢弃，函数返回 {}
+
+# 同样的陷阱：finally 里写 break / continue，
+# 以及在 finally 里 raise 新异常（会覆盖原异常，只剩 __context__）</code></pre>
+
+<p>这是 Python 语言层面规定的行为：<code>finally</code> 块里的 <code>return</code> / <code>break</code> / <code>continue</code> 会终止正在进行的异常传播，函数正常返回。它不会有任何警告，静态检查工具默认也未必开这条规则。<code>finally</code> 里只应该放清理动作，收尾工作更推荐交给上下文管理器，理由和这一条完全一样——把清理和控制流分开。</p>
+
+<div class="intuition-box">
+<p>吞掉异常买到的是「看起来还在跑」，付出的是根因。这笔交易的账单不会当场到，而是在几天后以「数据错了但没人知道从哪天开始」的形式送达。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、异常与可观测性：异常只有被看见才有价值</h2>
+
+<p>前面五节都在讲怎么抛、抛到哪、什么时候不接。但异常最终要落到人的眼睛里，而这一段是最常被草率对待的：一个设计精良的异常层次，配上 <code>print(e)</code> 的日志，效果和没设计一样。</p>
+
+<h3>日志里必须留 traceback</h3>
+
+<p><code>print(e)</code> 或 <code>logger.error(str(e))</code> 只会输出异常的消息字符串——一行文本，没有调用栈，没有异常链，没有类型。你知道「上游 pay-api 调用失败」，但不知道是哪个请求、从哪里调的、根因是什么。</p>
+
+<pre><code>except UpstreamError as e:
+    logger.exception("下单失败", extra={"order_id": e.order_id})   # ✅
+    # 等价写法：logger.error("下单失败", exc_info=True)
+
+    # ❌ logger.error(f"下单失败: {e}")   —— 只有一行消息，根因没了
+    # ❌ print(e)                        —— 连日志级别和时间都没有</code></pre>
+
+<p><code>logger.exception</code> 只能在 <code>except</code> 块里调用（它从当前异常上下文取 traceback），级别固定为 ERROR。需要别的级别时用 <code>exc_info=True</code>。第四节说的异常链会被完整打印出来，包括所有 <code>direct cause</code> 段落——这正是 <code>from e</code> 的收益兑现的地方。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某内部服务的错误日志长期写成 <code>logger.error(f"处理失败: {e}")</code>，一次线上事故中值班同学面对 4700 条内容一模一样的「处理失败: list index out of range」，完全无法定位是哪个字段、哪条数据、哪段代码。团队最终靠在本地按线上参数重放请求才复现，从告警到定位耗时约 2 小时 15 分钟。事后把这一处改成 <code>logger.exception</code> 并加上 <code>extra={"order_id": ...}</code>，下一次同类问题从告警到看见出错行号只用了约 3 分钟。改动是一个方法名加一个参数。</p>
+</div>
+
+<h3>异常消息该写什么、不该写什么</h3>
+
+<table>
+<tr><th>要素</th><th>反例</th><th>正例</th></tr>
+<tr><td>当时的输入</td><td><code>操作失败</code></td><td><code>解析配置失败: config/prod.toml 第 14 行</code></td></tr>
+<tr><td>期望与实际</td><td><code>参数错误</code></td><td><code>timeout 需为正数，收到 -3</code></td></tr>
+<tr><td>可定位的标识</td><td><code>数据库错误</code></td><td><code>写入 orders 失败 (order_id=A10293)</code></td></tr>
+<tr><td>下一步动作</td><td><code>请求失败</code></td><td><code>上游 pay-api 超时 3s，已重试 3 次，建议检查网关健康度</code></td></tr>
+<tr><td>敏感数据</td><td><code>认证失败: token=eyJhbGci...</code>（令牌进了日志）</td><td><code>认证失败: token 前缀 eyJh，长度 312</code></td></tr>
+</table>
+
+<p>最后一行单独强调：<strong>异常消息会进日志，日志会进日志平台，日志平台的权限范围通常远大于代码仓库</strong>。密钥、令牌、身份证号、完整请求体（可能含密码字段）都不该出现在异常消息里。需要定位时用「前缀 + 长度」「哈希后八位」这类不可逆的指纹。这条在代码评审里很容易漏，因为它不影响功能，只在泄漏发生后才显形。</p>
+
+<h3>重试的边界</h3>
+
+<p>重试只对<span class="term">瞬时性错误</span>有意义——那些「同样的请求，过一会儿再发就可能成功」的错误：连接超时、上游 503、数据库连接池暂时耗尽。反过来，<code>4xx</code> 这一类表示「请求本身有问题」，请求不变，重试一万次结果完全相同，只是在给已经不健康的上游继续加压。第二节里那个 <code>retriable</code> 字段的价值就在这里：让重试逻辑读属性，而不是猜消息。</p>
+
+<table>
+<tr><th>情况</th><th>重试</th><th>要点</th></tr>
+<tr><td>连接超时 / 读超时 / 503 / 429</td><td>✅</td><td>指数退避 + 抖动，避免所有客户端同时重试形成尖峰</td></tr>
+<tr><td>400 / 401 / 403 / 422</td><td>❌</td><td>请求本身的问题，重试只会放大上游压力</td></tr>
+<tr><td>非幂等写操作（下单、扣款）</td><td>⚠️</td><td>必须先有幂等键，否则重试 = 重复扣款</td></tr>
+<tr><td>批量任务中的单条失败</td><td>⚠️</td><td>要有失败率阈值，整批静默跳过就是第五节那个案例</td></tr>
+</table>
+
+<p>另外提一点：Python 3.11 引入的 <code>ExceptionGroup</code> 和 <code>except*</code> 语法，用于并发场景下「多个任务同时失败、需要一次性抛出多个异常」的情况——传统的单异常模型在这里表达不了「三个任务里两个失败了，而且失败原因不同」。这属于并发那一组的内容，本卡不展开。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每个应用 / 库定义一个根异常，让调用方一行 <code>except AppError</code> 兜住</li>
+<li>异常层次按<strong>调用方的处理动作</strong>分组，处理方式相同就合并成一类</li>
+<li>把可判断的信息做成字段（<code>retriable</code>、资源 id、<code>user_hint</code>），别拼进消息字符串</li>
+<li>在适配层把第三方异常转译成自己的类型，并且始终写 <code>from e</code></li>
+<li>中间层不 catch，让异常穿过；只在入口层统一兜底一次</li>
+<li>日志用 <code>logger.exception</code> 或 <code>exc_info=True</code>，保住完整 traceback 与异常链</li>
+<li>启动期的配置错误立刻崩，用非 0 退出码表达</li>
+<li>只对瞬时性错误重试，非幂等写操作先有幂等键</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>用异常表达正常业务分支（「没有优惠券」返回空就好）</li>
+<li>写 <code>except Exception: pass</code> 或 <code>except:</code>，把 <code>KeyboardInterrupt</code> 一起吞掉</li>
+<li>转译时漏掉 <code>from e</code>，把原始 traceback 丢在包装层里</li>
+<li>在每一层都「记条日志再 raise」，同一个错误刷四遍日志</li>
+<li>靠正则匹配异常消息判断该不该重试</li>
+<li>在 <code>finally</code> 里写 <code>return</code> / <code>break</code>，无声吞掉正在传播的异常</li>
+<li>把令牌、密钥、完整请求体写进异常消息</li>
+<li>批处理里 <code>except Exception: continue</code> 却不记日志、不设失败率阈值</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>异常设计的最终检验标准只有一个：线上出事时，你能不能只看日志就说出「哪一行、因为什么、下一步该改哪里」。说不出来，前面所有层次划分都只是好看的类图。</p>
+</div>
+
+<h3>「高阶特性」这一组走到这里</h3>
+
+<p>这八张卡其实在讲同一件事的八个侧面——<strong>Python 给了你哪些机制，去表达「这个对象/这段代码应该怎么被使用」</strong>。PY17 描述符把属性访问变成可拦截的协议；PY18 元类把类的创建过程变成可干预的环节；PY19 上下文管理器把资源的生命周期收进语法边界；PY20 类型注解把契约写给工具看；PY21 数据类把「这是一份数据」这件事声明出来；PY22 枚举与协议把取值范围和结构约束显式化；PY23 内存与回收讲清对象什么时候真正消失；到这张 PY24，异常体系设计回答的是——<strong>当约束被打破时，这件事该由谁知道、谁来处理、谁来决定生死</strong>。</p>
+
+<p>前面七张都在定义「正常应该怎样」，这一张定义「不正常时怎么办」。两者合起来，才是一份完整的契约。基础部分可回顾 <a href="py_classes_dunder.html">PY15 · 类与特殊方法契约</a> 与 <a href="py_object_model.html">PY09 · 对象模型与引用语义</a>。</p>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>什么时候该定义自定义异常，什么时候直接用内置的就行？</summary>
+<div class="answer">判据是「调用方会不会需要专门针对它写一个 except 分支」。如果只是参数类型不对、索引越界这类通用编程错误，直接用 <code>TypeError</code>、<code>ValueError</code>、<code>KeyError</code> 就好——它们有公认的语义，额外定义一个 <code>MyValueError</code> 只会增加调用方的认知负担。反过来，如果这个错误代表你这个模块特有的失败模式，并且调用方会因此做出不同的动作（重试、降级、提示用户），那就值得定义。判断标准始终是调用方的处理方式，而不是「这个错误听起来特不特别」。经验上，一个中等规模的服务有 5 到 15 个自定义异常类是合理的，几十个通常意味着分得太细了。</div>
+</details>
+
+<details>
+<summary>为什么不推荐在每一层都记一次日志？</summary>
+<div class="answer">因为同一个错误会在日志里出现四五遍，而且每一遍的 traceback 都指向不同的包装位置，排查时你得先判断哪几条其实是同一件事。更糟的是它会让日志量和告警数量虚高，真正的新问题被淹没在重复条目里。正确做法是让中间层完全不 catch，由入口层记录一次完整的 traceback——因为异常链已经把中间经过的所有层都记录在调用栈里了，中间层补的那条日志并没有提供新信息。如果某一层确实有独有的上下文需要留（比如重试了几次），更好的方式是把它作为字段挂到异常对象上，而不是单独打一条日志。</div>
+</details>
+
+<details>
+<summary><code>raise X from e</code> 和在 except 块里直接 <code>raise X</code>，打印出来到底差在哪？</summary>
+<div class="answer">两者都会保留原始异常，区别在于语义声明和打印的连接语。<code>from e</code> 设置 <code>__cause__</code>，traceback 里显示「The above exception was the direct cause of the following exception」，意思是「我是有意基于它抛出新异常的」。而在 except 块里裸写 <code>raise X</code>，Python 会自动设置 <code>__context__</code>，显示「During handling of the above exception, another exception occurred」，意思是「处理上一个异常的过程中又出了一个」。前者通常是设计，后者通常是意外——你的错误处理代码自己出了 bug。读日志时看到 During handling，第一反应应该是去检查 except 块里的代码，而不是只看最终抛出的那个异常类型。</div>
+</details>
+
+<details>
+<summary>吞异常（<code>except Exception: pass</code>）有没有合理的场景？</summary>
+<div class="answer">有，但比大多数人以为的少得多，而且必须同时满足两个条件：这个失败对主流程确实无关紧要，并且你已经把它记进日志了。典型的合理场景是清理动作的收尾——比如关闭一个已经出错的连接、删除一个临时文件，失败了也不影响主结果。即便如此，也应该写成 <code>except Exception: logger.warning("清理临时文件失败", exc_info=True)</code> 而不是 <code>pass</code>，因为「无关紧要」是你当下的判断，未来它可能变成排查线索。真正的 <code>pass</code> 只在极少数情况下成立，比如探测某个可选依赖是否存在。凡是写 <code>pass</code> 的地方，都应该有一行注释说明为什么可以忽略。</div>
+</details>
+
+<details>
+<summary>启动时配置错了，为什么不能用默认值兜底跑起来？</summary>
+<div class="answer">因为用默认值跑起来的服务处在一个「看起来健康、实际行为错误」的状态，而这是所有状态里最难发现的一种。典型后果是数据库地址落到了默认的本地或测试实例，服务正常接收流量、正常返回 200，数据却全写去了错地方，等发现时已经过了几天。相比之下，启动期崩溃的代价几乎是零——此时还没有任何用户流量，编排系统会立刻发现容器起不来并告警，你在部署阶段就能改掉。一个实用的做法是在进程启动的最开始集中做一次配置校验，把所有缺失和格式错误一次性收集完再抛出，而不是等到第一次用到某个配置项时才在业务代码深处报错。</div>
+</details>
+
+<details>
+<summary>为什么不该让第三方库的异常类型直接漏给我的调用方？</summary>
+<div class="answer">因为异常类型是你对外契约的一部分。一旦 <code>requests.exceptions.ConnectionError</code> 从你的函数里抛出去，调用方为了处理它就必须 <code>import requests</code>，哪怕他根本不关心你内部用什么发 HTTP。后果是你被锁死了：换成 <code>httpx</code> 或加一层缓存，异常类型全变，所有调用方一起报错，而你改的明明只是实现细节。正确做法是在适配层把外部异常转译成自己定义的类型，比如 <code>UpstreamUnavailable</code>，并且用 <code>from e</code> 保留因果链，这样原始信息仍在日志里，但对外的类型是稳定的。这层转译的成本是几行代码，省下的是未来一次跨团队的破坏性变更。</div>
+</details>
+
+<details>
+<summary><code>finally</code> 里写 <code>return</code> 为什么会吞掉异常？该怎么避免？</summary>
+<div class="answer">这是 Python 语言规定的行为：<code>finally</code> 块中的 <code>return</code>、<code>break</code>、<code>continue</code> 会终止正在进行的异常传播，函数转为正常返回。语言这样设计是因为这三个语句都表示「离开当前控制结构」，而异常传播也是一种离开，后发生的那个赢。问题在于它完全无声——没有警告，没有日志，异常就这样消失了，函数返回了一个看起来正常的值。避免方式很简单：<code>finally</code> 里只放清理动作，不放任何改变控制流的语句；同理也不要在 <code>finally</code> 里 <code>raise</code> 新异常，那会让原异常降级成 <code>__context__</code>。更好的选择是把清理逻辑交给上下文管理器，让资源的获取与释放成对出现，这样根本不需要手写 <code>finally</code>。</div>
+</details>
+
+<details>
+<summary>批处理任务里怎么做到「单条失败不中断整批」又不静默吞错？</summary>
+<div class="answer">关键是把「跳过」和「记录」拆成两件必须同时做的事。第一，每次跳过都必须写一条带 traceback 的日志（<code>logger.exception</code>），并且带上能定位到那条记录的标识，否则你事后无法知道漏了哪些。第二，要统计失败数并设阈值——单批失败率超过某个比例（比如 5%）就让整批失败，因为那已经不是脏数据问题，而是上游变更或代码 bug。第三，把失败条数暴露成监控指标，而不只是埋在日志里，这样它才能触发告警。只做第一步仍然危险：日志里有一万条 ERROR，但没人看日志，成功率指标依旧是 100%。三步齐备，才算是真正的「容错」而不是「静默」。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

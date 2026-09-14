@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY23 · 内存模型与垃圾回收</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、两套回收机制的分工</a>
+<a href="#s2">二、分代回收的策略与调参</a>
+<a href="#s3">三、循环引用怎么产生、怎么断开</a>
+<a href="#s4">四、删了对象内存却没还给系统</a>
+<a href="#s5">五、省内存的三件实用武器</a>
+<a href="#s6">六、内存问题的排查流程</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY23 · 内存模型与垃圾回收</h1>
+<p class="subtitle">引用计数与分代 GC 的分工 / 循环引用与弱引用 / 内存池与碎片 / __slots__ 与生成器 / tracemalloc 排查流程</p>
+
+<div class="intuition-box">
+<p>Python 的内存有两个独立的问题：一个是「对象什么时候死」，由引用计数加分代 GC 回答；另一个是「死了之后内存还给谁」，由 CPython 的内存池回答。绝大多数线上内存疑案，都是因为把这两个问题混成了一个。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、两套回收机制的分工</h2>
+
+<p>CPython 的内存回收不是一套机制，而是两套：一套是随时随地在跑的<span class="term">引用计数</span>——每个对象头部记录着「现在有多少个地方引用着我」，计数降到 0 的瞬间对象立刻被销毁；另一套是偶尔才醒过来扫一遍的<span class="term">分代垃圾回收器</span>，专门负责引用计数处理不了的那一小撮对象。</p>
+
+<p>引用计数是主力。你写的每一次赋值、每一次传参、每一次把对象塞进列表，底层都对应一次计数加一；每一次变量离开作用域、每一次 <code>del</code>、每一次容器被销毁，都对应一次计数减一。这意味着<strong>绝大多数对象的释放是确定性的、就地发生的</strong>：函数返回的那一刻，函数里创建的临时对象就已经没了，不需要等任何后台线程。</p>
+
+<div class="intuition-box">
+<p>引用计数像随手擦桌子——用完立刻收拾，代价均摊在每一次操作里；分代 GC 像每周大扫除——专门去找那些「互相抱着谁也不肯走」的垃圾。</p>
+</div>
+
+<h3>引用计数唯一处理不了的情况</h3>
+
+<p>引用计数的规则很朴素，但它有一个逻辑上无法自愈的盲区：<span class="term">循环引用</span>。A 的某个属性指向 B，B 的某个属性又指回 A，这时候即使外部再没有任何变量引用它们，A 和 B 的计数都还是 1——彼此撑着对方，谁也降不到 0。这两个对象从程序的角度已经<strong>不可达</strong>（unreachable，没有任何路径能从活着的变量走到它们），但从计数的角度还「活着」。</p>
+
+<p>这正是分代 GC 存在的唯一理由。它做的事情和引用计数完全不同：它不看计数，而是从根对象（模块全局、栈帧上的局部变量等）出发做可达性判断，把那些「计数不为 0、但外部谁也够不着」的对象整组回收掉。</p>
+
+<div class="arch-diagram">           Python 对象的两条回收路径
+
+  obj.refcount -= 1  ← 每次解引用都会发生（极高频）
+         │
+         ├── 计数 &gt; 0 ──→ 什么都不做，对象继续活着
+         │
+         └── 计数 == 0 ──→ 【引用计数】立刻析构
+                             ├─ 调用 __del__
+                             ├─ 递减其成员的计数（可能连锁）
+                             └─ 内存交还给 CPython 内存池
+                             时机：确定性，就在当前这行
+
+  ────────────────────────────────────────────────
+
+  分配数 - 释放数 &gt; threshold0
+         │
+         ▼
+  【分代 GC】暂停业务代码，扫描该代的容器对象
+         ├─ 只扫「可能含引用的容器」：list/dict/set/
+         │   实例对象/元组/闭包 cell …
+         ├─ 不扫 int/float/str/bytes（不可能构成环）
+         └─ 找出不可达的环 ──→ 整组回收
+         时机：不确定，由分配节奏触发</div>
+
+<p>注意架构图右下角那句「不扫 int/float/str」——这是一条很有用的性质。不含引用的<strong>原子对象</strong>在结构上就不可能参与循环，所以 GC 从不为它们付出扫描成本。一个装了一千万个整数的列表，GC 的负担只来自列表本身这一个容器，而不是一千万个元素。</p>
+
+<table>
+<thead><tr><th>维度</th><th>引用计数</th><th>分代垃圾回收器</th></tr></thead>
+<tbody>
+<tr><td>负责的对象</td><td>所有对象</td><td>只有容器类对象（可能含引用的）</td></tr>
+<tr><td>触发时机</td><td>计数变化的那一瞬间</td><td>分配/释放差值越过阈值时</td></tr>
+<tr><td>回收确定性</td><td>确定：这行代码执行完就没了</td><td>不确定：可能延迟到几万次分配之后</td></tr>
+<tr><td>能否处理循环</td><td>不能</td><td>能，这是它存在的全部理由</td></tr>
+<tr><td>运行成本</td><td>均摊在每次操作上，无停顿</td><td>集中式扫描，有可观测的停顿</td></tr>
+<tr><td>能否关闭</td><td>不能，是解释器的基础设施</td><td>能，<code>gc.disable()</code></td></tr>
+</tbody>
+</table>
+
+<h3>为什么 Python 的析构时机比 Java 可预测</h3>
+
+<p>Java 只有追踪式 GC，没有引用计数。一个对象什么时候被回收，取决于 GC 什么时候跑、跑的是哪一代、堆压力有多大——完全由运行时决定，代码无法预期。这就是为什么 Java 的 <code>finalize()</code> 从一开始就被劝退、后来干脆废弃：你不知道它会不会被调用、什么时候调用，所以不能把「关文件、断连接」这类事情交给它。</p>
+
+<p>CPython 因为有引用计数，情况截然不同：只要对象没有参与循环，最后一个引用消失的那一行，<code>__del__</code> 就会被调用。所以下面这种写法在 CPython 里是能用的——虽然依然不推荐：</p>
+
+<pre><code>def read_head(path):
+    return open(path).read(100)
+# 函数返回时文件对象引用计数归零，文件句柄立刻关闭
+# CPython 能这么写，但 PyPy 不行 —— PyPy 没有引用计数</code></pre>
+
+<p>这里有个关键的分寸问题：确定性析构是<strong>CPython 这个实现</strong>的性质，不是 Python 语言的保证。PyPy、Jython 用的是纯追踪式 GC，上面那行代码在它们上面会把文件句柄悬着直到下一次 GC。所以规范写法仍然是 <code>with</code>：<code>with</code> 的语义由语言定义，在所有实现上都成立。把「能依赖引用计数」当成一个方便的事实去理解，而不是当成一条可以写进代码的契约。</p>
+
+</div>
+
+<div class="section" id="s2">
+<h2>二、分代回收的策略与调参</h2>
+
+<p>分代回收背后只有一条经验假设，叫<span class="term">代际假说</span>：绝大多数对象创建后很快就死，活过一轮回收的对象大概率还会活很久。这条假设在真实程序里相当准——函数里的临时变量、循环中间结果、解析出来的一行数据，生命周期都以毫秒计；而配置对象、连接池、模型权重一旦建起来就陪你到进程结束。</p>
+
+<div class="intuition-box">
+<p>分代的本质是「把扫描预算花在最可能有收获的地方」：新对象堆里垃圾密度高，就频繁扫；老对象堆里几乎全是活的，扫了也是白扫，那就少扫。</p>
+</div>
+
+<h3>三代与晋升</h3>
+
+<p>CPython 把所有被 GC 跟踪的容器对象分成三代。新创建的进第 0 代；第 0 代回收后幸存下来的晋升到第 1 代；第 1 代回收后幸存的晋升到第 2 代。第 2 代是终点，不再晋升。</p>
+
+<p>触发规则是计数式的，不是定时的：解释器维护「分配数 − 释放数」这个差值，越过 <code>threshold0</code>（默认 700）就跑一次第 0 代回收；第 0 代跑够 <code>threshold1</code>（默认 10）次后，顺带把第 1 代也扫了；第 1 代跑够 <code>threshold2</code>（默认 10）次后，扫全代。注意这几个数字是<strong>次数比例</strong>而不是对象数量，所以第 2 代回收大约每 700×10×10 次净分配才发生一次。</p>
+
+<div class="arch-diagram">        对象的晋升路径与触发频率
+
+  新建容器对象
+       │
+       ▼
+  ┌──────────────┐   净分配 &gt; 700 就扫一次
+  │   第 0 代    │   垃圾密度高，每次扫得快
+  │  (young)     │   典型：函数里的临时 dict/list
+  └──────┬───────┘
+         │ 活下来的晋升
+         ▼
+  ┌──────────────┐   第 0 代扫 10 次，捎带扫一次
+  │   第 1 代    │   已经活过一轮，多半还会活
+  └──────┬───────┘
+         │ 活下来的晋升
+         ▼
+  ┌──────────────┐   第 1 代扫 10 次，才扫一次
+  │   第 2 代    │   全量扫描，停顿最长
+  │  (old)       │   典型：配置、缓存、模型权重
+  └──────────────┘
+         ▲
+         │  gc.freeze() 把这一代的对象
+         └── 整体搬进 permanent 区，从此不再扫描
+
+  扫描成本 ∝ 该代对象数量，与「有多少垃圾」无关
+  → 老年代对象越多，每次全代扫描越贵，收获却越少</div>
+
+<p>架构图最后两行是理解调参的关键：<strong>扫描成本由对象数量决定，收益由垃圾数量决定</strong>。一个持有几百万个长寿对象的服务，第 2 代回收每次都要遍历这几百万个对象，而真正能回收的可能一个都没有。这种「高成本零收益」的扫描，就是所有 GC 调优要消灭的目标。</p>
+
+<h3>可以动的几个旋钮</h3>
+
+<table>
+<thead><tr><th>调用</th><th>作用</th><th>什么场景下用</th><th>风险</th></tr></thead>
+<tbody>
+<tr><td><code>gc.get_threshold()</code></td><td>读出当前三个阈值，默认 <code>(700, 10, 10)</code></td><td>调参前先记录基线</td><td>无</td></tr>
+<tr><td><code>gc.set_threshold(n0, n1, n2)</code></td><td>调大可减少扫描频次</td><td>对象分配密集、GC 占比明显的服务</td><td>调太大会让峰值内存上升</td></tr>
+<tr><td><code>gc.freeze()</code></td><td>把当前所有被跟踪对象移入永久区，不再参与扫描（3.7+）</td><td>启动加载完成后、fork 出 worker 之前</td><td>冻结后这些对象的环永不回收</td></tr>
+<tr><td><code>gc.disable()</code></td><td>完全关闭分代回收，引用计数照常工作</td><td>短生命周期批处理、明确无循环引用</td><td>长期服务里会累积循环垃圾</td></tr>
+<tr><td><code>gc.collect(n)</code></td><td>手动触发指定代的回收</td><td>请求间隙、任务边界主动做一次</td><td>同步阻塞，不要放在热路径</td></tr>
+<tr><td><code>gc.set_debug(gc.DEBUG_LEAK)</code></td><td>把不可达对象记录到 <code>gc.garbage</code></td><td>排查阶段定位循环</td><td>开销大，只在诊断时开</td></tr>
+</tbody>
+</table>
+
+<h3>gc.freeze() 与多进程预加载</h3>
+
+<p>这个 3.7 引入的接口在「一个父进程加载模型、fork 出多个 worker」的部署形态里价值很大，原因有两层。</p>
+
+<p>第一层是省掉无效扫描：模型权重、词表、路由表这些启动期加载的对象注定活到进程结束，它们每次参与全代扫描都是纯浪费。<code>gc.freeze()</code> 把它们整体挪进永久区，后续 GC 直接跳过。</p>
+
+<p>第二层更关键，涉及<span class="term">写时复制</span>（copy-on-write，fork 出的子进程与父进程共享物理内存页，只有当某一页被写入时才真正复制一份）。问题在于：GC 扫描时会更新对象头部的 GC 链表指针和引用计数字段，这是<strong>写操作</strong>。于是子进程里一次全代扫描，就足以把父子共享的大量内存页逐页复制出来——明明什么业务数据都没改，内存占用却接近翻倍。在 fork 之前调用 <code>gc.freeze()</code>，就把这些页从扫描范围里摘了出去。</p>
+
+<pre><code>import gc
+load_model()          # 启动期加载，几百 MB 长寿对象
+gc.collect()          # 先清一遍启动期产生的真垃圾
+gc.freeze()           # 剩下的全部移入永久区
+start_workers()       # 再 fork，子进程不会因扫描而写脏页</code></pre>
+
+<div class="highlight">
+<strong>示例场景：</strong>一个 4 worker 的推理服务，父进程加载完模型后常驻约 800 MB。不做处理时，每个子进程运行几分钟后 RSS 从 fork 初期的约 60 MB 涨到约 700 MB，四个 worker 合计接近 3 GB——增长并非来自业务数据，而是全代扫描把共享页写脏后触发的复制。在 fork 前加入 <code>gc.collect()</code> + <code>gc.freeze()</code> 后，worker 稳态 RSS 降到约 150 MB 量级。具体数字取决于模型大小、对象个数与请求模式，这里只说明数量级差异的来源。
+</div>
+
+</div>
+
+<div class="section" id="s3">
+<h2>三、循环引用怎么产生、怎么断开</h2>
+
+<p>循环引用听上去像是要刻意构造才会出现的东西，实际上它在正常的面向对象代码里随处可见。下面四类是最常撞上的。</p>
+
+<h3>四种常见来源</h3>
+
+<table>
+<thead><tr><th>来源</th><th>典型形态</th><th>为什么容易被忽略</th></tr></thead>
+<tbody>
+<tr><td>双向链接</td><td>树/图节点里 <code>child.parent = self</code></td><td>父子互指是最自然的建模方式，写的时候不会意识到成环</td></tr>
+<tr><td>全局注册表</td><td>把实例 <code>append</code> 进模块级列表、注册回调</td><td>严格说是「被全局持有」而非环，但表现完全一样：永不回收</td></tr>
+<tr><td>闭包捕获自身</td><td>方法内定义的函数引用了 <code>self</code>，又被存回 <code>self</code> 上</td><td>闭包的 cell 对象是隐式的，代码里看不见这条边</td></tr>
+<tr><td>异常 traceback</td><td><code>except E as e: self.err = e</code></td><td>异常对象 → traceback → 栈帧 → 帧上所有局部变量，链条极长</td></tr>
+</tbody>
+</table>
+
+<p>第四种值得单独说。<code>traceback</code> 对象里挂着整条调用链的<span class="term">栈帧</span>（frame，函数执行时的上下文，保存着该函数所有局部变量的引用），而栈帧又引用着帧上的每一个局部变量。所以一旦你把异常对象存成了实例属性或塞进了某个列表，被拖住的不是一个异常对象，而是<strong>出错时整条调用栈上的全部局部变量</strong>——如果其中某一帧上恰好有一个刚读进来的大 DataFrame，它就跟着一起活下来了。</p>
+
+<p>顺带一提，Python 3 里 <code>except X as e:</code> 的 <code>e</code> 在 <code>except</code> 块结束时会被自动 <code>del</code> 掉，正是为了缓解这个问题。但如果你在块内把它存到了别处，这个保护就失效了。真正需要的信息往往只是字符串，存 <code>str(e)</code> 就够了。</p>
+
+<div class="intuition-box">
+<p>判断会不会成环，不要看类图，要看「从这个对象出发，顺着属性一直走，能不能走回它自己」。traceback 那条路径特别长，长到容易被当成不存在。</p>
+</div>
+
+<h3>用弱引用打断</h3>
+
+<p><span class="term">弱引用</span>（weak reference，一种指向对象但不增加其引用计数的引用）是打断环最标准的手段。被引对象该回收还是照常回收，弱引用只是在对象消失后变成 <code>None</code>，或者触发一个你注册的回调。在父子结构里，惯例是<strong>父对子用强引用，子对父用弱引用</strong>——因为父活着的时候子应该活着，反过来不成立。</p>
+
+<div class="arch-diagram">   成环：两个对象互相撑着计数，谁也降不到 0
+
+   ┌──────────┐  .children   ┌──────────┐
+   │  Parent  │ ───────────→ │  Child   │
+   │ rc = 1   │ ←─────────── │ rc = 1   │
+   └──────────┘   .parent    └──────────┘
+        ▲
+        │ 外部变量 root 消失后，两边 rc 仍然是 1
+        │ → 引用计数无能为力，只能等分代 GC 扫到
+
+   ───────────────────────────────────────────
+
+   打断后：子对父改用 weakref，这条边不计数
+
+   ┌──────────┐  .children   ┌──────────┐
+   │  Parent  │ ───────────→ │  Child   │
+   │ rc = 1   │ ⇠ ⇠ ⇠ ⇠ ⇠ ⇠  │ rc = 1   │
+   └──────────┘  weakref.ref └──────────┘
+        │         (不增加 rc)
+        │
+   root 消失 → Parent rc 归 0 → 立刻析构
+             → .children 释放 → Child rc 归 0 → 立刻析构
+             → 全程不需要 GC 参与，且是确定性的</div>
+
+<pre><code>import weakref
+
+class Node:
+    def __init__(self, parent=None):
+        self.children = []
+        self._parent = weakref.ref(parent) if parent else None
+
+    @property
+    def parent(self):
+        return self._parent() if self._parent else None  # 已回收则 None</code></pre>
+
+<p>标准库还提供了 <code>WeakValueDictionary</code> 和 <code>WeakSet</code>，用来做「缓存里存着但不阻止回收」的注册表——这恰好解决上表里第二类问题：观察者列表、连接注册表用弱容器装，对象消失时条目自动清掉，不需要谁去手动反注册。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>一个文档解析服务，每份文档解析成约 2 万个节点的树，每个节点通过 <code>self.parent = p</code> 强引用父节点。处理完一份文档后释放根节点，整棵树因为互指而全部滞留，要等第 2 代回收才可能被清掉。压测中每秒处理 5 份文档、单棵树占约 30 MB 时，RSS 在十分钟内从约 400 MB 涨到约 2.1 GB，呈明显锯齿状——每次全代回收掉一大块，随即又涨回去。把 <code>parent</code> 改成弱引用后，树在根节点释放的同一行就被完整析构，稳态内存回落到约 450 MB 且曲线平直。数字取决于节点结构和并发度，仅作量级参考。
+</div>
+
+<p>另外还有一条更朴素的手段：显式清理。在明确的生命周期边界上（请求结束、任务完成、连接关闭）主动把持有关系断掉——<code>self.children.clear()</code>、<code>self._callback = None</code>，让引用计数自己完成工作。这比依赖 GC 扫到更及时，也更容易在代码里读出来。关于「谁引用了谁」的底层语义，可以回看 <a href="py_object_model.html">PY09 · 对象模型与引用语义</a> 和 <a href="py_copy_semantics.html">PY10 · 拷贝语义与共享状态陷阱</a>。</p>
+
+</div>
+
+<div class="section" id="s4">
+<h2>四、删了对象内存却没还给系统</h2>
+
+<p>「我明明 <code>del</code> 了、<code>gc.collect()</code> 也跑了，为什么 <code>top</code> 里的 RSS 一点没降？」这是 Python 内存话题里出现频率最高的疑问，答案是：你观察的和你操作的根本不是同一层东西。</p>
+
+<p>这里必须把三件事分开：<strong>Python 对象被回收</strong>、<strong>CPython 的内存池把内存还给操作系统</strong>、<strong>进程 RSS 下降</strong>。它们是三个独立事件，前者发生完全不意味着后者会发生。</p>
+
+<div class="arch-diagram">          三层内存，三套账
+
+  ┌─────────────────────────────────────────────┐
+  │  第 1 层：Python 对象                        │
+  │  你的 list / dict / 实例                     │
+  │  del 或 rc 归 0 → 这一层结束，内存"空闲"     │
+  └───────────────────┬─────────────────────────┘
+                      │ 归还给 ↓，不是归还给 OS
+  ┌───────────────────▼─────────────────────────┐
+  │  第 2 层：CPython 内存池 (pymalloc)          │
+  │   arena (256 KB) ─┬─ pool (4 KB) ─┬─ block  │
+  │                   │               ├─ block  │
+  │                   └─ pool …       └─ block  │
+  │  · 只服务 ≤ 512 字节的小对象                 │
+  │  · 更大的对象直接走 malloc                   │
+  │  · arena 内只要还有 1 个存活块 → 整块不释放  │
+  └───────────────────┬─────────────────────────┘
+                      │ 只有整个 arena 全空才 free
+  ┌───────────────────▼─────────────────────────┐
+  │  第 3 层：操作系统 / 进程 RSS                │
+  │  top / ps 看到的就是这一层                   │
+  │  它只在第 2 层真正 free 之后才会下降         │
+  └─────────────────────────────────────────────┘</div>
+
+<p>卡住的地方在第 2 层。CPython 为小对象自建了一套分配器，把内存按 256 KB 的 <strong>arena</strong> 向系统申请，arena 切成 4 KB 的 <strong>pool</strong>，pool 再切成固定大小的 <strong>block</strong> 分给对象。归还是逐级的：block 空了归还给 pool，pool 空了归还给 arena，<strong>只有整个 arena 里一个存活对象都没有时，这 256 KB 才会被 free 回操作系统</strong>。</p>
+
+<p>于是<span class="term">内存碎片</span>就出现了：你分配了一百万个小对象，然后删掉了其中 99 万个，剩下 1 万个如果不巧散落在不同的 arena 里，那么这些 arena 一个都还不回去。从 Python 的角度内存是空闲的（下次分配会复用），但从操作系统的角度进程一点没瘦。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>一个常驻服务批量解析 100 万条记录，每条构造一个小 dict，峰值 RSS 约 1.3 GB。处理完成后把结果列表清空、显式 <code>gc.collect()</code>，用 <code>tracemalloc</code> 统计到的 Python 侧已分配量从约 1.1 GB 降到约 40 MB，但 <code>ps</code> 看到的 RSS 只从约 1.3 GB 降到约 1.1 GB——差出来的近 1 GB 就卡在那些「每个 arena 里还剩几个存活对象」的半空 arena 上。同一份代码改成分批处理、每批处理完立即释放，峰值 RSS 控制在约 300 MB。具体比例取决于对象大小、存活对象的分布方式与分配顺序，不同负载下差别很大。
+</div>
+
+<table>
+<thead><tr><th>你观察到的现象</th><th>发生在哪一层</th><th>正确的解读</th></tr></thead>
+<tbody>
+<tr><td><code>del obj</code> 后对象不可访问</td><td>第 1 层</td><td>对象确实死了，和内存还没关系</td></tr>
+<tr><td><code>gc.collect()</code> 返回了非 0</td><td>第 1 层</td><td>回收了这么多个循环垃圾对象，不是这么多字节</td></tr>
+<tr><td><code>tracemalloc</code> 统计量下降</td><td>第 1、2 层之间</td><td>Python 侧确实不再持有，但池可能没还</td></tr>
+<tr><td>RSS 不降</td><td>第 3 层</td><td>多半是碎片，未必是泄漏</td></tr>
+<tr><td>RSS 持续上涨不回落</td><td>第 1 层或第 3 层</td><td>要先区分是真泄漏还是碎片累积</td></tr>
+<tr><td>大对象删除后 RSS 明显下降</td><td>第 2 层旁路</td><td>&gt; 512 字节走 malloc，不经小对象池</td></tr>
+</tbody>
+</table>
+
+<div class="intuition-box">
+<p>Python 把内存还给内存池，内存池未必还给操作系统。所以「内存没降」的默认解释应该是碎片，而不是泄漏——先证明它是泄漏，再去修。</p>
+</div>
+
+<h3>这就是「重启大法」长期有效的原因</h3>
+
+<p>碎片是分配模式的产物，没有任何 GC 参数能消除它。既然内存只涨不落，最彻底的办法就是让进程别活那么久——这正是 Gunicorn 的 <code>max_requests</code>、uWSGI 的 <code>max-requests</code>、Celery 的 <code>worker_max_tasks_per_child</code> 这类配置存在的意义：处理 N 个请求后主动退出，由主进程拉起一个干净的新 worker。</p>
+
+<p>这不是打补丁式的将就，而是一个务实的工程选择：定期重启把内存曲线变成可预期的锯齿，代价只是一次进程启动。配 <code>max_requests_jitter</code> 是为了让多个 worker 的重启时刻错开，避免同时退出造成瞬时容量塌陷。判断标准也很简单：如果曲线是缓慢爬升并在重启后回到基线，那是碎片，定期重启就够了；如果单个周期内就能涨到 OOM，那是真泄漏，重启只是拖延，必须按第六节的流程去查。</p>
+
+</div>
+
+<div class="section" id="s5">
+<h2>五、省内存的三件实用武器</h2>
+
+<p>在动手优化之前先接受一个前提：下面所有的收益数字都是<strong>量级参考，不是承诺</strong>。同样的手段，对象字段多的时候省得多、字段少的时候省得少；对象数量到十万级才谈得上收益，几千个对象时优化的意义约等于零。先测量，再决定要不要动。</p>
+
+<h3>武器一：__slots__</h3>
+
+<p>默认情况下每个实例都自带一个 <code>__dict__</code> 来存属性，这个字典本身的开销比属性值还大。声明 <code>__slots__</code> 后，属性改用固定槽位存储，实例字典整个消失。在需要创建几十万个同类小对象的场景（坐标点、K 线、日志条目）收益相当明显。</p>
+
+<pre><code>class Point:
+    __slots__ = ('x', 'y')      # 实例不再有 __dict__
+    def __init__(self, x, y):
+        self.x, self.y = x, y
+# 代价：不能动态加属性，多继承受限，弱引用需显式加 '__weakref__'</code></pre>
+
+<p>关于 <code>__slots__</code> 与描述符、特殊方法的交互细节，PY15 那一张已经展开过，这里只补一句边界：它省的是<strong>每实例的字典开销</strong>，所以实例越多、字段越少，比例收益越高；如果你的对象总共只有几百个，或者每个对象里挂着一个大 list，那省下来的部分完全淹没在数据本身里。</p>
+
+<h3>武器二：用生成器替代中间列表</h3>
+
+<p>列表推导式一次性把所有元素物化在内存里，内存占用与数据量成正比；换成生成器后内存与数据量<strong>脱钩</strong>，只取决于单条记录的大小。这是所有省内存手段里最划算的一个：改动通常只是把一对方括号换成圆括号，收益却是从 O(n) 降到 O(1)。</p>
+
+<pre><code># 物化：内存 ∝ 文件行数
+lines = [parse(l) for l in open(path)]
+total = sum(r.amount for r in lines)
+
+# 流式：内存 ∝ 单行大小，与文件多大无关
+total = sum(parse(l).amount for l in open(path))</code></pre>
+
+<p>适用边界也很清楚：只能单次遍历、不能取长度、不能索引。需要多次遍历同一份数据时，硬用生成器反而会退化成重复计算。这一块的完整语义见 <a href="py_iterators_generators.html">PY12 · 迭代器与生成器协议</a> 与 <a href="py_comprehensions_lazy.html">PY13 · 推导式与惰性求值</a>。</p>
+
+<h3>武器三：选对数据结构</h3>
+
+<p>很多内存问题的根源不是「没优化」，而是一开始就选错了容器。Python 的 list 存的是<strong>指针</strong>，每个元素背后还有一个完整的对象头；换成 <code>array</code> 或 NumPy 数组后，数值直接紧凑排列，省掉的是每元素的对象开销。同理，只需要判断「在不在里面」却用了 list，代价不只是内存，还有从 O(1) 退化成 O(n) 的查找。</p>
+
+<table>
+<thead><tr><th>手段</th><th>典型收益量级</th><th>代价</th><th>适用规模</th></tr></thead>
+<tbody>
+<tr><td><code>__slots__</code></td><td>小对象每实例省下字典开销，字段少时可到数倍</td><td>不能动态加属性，多继承受限</td><td>同类实例 ≥ 10 万</td></tr>
+<tr><td>生成器替代列表</td><td>峰值从 O(n) 降到 O(1)，量级由数据总量决定</td><td>只能遍历一次，无 len、无索引</td><td>数据量超出内存或占比过半时</td></tr>
+<tr><td><code>array</code> / NumPy 替代数值 list</td><td>每个数值省掉对象头，通常是几倍差距</td><td>类型固定，丧失异构灵活性</td><td>数值元素 ≥ 10 万</td></tr>
+<tr><td><code>set</code> 替代 list 做成员判断</td><td>内存略高，查找从 O(n) 到 O(1)</td><td>元素必须可哈希，丢失顺序</td><td>集合 ≥ 千级且频繁查</td></tr>
+<tr><td>字符串驻留 / 复用</td><td>大量重复短串时去重比例可观</td><td>驻留表本身常驻，滥用反而增加占用</td><td>重复率高的短串（枚举值、字段名）</td></tr>
+<tr><td>分批处理</td><td>峰值内存 ≈ 单批大小</td><td>需要改造流程，可能增加 IO 次数</td><td>任何一次性全量加载的场景</td></tr>
+</tbody>
+</table>
+
+<div class="intuition-box">
+<p>省内存的优先级是：先别一次性装进来（分批 / 生成器），再考虑让每个对象更小（slots / array）。前者是数量级的改变，后者是常数倍的改善。</p>
+</div>
+
+<p>再强调一次表格里那些数字的性质：它们描述的是<strong>不同手段之间的相对量级关系</strong>，而不是你在自己项目里能拿到的具体倍数。真实收益取决于对象有几个字段、字段值本身多大、实例总数是多少、以及有没有被别的引用拖着。任何一篇文章给出的具体倍数都不能直接搬到你的场景里，包括这一篇。</p>
+
+</div>
+
+<div class="section" id="s6">
+<h2>六、内存问题的排查流程</h2>
+
+<p>排查内存问题，第一步不是打开工具，而是先做一次分类判断：这到底是<strong>泄漏</strong>还是<strong>峰值过高</strong>？两者的曲线形状不同，修法完全不同，搞错方向会白忙很久。</p>
+
+<table>
+<thead><tr><th>对比项</th><th>泄漏</th><th>峰值过高</th></tr></thead>
+<tbody>
+<tr><td>本质</td><td>对象一直被引用着，不该活还活着</td><td>一次性加载太多，回收本身是正常的</td></tr>
+<tr><td>曲线形状</td><td>持续爬升，空闲时也不回落</td><td>尖峰后回落，基线稳定</td></tr>
+<tr><td>与流量的关系</td><td>随累计请求数单调增长</td><td>随单次请求规模波动</td></tr>
+<tr><td>常见根因</td><td>模块级缓存、全局列表、未反注册的回调</td><td>全量读文件、无分页查询、超大批次</td></tr>
+<tr><td>修法</td><td>找到引用链，砍掉那条引用</td><td>分批、流式、限制并发</td></tr>
+<tr><td>重启能否缓解</td><td>能拖延，不能解决</td><td>无效，下次照样打满</td></tr>
+</tbody>
+</table>
+
+<div class="intuition-box">
+<p>泄漏是「该死的没死」，峰值是「活的太多」。前者要顺着引用链找到那个还抓着它不放的容器，后者只要别一次性全装进来——方向搞反，工具用得再熟也查不出东西。</p>
+</div>
+
+<h3>工具链与各自的边界</h3>
+
+<p><code>tracemalloc</code> 是标准库内置的分配追踪器，核心用法是在两个时间点各拍一张<span class="term">快照</span>（snapshot，记录当时所有分配及其源码位置），然后做差，直接得到「这段时间里内存增长是从哪几行代码分配出来的」。它定位的是<strong>分配点</strong>，不是持有者。</p>
+
+<pre><code>import tracemalloc
+tracemalloc.start()
+s1 = tracemalloc.take_snapshot()
+run_workload()                       # 跑一轮可疑逻辑
+s2 = tracemalloc.take_snapshot()
+for stat in s2.compare_to(s1, 'lineno')[:10]:
+    print(stat)                      # 按增量排序的前 10 个分配点</code></pre>
+
+<p>知道了在哪分配，还要知道<strong>谁还抓着它不放</strong>。这一步靠 <code>gc.get_objects()</code> 遍历所有被跟踪对象、或者 <code>gc.get_referrers(obj)</code> 反查引用者；<code>objgraph</code> 把这个过程包装得更好用，能按类型统计实例数增长，并画出从根对象到目标对象的引用链图。答案通常很朴素：某个模块级的 dict 缓存、某个 append 了就没清过的列表、某个注册了没反注册的回调表。</p>
+
+<p><code>sys.getsizeof</code> 要小心用，它有两个人人都踩过的局限：<strong>不递归</strong>，对容器只算外壳。一个装了一万个大字符串的列表，它返回的是那一万个指针的大小，和字符串内容一点关系没有。它只适合比较同类型对象的单体开销（比如验证 <code>__slots__</code> 有没有生效），不适合用来估算整体占用。</p>
+
+<div class="arch-diagram">        内存问题排查流程
+
+  ① 先看曲线，做分类
+     持续爬升不回落 ──→ 泄漏路线
+     尖峰后能回落   ──→ 峰值路线 → 分批/流式，到此结束
+                              │
+                              ▼  （以下是泄漏路线）
+  ② 稳定复现增长
+     固定一段可重复的负载，确认跑 N 轮后内存单调上升
+     跑不出来就别往下走，否则查的是噪声
+
+  ③ 两次快照做差       tracemalloc.compare_to()
+     得到：增长集中在哪几行代码
+     此时知道"在哪造出来的"，还不知道"谁留着"
+
+  ④ 沿引用链反查        gc.get_referrers / objgraph
+     目标对象 ←── 谁引用它 ←── 再往上 ←── 根
+     终点通常是：模块级缓存 / 全局 list / 回调注册表
+
+  ⑤ 砍掉那条引用并验证
+     改用弱容器、加容量上限(LRU)、或在生命周期边界显式清理
+     再跑一遍 ②，确认曲线变平</div>
+
+<p>第 ② 步最容易被跳过，也最不该跳过。没有稳定复现，你拿到的两张快照差值里混着预热、缓存填充、日志缓冲等一堆正常增长，很难判断哪条才是问题。宁可多花时间构造一个「跑 100 轮内存必涨 200 MB」的最小场景，后面三步都会顺利得多。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先用监控曲线区分泄漏与峰值，再决定查什么</li>
+<li>用 <code>tracemalloc</code> 做两点快照差值，而不是只看单点总量</li>
+<li>父子结构里子对父用 <code>weakref</code>，注册表用 <code>WeakValueDictionary</code></li>
+<li>模块级缓存一律加容量上限，比如 <code>lru_cache(maxsize=...)</code></li>
+<li>只存 <code>str(e)</code> 而不是异常对象本身，避免拖住整条栈帧</li>
+<li>长驻服务配 <code>max_requests</code> 定期回收 worker，接受碎片的存在</li>
+<li>fork 出 worker 之前先 <code>gc.collect()</code> 再 <code>gc.freeze()</code></li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要看到 RSS 不降就断定泄漏，默认解释应该是碎片</li>
+<li>不要用 <code>sys.getsizeof</code> 估算容器总占用，它不递归</li>
+<li>不要靠 <code>gc.disable()</code> 提性能而不评估循环垃圾的累积</li>
+<li>不要在热路径里手动 <code>gc.collect()</code>，它是同步阻塞的</li>
+<li>不要在 <code>except</code> 里把异常对象存成实例属性长期持有</li>
+<li>不要没复现就开始读代码猜，猜出来的结论无法验证</li>
+<li>不要把本文的内存倍数当承诺，先在自己数据上测</li>
+</ul>
+</div>
+</div>
+
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>既然有分代 GC，为什么还要保留引用计数？只留一个不行吗？</summary>
+<div class="answer">两者解决的问题不同，去掉任何一个都有明显代价。引用计数带来的是确定性：对象在最后一个引用消失的那一行就被销毁，文件句柄、锁、连接能被及时释放，内存曲线也更平稳，代价是每次引用变化都要改计数、且处理不了循环。分代 GC 只解决循环，但它需要暂停程序做可达性扫描，停顿时间随对象数量增长。如果只留分代 GC（像 Java 那样），Python 就失去了确定性析构，大量依赖这一性质的惯用写法都会变得不可靠；如果只留引用计数，循环垃圾会无限累积。所以 CPython 的选择是让引用计数承担 99% 的工作量，分代 GC 只兜住剩下那一小部分。</div>
+</details>
+
+<details>
+<summary>什么时候适合 gc.disable()？关了之后有什么风险？</summary>
+<div class="answer">适合的场景有两个共同特征：进程生命周期短，且数据结构里基本不产生循环引用。典型是命令行批处理脚本、一次性的数据转换任务——跑完就退出，循环垃圾攒多少都无所谓，关掉 GC 能省下全部扫描停顿。另一类是对延迟极敏感的服务，用关闭 GC 加上在请求间隙手动 <code>gc.collect()</code> 的方式，把不可控的停顿挪到可控的时间点。风险很直接：引用计数仍在工作，但所有循环垃圾都不再被回收，内存会单调上升。所以关闭之前必须先确认自己的对象图里没有环，关闭之后必须盯着内存曲线。更稳妥的中间方案是不关闭，只把 <code>gc.set_threshold()</code> 调大。</div>
+</details>
+
+<details>
+<summary>为什么 gc.collect() 返回了很大的数字，RSS 却几乎没变？</summary>
+<div class="answer">因为 <code>gc.collect()</code> 的返回值是<strong>回收的对象个数</strong>，不是释放的字节数。回收一百万个小 dict 和回收一个大数组，前者的返回值大得多，实际释放的内存却可能更少。更关键的是第四节讲的那一层：对象被回收只是把内存还给了 CPython 的内存池，池要等整个 arena 完全空了才会把 256 KB 还给操作系统。存活对象散落在多个 arena 里时，这些 arena 一个都还不回去，于是 RSS 纹丝不动。所以判断回收效果不该看 RSS，应该用 <code>tracemalloc</code> 看 Python 侧的已分配量，两者含义不同。</div>
+</details>
+
+<details>
+<summary>定义了 __del__ 的对象参与循环引用，会怎么样？</summary>
+<div class="answer">在 Python 3.4 之前，这类循环是无法回收的——GC 不知道该按什么顺序调用这些 <code>__del__</code>，只能把对象丢进 <code>gc.garbage</code> 列表让你手动处理，实际效果就是泄漏。PEP 442 改变了这一点：从 3.4 开始，GC 会先调用环中每个对象的 <code>__del__</code>，再回收内存，循环里有 <code>__del__</code> 不再阻止回收。但仍有两个注意点：一是 <code>__del__</code> 的调用顺序不确定，不要在里面假设其他成员还处于可用状态；二是 <code>__del__</code> 里抛出的异常会被忽略并打印到 stderr，不会向上传播，所以别把关键清理逻辑放里面。需要确定性清理时，正确答案始终是上下文管理器。</div>
+</details>
+
+<details>
+<summary>弱引用是不是可以随便用来避免循环？有什么限制？</summary>
+<div class="answer">不是随便用。第一个限制是并非所有对象都支持弱引用：<code>list</code>、<code>dict</code>、<code>int</code>、<code>str</code> 这些内置类型的实例不能被弱引用，自定义类默认可以，但一旦声明了 <code>__slots__</code> 就需要显式把 <code>'__weakref__'</code> 加进去。第二个限制是语义上的：弱引用意味着对象可能在任何时刻消失，所有取值处都得处理返回 <code>None</code> 的情况，代码复杂度是实实在在增加的。第三点是方向要选对——弱引用应该用在「逻辑上不拥有对方」的那一侧，父子结构里是子对父，观察者模式里是主题对观察者。如果方向反了，对象会在你还需要它的时候被回收掉，问题从内存泄漏变成了 <code>None</code> 引发的崩溃。</div>
+</details>
+
+<details>
+<summary>gc.freeze() 具体在什么部署形态下才值得加？</summary>
+<div class="answer">核心条件是「先加载大量长寿对象，再 fork 出多个子进程」这种形态，典型是 Gunicorn 的 preload 模式、多进程推理服务、加载了大词表或大配置的 Web 应用。收益来自两方面：这些对象不再参与后续的全代扫描，省掉纯浪费的遍历成本；更重要的是避免 GC 写脏共享内存页，因为扫描时更新对象头会触发写时复制，让子进程的内存占用无谓地翻倍。正确的调用顺序是先 <code>gc.collect()</code> 清掉启动期产生的真垃圾，再 <code>gc.freeze()</code>，最后才 fork。反过来说，单进程服务、或者启动期几乎不加载数据的服务，加了基本没有收益。冻结的代价是这些对象里如果存在循环引用，将永远不会被回收，所以只冻结那些本来就要活到进程结束的东西。</div>
+</details>
+
+<details>
+<summary>__slots__ 到底能省多少？什么时候不值得用？</summary>
+<div class="answer">省下来的是每个实例的 <code>__dict__</code> 开销，所以收益完全取决于两个变量：实例数量和每个实例的字段数。字段少、实例多的时候比例收益最高——几十万个只有两三个字段的小对象是最理想的场景；字段很多或者每个对象里挂着大数据时，字典开销在总量里的占比本来就小，优化掉也看不出差别。不值得用的情况有三类：实例总数只有几千个，这时省下的内存没有工程意义；类需要动态添加属性，比如 ORM 模型或插件系统，<code>__slots__</code> 会直接让这些写法报 <code>AttributeError</code>；继承结构复杂时，多个父类都声明 slots 会引发冲突。判断方法是先测量——用 <code>sys.getsizeof</code> 对比加与不加的单实例大小，乘以预期实例数，看绝对值够不够大再决定。</div>
+</details>
+
+<details>
+<summary>为什么在 except 里保存异常对象会拖住大量内存？</summary>
+<div class="answer">因为异常对象并不是孤零零的一个对象，它的 <code>__traceback__</code> 属性挂着整条调用链的栈帧，而每个栈帧都引用着该函数所有的局部变量。于是保存一个异常，实际上保存的是出错那一刻整条调用栈上的全部数据——如果其中某一层的局部变量里有一个刚读进内存的大文件内容或者 DataFrame，它就跟着一起活下来了。这条链还是环状的：traceback 引用帧，帧又引用异常，所以只能靠分代 GC 回收，释放时机不可控。Python 3 在 <code>except</code> 块结束时会自动 <code>del</code> 掉那个变量，正是为了缓解这个问题，但你把它存到实例属性或全局列表里就绕过了这个保护。实践中真正需要的信息通常只是错误描述和堆栈文本，存 <code>str(e)</code> 或 <code>traceback.format_exc()</code> 的字符串就足够了。</div>
+</details>
+
+<details>
+<summary>tracemalloc 和 objgraph 各自解决什么问题，为什么要两个都用？</summary>
+<div class="answer">它们回答的是排查过程中两个不同的问题。<code>tracemalloc</code> 回答「内存是在哪几行代码分配出来的」——它记录每次分配的源码位置，通过两张快照做差，能直接给出按增量排序的分配点列表。但它不告诉你这些对象为什么还活着。<code>objgraph</code>（以及底层的 <code>gc.get_referrers</code>）回答的是「谁还引用着它」——按类型统计实例数增长，并把从根对象到目标对象的引用链画出来。真正的修复依据在后者：知道分配点只能告诉你哪段代码造了对象，知道引用链才能告诉你该删掉哪一行。实践中的顺序是先用 <code>tracemalloc</code> 缩小范围，锁定嫌疑类型之后再用 <code>objgraph</code> 追引用链，终点通常是某个模块级的缓存字典或全局注册表。</div>
+</details>
+
+<details>
+<summary>把大 list 换成生成器之后，为什么有时候反而变慢了？</summary>
+<div class="answer">生成器省内存的代价是「只能走一遍」，而慢下来的原因基本都是这个代价被忽略了。最常见的一种是数据被遍历了多次：原来的 list 遍历第二遍是纯读取，换成生成器后第二遍要么拿到空结果，要么被改写成重新生成一次，于是所有解析和计算都重做了一遍。第二种是每次取元素的开销变高了：生成器的 <code>__next__</code> 涉及帧的恢复和挂起，逐元素的常数开销比直接遍历列表大，在数据量不大、且原本能放进内存时，这部分开销就显出来了。第三种是丢掉了批量优化的机会，比如 NumPy 的向量化运算需要完整数组才能发挥作用，硬改成逐元素生成会退化成纯 Python 循环。判断标准很简单：数据量大到内存放不下或占比过半时用生成器，能轻松放下且要多次使用时就老实物化成列表。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

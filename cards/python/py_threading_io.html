@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY26 · 多线程与 I/O 密集任务</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、线程省掉的是等待</a>
+<a href="#s2">二、别裸起线程：用线程池</a>
+<a href="#s3">三、竞态、锁与死锁</a>
+<a href="#s4">四、线程间怎么传东西</a>
+<a href="#s5">五、代价、边界与静默失败</a>
+<a href="#s6">六、落地判据</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY26 · 多线程与 I/O 密集任务</h1>
+<p class="subtitle">等待时间才是优化对象 / 线程池与 as_completed / 竞态与加锁纪律 / Queue 与停止信号 / 并发度怎么反推出来</p>
+
+<div class="intuition-box">
+<p>多线程在 Python 里几乎永远不是用来「算得更快」的，而是用来「等得更省」。一次远程调用的九成时间是这条线程躺在 socket 上什么都不做，多开几条线程只是让这些空等重叠起来——搞清楚这一点，你就能预判它什么时候有效、什么时候一点用都没有。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、线程省掉的是等待，不是计算</h2>
+
+<p>「加线程能不能变快」这个问题没有统一答案，但有一个统一的判断方法：<strong>先看时间花在哪</strong>。把一次典型的外部调用拆开，你会发现它的耗时构成极度不均衡，真正占用 CPU 的部分小得可以忽略。</p>
+
+<div class="arch-diagram">  一次内网 HTTP 调用的 200ms，都花在什么上
+  ──────────────────────────────────────────────────────────
+    建连 + TLS 握手         ████                 ~55ms   纯等待
+    发出请求                ▏                     ~1ms   本地 CPU
+    服务端处理 + 网络回程    ████████████        ~130ms   纯等待
+    读取响应体              █                     ~8ms   以等待为主
+    本地 JSON 解析          ▏                     ~6ms   真的在算
+                                              ─────────
+    CPU 真正在干活 ≈ 7ms / 200ms ≈ 3.5%
+    其余 96.5%，这条线程只是挂在内核的等待队列上，一点 CPU 都不占
+
+  串行跑 4 个请求                 4 条线程并发跑同样 4 个
+    ├─req1─┤                      ├─req1─┤
+           ├─req2─┤               ├─req2──┤
+                  ├─req3─┤        ├─req3─┤
+                         ├─req4─┤ ├─req4──┤
+    └───────── 800ms ──────────┘  └─ 约 215ms ─┘
+      总耗时 = 四次逐个累加           总耗时 ≈ 最慢的那一次</div>
+
+<p>这张图解释了两件事。第一，<span class="term">I/O 密集</span>任务的<span class="term">墙钟时间</span>（wall clock，从按下回车到拿到结果的真实时间）主要由等待构成，而等待是可以重叠的——一条线程在等内核返回时，解释器会把执行权交给别的线程。第二，重叠之后总耗时不会变成零，它收敛到「最慢的那一个」加上一点调度开销，所以并发的收益有天花板。</p>
+
+<div class="formula">并发墙钟 ≈ ⌈N / C⌉ × 单次耗时　　（N 个任务，并发度 C）</div>
+
+<p>这个近似式只在下游扛得住的前提下成立，第五节会讲它是怎么失效的。先用它估一下不同规模下的差距，因为量级感比公式本身更有用。</p>
+
+<table>
+<tr><th>请求数</th><th>串行墙钟</th><th>并发 8</th><th>并发 32</th><th>这个量级的实际含义</th></tr>
+<tr><td>10</td><td>2.0 秒</td><td>0.4 秒</td><td>0.2 秒</td><td>一批就跑完，并发度再高也没用</td></tr>
+<tr><td>100</td><td>20 秒</td><td>2.5 秒</td><td>0.8 秒</td><td>串行已经超出人能接受的等待</td></tr>
+<tr><td>1 000</td><td>3.3 分钟</td><td>25 秒</td><td>6.4 秒</td><td>并发收益最明显的区间</td></tr>
+<tr><td>10 000</td><td>33 分钟</td><td>4.2 分钟</td><td>63 秒</td><td>此时瓶颈通常已经不在你这边</td></tr>
+<tr><td>100 000</td><td>5.6 小时</td><td>42 分钟</td><td>10.4 分钟</td><td>该考虑异步或者分批调度了</td></tr>
+</table>
+
+<p>注意最后两行的备注。表格是按「你想开多少并发就有多少并发」算的，但现实里下游服务有连接池上限、有限流配额，它们会在某个点上接管成为瓶颈。所以这张表的正确读法是<strong>「并发能带来的收益上限」</strong>，不是「设成 32 就一定能拿到 63 秒」。</p>
+
+<h3>什么情况下线程一点忙都帮不上</h3>
+
+<p>反过来说，如果一个任务的时间是花在计算上——图像缩放、大矩阵运算、纯 Python 的循环统计——多开线程不但不会变快，还可能变慢。原因是 CPython 默认构建里有全局解释器锁（GIL，Global Interpreter Lock），同一时刻只允许一条线程执行 Python 字节码。多条 CPU 密集的线程会互相抢这把锁，把本来连续的计算切成碎片，额外付出切换成本。</p>
+
+<div class="intuition-box">
+<p>判断要不要上线程，只需要问一句：这段代码的时间是花在「等别人」还是「自己算」。等别人就上线程，自己算就换进程或者换库。</p>
+</div>
+
+<p>需要补一句的是，「自己算」这个判断要落到<strong>实现层</strong>。NumPy 的矩阵运算、大多数压缩与加解密库、数据库驱动的网络部分，都在 C 层执行并且在执行期间主动释放了 GIL，从 Python 的视角看它们的行为更接近 I/O 而不是计算。所以「用了 NumPy 的代码是 CPU 密集，所以线程没用」这个推论是错的，得实测。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、别裸起线程：线程池才是生产写法</h2>
+
+<p><code>threading.Thread</code> 是最直白的入口，值得先看懂它，因为线程池的行为是建立在这套语义之上的。它的模型很简单：给一个可调用对象，<code>start()</code> 让它在新线程里跑起来，<code>join()</code> 阻塞等它结束。</p>
+
+<pre><code>import threading
+
+def fetch(url):
+    ...
+
+t = threading.Thread(target=fetch, args=("/a",), name="w-1")
+t.start()                 # 不 start 就只是个普通对象，什么都不会发生
+t.join(timeout=5)         # 不 join，主线程不会等它
+print(t.is_alive())       # join 超时不抛异常，要靠这个判断是否真结束</code></pre>
+
+<p>这里有两个容易踩的点。<code>join(timeout=5)</code> 超时后<strong>不抛异常也不终止线程</strong>，它只是放弃等待返回，线程还在后台跑；想知道结果必须再查 <code>is_alive()</code>。另一个是 <code>target</code> 的返回值<strong>没有任何地方能接住</strong>——裸线程没有返回值通道，你得自己用队列或共享变量把结果传出来，而这恰恰是最容易写出 bug 的地方。</p>
+
+<h3>守护线程：主线程一退，它就地消失</h3>
+
+<p><span class="term">守护线程</span>（daemon thread）指的是 <code>daemon=True</code> 的线程。它和普通线程唯一的区别在进程退出时：解释器只等所有非守护线程结束，然后就开始收尾，<strong>守护线程会被直接掐断</strong>——不抛异常、不执行 <code>finally</code>、不运行上下文管理器的 <code>__exit__</code>（见 <a href="py_context_managers.html">PY19 · 上下文管理器</a>）。</p>
+
+<p>后果是具体的：守护线程里如果正在写文件，会留下半截内容；正在提交事务，连接直接断开；缓冲区里攒着的日志，一条都不会落盘。所以判据很清楚——<strong>守护线程只能用来跑「随时可以丢弃」的活</strong>，比如心跳上报、指标采集；凡是有收尾动作的任务都不能设成守护线程，而要用停止信号让它自己退出（第四节）。</p>
+
+<h3>线程池解决的四件事</h3>
+
+<p>生产代码里默认用 <code>concurrent.futures.ThreadPoolExecutor</code>，不是因为它写起来短，而是因为裸线程有四个坑它都替你填了：线程复用（不用为每个任务付创建开销）、并发上限（<code>max_workers</code> 是一道硬闸门）、结果回传（<code>Future</code>）、以及异常捕获（不会像裸线程那样悄悄消失）。</p>
+
+<div class="arch-diagram">  ThreadPoolExecutor 的内部结构
+  ─────────────────────────────────────────────────────────────
+    你的代码            内部任务队列          工作线程（会复用）
+   ex.submit(f, x1) ─┐  ┌──────────────┐       ┌──────────┐
+   ex.submit(f, x2) ─┼─▶│ x3 x4 x5 ... │──┬───▶│ worker-0 │─┐
+   ex.submit(f, x3) ─┘  │   无界排队   │  ├───▶│ worker-1 │─┤
+        │               └──────────────┘  └───▶│ worker-2 │─┤
+        │                                      └──────────┘ │
+        ▼                              最多 max_workers 条   │
+    3 个 Future  ◀──── 结果和异常都回填进 Future ◀───────────┘
+
+   闸门只拦「同时在跑几个」，不拦「排了多少个」：
+   submit 一百万次也不会阻塞，它们全在内存里的队列排着。
+   要控制排队规模，只能在提交侧自己分批。</div>
+
+<p>图里那一行注释值得单独记住：<code>submit</code> 永远不阻塞。很多人以为设了 <code>max_workers=8</code> 就万事大吉，然后在一个循环里 <code>submit</code> 了几十万个任务，内存被参数对象撑爆。闸门管的是执行并发度，不是提交速率。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个导出作业用 <code>max_workers=8</code> 的线程池处理 240 万行记录，写法是先把全表查出来、在一个 for 里逐行 <code>submit</code>。线程数确实只有 8，但那 240 万个待执行任务连同各自的行数据全都堆在线程池的内部队列里，进程 RSS 在 4 分钟内从 300MB 涨到 6.2GB 被 OOM 杀掉。改成「每次只提交 2000 个，等这批的 Future 全部取完结果再提交下一批」之后，峰值稳定在 420MB，总耗时反而因为不再换页少了两成。</p>
+</div>
+
+<h3>submit + as_completed 与 map 的差别</h3>
+
+<pre><code>from concurrent.futures import ThreadPoolExecutor, as_completed
+
+with ThreadPoolExecutor(max_workers=16) as ex:
+    futs = {ex.submit(fetch, u): u for u in urls}   # Future 映射回输入
+    for f in as_completed(futs):                    # 谁先完成谁先出来
+        url = futs[f]
+        try:
+            data = f.result()      # 任务里的异常，在这一行才抛出来
+        except Exception:
+            log.exception("失败: %s", url)          # 单个失败不影响其余</code></pre>
+
+<p><code>as_completed</code> 是一个生成器，按<strong>完成顺序</strong>吐出 Future。因为顺序被打乱了，你需要一个 dict 把 Future 映射回原始输入，否则拿到结果也不知道它属于谁。这个写法的价值在于「边出边处理」：一万个请求里先回来的那些可以立刻写库，不用等最慢的那个。</p>
+
+<pre><code>with ThreadPoolExecutor(max_workers=16) as ex:
+    # map 按 urls 的顺序返回结果，与谁先完成无关
+    for url, data in zip(urls, ex.map(fetch, urls)):
+        handle(url, data)</code></pre>
+
+<p><code>map</code> 短得多，代价是行为更粗粒度：结果<strong>严格按输入顺序</strong>返回，所以如果第一个任务最慢，后面全部完成了你也一个都拿不到——它们只能在内存里等着。异常同样是延迟的：任务内部抛出的异常不会在 <code>map()</code> 调用时出现，而是在迭代到那个位置、内部取 <code>result()</code> 时才抛出来，并且会中断整个 for 循环。</p>
+
+<table>
+<tr><th>维度</th><th>submit + as_completed</th><th>map</th></tr>
+<tr><td>结果顺序</td><td>完成顺序，先好先出</td><td>严格按输入顺序</td></tr>
+<tr><td>拿到第一个结果</td><td>最快的那个一回来就能处理</td><td>必须等第一个输入完成</td></tr>
+<tr><td>异常时机</td><td><code>f.result()</code> 时抛，可逐个接住</td><td>迭代到那一项时抛，默认中断整个循环</td></tr>
+<tr><td>关联原始输入</td><td>要自己用 dict 映射回去</td><td>天然一一对应</td></tr>
+<tr><td>整体超时</td><td><code>as_completed(fs, timeout=)</code></td><td><code>ex.map(f, xs, timeout=)</code></td></tr>
+<tr><td>适合</td><td>结果独立、要边出边处理、要精细处理单个失败</td><td>一一对应的转换、顺序重要、失败就整批放弃</td></tr>
+</table>
+
+<p>选择判据可以压缩成一句：<strong>失败是否允许单个处理</strong>。能容忍「一万条里坏了三条，记下来继续」就用 <code>as_completed</code>；要求「一条坏了整批重来」就用 <code>map</code>，它的中断语义正好是你要的。异常本身该怎么分类和转译，<a href="py_exception_design.html">PY24 · 异常体系设计</a>那一卡讲得更细。</p>
+
+<div class="intuition-box">
+<p>把线程池当成「一个有闸门的队列」，而不是「一堆线程」。你要关心的永远是闸门开多大（<code>max_workers</code>）和队列排多长（提交侧分批），线程本身是实现细节。</p>
+</div>
+
+<p>还有一个容易漏的细节：<code>with</code> 块退出时会调用 <code>shutdown(wait=True)</code>，它会等所有<strong>已提交</strong>的任务跑完，包括还在队列里排队、一行都没开始执行的。想在出错时尽快收场，需要 <code>shutdown(wait=False, cancel_futures=True)</code>（Python 3.9 起），它会把尚未开始的任务从队列里丢掉——但已经在跑的那些依然无法中断，原因见第五节。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、竞态、锁，以及怎么不写出死锁</h2>
+
+<p>只要两条线程会碰同一个可变对象，就存在<span class="term">竞态条件</span>（race condition）：结果取决于线程调度的先后，而调度是你控制不了的。最小的例子就是一行 <code>counter += 1</code>——它看起来是一步，实际上是三步。</p>
+
+<div class="arch-diagram">  counter += 1 在字节码层是「读 - 改 - 写」三条指令
+  ──────────────────────────────────────────────────────────
+  （指令名取自 3.11 及以后；3.10 及更早那条「改」叫 INPLACE_ADD）
+     LOAD_GLOBAL   counter      ← 读：把当前值取到栈上
+     BINARY_OP     (+=) 1       ← 改：算出新值
+     STORE_GLOBAL  counter      ← 写：放回去
+
+  解释器可以在任意两条指令之间切走（默认约每 5ms 检查一次，
+  见 sys.getswitchinterval()），于是：
+
+    时刻    线程 A            线程 B           counter 实际值
+     t1     读到 41                                 41
+     t2                       读到 41               41
+     t3     算出 42                                 41
+     t4                       算出 42               41
+     t5     写回 42                                 42
+     t6                       写回 42               42   ← 丢了一次
+
+  两条线程各加 100 万次，期望 200 万，实测常常是 100 多万。
+  加得越频繁越容易丢，而低频调用时可能几个月都不出错一次。</div>
+
+<p>最后那句是这类 bug 最难缠的地方：它的出现概率和调度时机相关，压测时稳定复现，上线后一周崩一次，本地永远重现不了。所以对待共享可变状态的态度不能是「测一测看会不会出问题」，而必须是「从结构上让它不可能出问题」。</p>
+
+<p>顺带澄清一个常见误解：GIL <strong>不能</strong>替你保证这三步的原子性。GIL 保证的是同一时刻只有一条线程在执行字节码，而切换发生在指令边界上——你的三条指令中间恰恰全是合法的切换点。（CPython 3.13 起的自由线程构建连这层保护都没有，竞态窗口更宽。）</p>
+
+<h3>Lock 与 RLock</h3>
+
+<p><span class="term">临界区</span>是指「同一时刻只允许一条线程进入」的那段代码。用 <code>Lock</code> 把它围起来，写法只有一种值得推荐：</p>
+
+<pre><code>lock = threading.Lock()
+
+def incr():
+    global counter
+    with lock:            # 等价于 acquire + try/finally + release
+        counter += 1      # 临界区里只放「改共享状态」的那几行</code></pre>
+
+<p>坚持用 <code>with</code> 而不是手写 <code>acquire()</code> / <code>release()</code>，理由是临界区里一旦抛出异常，手写版本会跳过 <code>release()</code>，这把锁就永远不会被释放，之后所有想进来的线程全部卡死。这是一个「一次疏忽换来整个服务挂起」的典型场景。</p>
+
+<p>只有一种情况需要手写：你不想无限期地等这把锁。<code>acquire(timeout=2)</code> 返回布尔值而不是阻塞到死，拿不到就走降级分支——这在「缓存刷新拿不到锁就用旧值」之类的场景里很有用。</p>
+
+<pre><code>if lock.acquire(timeout=2):
+    try:
+        refresh()
+    finally:
+        lock.release()   # 手写形式必须自己保证 finally
+else:
+    use_stale_cache()    # 拿不到就降级，而不是把调用方拖住</code></pre>
+
+<p><code>RLock</code>（可重入锁）的区别只有一条但很关键：同一条线程可以重复 acquire，内部用计数器记录层数，释放同样次数后才真正放开。它存在的理由是<strong>加了锁的方法内部又调用了另一个加锁的方法</strong>——用普通 <code>Lock</code> 时这会立刻自己把自己锁死，而且死得毫无提示。</p>
+
+<table>
+<tr><th>原语</th><th>同线程重复 acquire</th><th>谁可以 release</th><th>什么时候用</th></tr>
+<tr><td><code>Lock</code></td><td>立刻自锁死</td><td>任何线程都能释放</td><td>默认选它：一小段明确的临界区</td></tr>
+<tr><td><code>RLock</code></td><td>可以，计数 +1</td><td>只有持有者</td><td>加锁方法之间会互相调用时</td></tr>
+<tr><td><code>Semaphore(n)</code></td><td>可以，配额减 1</td><td>任何线程</td><td>限制同时访问某个下游的数量</td></tr>
+<tr><td><code>Condition</code></td><td>取决于底层锁</td><td>持有者</td><td>等待某个状态成立，配合 notify 唤醒</td></tr>
+<tr><td><code>Event</code></td><td>不适用</td><td>不适用</td><td>广播型的一次性 / 可重置信号</td></tr>
+</table>
+
+<p>表里第一行第二列那个「任何线程都能释放」经常被忽略：<code>Lock</code> 没有所有者概念，B 线程可以释放 A 线程持有的锁，解释器不会报错。这让「锁被误释放」成为一类很难查的 bug，也是 <code>RLock</code> 在需要归属语义时更安全的原因之一。</p>
+
+<div class="intuition-box">
+<p>需要 <code>RLock</code> 往往是个信号：说明你的加锁边界和函数边界重叠了。更干净的做法通常是把「加锁的公开方法」和「不加锁的内部实现」拆开，让锁只在最外层加一次。</p>
+</div>
+
+<h3>死锁：成因只有一个，纪律有三条</h3>
+
+<p><span class="term">死锁</span>的成因可以概括成一句话：<strong>两条线程以相反的顺序去拿同两把锁</strong>。一旦形成，双方都在等对方手里的那把，谁也不会退让，进程停在那里不报错、不超时、CPU 占用为零——最糟糕的故障形态，因为它看起来像「卡住了」而不是「出错了」。</p>
+
+<div class="arch-diagram">  死锁的最小形态
+  ─────────────────────────────────────────────────────────
+    线程 A                          线程 B
+    acquire(lock_account)  ✔       acquire(lock_ledger)   ✔
+       ...                            ...
+    acquire(lock_ledger)   ✖ 等 ──▶ 持有中，不放
+    持有中，不放 ◀── 等 ✖          acquire(lock_account)
+
+    两边都在等对方，进程永远停在这里。
+    现象：CPU 0%、没有报错、请求全部超时——最难定位的一种。
+
+  三条纪律，任何一条守住都能破环
+    1. 固定加锁顺序：给所有锁定一个全局次序，永远按次序加
+    2. 缩小临界区：锁里只放改状态的那几行，别放整个函数体
+    3. 持锁期间绝不做 I/O：一次 30 秒的网络超时
+       就是把所有等这把锁的线程一起卡 30 秒</div>
+
+<p>第三条最值得展开，因为它是性能问题和死锁的共同来源。在锁里发起一次 HTTP 请求或数据库查询，等于把这个外部依赖的延迟乘以并发度加到你的系统上：正常时下游 50ms，你只是慢一点；下游抖到 30 秒，你所有线程排在这把锁后面，整个服务表现为完全无响应。正确做法是<strong>先在锁外把数据准备好，进锁只做赋值</strong>。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个内存缓存的刷新逻辑写成了「持锁 → 调上游拉全量配置 → 写进 dict → 放锁」。平时上游 80ms，看不出任何问题。某次上游发布导致响应退化到 9 秒，该服务的 40 条工作线程在 12 秒内全部堆在这把锁上，健康检查超时被摘除，实际上进程本身是活的、CPU 接近 0%。改成「锁外拉数据，锁内只做一次字典替换」后，同样的上游抖动只表现为缓存刷新慢一拍。改动 4 行。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、线程间怎么传东西：少共享，多交接</h2>
+
+<p>上一节讲了怎么把共享状态保护好，这一节讲一个更根本的思路：<strong>尽量不共享</strong>。锁的数量和共享可变状态的数量成正比，而每一把锁都是一个潜在的死锁点和性能瓶颈。把「共享一块内存」换成「传递一个消息」，大部分锁就自然消失了。</p>
+
+<h3>queue.Queue：线程安全的交接点</h3>
+
+<p><code>queue.Queue</code> 内部已经用锁和条件变量实现好了，你不需要再加任何锁。它比「共享一个 list 再自己加锁」更不容易出错的原因在于：list 的读、判空、弹出是三次独立操作，你必须把它们一起锁起来才正确，而 <code>Queue.get()</code> 本身就是原子的，还顺带提供了阻塞等待和超时。</p>
+
+<div class="arch-diagram">  生产者 - 消费者：唯一的共享点是那个队列
+  ─────────────────────────────────────────────────────────
+     生产者线程           有界队列            消费者线程池
+   ┌───────────┐      ┌──────────────┐      ┌───────────┐
+   │ 扫描文件  │─put─▶│              │─get─▶│ worker-0  │
+   │ 拉取分页  │─put─▶│ maxsize=100  │─get─▶│ worker-1  │
+   └───────────┘      │              │─get─▶│ worker-2  │
+                      └──────────────┘      └───────────┘
+     队列满时 put 会阻塞，生产者自动被拖慢到消费者的速度，
+     这就是免费拿到的背压——不用自己写限速逻辑。
+
+   停止有两种语义，别混用：
+     stop_event.set()     立刻别干了，各线程在下一个检查点退出
+     往队列放 N 个 None    把队列里排着的干完再退，适合批任务</div>
+
+<pre><code>q = queue.Queue(maxsize=100)   # 有界：满了 put 就阻塞，天然背压
+
+def worker():
+    while True:
+        item = q.get()
+        try:
+            if item is None: break     # 哨兵值：一个 None 停一条线程
+            handle(item)
+        finally:
+            q.task_done()              # 漏掉它，q.join() 永远不返回</code></pre>
+
+<p><code>maxsize</code> 不是可选优化，而是必须设的参数。无界队列意味着生产者可以无限快地往里塞，当消费速度跟不上时，积压全部堆在内存里——这是「批处理任务跑着跑着内存被打满」的头号原因。设了上限之后，<code>put</code> 会在队列满时阻塞，生产者自动被拖慢到消费者的速度，这就是<span class="term">背压</span>（backpressure）。</p>
+
+<p><code>task_done()</code> 和 <code>q.join()</code> 是一对：前者每消费一项调一次，后者阻塞到「放进去的都被标记完成」。忘记调用 <code>task_done()</code> 的后果不是报错，而是 <code>join()</code> 永远挂着，表现为程序跑完了却不退出。Python 3.13 起 <code>Queue</code> 增加了 <code>shutdown()</code> 方法，可以让所有阻塞中的 <code>get</code> / <code>put</code> 抛 <code>queue.ShutDown</code>，不再需要哨兵值这套约定。</p>
+
+<h3>Event：一个能被所有线程看见的开关</h3>
+
+<pre><code>stop = threading.Event()
+
+def poller():
+    while not stop.is_set():
+        pull_once()
+        stop.wait(5)     # 比 time.sleep(5) 好：信号一到立刻醒，不用等满 5 秒
+
+stop.set()               # 主线程发信号，各线程在下一个检查点自己退出</code></pre>
+
+<p><code>stop.wait(5)</code> 替代 <code>time.sleep(5)</code> 这个细节，实际效果差别很大。用 <code>sleep</code> 时，发出停止信号后最坏要等一个完整周期线程才会醒来检查；轮询间隔如果是 60 秒，你的服务关闭就要拖 60 秒，超过容器编排的宽限期就会被强杀，收尾逻辑照样丢失。</p>
+
+<h3>threading.local：让「每线程一份」代替共享</h3>
+
+<pre><code>_local = threading.local()
+
+def session():
+    s = getattr(_local, "s", None)
+    if s is None:
+        s = _local.s = requests.Session()   # 每条线程独享一个连接会话
+    return s</code></pre>
+
+<p>这是「不共享」思路最直接的体现：与其给一个全局 Session 加锁，不如让每条线程拿自己的那份。数据库连接、HTTP 会话、日志上下文都适合这么处理。但有一个必须知道的副作用——<strong>线程池会复用线程</strong>，所以存进 <code>threading.local</code> 的东西会一直留到下一个任务。当作连接缓存正好；当作「本次任务的上下文」就会串味，上一个请求的 trace id 被下一个请求带上，排查时看到的调用链完全是错的。</p>
+
+<table>
+<tr><th>手段</th><th>传递什么</th><th>要不要自己加锁</th><th>主要风险</th></tr>
+<tr><td><code>queue.Queue</code></td><td>任务与结果对象</td><td>不用，内部已保证</td><td>不设 <code>maxsize</code> 会把内存吃光</td></tr>
+<tr><td><code>threading.Event</code></td><td>一个布尔广播</td><td>不用</td><td>只有两态，多状态别硬套</td></tr>
+<tr><td><code>threading.local</code></td><td>每线程私有对象</td><td>不用，本来就不共享</td><td>线程池复用线程，值会留到下一个任务</td></tr>
+<tr><td><code>Future.result()</code></td><td>单个任务的返回值</td><td>不用</td><td>不取结果，异常就被静默吞掉</td></tr>
+<tr><td>共享 list / dict + <code>Lock</code></td><td>任意结构</td><td><strong>要，且必须全覆盖</strong></td><td>漏锁 = 偶发丢数据；持锁做 I/O = 全局卡住</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>共享可变状态越少，需要的锁就越少，能写出的死锁也越少。看到「加个锁就好了」这种念头时，先想想能不能改成「把东西放进队列交出去」。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、线程的代价、边界与静默失败</h2>
+
+<p>线程不是免费的。每条线程都要分配自己的调用栈，栈大小按平台和构建配置在 512KB 到 8MB 之间（Linux 上通常跟随 <code>ulimit -s</code>，可用 <code>threading.stack_size()</code> 调整）。这是虚拟地址空间，实际驻留内存按页分配、远小于这个数，但线程开到几千条时，光是栈的地址空间就足以让 32 位进程直接失败，64 位进程也会明显感到调度压力。</p>
+
+<h3>并发度不是越大越好，上限由四个来源共同决定</h3>
+
+<table>
+<tr><th>约束来源</th><th>上限怎么反推</th><th>超了之后的症状</th></tr>
+<tr><td>下游连接池</td><td>客户端配置的 <code>pool_maxsize</code>（requests 默认每主机 10）</td><td>日志刷 connection pool is full，连接被丢弃重建，每次请求多付一次握手</td></tr>
+<tr><td>上游限流配额</td><td>允许 QPS × 单次耗时 = 可用并发（Little 定律）</td><td>429 比例上升，成功率下跌，重试又加重限流</td></tr>
+<tr><td>本机内存</td><td>线程数 × 栈大小 + 每任务的中间对象</td><td>RSS 持续上涨，极端情况 can't start new thread</td></tr>
+<tr><td>响应处理的 CPU</td><td>单次解析耗时 × 目标 QPS 不能超过一核</td><td>GIL 争抢加剧，P95 不降反升</td></tr>
+<tr><td>目标时延</td><td>并发越高排队越深，P95 = 排队 + 处理</td><td>吞吐还在涨，但单请求的体感越来越慢</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>生产事故复盘：</strong>一个每日跑的数据同步作业，要从上游 HTTP 接口拉 12 000 条记录，线程池 <code>max_workers=8</code>，单次调用 P50 约 420ms，实测吞吐约 19 QPS，全量耗时 10.5 分钟，成功率 99.9%，P95 0.42 秒。有人想「再快一点」，把 <code>max_workers</code> 直接从 8 调到 200 上线。</p>
+<p>结果是三件事同时发生：一是那个共享的 <code>requests.Session</code> 连接池上限是默认的 10，200 条线程把它打穿，日志里每秒上百条 connection pool is full，连接被丢弃后重建，每个请求额外付一次 TLS 握手；二是请求速率冲到接近 470 QPS，远超上游 50 QPS 的配额，429 占比涨到 8.8%；三是重试逻辑把这些 429 又原样打回去，进一步加重限流。最终成功率从 99.9% 掉到 91.2%，P95 从 0.42 秒涨到 6.8 秒，全量耗时不降反升到 23 分钟。</p>
+<p>处置是把并发回调到 16（按 50 QPS × 0.42 秒 ≈ 21 的可用并发再打八折），同时把连接池 <code>pool_maxsize</code> 设为 16 与之对齐、给重试加上指数退避。恢复后吞吐约 36 QPS，成功率 99.93%，P95 0.51 秒，全量 5.5 分钟——比原来的 8 并发快了近一倍，比 200 并发快了四倍。教训不是「并发不能调大」，而是<strong>并发度是从下游的连接池和限流反推出来的，不是从「我希望多快」推出来的</strong>。</p>
+</div>
+
+<h3>Python 没有办法安全地终止一条线程</h3>
+
+<p>这一条经常让从别的语言过来的人意外：标准库里没有 <code>thread.kill()</code>，而且这是有意为之。强行终止一条线程意味着它可能停在任意一条指令上——锁还持有着、文件只写了一半、事务没提交也没回滚。这种状态下的进程已经不可信了，所以 Python 的选择是干脆不提供这个能力。</p>
+
+<p>唯一正确的做法是<span class="term">协作式取消</span>：被取消方自己在合适的位置检查停止标志并退出。这也意味着<strong>取消的响应速度取决于检查点的密度</strong>，一个卡在没有超时的 <code>recv()</code> 上的线程，你设多少次标志它都不会醒——所以超时和取消其实是同一件事的两面。</p>
+
+<p>网上流传的 <code>ctypes.pythonapi.PyThreadState_SetAsyncExc</code> 注入异常的技巧不要用于生产：它只在线程执行 Python 字节码时才生效，线程阻塞在系统调用里时完全无效，而它「有时能用」的特性恰恰最危险。</p>
+
+<h3>异常默认只在那条线程里打印一下</h3>
+
+<pre><code>def job():
+    raise RuntimeError("boom")
+
+t = threading.Thread(target=job)
+t.start(); t.join()
+print("主线程认为一切正常")   # 回溯打在 stderr，主线程完全不知情</code></pre>
+
+<p>裸线程里未捕获的异常会交给 <code>threading.excepthook</code>（Python 3.8 起）处理，默认行为是把回溯打到 stderr，然后那条线程结束——<strong>主线程不会收到任何信号，退出码依然是 0</strong>。在容器里，这意味着日志采集如果只收结构化日志、不收 stderr，这次失败就彻底消失了。生产上应当替换 <code>threading.excepthook</code>，把它接进统一的异常上报。</p>
+
+<p>线程池的情况稍好但坑同样存在：异常被存进 <code>Future</code>，<strong>只在你调用 <code>result()</code> 或 <code>exception()</code> 时才抛出来</strong>。写成 <code>for u in urls: ex.submit(fetch, u)</code> 而从不取结果，所有失败就都留在无人查看的 Future 里。这也是「任务显示全部完成，数据却少了一半」这类问题的典型来源。</p>
+
+<table>
+<tr><th>症状</th><th>真实原因</th><th>处理</th></tr>
+<tr><td>作业报成功，数据少了一部分</td><td>submit 后从不取 <code>result()</code>，异常留在 Future 里</td><td>逐个 <code>result()</code>，或用 <code>as_completed</code> 显式处理</td></tr>
+<tr><td>进程跑完不退出</td><td>非守护线程还活着，或 <code>q.join()</code> 等不到 <code>task_done()</code></td><td>用停止信号让线程自己退，检查 task_done 配对</td></tr>
+<tr><td>退出时文件只写了一半</td><td>收尾任务跑在守护线程里，被直接掐断</td><td>改成非守护线程 + Event 停止信号</td></tr>
+<tr><td>CPU 0%、请求全超时</td><td>死锁，或持锁时卡在无超时的 I/O 上</td><td><code>faulthandler.dump_traceback</code> 看所有线程栈</td></tr>
+<tr><td>并发调大后反而变慢</td><td>下游连接池打穿 / 触发限流 / 重试放大</td><td>按上表四个来源重新反推并发度</td></tr>
+</table>
+
+<h3>和线程相关的版本行为</h3>
+
+<table>
+<tr><th>版本</th><th>变化</th><th>对写法的影响</th></tr>
+<tr><td>3.8</td><td>引入 <code>threading.excepthook</code>；线程池默认 <code>max_workers</code> 改为 <code>min(32, cpu+4)</code></td><td>可以统一上报线程内异常；不传 <code>max_workers</code> 时上限是 32</td></tr>
+<tr><td>3.9</td><td>线程池工作线程不再是守护线程；<code>shutdown(cancel_futures=True)</code></td><td>解释器退出会等工作线程；可以丢弃尚未开始的任务</td></tr>
+<tr><td>3.9</td><td><code>asyncio.to_thread()</code></td><td>异步代码里调同步阻塞库的标准做法</td></tr>
+<tr><td>3.13</td><td><code>Queue.shutdown()</code>；自由线程构建作为实验特性</td><td>停止协议不必再靠哨兵值</td></tr>
+<tr><td>3.14</td><td>自由线程转为正式支持（PEP 779）；标准库加入 <code>concurrent.interpreters</code></td><td>纯 Python 的 CPU 密集任务开始有线程方案</td></tr>
+</table>
+
+<p class="data-asof"><strong>数据截止 2026-06</strong> · 上表只列与线程直接相关的变化，具体行为以对应版本的 <code>whatsnew</code> 文档为准。自由线程仍需单独安装构建（如 <code>3.14t</code>），不是默认解释器。</p>
+
+<div class="intuition-box">
+<p>线程的三个代价里，内存和切换都能算出来，最贵的其实是第三个：它把「顺序执行」这个你赖以调试的前提拿走了。凡是能用不共享的结构解决的问题，就别用锁去解决。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、落地判据：并发度、超时、重试</h2>
+
+<p>把前面几节收成可执行的规则。第一件事是<strong>并发度必须算出来而不是拍出来</strong>，算法就是拿三个上限取最小值再留余量。</p>
+
+<div class="formula">C ≈ min( 连接池上限, 允许 QPS × 单次耗时, 内存允许的线程数 ) × 0.8</div>
+
+<p>中间那一项是 Little 定律的直接应用：系统里同时在途的请求数等于吞吐乘以时延。上游给你 50 QPS、单次 0.42 秒，那么同时在途的请求超过 21 个就一定会触发限流，跟你本地开了多少线程无关。乘 0.8 是给抖动留的余量——下游变慢时单次耗时会涨，可用并发会自动缩小，卡在上限上运行等于把自己放在悬崖边。</p>
+
+<p>第二件事是<strong>超时必须显式设置，而且要分开设</strong>。大多数网络库的默认值是「永不超时」，配上线程就是一个隐蔽的资源泄漏：一条线程挂在一个永远不会返回的连接上，池子里少一个工位，而监控上完全看不出来——它不算失败，只是永远没结束。</p>
+
+<pre><code># 连接超时和读取超时分开：建连慢通常是网络问题，读取慢是服务端慢
+resp = session.get(url, timeout=(3.05, 10))
+
+# 线程池侧再设一道整体超时，防止个别任务拖垮整批
+for f in as_completed(futs, timeout=120):
+    ...</code></pre>
+
+<p>要注意这两道超时的性质不同。<code>timeout=(3.05, 10)</code> 是真的会让底层 socket 放弃并抛异常；而 <code>as_completed(timeout=120)</code> 只是让<strong>等待方</strong>抛 <code>TimeoutError</code>，后台任务依然在跑——因为线程无法被强制终止。整体超时能保护调用方的时延，不能回收资源，资源只能靠第一道超时回收。</p>
+
+<p>第三件事是<strong>重试必须幂等</strong>。并发环境下重试的破坏力被放大：一次超时可能是请求根本没到达，也可能是对方已经处理完只是响应丢了，客户端分不清这两种情况。对读操作无所谓，对「扣款」「发消息」「创建订单」这类写操作，不带幂等键的重试就是在制造重复数据。除此之外还要加指数退避与随机抖动，否则大量客户端会在同一时刻一起重试，把刚缓过来的下游再打趴一次。</p>
+
+<h3>线程、进程、异步怎么选</h3>
+
+<table>
+<tr><th>维度</th><th>多线程</th><th>多进程</th><th>asyncio</th></tr>
+<tr><td>适用场景</td><td>I/O 密集，并发在几十到几百</td><td>CPU 密集，需要吃满多核</td><td>纯 I/O，并发上千甚至上万</td></tr>
+<tr><td>单位开销</td><td>每线程 MB 级栈 + 内核调度</td><td>每进程独立解释器，几十 MB 起</td><td>每协程 KB 级，同进程内</td></tr>
+<tr><td>切换成本</td><td>内核上下文切换，微秒量级</td><td>最贵，还要跨进程传数据</td><td>用户态跳转，最便宜</td></tr>
+<tr><td>能否真并行算</td><td>默认构建受 GIL 限制</td><td>能，各进程各一把 GIL</td><td>不能，单线程事件循环</td></tr>
+<tr><td>改造成本</td><td>最低，同步库直接拿来用</td><td>参数和返回值必须可 pickle</td><td>全链路都要 async 库</td></tr>
+<tr><td>典型翻车方式</td><td>竞态、死锁、异常被静默吞掉</td><td>序列化失败、子进程僵死</td><td>一个同步调用阻塞整个事件循环</td></tr>
+</table>
+
+<p>并发上千是线程和异步的分水岭，原因是成本结构不同。一万条线程意味着一万份栈和一万个内核调度实体，而一万个协程只是一万个对象，切换不进内核。反过来，如果你的依赖里有任何一个只提供同步接口的库（不少数据库驱动、SDK 都是这样），异步方案就得给它包一层线程池（<code>asyncio.to_thread</code>，Python 3.9 起），此时线程并没有消失，只是退到了幕后。</p>
+
+<p>还有一个常被忽略的判据是<strong>团队能读懂哪一种</strong>。线程的调试工具链（<code>faulthandler</code>、线程栈转储）成熟且直观，异步的报错栈对新手更难读。在并发量只有几十的场景里，为了理论上更省的资源把整条链路改成异步，通常不划算。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>默认用 <code>ThreadPoolExecutor</code>，显式传 <code>max_workers</code>，值从下游上限反推</li>
+<li>每个网络调用都设超时，连接超时和读取超时分开设</li>
+<li>用 <code>with</code> 管理锁，临界区里只放改状态的那几行</li>
+<li>用 <code>queue.Queue(maxsize=N)</code> 交接数据，靠有界队列拿到背压</li>
+<li>停止靠 <code>Event</code> + 协作式检查，用 <code>stop.wait(n)</code> 代替 <code>sleep(n)</code></li>
+<li>每个 Future 都取一次 <code>result()</code>，让异常有地方可去</li>
+<li>客户端连接池大小和线程池大小对齐，两边一起调</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>为了「再快一点」把并发翻十倍，却不看下游连接池和限流配额</li>
+<li>在持有锁的时候发起 HTTP 请求或数据库查询</li>
+<li>用守护线程跑有收尾动作的任务（写文件、提交事务、flush 日志）</li>
+<li>用无界 <code>Queue</code>，或在循环里无限 <code>submit</code> 却不分批</li>
+<li>共享一个 <code>requests.Session</code> 却不调整 <code>pool_maxsize</code></li>
+<li>用 <code>ctypes</code> 注入异常来「杀死」线程</li>
+<li>对非幂等的写操作做重试，还不加退避和抖动</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>并发度是一个从外部约束反推出来的数，不是一个可以调大的旋钮。你能调的其实只有一件事：让每次调用更快返回——超时、退避、缓存，都是在做这件事。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>CPython 有 GIL，那多线程到底还有没有用？</summary>
+<div class="answer">有用，而且对绝大多数后端场景是首选。GIL 约束的是「同时执行 Python 字节码」，而线程在等待网络、磁盘、子进程返回时会主动释放 GIL——这段时间正好让别的线程去跑。由于 I/O 密集任务里等待占了九成以上，重叠这部分等待的收益和有没有 GIL 无关。GIL 真正封死的是「多条线程同时跑纯 Python 计算」，那种场景该用多进程。另外要注意大量 C 扩展（NumPy、压缩、加解密、数据库驱动）在耗时操作期间也会释放 GIL，所以「调用了 C 库就等于 CPU 密集、线程没用」这个推论是错的，得实测。</div>
+</details>
+
+<details>
+<summary>max_workers 到底该设多少？有没有公式？</summary>
+<div class="answer">有一个可用的起点：取「下游连接池上限」「允许 QPS × 单次耗时」「内存允许的线程数」三者的最小值，再乘 0.8 留余量。中间那一项是 Little 定律，比如上游限 50 QPS、单次 0.42 秒，同时在途请求超过 21 个就必然触发限流。关键在于这三项都来自你之外的约束，所以正确顺序是先去查下游的配额和连接池配置，而不是先猜一个数再压测。不传 <code>max_workers</code> 时，Python 3.8 起 <code>ThreadPoolExecutor</code> 的默认值是 <code>min(32, os.cpu_count() + 4)</code>——这个默认值是为通用场景取的，对有严格限流的下游通常偏大。</div>
+</details>
+
+<details>
+<summary>submit + as_completed 和 map 该选哪个？</summary>
+<div class="answer">看失败的处理粒度。如果一万条任务里坏了三条，你希望记录下来继续跑完，用 <code>submit</code> + <code>as_completed</code>：结果按完成顺序回来，每个 <code>result()</code> 单独 try，一个失败不影响其他；代价是要自己用 dict 把 Future 映射回原始输入。如果语义是「一条失败整批作废」，<code>map</code> 更合适，它在迭代到失败项时抛出异常并中断循环，正好是你要的行为。还有一个次要差别：<code>map</code> 严格按输入顺序返回结果，第一个任务最慢时后面的结果只能在内存里等着，处理不能提前开始。要边出边处理就只能用 <code>as_completed</code>。</div>
+</details>
+
+<details>
+<summary>能强行杀掉一条线程吗？任务卡住了怎么办？</summary>
+<div class="answer">不能，标准库没有提供这个能力，而且是有意的：强杀会让线程停在任意指令上，锁可能还持有着、文件写了一半、事务不明不白，之后整个进程都不可信。唯一的办法是协作式取消——用 <code>threading.Event</code> 发停止信号，被取消方在循环里检查并主动退出。这意味着取消的响应速度取决于检查点密度，一条卡在没有超时的 socket 读取上的线程，设多少次标志都不会醒，所以给每个阻塞调用设超时本身就是取消能力的一部分。网上用 <code>ctypes</code> 注入异常的技巧不要用于生产，它在线程阻塞于系统调用时完全无效，「有时能用」比「完全不能用」更危险。如果确实需要硬性终止，把那部分任务放进子进程，进程是可以被杀的。</div>
+</details>
+
+<details>
+<summary>线程里抛了异常，为什么程序还显示成功？</summary>
+<div class="answer">这是线程最常见的静默失败。裸线程里未捕获的异常交给 <code>threading.excepthook</code>（Python 3.8 起）处理，默认只把回溯打到 stderr，线程就此结束，主线程收不到任何通知，进程退出码依然是 0。线程池的情况类似但更隐蔽：异常被存进 <code>Future</code>，只有你调用 <code>result()</code> 或 <code>exception()</code> 时才会抛出来，所以 <code>for u in urls: ex.submit(fetch, u)</code> 这种从不取结果的写法会让所有失败石沉大海。两条对策：每个 Future 都取一次结果（或用 <code>as_completed</code> 遍历），以及在服务启动时替换 <code>threading.excepthook</code>，把线程内异常接进统一上报。</div>
+</details>
+
+<details>
+<summary>多个线程共用一个 requests.Session 可以吗？</summary>
+<div class="answer">官方文档明确说 <code>Session</code> 不保证线程安全，所以稳妥做法是用 <code>threading.local</code> 给每条线程一个独立 Session。如果确实要共享，至少必须把连接池调大：<code>HTTPAdapter</code> 的默认 <code>pool_maxsize</code> 是每个主机 10 条连接，线程数超过它之后，多出来的连接用完即弃，日志会刷 connection pool is full 的警告，每个请求都要重新握手，性能不升反降。规则是<strong>连接池大小和线程池大小对齐</strong>，两边一起调。注意共享 Session 还有一个副作用：cookie jar 是共享的，多线程互相污染会话状态，这类 bug 很难查。</div>
+</details>
+
+<details>
+<summary>把线程池换成进程池会不会更快？</summary>
+<div class="answer">对 I/O 密集任务通常更慢。进程池的每个任务都要把参数序列化（pickle）传过去、再把结果序列化传回来，对于「发个 HTTP 请求拿一段 JSON」这种任务，序列化开销可能和任务本身一个量级，而它要解决的 GIL 问题在这里根本不存在——线程等待时本来就不占 GIL。进程池的适用场景是响应回来之后的处理很重：大量正则解析、图像处理、纯 Python 的数值计算。这时可以分工，用线程池负责拉数据、进程池负责算，两级串起来。另外还有两个额外成本：不可 pickle 的对象（打开的连接、lambda、闭包）传不过去，以及子进程崩溃后需要自己处理回收，见 <a href="py_memory_gc.html">PY23 · 内存模型与垃圾回收</a>里关于进程内存不共享的讨论。</div>
+</details>
+
+<details>
+<summary>什么时候该从线程切到 asyncio？</summary>
+<div class="answer">三个信号同时出现时：并发目标上千、任务是纯 I/O、依赖链上的库都有异步版本。前两条是收益，第三条是可行性，而第三条通常才是决定性的——只要链路里有一个只提供同步接口的库，一次调用就会阻塞整个事件循环，让所有协程一起卡住，这种问题比线程的竞态更难定位。折中方案是保持异步主干、用 <code>asyncio.to_thread()</code>（Python 3.9 起）把那几个同步调用扔进线程池，此时线程并没有消失，只是退到了幕后。如果并发只有几十上百，线程池完全够用，为了理论上更省的资源把整条链路改成异步通常不划算，还要额外承担团队读不懂异步报错栈的成本。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

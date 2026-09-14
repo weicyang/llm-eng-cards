@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY16 · 继承、MRO 与组合优先</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、继承做了什么，代价是什么</a>
+<a href="#s2">二、MRO：为什么需要一个算法</a>
+<a href="#s3">三、super() 走的是 MRO 下一个</a>
+<a href="#s4">四、多继承的真实故障模式</a>
+<a href="#s5">五、混入类与抽象基类</a>
+<a href="#s6">六、组合优先：什么时候不该继承</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY16 · 继承、MRO 与组合优先</h1>
+<p class="subtitle">属性查找链与脆弱基类 / C3 线性化与 __mro__ / super() 的真实语义 / 多继承四类故障 / 混入与抽象基类 / 委托与组合重构</p>
+
+<div class="intuition-box">
+<p>继承不是「把父类的代码搬过来」，而是「把自己挂到一条属性查找链上」。你省下的是重复代码，付出的是这条链上任何一环变动都会波及自己。搞清楚链是怎么排的、谁在链上走、走到哪一步停，继承的绝大部分玄学就消失了。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、继承做了什么，以及它真正的代价</h2>
+
+<p>写下 <code>class Dog(Animal)</code> 的那一刻，Python 做的事情比大多数人想象的少：它没有把 <code>Animal</code> 里的任何代码复制到 <code>Dog</code> 里，只是在 <code>Dog</code> 这个类对象上记了一笔「我的上游是 <code>Animal</code>」，并据此算出一条有序的类列表。之后每次访问 <code>dog.speak</code>，解释器都沿着这条链现场查找。</p>
+
+<p>这个「现场查找」是理解继承一切行为的起点。它意味着基类后来新增的方法，子类立刻就有；也意味着基类改掉一个内部方法的语义，所有子类在下一次调用时立刻跟着变——没有编译期检查，没有提示。</p>
+
+<h3>一次属性访问走过的路</h3>
+
+<div class="arch-diagram">  d = Dog("旺财");   d.speak()
+  ─────────────────────────────────────────────────────────
+  第 1 站  实例自己的 __dict__
+           {'name': '旺财'}                没有 speak → 继续
+              │
+              ▼
+  第 2 站  沿 type(d).__mro__ 逐个翻类的 __dict__
+           Dog.__dict__      {'__init__', 'fetch'}     没有 → 继续
+           Animal.__dict__   {'speak', 'describe'}     命中 ✔
+           object.__dict__   {...}                     轮不到
+              │
+              ▼
+  第 3 站  命中的是函数对象 → 触发描述符协议 → 绑定成方法 → 调用
+              │
+              ▼
+  全链未命中 → 最后才调 __getattr__（若定义了）
+              → 仍然没有 → AttributeError: 'Dog' object has no attribute 'speak'
+
+  关键：查的是「类的 __dict__」，不是「父类的源码」。
+        基类今天加一个方法，昨天写的子类今天就拥有它。</div>
+
+<p>这条链解释了一个常被误解的现象：子类「覆盖」父类方法，本质上不是替换，而是<strong>抢先命中</strong>。父类的那份实现还在原地，只是查找时先撞上了子类的版本，所以你随时可以用 <code>Animal.speak(self)</code> 把它请回来。</p>
+
+<div class="intuition-box">
+<p>继承没有复制任何代码，它只是给你排了一条查找队列。子类覆盖父类方法，不是把父类的删掉，而是站到了队伍前面。</p>
+</div>
+
+<h3>脆弱基类：耦合强度被严重低估</h3>
+
+<p><span class="term">脆弱基类问题</span>指的是：基类的一处内部改动，在不修改任何子类代码的前提下，导致子类行为出错。它之所以危险，是因为破坏发生在「基类作者认为自己只改了私事」的时候。</p>
+
+<p>典型形态是这样的：基类的 <code>add()</code> 原本独立实现，<code>add_many()</code> 循环调用 <code>add()</code>；某个子类为了统计条数，覆盖了 <code>add()</code> 加了一行计数。某天基类作者出于性能考虑，把 <code>add_many()</code> 改成直接批量写入、不再走 <code>add()</code>——基类的对外行为完全没变，测试全绿，但那个子类的计数从此少算了一大半，而且不会报任何错。</p>
+
+<p>问题的根源在于：子类依赖的不是基类的<strong>接口</strong>，而是基类的<strong>内部调用顺序</strong>。而这个顺序从来没有被写进任何契约里。这正是继承比函数调用、比组合都更强的耦合——它把实现细节也一并暴露给了下游。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某内部 SDK 的基类 <code>BaseClient</code> 把 <code>request()</code> 的重试逻辑从「<code>send()</code> 内部循环 3 次」改成「外层 <code>request()</code> 循环 3 次」，基类自身的 12 个单测全部通过。但下游有 7 个子类覆盖了 <code>send()</code> 来打点，改动后这些打点从每次请求上报 3 条变成 1 条，监控面板上的失败率曲线整体下移到原来的三分之一，两周后才因为一次真实故障没告警而被发现。基类的公开行为一个字没改，坏掉的是没人写下来的内部调用约定。</p>
+</div>
+
+<h3>接口继承与实现继承：把两种动机分开</h3>
+
+<p><span class="term">接口继承</span>是为了多态——让一族类对外呈现同一组方法，调用方可以互换使用而不必知道具体是哪一个。<span class="term">实现继承</span>是为了复用——我想白拿基类那几个写好的方法，至于要不要对外可替换，无所谓。</p>
+
+<p>这两种动机在语法上长得一模一样，代价却完全不同。接口继承的耦合停在方法签名上，基类通常很薄甚至是抽象的；实现继承的耦合深入到基类的内部流程，脆弱基类问题几乎全部出自这一侧。</p>
+
+<table>
+<tr><th>维度</th><th>接口继承（为了多态）</th><th>实现继承（为了复用）</th></tr>
+<tr><td>目的</td><td>让一族类可互换，调用方写一套代码</td><td>白拿基类已经写好的方法体</td></tr>
+<tr><td>基类形态</td><td>薄，常是抽象基类或只有签名</td><td>厚，装着大量具体逻辑</td></tr>
+<tr><td>耦合面</td><td>方法名与签名</td><td>方法名、签名、<strong>加上内部调用顺序</strong></td></tr>
+<tr><td>基类改动的影响</td><td>只有改签名才会波及子类</td><td>改任何内部实现都可能波及子类</td></tr>
+<tr><td>更合适的替代</td><td>抽象基类 / 协议（通常无需替代）</td><td><strong>组合 + 委托</strong>，见第六节</td></tr>
+<tr><td>层级深度经验值</td><td>2 层足够，很少需要第 3 层</td><td>超过 2 层基本就是信号灯</td></tr>
+</table>
+
+<p>实用的自查是一句话：<strong>我需要「把子类对象传给一个接受基类的函数」吗？</strong>需要，那是接口继承，继承合理；不需要，只是想少写几行，那就该考虑把基类当成一个成员对象持有起来。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、MRO：方法解析顺序为什么需要一个算法</h2>
+
+<p>单继承时，查找顺序是显而易见的：自己、父亲、祖父、一路到 <code>object</code>，一条直线，没有任何歧义。需要算法，是因为多继承把这条直线变成了图。</p>
+
+<p>一旦两个父类共享同一个祖先，就形成了<span class="term">菱形继承</span>——从子类出发有两条不同的路径能走到同一个基类。这时「先深度还是先广度」两种朴素规则都会翻车：纯深度优先会让共同基类排在另一个直接父类前面，导致本该生效的覆盖被祖先抢走；纯广度优先又会让父子顺序错位。</p>
+
+<h3>C3 线性化给出唯一确定的顺序</h3>
+
+<p>Python 从 2.3 起使用 <span class="term">C3 线性化</span>——一种把继承图压平成一条有序列表的算法，它保证结果同时满足两条约束：子类一定排在它的所有父类之前；父类之间的相对顺序，和 <code>class</code> 语句里书写的顺序一致。满足这两条的顺序如果存在，C3 给出的就是唯一的那一个。</p>
+
+<div class="arch-diagram">        object                    class Base:      pass
+          ▲                       class A(Base):   pass
+          │                       class B(Base):   pass
+         Base                     class D(A, B):   pass
+        ▲    ▲
+        │    │        两条路径都能从 D 走到 Base：
+        A    B        D → A → Base   和   D → B → Base
+        ▲    ▲        「深度优先」会排成 D, A, Base, B —— B 被 Base 挡在后面，
+        └─┬──┘         B 里对 Base 方法的覆盖会失效，这显然不对。
+          D
+
+  C3 线性化结果
+     D.__mro__ = (D, A, B, Base, object)
+                  ↑  └─┬─┘  └──┬───┘
+                 自己  声明顺序  共同基类只出现一次，
+                                且排在所有派生类之后
+
+  两条不可违背的约束（单调性）
+     ① 子类一定排在它的每一个父类之前
+     ② 父类之间的相对顺序 = class D(A, B) 里书写的顺序</div>
+
+<p>可以直接查看这条链，不需要任何推理：</p>
+
+<pre><code>&gt;&gt;&gt; class Base: pass
+&gt;&gt;&gt; class A(Base): pass
+&gt;&gt;&gt; class B(Base): pass
+&gt;&gt;&gt; class D(A, B): pass
+&gt;&gt;&gt; [c.__name__ for c in D.__mro__]
+['D', 'A', 'B', 'Base', 'object']</code></pre>
+
+<div class="intuition-box">
+<p>遇到任何「为什么调到的是这个方法」的疑惑，别猜，把 <code>Klass.__mro__</code> 打出来。答案永远是这条列表里从左往右第一个拥有该属性的类，没有例外。</p>
+</div>
+
+<h3>声明顺序直接决定行为</h3>
+
+<table>
+<tr><th>继承声明</th><th>MRO（省略 object）</th><th>说明</th></tr>
+<tr><td><code>class C(A)</code></td><td>C, A, Base</td><td>单继承，一条直线，无需算法</td></tr>
+<tr><td><code>class D(A, B)</code></td><td>D, <strong>A, B</strong>, Base</td><td>菱形；A 先于 B，与书写顺序一致</td></tr>
+<tr><td><code>class D(B, A)</code></td><td>D, <strong>B, A</strong>, Base</td><td>只换了书写顺序，同名方法的胜者就换人</td></tr>
+<tr><td><code>class S(LogMixin, Service)</code></td><td>S, LogMixin, Service</td><td>混入写在左边才能拦在主类前面，这是惯例的由来</td></tr>
+<tr><td><code>class S(Service, LogMixin)</code></td><td>S, Service, LogMixin</td><td>混入排在主类后面，多半拦不到任何调用，等于白写</td></tr>
+<tr><td><code>class D(Base, A)</code></td><td><strong>TypeError</strong></td><td>要求 Base 先于 A，又要求子类 A 先于父类 Base，矛盾</td></tr>
+</table>
+
+<p>最后一行值得留意：不满足单调性的继承声明，错误发生在<strong>类定义时</strong>，也就是模块被 import 的那一刻，而不是等到你去实例化。报错原文是 <code>TypeError: Cannot create a consistent method resolution order (MRO) for bases Base, A</code>。它看起来吓人，但其实是最友好的一类失败——在任何业务代码跑起来之前就把矛盾摆了出来。</p>
+
+<p>第四行和第五行的对比则是混入类惯例的全部理由：混入必须写在左侧。这一点在第五节还会再展开。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、<code>super()</code> 不是「调用父类」，而是「沿 MRO 走下一个」</h2>
+
+<p>这是整张卡片里最值得改掉的一个认知。大量教程把 <code>super()</code> 解释成「调用父类的方法」，在单继承下这个说法恰好总是对的，于是没人发现它错了——直到写出第一个多继承。</p>
+
+<p><code>super()</code> 的真实语义是：在<strong>实例的 MRO</strong> 里，找到「当前这个类」所在的位置，然后取它<strong>右边第一个</strong>拥有目标属性的类。注意两个限定词：用的是实例的 MRO（不是当前类自己的），起点是当前类（不是实例的类）。因此 <code>super()</code> 完全可能跳到一个和当前类毫无父子关系的兄弟类上。</p>
+
+<div class="arch-diagram">  class Base / class A(Base) / class B(Base) / class D(A, B)
+  d = D();  d.setup()
+  ─────────────────────────────────────────────────────────────
+  实例 d 的 MRO（super() 就在这条链上向右走一格）
+
+     D  ──►  A  ──►  B  ──►  Base  ──►  object
+     │       │       │        │
+     │       │       │        └─ Base.setup 里的 super() → object
+     │       │       └─ B.setup 里的 super() → Base
+     │       └─ A.setup 里的 super() → B      ←★ A 和 B 没有父子关系！
+     └─ D.setup 里的 super() → A
+
+  写 A 的时候，你根本不知道 B 存在；
+  运行时 A 里的 super().setup() 却跳进了 B。
+  这不是意外，这就是 super() 的定义：取「实例 MRO 中当前类的下一个」。
+
+  反过来，如果 A 直接写死 Base.setup(self) 而不是 super()：
+     D ──► A ──╳──► Base          B 被整条跳过，静默失效</div>
+
+<p>上图最后两行是<span class="term">协作式多继承</span>的核心——多个类各自只调 <code>super()</code>、不指名道姓调具体父类，于是它们能被任意组合、按 MRO 串成一条完整的责任链。任何一个环节改成硬编码的 <code>Base.setup(self)</code>，链条就在那里断开，后面的类被静默跳过。</p>
+
+<pre><code>class A(Base):
+    def setup(self, **kw):
+        print("A 先做点事")
+        super().setup(**kw)   # 不是「调父类」，是「交给 MRO 里的下一个」</code></pre>
+
+<div class="intuition-box">
+<p>把 <code>super()</code> 读成「下一个」，不要读成「父类」。它是一根接力棒，交给谁由实例的 MRO 决定，而 MRO 由最终那个子类的继承声明决定——写基类的人无权也无需知道。</p>
+</div>
+
+<h3>无参 <code>super()</code> 的隐形依赖</h3>
+
+<p>Python 3 允许直接写 <code>super()</code>，省掉 Python 2 时代的 <code>super(A, self)</code>。这不是语法糖那么简单：编译器在检测到函数体里出现 <code>super</code> 或 <code>__class__</code> 时，会给这个函数悄悄加一个名为 <code>__class__</code> 的闭包单元，指向它所在的类。<code>super()</code> 正是靠读这个单元 + 读第一个位置参数（也就是 <code>self</code>）来还原出那两个隐含参数的。</p>
+
+<p>这个机制带来三条实际约束：函数必须<strong>定义在类体内部</strong>，事后用赋值挂上去的函数里 <code>super()</code> 会抛 <code>RuntimeError: super(): __class__ cell not found</code>；函数必须有第一个位置参数可取；在 <code>staticmethod</code> 里没有 <code>self</code> 可用，只能退回带参形式。</p>
+
+<table>
+<tr><th>写法</th><th>能否使用</th><th>场景与注意</th></tr>
+<tr><td><code>super().m()</code>（类体内）</td><td>可以</td><td>默认写法，编译期注入 <code>__class__</code></td></tr>
+<tr><td><code>super(A, self).m()</code></td><td>可以</td><td>需要显式指定起点时用；写错类名会跳错位置</td></tr>
+<tr><td><code>super(type(self), self)</code></td><td><strong>不要用</strong></td><td>子类调用时起点是子类自己，直接无限递归</td></tr>
+<tr><td>类外函数里 <code>super()</code></td><td>不可以</td><td><code>RuntimeError: super(): __class__ cell not found</code></td></tr>
+<tr><td><code>staticmethod</code> 里 <code>super()</code></td><td>不可以</td><td>没有 <code>self</code>，只能用带参形式或改成 <code>classmethod</code></td></tr>
+<tr><td><code>Base.m(self)</code> 硬编码</td><td>能跑但危险</td><td>绕过 MRO，协作链在此断开，后续类被跳过</td></tr>
+</table>
+
+<p>第三行那个陷阱很值得记一下。<code>super(type(self), self)</code> 看起来聪明，实际是死循环制造器：当 <code>C</code> 继承 <code>A</code>、你在 <code>A</code> 里这样写，实例是 <code>C</code> 时 <code>type(self)</code> 得到 <code>C</code>，于是 <code>super()</code> 的起点永远从 <code>C</code> 之后算起，又落回 <code>A</code>，直到 <code>RecursionError</code>。</p>
+</div>
+
+<div class="section" id="s4">
+<h2>四、多继承的真实故障模式</h2>
+
+<p>多继承本身不是错误，出事的几乎总是同一批具体问题。把它们逐个拆开，比记住「不要用多继承」这条口号有用得多——因为混入类、<code>collections.abc</code>、大量框架的基类体系全都建立在多继承之上，你躲不开。</p>
+
+<p>所有故障归结起来只有一个共同点：<strong>协作链的某一环没有履行契约</strong>。契约有两条，一是把参数原样往后传，二是一定要调 <code>super()</code>。</p>
+
+<div class="arch-diagram">  理想状态：每个类都 super() 转发，链条走到底
+     D.__init__ ──► A.__init__ ──► B.__init__ ──► Base.__init__
+        ✔             ✔              ✔               ✔   全部执行
+
+  故障一：A 忘了调 super()
+     D.__init__ ──► A.__init__ ──╳
+                                  B.__init__     从未执行（无任何提示）
+                                  Base.__init__  从未执行（无任何提示）
+     症状：B 本该设置的 self.conn 不存在
+           AttributeError 出现在几十行之外的某个方法里
+
+  故障二：A 的签名不接受 **kwargs
+     D(name='x', level=3) ──► A.__init__(self, name)
+                                 level 无处安放 ✗
+     症状：TypeError: __init__() got an unexpected keyword argument 'level'
+           或更糟 —— 参数被 A 悄悄吞掉，B 拿到的是默认值
+
+  故障三：同名方法按 MRO 静默取胜
+     D(A, B) 里 A.save 和 B.save 都存在 → 永远只有 A.save 被调用
+     症状：没有报错、没有警告，只是 B 的那份逻辑从来没跑过</div>
+
+<h3>四类故障速查</h3>
+
+<table>
+<tr><th>故障</th><th>症状</th><th>成因</th><th>定位方式</th></tr>
+<tr><td>协作链断裂</td><td>后面类的属性缺失，<code>AttributeError</code> 出现在远处</td><td>中间某个类没调 <code>super().__init__()</code></td><td>在每个 <code>__init__</code> 首行打印 <code>type(self).__name__</code> 与当前类名，对照 MRO 看少了谁</td></tr>
+<tr><td>签名不兼容</td><td><code>TypeError: got an unexpected keyword argument</code></td><td>链上某类的 <code>__init__</code> 不接受也不转发 <code>**kwargs</code></td><td>逐个类检查签名；协作链上的类一律写成 <code>def __init__(self, *, a=None, **kw)</code></td></tr>
+<tr><td>同名方法静默取胜</td><td>改了 B 的代码毫无效果，像是没生效</td><td>MRO 里 A 排在 B 前面，B 的同名方法永不执行</td><td><code>Klass.__mro__</code> 加 <code>Klass.save.__qualname__</code>，直接看胜者是谁</td></tr>
+<tr><td>基类初始化执行 0 次或 2 次</td><td>计数器被清零、连接被建两遍、资源泄漏</td><td>菱形里混用 <code>super()</code> 和硬编码 <code>Base.__init__(self)</code></td><td>在 <code>Base.__init__</code> 里加计数打印，跑一次实例化看总次数</td></tr>
+</table>
+
+<p>第四行的「执行两次」尤其隐蔽。菱形结构下，如果 A 和 B 都老老实实用 <code>super()</code>，<code>Base.__init__</code> 恰好执行一次——这正是 C3 让共同基类只出现一次的价值。但只要有一个类改成 <code>Base.__init__(self)</code> 硬调，Base 就会被执行两次：一次来自硬调，一次来自另一条 <code>super()</code> 路径。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某数据同步服务的 <code>Worker</code> 同时继承 <code>RetryMixin</code> 和 <code>MetricsMixin</code>，两者最终都指向 <code>BaseWorker</code>。上线后监控显示每处理 1 万条记录，连接池被创建 2 次、活跃连接数稳定在配置上限的 2 倍（40 而非 20），数据库侧连接数告警连续触发 6 天。排查发现 <code>MetricsMixin.__init__</code> 里写的是 <code>BaseWorker.__init__(self)</code> 而不是 <code>super().__init__()</code>，导致 <code>BaseWorker</code> 被初始化两遍。改成 <code>super()</code> 后连接数回到 20，改动量 1 行。整个过程没有任何异常抛出，靠的是连接数曲线才发现。</p>
+</div>
+
+<div class="intuition-box">
+<p>多继承的 bug 有个共同特征：不报错。少执行一个类、多执行一遍基类、调错同名方法，Python 都会安静地继续跑下去。所以这里的排查工具不是 try/except，而是 <code>__mro__</code> 和打印。</p>
+</div>
+
+<h3>把协作契约写进签名</h3>
+
+<p>要让一条链可靠，参与其中的每个类的 <code>__init__</code> 都应该满足：只用关键字参数取走自己关心的那几个，其余原封不动通过 <code>**kwargs</code> 往后传，并且无条件调用 <code>super().__init__(**kwargs)</code>。位置参数是协作式多继承的天敌——它们的含义取决于顺序，一旦经过多层传递就无法保证对齐。</p>
+
+<p>这条规矩的收益是：类的组合顺序可以随便换，链条都不会断。代价是签名略啰嗦，以及必须约定「链条的终点」是 <code>object</code>——它的 <code>__init__</code> 不接受任何多余参数，所以没被消费完的关键字参数会在这里暴露成 <code>TypeError</code>，这反而是好事，等于一个自动的拼写检查。</p>
+</div>
+
+<div class="section" id="s5">
+<h2>五、混入类与抽象基类：让多继承变得可控</h2>
+
+<p>既然多继承的风险集中在「实现继承 + 状态 + 断链」上，那么让它安全的思路就很直接：约束参与者。<span class="term">混入</span>（Mixin）是一类专门为多继承设计的小类——它只提供行为、不提供身份，不打算被单独实例化。</p>
+
+<h3>混入类的五条纪律</h3>
+
+<p>这些不是语法规定，Python 不会强制检查，但它们几乎是经验的最大公约数：</p>
+
+<ul>
+<li><strong>不自己实例化</strong>：<code>LoggingMixin()</code> 是没有意义的，它缺少主类提供的那部分。</li>
+<li><strong>不持有状态</strong>：不定义 <code>__init__</code>，不设自己的属性。一旦持有状态，就要参与初始化链，风险立刻回来了。</li>
+<li><strong>名字带 <code>Mixin</code> 后缀</strong>：读代码的人一眼就知道 <code>class S(LogMixin, Service)</code> 里谁是主体、谁是配料。</li>
+<li><strong>只加行为，不改语义</strong>：混入应该是可加可减的，去掉它类还能正常工作，只是少了那项能力。</li>
+<li><strong>必须 <code>super()</code> 转发</strong>：混入天生站在 MRO 中间，不转发就等于把后面的人全挡住。</li>
+</ul>
+
+<p>第五条配合第二节那张表的第四、五行看：混入必须写在主类<strong>左边</strong>才能拦在主类前面，写在右边就轮不到它先执行，等于白加。</p>
+
+<div class="intuition-box">
+<p>混入是调料不是主菜。判断一个类该不该做成混入，问一句：单独实例化它有意义吗？有意义的话它是个正经的类，该用组合；没意义的话它才适合当混入。</p>
+</div>
+
+<h3>抽象基类：把「没实现完」提前到实例化时报错</h3>
+
+<p><span class="term">抽象基类</span>是一种不能被直接实例化、并且可以要求子类必须实现某些方法的类，标准库入口是 <code>abc.ABC</code> 加 <code>@abstractmethod</code>。它解决的是这样一个问题：基类里写了 <code>raise NotImplementedError</code> 的占位方法，子类忘了实现，程序照样能启动、照样能跑很久，直到某条分支第一次碰到它才炸——可能是深夜的定时任务。</p>
+
+<pre><code>from abc import ABC, abstractmethod
+
+class Exporter(ABC):
+    @abstractmethod
+    def write(self, rows): ...
+
+class CsvExporter(Exporter):      # 忘了实现 write
+    pass
+
+CsvExporter()   # TypeError: Can't instantiate abstract class CsvExporter</code></pre>
+
+<p>差别在于失败的<strong>时机</strong>和<strong>信息量</strong>：<code>NotImplementedError</code> 发生在第一次调用那个方法时，可能是上线三天后；抽象基类的 <code>TypeError</code> 发生在构造对象时，而且报错里直接列出了缺哪几个方法。对于在进程启动阶段就会创建对象的服务，这等于把故障从生产环境挪到了启动阶段。</p>
+
+<p><code>collections.abc</code> 把这套机制用到了极致：继承 <code>Sequence</code> 只需要自己实现 <code>__getitem__</code> 和 <code>__len__</code>，就能白得 <code>__contains__</code>、<code>__iter__</code>、<code>__reversed__</code>、<code>index</code>、<code>count</code> 这一批派生方法；继承 <code>MutableMapping</code> 实现 5 个必需方法，能补齐 <code>get</code>、<code>pop</code>、<code>setdefault</code>、<code>update</code>、<code>items</code> 等十来个。这是接口继承最理想的形态——基类很薄，给的是能力而不是纠缠。</p>
+
+<h3>三种「约定接口」的方式怎么选</h3>
+
+<table>
+<tr><th>维度</th><th>混入类 Mixin</th><th>抽象基类 ABC</th><th>协议式鸭子类型</th></tr>
+<tr><td>解决什么</td><td>给多个不相关的类复用同一段行为</td><td>强制子类实现指定方法，并自动补齐派生方法</td><td>只要对象有那几个方法就能用，不管它是谁</td></tr>
+<tr><td>要不要继承</td><td>要（写在左侧）</td><td>要</td><td>不要</td></tr>
+<tr><td>约束时机</td><td>无约束，全靠自觉</td><td><strong>实例化时</strong> <code>TypeError</code></td><td>运行到那一行才 <code>AttributeError</code>；静态检查可提前</td></tr>
+<tr><td>能否事后适配第三方类</td><td>不能（要改继承声明）</td><td>可以，用 <code>register()</code> 虚拟注册</td><td>天然可以，完全不需要改对方</td></tr>
+<tr><td>对 <code>isinstance</code></td><td>成立</td><td>成立</td><td>需配合 <code>runtime_checkable</code> 才成立</td></tr>
+<tr><td>主要代价</td><td>参与 MRO，顺序错了就失效</td><td>耦合到继承体系，跨库使用别扭</td><td>接口没有单一出处，重构时容易漏改</td></tr>
+<tr><td>适合</td><td>同一代码库内的横切能力：日志、缓存、序列化</td><td>自己定义的一族可替换实现：各种 Exporter / Backend</td><td>跨库、跨团队，或对象不在你掌控之下</td></tr>
+</table>
+
+<p>选择标准可以浓缩成一句：<strong>能不能改对方的类定义</strong>。能改且想要强制约束，用抽象基类；能改且只是想加块能力，用混入；不能改，或者对象来自别的库，用鸭子类型加静态检查。</p>
+</div>
+
+<div class="section" id="s6">
+<h2>六、组合优先：什么时候不该用继承</h2>
+
+<p>「优先使用组合而非继承」这条建议流传很广，但「是一个（is-a）还是有一个（has-a）」的判据在真实代码里经常失灵——因为几乎任何东西都能被论证成「是一个」。<code>CachedUserService</code> 是一个 <code>UserService</code> 吗？听起来是。但它真正需要的只是转发调用加一层缓存，继承在这里只带来了耦合。</p>
+
+<p>更可操作的判据是另一句：<strong>我是否需要把这个对象传给一个只认基类的地方</strong>。需要，说明多态替换是刚需，继承有理由；不需要，那你要的只是复用，组合能以更低的代价做到。</p>
+
+<h3>委托：把「继承」换成「持有」</h3>
+
+<p><span class="term">委托</span>是组合的落地方式——把被复用的对象存成实例属性，需要它的能力时转发过去。多写的那一行转发，换来的是耦合面从「基类的全部内部实现」缩小到「你实际调用的那两三个方法」。</p>
+
+<div class="arch-diagram">  继承版（紧耦合）                      组合 + 委托版（松耦合）
+  ┌──────────────────────┐            ┌──────────────────────────┐
+  │ ReportService        │            │ ReportService            │
+  │   (HttpClient)       │            │   _client: HttpClient    │ ← 存为属性
+  │                      │            │                          │
+  │ 继承来的公开方法：     │            │ 对外暴露的方法：          │
+  │   get  post  put     │            │   fetch(day)             │
+  │   delete  session    │            │                          │
+  │   retry  close  ...  │            │ 内部只用到 1 个：         │
+  │   共 12 个全部外泄    │            │   self._client.get(...)  │
+  └──────────────────────┘            └──────────────────────────┘
+         ▲                                        ▲
+         │ 基类改 retry 的行为                      │ 基类改 retry 的行为
+         │ → 可能波及本类                          │ → 只要 get 签名不变就无感
+         │ 测试要造一个真的 HttpClient              │ 测试传入一个假的 client 即可
+         │                                        │
+    耦合面 = 基类全部实现                     耦合面 = get() 一个方法</div>
+
+<p>右侧还顺带解决了一个实际痛点：可测试性。继承版里 <code>HttpClient</code> 的行为焊死在对象内部，要测 <code>fetch</code> 就得想办法拦住真实网络请求；委托版只需要在构造时传一个有 <code>get</code> 方法的假对象进去，测试用例可以是三行。</p>
+
+<h3>一次具体的重构</h3>
+
+<p>重构前，继承的唯一理由是「想用 <code>self.get()</code>」——典型的实现继承：</p>
+
+<pre><code>class ReportService(HttpClient):          # 继承只为了白拿 get()
+    def fetch(self, day):
+        return self.get(f"/report/{day}")</code></pre>
+
+<p>重构后，依赖从继承关系变成了构造参数：</p>
+
+<pre><code>class ReportService:
+    def __init__(self, client):           # 依赖显式传入
+        self._client = client
+    def fetch(self, day):
+        return self._client.get(f"/report/{day}")</code></pre>
+
+<p>多出来的是两行样板，换回来的是三件事：<code>ReportService</code> 不再暴露 <code>post</code>/<code>close</code> 等 11 个与报表无关的方法；<code>HttpClient</code> 改任何内部实现都不会波及它；测试时传一个三行的假 client 就能跑。</p>
+
+<h3>什么时候该停下来换成组合</h3>
+
+<table>
+<tr><th>信号</th><th>为什么是问题</th><th>换成什么</th></tr>
+<tr><td>继承层级超过 3 层</td><td>改一个方法要翻 4 个文件才知道最终跑的是哪份</td><td>把中间层拆成可注入的组件</td></tr>
+<tr><td>「为了复用一个方法而继承」</td><td>顺带继承了基类的全部实现与内部约定</td><td>持有对象并委托，或干脆抽成普通函数</td></tr>
+<tr><td>子类覆盖后抛 <code>NotImplementedError</code></td><td>说明子类不满足基类契约，is-a 关系本来就不成立</td><td>拆开继承，各自实现</td></tr>
+<tr><td>子类需要「删掉」基类的某个能力</td><td>继承只能加不能减，只能靠覆盖成报错来假装删除</td><td>组合，只暴露需要的那部分</td></tr>
+<tr><td>基类里出现 <code>if isinstance(self, 某子类)</code></td><td>基类反过来依赖子类，方向彻底反了</td><td>把分支逻辑下放到子类，或改成策略对象</td></tr>
+<tr><td>只是想共享几个常量或工具函数</td><td>继承的代价远高于收益</td><td>模块级常量、独立函数，见 PY08</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>继承是把两个类的命运绑在一起，组合只是让它们互相认识。默认选认识，只有在确实需要「可以互相替换」的时候，才升级为绑定。</p>
+</div>
+
+<h3>这一组八张卡连起来看</h3>
+
+<p>「语言核心与数据模型」这一组到这里收尾。把八张卡按依赖顺序串起来，会看到一条相当清晰的主线：<strong>对象模型</strong>（PY09）说清楚了变量是名字、对象有身份，这是一切的地基；<strong>拷贝语义</strong>（PY10）在这个地基上回答「复制到底复制了什么」；<strong>协议与接口</strong>（PY11）把关注点从「它是什么类型」转向「它能做什么」；<strong>迭代器与生成器</strong>（PY12）是协议思想最成功的一次落地；<strong>推导式</strong>（PY13）把这套迭代能力变成日常写法；<strong>闭包与装饰器</strong>（PY14）展示了函数作为一等对象能被怎样包装；<strong>特殊方法</strong>（PY15）让自定义类接入所有内置语法；而<strong>继承与 MRO</strong>（本卡）回答的是这些类之间如何组织。</p>
+
+<p>如果要从这一组里只带走一件事，那就是：<strong>Python 的设计重心一直在「对象能响应什么」而不是「对象属于哪个类」</strong>。协议、鸭子类型、特殊方法都在往这个方向推，继承只是组织代码的诸多手段之一，而且是耦合最强的那一个。往前回看，<a href="py_functions_basics.html">PY05 · 函数入门与参数传递</a> 里的参数传递语义、<a href="py_modules_packages.html">PY08 · 模块、包与项目结构</a> 里的模块边界，其实一直在讲同一件事——先把边界划清楚，再决定要不要把它们绑在一起。往后走，异常体系（PY18）和类型注解（PY22）会分别从错误契约和静态契约两个角度，继续补上「怎么把约定写下来」这个话题。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>继承前先问「我需要多态替换吗」，只为复用就改用组合</li>
+<li>行为搞不清顺序时，先打印 <code>Klass.__mro__</code>，不要靠猜</li>
+<li>协作链上的类一律 <code>def __init__(self, **kwargs)</code> 并转发 <code>super().__init__(**kwargs)</code></li>
+<li>混入写在主类左边，带 <code>Mixin</code> 后缀，不持有状态</li>
+<li>一族可替换的实现用 <code>abc.ABC</code> + <code>@abstractmethod</code>，把失败提前到实例化时</li>
+<li>把依赖作为构造参数传入，测试时就能替换成假对象</li>
+<li>继承层级控制在 2 层以内，第 3 层出现时先停下来评估</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在协作链里硬编码 <code>Base.__init__(self)</code>——会跳过兄弟类或让基类跑两遍</li>
+<li>把 <code>super()</code> 理解成「父类」，多继承下它常常跳到兄弟类</li>
+<li>用 <code>super(type(self), self)</code>，子类调用时会无限递归</li>
+<li>让混入类持有自己的状态或被单独实例化</li>
+<li>在基类里写 <code>if isinstance(self, 子类)</code>，依赖方向反了</li>
+<li>为了共享几个常量或工具函数而建继承体系</li>
+<li>靠 <code>raise NotImplementedError</code> 当契约，它要等调用到才报</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>为什么 super() 调用的不是我写在 class 括号里的第一个父类？</summary>
+<div class="answer">因为 <code>super()</code> 查的是<strong>实例</strong>的 MRO，不是当前类自己的父类列表。它先在 <code>type(self).__mro__</code> 里定位「当前这个类」的位置，然后取右边第一个拥有目标属性的类。单继承时这两者恰好总是同一个，所以大家习惯把它读成「父类」。多继承时就不同了：假设 <code>D(A, B)</code> 且 A、B 都继承自 Base，实例是 D 时，A 里的 <code>super()</code> 会跳到 B——而 A 和 B 之间没有任何父子关系。这正是协作式多继承的机制，它让写 A 的人不需要知道 B 的存在。想确认具体跳到哪，打印 <code>type(self).__mro__</code> 即可，答案完全由这条列表决定。</div>
+</details>
+
+<details>
+<summary>类定义时报 TypeError: Cannot create a consistent method resolution order 怎么办？</summary>
+<div class="answer">这说明你的继承声明违反了 C3 线性化的单调性约束，最常见的形式是 <code>class D(Base, A)</code> 而 A 本身又继承自 Base。这里有两条矛盾的要求：写在前面的 Base 要排在 A 之前，而子类必须排在父类之前又要求 A 排在 Base 之前，无解。修复方法通常只是调换书写顺序，把更派生的类写在前面，即 <code>class D(A, Base)</code>——而且这时 Base 往往是多余的，因为 A 已经带着它了。这个错误发生在类定义时，也就是模块被 import 的那一刻，属于最容易修的一类问题。如果继承关系复杂到难以推断，把每个父类的 <code>__mro__</code> 都打出来对照看，矛盾点一般一眼可见。</div>
+</details>
+
+<details>
+<summary>多继承里基类的 __init__ 被执行了两次，问题出在哪？</summary>
+<div class="answer">几乎可以肯定是菱形结构里混用了 <code>super()</code> 和硬编码的父类调用。C3 线性化保证共同基类在 MRO 里只出现一次，所以只要链上每个类都用 <code>super().__init__()</code>，基类恰好执行一次。但如果其中一个类写成 <code>Base.__init__(self)</code>，这次硬调之外，另一条 <code>super()</code> 路径仍然会再走到 Base，于是执行了两遍。后果通常不报错但很难受：连接建两份、计数器被重置、缓存被清空。定位方式是在 <code>Base.__init__</code> 里临时加一行打印，实例化一次数一下条数，然后逐个检查链上的类有没有硬编码调用。修复就是全部改成 <code>super()</code>，通常只要改一行。</div>
+</details>
+
+<details>
+<summary>混入类为什么一定要写在主类左边？</summary>
+<div class="answer">因为 MRO 里父类的相对顺序和你在 <code>class</code> 语句里书写的顺序一致，而方法查找是从左往右取第一个命中的。<code>class S(LogMixin, Service)</code> 的 MRO 是 S、LogMixin、Service，混入的方法排在主类前面，所以调用 <code>s.save()</code> 时先进 LogMixin，它打完日志再 <code>super().save()</code> 转给 Service，拦截生效。反过来写 <code>class S(Service, LogMixin)</code>，MRO 变成 S、Service、LogMixin，Service 的 <code>save</code> 先命中；除非 Service 自己也调 <code>super()</code>，否则 LogMixin 永远轮不到，等于白加了一个混入。这也是为什么混入必须转发 <code>super()</code>——它天生站在链条中间，不转发就把后面的人全挡住了。</div>
+</details>
+
+<details>
+<summary>抽象基类和直接 raise NotImplementedError 有什么实质区别？</summary>
+<div class="answer">区别在失败的时机和信息量。<code>raise NotImplementedError</code> 只是一个普通方法体，子类忘了实现时对象照样能创建、程序照样能启动，直到某条代码路径第一次调到它才抛异常——这个「第一次」可能是上线三天后的一个低频分支，也可能是凌晨的定时任务。用 <code>abc.ABC</code> 加 <code>@abstractmethod</code> 则是在<strong>实例化</strong>那一刻就抛 <code>TypeError</code>，并且报错信息里直接列出缺少哪几个抽象方法。对于在进程启动阶段构造对象的服务来说，这等于把一个生产事故变成了一次启动失败。额外的好处是抽象基类可以顺带提供派生方法的默认实现，<code>collections.abc</code> 就是靠这个让你实现两个方法白得五六个。</div>
+</details>
+
+<details>
+<summary>什么情况下多继承是合理的，不该一刀切禁止？</summary>
+<div class="answer">当参与方都是无状态、只加行为、并且规范转发 <code>super()</code> 的混入时，多继承是安全且好用的。标准库和主流框架大量依赖它：<code>collections.abc</code> 的各种基类、Web 框架里的权限校验与序列化混入、测试框架里的 fixture 混入，都是这个形态。判断标准是看有没有「状态参与」：一旦某个参与类定义了自己的 <code>__init__</code> 并持有属性，它就进入了协作初始化链，签名兼容和调用顺序的风险立刻回来。所以实践中的分界线不是「能不能用多继承」，而是「多继承的参与者里最多只能有一个持有状态的主类，其余都必须是纯行为混入」。守住这条线，第四节那四类故障基本都不会发生。</div>
+</details>
+
+<details>
+<summary>组合到处写转发方法很啰嗦，有没有折中办法？</summary>
+<div class="answer">先确认啰嗦是不是真的。委托版通常只需要转发你<strong>实际用到</strong>的那两三个方法，而不是基类的全部；如果你发现要转发十几个，那往往说明这里确实需要的是接口继承而不是组合。真的需要大面积转发时，可以用 <code>__getattr__</code> 做兜底转发——属性在自己身上找不到时自动转给内部对象，代价是丢掉了显式性，IDE 补全和静态检查都看不到这些方法，拼写错误也不会被发现。另一种更克制的做法是用 <code>functools.wraps</code> 或一小段循环批量生成转发方法，把范围限制在明确列出的方法名上。折中的原则是：宁可多写几行显式转发，也不要用动态转发把接口变成黑盒——组合的核心价值就是把耦合面收窄到看得见的那几个方法。</div>
+</details>
+
+<details>
+<summary>怎么快速判断一个方法调用最终会落到哪个类上？</summary>
+<div class="answer">两行代码解决，不需要推理。先 <code>[c.__name__ for c in Klass.__mro__]</code> 看完整的解析顺序，再 <code>Klass.方法名.__qualname__</code> 直接看这个名字实际绑定到了哪个类的函数上——<code>__qualname__</code> 会给出类似 <code>'B.save'</code> 的限定名，胜者是谁一目了然。如果想看整条链上有几个类定义了同名方法，可以遍历 MRO 检查每个类的 <code>__dict__</code> 里有没有这个键。这套方法对排查「我明明改了 B 的代码却毫无效果」特别有效，那种情况通常就是 A 在 MRO 里排在 B 前面，B 的实现从来没被执行过。养成先查再改的习惯，多继承里的大部分玄学都能在一分钟内定性。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

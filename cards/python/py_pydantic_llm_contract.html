@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY53 · 用 Pydantic 约束大模型输出</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、模型输出是不可信输入</a>
+<a href="#s2">二、把契约写成模型</a>
+<a href="#s3">三、校验失败要能定位到字段</a>
+<a href="#s4">四、把错误喂回模型</a>
+<a href="#s5">五、宽严的边界在哪</a>
+<a href="#s6">六、性能、版本与工程纪律</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY53 · 用 Pydantic 约束大模型输出</h1>
+<p class="subtitle">模型输出是不可信输入 / 一份定义同时是校验器与格式说明 / 错误要能定位到字段路径 / 修复循环的三条纪律 / 宽严边界与兜底取值</p>
+
+<div class="intuition-box">
+<p>把大模型返回的那段文本，当成一个陌生人通过公网 POST 过来的请求体。你不会拿那种请求体直接去写数据库，也就不该拿模型输出直接去写数据库。差别只在于：请求体坏了会立刻报错，模型输出坏了往往能一路滑到很远的地方才暴露。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、模型输出为什么必须当成不可信输入</h2>
+
+<p>大模型生成的是<strong>概率上最可能的下一段文本</strong>，不是一个数据结构。即使你在提示词里把格式写得再清楚，即使九成九的调用都乖乖返回了合法 JSON，剩下那一小部分仍然会以各种方式坏掉——而且坏的方式每次都不太一样。</p>
+
+<p>这件事和「模型够不够强」关系没有想象中大。换更强的模型能把坏输出的比例从 2% 压到 0.3%，但压不到 0。只要你的流程每天跑几万次，0.3% 就是几百条。所以问题从来不是「怎么让它别出错」，而是<strong>出错的那几百条应该在哪里被拦下来</strong>。</p>
+
+<h3>典型的坏法有哪几种</h3>
+
+<table>
+<tr><th>坏输出形态</th><th>一个具体例子</th><th>不校验会怎样</th></tr>
+<tr><td>外包一层解释文字</td><td>JSON 前面多一句「好的，以下是抽取结果：」，或裹了一层代码块围栏</td><td>解析阶段直接抛异常——这反而是最容易发现的一类</td></tr>
+<tr><td>字段名漂移</td><td>约定 <code>amount</code>，返回 <code>Amount</code> 或 <code>amount_value</code></td><td>按键取值拿到 <code>None</code>，下游当成「没抽到」，静默丢数据</td></tr>
+<tr><td>枚举取值超纲</td><td>约定三选一，模型自己发明了第四个取值</td><td>分支逻辑落进 <code>else</code>，统计口径悄悄变形</td></tr>
+<tr><td>数字变字符串</td><td>约定 <code>12.5</code>，返回 <code>"12.5 万元"</code></td><td>入库到文本列不报错，做聚合时被当成 0</td></tr>
+<tr><td>嵌套层级缺失</td><td>约定 <code>{"items": [...]}</code>，返回顶层直接是数组</td><td>遍历时类型错误，或者把一条误当成多条</td></tr>
+<tr><td>凭空多出字段</td><td>模型自作主张补了一个你没要的字段</td><td>多数代码会忽略，但写进宽表会污染表结构</td></tr>
+</table>
+
+<p>注意这张表的第二列和第三列的错位：<strong>越是显眼的坏法，危害越小</strong>。解析就失败的那一类当场就炸了，你马上知道；而字段名漂移和数字变字符串这两类，是能顺利通过 <code>json.loads</code> 的合法 JSON，它们会安静地往下走。</p>
+
+<div class="intuition-box">
+<p>危险的不是「模型返回了垃圾」，而是「模型返回了<em>看起来像好数据的</em>垃圾」。前者会自己暴露，后者需要你主动去拦。</p>
+</div>
+
+<h3>不拦在门口，就等于把不确定性扩散到整个系统</h3>
+
+<p>一段没校验过的数据每往下游走一层，它可能出错的假设就多一层，而排查时要回溯的路径也长一层。这就是<span class="term">校验边界</span>这个概念的全部理由：在数据<strong>进入系统的那一刻</strong>做一次判定，通过就是可信的，不通过就当场拒绝。</p>
+
+<div class="arch-diagram">  模型返回的那段文本
+        │
+        ├─── 路径 A：直接用 ── 把不确定性扩散出去
+        │       │
+        │       ▼
+        │   json.loads 侥幸成功 → 入库 → 日报 → 对外接口 → 财务对账
+        │       │        │        │        │         │
+        │       └── 坏值可能在这五层里的任意一层才暴露
+        │           离产生点越远，定位成本越高，且可能根本不暴露
+        │
+        └─── 路径 B：进门就校验 ── 把不确定性关在门口
+                │
+                ▼
+          契约模型校验一次
+          ├─ 通过 → 下游所有代码都拿到已知形状的数据，不再重复判空
+          └─ 失败 → 明确知道：哪个字段、期望什么、实际收到什么
+                    可重试 / 可降级 / 可告警，但绝不静默往下走</div>
+
+<p>路径 B 的附带好处常被低估：一旦入口处做了校验，下游那些 <code>if x is not None and isinstance(x, float)</code> 的防御式代码就全都可以删掉。校验集中在一处，代码总量反而变少。这个论点在 <a href="py_dataclasses.html">PY21</a> 里已经作为选型结论讲过——本卡要展开的是具体怎么做。</p>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>一条合同信息抽取流水线，日均处理约 6.5 万条记录，模型输出经 <code>json.loads</code> 后直接写入数据库。某次对提示词做了一处措辞微调（把「返回金额」改成了「返回合同金额」），模型开始在 <code>amount</code> 这个数值字段上<strong>偶发</strong>返回带单位的字符串，如 <code>"12.5 万元"</code>，比例约 <strong>0.7%</strong>。入库列是宽松的文本类型，写入不报错；下游统计任务把无法转数字的值当 0 处理，同样不报错。问题<strong>静默运行了 9 天</strong>，累计影响约 <strong>4100 条</strong>记录。最终不是被任何监控发现的，而是财务做月度对账时发现合同总额对不上，差了 <strong>3.2%</strong>，反查才定位到抽取环节。补上契约校验后的第一周，45.5 万条里拦截了约 <strong>2900 条</strong>（0.64%），其中 <strong>96%</strong> 经一轮修复重试后通过，剩下约 120 条进了人工队列；回溯重跑那 4100 条历史记录另外花了 2 天。真正的教训不是「模型不靠谱」，而是<strong>整条链路上没有任何一个环节有资格说「这个字段是数字」</strong>。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、把契约写成模型</h2>
+
+<p><span class="term">数据契约</span>指的是「这份数据必须长什么样」的一份可执行声明。用 Pydantic 写契约，本质就是写一个类：字段名是类属性，字段类型是类型注解，业务规则用字段约束表达。</p>
+
+<pre><code>from pydantic import BaseModel, Field
+
+class Extracted(BaseModel):
+    amount: float = Field(ge=0, description="合同金额，单位元，不带单位")
+    currency: str = Field(pattern=r"^[A-Z]{3}$")
+    note: str = Field(default="", max_length=200)</code></pre>
+
+<p>这段代码里没有一行是「校验逻辑」，但它已经完整表达了四条规则：金额必须能解析成非负浮点数、币种必须是三位大写字母、备注最长 200 字、备注可以不给。</p>
+
+<h3>为什么它比手写校验强：一份定义，三个用处</h3>
+
+<p>这才是选 Pydantic 而不是手写 <code>if</code> 的根本原因。同一个类定义，同时扮演三个角色，而且三者<strong>永远不会互相跑偏</strong>，因为它们来自同一份源。</p>
+
+<div class="arch-diagram">                     class Extracted(BaseModel)
+                       amount: float = Field(ge=0)
+                                 │
+        ┌────────────────────────┼────────────────────────┐
+        ▼                        ▼                        ▼
+  ① 运行时校验器           ② 给模型看的格式说明       ③ 静态类型信息
+  收到数据时逐字段          从模型导出 JSON Schema     编辑器补全字段名，
+  检查并做必要的转换，      塞进提示词，或直接传给      类型检查器能在改
+  不合规就抛出带路径        供应商的结构化输出参数      契约时把所有受影
+  的结构化错误              （两种用法都常见）          响的代码标出来
+        │                        │                        │
+        └────────────────────────┴────────────────────────┘
+                     改一次字段，三处同时生效
+
+  手写校验做不到这一点，因为那时是三份东西：
+    校验代码  +  提示词里手打的格式描述  +  下游取字段的代码
+  改任意一处，另外两处都会悄悄过期，而且没有任何机制会提醒你</div>
+
+<p>第②点值得展开。模型能把自己导出成一份标准的 <span class="term">JSON Schema</span>——描述数据结构的通用格式。这份 Schema 有两种用法：拼进提示词当作格式说明，或者作为参数交给供应商的结构化输出接口去做解码期约束。后者效果强得多，但不是所有供应商和所有模型都支持，两种方案的取舍与更完整的谱系见 <a href="../llm/structured_output_four_defenses.html">L13 结构化输出的四道防线</a>。</p>
+
+<pre><code>import json
+
+schema = Extracted.model_json_schema()      # 标准 JSON Schema 字典
+prompt = SYSTEM + "\n严格按以下结构输出：\n" + json.dumps(
+    schema, ensure_ascii=False)</code></pre>
+
+<p>顺带一提，<code>Field</code> 里那个 <code>description</code> 会原样进入导出的 Schema。也就是说，<strong>写给同事看的字段注释和写给模型看的字段说明是同一句话</strong>——这是个很小但很实在的收益。</p>
+
+<div class="intuition-box">
+<p>手写校验是在「描述数据」之外<em>额外</em>写一套检查；契约模型是让「描述数据」这件事本身就产生检查。少写的不只是代码，还有三份东西不同步的风险。</p>
+</div>
+
+<h3>各类规则该用什么表达</h3>
+
+<table>
+<tr><th>想表达的规则</th><th>用什么表达</th><th>要注意</th></tr>
+<tr><td>字段是什么类型</td><td>类型注解，如 <code>float</code> / <code>list[Item]</code></td><td>嵌套模型会递归校验，错误路径自带层级</td></tr>
+<tr><td>数值范围</td><td>字段约束 <code>ge</code> / <code>le</code> / <code>gt</code> / <code>lt</code></td><td>会一并写进导出的 Schema，模型也看得到</td></tr>
+<tr><td>字符串长度与格式</td><td><code>min_length</code> / <code>max_length</code> / <code>pattern</code></td><td>v1 里正则参数名是 <code>regex</code>，v2 改成了 <code>pattern</code></td></tr>
+<tr><td>合法取值集合</td><td><code>Enum</code> 子类或 <code>Literal</code> 类型</td><td>枚举的表达力见 <a href="py_enum_protocol.html">PY22</a></td></tr>
+<tr><td>可选与默认值</td><td>类型写成可空，并给默认值</td><td>「字段缺失」与「显式给了 null」是两件事，别混</td></tr>
+<tr><td>单字段的自定义逻辑</td><td>字段级校验器装饰器</td><td>v1 是 <code>@validator</code>，v2 改名为 <code>@field_validator</code></td></tr>
+<tr><td>跨字段的逻辑</td><td>模型级校验器装饰器</td><td>v1 是 <code>@root_validator</code>，v2 改名为 <code>@model_validator</code></td></tr>
+<tr><td>拒绝多余字段</td><td>模型配置项 <code>extra="forbid"</code></td><td>默认行为是<strong>忽略</strong>多余字段，不是报错</td></tr>
+</table>
+
+<p>类型注解在这里不只是给人看的提示，而是真正被执行的约束——这一点和标准库的 <code>dataclass</code> 截然不同，注解与校验的区别在 <a href="py_type_hints.html">PY20</a> 和 <a href="py_dataclasses.html">PY21</a> 里都讲过。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、校验失败要能定位到字段</h2>
+
+<p>「校验失败了」这句话本身没有任何价值。有价值的是「第 3 个条目的 <code>amount</code> 字段期望一个数字，实际收到字符串 <code>'12.5 万元'</code>」。两者的差距，决定了你是花 5 分钟还是花 5 小时。</p>
+
+<h3>结构化的校验错误长什么样</h3>
+
+<p>校验失败时抛出的 <code>ValidationError</code> 不是一句文本，而是一个<strong>可遍历的错误列表</strong>，而且是一次性收集<strong>全部</strong>错误后才抛——不是遇到第一个就返回。列表里每一项都是一个结构化的条目：</p>
+
+<div class="arch-diagram">  errors() 返回的每一项大致长这样（Pydantic v2）
+
+  ┌────────────────────────────────────────────────────────────────┐
+  │ loc    ('items', 2, 'amount')                                  │
+  │          出错位置：第 3 个条目里的 amount 字段（索引从 0 起）    │
+  │ type   'float_parsing'                                         │
+  │          机器可读的错误类别，字符串常量，适合拿来分支            │
+  │ msg    'Input should be a valid number, ...'                   │
+  │          人读的说明，适合放进给模型的修复提示                    │
+  │ input  '12.5 万元'                                             │
+  │          实际收到的值，原样保留                                 │
+  └────────────────────────────────────────────────────────────────┘
+       │                  │                          │
+       ▼                  ▼                          ▼
+  打点用的维度        分流用的依据              喂回模型的证据
+  items.*.amount     格式类还是内容类          「你给的是这个，
+  能看出是哪个       决定要不要重试             但要求是那样」
+  字段长期不稳定</div>
+
+<p>注意 <code>loc</code> 的形态：它是一个<strong>序列</strong>而不是字符串，嵌套模型和列表索引会一层层拼进去。把它连成 <code>items.2.amount</code> 这样的点分路径只是一行代码，但这一步做与不做，决定了你的日志能不能被聚合。</p>
+
+<table>
+<tr><th>维度</th><th>手写 if 校验</th><th>结构化校验错误</th></tr>
+<tr><td>哪个字段出错</td><td>混在错误文本里，只能靠人读</td><td>独立字段，可直接当监控维度用</td></tr>
+<tr><td>嵌套与列表定位</td><td>几乎写不出来，写出来也难维护</td><td>路径自带层级和索引</td></tr>
+<tr><td>一次报几个错</td><td>通常第一个就 return 了</td><td>一次收集全部，一轮就能全修</td></tr>
+<tr><td>能否机器分类</td><td>不能，只有一句自由文本</td><td>能，有稳定的错误类别标识</td></tr>
+<tr><td>实际收到了什么</td><td>要自己记得拼进消息里</td><td>自带，不会忘</td></tr>
+<tr><td>够不够喂回模型</td><td>信息通常不足</td><td>位置、期望、实际三要素齐全</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>只记「校验失败」，你得到的是一条曲线；记下字段路径，你得到的是一张可以下钻的表。前者只能告诉你「最近变差了」，后者能告诉你「是 amount 这一个字段变差了」。</p>
+</div>
+
+<h3>把字段路径记进日志和指标</h3>
+
+<p>这是本节最容易被跳过、但回报最高的一步。只打一个「校验失败总数」的计数器，你永远分不清两种完全不同的状况：<strong>某一个字段长期小比例不稳定</strong>（说明该字段的提示词描述有歧义，改提示词就能解决），还是<strong>整体格式突然崩掉</strong>（说明模型版本变了或提示词被改坏了，得回滚）。这两件事的应对方式完全相反，而总数曲线对它们的反应长得一模一样。</p>
+
+<pre><code>try:
+    data = Extracted.model_validate_json(raw_text)
+except ValidationError as e:
+    for err in e.errors():
+        path = ".".join(str(p) for p in err["loc"])
+        log.warning("contract_reject", field=path,
+                    kind=err["type"], got=repr(err["input"])[:80])</code></pre>
+
+<p>把 <code>field</code> 和 <code>kind</code> 作为结构化日志的字段而不是拼进消息文本，才能在日志系统里按字段聚合——这套写法的完整理由在 <a href="py_logging_observability.html">PY43</a> 里。<code>got</code> 记得截断：模型偶尔会返回几千字的东西，原样打进日志会把采集链路撑爆。另外，校验失败属于<strong>预期内</strong>的失败，不该用崩溃级别的日志，异常分层的取舍见 <a href="py_exception_design.html">PY24</a>。</p>
+</div>
+
+<div class="section" id="s4">
+<h2>四、把错误喂回模型</h2>
+
+<p>拦住坏输出只是止损，真正能把可用率拉上去的是下一步：<strong>把校验错误翻译成给模型的修正指令，让它自己改</strong>。上一节那三个信息——出错在哪、期望什么、实际给了什么——正好就是修复提示需要的全部内容。</p>
+
+<h3>修复循环的形状</h3>
+
+<div class="arch-diagram">  ┌── 第 n 轮 ────────────────────────────────────────────────────┐
+  │  输入 = 任务提示词 + 契约的结构描述                             │
+  │         n ≥ 2 时再追加三样：                                   │
+  │           · 上一轮的原始输出（原样贴回去，别自己改写）           │
+  │           · 哪些字段不合规（错误路径 + 说明）                   │
+  │           · 那些字段期望什么                                   │
+  └────────────────────────────┬──────────────────────────────────┘
+                               ▼
+                        模型返回文本
+                               ▼
+              预处理：去代码块围栏、大小写归一、同义词映射
+                               ▼
+                          契约校验
+                  ┌────────────┴────────────┐
+                通过                       失败
+                  │                          │
+                  ▼                     是格式错误吗
+             交给下游               ┌────────┴────────┐
+                                   是                否
+                                    │                 │
+                          n 未到上限就再来一轮    内容错误：重试只会
+                          （上限通常 2，最多 3）   得到同样的结果
+                                    │                 │
+                                 到上限              ▼
+                                    └────────► 人工队列 / 降级 + 告警</div>
+
+<p>实践里这个循环的收敛速度往往出人意料：<strong>绝大多数格式问题一轮就修好了</strong>。原因不难理解——模型本来就知道正确格式该怎么写，它只是这一次没写对；你把具体错在哪指出来之后，这就变成了一个比原任务简单得多的改写任务。</p>
+
+<div class="intuition-box">
+<p>修复提示的关键不是措辞，而是<strong>具体</strong>。「格式不对，请重新输出」基本等于重掷一次骰子；「字段 items.2.amount 需要数字，你给的是 '12.5 万元'」几乎一次就能修好。你手里已经有了这份具体信息，别浪费。</p>
+</div>
+
+<pre><code>def repair_prompt(raw: str, e: ValidationError) -&gt; str:
+    problems = "\n".join(
+        f'- 字段 {".".join(str(p) for p in x["loc"])}：{x["msg"]}，'
+        f'你给的是 {x["input"]!r}'
+        for x in e.errors()
+    )
+    return f"上次输出不合规：\n{raw}\n\n问题：\n{problems}\n只返回修正后的 JSON。"</code></pre>
+
+<h3>三条纪律</h3>
+
+<p><strong>第一，修复次数必须有硬上限。</strong>没有上限的重试循环，在一个模型死活修不好的样本上会一直转下去。这不是理论风险：单条请求的成本乘以无限次，加上批量任务里并发的几十条一起转，能在很短时间里烧掉大量配额。上限设 2（即最多一次修复）通常就够了，因为第二次还修不好的，第三次大概率也修不好。</p>
+
+<p><strong>第二，必须区分<span class="term">格式错误</span>与<span class="term">内容错误</span>。</strong>这是决定「该不该重试」的唯一依据，也是最容易被忽略的一条。</p>
+
+<table>
+<tr><th>对比项</th><th>格式错误</th><th>内容错误</th></tr>
+<tr><td>典型表现</td><td>数字写成带单位的字符串、多包了一层、字段名大小写不对</td><td>金额抽成了另一个数、枚举语义选错、把推测当事实填上</td></tr>
+<tr><td>契约能发现吗</td><td>能，这正是它擅长的</td><td>只能发现「不合法」，发现不了「合法但不正确」</td></tr>
+<tr><td>重试有用吗</td><td>有，指出问题后通常一轮修好</td><td>没用，同样的输入会得到同样的错</td></tr>
+<tr><td>该怎么处理</td><td>走自动修复循环</td><td>人工队列、降级为空结果、或换更强的模型重跑</td></tr>
+<tr><td>该监控什么</td><td>修复率、平均修复轮数</td><td>抽样人工核对的准确率</td></tr>
+</table>
+
+<p>这张表最右列有个必须承认的事实：<strong>契约管不了内容对不对</strong>。一个格式完美、数值却抽错的输出，会毫无阻碍地通过所有校验。所以契约是防线之一而不是全部，它和采样复核、交叉验证之类的手段是互补关系，整体防线的组合策略见 <a href="../llm/structured_output_four_defenses.html">L13 结构化输出的四道防线</a>。</p>
+
+<p><strong>第三，把修复率当成提示词质量的指标。</strong><span class="term">修复率</span>指的是「需要走修复循环才通过的调用占比」。它平时应该是一个很小的、稳定的数——一旦某次提示词调整后它跳了一个台阶，说明这次改动引入了歧义，即使最终结果还是对的，你也在为每一次调用多付一轮 token。把它和上一节的字段维度放在同一张看板上，提示词改坏了当天就能看见，而不是等九天后财务来对账。</p>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>一个批量摘要任务在夜间跑，修复循环写成了 <code>while not valid:</code>，没有上限。当晚有 <strong>37 条</strong>输入里含有大段代码片段，模型持续把代码里的花括号带进输出，格式永远校验不过。这 37 条各自转了平均 <strong>1900 多轮</strong>，四个多小时里消耗掉当月配额的 <strong>六成</strong>，直到早上配额触顶、整条链路 429 才被发现。修复只有两行：加上 <code>for attempt in range(2)</code> 的上限，以及超限后写入人工队列并告警。之后同类输入的表现是——每条多花 1 轮，然后干净利落地进队列。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、宽严的边界在哪</h2>
+
+<p>契约收得太紧和放得太松，是两个方向上等价的错误。<strong>过严</strong>会把本来完全可用的输出拒掉：要求精确枚举 <code>positive</code>，模型给了 <code>正面</code>，语义一模一样，却被判失败，然后白白触发一轮重试。<strong>过松</strong>则是另一回事——所有字段都写成 <code>str</code>，所有字段都有默认值，校验永远通过，那这层契约除了制造一种「我们有校验」的错觉之外什么也没做。</p>
+
+<div class="intuition-box">
+<p>契约的松紧不是一个全局旋钮，是<strong>逐字段</strong>的决定。同一个模型里，主键字段应该严到错一个字符就整条拒绝，摘要字段应该松到只管长度别的不问。</p>
+</div>
+
+<h3>先预处理，再校验，最后才兜底</h3>
+
+<p>关键的认识是：<strong>能自动修正的偏差，根本不该走到校验失败那一步</strong>。代码块围栏、首尾空白、枚举取值的大小写、几个已知的同义词——这些都是确定性的、可以用几行代码抹平的，让模型重试一轮去修它们，既慢又贵还不稳定。</p>
+
+<div class="arch-diagram">  模型返回的原始文本
+        │
+        ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │ 第一层：预处理（确定性的、不需要判断的）                  │
+  │   · 剥掉代码块围栏与首尾空白                              │
+  │   · 枚举字段统一转小写、去空格                            │
+  │   · 已知同义词映射表：正面 → positive，pos → positive     │
+  │   便宜、可测、可回归。能在这层解决的绝不往下推             │
+  └────────────────────────┬────────────────────────────────┘
+                           ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │ 第二层：契约校验（需要判断对错的）                        │
+  │   核心字段从严，描述性字段从宽                            │
+  └────────────────────────┬────────────────────────────────┘
+                           ▼
+  ┌─────────────────────────────────────────────────────────┐
+  │ 第三层：兜底取值（让「不确定」有地方可放）                │
+  │   枚举里留一个 unknown，置信度字段允许低分               │
+  │   不给出口，模型就只能在几个选项里硬猜一个                │
+  └─────────────────────────────────────────────────────────┘</div>
+
+<pre><code>import re
+
+FENCE = re.compile(r"^\s*```(?:json)?|```\s*$")
+ALIAS = {"pos": "positive", "正面": "positive", "neg": "negative"}
+
+text = FENCE.sub("", raw).strip()
+label = ALIAS.get(raw_label.strip().lower(), raw_label)</code></pre>
+
+<p>第三层的<span class="term">兜底取值</span>尤其重要，而且违反直觉。很多人觉得枚举里加一个 <code>unknown</code> 是在给模型偷懒的机会，实际恰恰相反：<strong>不给它表达「我不确定」的出口，它就只能在剩下的选项里挑一个</strong>，于是你得到的是一个格式完美、看起来很确定、实际上是瞎猜的值——这比一个诚实的 <code>unknown</code> 危险得多，因为它不会触发任何后续复核。同样的道理适用于置信度字段：允许低分，并在低分时自动转人工。</p>
+
+<h3>逐字段定松紧</h3>
+
+<table>
+<tr><th>字段性质</th><th>例子</th><th>该多严</th><th>怎么兜底</th></tr>
+<tr><td>主键 / 外部 ID</td><td>合同号、工单号</td><td>最严：正则加长度，错一位就整条拒</td><td>不设兜底，直接进人工</td></tr>
+<tr><td>参与计算的数值</td><td>金额、数量、评分</td><td>严：类型加范围，不接受带单位的字符串</td><td>不设兜底，进人工</td></tr>
+<tr><td>驱动分支的枚举</td><td>意图、情感、优先级</td><td>严格枚举，但前面挂同义词归一</td><td>枚举里显式留一个 <code>unknown</code></td></tr>
+<tr><td>结构性字段</td><td>列表条目、嵌套层数</td><td>中：限住长度上限，防模型无限展开</td><td>超限则截断并记录，不整条拒</td></tr>
+<tr><td>描述性文本</td><td>摘要、理由、备注</td><td>松：只限长度，不管内容</td><td>默认空串</td></tr>
+<tr><td>置信度</td><td>模型自报的把握</td><td>中：限定在 0 到 1 之间</td><td>缺失时按低置信处理，走复核</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>一个工单分类流程把优先级枚举定成了 <code>high / medium / low</code> 三选一，严格匹配，不合规就整条丢弃并计入失败。上线后失败率稳定在 <strong>8.4%</strong>，团队一度以为是模型能力不足，准备换更贵的模型。导出失败样本一看才发现，被拒的值里超过九成是 <code>High</code>、<code>HIGH</code>、<code>紧急</code> 这三种——语义完全正确，只是大小写和语言不同。加了一层七条映射的归一表之后，失败率降到 <strong>0.5%</strong>，换模型的计划直接取消。这个坑的教训是：<strong>在判断「模型不行」之前，先把被拒样本导出来看一眼</strong>，成本几乎为零。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、性能、版本与工程纪律</h2>
+
+<p>校验有开销，而且不小。虽然 v2 把校验核心用 Rust 重写后比 v1 快了很多，但和「直接赋值」相比仍是数量级的差距。结论和 <a href="py_dataclasses.html">PY21</a> 完全一致：<strong>把校验放在系统边界，不要放进内层热路径</strong>。</p>
+
+<p>不过在大模型场景里，这个权衡比普通场景轻松得多——一次模型调用的耗时是百毫秒到数秒量级，校验那点微秒级的开销完全淹没在里面。真正需要留意的只有一种情况：批量处理几十万条历史数据时逐条构造模型。那时正确的做法不是放弃校验，而是<strong>整批校验一次</strong>（用一个包着列表的模型），再把结果转成内层的轻量对象参与计算。</p>
+
+<div class="intuition-box">
+<p>在大模型链路里纠结校验开销，相当于在一趟跨国航班上纠结值机柜台多走的那十步路。校验的成本永远小于一条坏数据流进下游的成本。</p>
+</div>
+
+<h3>v1 与 v2 的差别要写进项目约定</h3>
+
+<p>Pydantic 的 v1 到 v2 是一次大改，方法名几乎全换了一遍。混淆版本是这个库最常见的时间浪费来源：网上很多教程还停留在 v1 写法，抄进 v2 项目会报一堆看不懂的错。凡是涉及这个库的文档、示例、代码评审，<strong>先说清楚是哪个大版本</strong>。</p>
+
+<table>
+<tr><th>做的事</th><th>v1 写法</th><th>v2 写法</th></tr>
+<tr><td>从字典校验</td><td><code>parse_obj()</code></td><td><code>model_validate()</code></td></tr>
+<tr><td>从 JSON 字符串校验</td><td><code>parse_raw()</code></td><td><code>model_validate_json()</code></td></tr>
+<tr><td>导出成字典 / JSON</td><td><code>dict()</code> / <code>json()</code></td><td><code>model_dump()</code> / <code>model_dump_json()</code></td></tr>
+<tr><td>导出 JSON Schema</td><td><code>schema()</code></td><td><code>model_json_schema()</code></td></tr>
+<tr><td>字段校验器</td><td><code>@validator</code></td><td><code>@field_validator</code>（需配 <code>@classmethod</code>）</td></tr>
+<tr><td>跨字段校验器</td><td><code>@root_validator</code></td><td><code>@model_validator</code>（用 <code>mode=</code> 代替 <code>pre=</code>）</td></tr>
+<tr><td>模型配置</td><td>内嵌 <code>class Config</code></td><td><code>model_config = ConfigDict(...)</code></td></tr>
+<tr><td>字符串正则约束</td><td><code>Field(regex=...)</code></td><td><code>Field(pattern=...)</code></td></tr>
+</table>
+
+<p>v1 的那些名字在 v2 里多数还在，只是被标记为废弃——所以抄错了<strong>不一定立刻报错</strong>，可能只是打一条警告。更隐蔽的是配置项改名（比如 <code>orm_mode</code> 变成 <code>from_attributes</code>）：写错的键会安静地待在配置字典里从不被读取，行为不生效也没有任何提示。新项目直接用 v2；老项目迁移时把配置项逐个对着迁移文档核一遍，别只信运行不报错。</p>
+
+<h3>契约要集中管理并纳入版本</h3>
+
+<p>契约模型不该散落在各个调用点，而应当集中在一个模块里。理由是<strong>契约的变更是破坏性变更</strong>：加一个必填字段，所有历史数据都不再合法；改一个枚举取值，所有存量记录的语义都变了。它和数据库表结构是同一类东西，理应享受同样的待遇——改动走评审，变更留记录，必要时给契约本身编个<span class="term">契约版本号</span>，让日志里能看出某条记录是按哪一版契约校验通过的。</p>
+
+<div class="intuition-box">
+<p>契约模型是接口定义，不是工具函数。判断标准很简单：如果改它会让别人的代码或者历史数据出问题，那它就该放在能被看见的地方，而不是藏在某个 handler 文件的中段。</p>
+</div>
+
+<h3>用真实坏输出做回归样本</h3>
+
+<p>最后一条纪律，也是最有杠杆的一条：<strong>为契约写测试，测试样本必须来自线上真实拦截到的坏输出</strong>。这正是第三节要求「把被拒的原始文本存下来」的兑现时刻。</p>
+
+<p>自己构造的坏样本和真实坏样本完全不是一回事。你能想到的无非是「少个字段」「类型不对」；而模型真实的坏法千奇百怪——中文全角引号、末尾多一个逗号、把整个 JSON 又包进一个 <code>result</code> 键里、数字里夹了千分位逗号。这些你坐在工位上想不出来，但线上一周就能攒出几十个。把它们存成 fixture 目录，每次改契约或改提示词都跑一遍，这套<span class="term">回归样本</span>的组织方式见 <a href="py_pytest_engineering.html">PY41</a>。</p>
+
+<pre><code>@pytest.mark.parametrize("sample", load_bad_samples("fixtures/llm_bad/"))
+def test_known_bad_is_rejected(sample):
+    with pytest.raises(ValidationError):
+        Extracted.model_validate_json(sample.raw)
+
+def test_golden_sample_parses():
+    assert Extracted.model_validate_json(GOLDEN).amount == 12.5</code></pre>
+
+<p>这套测试的真正价值在放宽契约的时候才显现：当你为了降低失败率想把某个字段改松，它会立刻告诉你这一改会让哪几个历史坏样本变成「合法」。没有它，放宽契约就是闭着眼睛拆防线。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>模型输出在<strong>进入系统的第一行代码</strong>就过契约，通过之后下游不再重复判空</li>
+<li>校验失败时把<strong>字段路径</strong>和错误类别作为结构化日志字段打点，不是拼进消息文本</li>
+<li>修复重试设硬上限（通常 2 轮），超限走人工队列并告警</li>
+<li>修复提示里带上原始输出、具体字段路径、期望是什么这三样</li>
+<li>确定性的偏差（围栏、大小写、已知同义词）在预处理层抹平，不占重试次数</li>
+<li>枚举留一个 <code>unknown</code> 出口，让模型能表达「不确定」而不是硬猜</li>
+<li>契约模型集中在一个模块，变更按破坏性变更对待</li>
+<li>把线上拦截到的坏输出存成 fixture，当作契约的回归样本</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>把 <code>json.loads</code> 的结果直接写库或直接喂给下游</li>
+<li>只记录「校验失败 +1」，不记是哪个字段——分不清单字段漂移和整体崩盘</li>
+<li>写 <code>while not valid:</code> 这种没有上限的修复循环</li>
+<li>对内容错误反复重试——同样的输入只会得到同样的错</li>
+<li>用「格式不对，请重新输出」这种没有具体信息的修复提示</li>
+<li>所有字段都写成 <code>str</code> 且都给默认值，校验永远通过</li>
+<li>不看被拒样本就断定「模型不行」，直接上更贵的模型</li>
+<li>照抄网上的 v1 写法进 v2 项目，或反过来</li>
+<li>只用手工构造的坏样本做测试，不收集线上真实坏输出</li>
+</ul>
+</div>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>就几个字段，用 json.loads 加几行 if 判断不行吗？非要引一个库？</summary>
+<div class="answer">字段少的时候确实能写，问题在于三件事会随时间变差。第一是嵌套：一旦结构里有列表套对象，手写的定位逻辑会迅速变得难以维护，而你几乎肯定写不出「第 3 个条目的 amount 字段」这种精度的错误信息。第二是三处不同步：校验代码、提示词里手打的格式说明、下游取字段的代码是三份独立的东西，改一处漏两处是必然而不是偶然。第三是错误信息的形态——手写校验给出的是一句自由文本，既不能按字段聚合做监控，也不足以喂回给模型做修复。真正的分水岭不是字段多少，而是你需不需要「按字段打点」和「自动修复循环」这两件事。只要需要其中任何一件，手写方案就撑不住了。</div>
+</details>
+
+<details>
+<summary>把 JSON Schema 塞进提示词，模型就一定会照着输出吗？</summary>
+<div class="answer">不会，这只是提高概率，不是保证。塞进提示词的 Schema 本质上还是文本，模型读了它之后仍然是在做概率生成，没有任何机制强制它遵守。真正能提供强约束的是供应商提供的结构化输出接口——那类接口在解码阶段就限制了可生成的 token，从机制上排除了不合法的输出，但它有代价（不是所有模型都支持、复杂 Schema 可能被降级或拒绝、有时会影响生成质量）。所以现实的做法是两层都要：能用解码期约束就用，同时运行期的契约校验一层都不能省。把提示词里的格式说明当成「引导」而不是「约束」，这个心态摆正了，后面的设计就不会出错。更完整的方案谱系与选型见 <a href="../llm/structured_output_four_defenses.html">L13 结构化输出的四道防线</a>。</div>
+</details>
+
+<details>
+<summary>修复重试的上限到底该设几次？</summary>
+<div class="answer">默认设 2，也就是最多修一次。依据是修复成功率的分布形状：格式错误在第一次修复时的成功率通常很高（本卡第一个复盘里是 96%），而第一次没修好的样本，第二次修好的概率会掉得很厉害——因为它们往往不是格式问题，而是被误判成格式问题的内容问题，或者输入本身有结构性障碍（比如内容里含大段代码、含大量引号）。继续重试只是在为同一个失败反复付费。如果你的业务确实对单条成功率极度敏感，可以放到 3，但同时必须做两件事：给整批任务设一个总的重试预算上限，以及把「用满次数仍失败」的样本单独存下来定期人工看——那批样本通常能直接告诉你提示词该怎么改。</div>
+</details>
+
+<details>
+<summary>校验失败的样本要不要保存？保存什么？</summary>
+<div class="answer">要，而且这是投入产出比最高的一件事。至少保存四样：模型返回的原始文本（原样，不要做任何清洗）、错误列表里的字段路径与错误类别、当次用的提示词版本或哈希、以及模型名与版本。原始文本是回归样本的来源；字段路径与类别用来做聚合分析，看出是哪个字段长期不稳定；提示词版本用来把失败率的跳变对上是哪次改动引入的；模型版本则是为了应对供应商静默更新模型这种情况。存储上注意两点：原始文本要截断（模型偶尔会返回几千字），以及如果内容涉及敏感信息，样本库要和正式数据享受同等的权限与脱敏待遇。</div>
+</details>
+
+<details>
+<summary>v1 和 v2 差别大到什么程度？老项目值得迁吗？</summary>
+<div class="answer">差别很大，方法名基本全换了一遍（见第六节的对照表），配置方式从内嵌类改成了配置字典，校验器装饰器也换了名字和签名。新项目没有任何理由不用 v2。老项目要不要迁，看两点：一是性能——v2 的校验核心是 Rust 实现的，如果你的校验量大，收益是实打实的；二是依赖——生态里的主流库现在基本都以 v2 为准，继续留在 v1 会越来越难升级其他依赖。迁移时最需要小心的不是那些会报错的改动（报错的反而好办，跑一遍就知道），而是<strong>静默失效</strong>的那一类：配置项改名之后，写错的旧键会安静地留在配置字典里永不被读取，行为悄悄地不生效。所以迁移后一定要补一组针对配置行为的测试，别只看「能跑起来」。</div>
+</details>
+
+<details>
+<summary>契约里该不该允许模型多给字段？</summary>
+<div class="answer">分两种情况。如果下游是把整个对象原样落库或者转发出去，应该<strong>禁止</strong>多余字段，因为模型自己发明的字段会污染表结构或对外接口。如果下游只按名字取用固定的几个字段，那么默认的「忽略多余字段」是合理的，还顺带带来一点容错。但无论选哪种，都建议把「出现了多余字段」这件事记一条日志——它通常是一个信号，说明提示词里的格式说明有歧义，或者模型版本变了。需要注意的是默认行为是忽略而不是报错，想要严格模式得在模型配置里显式打开。另外别忘了反向的情况：字段<strong>缺失</strong>和字段<strong>显式给了 null</strong>在语义上是两回事，如果你的业务需要区分，就不能简单地给个默认值了事。</div>
+</details>
+
+<details>
+<summary>批量处理几十万条时，校验会成为瓶颈吗？</summary>
+<div class="answer">在大模型链路里几乎不会。一次模型调用是百毫秒到数秒量级，一次校验是微秒到几十微秒量级，两者差了四五个数量级，校验完全淹没在调用耗时里。会成为瓶颈的是另一种场景：你已经有了几十万条<strong>存量</strong>的模型输出（比如回溯重跑历史数据），在一个循环里逐条构造模型。这时的正确做法不是放弃校验，而是改成整批校验一次——定义一个包着列表的模型，一次校验整批，错误路径自带条目索引，照样能定位到具体是第几条的哪个字段。如果校验之后还要参与大量计算，再把结果转成内层的轻量对象（<code>dataclass</code> 或具名元组），这套分层的理由和边界在 <a href="py_dataclasses.html">PY21</a> 里讲得更细。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

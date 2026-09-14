@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY33 · 同步与异步的互通</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、问题的形状：四个方向</a>
+<a href="#s2">二、异步里调同步阻塞代码</a>
+<a href="#s3">三、异步里调 CPU 密集计算</a>
+<a href="#s4">四、同步里调异步代码</a>
+<a href="#s5">五、陷阱清单</a>
+<a href="#s6">六、架构判据：边界划在哪</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY33 · 同步与异步的互通</h1>
+<p class="subtitle">四种互通方向 / to_thread 与默认线程池 / CPU 密集只能进程池 / 跨线程提交协程 / 异步边界划在哪</p>
+
+<div class="intuition-box">
+<p>没有哪个真实项目是纯异步的。生态里一半的库还是同步写法，所以你写的每个异步服务本质上都是一座桥：桥搭对了，阻塞被挪到别的线程，事件循环继续转；桥搭错了，整个循环停在那一行上，而且平时一点都不报错。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、问题的形状：真实项目永远是混合的</h2>
+
+<p>「学会 async/await」和「能在生产里用好 asyncio」之间隔着的不是语法，而是这件事：<strong>你几乎不可能让整条调用链都是异步的</strong>。异步的 Web 框架里要调一个只有同步版本的数据库驱动；一个同步的批处理脚本里要复用团队已经写好的异步客户端；一个要被两种调用方同时使用的内部库，得同时给出两套入口。这些都不是设计失误，而是生态的现状。</p>
+
+<p>把这类问题笼统叫做「异步兼容」没有用，因为<span class="term">互通</span>其实有四个方向，每个方向的正确解法完全不同，混用错了就是事故。先把方向认出来，后面五节才有落点。</p>
+
+<div class="arch-diagram">  四个方向，四套解法
+  ────────────────────────────────────────────────────────────
+
+  ① 异步 ─► 同步阻塞 I/O          ② 异步 ─► 同步纯计算
+     async def handler():            async def handler():
+         rows = db.query(...)            score = heavy_math(x)
+              ↑ 阻塞在 socket 上              ↑ 阻塞在 CPU 上
+     解法：挪到线程池                解法：挪到进程池
+       asyncio.to_thread(...)          run_in_executor(ProcessPool, ...)
+     线程等 I/O 时不占解释器锁       纯 Python 计算不放解释器锁，
+                                     换线程没用
+
+  ③ 同步 ─► 异步                  ④ 一个库要同时服务两种调用方
+     def main():                     lib.fetch()        ← 同步入口
+         data = fetch_async()        await lib.afetch() ← 异步入口
+              ↑ 拿到的是协程对象
+     解法：分两种情况                解法：以异步为唯一实现，
+       当前线程没有运行中的循环        同步入口只是薄薄一层包装；
+         → asyncio.run(...)           千万别把 asyncio.run 埋进
+       循环在别的线程上               被复用的库函数里
+         → run_coroutine_threadsafe
+
+  认错方向的后果：
+    ①用了进程池 → 多付一次序列化，白花钱
+    ②用了线程池 → 事件循环照样被拖慢，压测才发现
+    ③在已有循环里调 asyncio.run → 直接 RuntimeError
+    ④把 asyncio.run 写进库 → 调用方永远无法复用自己的循环</div>
+
+<table>
+<tr><th>方向</th><th>典型场景</th><th>正确解法</th><th>用错了会怎样</th></tr>
+<tr><td>异步里调同步阻塞 I/O</td><td>只有同步驱动的数据库、老 SDK、<code>requests</code></td><td><code>asyncio.to_thread()</code> 或自建线程池</td><td>不挪走：整个循环卡住，<strong>所有</strong>在途请求一起变慢</td></tr>
+<tr><td>异步里调同步纯计算</td><td>大 JSON 解析、加解密、特征抽取、图像编解码</td><td><code>run_in_executor</code> 传 <code>ProcessPoolExecutor</code></td><td>放线程池：线程争抢解释器锁，延迟照样恶化</td></tr>
+<tr><td>同步里调异步</td><td>CLI 入口、定时任务、测试、Jupyter</td><td>看当前线程有没有运行中的循环，分两种写法</td><td>无脑 <code>asyncio.run</code>：在已有循环里直接报错</td></tr>
+<tr><td>两套入口共存</td><td>要被 Web 服务和离线脚本同时调用的内部 SDK</td><td>异步为本体，同步入口是显式命名的薄包装</td><td>库内部自己起循环：连接池、上下文、取消信号全都不共享</td></tr>
+</table>
+
+<h3>怎么认出一个调用是不是阻塞的</h3>
+
+<p>这一步比想象中重要，因为方向①的典型症状就是「代码看起来完全正常，测试全绿，上线后慢得莫名其妙」。没有任何语法特征能告诉你 <code>db.query()</code> 会把线程挂住 30 毫秒——你得从别的地方判断。</p>
+
+<table>
+<tr><th>线索</th><th>判断</th><th>说明</th></tr>
+<tr><td>函数前面能不能加 <code>await</code></td><td>不能 → 极可能是同步的</td><td>最快的一眼判据，但对返回 <code>Future</code> 的老式 API 会误判</td></tr>
+<tr><td>库的文档里有没有 <code>async def</code> 示例</td><td>没有 → 同步库</td><td><code>requests</code> / <code>psycopg2</code> / <code>redis-py</code> 的同步类都属此列</td></tr>
+<tr><td>内部有没有 <code>socket</code> / <code>open()</code> / <code>subprocess</code></td><td>有 → 阻塞 I/O</td><td>包括看不见的那些：DNS 解析、TLS 握手、文件 <code>fsync</code></td></tr>
+<tr><td>开 <code>asyncio</code> 调试模式跑一遍</td><td>有告警 → 循环被卡住过</td><td><code>asyncio.run(main(), debug=True)</code>，单次回调超过 <code>slow_callback_duration</code>（默认 0.1 秒）就打印告警</td></tr>
+<tr><td>压测时延迟是否随并发同步抬升</td><td>是 → 循环里有阻塞</td><td>纯异步链路的延迟在饱和前应当基本平坦</td></tr>
+</table>
+
+<p>最后一条调试模式的办法值得固定进开发流程。它不需要你预先知道哪一行有问题，直接把「循环被某个回调独占超过 100 毫秒」这件事报出来，是排查方向①最省力的入口。注意它只在调试模式下生效，不要开到生产上。</p>
+
+<div class="intuition-box">
+<p>异步不是「更快」，是「等待的时候让出去」。任何一行没有让出去的等待，代价都不是它自己慢，而是它把同一个循环上所有别人的等待一起延后了。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、异步里调同步阻塞代码：to_thread 与它的隐形队列</h2>
+
+<p>方向①是四个方向里最高频的，也是解法最成熟的。从 Python 3.9 起，标准答案是 <code>asyncio.to_thread()</code>：</p>
+
+<pre><code>import asyncio
+
+# 同步阻塞的老驱动，改不动，也不打算改
+def query_user(uid: int) -&gt; dict:
+    return legacy_db.execute("select * from users where id=%s", uid)
+
+async def handler(uid: int) -&gt; dict:
+    return await asyncio.to_thread(query_user, uid)</code></pre>
+
+<p>它做的事非常薄：拿到当前运行中的循环，复制一份 <span class="term">contextvars</span> 上下文，然后把函数交给 <code>loop.run_in_executor(None, ...)</code>——也就是循环的<strong>默认线程池</strong>。所以下面这两行在效果上几乎等价，只差一个上下文传递和参数写法：</p>
+
+<pre><code># 3.9 起的写法：支持关键字参数，自动传递 contextvars
+await asyncio.to_thread(query_user, uid=42)
+
+# 底层等价物：run_in_executor 的签名是 (executor, func, *args)
+# 没有 **kwargs，要传关键字参数得自己包一层 partial
+loop = asyncio.get_running_loop()
+await loop.run_in_executor(None, functools.partial(query_user, uid=42))</code></pre>
+
+<p><code>run_in_executor</code> 不接受关键字参数这一点每个人都会踩一次。<code>to_thread</code> 存在的主要价值就是替你把 <code>functools.partial</code> 和上下文复制这两件杂事做掉，此外没有任何魔法。</p>
+
+<h3>它究竟解决了什么，又没解决什么</h3>
+
+<p>关键在于「阻塞」发生的位置变了，但阻塞本身一秒也没减少。原来是事件循环所在的那个线程停在 socket 上，现在是线程池里的某个工作线程停在 socket 上——差别在于前者会连累所有在途请求，后者只连累自己。<strong>循环得以继续转，这就是全部收益。</strong></p>
+
+<div class="arch-diagram">  await asyncio.to_thread(query_user, 42) 发生了什么
+  ─────────────────────────────────────────────────────────
+
+  事件循环线程                      默认线程池（容量有上限）
+  ┌────────────────────┐           ┌──────────────────────────┐
+  │ handler 协程       │           │  worker-1  忙：等 DB 25ms │
+  │   ↓ to_thread      │  提交任务  │  worker-2  忙：等 DB 25ms │
+  │   ├───────────────────────────►│  worker-3  忙            │
+  │   │                │           │  ...                     │
+  │   │ 挂起，循环继续  │           │  worker-N  忙            │
+  │   │ 跑别的协程 ✔   │           │──────────────────────────│
+  │   │                │           │  等待队列 ← 排在这里的时间 │
+  │   ▼ 结果回来，恢复  │◄──────────│  不计入 query_user 的耗时 │
+  └────────────────────┘  唤醒      └──────────────────────────┘
+                                       ▲
+                                       └── 事故就藏在这一格：
+                                           你在应用里给 query_user
+                                           打的耗时日志永远是 25ms，
+                                           而调用方实测是 1.6 秒</div>
+
+<p>上图右下角那一格是本节的核心。线程池的容量是有限的，当同时发起的阻塞调用数量超过工作线程数时，多余的任务进入 <code>Executor</code> 的等待队列。<strong>队列里的等待时间不体现在任何一次函数调用的耗时上</strong>——你在 <code>query_user</code> 里打的埋点从进入函数体才开始计时，排队那段完全是空白。这使得它成为一类极难从应用日志里看出来的故障。</p>
+
+<div class="highlight">
+<p><strong>生产事故复盘：</strong>某异步服务（4 核容器）把全部同步数据库调用一律用 <code>to_thread</code> 包起来就上线了，功能测试全绿。压测时出现典型的非线性恶化：并发 50 时 P95 是 120 毫秒，并发 200 时涨到 780 毫秒，并发 400 时 1.6 秒，而吞吐无论怎么加压都封顶在每秒 310 次左右。诡异之处在于，应用侧给数据库调用打的耗时埋点<strong>始终稳定在 26～30 毫秒</strong>，数据库自己的慢查询日志一条都没有。根因是默认线程池容量远小于并发请求数：4 核机器上默认只有 8 个工作线程，单次查询 25 毫秒，理论吞吐上限正好是 8 ÷ 0.025 ≈ 320 次每秒，400 个在途请求要排大约 50 轮才轮得到最后一个。修复分两步：先给数据库调用换成 32 线程的<strong>专用线程池</strong>并加上信号量限流，P95 降到 240 毫秒；随后把驱动换成原生异步版本，P95 落到 48 毫秒，线程池整个撤掉。</p>
+</div>
+
+<h3>默认线程池到底有多大</h3>
+
+<p>循环的<span class="term">默认执行器</span>是在第一次用到时惰性创建的一个 <code>ThreadPoolExecutor()</code>，不传 <code>max_workers</code>，因此它的容量就是 <code>concurrent.futures</code> 的默认值。这个默认值随版本改过两次，写代码时不要凭记忆假设：</p>
+
+<table>
+<tr><th>版本</th><th>默认 <code>max_workers</code></th><th>4 核机器上的实际值</th></tr>
+<tr><td>3.5 – 3.7</td><td><code>os.cpu_count() * 5</code></td><td>20</td></tr>
+<tr><td>3.8 – 3.12</td><td><code>min(32, os.cpu_count() + 4)</code></td><td>8</td></tr>
+<tr><td>3.13 起</td><td><code>min(32, (os.process_cpu_count() or 1) + 4)</code></td><td>8（但会遵守容器的 CPU 亲和性限制）</td></tr>
+</table>
+
+<p>注意 3.8 那一次改动是<strong>大幅调小</strong>：8 核机器上从 40 个线程降到 12 个。如果你读到的经验帖写于 2019 年之前，它对默认容量的估计会偏大好几倍。3.13 的改动方向不同，是让容量识别 <code>cgroup</code> 之类的限制——在只分到 2 核的容器里，<code>os.cpu_count()</code> 可能报告宿主机的 64 核，而 <code>os.process_cpu_count()</code> 报告 2，两者差出一个数量级。</p>
+
+<p>关于容量，真正该记住的不是公式而是量级：<strong>它是个位数到几十的数量级，和你的并发请求数完全不在一个尺度上。</strong>公式随时可能再变，这个结论不会变。</p>
+
+<h3>三条路怎么选</h3>
+
+<table>
+<tr><th>做法</th><th>适合</th><th>代价</th><th>要补的配套</th></tr>
+<tr><td>默认线程池（<code>to_thread</code>）</td><td>低频调用：启动期加载配置、偶发的一次外部调用</td><td>容量个位数且<strong>全进程共享</strong>，任何一类调用都能把它占满</td><td>无，但要确认调用频率真的低</td></tr>
+<tr><td>自建专用线程池</td><td>高频但确实换不掉的同步驱动</td><td>要自己管生命周期与关闭；线程本身有栈内存开销</td><td>按依赖分池隔离、容量与连接池对齐、加信号量上限与排队指标</td></tr>
+<tr><td>换原生异步驱动</td><td>有成熟异步实现的依赖（数据库、HTTP、对象存储）</td><td>一次性的迁移与回归测试成本</td><td>连接池参数要重调；<strong>长期看这是唯一真正的解</strong></td></tr>
+</table>
+
+<p>自建池那一行的「按依赖分池隔离」值得展开一句。共用一个线程池的后果是故障会串门：调用某个外部 HTTP 接口时对方超时到 10 秒，这些线程会把池占满，于是<strong>数据库查询也跟着排队</strong>，监控上看起来像数据库出了问题。给每类依赖一个独立的池，故障就被关在自己的格子里。线程池的创建与关闭建议交给上下文管理器或应用的生命周期钩子来管（见 <a href="py_context_managers.html">PY19</a>），不要让它随进程泄漏。</p>
+
+<pre><code>DB_POOL = ThreadPoolExecutor(max_workers=32, thread_name_prefix="db")
+SEM = asyncio.Semaphore(32)          # 上限和池容量对齐，让排队发生在这里
+
+async def query(uid: int) -&gt; dict:
+    async with SEM:                  # 超限时在这里等，可观测、可超时
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(DB_POOL, query_user, uid)</code></pre>
+
+<p>加信号量的目的不是限制并发——线程池自己就限制了——而是<strong>把排队从不可见的地方搬到可见的地方</strong>。信号量的等待发生在你的代码里，可以埋点、可以设超时、可以在超限时快速失败并返回明确的错误类型（异常分层见 <a href="py_exception_design.html">PY24</a>）；而 <code>Executor</code> 内部队列的等待你什么都拿不到。前面那起事故如果一开始就有这个信号量，压测第一轮就能定位。</p>
+
+<div class="intuition-box">
+<p><code>to_thread</code> 不会让阻塞消失，只是给它换了个地方等。真正的问题从来不是「这次调用多久」，而是「同时有多少次调用在等，它们在哪排队，你看不看得见那个队列」。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、异步里调 CPU 密集计算：线程池救不了它</h2>
+
+<p>方向②看起来和方向①很像——同样是一个同步函数卡住了循环，同样想把它挪走——但把它扔进 <code>to_thread</code> 基本没有用。原因在于两种「卡住」的性质完全不同。</p>
+
+<p>阻塞 I/O 的线程在等操作系统，它在 <code>read</code> 上睡着，此时会释放<span class="term">解释器全局锁</span>，别的线程可以照常执行 Python 字节码。而纯 Python 的计算需要持续持有这把锁才能往下执行字节码，把它挪到另一个线程，两个线程只会轮流抢同一把锁，总的计算吞吐一点没涨，还多付了线程切换的开销。</p>
+
+<div class="arch-diagram">  同样是「挪到线程池」，两种负载的结果完全不同
+  ─────────────────────────────────────────────────────────
+
+  阻塞 I/O（可以挪）                纯 Python 计算（挪了没用）
+  ┌─────────────────────┐          ┌─────────────────────┐
+  │ 循环线程  ████████  │ 一直在跑 │ 循环线程  ██··██··█ │ 被切碎
+  │ worker-1  ~~~~~~~~  │ 等 socket│ worker-1  ··██··██· │ 抢锁
+  │ worker-2  ~~~~~~~~  │ 等 socket│ worker-2  ··········│ 排队等锁
+  └─────────────────────┘          └─────────────────────┘
+     ~~~ 段不持有解释器锁             ██ 段必须持有解释器锁
+     循环照常处理别的请求 ✔           循环被抢走时间片 ✘
+
+  正解：换成进程池，每个进程有各自独立的解释器与锁
+  ┌────────────────────────────────────────────────────┐
+  │ 主进程：事件循环         ──提交──►  进程 1（独立锁）│
+  │   参数 pickle ─► 管道 ─► 子进程反序列化 ─► 真正计算 │
+  │   结果 pickle ◄─ 管道 ◄─ 子进程序列化   ◄───────────│
+  └────────────────────────────────────────────────────┘
+     多出来的成本：两次序列化 + 两次进程间拷贝 + 进程启动</div>
+
+<p>写法上和线程池只差一个执行器对象：</p>
+
+<pre><code>from concurrent.futures import ProcessPoolExecutor
+
+CPU_POOL = ProcessPoolExecutor(max_workers=4)   # 应用启动时建一次
+
+async def score(payload: dict) -&gt; float:
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(CPU_POOL, heavy_math, payload)</code></pre>
+
+<p>注意 <code>asyncio.to_thread()</code> 没有对应的「to_process」版本，方向②必须走 <code>run_in_executor</code>。还要注意进程池要在应用启动时创建一次并复用，<strong>不要在每个请求里现建</strong>——建池要 fork 或 spawn 出若干个进程，成本比一次计算高得多。</p>
+
+<h3>代价：所有东西都得能 pickle</h3>
+
+<p>参数和返回值要跨进程传输，就必须被<span class="term">序列化</span>。<code>ProcessPoolExecutor</code> 默认用 <code>pickle</code>，于是一批东西直接出局：lambda 与局部函数、打开着的文件句柄与数据库连接、线程锁、闭包捕获的不可序列化对象。传入的参数在子进程里是一份<strong>独立的副本</strong>，你在子进程里改它，主进程完全看不到——这一点和深浅拷贝的直觉是一致的（见 <a href="py_copy_semantics.html">PY10</a>）。</p>
+
+<p>子进程里抛出的异常会被序列化后在主进程重新抛出，但栈信息会被压扁，自定义异常如果构造函数签名特殊还可能在反序列化时二次失败。跨进程的错误传播要提前测一遍，不要等线上才发现异常本身也传不回来。</p>
+
+<h3>判据：多大的计算才值得付这笔钱</h3>
+
+<p>进程间通信的固定成本对小对象大约在亚毫秒到几毫秒的量级（两次序列化加两次管道往返），随载荷大小线性增长。把这个成本和单次计算的耗时放在一起比，判据就出来了：</p>
+
+<table>
+<tr><th>单次计算耗时</th><th>建议</th><th>理由</th></tr>
+<tr><td>小于 1 毫秒</td><td>就在循环里直接算</td><td>挪出去的成本远大于计算本身，纯亏</td></tr>
+<tr><td>1 – 10 毫秒</td><td>留在循环里，但要批量合并</td><td>进程池的固定成本占比过高；真的卡就先优化算法</td></tr>
+<tr><td>10 – 50 毫秒</td><td>看频率：高频才进进程池</td><td>灰色地带，用实测决定，不要凭感觉</td></tr>
+<tr><td>大于 50 毫秒</td><td>明确走进程池</td><td>通信成本被摊薄到百分之几，收益清晰</td></tr>
+<tr><td>任意耗时但载荷是 MB 级</td><td>改传引用而非传值</td><td>序列化本身成为瓶颈，应传文件路径、对象存储键或共享内存名</td></tr>
+</table>
+
+<p>还有一类计算不需要进程池：如果热点其实落在 NumPy、加解密库、压缩库这类 C 扩展里，它们在计算期间通常会主动释放解释器锁，那么<strong>线程池对它们是有效的</strong>。判断方法只有实测——把负载放进线程池，看多线程下总吞吐涨不涨。涨了说明锁被释放了，没涨说明是纯 Python 计算，老老实实上进程池。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个文档处理服务在请求路径上做纯 Python 的文本分词与打分，单次约 180 毫秒。最初用 <code>to_thread</code> 包起来，压测时发现连不带计算的健康检查接口 P95 都从 3 毫秒涨到了 260 毫秒——循环被抢走了时间片，整个服务一起变慢。改成 4 进程的 <code>ProcessPoolExecutor</code> 后，健康检查回到 4 毫秒，处理接口的 P95 从 1.4 秒降到 320 毫秒。单次多付的序列化成本实测约 2 毫秒，相对 180 毫秒的计算可以忽略。</p>
+</div>
+
+<div class="intuition-box">
+<p>线程池搬运的是「等待」，进程池搬运的是「计算」。搬错了不会报错，只会在压测时让你看见一条不该变慢的曲线跟着变慢。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、同步里调异步代码：先回答「有没有运行中的循环」</h2>
+
+<p>方向③的入口函数是 <code>asyncio.run()</code>，它做三件事：新建一个事件循环、把传入的协程跑到完成、然后关闭这个循环并清理异步生成器。关键限制在第一步——它<strong>只能在当前线程没有运行中的循环时调用</strong>。在一个已经跑着循环的线程里调它，得到的是：</p>
+
+<div class="formula">RuntimeError: asyncio.run() cannot be called from a running event loop</div>
+
+<p>所以方向③不存在一个万能写法，你必须先回答一个问题：当前这个线程上，有没有正在运行的事件循环？标准答案用 <code>asyncio.get_running_loop()</code> 探测，它在没有循环时抛 <code>RuntimeError</code>：</p>
+
+<pre><code>import asyncio
+
+def running_loop_or_none():
+    """当前线程有运行中的循环就返回它，否则返回 None。"""
+    try:
+        return asyncio.get_running_loop()
+    except RuntimeError:      # "no running event loop"
+        return None</code></pre>
+
+<p>不要用 <code>asyncio.get_event_loop()</code> 来做这个探测。它的语义跨版本一直在变，在没有循环的非主线程里直接抛 <code>RuntimeError: There is no current event loop in thread ...</code>（3.12 实测），在主线程上则经历了「自动创建 → 弃用告警 → 报错」的演进过程。<code>get_running_loop()</code> 的语义从 3.7 引入起就是明确且稳定的：只返回<strong>正在运行</strong>的循环，没有就抛错。</p>
+
+<table>
+<tr><th>你在哪</th><th>本线程有运行中的循环吗</th><th>正确做法</th></tr>
+<tr><td>脚本 <code>main</code>、CLI 入口、定时任务</td><td>没有</td><td><code>asyncio.run(main())</code>，一个进程只在最外层调一次</td></tr>
+<tr><td>协程直接调用的同步函数（同一线程）</td><td>有</td><td>不能调 <code>asyncio.run</code>。把这个函数改成 <code>async def</code>，让 <code>await</code> 链路连起来</td></tr>
+<tr><td>线程池 worker 里想用异步客户端</td><td>本线程没有，主线程有</td><td><code>asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=...)</code></td></tr>
+<tr><td>自己起的独立后台线程</td><td>没有</td><td>该线程内自己 <code>asyncio.run()</code>；注意它与主循环互不相通，连接池不共享</td></tr>
+<tr><td>Jupyter、pytest-asyncio、框架的生命周期钩子</td><td>有（框架已经起好了）</td><td>直接 <code>await</code>。在 Jupyter 里就是顶层 <code>await</code>，不要包 <code>asyncio.run</code></td></tr>
+</table>
+
+<h3>跨线程把协程交给已有的循环</h3>
+
+<p>表里第三行是方向③里最需要讲清的一种。场景是：主线程跑着事件循环，某个同步函数被扔进了线程池，而它内部需要调用一个只有异步版本的客户端。这时既不能 <code>await</code>（当前不是协程），也不能 <code>asyncio.run</code>（会起第二个循环，连接池和上下文全都不共享）。正确的桥是 <code>asyncio.run_coroutine_threadsafe(coro, loop)</code>。</p>
+
+<div class="arch-diagram">  跨线程提交协程的完整路径
+  ─────────────────────────────────────────────────────────
+
+  事件循环线程                         线程池 worker 线程
+  ┌────────────────────────┐          ┌────────────────────────┐
+  │ loop 正在运行          │          │ 同步函数 sync_work()   │
+  │                        │          │   需要 await 一个客户端│
+  │   ◄───── 线程安全地提交 ───────────│ run_coroutine_threadsafe│
+  │ 把协程排进本循环        │          │        (coro, loop)     │
+  │   ↓ 正常调度执行        │          │        ↓ 拿到的是       │
+  │   ↓ 完成后填充结果      │          │  concurrent.futures    │
+  │   ─────── 结果回传 ───────────────►│        .Future         │
+  │                        │          │   fut.result(timeout=5)│
+  └────────────────────────┘          │        ↑ 阻塞等待       │
+                                      └────────────────────────┘
+
+  两个必须记住的点
+  ① 返回的是 concurrent.futures.Future，不是 asyncio.Future
+     ⇒ 不能 await，要用阻塞的 .result(timeout=...) 取值
+  ② 绝对不要在事件循环所在的那个线程里调 .result()
+     ⇒ 循环被阻塞在这一行，提交进去的协程永远没机会执行 = 死锁</div>
+
+<pre><code># 主线程：起循环前把 loop 传给需要它的同步代码
+loop = asyncio.get_running_loop()
+
+def sync_work(url: str) -&gt; bytes:        # 跑在线程池 worker 里
+    fut = asyncio.run_coroutine_threadsafe(client.fetch(url), loop)
+    return fut.result(timeout=10)        # 必须给 timeout，否则可能永久挂起
+
+await asyncio.to_thread(sync_work, "https://example.com")</code></pre>
+
+<p>返回类型这一点值得单独强调，因为它是这个 API 最容易记错的地方：<code>run_coroutine_threadsafe</code> 返回的是 <code>concurrent.futures.Future</code>，不是 <code>asyncio.Future</code>。两者名字像、用途像，但前者的 <code>result()</code> 是<strong>阻塞</strong>的普通方法，后者要 <code>await</code>。这个设计是合理的：调用方本来就在一个同步的、没有循环的线程里，给它一个只能 <code>await</code> 的对象毫无意义。</p>
+
+<p>同族还有一个更轻量的 <code>loop.call_soon_threadsafe(callback, *args)</code>，用于从别的线程往循环里塞一个<strong>普通回调</strong>（不是协程），它不返回任何可等待的东西，适合「通知一下、不要结果」的场景，比如从线程里 <code>set()</code> 一个 <code>asyncio.Event</code>。</p>
+
+<div class="highlight">
+<p><strong>踩坑提醒：</strong>上面代码里的 <code>timeout=10</code> 不是可选项。<code>concurrent.futures.Future.result()</code> 不传超时就是无限期阻塞，一旦事件循环因为别的原因卡住或已经关闭，这个 worker 线程会永久挂在那里。线程池里的线程从 Python 3.9 起不再是守护线程，若干个线程这样挂住之后，进程连正常退出都做不到——表现为「服务收到停止信号后一直不退出，最后被强杀」。</p>
+</div>
+
+<div class="intuition-box">
+<p>「同步里怎么调异步」这个问题没有统一答案，因为它其实是两个问题。先问清楚「当前线程上有没有循环在跑」，答案分岔之后，每一支的写法都只有一种。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、陷阱清单：五种平时不报错的写法</h2>
+
+<p>这一节的五条有一个共同特征：<strong>它们在开发和单元测试里几乎都不报错</strong>。低并发下阻塞一下没人看得出来，测试里跑一次也正常返回。它们要等到压测或者线上流量才显形，而那时的症状又指向别的地方。</p>
+
+<h3>其一：在协程里直接调同步 I/O</h3>
+
+<p>最常见的一条，也是第二节整节在讲的那个问题。症状很有辨识度：<strong>不相干的接口也一起变慢</strong>。因为被卡住的是共享的事件循环，健康检查、静态资源、别的业务接口全在同一个循环上排队。如果你看到「只是某个下游变慢了，但整个服务的 P95 都抬起来了」，先怀疑这条。</p>
+
+<h3>其二：在协程里用 time.sleep</h3>
+
+<p>本质上是其一的特例，但因为太常见值得单列。<code>time.sleep(1)</code> 把整个线程挂起一秒，循环上所有协程一起停一秒；<code>await asyncio.sleep(1)</code> 只挂起当前这一个协程。重试退避、轮询间隔、限流等待这几处是重灾区，写法要检查到位。</p>
+
+<h3>其三：把 asyncio.run 写进库函数</h3>
+
+<p>库函数内部调 <code>asyncio.run</code>，意味着这个函数<strong>永远不能被异步调用方使用</strong>——对方已经有循环在跑，调进来直接 <code>RuntimeError</code>。即使调用方恰好是同步的，每次调用也会新建再销毁一个循环，连接池、<code>contextvars</code>、取消信号全都无法跨调用复用。正确做法是异步实现为本体，同步入口用一个名字上就能看出来的薄包装单独提供。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>异步实现是唯一本体：<code>async def fetch(...)</code></li>
+<li>同步入口显式命名：<code>def fetch_sync(...)</code>，内部才调 <code>asyncio.run</code></li>
+<li>同步入口在文档里写明「不可在已有循环中调用」</li>
+<li>在协程里等待用 <code>await asyncio.sleep(...)</code></li>
+<li>跨线程提交协程一律带 <code>timeout</code></li>
+<li>线程池按依赖分池，容量与下游连接池对齐</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在库函数体内直接调 <code>asyncio.run</code>，让调用方失去循环控制权</li>
+<li>协程里 <code>time.sleep</code> / <code>requests.get</code> / 裸 <code>open()</code> 读大文件</li>
+<li>用 <code>asyncio.get_event_loop()</code> 跨线程去「拿」循环</li>
+<li>把 <code>asyncio.Queue</code> / <code>Event</code> 直接交给线程池里的函数操作</li>
+<li>对协程对象做 <code>if</code> 判断或直接当结果用</li>
+<li><code>fut.result()</code> 不带超时，或在循环线程里调它</li>
+</ul>
+</div>
+</div>
+
+<h3>其四：对协程对象做条件判断</h3>
+
+<p>调用一个 <code>async def</code> 函数<strong>不会执行任何函数体</strong>，只是返回一个<span class="term">协程对象</span>。而协程对象没有定义 <code>__bool__</code>，按 Python 的默认规则它<strong>永远为真</strong>。于是这样的代码会静默走错分支：</p>
+
+<pre><code>async def get_user(uid):  ...
+
+# ✘ 函数体一行没跑，coro 恒为真，永远进 if 分支
+if get_user(42):
+    print("找到了")
+
+# ✔ 同步上下文里要么 asyncio.run，要么在协程里 await
+if await get_user(42):
+    print("找到了")</code></pre>
+
+<p>Python 会为此发一条 <code>RuntimeWarning: coroutine 'get_user' was never awaited</code>，但默认配置下 <code>RuntimeWarning</code> 只打印到 stderr 且不中断程序，在有日志框架的服务里很容易被淹没。把测试环境的 <code>-W error::RuntimeWarning</code> 打开，这类漏掉的 <code>await</code> 会在 CI 里直接变成失败。</p>
+
+<h3>其五：线程池里的函数碰了事件循环相关对象</h3>
+
+<p><code>asyncio</code> 的绝大多数对象<strong>不是线程安全的</strong>。在 worker 线程里往 <code>asyncio.Queue</code> 里 <code>put_nowait</code>、<code>set()</code> 一个 <code>asyncio.Event</code>、或者取消一个 <code>Task</code>，都可能造成循环内部状态错乱，而且错乱的表现是随机的——偶发卡死、偶发丢消息、偶发的 <code>Future attached to a different loop</code>。跨线程只有两个官方入口：<code>loop.call_soon_threadsafe()</code> 和 <code>asyncio.run_coroutine_threadsafe()</code>，其余一律不要碰。如果只是想从线程往协程侧传数据，用 <code>queue.Queue</code>（线程安全的那个）加上 <code>call_soon_threadsafe</code> 通知，比直接操作 <code>asyncio.Queue</code> 稳妥得多。</p>
+
+<table>
+<tr><th>症状</th><th>可能的陷阱</th><th>确认办法</th></tr>
+<tr><td>下游变慢时，连健康检查都变慢</td><td>其一：循环里有同步 I/O</td><td>开 <code>debug=True</code> 看慢回调告警</td></tr>
+<tr><td>延迟正好是某个整秒的倍数</td><td>其二：协程里 <code>time.sleep</code></td><td>全局搜 <code>time.sleep</code>，看是否在 <code>async def</code> 内</td></tr>
+<tr><td><code>asyncio.run() cannot be called from a running event loop</code></td><td>其三：库函数内部起了循环</td><td>看报错栈里哪个第三方库调了 <code>asyncio.run</code></td></tr>
+<tr><td>分支永远走同一边，且日志里有 never awaited</td><td>其四：对协程对象做判断</td><td><code>-W error::RuntimeWarning</code> 跑一遍测试</td></tr>
+<tr><td>偶发卡死 / <code>attached to a different loop</code></td><td>其五：跨线程碰了 asyncio 对象</td><td>审查所有传进 <code>run_in_executor</code> 的闭包捕获了什么</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>这五条没有一条会在你写的时候报错。它们的成本不在修复，在发现——所以值得把调试模式、<code>-W error::RuntimeWarning</code> 和一轮真实并发的压测固定进流程，让它们在 CI 里显形，而不是在凌晨的告警里。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、架构判据：桥要搭，但边界要划在外面</h2>
+
+<p>前面五节都在讲「怎么搭桥」。这一节讲一件更重要的事：<strong>桥的数量和位置，决定了这个服务能不能维护。</strong>每一座桥都是一处<span class="term">线程边界</span>、一处需要单独配容量和加指标的地方、一处可能出错的取消与超时传播路径。桥多到一定程度，异步带来的收益会被桥本身的复杂度吃光。</p>
+
+<div class="arch-diagram">  一条决策路径
+  ─────────────────────────────────────────────────────────
+
+  这个依赖有成熟的原生异步实现吗？
+     │
+     ├── 有 ──────► 换掉它。别搭桥。
+     │              迁移是一次性成本，桥是永久成本。
+     │
+     └── 没有 ───► 要桥接的调用占整条链路的比例有多高？
+                      │
+                      ├── 低（少数几处）──► 搭桥，并且补齐三件套：
+                      │                      专用线程池 + 并发上限 + 排队指标
+                      │
+                      ├── 中 ─────────────► 搭桥，但把这些依赖
+                      │                      收拢到一个模块里统一管
+                      │
+                      └── 高（大半都要桥）► 停下来重新想：
+                                            这个服务本就不该做成异步的。
+                                            同步框架 + 多进程 + 线程池
+                                            又简单又好调，别硬上 asyncio。
+
+  最后一行不是玩笑。全是桥的「异步服务」拿不到异步的任何好处，
+  却背上了异步的全部调试难度。</div>
+
+<p>最下面那一支值得说透。异步的收益来自「等待时把线程让出去」，如果你的每一次等待最终都发生在某个线程池的工作线程上，那你实际的并发上限就是线程池容量——和直接用一个同步框架配同样大小的线程池完全一样，甚至更差，因为多了一层调度。这种情况下 <code>asyncio</code> 只贡献了调试难度。<strong>能不能受益于异步，取决于你有多少等待真的是非阻塞的，而不是你写了多少个 <code>async def</code>。</strong></p>
+
+<h3>异步边界应该划在哪</h3>
+
+<p>假设桥是必须搭的，下一个问题是搭在哪一层。答案是：<span class="term">异步边界</span>越靠外越好，整条调用链上只穿越一次。最糟的形态是在调用链中段来回切换——异步的处理器调同步的服务层，服务层里又通过 <code>run_coroutine_threadsafe</code> 调回异步的客户端。</p>
+
+<table>
+<tr><th>边界位置</th><th>形态</th><th>评价</th></tr>
+<tr><td>最外层（推荐）</td><td>入口是异步的，整个内部实现同步，只在入口处一次 <code>to_thread</code></td><td>桥只有一座，容量集中可控，栈干净好调</td></tr>
+<tr><td>最内层</td><td>整条链路异步，只在真正碰到同步驱动的那一个函数上桥接</td><td>次优。桥多但都很薄，前提是必须集中在一个适配层里</td></tr>
+<tr><td>中段来回切</td><td>异步 → 同步 → 异步 → 同步</td><td><strong>要避免。</strong>栈深且乱、取消信号传不下去、超时无法端到端计算</td></tr>
+<tr><td>无边界（全异步）</td><td>所有依赖都有原生异步实现</td><td>理想态。值得为之做驱动迁移</td></tr>
+</table>
+
+<p>「中段来回切」那一行的真正危害不在性能，在<strong>取消与超时</strong>。<code>asyncio</code> 的取消是通过向协程抛 <code>CancelledError</code> 实现的，而它<strong>穿不过线程边界</strong>：客户端断开连接、上游超时触发取消，事件循环侧的协程确实被取消了，但已经进了线程池的那个函数会一直跑到自己结束为止，没有任何办法打断它。链路上每多一次切换，就多一段无法取消的区间，端到端的超时预算也就无从计算。</p>
+
+<p>还有一个常被忽略的后果是<span class="term">可观测性</span>断裂。基于 <code>contextvars</code> 的请求追踪 ID 在 <code>to_thread</code> 时会被自动复制过去（这是 <code>to_thread</code> 相对裸 <code>run_in_executor</code> 的一个实质优势），但在 <code>run_coroutine_threadsafe</code> 反向提交时不会自动传播，得自己带。来回切几次之后，链路追踪就断成了几截。</p>
+
+<div class="intuition-box">
+<p>判断一个异步服务健不健康，数一下它有几处线程切换就够了。零处是理想，一处是正常，每类依赖一处还能接受；如果一个请求要穿越五六次线程边界，问题已经不是某座桥搭得对不对，而是这个服务当初就不该选异步。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>asyncio.to_thread 和 loop.run_in_executor 到底该用哪个？</summary>
+<div class="answer">默认用 <code>to_thread</code>（Python 3.9 起可用）。它是 <code>run_in_executor(None, ...)</code> 的封装，额外替你做了两件事：支持关键字参数（<code>run_in_executor</code> 的签名是 <code>(executor, func, *args)</code>，没有 <code>**kwargs</code>，要传关键字得自己包 <code>functools.partial</code>），以及自动把当前的 <code>contextvars</code> 上下文复制到工作线程——这对基于上下文变量的请求追踪很关键。唯一必须用 <code>run_in_executor</code> 的场合是你要<strong>指定执行器</strong>：自建的专用线程池，或者 CPU 密集任务要用的 <code>ProcessPoolExecutor</code>。<code>to_thread</code> 不接受执行器参数，永远走默认线程池。实践上的分界很清楚：低频的一次性调用用 <code>to_thread</code>，高频的依赖调用用自建池加 <code>run_in_executor</code>。</div>
+</details>
+
+<details>
+<summary>默认线程池到底有多大？会不会自动扩容？</summary>
+<div class="answer">不会自动扩容，容量在池创建时就定死了。事件循环的默认执行器是第一次用到时惰性创建的一个不带参数的 <code>ThreadPoolExecutor()</code>，所以容量就是标准库的默认值，而这个默认值改过两次：3.5–3.7 是 <code>os.cpu_count() * 5</code>；3.8–3.12 改成 <code>min(32, os.cpu_count() + 4)</code>，这是一次大幅调小；3.13 起改成 <code>min(32, (os.process_cpu_count() or 1) + 4)</code>，区别在于 <code>process_cpu_count()</code> 会遵守容器的 CPU 亲和性限制，在只分到 2 核的容器里不会误报宿主机的核数。真正该记住的不是公式而是量级：它是个位数到几十，和动辄几百的并发请求数根本不在一个尺度上。超出容量的任务在 <code>Executor</code> 内部队列里排队，这段等待不体现在被调用函数的耗时埋点上。</div>
+</details>
+
+<details>
+<summary>为什么 CPU 密集任务放线程池没用，放进程池就有用？</summary>
+<div class="answer">因为两者「卡住」的性质不同。阻塞 I/O 的线程是在等操作系统，等待期间会释放解释器全局锁，别的线程可以继续执行 Python 字节码，所以挪到线程里是真的把等待挪走了。纯 Python 计算则必须持续持有这把锁才能往下走，两个线程只会轮流抢同一把锁，总吞吐一点不涨还多付切换开销。进程池则让每个子进程拥有各自独立的解释器和锁，真正并行。代价是参数和返回值要 <code>pickle</code>、要跨管道拷贝，固定成本对小对象在亚毫秒到几毫秒量级。一个重要的例外：NumPy、加解密、压缩这类 C 扩展在计算期间通常会主动释放锁，对它们线程池是有效的。判断方法只有实测——放进线程池看多线程下总吞吐涨不涨。</div>
+</details>
+
+<details>
+<summary>run_coroutine_threadsafe 返回的 Future 为什么不能 await？</summary>
+<div class="answer">因为它返回的是 <code>concurrent.futures.Future</code>，不是 <code>asyncio.Future</code>。两者名字相近、职责相似，但不是同一套东西：前者面向线程，取值方法 <code>result(timeout=...)</code> 是阻塞的普通方法；后者面向协程，必须 <code>await</code>。这个设计是合理的——调用 <code>run_coroutine_threadsafe</code> 的代码本来就跑在一个同步的、没有事件循环的线程里，给它一个只能 <code>await</code> 的对象毫无意义。两条铁律：第一，<code>result()</code> 一定要带 <code>timeout</code>，否则循环一旦卡住或关闭，这个线程会永久挂起，进程连正常退出都做不到；第二，绝对不要在事件循环所在的那个线程里调 <code>result()</code>，那会把循环阻塞在这一行，刚提交进去的协程永远没机会被调度，直接死锁。</div>
+</details>
+
+<details>
+<summary>我的库既要给同步代码用，又要给异步代码用，该怎么设计？</summary>
+<div class="answer">以异步为唯一实现本体，同步入口做成一层显式命名的薄包装。具体说：核心逻辑全部写成 <code>async def fetch(...)</code>，然后额外提供 <code>def fetch_sync(...)</code>，内部才调 <code>asyncio.run(fetch(...))</code>，并在文档里写明它不可在已有循环中调用。关键是<strong>绝不要把 <code>asyncio.run</code> 藏进普通函数里</strong>——那样异步调用方一调进来就是 <code>RuntimeError: asyncio.run() cannot be called from a running event loop</code>，等于把整类用户挡在门外；即使调用方恰好是同步的，每次调用新建再销毁循环也让连接池、上下文变量、取消信号全都无法复用。反过来的做法（同步为本体、异步入口用 <code>to_thread</code> 包）在低频场景下也可以，但并发上限会被线程池容量卡死，不适合做高频客户端库。</div>
+</details>
+
+<details>
+<summary>怎么快速排查「哪一行阻塞了事件循环」？</summary>
+<div class="answer">最省力的入口是 <code>asyncio</code> 的调试模式：<code>asyncio.run(main(), debug=True)</code>，或者设环境变量 <code>PYTHONASYNCIODEBUG=1</code>。开启后，任何单次执行超过 <code>loop.slow_callback_duration</code>（默认 0.1 秒）的回调都会打印告警，并带上是哪个 <code>Handle</code>。它的好处是不需要你预先猜测哪里有问题。注意调试模式本身有性能开销，只在开发和压测环境开，不要带到生产。第二个办法是看症状特征：如果某个下游变慢时连健康检查接口的 P95 都跟着抬起来，那基本可以确定循环被独占过——真正的异步链路上，一个依赖变慢不应该影响不相干的接口。第三，把 <code>-W error::RuntimeWarning</code> 加进 CI 的测试命令，漏掉的 <code>await</code> 会直接变成测试失败。</div>
+</details>
+
+<details>
+<summary>在 Jupyter 里跑 asyncio.run 报错，怎么办？</summary>
+<div class="answer">Jupyter 的内核本身就跑在一个事件循环上，所以当前线程已经有运行中的循环，调 <code>asyncio.run</code> 必然得到 <code>RuntimeError: asyncio.run() cannot be called from a running event loop</code>。正确做法是直接用顶层 <code>await</code>：在 cell 里写 <code>result = await fetch(url)</code> 就行，IPython 支持这种写法。不要去装那些「给循环打补丁允许嵌套」的第三方库来绕过这个限制——嵌套循环会让重入语义变得难以预测，调试成本远高于改一行写法。这个场景也是判断规则的好例子：遇到「同步里调异步」，第一步永远是问「当前线程有没有运行中的循环」，Jupyter、pytest-asyncio 的用例、Web 框架的生命周期钩子都属于「有」，一律直接 <code>await</code>。</div>
+</details>
+
+<details>
+<summary>请求被取消时，已经提交到线程池的那个函数会停下来吗？</summary>
+<div class="answer">不会。<code>asyncio</code> 的取消机制是向协程抛 <code>CancelledError</code>，而它<strong>穿不过线程边界</strong>。客户端断连或上游超时触发取消后，事件循环侧的协程确实被取消了、<code>await</code> 立即返回，但已经在工作线程里跑着的那个同步函数会一直执行到自己结束，占着线程和下游连接。这带来两个实际后果：一是取消不能释放资源，被取消的请求仍在消耗线程池容量，高取消率场景下会加剧排队；二是端到端超时预算无法保证，因为链路上存在不可打断的区间。缓解手段只有间接的：给下游调用本身设置库级别的超时（比如数据库驱动的 <code>statement_timeout</code>）、把线程池容量与信号量上限对齐避免堆积、以及最根本的——减少线程边界的穿越次数。这也是「异步边界越靠外越好」的一个重要理由。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

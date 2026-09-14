@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY36 · 依赖管理的问题域与 uv</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、问题域先于工具</a>
+<a href="#s2">二、旧工具链的裂缝</a>
+<a href="#s3">三、uv 是什么</a>
+<a href="#s4">四、两套命令风格</a>
+<a href="#s5">五、解释器与工具管理</a>
+<a href="#s6">六、迁移与取舍</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY36 · 依赖管理的问题域与 uv</h1>
+<p class="subtitle">依赖管理的五个子问题 / 碎片化本身就是成本 / uv 的统一模型与性能来源 / 项目接口与兼容接口的分界 / 迁移判据与真实代价</p>
+
+<div class="intuition-box">
+<p>「Python 依赖管理很乱」不是因为工具做得差，而是因为它其实是五个彼此独立的问题被塞进了同一个词里。先把这五个问题分开，再看任何工具，就能一眼说出它管哪几个、漏了哪几个——uv 的全部价值也只是「这五个它都管，而且是同一套元数据」。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、问题域先于工具：依赖管理其实是五件事</h2>
+
+<p>新人问「Python 该用什么管依赖」，得到的答案通常是一串工具名：pip、venv、pyenv、pipx、poetry、conda、uv。这个答法没有信息量，因为它跳过了最关键的一步——这些工具解决的<strong>根本不是同一个问题</strong>。把 requirements.txt 换成 pyproject.toml 不会让「同事装出来的环境和我的不一样」消失，因为那是另一个子问题。</p>
+
+<p>把「依赖管理」这个词拆开，里面至少有五件必须同时解决的事。缺任何一件，项目在别人机器上或者在 CI 里都有相当概率跑不起来。</p>
+
+<div class="arch-diagram">  一个项目从「代码」到「能在别人机器上跑起来」，中间要回答五个问题
+  ──────────────────────────────────────────────────────────────
+
+  ① 装什么版本？        requests 我写了「要 2.x」，
+     版本解析           它的依赖又要求 urllib3 某个区间，
+                        谁来算出一组同时满足所有约束的版本？
+
+  ② 装到哪里？          项目 A 要某库 1.x，项目 B 要 2.x，
+     环境隔离           同一台机器上怎么共存？
+
+  ③ 别人怎么装出一样的？ 我这里装到的是 2.31.0，
+     锁定               三个月后同事装到 2.34.0，行为变了
+
+  ④ 用哪个解释器？      我本地 3.12，CI 镜像 3.10，
+     Python 版本管理     语法和依赖可用性都不一样
+
+  ⑤ 工具本身装哪？      ruff、mypy 这些命令行工具
+     工具隔离           要不要装进项目环境，污染项目依赖？
+
+  ──────────────────────────────────────────────────────────────
+  这五件事互相独立：解决了 ② 不等于解决了 ③，
+  而绝大多数「在我机器上是好的」都恰好卡在 ③ 上</div>
+
+<p>第一件事叫<span class="term">版本解析</span>。你在声明文件里写的是约束（「要 2.x」），不是具体版本；而你依赖的包又各自有自己的约束。求出一组同时满足所有约束的具体版本，是一个需要<span class="term">回溯</span>的搜索问题——某个版本选错了，可能要退回去换一个重算。第二件事是<span class="term">环境隔离</span>，也就是虚拟环境要解决的问题，<a href="py_environment_interpreter.html">PY01</a> 已经讲过它的实现只是一组路径约定。</p>
+
+<p>第三件事是<span class="term">锁定</span>，这是最容易被忽略、代价也最大的一件。声明文件记的是约束，锁文件记的是「上次解析出来的那一组确切版本」（通常还带哈希）。没有锁文件，每个人、每次 CI 构建都会重新解析一遍，装到的版本取决于当天上游发布了什么。第四件是<strong>解释器本身</strong>的版本管理，第五件是<span class="term">工具隔离</span>——<code>ruff</code>、<code>mypy</code>、<code>pre-commit</code> 这类命令行工具和项目的运行依赖没有关系，装进项目环境只会让依赖图变脏。</p>
+
+<h3>历史上这五件事分别归谁管</h3>
+
+<table>
+<tr><th>子问题</th><th>要回答的问题</th><th>历史上主要由谁负责</th><th>缺了它的典型症状</th></tr>
+<tr><td>① 版本解析</td><td>一组约束对应哪组确切版本</td><td><code>pip</code>、<code>pip-tools</code>、<code>poetry</code></td><td>装完后各包的声明互相矛盾</td></tr>
+<tr><td>② 环境隔离</td><td>不同项目的包放在哪</td><td><code>virtualenv</code>、标准库 <code>venv</code>、<code>conda</code></td><td>两个项目抢同一个库的版本</td></tr>
+<tr><td>③ 锁定</td><td>怎么复现出同一组版本</td><td><code>pip-compile</code>、<code>poetry.lock</code>、<code>Pipfile.lock</code></td><td>「我这里是好的」，CI 和同事那里不是</td></tr>
+<tr><td>④ 解释器版本</td><td>用哪个 python 可执行文件</td><td><code>pyenv</code>、<code>conda</code>、官方安装包</td><td>本地和 CI 的 Python 小版本不一致</td></tr>
+<tr><td>⑤ 工具隔离</td><td>全局命令行工具装在哪</td><td><code>pipx</code></td><td>lint 工具的依赖挤进了项目依赖图</td></tr>
+</table>
+
+<p>这张表解释了一个让新人困惑的历史现象：为什么早年一个正经的 Python 项目要装四五个工具才算齐活。因为每一行都得有人管，而当时没有任何一个工具能覆盖全部五行。<code>pyenv</code> + <code>virtualenv</code> + <code>pip-tools</code> + <code>pipx</code> 这种组合不是谁品味差，而是当时的必然结果。</p>
+
+<div class="intuition-box">
+<p>评价任何依赖管理工具，只问一句：上面那五行它覆盖了哪几行，剩下的谁来管，以及这几套工具之间的元数据是不是同一份。答不出来的对比都是在比语法糖。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、旧工具链的裂缝：碎片化本身就是成本</h2>
+
+<p>这一节要说清的不是「旧工具很差」——它们每一个都在自己的职责范围内做得不错，很多至今仍是最稳妥的选择。要说清的是另一件事：<strong>把五个职责分给五个工具，产生的成本不是五份，而是五份加上它们之间所有接缝的成本</strong>。而接缝是没人负责的。</p>
+
+<h3>逐个看它们的边界</h3>
+
+<p><code>pip</code> 管的是「安装」和「解析」。它不产出锁文件——很多人以为 <code>pip freeze &gt; requirements.txt</code> 就是锁定，但 freeze 导出的是<strong>当前环境里恰好装着什么</strong>，既不区分直接依赖和<span class="term">传递依赖</span>，也不带哈希，还会把只在你这台机器上装过的东西一起写进去。另外要记一个版本分水岭：pip 直到 20.3（2020 年底）才把带回溯的解析器设为默认，在那之前 <code>pip install a b</code> 完全可能装出一组互相不满足声明的版本，而且不报错——这也是 <code>pip check</code> 这个子命令存在的原因。</p>
+
+<p><code>virtualenv</code>（以及标准库的 <code>venv</code>）只管第二行，它对「装什么版本」一无所知。<code>pyenv</code> 只管第四行，它通过 shim 拦截 <code>python</code> 调用来切版本，代价是要在本地从源码编译解释器，首次安装慢，且 Windows 上是另一个分支项目。<code>pipx</code> 只管第五行，做法是给每个工具一个独立虚拟环境。</p>
+
+<p><code>poetry</code> 和 <code>pipenv</code> 是第一批认真做整合的工具，它们同时管了 ①②③，也确实把体验提升了一个台阶。它们的问题在别处：各自引入了自己的元数据约定（<code>Pipfile</code>、以及 poetry 早期的 <code>[tool.poetry.dependencies]</code> 写法与后来标准化的 <code>[project]</code> 表并不相同），于是「用哪个工具」变成了一个会写进仓库、很难反悔的决定；同时两者都用 Python 实现，在依赖多、约束复杂的项目上解析和安装都偏慢。</p>
+
+<table>
+<tr><th>工具</th><th>覆盖的子问题</th><th>没覆盖的</th><th>主要裂缝</th></tr>
+<tr><td><code>pip</code></td><td>①（20.3 起带回溯）</td><td>②③④⑤</td><td>不产出锁文件；freeze 不是锁定</td></tr>
+<tr><td><code>venv</code> / <code>virtualenv</code></td><td>②</td><td>①③④⑤</td><td>只改路径，不知道该装什么</td></tr>
+<tr><td><code>pip-tools</code></td><td>①③</td><td>②④⑤</td><td>锁文件平台相关，多平台要各编译一份</td></tr>
+<tr><td><code>pyenv</code></td><td>④</td><td>①②③⑤</td><td>本地源码编译慢；Windows 需另一实现</td></tr>
+<tr><td><code>pipx</code></td><td>⑤</td><td>①②③④</td><td>只管全局工具，与项目环境无关</td></tr>
+<tr><td><code>poetry</code> / <code>pipenv</code></td><td>①②③</td><td>④⑤</td><td>自带元数据约定；纯 Python 实现，速度受限</td></tr>
+</table>
+
+<p>看表格右下角：即使选了整合度最高的 poetry，第四行和第五行仍然要另外找工具。于是一个项目的真实工具栈是「poetry + pyenv + pipx」，三个工具三套配置文件、三个升级节奏、三份要写进 README 的安装说明。新人 onboarding 时的第一天就消耗在这里。</p>
+
+<div class="arch-diagram">  2020 年前后一个「规范」项目的工具栈
+  ────────────────────────────────────
+    pipx          ← 装 ruff / mypy / pre-commit
+    pyenv         ← 定 Python 3.9.13
+    poetry        ← 解析 + 建环境 + 写 poetry.lock
+    pip           ← 兜底：poetry 搞不定的私有包手动装
+      ↑
+      这一层是所有事故的来源：手动装的东西不在任何声明里
+
+  配置文件：.python-version / pyproject.toml / poetry.lock
+            / .pre-commit-config.yaml / requirements-dev.txt
+  README 安装步骤：7 行，其中 3 行是「先装某个工具」
+
+  ────────────────────────────────────
+  换成 uv 之后
+    uv            ← 上面五件事同一套元数据
+  配置文件：pyproject.toml / uv.lock / .python-version</div>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>某内部服务的 CI 在一次例行构建中突然报 <code>ModuleNotFoundError: No module named 'tenacity'</code>，而所有 8 名开发的本地环境都正常。3 个人断续排查了约 4.5 小时、跨两天，中途怀疑过 CI 缓存、镜像源和构建顺序。最后的发现方式很土：把开发机上 <code>python -m pip freeze</code> 的 106 行输出，和「按 <code>pyproject.toml</code> 里 23 个直接依赖新建一个干净环境」后 freeze 出的 94 行做差集，多出 12 个包，其中 <code>tenacity</code> 被业务代码直接 import。根因是六周前一次线上救火，有人在开发机的虚拟环境里手动 <code>pip install tenacity</code> 应急，没写进声明文件；此后每个人拉代码时都从这个环境继续开发，本地一直能跑。真正的问题不是那条命令，而是<strong>「环境」和「声明」是两份可以长期不一致的东西，而没有任何机制会告诉你它们已经漂移了</strong>。</p>
+</div>
+
+<div class="intuition-box">
+<p>只要「改环境」和「改声明」是两个独立动作，它们就一定会漂移，区别只是多久暴雷。所以真正的解法不是更勤快地维护声明文件，而是让「装包」这个动作<strong>无法</strong>不更新声明。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、uv 是什么：一个工具覆盖五行</h2>
+
+<p><span class="term">uv</span> 是 Astral（Ruff 的作者）用 Rust 写的 Python 包与项目管理器。按上一节那张表来说，它的定位可以一句话讲完：<strong>五行它都管，而且用的是同一套元数据</strong>——<code>pyproject.toml</code> 里的标准 <code>[project]</code> 表加上一个 <code>uv.lock</code>。官方文档对自己的描述是「用一个工具替代 <code>pip</code>、<code>pip-tools</code>、<code>pipx</code>、<code>poetry</code>、<code>pyenv</code>、<code>twine</code>、<code>virtualenv</code> 等」，这个列表和前面五行基本能对上。</p>
+
+<p>注意它不引入新的依赖声明格式。这一点值得单独指出：<code>[project]</code> 表是社区标准，<code>uv add</code> 写进去的内容 pip 也能读。这意味着「换到 uv」不是一个难以反悔的决定，这和当年从 poetry 的私有表结构迁出的痛苦程度完全不同。</p>
+
+<pre><code># 从零到能跑代码：四条命令，不需要先装 Python
+uv python install 3.12   # 装解释器（不碰系统 Python）
+uv init myproject        # 建项目骨架
+cd myproject
+uv add requests          # 加依赖：自动建 .venv + 写 uv.lock
+uv run main.py           # 跑代码（不需要「激活」任何东西）</code></pre>
+
+<p><code>uv init</code> 会生成 <code>pyproject.toml</code>、<code>.python-version</code>、<code>README.md</code> 和一个入口源码文件，并初始化 git 仓库。具体的目录布局（是否用 <code>src/</code> 分层、入口文件叫什么）在不同 uv 版本间调整过，所以这里不写死——用之前跑一次 <code>uv init --help</code> 看当前版本的行为。<code>.venv</code> 和 <code>uv.lock</code> 不由 <code>uv init</code> 创建，而是在第一次执行 <code>uv run</code> / <code>uv sync</code> / <code>uv lock</code> 时出现。</p>
+
+<h3>速度从哪来</h3>
+
+<p>uv 最常被提到的是快。官方文档给出的量级是<strong>比 pip 快 10–100 倍</strong>——请把它当成一个量级区间而不是一个倍数，因为实际差距和场景强相关：缓存是冷还是热、依赖有几十个还是几百个、有没有包要现场编译源码分发，都能把这个数字拉到区间的任一端。在一个只有三五个纯 Python 依赖的小项目上，你大概感觉不到十倍。</p>
+
+<p>它的快主要来自三处，其中第二处顺带解决了磁盘占用问题：</p>
+
+<table>
+<tr><th>来源</th><th>做了什么</th><th>什么场景下收益最明显</th></tr>
+<tr><td>并行网络与解包</td><td>元数据请求、下载、解压并发进行，而非逐个串行</td><td>依赖数量多、冷缓存首次安装</td></tr>
+<tr><td>全局缓存 + 链接</td><td>包只解压一份放进全局缓存，环境里用链接指过去</td><td>同一台机器上多个项目、反复重建环境</td></tr>
+<tr><td>解析器实现</td><td>Rust 实现的回溯解析，元数据获取与求解重叠进行</td><td>约束复杂、需要大量回溯的依赖图</td></tr>
+<tr><td>原生二进制</td><td>本身是单个可执行文件，启动不需要先起一个 Python</td><td>CI 里高频调用的短命令</td></tr>
+</table>
+
+<p>第二行值得展开，因为它是「装包很快」之外的另一个实际好处。uv 维护一个全局缓存目录，同一个包的同一个版本在整台机器上只解压一份；各个项目的 <code>.venv</code> 里不是副本，而是指向缓存的链接。默认策略按平台区分：macOS 和 Linux 上默认用 <span class="term">写时复制</span>（clone），Windows 上默认用<span class="term">硬链接</span>，也可以用 <code>--link-mode</code> 显式指定。</p>
+
+<div class="arch-diagram">  传统做法：每个项目一份完整副本
+    projA/.venv/.../numpy/   ← 约 30 MB 实体文件
+    projB/.venv/.../numpy/   ← 又 30 MB，内容完全一样
+    projC/.venv/.../numpy/   ← 再 30 MB
+
+  uv：全局缓存存一份，环境里放链接
+    ~/.cache/uv/.../numpy-x.y.z/   ← 唯一的实体
+          ↑           ↑          ↑
+      projA/.venv  projB/.venv  projC/.venv
+      （clone 或 hardlink，几乎不占额外空间）
+
+  ⚠ 有个前提容易踩：缓存目录必须和虚拟环境在同一个文件系统上。
+    否则链接建不起来，uv 会退回「逐文件复制」，慢且占空间。
+    典型翻车场景：容器里把缓存挂到另一个卷上，
+    于是「装得很快」这件事在 CI 上完全没发生。</div>
+
+<p>那个警告框里的坑在 Docker 和 CI 上相当常见，而且症状很温和——不报错，只是没有变快，于是很容易被归结为「uv 名不副实」。判断方法是看安装耗时：热缓存下几十个包的安装应该是百毫秒量级；如果是几秒到几十秒，先确认缓存和环境是不是在同一个文件系统上。</p>
+
+<h3>锁文件为什么是跨平台的</h3>
+
+<p>还有一个不属于「速度」但同样重要的差别：<code>uv.lock</code> 是<strong>跨平台</strong>的锁文件。这件事需要对比才能看出价值。<code>pip-compile</code> 产出的 <code>requirements.txt</code> 是在你当前这台机器上解析出来的结果，它记的是「在 Linux x86_64 上、Python 3.12 下要装这些」；换到 macOS 或换个 Python 小版本，这份清单可能就不成立了，于是团队要为每个目标平台各编译一份并分别维护。</p>
+
+<p><code>uv.lock</code> 的做法不同：它为所有目标环境记录一份带标记条件的解析结果，安装时再按当前平台挑出适用的那部分。实际效果是一个仓库一份锁文件，本地 Windows 开发、CI 跑 Linux、同事用 macOS，三方拿到的是同一份声明来源。这也顺带解释了为什么 <code>uv.lock</code> 比 <code>requirements.txt</code> 长得多——它装的信息本来就多一个维度。</p>
+
+<div class="intuition-box">
+<p>uv 的快有两个来源要分开看：一部分是「用 Rust 重写 + 并行」带来的，任何场景都吃得到；另一部分是缓存加链接带来的，一旦跨文件系统就归零。后者是可以被配置搞坏的，出问题先查它。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、两套命令风格：最大的困惑来源在这里</h2>
+
+<p>uv 有两组命令，长得很像但工作模型完全不同。不先把这条线划清楚，后面所有奇怪现象都解释不了——这也是新用户最常见的困惑来源。</p>
+
+<p>第一组叫<strong>项目接口</strong>：<code>uv init</code>、<code>uv add</code>、<code>uv remove</code>、<code>uv sync</code>、<code>uv lock</code>、<code>uv run</code>。它们围绕 <code>pyproject.toml</code> 和 <code>uv.lock</code> 工作，每一条都同时维护「声明」和「环境」两侧。第二组叫<strong>兼容接口</strong>：<code>uv pip install</code>、<code>uv pip sync</code>、<code>uv pip compile</code>、<code>uv pip freeze</code> 等。它们刻意模仿 pip 和 pip-tools 的行为，作用对象是「当前这个环境」，<strong>完全不碰 <code>pyproject.toml</code> 也不碰锁文件</strong>。</p>
+
+<table>
+<tr><th>维度</th><th>项目接口（<code>uv add</code> 等）</th><th>兼容接口（<code>uv pip install</code> 等）</th></tr>
+<tr><td>作用对象</td><td>项目：声明 + 锁文件 + 环境三者同步</td><td>某一个环境，就地增删</td></tr>
+<tr><td>会不会写 <code>pyproject.toml</code></td><td>会</td><td>不会</td></tr>
+<tr><td>会不会写 <code>uv.lock</code></td><td>会</td><td>不会</td></tr>
+<tr><td>心智模型</td><td>声明式：我描述想要什么，工具负责对齐</td><td>命令式：我下指令，改完就结束</td></tr>
+<tr><td>适合</td><td><strong>所有新项目</strong>、需要可复现构建的一切场景</td><td>迁移过渡期、临时环境、纯 <code>requirements.txt</code> 的老仓库、脚本化一次性安装</td></tr>
+<tr><td>混用的后果</td><td colspan="2">环境里多出锁文件不知道的包 —— 正是第二节那个事故的形态，只是换了个工具</td></tr>
+</table>
+
+<p>最后一行是本节的重点。<code>uv pip install</code> 装进去的包不会出现在 <code>uv.lock</code> 里，于是你重新得到了「环境和声明可以漂移」这个能力——而这恰恰是换到 uv 想消除的东西。更容易踩的是反向：因为 <code>uv sync</code> 默认做<strong>精确同步</strong>（环境里多出来的包会被移除），你上一步用 <code>uv pip install</code> 装的东西，下一次 <code>uv sync</code> 就会被清掉，表现为「我明明装过，怎么又没了」。</p>
+
+<div class="highlight">
+<p><strong>一条简单规则，能省掉这一类的全部麻烦：</strong>新项目<strong>只用</strong>项目接口。看到教程里写 <code>pip install X</code>，翻译成 <code>uv add X</code>，而不是 <code>uv pip install X</code>。兼容接口只在两种情况下用：一是老仓库还在用 <code>requirements.txt</code>、暂时不打算改造；二是你要临时造一个用完就扔的环境，比如复现一个 bug。这两种情况的共同点是<strong>本来就不存在锁文件</strong>，所以不会漂移。</p>
+</div>
+
+<p>还有一类依赖值得用项目接口专门处理：只在开发时需要的东西，比如 <code>pytest</code>、格式化工具、类型检查器。它们不该出现在运行依赖里，否则线上镜像会白白装进一堆测试工具。老办法是另开一个 <code>requirements-dev.txt</code>，但那份文件不参与解析，很容易和主依赖打架。现在的标准做法是 PEP 735 定义的 <code>[dependency-groups]</code> 表，uv 用 <code>uv add --dev</code> 写入，<code>uv sync --no-dev</code> 在构建生产环境时排除。关键是这些开发依赖<strong>和运行依赖一起参与同一次解析、写进同一个锁文件</strong>，所以不会出现「开发环境里的某个工具悄悄把某个库顶到了别的版本」。</p>
+
+<h3><code>uv run</code>：为什么「忘了激活虚拟环境」这件事消失了</h3>
+
+<p><code>uv run</code> 看起来只是「帮你拼好 <code>.venv/bin/python</code> 的路径」，但它做的比这多一步，而这一步才是关键：<strong>执行前它会先确认锁文件与 <code>pyproject.toml</code> 一致、环境与锁文件一致</strong>，不一致就先补齐再执行。于是「我以为装了其实没装」「同事加了依赖我没同步」这类问题在命令层面就被消灭了，不需要任何人记得先跑一次安装。</p>
+
+<div class="arch-diagram">  uv run main.py 实际发生的事
+  ───────────────────────────
+
+   ① 读 pyproject.toml，检查 uv.lock 是否还匹配声明
+        不匹配 → 重新解析，更新 uv.lock
+   ② 检查 .venv 是否与 uv.lock 一致
+        不一致 → 装缺的、补齐版本
+   ③ 用 .venv 里的解释器执行 main.py
+
+  于是这两类问题从根上消失：
+    「忘了激活」        → 第 ③ 步不依赖 PATH，直接指名解释器
+    「忘了装新依赖」    → 第 ①② 步会自动补
+
+  CI 里通常要反过来：不许它自动改锁文件
+    uv run --locked ...   锁文件过期就报错，不偷偷更新
+    uv run --frozen ...   直接用现有锁文件，不检查是否过期
+    uv run --no-sync ...  不检查环境，只管执行
+    uv lock --check       单独校验锁文件是否与声明一致</div>
+
+<p>本地开发和 CI 对这套自动行为的需求正好相反。本地希望它自动补齐，越省事越好；CI 则必须禁止任何自动更新——否则一次构建可能悄悄解析出一组新版本并写进锁文件，你的「可复现构建」就名存实亡了。所以 CI 脚本里应当固定带上 <code>--locked</code>（或先跑一次 <code>uv lock --check</code>），让锁文件过期这件事变成一个明确的构建失败，而不是一次静默的版本漂移。</p>
+
+<div class="intuition-box">
+<p><code>uv run</code> 的价值不在于少敲几个字，而在于它把「环境是否正确」从一件需要人记住的事，变成了每次执行前自动校验的一步。凡是靠自觉维护的一致性，长期一定会坏。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、解释器与工具管理：第四行和第五行</h2>
+
+<p>这一节对应前面那张表的最后两行。它们和依赖管理常被混为一谈，但其实是两个独立问题：一个是「谁来执行」，一个是「我机器上那些全局命令装在哪」。</p>
+
+<h3>解释器：<code>uv python</code></h3>
+
+<p>uv 可以自己下载和管理 CPython。这里有个和 <code>pyenv</code> 的实现差异值得知道：pyenv 在你机器上<strong>从源码编译</strong>解释器，所以需要一整套本地构建依赖，首次安装通常要几分钟；uv 用的是预构建的独立发行版（<code>python-build-standalone</code> 项目），下载解压即可用，不需要编译工具链。代价是这些发行版为了可移植性有一些行为上的小差异，官方文档专门列了一页 quirks。</p>
+
+<pre><code>uv python install 3.12        # 装 3.12 的最新补丁版
+uv python install 3.10 3.11   # 一次装多个
+uv python list                # 列出已装的 + 可下载的
+uv python list --only-installed   # 只看已装的
+uv python pin 3.12            # 写入 .python-version
+uv python find                # 当前会命中哪个解释器
+uv python upgrade 3.12        # 升到该小版本的最新补丁版</code></pre>
+
+<p>还有一个容易忽略的点：这些命令<strong>在多数情况下不是必须的</strong>。uv 默认在需要时自动下载解释器，所以 <code>uv init</code> 一个要求 3.12 的项目、而机器上没有 3.12 时，它会自己装。<code>uv python install</code> 的价值在于显式控制——比如在构建镜像时把解释器提前装好，避免运行期下载。</p>
+
+<div class="arch-diagram">  uv 找解释器的顺序（简化）
+  ─────────────────────────
+   ① 当前或上层目录的 .venv（活跃虚拟环境优先）
+   ② uv 自己安装的托管版本
+   ③ PATH 上的 python / python3 / python3.x
+      （Windows 上还会查注册表和 Microsoft Store）
+   ④ 都没有合适的 → 下载一个托管版本
+
+  版本请求从哪来（优先级从高到低）
+   ① 命令行 --python 3.12
+   ② .python-version 文件（uv python pin 写的）
+   ③ pyproject.toml 里的 requires-python
+
+  ⚠ 注意 ③ 是一个区间约束，不是一个确定版本。
+    requires-python 只说「至少要 3.10」，
+    要固定小版本得靠 .python-version。</div>
+
+<p>上图最后那个提醒解释了一类困惑：明明 <code>pyproject.toml</code> 里写了 Python 版本，为什么同事装出来的解释器小版本和我不一样。因为 <code>requires-python</code> 表达的是兼容区间（「这个包能跑在哪些版本上」），它的语义本来就不是「用这个版本」。要让团队和 CI 落在同一个小版本上，得提交 <code>.python-version</code>。</p>
+
+<h3>全局工具：<code>uv tool</code> 与 <code>uvx</code></h3>
+
+<p>第五行的问题是：<code>ruff</code>、<code>mypy</code>、<code>pre-commit</code> 这些工具是命令行程序，你希望在任何目录都能敲，但它们各自有依赖，装进项目环境会污染项目依赖图。<code>pipx</code> 的答案是每个工具一个独立虚拟环境，uv 沿用了同样的模型：</p>
+
+<pre><code>uv tool install ruff        # 装成常驻全局命令
+uv tool list                # 看装了哪些
+uv tool upgrade ruff        # 升级
+uv tool uninstall ruff      # 卸载
+uv tool update-shell        # 把工具目录加进 PATH
+
+uvx ruff check .            # 不安装，临时环境里跑一次
+uvx [email protected] --version    # 指定版本跑</code></pre>
+
+<p><code>uvx</code> 是 <code>uv tool run</code> 的别名，两者行为完全相同。它和 <code>uv tool install</code> 的区别是环境的生命周期：<code>uvx</code> 用的是缓存在 uv 缓存目录里的一次性环境（<code>uv cache clean</code> 会删掉），<code>uv tool install</code> 建的环境会一直留着，直到你卸载。官方的建议是<strong>默认用 <code>uvx</code></strong>，只有当这个命令需要被别的程序或别的用户调用时才装。</p>
+
+<p>再补一条很容易搞错的：<code>uvx</code> 跑出来的工具和你的项目环境是<strong>隔离</strong>的。所以 <code>pytest</code>、<code>mypy</code> 这类必须看见项目代码和项目依赖的工具，应该用 <code>uv run pytest</code> 而不是 <code>uvx pytest</code>——后者在一个干净环境里跑，import 不到你的包。这个区分和 <a href="py_modules_packages.html">PY08</a> 讲的模块搜索路径是同一件事的两个侧面。</p>
+
+<table>
+<tr><th>你原来用什么</th><th>现在用什么</th><th>差别 / 注意</th></tr>
+<tr><td><code>pyenv install 3.12</code></td><td><code>uv python install 3.12</code></td><td>下载预构建版，不本地编译</td></tr>
+<tr><td><code>pyenv local 3.12</code></td><td><code>uv python pin 3.12</code></td><td>都是写 <code>.python-version</code>，格式互通</td></tr>
+<tr><td><code>python -m venv .venv</code></td><td><code>uv venv</code></td><td>项目接口下一般不用手动建</td></tr>
+<tr><td><code>pip install requests</code></td><td><code>uv add requests</code></td><td>顺带写声明和锁文件（关键差别）</td></tr>
+<tr><td><code>pip install -r requirements.txt</code></td><td><code>uv sync</code></td><td><code>uv sync</code> 会移除多余包，pip 不会</td></tr>
+<tr><td><code>pip-compile requirements.in</code></td><td><code>uv lock</code></td><td>锁文件跨平台，不必每平台一份</td></tr>
+<tr><td><code>pipx install ruff</code></td><td><code>uv tool install ruff</code></td><td>同一个模型：一工具一环境</td></tr>
+<tr><td><code>pipx run ruff</code></td><td><code>uvx ruff</code></td><td><code>uvx</code> = <code>uv tool run</code></td></tr>
+<tr><td><code>python -m build</code> + <code>twine upload</code></td><td><code>uv build</code> + <code>uv publish</code></td><td>发布场景先小范围验证再全面切</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>解释器版本和全局工具这两件事，用不用 uv 都得有人管。uv 的好处不是「多了两个功能」，而是它们和依赖管理共用同一份配置、同一个缓存、同一条升级路径，接缝少了三处。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、迁移与取舍：什么时候别动</h2>
+
+<p>前面五节都在说 uv 的模型好在哪。这一节要给出反面：什么情况下现在换是错的，以及换了要付什么代价。一个工具的推荐如果不带这两样，读者就没法自己做判断。</p>
+
+<h3>先判断该不该动</h3>
+
+<table>
+<tr><th>项目情况</th><th>建议</th><th>理由</th></tr>
+<tr><td>全新项目</td><td>直接用，只用项目接口</td><td>没有历史包袱，一步到位成本最低</td></tr>
+<tr><td>老项目只有 <code>requirements.txt</code></td><td>可以先换，从兼容接口起步</td><td><code>uv pip install -r</code> 基本原地可用，先吃到速度收益</td></tr>
+<tr><td>已在用 poetry / pipenv 且运转良好</td><td>不急，等有明确痛点再说</td><td>元数据要改写、CI 要改、团队要重学，收益主要是速度</td></tr>
+<tr><td>团队已有既定工具链和规范</td><td>先别动，或只在个人环境试</td><td>工具统一的价值通常高于单工具的先进性</td></tr>
+<tr><td>有依赖特殊构建流程的私有包</td><td>先在分支上验证，别直接切</td><td>uv 默认启用 PEP 517 构建隔离，声明不全的包会装不上</td></tr>
+<tr><td>重度依赖 conda 生态（CUDA、MKL 等）</td><td>保留 conda，或只用 uv 管纯 Python 部分</td><td>非 Python 的系统库仍是 conda 的主场</td></tr>
+<tr><td>CI 改造成本高、发布链路复杂</td><td>分两步：先换本地，再换 CI</td><td>本地收益立刻可见，CI 可以慢慢验证</td></tr>
+</table>
+
+<p>第五行那个「PEP 517 构建隔离」值得多说一句，因为它是迁移时最常见的硬故障。uv 默认在隔离环境里构建源码分发，这意味着包必须<strong>正确声明了自己的构建期依赖</strong>。有些年代久远的内部包默认「构建时 numpy 已经装好了」，在 pip 的旧行为下能侥幸通过，在 uv 下就会直接失败。应急出口是 <code>--no-build-isolation</code>（需要先手动装好构建依赖），但更好的做法是把那个包的构建声明补全。</p>
+
+<h3>诚实的代价清单</h3>
+
+<p>第一，<strong>多一个团队需要理解的工具</strong>。而且理解成本不为零：本卡第四节那整节内容——两套接口的分界——就是每个团队成员都得搞清楚的东西，否则混用会造出新的一类问题。</p>
+
+<p>第二，<strong>生态和文档还在快速变化</strong>。uv 的迭代很快，子命令和默认行为都还在调整（这也是本卡刻意不写死 <code>uv init</code> 生成哪些文件的原因）。实际影响是：网上搜到的教程可能已经不对，团队内部的文档需要定期核对；跟着官方文档走比跟着博客走可靠得多。</p>
+
+<p>第三，<strong>某些冷门场景要回落到兼容接口</strong>。项目接口是围绕「一个 pyproject 加一个锁文件」设计的，遇到不符合这个形状的场景——多个互相冲突的 extra 组合、必须按平台分别产出 <code>requirements.txt</code> 交给下游、依赖来自不遵守标准的私有索引——就得退回 <code>uv pip compile</code> 这类命令手工处理。能退是好事，但要知道自己此时已经离开了「可复现」的保护。</p>
+
+<div class="arch-diagram">  一条低风险的迁移路径
+  ────────────────────
+
+  第 0 步  在个人机器上装 uv，什么都不改，
+           只把 pip install 换成 uv pip install
+           → 拿到速度收益，零风险，可随时退回
+
+  第 1 步  uv init 到一个分支，把依赖搬进 [project]，
+           生成 uv.lock，跑通全部测试
+           → 这一步会暴露构建隔离之类的硬问题
+
+  第 2 步  日常开发统一用 uv run / uv add，
+           删掉 README 里「先激活虚拟环境」那几行
+
+  第 3 步  CI 改为 uv sync --locked（锁文件过期即失败）
+           镜像构建里提前 uv python install
+
+  第 4 步  全局工具从 pipx 迁到 uv tool，
+           最后卸掉 pyenv / virtualenv / pipx</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>新项目只用项目接口：<code>uv init</code> / <code>uv add</code> / <code>uv run</code> / <code>uv sync</code></li>
+<li><code>uv.lock</code> 和 <code>.python-version</code> 都提交进仓库</li>
+<li>CI 里固定带 <code>--locked</code>，让锁文件过期变成构建失败</li>
+<li>需要看见项目代码的工具（pytest、mypy）用 <code>uv run</code></li>
+<li>全局命令行工具默认 <code>uvx</code> 临时跑，确有必要才 <code>uv tool install</code></li>
+<li>确认缓存目录和 <code>.venv</code> 在同一个文件系统上，否则链接优化失效</li>
+<li>迁移先在分支上跑通全部测试，再改 CI</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在有 <code>uv.lock</code> 的项目里用 <code>uv pip install</code> 装包——会漂移，且下次 <code>uv sync</code> 被清掉</li>
+<li>把 <code>pip freeze</code> 的输出当锁文件用</li>
+<li>指望 <code>requires-python</code> 能固定小版本——它是区间约束</li>
+<li>为了「统一工具」去动一条正在稳定运转的 poetry 链路</li>
+<li>用 <code>uvx pytest</code> 跑项目测试——环境隔离，import 不到你的包</li>
+<li>在 CI 里让 uv 自动更新锁文件（等于放弃可复现构建）</li>
+<li>把「快 10–100 倍」当成任何场景都成立的承诺</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>换工具的收益是一次性的，接缝减少的收益是长期的。所以判断要不要迁移，别看「快多少倍」，看「迁完之后团队需要理解的工具从几个变成几个」——这个数字从 4 降到 1 才值得动，从 2 降到 1 大概不值得。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>我们已经在用 poetry 且一切正常，值得换成 uv 吗？</summary>
+<div class="answer">如果只是「听说 uv 更快」，不值得。poetry 已经覆盖了版本解析、环境隔离、锁定这三件事，你换过去拿到的主要是速度，而要付出的是改写元数据、改 CI、全团队重学两套接口的分界。值得换的情形是你已经在为 poetry 覆盖不到的部分额外维护工具——比如同时还装着 pyenv 和 pipx，那么「团队要理解的工具从三个变成一个」这个收益是长期的，值得一次性成本。另一个值得换的信号是解析或安装已经明确成为瓶颈，比如 CI 里依赖安装占了构建时间的大头。判断标准不是工具先进程度，而是接缝数量和实际痛点。</div>
+</details>
+
+<details>
+<summary><code>uv add</code> 和 <code>uv pip install</code> 到底差在哪？混用会出什么问题？</summary>
+<div class="answer">差别只有一句话但很关键：<code>uv add</code> 同时更新 <code>pyproject.toml</code>、<code>uv.lock</code> 和 <code>.venv</code> 三者；<code>uv pip install</code> 只改 <code>.venv</code>，完全不碰前两者。混用有两个后果。一是你重新得到了「环境里有锁文件不知道的包」这个状态，本地能跑、别人和 CI 装不出来，也就是第二节那个事故的形态。二是方向相反的坑：<code>uv sync</code> 默认做精确同步，会移除环境里不在锁文件中的包，所以你 <code>uv pip install</code> 装的东西下一次 <code>uv sync</code> 就没了，表现为「装过的包莫名消失」。规则很简单：项目里有 <code>uv.lock</code> 就只用项目接口，兼容接口留给没有锁文件的老仓库和一次性环境。</div>
+</details>
+
+<details>
+<summary><code>uv.lock</code> 要提交到 git 吗？还需要 <code>requirements.txt</code> 吗？</summary>
+<div class="answer">应用项目要提交，这是锁文件存在的全部意义——让别人和 CI 能装出和你一样的版本。它是人可读的 TOML，但由 uv 维护，不要手改。库项目的情况略有不同：库的使用者按你声明的约束自行解析，不会读你的锁文件，但提交它仍然对你自己的 CI 有价值（让测试跑在确定的版本上）。<code>requirements.txt</code> 在换到项目接口后不再需要手工维护，如果下游工具还要读它，用 <code>uv export --format requirements.txt</code> 从锁文件导出，而不是另外维护一份——两份手写的依赖清单必然会不一致。uv 也支持导出 PEP 751 定义的 <code>pylock.toml</code> 标准格式。</div>
+</details>
+
+<details>
+<summary>uv 装的 Python 和系统 Python、pyenv 装的有什么区别？</summary>
+<div class="answer">来源不同。uv 用的是预构建的独立发行版（<code>python-build-standalone</code>），下载解压就能用；pyenv 是在你机器上从源码编译，所以需要本地构建依赖，首次安装慢得多。功能上日常写业务代码感觉不出差别，但要知道两点：一是这些独立发行版为了可移植性存在一些行为差异，官方文档专门列了一页 quirks，遇到诡异的构建或链接问题值得去查；二是 uv 只把自己装的版本叫「托管版本」，系统装的、pyenv 装的在 uv 看来都属于「系统版本」，可以用 <code>--managed-python</code> / <code>--no-managed-python</code> 控制只用哪一类。另外别忘了系统自带的那个 Python 属于操作系统，不要往里装包，理由见 <a href="py_environment_interpreter.html">PY01</a>。</div>
+</details>
+
+<details>
+<summary>CI 里怎么用 uv 才是对的？</summary>
+<div class="answer">核心原则是<strong>禁止 CI 自动更新锁文件</strong>。本地 <code>uv run</code> 会在锁文件过期时自动重新解析，这在开发时很方便，但在 CI 里意味着一次构建可能悄悄换掉一批依赖版本，可复现构建就没了。所以安装步骤用 <code>uv sync --locked</code>，锁文件和声明不一致时直接失败；或者单独加一步 <code>uv lock --check</code> 做前置校验。第二件事是缓存：把 uv 缓存目录纳入 CI 缓存能省掉大量下载，官方建议在作业末尾跑 <code>uv cache prune --ci</code>，它会清掉预构建 wheel 但保留源码构建出来的产物，因为后者才是重新生成最贵的部分。第三件事是确认缓存目录和虚拟环境在同一个文件系统上，跨卷会让链接优化静默失效。</div>
+</details>
+
+<details>
+<summary><code>uvx</code> 和 <code>uv run</code> 什么时候用哪个？</summary>
+<div class="answer">看这个命令需不需要看见你的项目代码和项目依赖。<code>uvx</code>（等同于 <code>uv tool run</code>）在一个和项目完全隔离的临时环境里跑，适合独立工具——格式化一个孤立文件、跑一个脚手架生成器、临时试用某个 CLI。<code>uv run</code> 在项目环境里跑，适合 <code>pytest</code>、<code>mypy</code> 这类必须 import 到你的包、还要看到你锁定的依赖版本的工具。典型的踩坑是用 <code>uvx pytest</code> 跑项目测试，结果一片 <code>ModuleNotFoundError</code>，因为那个临时环境里既没有你的包也没有你的依赖。顺带一提，<code>uv tool install</code> 和 <code>uvx</code> 的区别只是环境存不存久：前者留着并把命令放进 PATH，后者用完即弃（只在缓存里留一份加速下次调用）。</div>
+</details>
+
+<details>
+<summary>官方说快 10–100 倍，为什么我这里没那么明显？</summary>
+<div class="answer">因为那是一个量级区间，而不是任何场景都成立的倍数。落在区间哪一端取决于几件事。依赖数量：只有三五个纯 Python 包时，总耗时本来就只有一两秒，差距感觉不出来。缓存冷热：热缓存下 uv 几乎只是建链接，差距最大；全冷缓存时瓶颈在网络带宽，谁也快不过下载。有没有源码构建：如果某个包必须现场编译 C 扩展，时间全花在编译器上，和包管理器无关。还有一个会让优化整体失效的配置问题：缓存目录和虚拟环境不在同一个文件系统时，uv 建不了链接，会退回逐文件复制——不报错，只是不快了。所以感觉没变快时，先确认这一条，再看是不是本来就没有可优化的空间。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

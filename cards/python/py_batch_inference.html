@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY56 · 批量任务的吞吐与续跑</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、批量任务的目标函数不一样</a>
+<a href="#s2">二、吞吐由最紧的那道闸决定</a>
+<a href="#s3">三、有界并发流水线</a>
+<a href="#s4">四、断点续跑是刚需</a>
+<a href="#s5">五、成本与质量的权衡</a>
+<a href="#s6">六、进度、验收与预演纪律</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY56 · 批量任务的吞吐与续跑</h1>
+<p class="subtitle">批量与交互的目标函数之别 / 瓶颈闸口定位 / 有界并发流水线 / 断点续跑与幂等 / 成本与质量的权衡</p>
+
+<div class="intuition-box">
+<p>交互式请求是一场百米赛，批量任务是一场马拉松。用跑百米的姿势去跑马拉松——超时设得短、重试催得急、跑完才落盘——问题不是跑不快，是跑不完。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、批量任务的目标函数不一样</h2>
+
+<p>把几万条数据丢给模型跑一遍，代码看起来和写一个线上接口没什么区别：发请求、拿结果、处理异常。但两者优化的根本不是同一个量，把线上接口那套参数原样搬过来，批量任务往往在半路就散架。</p>
+
+<p>交互式请求优化的是<span class="term">单次延迟</span>：用户在屏幕前等着，P95 超过两秒体验就崩了，所以超时要短、重试要快、宁可快速失败也不要让人干等。批量任务优化的是<span class="term">总完成时间</span>（从启动到最后一条落盘的墙钟时间）和<span class="term">单位成本</span>：没有人在等某一条，只要整批在时间窗口内跑完、花的钱在预算内，就算成功。</p>
+
+<p>这两个目标函数经常给出<strong>相反</strong>的最优策略。单条请求慢到三十秒，在交互式场景是事故，在批量场景可能恰恰是最优解——因为继续等它比超时后重发一遍更省配额也更省钱。退避退到一分钟，在交互式场景不可接受，在批量场景是撞上限流后最该做的事。</p>
+
+<div class="intuition-box">
+<p>批量任务里，<strong>慢不是问题，停才是问题</strong>。任何会让整批停下来的设计——短超时引发的重试风暴、一条失败就整体退出、结果攒在内存里把机器撑爆——都比单条慢十倍严重得多。</p>
+</div>
+
+<h3>同一批任务，两套参数的实际形态</h3>
+
+<div class="arch-diagram">  同样 40000 条任务，两种目标函数给出的执行形态
+  ──────────────────────────────────────────────────────────
+  按「交互式」那套参数跑：超时 5s、重试 3 次、退避 200ms
+    0h         1h         2h         3h
+    ├──快──┬──限流──┬──重试风暴──┬──配额被自己打满──┤ 仍未跑完
+            ↑ 短超时把还没返回的慢请求成批重发
+              重发又占掉配额，成功率继续下降 ← 正反馈
+              实际吞吐反而更低，成本约 ×1.8
+
+  按「批量」那套参数跑：超时 120s、重试 5 次、退避到分钟级
+    0h         1h         2h         3h         4h
+    ├─────稳定贴着配额上限─────┬──整体降速──┬──恢复──┤ 完成
+                                ↑ 撞限流就全局减速，不对单条狂试
+
+  差别不在代码结构，只在四个参数：超时、重试次数、退避曲线、
+  以及「失败之后是终止整批还是记下来接着跑」</div>
+
+<h3>两类负载的参数对照</h3>
+
+<table>
+<tr><th>维度</th><th>交互式请求</th><th>批量任务</th><th>为什么会反过来</th></tr>
+<tr><td>优化目标</td><td>单次 P95 延迟</td><td>总完成时间与总成本</td><td>没有人在等某一条返回</td></tr>
+<tr><td>单请求超时</td><td>秒级，宁短勿长</td><td>分钟级，容忍长尾</td><td>超时重发等于把已经花掉的钱作废再花一遍</td></tr>
+<tr><td>并发策略</td><td>随外部流量波动，弹性伸缩</td><td>固定在配额允许的上限附近</td><td>批量的流量是自己造的，可以精确控制</td></tr>
+<tr><td>重试与退避</td><td>次数少、退避短</td><td>次数多、退避长，可跨分钟甚至小时</td><td>等配额恢复比放弃整条任务便宜得多</td></tr>
+<tr><td>撞限流时</td><td>快速失败或降级</td><td>整体减速，稍后继续</td><td>降级会改变输出质量，整批结果就不齐了</td></tr>
+<tr><td>失败处理</td><td>立刻把错误返回给调用方</td><td>记进待重跑列表，整批结束后统一处理</td><td>单条失败不应该终止另外三万九千条</td></tr>
+<tr><td>运行时段</td><td>跟随用户作息，不可选</td><td>可安排在低峰或夜间</td><td>低峰时配额更宽松，排队也更短</td></tr>
+</table>
+
+<h3>和服务端的批处理不是一回事</h3>
+
+<p>推理服务自己也在为吞吐做优化，但那是另一层的事。<a href="../deploy/continuous_batching_scheduling.html">DP11 Continuous Batching 与推理调度策略</a> 讲的是推理服务<strong>内部</strong>如何把多个请求拼进同一个批次、如何做迭代级调度与抢占——那是被调用方的调度器在做的决策，你作为客户端既看不见也控制不了。</p>
+
+<p>本卡站在<strong>调用方</strong>这一侧：你手上有几万条任务和一份别人给你的配额，怎么把它们全部跑完。两者不冲突，也不能互相替代——服务端把单位时间能处理的请求数做上去了，调用方仍然要自己解决并发编排、断点续跑和成本控制，否则照样跑不完。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、吞吐由最紧的那道闸决定</h2>
+
+<p>优化批量任务最常见的浪费，是把力气花在一道本来就不紧的闸上。把并发从 32 提到 128，吞吐纹丝不动——因为真正卡住的是下游每分钟的 token 配额，它在你把并发提上去之前就已经满了。提高非瓶颈环节的能力，收益严格等于零。</p>
+
+<p>所以第一步永远是找出当前的<span class="term">瓶颈闸口</span>。一条批量链路上串着好几道闸，每道都有自己的额定速率，整条链路的实际吞吐等于其中最小的那个。</p>
+
+<div class="arch-diagram">  一条批量链路上串着的闸口（括号里是示意的额定速率）
+  ──────────────────────────────────────────────────────────
+   本地读取         本地预处理        客户端并发         连接池
+   数据源/文件  ──▶  切分/清洗   ──▶  在飞请求上限  ──▶  连接数上限
+   （5000 条/s）     （800 条/s）      （64 在飞）        （100 连接）
+        │                │                 │                │
+        └────────────────┴────────┬────────┴────────────────┘
+                                  ▼
+                        ┌─────────────────────────┐
+                        │ 下游请求数配额（600 次/分）│
+                        │ 下游 token 配额（120 万/分）│  ← 两个维度各算一次
+                        └────────────┬────────────┘
+                                     ▼
+                             结果落盘 / 回写
+                             （2000 条/s）
+
+   实际吞吐 = 这一串里最小的那个
+   把非最小的那几道加宽，整条链路一动不动</div>
+
+<div class="formula">实际吞吐 ≈ min( 各闸口额定速率 )　　提升非最小项，收益为 0</div>
+
+<h3>两个问题就能定位瓶颈</h3>
+
+<p>第一个问题：把<strong>实际速率</strong>分别除以每道闸的额定值，比值最接近 1 的那道就是瓶颈。下游配额尤其要按两个维度各算一次——请求数没满不代表 token 没满，输入长的任务几乎总是先撞 token 配额。</p>
+
+<p>第二个问题：看<strong>在飞请求数</strong>。如果它长期贴着你设的并发上限，说明瓶颈在下游或在你自己设的这个上限上；如果它常年只有上限的三成，说明任务根本喂不进来，瓶颈在上游的读取或预处理，这时候调并发毫无意义。</p>
+
+<table>
+<tr><th>闸口</th><th>怎么观测</th><th>顶到上限的典型症状</th><th>放宽的代价</th></tr>
+<tr><td>下游请求数配额</td><td>每分钟成功请求数 ÷ 配额</td><td>限流错误成片出现，且随请求数同步涨落</td><td>申请提额，或把多条合并成一次请求</td></tr>
+<tr><td>下游 token 速率配额</td><td>每分钟消耗 token ÷ 配额</td><td>请求数明明没满也被限流</td><td>压缩输入、限制输出长度</td></tr>
+<tr><td>客户端并发上限</td><td>在飞请求数是否贴着设定值</td><td>稍微提高并发，吞吐立刻同步上升</td><td>提得过高会把下游配额打满，反而更慢</td></tr>
+<tr><td>连接池上限</td><td>获取连接的等待耗时</td><td>请求总耗时里多出一段稳定的排队时间</td><td>连接数要与并发度一起调，只提并发没用</td></tr>
+<tr><td>本地读取与预处理</td><td>在飞请求数远低于上限</td><td>提高并发毫无反应，CPU 却跑满一核</td><td>预处理搬进程池，见 <a href="py_multiprocessing.html">PY27</a></td></tr>
+<tr><td>结果落盘</td><td>待写入队列的积压长度</td><td>内存缓慢增长，越跑到后面越慢</td><td>小批写入加定期刷新，别每条都强制同步</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某批量任务把并发从 32 一路提到 256，吞吐从每分钟约 500 条只涨到约 560 条就再也不动，限流错误率却从 1% 涨到 18%。按上面两个问题算一遍：请求数配额用掉约 55%，token 配额用掉约 97%——瓶颈在 token 速率而不是请求数。把提示词里一段两千多字符、对本任务毫无作用的固定说明删掉之后，并发退回 64，吞吐反而升到每分钟约 900 条，限流错误率回到 1% 以下。<strong>之前那半天都花在往一道已经关死的闸上推。</strong></p>
+</div>
+
+<div class="intuition-box">
+<p>找瓶颈最快的办法不是读代码，是把「实际速率 ÷ 额定速率」这个比值对每道闸各算一遍。哪个最接近 1，哪个就是今天唯一值得动的地方，其余的改了都是白改。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、有界并发流水线：几万条任务的正确形状</h2>
+
+<p>拿到几万条任务，最自然的写法是把它们全部转成任务对象，一次性交给编排原语等结果。这在几十条时完全没问题，到几万条就同时踩三个坑：内存里一次性躺着几万个任务对象和几万份输入数据；下游在一瞬间收到远超配额的请求；以及任何一条出错时，你手上只有一个几万元素的结果列表，既不好定位也不好重跑。</p>
+
+<p>正确的形状是<span class="term">有界并发流水线</span>：一个生产者按需逐条读取任务放进队列，固定数量的工作协程从队列取任务处理，处理完立刻把结果交给写入端。队列长度有上限，于是<strong>反压</strong>能一路传回源头——下游慢了，工作协程取不走，队列满了，生产者自然停下来等，内存不会跟着任务总数涨。</p>
+
+<p>编排原语（任务组、结果聚合、异常传播）见 <a href="py_task_orchestration.html">PY30</a>，队列本身的用法与收尾顺序见 <a href="py_asyncio_queue.html">PY32</a>，限流器与超时的写法见 <a href="py_cancel_timeout_ratelimit.html">PY31</a>。本节只讲批量场景特有的三个取舍。</p>
+
+<div class="arch-diagram">  有界并发流水线
+  ──────────────────────────────────────────────
+   数据源 ──逐条读取──▶ ┌────────────┐
+   （不要一次读进内存）   │  任务队列   │ maxsize ≈ 并发度 × 2
+                         └─────┬──────┘
+              ┌────────────────┼────────────────┐
+              ▼                ▼                ▼
+          worker-1         worker-2   ...   worker-N   N 由配额反推
+              │                │                │
+              └────────────────┼────────────────┘
+                               ▼
+                        ┌─────────────┐
+                        │  结果写入端  │ 边完成边追加落盘
+                        └─────────────┘
+
+   队列满 ⇒ 生产者阻塞 ⇒ 反压传回源头 ⇒ 内存有上界
+   对照：一次性建 40000 个任务 ⇒ 没有反压 ⇒ 内存与下游同时爆</div>
+
+<h3>取舍一：并发度从下游配额反推</h3>
+
+<p>并发度不该拍脑袋设一个大数。稳态下，在飞请求数约等于目标吞吐乘以单条平均耗时——目标每秒 10 条、单条平均 6 秒，就需要大约 60 个在飞请求，再留点余量，并发度设 64 左右。反过来先设并发再看结果，就只能靠反复试，而且每试一次都要烧真金白银。</p>
+
+<div class="formula">并发度 N ≈ 目标吞吐（条/秒） × 单条平均耗时（秒） × 安全系数（0.8 ~ 1.0）</div>
+
+<p>目标吞吐本身也不是随便定的，它由配额倒推：请求数配额除以 60 得到每秒能发多少次，token 配额除以单条平均 token 量再除以 60 得到另一个值，取两者里小的那个。算出来的并发度通常比大家凭感觉设的要小得多，这是正常的。</p>
+
+<h3>取舍二：任务粒度不要太细</h3>
+
+<p>如果单条任务只要几十毫秒，调度、队列出入、日志、落盘这些固定开销就会占掉相当大的比例；把若干条打包成一个工作单元能把这部分摊薄。但粒度也不能太粗——单个工作单元越大，中断时丢掉的进度越多，第四节讲的续跑代价就越高。经验区间是让单个工作单元的处理耗时落在<strong>秒级到十秒级</strong>。</p>
+
+<h3>取舍三：结果边完成边落盘</h3>
+
+<p>常见写法是把所有结果收集到一个列表里，等全部跑完再统一写文件。几万条带长文本的结果足以吃掉几个 GB；更糟的是进程一旦中断，几小时的成果一起消失，这正是第四节那个事故的直接原因。正确做法是每条（或每小批）完成就追加写出去，写入端和工作协程解耦。</p>
+
+<pre><code>async def worker(q, sink):
+    while True:
+        task = await q.get()
+        try:
+            await sink.write(await handle(task))   # 完成一条写一条
+        except Exception as exc:
+            await sink.fail(task.id, exc)          # 失败单独记录，不抛出
+        finally:
+            q.task_done()</code></pre>
+
+<p>注意 <code>except</code> 这一支：批量场景里单条失败<strong>不应该</strong>让异常冒泡出去终止整批，它应该被就地记录。这和交互式场景的习惯正好相反，也是照搬接口代码最容易漏掉的一处。</p>
+
+<table>
+<tr><th>编排形状</th><th>内存占用</th><th>有反压吗</th><th>中断后损失</th><th>适用规模</th></tr>
+<tr><td>一次性创建全部任务</td><td>与任务总数成正比</td><td>没有</td><td>全部</td><td>几十条以内</td></tr>
+<tr><td>分批循环，每批等全部完成</td><td>与批大小成正比</td><td>很弱</td><td>当前整批</td><td>写起来简单，但有木桶效应</td></tr>
+<tr><td>有界并发流水线</td><td>与并发度成正比</td><td>有</td><td>只丢在飞的那几条</td><td>几千条以上的标准选择</td></tr>
+<tr><td>多进程，每进程一条流水线</td><td>进程数 × 上一行</td><td>有</td><td>同上</td><td>本地预处理是瓶颈时</td></tr>
+</table>
+
+<p>「分批循环」那一行的木桶效应值得展开：每批都必须等最慢的那条返回才能开下一批。大模型调用的耗时分布长尾很明显（同一批里从 1 秒到 30 秒都有），于是每批的时间都被最慢的那条拖住，实测的并发利用率常常只有六七成。流水线没有这个问题——一条完成就立刻补进下一条，槽位从不空着。</p>
+
+<div class="intuition-box">
+<p>判断编排写对了没有，只看一个现象：任务总数从一万涨到十万，进程的内存占用应该<strong>几乎不变</strong>。如果内存跟着任务数一起涨，说明你名义上写了队列，实际上还是先把整个列表展开了。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、断点续跑是刚需</h2>
+
+<p>几万条任务要跑几个小时，这段时间里发生中断几乎是必然事件：撞上限流、网络抖动、机器重启、被别人误杀、或者你自己发现提示词写错了要改代码。问题从来不是能不能避免中断（不能），而是中断之后是<strong>从断点继续</strong>还是<strong>从头再来</strong>。在几小时量级的任务上，这两者的差别就是几百块钱和一整个下午。</p>
+
+<p>做到续跑需要四件事，每一件都不复杂，但缺一不可。</p>
+
+<h3>一、为每条任务设计稳定的标识</h3>
+
+<p><span class="term">任务标识</span>稳定的含义是：同一条输入，今天跑和明天跑算出来的标识必须一模一样。有业务主键就直接用（文档 ID、订单号），没有就对「决定输出的全部输入」做哈希。<strong>不能用</strong>的是循环下标——数据源的顺序或过滤条件一变，所有标识整体平移，续跑会跳错任务而且你不会收到任何报错。</p>
+
+<table>
+<tr><th>标识来源</th><th>稳定吗</th><th>要注意什么</th></tr>
+<tr><td>业务主键（文档 ID、订单号）</td><td>稳定</td><td>首选；跨数据源合并时加前缀，避免不同来源撞号</td></tr>
+<tr><td>输入内容的哈希</td><td>稳定</td><td>先做规范化：去掉时间戳、统一空白与换行，否则同一条会算出不同标识</td></tr>
+<tr><td>文件名 + 行号</td><td>半稳定</td><td>源文件重新生成或重新排序就全部错位</td></tr>
+<tr><td>循环下标</td><td>不稳定</td><td>过滤条件一改就整体平移，续跑静默跳错</td></tr>
+<tr><td>随机 ID / 每次新生成的 UUID</td><td>不稳定</td><td>每次运行都不同，等于没有续跑</td></tr>
+</table>
+
+<h3>二、结果以可追加的形式落盘</h3>
+
+<p>每行一条 JSON 的行式文件是最省事的选择：追加写不需要读取或重写已有内容，进程被强杀最多损坏最后一行，解析时跳过即可。相比之下，一个大的 JSON 数组文件必须在最后才闭合，中断即整份不可解析。写完要让内容真正落到文件里（按小批刷新），而不是停在缓冲区里等着和进程一起消失。追加写、编码与异常处理的细节见 <a href="py_files_exceptions.html">PY07</a>。</p>
+
+<h3>三、启动时先加载已完成集合</h3>
+
+<p>启动时先扫一遍已有的结果文件，把里面的任务标识读进一个集合，生产者产出任务时直接跳过集合里已有的。几万个标识放在内存里是几 MB 量级，代价完全可以忽略；哪怕到百万量级，也只是几百 MB，仍然比重跑一遍便宜得多。</p>
+
+<h3>四、失败单独记录，并带上类别</h3>
+
+<p>失败的任务写进另一个文件，除了标识还要记<strong>错误类别</strong>：限流、超时、下游报错、输出解析失败、输入本身有问题。整批跑完后只重跑可重试的那几类；输入有问题的那些应该去修数据，反复重试只是在烧钱。</p>
+
+<div class="arch-diagram">  一条任务的状态流转，以及重启时怎么恢复
+  ──────────────────────────────────────────────────────
+                     ┌───────────┐
+   数据源 ──────────▶│  待处理    │◀─────────┐
+                     └─────┬─────┘          │
+                           │ 被 worker 取走  │ 下次启动重新产出
+                           ▼                │
+                     ┌───────────┐          │
+                     │  处理中    │──中断──▶ 丢失（只丢在飞的 N 条）
+                     └─────┬─────┘
+                 成功 ┌────┴────┐ 失败
+                      ▼         ▼
+              ┌────────────┐ ┌────────────┐
+              │  结果文件   │ │  失败文件   │ 记 标识 + 错误类别
+              │  追加一行   │ └─────┬──────┘
+              └──────┬─────┘       │ 只重跑可重试的类别
+                     │             ▼
+                     └──▶ 启动时读入「已完成标识集合」──▶ 生产者跳过
+
+   本次要跑的 = 全集 减去 已完成集合
+   幂等前提：同一标识重跑一次，下游不应该留下第二份副作用</div>
+
+<h3>幂等是续跑的前提</h3>
+
+<p>续跑必然会重跑一小部分任务——中断那一刻正在飞的那几条，状态是不确定的：可能下游已经处理完了，只是结果还没写回来。如果这条任务除了返回结果还会产生副作用（写库、发消息、生成计费记录），重跑就会留下两份。</p>
+
+<p>解决办法是把任务标识一路带到产生副作用的那一端，用它当<span class="term">幂等键</span>，让下游能识别出「这条我已经处理过了」。只读的抽取、分类、打标任务天然幂等，不用额外处理；一旦链路里有写入动作，这一步不能省——而它恰恰是最容易被忽略的，因为在没有中断的理想路径上永远不会暴露。</p>
+
+<div class="highlight">
+<p><strong>生产事故复盘：</strong>一个约 4 万条的文档字段抽取任务，第一次启动跑了约 3 小时 10 分、完成约 2.7 万条时，撞上下游按分钟计的配额收紧，重试次数耗尽后进程退出。因为结果全攒在内存里、也没有已完成标识，这 2.7 万条的成果<strong>全部作废</strong>，只能从头再来。第二次只改了退避参数就继续跑，在约 4 小时 15 分、完成约 3.6 万条时又撞上同一个问题，再次归零——离终点只差不到 4 千条。两次白跑合计浪费约 7.5 小时的墙钟时间和约 6.3 万次调用，重复烧掉的钱超过完整跑一遍成本的 1.5 倍。</p>
+<p>第三次上线前只加了三样东西：行式结果文件追加落盘、启动时加载已完成标识集合、失败任务单独记录类别。同一批数据依然中断了两次（还是同样的配额问题），但每次重启后需要重跑的不到 200 条，全量跑完用时约 5 小时，额外的重复调用不到 400 次。<strong>改动量是几十行代码，省下的是两个下午和一大半预算。</strong></p>
+</div>
+
+<div class="intuition-box">
+<p>判断续跑做没做对，只需要一个动作：跑到一半直接把进程杀掉，再原样启动一次。如果它接着往下跑、并且结果文件里没有出现重复标识，才算做对了。这个测试要在小样本阶段就做，不要等真出事的时候才第一次验证。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、成本与质量的权衡</h2>
+
+<p>批量任务是整条链路上最容易省钱、也最容易烧钱的地方，原因只有一个：同一个数字被乘了几万次。提示词里多出 500 个 token，在单次调用里根本看不出来；乘以 4 万条就是 2000 万 token。反过来，把一个能用小模型处理的子集分流出去，省下的也是同一个量级。</p>
+
+<div class="formula">总成本 ≈ 条数 × (1 − 缓存命中率) × (1 + 重试率) × 单条 token 量 × 单价</div>
+
+<p>这四个可控因子是<strong>相乘</strong>关系，意味着任何一个失控都会吃掉其他三个的全部优化成果。你把单条 token 量砍掉一半，却让重试率从 5% 涨到 120%，净结果是成本上升。</p>
+
+<h3>省钱的四个手段</h3>
+
+<p><strong>对重复输入做缓存。</strong>关键全在缓存键上：它必须包含<strong>所有影响输出的因素</strong>——输入内容、提示词版本、模型标识、温度等采样参数、以及输出格式约定。漏掉提示词版本是最常见也最隐蔽的错误：你改完提示词重跑，命中的却是旧提示词产出的结果，于是得出「改动没有效果」的错误结论。</p>
+
+<p><strong>把简单件分流给小模型。</strong>几万条任务里往往有很大一部分是格式规整、字段明确的简单件，小模型甚至规则就能处理，只把难例送给大模型。做法是先用便宜的方式处理，对结果做置信度判断，不达标的再升级。代价是要维护一套判据，而判据本身也会出错，所以必须配抽检。</p>
+
+<p><strong>压缩不必要的上下文。</strong>批量任务的提示词往往是从交互式场景整段复制过来的，里面带着大量对批量场景无用的内容：寒暄式的角色设定、与当前字段无关的示例、重复三遍的格式说明。逐段审视一遍，每删一段都要乘以几万。</p>
+
+<p><strong>合并可以一次处理多条的任务。</strong>一次请求处理多条输入能显著降低请求数，也能摊薄固定的提示词开销。但它有三个代价必须认：多条之间会互相干扰（前一条的内容影响后一条的判断）、单条出错会牵连整批、输出对齐变难（模型少输出一条，整个批次就对不上号）。合并数量要保守，并且必须要求输出里带上每条的标识。</p>
+
+<p>另外，有些服务商提供延迟以小时计的离线批量提交方式，单价明显低于实时调用。它适合完全没有时效要求的整批任务，代价是提交之后不可交互、出错反馈很慢。各家的形态、限制和支持的任务类型差别很大，用之前要按各自的文档确认，不要假设它和实时调用完全等价。</p>
+
+<table>
+<tr><th>手段</th><th>节省量级</th><th>质量代价</th><th>什么时候别用</th></tr>
+<tr><td>输入级缓存</td><td>取决于重复率，常见 10%–40%</td><td>键设计错会返回过期结果，且不报错</td><td>输入几乎没有重复时</td></tr>
+<tr><td>小模型分流</td><td>分流比例 × 价差，可达数倍</td><td>难例被误判成简单件，需要抽检兜底</td><td>任务本身全是难例</td></tr>
+<tr><td>压缩提示词</td><td>输入 token 降 10%–30%</td><td>删过头会丢掉关键约束</td><td>提示词本来就很精简</td></tr>
+<tr><td>多条合并成一次请求</td><td>请求数降一个量级，token 降有限</td><td>互相干扰、一条坏全批、定位变难</td><td>单条输入本来就很长</td></tr>
+<tr><td>离线批量通道</td><td>单价低一档</td><td>质量不受影响，但延迟以小时计</td><td>有时效要求或需要边跑边看</td></tr>
+<tr><td>限制输出长度</td><td>输出 token 直接下降</td><td>截断导致结构不完整</td><td>输出长度不可控时要配校验</td></tr>
+</table>
+
+<h3>三种烧钱形态</h3>
+
+<div class="arch-diagram">  三种烧钱形态，共同点都是「一个小数乘以几万次」
+  ──────────────────────────────────────────────────────
+  ① 失控重试
+     单条失败 ──▶ 立刻重试 ──▶ 还是限流 ──▶ 再重试 ……
+     重试本身占满配额，成功率继续下降，于是重试更多 ← 正反馈
+     成本 ×1.5 ~ ×3，而吞吐比不重试还低
+     解法：指数退避 + 次数上限 + 全局降速，而不是单条狂试
+
+  ② 重复跑已完成的任务
+     没有续跑 ──▶ 中断一次 ──▶ 前面跑过的全部重新付一遍
+     成本 ≈ 完整一遍 × （中断次数 + 1）
+     解法：第四节的已完成标识集合
+
+  ③ 提示词冗余乘以条数
+     多余 500 token × 40000 条 = 2000 万 token
+     在单次调用里完全看不出来，在账单上是最大的一项
+     解法：批量任务的提示词单独维护，逐段问「这段值 2000 万吗」</div>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>同一批 4 万条分类任务，第一版每条都走大模型、提示词里带 6 个示例，跑完消耗约 4600 万 token。第二版做了三件事——示例从 6 个减到 2 个、对重复输入做缓存（命中率约 18%）、把置信度高的简单件分流到小模型（占比约 55%）——消耗降到约 1200 万 token。抽检 500 条的准确率从 94.2% 变成 93.6%。<strong>质量掉了 0.6 个百分点，成本降到约四分之一</strong>，在批量场景这个交换通常划算；但这个判断必须建立在有抽检数据的基础上，凭感觉做分流是另一回事。</p>
+</div>
+
+<div class="intuition-box">
+<p>批量任务里改任何一个参数之前，先把它乘以总条数再看一眼。500 个 token、0.1 秒、1% 的重试率，单看每一个都可以忽略；乘以四万之后，没有一个可以忽略。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、进度、验收与预演纪律</h2>
+
+<p>一个要跑几小时的任务，如果启动之后只能盯着终端发呆，它就是不可运维的——你既不知道它是不是已经卡死，也不知道该不该现在去吃饭。可观测的进度和可判断的收尾，是批量任务和「一段能跑的脚本」之间的分界线。</p>
+
+<h3>进度要有四个数</h3>
+
+<p>已完成、失败、剩余、预计完成时间。前三个是计数器，第四个要算——而且要用<strong>最近一段窗口</strong>的速率去除剩余条数，不要用全程平均速率。全程平均会被启动阶段的预热和中途的限流拖慢，给出的预计时间常常偏差一倍以上；滑动窗口（比如最近 5 分钟）才能反映当下的真实速度。</p>
+
+<p>进度输出建议走结构化日志，而不是刷屏的进度条。几小时的任务通常在后台或容器里跑，日志要能事后回看、能被采集聚合。每隔固定时间（比如 30 秒）输出一条<span class="term">心跳记录</span>，带上这四个数以及按错误类别分桶的计数，就足够了。日志字段设计与指标暴露见 <a href="py_logging_observability.html">PY43</a>。</p>
+
+<h3>收尾要有判据</h3>
+
+<p>「跑完了」不等于「跑对了」。交付之前至少要过下面这张表，其中前两条是纯机械的等式检查，最容易被跳过，也最容易抓出静默丢任务的 bug。</p>
+
+<table>
+<tr><th>检查项</th><th>怎么算</th><th>不通过意味着什么</th></tr>
+<tr><td>覆盖完整</td><td>已完成数 + 失败数 = 总数</td><td>有任务被静默吞掉了，编排里有漏洞</td></tr>
+<tr><td>没有重复</td><td>结果文件里唯一标识数 = 总行数</td><td>续跑逻辑或标识设计有问题</td></tr>
+<tr><td>失败率达标</td><td>失败数 ÷ 总数 ≤ 事先定好的阈值</td><td>不能直接交付，先看失败分布</td></tr>
+<tr><td>失败可解释</td><td>「未知」类别的计数 = 0</td><td>存在没被识别的失败模式，你不知道自己漏了什么</td></tr>
+<tr><td>输出可解析</td><td>抽样解析成功率</td><td>落盘格式或输出约束有问题</td></tr>
+<tr><td>质量抽检</td><td>人工或规则抽检若干条</td><td>跑完了，但结果不能用</td></tr>
+</table>
+
+<p>这里的<span class="term">验收判据</span>必须<strong>事先</strong>定好数字。事后看着结果说「5% 的失败率应该还行吧」，本质上是在用结果给自己找理由。</p>
+
+<h3>预演纪律：最贵的错误发生在第三个小时</h3>
+
+<p>跑了三小时才发现结果文件格式不对、或者发现续跑其实根本没生效——这类错误的共同点是，<strong>只要先用一百条数据跑一遍全链路就能提前发现</strong>。很多人跳过这一步，理由是「先小跑一遍很麻烦」，而代价是整整一个下午加上一笔白花的调用费。</p>
+
+<div class="arch-diagram">  从预演到全量的四级阶梯，每一级只看特定的东西
+  ──────────────────────────────────────────────────────
+  ① 1 条      走通一次调用，看清输出到底长什么样
+              检查：能否解析、字段是否齐全、格式约束有没有生效
+
+  ② 100 条    走通全链路，重点是落盘与续跑
+              检查：结果文件格式对不对
+                    跑到一半杀掉进程，重启后能否接上且不重复
+                    失败的那几条有没有真的落进失败文件
+
+  ③ 1000 条   跑出真实的速率与成本
+              检查：每分钟多少条、单条平均多少 token
+                    按比例外推全量的耗时与花费，超预算就现在改
+
+  ④ 全量      只看进度与失败分布，原则上不再改代码
+              检查：心跳是否持续、失败率是否在阈值内
+
+   跳过 ② 的典型代价：跑三小时后发现结果文件解析不了
+   跳过 ③ 的典型代价：跑到一半才发现预算根本不够</div>
+
+<p>第 ③ 级的外推有个前提要说清楚：小样本的单条成本可以线性外推，但<strong>吞吐不能</strong>。1000 条时你可能还没碰到任何配额上限，全量跑起来才会撞上，所以外推出来的总耗时应该当成乐观下界看待，留出余量。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>结果边完成边追加落盘，每条都带稳定的任务标识</li>
+<li>启动时先加载已完成标识集合，跳过已经跑过的</li>
+<li>并发度由下游配额反推，而不是设一个感觉上很大的数</li>
+<li>撞限流时全局降速并拉长退避，不对单条快速重试</li>
+<li>缓存键包含提示词版本、模型标识与采样参数</li>
+<li>每 30 秒输出一条含「完成 / 失败 / 剩余 / 预计完成」的心跳</li>
+<li>全量之前用百条量级跑通全链路，并真的杀一次进程验证续跑</li>
+<li>失败按错误类别分桶记录，只重跑可重试的那几类</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>一次性把几万个任务全部创建出来再等结果</li>
+<li>把所有结果收集在内存里，等全部跑完再统一写文件</li>
+<li>用循环下标或每次新生成的随机 ID 当任务标识</li>
+<li>沿用交互式接口的短超时和快速重试参数</li>
+<li>没确认瓶颈在哪一道闸就先去调高并发</li>
+<li>把交互式场景的提示词整段复制过来不做裁剪</li>
+<li>用全程平均速率估算剩余时间</li>
+<li>「未知错误」还剩一大桶就把结果交付出去</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>批量任务的交付标准不是「跑完了」，而是能回答三个问题：哪些条跑成了、哪些没跑成分别是什么原因、现在要再跑一次得花多久多少钱。这三个问题答不上来，就还没跑完。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>并发度到底该设多少？有没有一个通用的默认值？</summary>
+<div class="answer">没有通用值，因为它完全由你的配额和单条耗时决定，而这两个数每个项目都不同。算法是固定的：先由配额算出目标吞吐——请求数配额除以 60 得到每秒能发几次，token 配额除以单条平均 token 量再除以 60 得到另一个数，取小的那个；再乘以单条平均耗时，得到需要的在飞请求数；最后乘以 0.8 到 1.0 的安全系数。目标每秒 10 条、单条平均 6 秒，算出来约 60，设 64 就很合适。这个数通常比凭感觉设的要小，如果你算出来是 30 而手上代码写着 500，那 500 那个值从第一天起就没起作用——多出来的请求只是在下游排队或者被限流打回。另外记得连接池上限要跟着并发度一起调，否则并发提上去了，请求都堵在拿连接那一步。</div>
+</details>
+
+<details>
+<summary>一次请求合并处理多条输入，到底值不值？</summary>
+<div class="answer">看瓶颈在哪。如果瓶颈是请求数配额，合并的收益很直接——10 条合一次，请求数降一个量级。如果瓶颈是 token 速率配额，收益就小得多，因为合并只摊薄了固定的提示词开销，内容本身的 token 一个都没少。代价有三个：多条之间会互相干扰，前面几条的内容会影响后面几条的判断，准确率通常会掉一点；单条触发的错误会牵连整批，一批 10 条里有 1 条让模型跑偏，你可能要把 10 条全部重跑；输出对齐很脆弱，模型少输出一条或者顺序变了，你就得整批作废。实践上的折中是合并数量保守（个位数到十几条）、在输出格式里强制要求带上每条的标识、并且在解析时校验条数和标识是否与输入对得上，对不上就整批打回重试。</div>
+</details>
+
+<details>
+<summary>任务标识用输入内容的哈希，有什么坑？</summary>
+<div class="answer">最大的坑是<strong>没有规范化就直接哈希</strong>。输入里只要带了时间戳、请求 ID、或者仅仅是行尾换行符从 LF 变成了 CRLF，同一条逻辑上的数据就会算出两个不同的标识，续跑时它会被当成新任务重新跑一遍，你的结果文件里会出现语义重复但标识不同的两行。所以哈希之前要先做规范化：去掉与内容无关的字段、统一空白与换行、必要时统一大小写和全半角。第二个坑是<strong>哈希的范围取错了</strong>。如果只哈希输入文本，那么改了提示词或换了模型之后重跑，所有标识都没变，续跑会认为「全都跑过了」直接跳过，你会得到一个什么都没做的运行。判断方法和缓存键一样：所有影响输出的因素都要进哈希；如果某个因素是全局统一的（比如提示词版本），也可以不进哈希，而是换一个输出文件目录，用目录来隔离。</div>
+</details>
+
+<details>
+<summary>结果落盘应该用行式文件还是直接写数据库？</summary>
+<div class="answer">两条路都能做到续跑，选哪个取决于结果之后要怎么用。行式文件（每行一条 JSON）的优点是零依赖、追加写极快、进程被强杀最多坏最后一行、出问题时能直接用文本工具查看；缺点是去重和查询要靠自己扫一遍，并且多进程同时往一个文件追加需要小心（通常的做法是每个进程写自己的分片文件，最后合并）。数据库的优点是天然能用唯一约束来保证幂等——同一个任务标识插第二次直接冲突，续跑的去重逻辑几乎不用写；缺点是多了一个依赖，写入吞吐可能反过来变成新的瓶颈，而且批量写要自己攒批。经验上，一次性的离线任务用行式文件，结果要长期被别的系统查询的用数据库；无论哪种，任务标识都必须作为一等字段存下来，不能只存结果。</div>
+</details>
+
+<details>
+<summary>撞上限流之后，是整批停下来等，还是只让失败的那条退避？</summary>
+<div class="answer">要全局降速，不能只处理失败的那一条。原因是限流反映的是整条链路的容量已经到顶，此时其他还在飞的请求同样会陆续失败；如果只让失败的那条退避、其余照常全速发，你会在接下来几十秒里持续制造失败，每一次失败都白占一次配额，成功率越来越低——这就是第五节说的失控重试正反馈。正确做法是让限流信号作用在<strong>整个工作池</strong>上：收到限流后统一降低发送速率（比如并发度减半），等一段时间没有再出现限流信号，再逐步恢复。这个「快降慢升」的形状和网络拥塞控制是同一个思路。具体的限流器与退避写法见 PY31。另外提醒一句，退避一定要带抖动，否则所有 worker 会在同一时刻同时恢复，立刻再撞一次。</div>
+</details>
+
+<details>
+<summary>这套客户端的做法，和服务端的连续批处理是什么关系？</summary>
+<div class="answer">是两层完全不同的问题，不能互相替代。服务端的连续批处理（本卡第一节链接的 DP11）解决的是推理服务内部的调度：怎么把来自不同客户端的请求拼进同一个批次、怎么在每一步迭代后动态换入换出、怎么避免短请求被长请求堵住。它决定的是这台服务「每秒能处理多少请求」这个额定值。客户端这一侧解决的是：给定那个额定值，我手上这几万条任务怎么编排、怎么在中断后接着跑、怎么控制总花费。就算服务端的调度做到了极致，客户端如果一次性把几万个请求砸过去、中断后又从头再来，任务照样跑不完、钱照样白花。反过来也一样，客户端做得再好也突破不了服务端给的配额上限。顺带一提，客户端的三种调用模式（同步、异步、流式）以及重试、熔断、降级这类韧性机制各自有专门的一张卡，本卡只在需要时引用它们的结论。</div>
+</details>
+
+<details>
+<summary>预演阶段用小样本测出来的成本和耗时，外推到全量准不准？</summary>
+<div class="answer">成本比较准，耗时往往偏乐观。成本之所以准，是因为它基本是线性的——单条平均消耗多少 token 乘以条数即可，唯一要留意的是小样本可能不能代表输入长度的分布，如果你的数据里有少量超长文档，随机抽 1000 条可能一条都没抽到，全量跑起来这部分会额外多出一块，所以抽样时最好按长度分层。耗时偏乐观的原因是配额：1000 条时你的速率可能还没顶到任何一道闸，全量跑起来在飞请求数上去了才会撞上限流，实际吞吐会低于小样本的外推值。此外还要算上中断恢复的时间。实践上把外推出来的耗时乘以 1.3 到 1.5 当作预期，并且在预演阶段就把限流错误率记下来——如果 1000 条时已经出现限流，全量必然更严重，这时应该先调并发度而不是直接放全量。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

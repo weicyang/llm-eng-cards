@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY42 · 性能剖析与优化</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、优化的前置条件</a>
+<a href="#s2">二、工具分层</a>
+<a href="#s3">三、怎么读剖析结果</a>
+<a href="#s4">四、优化的优先顺序</a>
+<a href="#s5">五、Python 特有的性能常识</a>
+<a href="#s6">六、优化的纪律与收尾</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY42 · 性能剖析与优化</h1>
+<p class="subtitle">先测量再优化 / 指标、基线与目标 / 剖析工具的粒度与开销 / 六层优先顺序 / 微优化的边界与纪律</p>
+
+<div class="intuition-box">
+<p>性能工作里真正稀缺的不是技巧，而是「知道时间花在哪」。技巧网上到处都是，而一个能复现的测量方法只能自己搭；没有它，你写下的每一行优化都只是在赌。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、优化的前置条件：先有指标，再有基线，最后才是目标</h2>
+
+<p>「这个接口有点慢，你优化一下」是一个无法执行的需求。慢是多少毫秒？在什么负载下？是所有请求都慢还是一小部分慢？接受到多少算优化完成？这四个问题任何一个答不上来，后面的工作就没有验收标准——你只能凭感觉改，改完凭感觉说「快了」。</p>
+
+<p>所以优化的第一步不是打开剖析器，而是依次确定三样东西：<span class="term">指标</span>（用什么数衡量快慢）、<span class="term">基线</span>（当前这个数是多少）、<span class="term">目标</span>（改到多少就停）。这三样缺一不可，而且顺序不能倒。</p>
+
+<h3>为什么凭直觉猜热点几乎总是猜错</h3>
+
+<p>人看代码时对「重」的判断来自<strong>结构复杂度</strong>：三重嵌套循环看起来很重，一行属性访问看起来无害。但实际耗时等于<strong>单次成本 × 调用次数</strong>，再加上等待外部系统的时间，这三个因子里只有第一个能从代码结构上看出来。</p>
+
+<p>于是典型的误判长这样：那个吓人的三重循环在真实数据上只跑了 12 次，总耗时 0.4 毫秒；而某个看起来人畜无害的 <code>obj.config.timeout</code>，因为在一个百万级的循环里，贡献了 30% 的 CPU 时间。更常见的是第三种——整个函数 95% 的时间在等一个数据库连接，而你盯着剩下 5% 的纯计算改了一下午。</p>
+
+<div class="intuition-box">
+<p>代码的「看起来重」和「实际耗时」之间几乎没有相关性。前者由嵌套深度决定，后者由调用次数和等待决定，而这两个量都不写在代码里。</p>
+</div>
+
+<h3>平均值会掩盖问题，必须看分位数</h3>
+
+<p>假设一个接口 1000 次调用里有 950 次是 20 毫秒，50 次是 2000 毫秒。平均延迟是 119 毫秒，看起来不算灾难；但每 20 个用户里就有 1 个等了 2 秒。平均值把这批人的体验平摊掉了，而他们才是会来投诉的人。</p>
+
+<p>所以延迟要看分布，标准做法是报 <span class="term">P50</span>（中位数，典型体验）、<span class="term">P95</span> 与 <span class="term">P99</span>（尾部，最差体验）。长尾通常有独立于主路径的成因：缓存未命中、垃圾回收停顿、连接池排队、下游重试、冷启动——这些都不会在平均值上留下明显痕迹，却会在 P99 上非常显眼。</p>
+
+<div class="arch-diagram">  同一批请求的两种看法
+  ─────────────────────────────────────────────────────────
+  请求数
+    ▲
+    │ ████████████
+    │ ████████████
+    │ ████████████
+    │ ████████████
+    │ ████████████                                  ██
+    └─┴──────────┴──────────────────────────────────┴┴──▶ 延迟
+      20ms       │                                 2000ms
+                 │
+      平均值 119ms ─┘  落在没有任何请求的空白区，
+                      它既不代表典型体验，也不代表最差体验
+
+      P50 =   20ms   ← 大多数人的真实感受
+      P95 =   20ms   ← 还没触到尾巴
+      P99 = 2000ms   ← 投诉来自这里
+
+  推论：只报平均值的监控面板，等于把 5% 的最差体验隐藏了</div>
+
+<h3>常用指标各自能回答什么</h3>
+
+<table>
+<tr><th>指标</th><th>它回答什么问题</th><th>什么时候会骗你</th></tr>
+<tr><td>吞吐（QPS / 条每秒）</td><td>系统单位时间能做完多少活</td><td>限流或客户端并发不足时，测到的是压测端的上限，不是服务端的</td></tr>
+<tr><td>平均延迟</td><td>几乎什么都回答不了</td><td>只要分布有长尾就失真；两个体验天差地别的系统可以有同一个均值</td></tr>
+<tr><td>P50 延迟</td><td>典型用户的感受</td><td>尾部恶化时它可以完全不动，掩盖正在扩大的故障面</td></tr>
+<tr><td>P95 / P99 延迟</td><td>最差那批用户的感受</td><td>样本量太小时噪声极大；一天只有 300 次调用时 P99 由 3 个点决定</td></tr>
+<tr><td>CPU 利用率</td><td>算力有没有被吃满</td><td>I/O 密集服务 CPU 常年 10%，但已经慢到不可用；低利用率不等于有余量</td></tr>
+<tr><td>内存占用（RSS）</td><td>会不会被 OOM 杀掉</td><td>释放后的内存未必还给操作系统，RSS 不降不代表存在泄漏</td></tr>
+<tr><td>饱和度（队列长度、等待时长）</td><td>请求在排队还是在干活</td><td>需要主动埋点，多数默认监控不采集，出事时往往没有历史数据</td></tr>
+</table>
+
+<p>这张表可以合成一条经验：<strong>延迟看分位数，容量看饱和度，CPU 利用率只在 CPU 密集场景里有意义</strong>。三者一起看才能区分「算得慢」和「排队久」，而这两种慢的处理方式完全不同。</p>
+
+<div class="highlight">
+<p><strong>一条硬纪律：没有可复现的测量方法，就不要开始优化。</strong>可复现意味着四件事都固定下来——固定的输入数据（同一份样本，不是随机生成）、固定的环境（同一台机器、同样的并发、预热之后再测）、足够的重复次数（至少几十次，取分布而不是单次）、以及每次都输出同一组数字。做不到这四点，你后面每一次「快了 15%」都无法和机器抖动区分开，改对改错全靠运气。</p>
+</div>
+
+<pre><code>def bench(fn, arg, rounds=200, warmup=20):   # import statistics, time
+    for _ in range(warmup):
+        fn(arg)                              # 预热：排除冷缓存与首次导入
+    xs = []
+    for _ in range(rounds):
+        t0 = time.perf_counter()
+        fn(arg)
+        xs.append((time.perf_counter() - t0) * 1000)
+    q = statistics.quantiles(xs, n=100)      # 3.8 起提供
+    return {"p50": q[49], "p95": q[94], "p99": q[98]}</code></pre>
+
+<p>这段骨架很短，但它把上面四件事都固定住了：预热排除首次导入与缓存冷启动的干扰，重复采样得到分布，<code>time.perf_counter</code> 提供单调的高精度计时，返回的是分位数而不是一个平均值。把它存进仓库，它就是这次优化的<strong>基线脚本</strong>——之后每一次改动都用它重跑一遍。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、工具分层：从打点计时到采样剖析</h2>
+
+<p>剖析工具不是越精细越好。精细意味着开销大，开销大意味着两个后果：跑不进生产环境，以及<strong>扭曲你要测的东西本身</strong>。所以实际做法是分层——用粗的工具定位到大致区域，再用细的工具确认到具体行。</p>
+
+<div class="arch-diagram">  由粗到细的四层，箭头方向 = 排查推进方向
+  ─────────────────────────────────────────────────────────────
+  第 0 层  端到端埋点       粒度：一次请求 / 一个阶段
+           perf_counter     开销：可忽略        可上生产
+              │             回答：慢在哪个阶段
+              ▼
+  第 1 层  采样剖析         粒度：函数调用栈（按频率抽样）
+           栈采样类工具     开销：小（个位数百分比）  可挂到已运行的进程
+              │             回答：CPU 时间集中在哪条调用链
+              ▼
+  第 2 层  确定性剖析       粒度：每次函数调用，逐个计数
+           cProfile+pstats  开销：大（常见 1.3 倍以上，调用密集时更高）
+              │             回答：哪个函数被调了多少次、累计多久
+              ▼
+  第 3 层  行级 / 内存剖析  粒度：单行代码 / 单次内存分配
+           tracemalloc 等   开销：很大，只对已锁定的单个函数开
+                            回答：这个函数内部是哪一行在烧时间或占内存
+
+  常见错误：跳过第 0 层直接上 cProfile，
+            结果剖出来一堆函数，却不知道它们属不属于慢的那条路径</div>
+
+<h3>四类工具的取舍</h3>
+
+<table>
+<tr><th>工具 / 类别</th><th>粒度</th><th>开销</th><th>适用场景</th></tr>
+<tr><td><code>time.perf_counter</code> 手工打点</td><td>你自己划定的代码区间</td><td>可忽略（一次调用的量级）</td><td>开发机与生产都可以，是阶段耗时埋点的默认做法</td></tr>
+<tr><td><code>timeit</code>（含 <code>python -m timeit</code>）</td><td>一小段表达式或语句</td><td>不适用，它本身就是测量</td><td>仅限开发机做微基准，对比两种写法哪个快</td></tr>
+<tr><td>确定性剖析：<code>cProfile</code> + <code>pstats</code></td><td>每个函数的调用次数与耗时</td><td>大，且对「调用次数多、单次很短」的代码惩罚更重</td><td>开发机 / 预发环境跑离线任务或单条请求</td></tr>
+<tr><td>采样剖析（<code>py-spy</code> 属于这一类）</td><td>按固定频率抓取调用栈</td><td>小，通常个位数百分比</td><td>生产首选：可以挂到一个已经在跑的进程上，不需要改代码重启</td></tr>
+<tr><td>行级剖析（需第三方库）</td><td>函数内逐行耗时</td><td>很大</td><td>只在已经锁定某个函数之后，对那一个函数临时开启</td></tr>
+<tr><td><code>tracemalloc</code>（标准库）</td><td>内存分配按代码行或调用栈归因</td><td>大，时间和内存都显著增加</td><td>查内存增长与疑似泄漏，开发机或可控的灰度实例</td></tr>
+</table>
+
+<p>表里第三行和第四行的差别值得展开。<span class="term">确定性剖析</span>在每次函数进出时都记一笔，所以调用计数绝对准确，但也因此给「被调用一百万次的小函数」额外加上了一百万次记账成本——剖出来的相对耗时会向这类函数倾斜。<span class="term">采样剖析</span>则是每隔固定时间（比如 100 赫兹）抓一次当前栈，谁在栈上出现得多谁就占得多，开销与程序的调用密度无关，代价是它给不出精确的调用次数，短时间运行的函数也可能一次都没被采到。</p>
+
+<div class="intuition-box">
+<p>确定性剖析回答「调了多少次」，采样剖析回答「时间在哪」。生产环境上你几乎只能用后者，而它恰好也是更该先看的那个。</p>
+</div>
+
+<h3>计时函数别选错</h3>
+
+<table>
+<tr><th>函数</th><th>测的是什么</th><th>单调</th><th>什么时候用它</th></tr>
+<tr><td><code>time.perf_counter()</code></td><td>最高可用分辨率的经过时间（含休眠与等待）</td><td>是</td><td>测代码块耗时的默认选择</td></tr>
+<tr><td><code>time.perf_counter_ns()</code></td><td>同上，返回整数纳秒</td><td>是</td><td>极短区间，避免浮点误差累积</td></tr>
+<tr><td><code>time.monotonic()</code></td><td>单调时钟，分辨率通常低于前者</td><td>是</td><td>超时判断、限流窗口这类长区间</td></tr>
+<tr><td><code>time.process_time()</code></td><td>本进程的 CPU 时间，<strong>不含</strong>休眠与 I/O 等待</td><td>是</td><td>区分「在算」还是「在等」的关键工具</td></tr>
+<tr><td><code>time.time()</code></td><td>挂钟时间（Unix 时间戳）</td><td>否</td><td>记录事件发生时刻；<strong>不要</strong>用来测耗时，会被校时跳变影响</td></tr>
+</table>
+
+<p>第四行藏着一个很实用的技巧：同一段代码分别用 <code>perf_counter</code> 和 <code>process_time</code> 各测一次，两者相减就是<strong>等待时间</strong>。如果一段代码耗时 900 毫秒而 CPU 时间只有 8 毫秒，那它在等外部系统，本地任何算法优化都不会有效果——这个判断只要两行代码，却能省掉整场误入歧途的优化。</p>
+
+<pre><code># 微基准：只在开发机上、只用来对比两种写法
+import timeit
+
+setup = "xs = list(range(10_000)); s = set(xs)"
+a = timeit.repeat("9999 in xs", setup=setup, number=1000, repeat=5)
+b = timeit.repeat("9999 in s",  setup=setup, number=1000, repeat=5)
+print(min(a), min(b))   # 取最小值：它受其他进程干扰最小</code></pre>
+
+<p><code>timeit</code> 有两个默认行为要知道。一是它在计时期间<strong>关闭垃圾回收</strong>，这让结果更稳定，但也意味着它测不出分配压力带来的 GC 成本——这部分见 <a href="py_memory_gc.html">PY23</a>。二是官方建议看 <code>repeat</code> 结果里的<strong>最小值</strong>而不是平均值：噪声只会让某次变慢，不会让它变快，所以最小值最接近真实下限。</p>
+
+<pre><code># 确定性剖析：把结果落盘，再用 pstats 慢慢看
+# 命令行： python -m cProfile -o out.prof your_script.py
+import cProfile, pstats
+
+with cProfile.Profile() as pr:
+    run_one_request(sample)
+
+st = pstats.Stats(pr).strip_dirs()
+st.sort_stats(pstats.SortKey.TIME).print_stats(15)   # 按自身耗时
+st.sort_stats(pstats.SortKey.CUMULATIVE).print_stats(15)</code></pre>
+
+<p><code>cProfile.Profile</code> 从 Python 3.8 起支持上下文管理器写法，比 <code>enable()</code> / <code>disable()</code> 更不容易漏关。<code>pstats.SortKey</code> 是排序键的枚举（3.7 引入），比传字符串安全。另外补一条版本信息：Python 3.12 引入了 <code>sys.monitoring</code>（PEP 669），提供低开销的事件监控接口，它主要是给剖析器和调试器作者用的底层设施，日常排查仍然直接用上面这些成品工具。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、怎么读剖析结果：三个数比一堆数有用</h2>
+
+<p>第一次看 <code>pstats</code> 输出的人通常会被几百行函数名淹没，然后随便挑一个眼熟的开始改。实际上有用的信息只有三列，而且它们回答的是不同的问题。</p>
+
+<table>
+<tr><th>字段</th><th>含义</th><th>用来回答</th></tr>
+<tr><td><code>ncalls</code></td><td>调用次数（递归时显示为「总次数/原始次数」）</td><td>是不是在重复做同一件事</td></tr>
+<tr><td><code>tottime</code></td><td><span class="term">自身耗时</span>：函数体内的时间，<strong>不含</strong>它调用的子函数</td><td>真正在烧 CPU 的是谁</td></tr>
+<tr><td><code>cumtime</code></td><td><span class="term">累计耗时</span>：含全部子调用的时间</td><td>这条慢路径从哪个入口进来的</td></tr>
+<tr><td><code>percall</code></td><td>上述耗时除以调用次数</td><td>单次是不是异常贵</td></tr>
+</table>
+
+<p>两个耗时的分工很明确：<strong>按 <code>cumtime</code> 排序是自顶向下找入口</strong>，最顶上永远是 <code>main</code> 之类的东西，你要找的是那个第一次出现的、属于你业务的函数；<strong>按 <code>tottime</code> 排序是自底向上找干活的地方</strong>，排在前面的就是真正消耗 CPU 的叶子。两个榜单都要看：只看 <code>cumtime</code> 会停在无意义的外层，只看 <code>tottime</code> 会看到一堆底层库函数却不知道谁在调它们。</p>
+
+<h3>调用次数异常，往往比单次耗时更值得看</h3>
+
+<p>一个函数单次 0.3 毫秒不算慢，但如果 <code>ncalls</code> 是 48000 而你处理的只有 800 条数据，那真正的问题不是它慢，是它<strong>不该被调这么多次</strong>。这类信号几乎总指向同一批成因：循环内部重复做本可以提到循环外的工作、每条记录单独发一次查询的 N+1 模式、以及在遍历中反复构造同一个对象或重复编译同一个正则。</p>
+
+<p>这也是确定性剖析唯一不可替代的价值——采样剖析给不出准确的调用次数。所以实际节奏常常是：先用采样剖析在生产上确认「时间在这条链路上」，再在开发机用 <code>cProfile</code> 对同一条链路跑一遍，看调用计数有没有离谱。</p>
+
+<div class="arch-diagram">  典型的调用树（宽度 = 累计耗时，缩进 = 调用层级）
+  ═══════════════════════════════════════════════════════════
+  handle_request                                  cum 1010ms
+  ████████████████████████████████████████████████████████
+   ├─ load_orders                                 cum  905ms
+   │  ████████████████████████████████████████████████
+   │   └─ cursor.execute            ★ 平顶      tot  900ms
+   │      ███████████████████████████████████████████
+   │            ↑ 宽且没有子调用 = 时间真的耗在这里
+   │              但这是在「等数据库」，不是在「算」
+   │
+   ├─ render_rows                                 cum   80ms
+   │  ████
+   │   ├─ fmt_amount   ncalls 48000 ★ 次数可疑   tot   46ms
+   │   │  ██
+   │   └─ to_dict      ncalls   800              tot   28ms
+   │      █
+   └─ json.dumps                                  tot   20ms
+      █
+
+  该先看哪里：
+    1. 找最宽的「平顶」——自身耗时大、没有子调用，那是真正的热点
+    2. 再扫一遍 ncalls 明显超出数据量的行，那是重复工作的信号
+    3. 平顶如果是 I/O 调用（execute / recv / read），
+       说明瓶颈在外部系统，本地优化到此为止</div>
+
+<p>火焰图是同一份数据的另一种画法：横轴宽度仍然是耗时占比，但<strong>横轴不代表时间先后</strong>，同名函数会被聚合到一起，纵轴是调用深度。读法和上面一致——找宽的平顶，忽略窄的尖刺。一个常见误读是看到某个函数在图上出现了很多细条就觉得它有问题，实际上碎片多只说明它出现在多条不同的调用链上，把它们加起来才有意义。</p>
+
+<div class="intuition-box">
+<p>累计耗时告诉你「从哪扇门进去的」，自身耗时告诉你「屋里谁在干活」。只看门会一直在走廊里打转，只看人会不知道该关哪扇门。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、优化的优先顺序：这一节比任何技巧都重要</h2>
+
+<p>拿到剖析结果之后，多数人的下一个动作是搜「Python 怎么让这个函数更快」，然后得到一堆微优化建议。这是顺序错了。同一个热点，不同层次的改法收益能差三个数量级，而<strong>该先试哪一层是有固定次序的</strong>——从「能不能不做」开始，一直到「做得更快一点」结束。</p>
+
+<div class="arch-diagram">  优化的六级阶梯：从上往下试，不要跳级
+  ═══════════════════════════════════════════════════════════
+  ① 减少工作量          去重复、加缓存、批量化、过滤下推到数据源
+     收益 ██████████    「这件事根本不用做」——唯一能做到 10 倍以上的一层
+                        ↓ 上一层榨干了再往下
+  ② 数据结构与复杂度    list 查找换 set、循环嵌套换索引表、换算法
+     收益 ████████      数据量越大收益越大，小数据上可能看不出差别
+                        ↓
+  ③ 减少跨边界开销      数据库往返、网络调用、跨进程序列化
+     收益 ██████        一次往返的固定成本远大于其中的计算
+                        ↓
+  ④ 用更快的实现        向量化、成熟的原生扩展库
+     收益 ████          换库通常划算，自己写 C 扩展通常不划算
+                        ↓
+  ⑤ 换并发模型          I/O 密集用异步或线程，CPU 密集用多进程
+     收益 ███           不减少总工作量，只是让它们重叠或并行
+                        ↓
+  ⑥ 微优化语言细节      局部变量、避免属性查找、换写法
+     收益 █             通常几个百分点，且让代码更难读
+
+  代价方向恰好相反：越往下改动越局部、越安全，
+                    越往上越需要动设计，但收益也越大</div>
+
+<h3>① 减少工作量：唯一能带来数量级收益的一层</h3>
+
+<p>这一层的核心问题不是「怎么算得更快」，而是「这件事能不能不做、少做、或者晚点做」。四种常见形态：把循环内不变的计算提到循环外；给纯函数加缓存（<code>functools.cache</code> 与 <code>functools.lru_cache</code>，用法见 <a href="py_closures_decorators.html">PY14</a>）；把 N 次单条操作合并成 1 次批量操作；把过滤条件<strong>下推到数据源</strong>，让数据库或文件层只返回需要的行，而不是取回全部再在 Python 里筛。</p>
+
+<p>最后一条的收益常被低估。取回 50 万行再用列表推导筛出 300 行，和让数据库用索引直接返回这 300 行，Python 侧的代码看起来只差一行，但前者要为 50 万行付出网络传输、反序列化和对象创建的成本。惰性求值与生成器可以减少内存峰值（见 <a href="py_comprehensions_lazy.html">PY13</a>），但它减不掉「数据已经被传过来了」这件事——真正的解法是一开始就别传。</p>
+
+<pre><code># N+1：800 条记录发了 801 次查询
+orders = db.query("select id, user_id from orders limit 800")
+for o in orders:
+    o.user = db.query("select * from users where id = ?", o.user_id)
+
+# 批量化：2 次查询，外加一次内存中的哈希关联
+ids = {o.user_id for o in orders}
+users = {u.id: u for u in db.query_in("select * from users where id in", ids)}
+for o in orders:
+    o.user = users[o.user_id]</code></pre>
+
+<h3>② 数据结构与算法复杂度</h3>
+
+<p>这一层的典型案例是「在一个 list 里反复做成员判断」。<code>x in list</code> 是 O(n) 的线性扫描，<code>x in set</code> 是平均 O(1) 的哈希查找；放在一个同样 n 量级的循环里，前者是 O(n²)，后者是 O(n)。n 等于 100 时你察觉不到，n 等于 10 万时差距就是「秒」和「毫秒」的区别。各容器操作的复杂度见 <a href="py_containers_overview.html">PY03</a>。</p>
+
+<p>需要提醒的是反方向也存在：为了「复杂度更好」而引入的字典、索引、堆，在数据量很小的时候可能比朴素的线性扫描更慢，因为常数项和内存分配成本占了主导。所以这一层同样要测，不能只看大 O。</p>
+
+<h3>③ 减少跨边界开销</h3>
+
+<p>每一次跨进程、跨机器的调用都有一笔固定成本：连接获取、协议编解码、序列化反序列化、网络往返。这笔成本和你要传的数据量关系不大，和<strong>往返次数</strong>关系极大。所以这一层的手段几乎都是「合并往返」：批量查询、管道化、连接复用、一次多进程任务里传大块数据而不是频繁传小块（跨进程传对象要经过序列化，还可能触发意外的深拷贝，语义细节见 <a href="py_copy_semantics.html">PY10</a>）。</p>
+
+<h3>④⑤⑥ 剩下三层</h3>
+
+<p>换更快的实现，指的通常是把手写的数值循环换成向量化库，或者把手写的解析换成成熟的原生扩展实现。判断标准很简单：<strong>换现成的库通常划算，自己写 C 扩展通常不划算</strong>，因为后者带来的构建复杂度、跨平台编译和调试难度是长期成本。</p>
+
+<p>换并发模型要先想清楚它不减少总工作量，只是让工作重叠（I/O 等待期间去做别的）或并行（多核同时算）。它对「在等」的场景有效，对「在算」的场景需要绕开全局解释器锁才有效。这一整套判断属于并发那一组卡片的内容（负载类型与模型选型见 <a href="py_gil_free_threading.html">PY25</a>，剖析发现热点在等待时的异步改造见 <a href="py_asyncio_eventloop.html">PY28</a>），这里只强调它的位置：<strong>排在减少工作量之后</strong>。给一个跑着 O(n²) 算法的函数套上并发，只是让几个核同时跑慢算法。</p>
+
+<h3>手段、收益量级与代价</h3>
+
+<table>
+<tr><th>手段</th><th>典型收益量级</th><th>代价</th></tr>
+<tr><td>去掉重复计算 / 加缓存</td><td>数倍到数十倍，取决于命中率与重复度</td><td>缓存一致性、内存占用、失效逻辑的复杂度</td></tr>
+<tr><td>批量化 / 消除 N+1</td><td>与往返次数成正比，常见数倍到数十倍</td><td>单次请求内存峰值上升，需要分批控制</td></tr>
+<tr><td>过滤下推到数据源</td><td>与被过滤掉的数据比例成正比</td><td>业务逻辑下沉到查询层，可读性与可测性变差</td></tr>
+<tr><td>换数据结构降复杂度</td><td>随数据量增长，大数据量上可达数量级</td><td>额外内存；小数据量上可能反而变慢</td></tr>
+<tr><td>合并跨边界往返</td><td>数倍，取决于原来的往返次数</td><td>失败处理变复杂，一次失败影响一批</td></tr>
+<tr><td>向量化 / 换原生实现</td><td>数倍到数十倍，仅限数值与批处理场景</td><td>引入重依赖；数据要能组织成数组形态</td></tr>
+<tr><td>换并发模型</td><td>受并行度与串行部分比例限制，不超过核数</td><td>并发缺陷、调试难度、资源竞争</td></tr>
+<tr><td>微优化语言细节</td><td>通常个位数百分比</td><td>可读性下降，且几乎必然随版本变化而失效</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>前两层在回答「能不能不做这件事」，后两层在回答「这件事能不能做快一点」。经验上，绝大多数真正的胜利来自第一个问题，而绝大多数投入浪费在第二个问题上。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、Python 特有的性能常识：全是微优化，别当第一步用</h2>
+
+<p>下面这些都属于上一节的第 ⑥ 层。它们是真实存在的效应，在确认为热点的循环里有可测量的收益；但在非热点处使用，唯一的效果是让代码更难读。<strong>本节所有内容的前提都是：剖析已经指向了这段代码。</strong></p>
+
+<h3>属性查找和函数调用不是免费的</h3>
+
+<p>写 <code>self.cache.get(k)</code> 时，解释器要先取 <code>self</code>、再查 <code>cache</code> 属性、再查 <code>get</code> 方法，最后才发起调用。每一步都是一次字典查找，还可能触发描述符协议。单次成本极小，但乘以百万次循环就能被测出来。对应的手法是在进入热循环之前把方法绑定到局部变量。</p>
+
+<pre><code># 只在确认这是热点循环之后才这么写
+def collect(self, items):
+    out = []
+    append = out.append          # 把方法取到局部变量
+    fmt = self.formatter.format  # 把多级属性查找提到循环外
+    for it in items:
+        append(fmt(it))
+    return out</code></pre>
+
+<p>要强调这是<strong>最后一步而不是第一步</strong>：如果 <code>fmt</code> 本身花 200 微秒，省下的那几纳秒查找成本完全不可见。这类改写只在循环体极短、次数极多时才有意义。</p>
+
+<h3>字符串拼接的复杂度陷阱</h3>
+
+<p>字符串是不可变对象，<code>s = s + x</code> 语义上要新建一个字符串并复制全部已有内容，在循环里就是 O(n²)。正确做法是把片段收集进列表，最后用 <code>"".join(parts)</code> 一次性拼成，整体 O(n)。</p>
+
+<p>这里有个容易被误传的细节：CPython 对 <code>s += x</code> 存在一个原地扩展的优化，条件是该字符串只有一个引用。它能让很多循环拼接在实测中表现得接近线性，但这是<strong>实现细节而非语言保证</strong>——一旦字符串被别处引用，或换到别的实现上，就退化回 O(n²)。所以规则仍然是用 <code>join</code>，编码与字符串的更多细节见 <a href="py_strings_encoding.html">PY06</a>。</p>
+
+<h3>局部变量、内置函数与推导式</h3>
+
+<p>局部变量的读取编译成 <code>LOAD_FAST</code>，走的是数组下标；全局与内置名字要走模块字典乃至内置字典的查找。这就是「把全局常量在函数开头赋给局部变量」这类写法的来源。补一句版本信息：Python 3.11 起对全局查找做了内联缓存优化，这个差距比过去小了，但方向没变。</p>
+
+<p>内置函数（<code>sum</code>、<code>min</code>、<code>any</code>、<code>sorted</code>）与列表推导式通常快于等价的手写循环，原因是循环体在 C 层执行，省掉了每轮迭代的字节码调度。但注意<strong>不适用于带复杂条件或副作用的情形</strong>，那时推导式只是把同样的 Python 代码换了个写法，快不了多少，可读性反而更差（见 <a href="py_comprehensions_lazy.html">PY13</a>）。</p>
+
+<h3>换版本本身就是一次免费优化</h3>
+
+<p>CPython 近几个版本持续有性能改进：3.11 是其中最显著的一次（官方公布的基准套件整体提升在 10%–60% 区间，具体幅度高度依赖负载类型），3.12 与 3.13 继续在解释器与内存布局上推进，3.13 还引入了一个默认关闭的实验性 JIT（PEP 744）。对纯 Python 计算密集型代码，升级解释器有时比你改一周代码收益更大；而对以 I/O 等待为主的服务，升级几乎看不出差别——同样要先测。</p>
+
+<table>
+<tr><th>微优化项</th><th>为什么有效</th><th>量级</th><th>什么时候别用</th></tr>
+<tr><td>方法绑定到局部变量</td><td>省掉每轮的属性查找与描述符触发</td><td>百分之几，循环极短时更明显</td><td>循环体本身就重，或循环次数很少</td></tr>
+<tr><td><code>"".join()</code> 代替循环 <code>+=</code></td><td>避免反复复制已有内容</td><td>大 n 时可达数量级</td><td>片段只有两三个，直接拼更清楚</td></tr>
+<tr><td>全局名提为局部名</td><td><code>LOAD_FAST</code> 走数组，不查字典</td><td>百分之几；3.11 起差距缩小</td><td>非热点代码，会牺牲可读性</td></tr>
+<tr><td>内置函数 / 推导式</td><td>迭代在 C 层完成，省字节码调度</td><td>常见数十个百分点</td><td>逻辑复杂、有副作用或需要提前退出</td></tr>
+<tr><td>升级解释器版本</td><td>解释器自身的持续优化</td><td>依负载而定，I/O 密集接近无感</td><td>依赖还没有对应版本的预编译包</td></tr>
+<tr><td>减少临时对象分配</td><td>降低分配与垃圾回收压力</td><td>分配密集型场景明显</td><td>为省对象而把代码写成一团（见 <a href="py_memory_gc.html">PY23</a>）</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>微优化的正确用法是收尾，不是开场。它能把已经对的方案再挤出几个百分点；它救不了一个错的方案，只会让这个错的方案更难被看懂和替换。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、优化的纪律与收尾：知道什么时候停</h2>
+
+<p>优化最容易失控的地方不是技术，是流程。一次性改五处、改完不重测、觉得「应该更快了」就合并——这样做的结果是：性能可能确实变好了，但没人知道是哪一处起了作用，也没人知道有没有某一处其实拖慢了。</p>
+
+<h3>四条可执行的纪律</h3>
+
+<p><strong>每次只改一处，改完立刻用基线脚本重测。</strong>这条看起来啰嗦，实际能省下大量时间：一旦某次改动没有收益，立刻回退，你就永远不会积累一堆「不知道有没有用但不敢删」的复杂代码。</p>
+
+<p><strong>基线脚本进仓库，和测试放在一起。</strong>它不是一次性的草稿。三个月后有人报告同一个接口又慢了，有这个脚本就能在十分钟内拿到对比数据，没有它就要从头搭一遍测量环境。</p>
+
+<p><strong>把性能断言写进测试，防止回退。</strong>但这里有个陷阱：直接断言墙钟时间（例如「必须小于 50 毫秒」）在 CI 上极易抖动成 flaky 测试，因为构建机负载不可控。更稳的做法是断言<strong>操作计数</strong>——这次请求最多发几条 SQL、最多调几次外部接口、最多读几次文件。计数是确定的，不受机器快慢影响，而且它恰好能拦住最常见的性能回退：有人无意中在循环里加了一次查询。</p>
+
+<pre><code>def test_no_n_plus_one(db_spy, client):
+    client.get("/orders?limit=800")
+    # 断言操作次数而不是耗时：结果确定，不受 CI 机器负载影响
+    assert db_spy.query_count &lt;= 3
+    assert db_spy.max_rows_fetched &lt;= 2000</code></pre>
+
+<p><strong>达到目标就停。</strong>目标是在第一节里定下的那个数。到了就收工，把剩下的时间还给功能开发。继续优化的边际收益递减，而代码复杂度的增长是线性甚至更快的——这是很多性能工作最后变成技术债的路径。</p>
+
+<div class="highlight">
+<p><strong>一条反向判据：如果热点在等待外部系统，本地优化毫无意义。</strong>用第二节那个办法可以在两分钟内确认——同时测 <code>perf_counter</code> 和 <code>process_time</code>，如果 CPU 时间只占经过时间的很小一部分，说明进程绝大多数时候在阻塞等待。这时候有效的动作只有三类：让外部系统本身变快（加索引、调查询、扩容），减少对它的调用次数（缓存、批量、合并往返），或者让等待重叠起来（并发发起）。把本地那段计算从 80 毫秒优化到 12 毫秒，在 900 毫秒的等待面前是看不见的。</p>
+</div>
+
+<h3>一次真实的三天弯路</h3>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>订单列表接口 P95 端到端 1010 毫秒，用户持续投诉。负责人打开 <code>cProfile</code>，看到 <code>render_rows</code> 这条链路上函数最多、名字最眼熟，判断瓶颈在「内部数据加工」，随后花了<strong>三天（约 22 人时）</strong>做优化：把逐行格式化改成批量、消掉一处重复的字典构造、给两个纯函数加了缓存，<strong>内部计算从 80 毫秒压到 12 毫秒</strong>——这部分优化本身是成功的，收益 85%。</p>
+<p>但端到端 P95 只从 1010 毫秒降到 942 毫秒，降幅 6.7%，用户完全无感。第四天有人补了阶段埋点，才发现真正的耗时是一条 <code>where status = ? and created_at &gt; ?</code> 的查询走了全表扫描，单独占 900 毫秒。<strong>加一个复合索引，耗时 900 毫秒降到 35 毫秒，改动一行 DDL，耗时 20 分钟</strong>，端到端 P95 落到 77 毫秒。</p>
+<p>事后算账：真正生效的那一处改动占总投入时间的 1.5%，贡献了 92% 的收益。而如果第一天就先做阶段耗时分解，那三天中的大部分本可以不发生——它们不是白做（12 毫秒确实比 80 毫秒好），只是顺序错了。</p>
+</div>
+
+<table>
+<tr><th>阶段</th><th>优化前</th><th>三天优化后</th><th>加索引后</th><th>说明</th></tr>
+<tr><td>数据库查询</td><td>900 ms</td><td>900 ms</td><td><strong>35 ms</strong></td><td>全表扫描；加复合索引解决</td></tr>
+<tr><td>内部计算加工</td><td>80 ms</td><td><strong>12 ms</strong></td><td>12 ms</td><td>三天工作量的全部成果</td></tr>
+<tr><td>响应序列化</td><td>20 ms</td><td>20 ms</td><td>20 ms</td><td>未动</td></tr>
+<tr><td>框架与网络</td><td>10 ms</td><td>10 ms</td><td>10 ms</td><td>未动</td></tr>
+<tr><td><strong>端到端 P95</strong></td><td><strong>1010 ms</strong></td><td><strong>942 ms</strong></td><td><strong>77 ms</strong></td><td>投入 22 人时 vs 20 分钟</td></tr>
+</table>
+
+<div class="arch-diagram">  同一个接口的耗时构成，一眼就能看出该动哪里
+  ═══════════════════════════════════════════════════════════
+  优化前 1010ms
+  DB 900ms  ████████████████████████████████████████████████
+  计算 80ms ████
+  序列化 20ms █
+  其他 10ms  ▌
+
+  三天优化之后 942ms  ← 只动了那根最短的柱子里的一部分
+  DB 900ms  ████████████████████████████████████████████████
+  计算 12ms ▌
+  序列化 20ms █
+  其他 10ms  ▌
+
+  加索引之后 77ms
+  DB 35ms   ██
+  计算 12ms ▌
+  序列化 20ms █
+  其他 10ms  ▌
+
+  教训：先画这张图（阶段埋点，十几行代码），再决定改哪里。
+        跳过它直接上函数级剖析，剖出来的是「最长柱子内部的细节」
+        的概率，并不比「最短柱子内部的细节」更高。</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先定指标、基线、目标，三者写进任务描述再动手</li>
+<li>延迟一律报 P50 / P95 / P99，不报平均值</li>
+<li>先做阶段耗时分解，再做函数级剖析</li>
+<li>同时测 <code>perf_counter</code> 与 <code>process_time</code>，区分「在算」和「在等」</li>
+<li>生产上用采样剖析，开发机上用 <code>cProfile</code> 看调用次数</li>
+<li>按「减少工作量 → 换数据结构 → 减少往返」的顺序试</li>
+<li>每次只改一处，改完用基线脚本重测并记录</li>
+<li>把基线脚本入库，把操作计数断言写进测试</li>
+<li>达到目标就停手</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不测量就凭代码结构猜热点</li>
+<li>用 <code>time.time()</code> 测耗时，用单次运行的结果下结论</li>
+<li>拿平均延迟向外汇报，掩盖掉尾部</li>
+<li>在生产进程上开确定性剖析或 <code>tracemalloc</code> 不设兜底</li>
+<li>把 <code>cProfile</code> 的绝对耗时当成真实耗时引用</li>
+<li>跳过前三层直接做微优化，或给慢算法套并发</li>
+<li>一次改五处，改完不重测就合并</li>
+<li>在 CI 里断言墙钟时间，制造 flaky 测试</li>
+<li>热点明明在外部系统，却继续抠本地代码</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>一次性能优化的交付物不只是更快的代码，还包括一个能复现的测量脚本和一条防回退的断言。少了后两样，你只是让它这次变快了，没有让它保持快。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>cProfile 报出来的总耗时比程序实际运行时间还长／对不上，是不是坏了？</summary>
+<div class="answer">没坏，这是确定性剖析的固有特性。它在每一次函数进入和退出时都要记账，这笔开销被算进了统计里，所以剖析状态下的绝对数字一定大于真实运行时间，常见放大在 1.3 倍以上，函数调用越密集放大越明显。更需要警惕的是它对<strong>相对比例</strong>也有扭曲：一个被调用一百万次的小函数，记账成本占比很高，在报告里会显得比实际更重；而一个只调用一次的大函数几乎不受影响。所以正确用法是把 <code>cProfile</code> 的输出当成「相对排序和调用次数」的来源，而不是耗时的真值；要拿准确的绝对耗时，用 <code>perf_counter</code> 在不开剖析的情况下单独测那一段。</div>
+</details>
+
+<details>
+<summary>为什么不建议直接用 timeit 测一整个业务函数？</summary>
+<div class="answer">三个原因。第一，<code>timeit</code> 默认在计时期间关闭垃圾回收，业务函数往往会产生大量临时对象，关掉 GC 等于把一部分真实成本从账单里抹掉了。第二，它会把同一段代码重复执行很多次，缓存、连接池、数据库查询缓存都会在第二次之后命中，测出来的是热态性能，而线上大量请求处于冷态。第三，业务函数通常有副作用——写库、发消息、改全局状态，重复执行成百上千次要么报错要么污染数据。<code>timeit</code> 的定位是<strong>微基准</strong>：对比两种纯计算写法哪个快。测业务函数请用第一节那种带预热、报分位数的基准骨架。</div>
+</details>
+
+<details>
+<summary>能在生产环境上开剖析吗？</summary>
+<div class="answer">分工具看。采样剖析可以，这正是它存在的意义——开销通常在个位数百分比，而且可以挂到一个已经在跑的进程上，不需要改代码、不需要重启，<code>py-spy</code> 就属于这一类。确定性剖析（<code>cProfile</code>）原则上不要在生产全量开，开销大且会扭曲结果；如果确实需要，限定在单个灰度实例、按采样比例只剖一小部分请求、并设置自动关闭的兜底。<code>tracemalloc</code> 同理，它对时间和内存的影响都很显著，只在排查内存增长时短时开启。另外永远要给这类开关准备一个「不重启就能关掉」的路径，否则忘记关就变成了新的事故。</div>
+</details>
+
+<details>
+<summary>监控上平均延迟明明降了，为什么用户还在说慢？</summary>
+<div class="answer">因为平均值对尾部不敏感。假设你把 95% 的快请求从 25 毫秒优化到 15 毫秒，平均值会明显下降，但那 5% 卡在两秒的请求一点没变——而抱怨恰恰全部来自这 5%。更糟的情况是尾部其实在恶化：慢请求从 2 秒涨到 3 秒，因为快请求变多而被稀释，平均值反而继续下降，监控面板一片绿色。所以延迟指标要看分位数，并且至少看到 P99；同时看请求量，样本太少时 P99 本身噪声很大。如果尾部和主路径的成因不同（缓存未命中、GC 停顿、连接池排队），还需要把这些请求单独打标采样，否则在聚合数据里永远找不到它们。</div>
+</details>
+
+<details>
+<summary>加了缓存为什么没变快，有时候反而更慢？</summary>
+<div class="answer">先看命中率，这是唯一要紧的数字。命中率低的缓存等于给每次调用增加了一次查找加一次写入的成本，本来就慢的路径会更慢。命中率低通常有三个来源：缓存键里混进了每次都不同的成分（时间戳、请求 ID、未排序的集合），缓存容量太小导致频繁淘汰，以及被缓存的函数本来就很少被重复调用。第二种可能是缓存位置太靠内层——在最底层的小函数上缓存，外层的重复工作一点没省；往上挪一层，一次命中能跳过整条链路。第三种是缓存的东西本身不贵，省下的计算还不够付哈希键的成本。无论哪种，判断方法都一样：把命中率打出来，再用基线脚本对比开关缓存的两组数字。</div>
+</details>
+
+<details>
+<summary>火焰图里最宽的那块是 socket 读取，接下来该干什么？</summary>
+<div class="answer">这说明进程在等，不在算，本地代码优化的空间已经基本为零。有效的动作只有三类。一是让被等的那一方变快：定位到具体是哪个下游，是数据库就去看执行计划和索引，是外部接口就去看它的服务端指标。二是减少等待次数：合并往返、批量请求、加缓存，把 N 次调用降成 1 次。三是让等待重叠：多个互不依赖的外部调用并发发起，总耗时从「求和」变成「取最大值」——这条属于并发模型的选择，需要评估下游的承载能力，别把自己的延迟问题转嫁成下游的过载。要特别避免的动作是继续在 Python 侧抠计算，那部分在总账里可能只占百分之几。</div>
+</details>
+
+<details>
+<summary>热点函数要不要重写成 C 扩展？</summary>
+<div class="answer">绝大多数情况下不要，至少不要作为早期选项。先确认前三层都榨干了：这段计算是不是重复做了、数据结构对不对、能不能批量。然后优先考虑换用成熟的原生实现——如果你的热点是数值循环，向量化库已经把 C 层的工作做完了，收益和自己写扩展接近，成本却低一个数量级。自己写扩展的真实代价不在写的那几天，而在之后：需要维护构建链路、为每个平台和 Python 版本出预编译包、调试时栈跟踪跨语言、内存错误会直接让解释器崩溃而不是抛异常。只有当热点非常集中（少数几个函数占了绝大部分时间）、算法已经确定不会再变、并且现成的库确实覆盖不了时，它才是划算的。</div>
+</details>
+
+<details>
+<summary>性能测试在 CI 上老是随机失败，要不要干脆删掉？</summary>
+<div class="answer">不要删，换一种断言方式。墙钟时间在共享的 CI 机器上本来就不可靠：邻居任务、缓存状态、CPU 降频都会让同一段代码的耗时浮动几十个百分点，硬卡阈值必然 flaky，而 flaky 测试最后的命运是被所有人忽略。替代方案是断言<strong>确定性的量</strong>：一次请求最多发几条 SQL、最多调几次外部接口、最多加载多少行数据、某个函数最多被调用几次。这些数字不受机器快慢影响，而且它们拦住的正是最常见的性能回退——有人在循环里加了一次查询、有人不小心关掉了缓存。如果确实需要盯住绝对耗时，把它挪到专用的、独占的基准机器上定时跑，用趋势告警而不是单次红绿。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

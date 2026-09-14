@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY48 · 数值稳定性与对数域计算</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、浮点数不是实数</a>
+<a href="#s2">二、溢出与下溢的真实场景</a>
+<a href="#s3">三、稳定 softmax 的原理</a>
+<a href="#s4">四、对数域计算</a>
+<a href="#s5">五、其他高频不稳定模式</a>
+<a href="#s6">六、怎么发现与防住</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY48 · 数值稳定性与对数域计算</h1>
+<p class="subtitle">浮点的三个后果 / 溢出与下溢的判据 / 稳定 softmax 的恒等变形 / logsumexp 与对数域 / 非数值检测与极端输入测试</p>
+
+<div class="intuition-box">
+<p>浮点数不是实数，它是「固定位数的科学计数法」。所有数值稳定性技巧都在做同一件事：把要算的表达式改写成一个<strong>数学上完全等价、但中间结果落在浮点能表示的区间里</strong>的形式。减最大值不是玄学，是可以推导出来的恒等变形。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、浮点数不是实数：三个必须记住的后果</h2>
+
+<p>大多数数值 bug 的根子在同一个误解上——把 <code>float</code> 当成实数用。实数是稠密、无界、满足结合律的；浮点数三条都不满足。它是一个<strong>有限集合</strong>：固定位数的符号位、指数位、有效位组合出来的那些值，别的数字一概表示不了，只能四舍五入到最近的一个。Python 的 <code>float</code> 就是 C 的 <code>double</code>，即 IEEE 754 的 binary64；这一点在变量与内置类型那张卡（<a href="py_variables_builtin_types.html">PY02</a>）里讲过表示层，本节从它推出三个会直接咬到你的后果。</p>
+
+<div class="arch-diagram">  IEEE 754 的一个浮点数 = 符号 × 有效位 × 2^指数
+  ─────────────────────────────────────────────
+
+  binary64（Python float / np.float64）
+  ┌─┬───────────┬────────────────────────────────────────────────────┐
+  │S│  指数 11  │                  有效位 52                         │
+  └─┴───────────┴────────────────────────────────────────────────────┘
+     └ 决定「能表示多大多小」      └ 决定「同一量级里能分多细」
+
+  binary32（np.float32）          binary16（float16）   bfloat16（脑浮点）
+  ┌─┬────────┬─────────────┐     ┌─┬─────┬────────┐   ┌─┬────────┬─────┐
+  │S│ 指数 8 │  有效位 23  │     │S│指数5│有效位10│   │S│ 指数 8 │有效7│
+  └─┴────────┴─────────────┘     └─┴─────┴────────┘   └─┴────────┴─────┘
+                                   范围窄、易溢出        范围=f32、精度粗
+
+  关键：指数位和有效位是两笔独立的预算。16 位总共只有 15 位可分，
+        给范围多一点就必须给精度少一点——这正是 bf16 被训练场景选中的原因。</div>
+
+<h3>后果一：有限精度，相近的数相减会丢有效位</h3>
+
+<p>两个量级相同、数值相近的数相减，结果的量级会骤降，但它继承来的绝对误差不变——于是<strong>相对误差被放大了几个数量级</strong>。这个现象叫 <span class="term">灾难性抵消</span>（catastrophic cancellation），是精度类 bug 的头号来源。</p>
+
+<pre><code>&gt;&gt;&gt; 0.1 + 0.2
+0.30000000000000004          # 0.1/0.2/0.3 三个都不能精确表示
+&gt;&gt;&gt; (0.1 + 0.2) == 0.3
+False                        # 所以浮点相等比较几乎总是错的
+&gt;&gt;&gt; import sys; sys.float_info.epsilon
+2.220446049250313e-16        # 1.0 和它的下一个可表示数之间的距离</code></pre>
+
+<p><span class="term">机器 epsilon</span> 是理解精度的正确单位：它不是「最小能表示的数」，而是<strong>相对分辨率</strong>。binary64 的 epsilon 约 2.2e-16，意思是在任何量级上，浮点只能分辨出大约 16 位十进制有效数字的差别。在 1e9 附近，相邻可表示数之间就差了约 2e-7；两个 1e18 量级的数相减，误差量级在几百——这正是第五节里朴素方差公式崩掉的原因。</p>
+
+<h3>后果二：有限范围，超出就变成无穷或零</h3>
+
+<p>指数位的位数决定了可表示区间。超过上界叫 <span class="term">上溢</span>，结果是 <code>inf</code>（NumPy 里）或 <code>OverflowError</code>（Python <code>math</code> 里）；低于下界叫 <span class="term">下溢</span>，结果是 <code>0.0</code>。下溢之前还有一段 <span class="term">次正规数</span>（subnormal）区间，它用牺牲有效位的方式把可表示范围再往下延一截，所以「最小正数」比「最小正规格化数」还要小几十个数量级。</p>
+
+<table>
+<tr><th>格式</th><th>指数位 / 有效位</th><th>最大有限值</th><th>最小正规格化数</th><th>机器 epsilon</th><th>十进制有效位</th></tr>
+<tr><td>binary64（双精度）</td><td>11 / 52（+隐含 1）</td><td>≈ 1.8e308</td><td>≈ 2.2e-308</td><td>2⁻⁵² ≈ 2.2e-16</td><td>约 15~17 位</td></tr>
+<tr><td>binary32（单精度）</td><td>8 / 23</td><td>≈ 3.4e38</td><td>≈ 1.2e-38</td><td>2⁻²³ ≈ 1.2e-7</td><td>约 6~9 位</td></tr>
+<tr><td>binary16（半精度）</td><td>5 / 10</td><td>65504</td><td>≈ 6.1e-5</td><td>2⁻¹⁰ ≈ 9.8e-4</td><td>约 3~5 位</td></tr>
+<tr><td>bfloat16</td><td>8 / 7</td><td>≈ 3.4e38</td><td>≈ 1.2e-38</td><td>2⁻⁷ ≈ 7.8e-3</td><td>约 2~4 位</td></tr>
+</table>
+
+<p>这张表最值得记的是最后两行的对比：<strong>float16 和 bfloat16 都是 16 位，但范围差了 33 个数量级</strong>。float16 的上限只有 65504，一个稍大的中间量就溢出；bfloat16 把指数位加到和 float32 一样的 8 位，代价是有效位只剩 7 位（相对分辨率不到 1%）。深度学习训练更常选 bfloat16，正是因为训练过程对<strong>范围</strong>的需求远大于对精度的需求——梯度可以糙，但不能变成 <code>inf</code>。</p>
+
+<div class="intuition-box">
+<p>范围和精度是两件独立的事。「换成 16 位会不会不准」和「换成 16 位会不会溢出」要分开问，答案往往相反。</p>
+</div>
+
+<h3>后果三：浮点加法不满足结合律</h3>
+
+<p>每一次浮点运算都要把精确结果舍入到最近的可表示值，舍入误差依赖于两个操作数的量级，因此<strong>求和的顺序会改变结果</strong>。</p>
+
+<pre><code>&gt;&gt;&gt; (1.0 + 1e16) - 1e16
+0.0                    # 1.0 相对 1e16 小于半个 ulp，加进去直接被舍掉
+&gt;&gt;&gt; 1.0 + (1e16 - 1e16)
+1.0                    # 换个括号位置，答案不一样
+# 结论：a+(b+c) != (a+b)+c，浮点加法只满足交换律，不满足结合律</code></pre>
+
+<p>这条后果的工程含义比看起来大。多线程或多进程把一个大数组拆开各自求和再合并，划分方式一变，求和顺序就变，<strong>结果会在最后几位上抖动</strong>。GPU 上的归约、`np.sum` 的分块策略、多卡训练里的梯度 all-reduce 都有这个性质。所以「换了机器 / 换了线程数，结果对不上第 12 位」通常不是 bug，而是浮点的正常行为；真正该做的是把断言从「完全相等」改成「容差内相等」。</p>
+
+<table>
+<tr><th>后果</th><th>直接症状</th><th>典型触发场景</th><th>应对方向</th></tr>
+<tr><td>有限精度</td><td>结果多了几位垃圾数字；相等比较失败；方差变成 0 或负数</td><td>相近数相减、大数吃小数、长序列累加</td><td>换等价公式避免相减；用容差比较；提高累加器精度</td></tr>
+<tr><td>有限范围</td><td><code>inf</code> / <code>0.0</code> / <code>nan</code>，且会往下游传播</td><td><code>exp</code>、概率连乘、平方、低精度训练</td><td>改写到对数域；先平移再指数；加 clip</td></tr>
+<tr><td>不满足结合律</td><td>换并行度 / 换设备结果不一致，末几位抖动</td><td>并行归约、分块求和、多卡梯度同步</td><td>接受抖动，用 <code>isclose</code> 断言；需要可复现就固定归约顺序</td></tr>
+</table>
+
+<p class="data-asof"><strong>数据截止 2026-06</strong> · 表中数值为 IEEE 754-2019 标准（bfloat16 非该标准格式，参数取业界一致实现）的规格参数，可在本机用 <code>sys.float_info</code> 与 <code>numpy.finfo</code> 复核。本卡代码在 Python 3.12 / NumPy 2.x 上验证。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、溢出与下溢的真实场景：指数与连乘是两个引爆点</h2>
+
+<p>知道了浮点有范围上限，下一个问题是：什么样的表达式会真的顶到上限？答案高度集中——<strong>绝大多数生产环境的数值爆炸都来自指数函数，绝大多数精度归零都来自概率连乘</strong>。这两者都不是罕见写法，它们出现在 softmax、注意力、语言模型打分、贝叶斯推断、隐马尔可夫模型里。</p>
+
+<h3>指数函数把加法量级变成乘法量级</h3>
+
+<p><code>exp</code> 的输入只要走到三位数，输出就顶破了双精度的上限。这个阈值可以直接算出来：溢出条件是 <code>exp(x) &gt; 最大有限值</code>，也就是 <code>x &gt; ln(最大有限值)</code>。</p>
+
+<table>
+<tr><th>格式</th><th><code>exp(x)</code> 溢出为 <code>inf</code></th><th><code>exp(x)</code> 下溢为 <code>0.0</code></th><th>可用的安全区间（约）</th></tr>
+<tr><td>binary64</td><td>x ≳ 709.8</td><td>x ≲ -745</td><td>[-745, 709]</td></tr>
+<tr><td>binary32</td><td>x ≳ 88.7</td><td>x ≲ -104</td><td>[-103, 88]</td></tr>
+<tr><td>binary16</td><td>x ≳ 11.1</td><td>x ≲ -17</td><td>[-16, 11]</td></tr>
+<tr><td>bfloat16</td><td>x ≳ 88.7</td><td>x ≲ -93</td><td>[-92, 88]</td></tr>
+</table>
+
+<p>binary16 那一行值得盯一眼：<strong>半精度下 <code>exp(12)</code> 就已经是 <code>inf</code></strong>。注意力分数、logit 这些量走到 12 是家常便饭，这就是为什么半精度训练必须把 softmax 之类的归约放到 float32 里算。还有一个容易忽略的差异：<strong>Python 的 <code>math.exp</code> 溢出会抛异常，NumPy 的 <code>np.exp</code> 溢出只给一条警告然后返回 <code>inf</code></strong>。前者会立刻停在出错的地方，后者让坏值静悄悄流进下游——这个差异决定了你是在第一现场看到问题，还是在三层调用之后看到一个莫名其妙的 <code>nan</code>。</p>
+
+<pre><code>&gt;&gt;&gt; import math, numpy as np
+&gt;&gt;&gt; math.exp(1000)
+OverflowError: math range error       # 立刻炸在现场
+&gt;&gt;&gt; np.exp(1000.0)
+inf                                   # 只有 RuntimeWarning，值继续往下流
+&gt;&gt;&gt; np.exp(1000.0) / np.exp(1000.0)
+nan                                   # inf/inf，从这里开始不可逆</code></pre>
+
+<h3>非数值一旦产生就会污染整张计算图</h3>
+
+<p><code>nan</code>（not a number）的设计目标是「可传播的错误标记」：几乎任何含 <code>nan</code> 的运算结果都是 <code>nan</code>，而且<strong>所有涉及 <code>nan</code> 的比较都返回假</strong>，包括 <code>nan == nan</code>。这让它极难被常规的边界检查拦住——写 <code>if x &gt; threshold</code> 的分支在 <code>nan</code> 上永远走 else，你的代码会「正常地」得出错误结论。</p>
+
+<table>
+<tr><th>表达式</th><th>Python <code>float</code></th><th>NumPy 浮点</th><th>说明</th></tr>
+<tr><td><code>1.0 / 0.0</code></td><td>抛 <code>ZeroDivisionError</code></td><td><code>inf</code> + divide 警告</td><td>同一个写法，两套语义</td></tr>
+<tr><td><code>0.0 / 0.0</code></td><td>抛 <code>ZeroDivisionError</code></td><td><code>nan</code> + invalid 警告</td><td>归一化全零向量的典型出口</td></tr>
+<tr><td><code>inf - inf</code></td><td><code>nan</code></td><td><code>nan</code></td><td>减最大值时若最大值已是 <code>inf</code> 就在这里翻车</td></tr>
+<tr><td><code>0.0 * inf</code></td><td><code>nan</code></td><td><code>nan</code></td><td>掩码乘法里最常见的 <code>nan</code> 来源</td></tr>
+<tr><td><code>nan == nan</code></td><td><code>False</code></td><td><code>False</code></td><td>只能用 <code>isnan</code> / <code>x != x</code> 检测</td></tr>
+<tr><td><code>nan &gt; 1</code> 与 <code>nan &lt; 1</code></td><td>都是 <code>False</code></td><td>都是 <code>False</code></td><td>阈值分支被静默绕过</td></tr>
+</table>
+
+<div class="arch-diagram">  一个 inf 是怎么变成全表 nan 的
+  ─────────────────────────────
+  scores = [ 1.0,  2.0,  1000.0 ]        ← 只有一个异常样本
+
+  exp(scores)      = [ 2.72,  7.39,   inf ]
+  sum              =   inf
+  exp(scores)/sum  = [ 2.72/inf, 7.39/inf, inf/inf ] = [ 0.0, 0.0, nan ]
+                       正常样本的概率也被抹成 0，不只是坏的那一个
+
+  往下游再走一步：
+    loss = -log(p) → nan ；grad → nan ；w -= lr*grad → nan（参数表报废）
+    此后每一个 batch 的前向都是 nan，服务再也回不来
+
+  关键性质：nan 只进不出。等它传播到日志里再排查，
+            现场（那个 exp 溢出的位置）早就没了。</div>
+
+<h3>另一头：概率连乘迅速下溢成零</h3>
+
+<p>序列概率是逐项条件概率的乘积。假设每个 token 的概率约 1e-3，300 个 token 的序列概率是 1e-900——远低于双精度的下界 5e-324，<strong>直接变成 0.0</strong>。麻烦不在于「不精确」，而在于<strong>比较彻底失效</strong>：两个候选序列的概率都是 0.0，你无法判断哪个更可能；做归一化时又得到 0/0，回到上面那张表的第二行。</p>
+
+<div class="intuition-box">
+<p>判据：<strong>只要表达式里出现指数函数或概率连乘，就必须先想稳定性，再想性能。</strong>这两个模式是数值爆炸的充分预警信号，没有例外。</p>
+</div>
+
+<div class="highlight">
+<p><strong>生产事故复盘：</strong>一个候选排序打分服务上线后偶发返回 <code>nan</code>，触发率约 <strong>0.04%</strong>，6 小时内影响 <strong>1247 个请求</strong>（总量约 312 万），定位耗时 <strong>9 小时</strong>。归一化那一步写的是最朴素的 <code>np.exp(s) / np.exp(s).sum()</code>，没有减最大值。线上 99.96% 的分数落在 [-20, 30]，本来相安无事；但有一路召回通道在特征缺失时把分数兜底填成了 1e3 量级，<code>np.exp(1000)</code> 溢出成 <code>inf</code>，求和后 <code>inf/inf</code> 变 <code>nan</code>，同一批里所有正常候选的分数也被一起抹成 0。定位之所以花了 9 小时，是因为日志只记录了最终的 <code>nan</code> 结果，<code>np.exp</code> 的 <code>RuntimeWarning</code> 默认不入日志，而 0.04% 的触发率在灰度期一次都没复现。修复两处共 3 行：归一化改用减最大值的稳定写法，以及在入口对分数做范围校验并快速失败。</p>
+</div>
+
+<p>这个事故的教训有两层。表层是「softmax 要减最大值」；深层是<strong>坏值的产生点和暴露点被拉开了很远</strong>——警告被丢弃、异常样本比例极低、日志只记结果不记中间量。第六节讲的就是怎么把这段距离压回到零。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、稳定 softmax 的原理：把实现细节还原成恒等变形</h2>
+
+<p>「softmax 要减去每行的最大值」这句话在很多代码里以注释形式存在，读的人当作一条要背的规矩。它其实是一个两行就能推完的恒等变形，理解了推导，你就能在遇到新的表达式时自己造出同类的技巧，而不是只会照抄这一个。</p>
+
+<h3>为什么减去一个常数不改变结果</h3>
+
+<p>softmax 的定义是每一项的指数除以所有项指数之和。把每个输入都减掉同一个常数 <code>m</code>，相当于给分子和分母同时乘上了 <code>exp(-m)</code> 这个非零常数，约掉之后完全回到原式。</p>
+
+<div class="formula">softmax(x)ᵢ = exp(xᵢ) / Σⱼ exp(xⱼ)<br><br>exp(xᵢ - m) / Σⱼ exp(xⱼ - m)<br>= [ exp(xᵢ)·exp(-m) ] / [ exp(-m)·Σⱼ exp(xⱼ) ]<br>= exp(xᵢ) / Σⱼ exp(xⱼ)&nbsp;&nbsp;&nbsp;= softmax(x)ᵢ</div>
+
+<p>注意这里的等号是<strong>数学上的严格相等</strong>，对任意实数 <code>m</code> 都成立，不是近似、不是「误差可忽略」。所以我们有完全的自由去挑一个让中间结果最听话的 <code>m</code>。</p>
+
+<h3>为什么偏偏选行最大值</h3>
+
+<p>取 <code>m = max(x)</code> 之后，所有 <code>xᵢ - m ≤ 0</code>，于是每个 <code>exp(xᵢ - m)</code> 都落在 <code>(0, 1]</code> 区间里。三个好性质同时成立：</p>
+
+<ul>
+<li><strong>杜绝上溢</strong>：指数的最大输入变成 0，<code>exp(0) = 1</code>，再大的原始分数也不可能让指数项超过 1。</li>
+<li><strong>分母有下界</strong>：最大项恰好贡献 1，所以分母 ≥ 1，不可能出现除零。</li>
+<li><strong>下溢是安全的</strong>：某些 <code>xᵢ - m</code> 非常负，其指数下溢为 0.0——但这恰好是<strong>正确舍入的结果</strong>。这些项在数学上本来就远小于分母里那个 1，把它们当 0 不改变归一化后的答案在可表示精度内的取值。</li>
+</ul>
+
+<p>第三点是关键，也是最容易被误解的地方：<strong>不是所有下溢都危险</strong>。危险的下溢是「后面还要拿它做除数或取对数」的那种；这里下溢的项只是被加进一个至少为 1 的和里，贡献为 0，没有任何后续伤害。数值稳定性的功夫，一半在于判断哪些误差无害。</p>
+
+<div class="arch-diagram">  同一组分数，两种写法的中间量
+  ────────────────────────────
+  x = [ 1.0, 2.0, 1000.0 ]
+
+  朴素：exp(x)                       稳定：m = max(x) = 1000
+    exp(1)    = 2.72                       x - m = [-999, -998, 0]
+    exp(2)    = 7.39                       exp(-999) = 0.0    （下溢，无害）
+    exp(1000) = inf     ← 炸               exp(-998) = 0.0    （下溢，无害）
+    sum       = inf                        exp(0)    = 1.0    ← 上界被钉住
+    x/sum     = [0, 0, nan]                sum       = 1.0    ← 分母 ≥ 1 恒成立
+                                           结果      = [0, 0, 1.0]  ✅
+
+  两种写法数学上等价，差别只在中间量有没有跑出可表示区间。
+  实现要点：m 必须沿 softmax 作用的那一维取，不能取全局最大值——注意力里
+            是 [batch, head, query, key] 的最后一维。取错维度不会报错，
+            只会得到静默错误的概率分布。</div>
+
+<table>
+<tr><th></th><th>朴素写法</th><th>稳定写法（减最大值）</th></tr>
+<tr><td>表达式</td><td><code>exp(x) / exp(x).sum()</code></td><td><code>e = exp(x - x.max()); e / e.sum()</code></td></tr>
+<tr><td>指数项取值范围</td><td><code>(0, +inf)</code>，可溢出</td><td><code>(0, 1]</code>，恒有界</td></tr>
+<tr><td>分母下界</td><td>无，可为 0 或 <code>inf</code></td><td>≥ 1</td></tr>
+<tr><td>x 全相等时</td><td>可能溢出</td><td>正确返回均匀分布</td></tr>
+<tr><td>x 含 <code>-inf</code>（掩码）时</td><td><code>exp(-inf)=0</code>，但若全被掩码则 0/0</td><td>同样要单独处理「整行全掩码」</td></tr>
+<tr><td>额外成本</td><td>—</td><td>多一次沿该维的最大值归约</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>稳定 softmax 唯一救不了的边界：</strong>如果一行全部被掩码成 <code>-inf</code>，此时 <code>m = -inf</code>，<code>-inf - (-inf) = nan</code>，整行直接变非数值。因果掩码的第一行、长度为 0 的序列、padding 全覆盖的样本都可能撞上它。两条防线：归一化之前确保每行至少有一个有效位置；掩码值用一个足够负的<strong>有限数</strong>（如 float32 下的 -1e9，或 <code>np.finfo(dtype).min</code> 的一半）而不是 <code>-inf</code>，这样减最大值这一步就不会踩到 <code>inf - inf</code>。手写注意力时这一步在缩放点积之后、乘 V 之前，完整实现与掩码写法见 <a href="../transformer/attention_from_scratch.html">T06 · Attention：从零实现缩放点积注意力</a>——那张卡里减最大值只占一行代码，本节要说明的是它为什么必须是那一行。</p>
+</div>
+
+<div class="intuition-box">
+<p>减最大值不是「让数字小一点」这种模糊的好意，它是把指数项的上界精确钉在 1、把分母的下界精确钉在 1。凡是能找到这种「等价改写后中间量有硬边界」的变形，就是一个稳定算法。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、对数域计算：连乘变求和，下溢问题消失</h2>
+
+<p>第二节那个下溢场景（300 个 1e-3 相乘等于 0）没法靠平移解决，因为问题不在某一项，而在<strong>乘积本身的量级</strong>就落在可表示范围之外。这时唯一的出路是换一套坐标：不存概率，存概率的对数，也就是搬到<span class="term">对数域</span>去算。</p>
+
+<h3>换了坐标之后，三件事同时变好</h3>
+
+<p>对数是严格单调递增的，所以<strong>比较大小、求 argmax、排序在对数域完全等价</strong>——这就是它能当替身的前提。换过去之后：连乘变成求和（乘法的舍入误差不再累积成灾），量级从 1e-900 变成 -2072 这种舒服的数字（彻底告别下溢），而且加法比乘法更不容易失去精度。</p>
+
+<div class="arch-diagram">  概率域                          对数域
+  ──────────────────────────────────────────────────────
+  p1 · p2 · ... · pn              log p1 + log p2 + ... + log pn
+     ↓ 300 项、每项 1e-3              ↓
+     1e-900  →  0.0  ✗              -2072.3  ✓  （离 ±709 的指数边界很远）
+
+  p / Σ p                         log p - logsumexp(log p)
+  Σ p                             logsumexp(log p)      ← 唯一需要技巧的运算
+  p_a / p_b（似然比）              log p_a - log p_b
+  argmax p                        argmax log p          ← 单调，完全等价
+
+  只有「把若干概率加起来」这一步需要回到指数：log( exp(a)+exp(b)+... )
+  直接算就又溢出了，所以需要一个稳定的 logsumexp。</div>
+
+<h3>logsumexp：对数域的加法，也只需要提最大值</h3>
+
+<p>把最大值提到对数外面，同样是一个严格的恒等变形——这次用的是「乘进对数等于加在外面」。</p>
+
+<div class="formula">m = max(x)<br><br>log Σᵢ exp(xᵢ)<br>= log [ exp(m) · Σᵢ exp(xᵢ - m) ]<br>= m + log Σᵢ exp(xᵢ - m)</div>
+
+<p>右边的每个 <code>exp(xᵢ - m)</code> 都在 <code>(0, 1]</code> 里，不会上溢；括号里的和至少是 1，所以对数的输入至少是 1，不会取到 0 或负数。这一个函数是许多算法的基石：隐马尔可夫的前向算法、贝叶斯模型的证据归一化、beam search 的打分、对比学习的损失，本质上都是在反复调用它。标准实现已经有了——NumPy 的 <code>np.logaddexp</code>（两项版本）、SciPy 的 <code>scipy.special.logsumexp</code>、PyTorch 的 <code>torch.logsumexp</code>，<strong>优先用现成的，不要自己写</strong>。</p>
+
+<pre><code>&gt;&gt;&gt; import numpy as np
+&gt;&gt;&gt; np.logaddexp(1000.0, 1001.0)      # log(exp(1000) + exp(1001))
+1001.3132616875182                     # 朴素写法这里是 inf
+&gt;&gt;&gt; np.log(np.exp(1000.0) + np.exp(1001.0))
+inf
+# log_softmax 就是 x - logsumexp(x)，同样不要手工拼 log(softmax(x))</code></pre>
+
+<h3>log1p 与 expm1：为接近零的那一段保留精度</h3>
+
+<p>这两个函数存在的唯一理由是<strong>躲开「1 加上一个极小数」这一步的灾难性抵消</strong>。<code>1 + 1e-17</code> 在双精度里就等于 <code>1.0</code>（因为 1e-17 小于 1.0 处的半个 ulp），信息在加法那一刻就没了，后面的 <code>log</code> 再怎么算都只能得到 0。<code>math.log1p(x)</code> 直接计算 <code>log(1+x)</code> 这个整体，绕过了中间那个 <code>1+x</code>；<code>math.expm1(x)</code> 对 <code>exp(x)-1</code> 做同样的事。这不是学术洁癖：复利、极小概率的对数似然、学习率衰减、<code>log(1 - p)</code> 形式的二分类损失都会走到这一段，而且这类误差不会报警，只会让结果悄悄偏掉。</p>
+
+<pre><code>&gt;&gt;&gt; import math
+&gt;&gt;&gt; math.log(1 + 1e-17), math.log1p(1e-17)
+(0.0, 1e-17)                  # 左边全损，右边满精度
+&gt;&gt;&gt; math.exp(1e-17) - 1, math.expm1(1e-17)
+(0.0, 1e-17)
+# 判据：只要参数可能接近 0，log(1+x) 就写 log1p(x)，exp(x)-1 就写 expm1(x)</code></pre>
+
+<h3>交叉熵为什么要直接从 logit 算</h3>
+
+<p>交叉熵损失是 <code>-log(softmax(x)_y)</code>。分两步算（先 softmax 再取对数）会连撞两个坑：softmax 那一步如果没减最大值会溢出；即使减了，正确答案概率很小时 softmax 的输出会下溢成 0，接着 <code>log(0) = -inf</code>。把两步<strong>融合成一个表达式</strong>就能同时躲开——代入上面的 logsumexp 恒等式：</p>
+
+<div class="formula">-log softmax(x)_y = logsumexp(x) - x_y<br>= [ m + log Σᵢ exp(xᵢ - m) ] - x_y</div>
+
+<p>右边没有任何一步需要先算出那个可能极小的概率值，指数的输入全都 ≤ 0，对数的输入 ≥ 1。这就是框架里 <code>torch.nn.CrossEntropyLoss</code> 和 <code>torch.nn.functional.cross_entropy</code> 都<strong>接受未归一化的 logit 而不是概率</strong>的原因；二分类对应的是 <code>binary_cross_entropy_with_logits</code>。名字里带 <code>_with_logits</code> 或文档写「输入是 logit」的那一版，就是融合过的稳定版本，自己先 <code>softmax</code> / <code>sigmoid</code> 再套 <code>log</code> 等于主动放弃这份保护。</p>
+
+<table>
+<tr><th>要算什么</th><th>朴素写法（会出问题）</th><th>稳定写法</th><th>为什么</th></tr>
+<tr><td>softmax</td><td><code>exp(x) / exp(x).sum()</code></td><td><code>scipy.special.softmax</code> / 先减 <code>x.max()</code></td><td>指数上溢成 <code>inf</code>，除法后 <code>inf/inf = nan</code></td></tr>
+<tr><td>log softmax</td><td><code>np.log(softmax(x))</code></td><td><code>log_softmax(x)</code>，即 <code>x - logsumexp(x)</code></td><td>小概率先下溢为 0，再 <code>log(0) = -inf</code></td></tr>
+<tr><td>若干概率求和</td><td><code>np.log(np.exp(a).sum())</code></td><td><code>logsumexp(a)</code> / <code>np.logaddexp</code></td><td>提出最大值后指数输入 ≤ 0，恒不溢出</td></tr>
+<tr><td>序列联合概率</td><td><code>np.prod(probs)</code></td><td><code>np.log(probs).sum()</code></td><td>连乘下溢为 0，比较与归一化全部失效</td></tr>
+<tr><td><code>log(1 + x)</code>，x 可能很小</td><td><code>math.log(1 + x)</code></td><td><code>math.log1p(x)</code></td><td><code>1 + x</code> 把小量吃掉，灾难性抵消</td></tr>
+<tr><td><code>exp(x) - 1</code>，x 可能很小</td><td><code>math.exp(x) - 1</code></td><td><code>math.expm1(x)</code></td><td>同上，两个近 1 的数相减</td></tr>
+<tr><td>交叉熵</td><td><code>-log(softmax(x)[y])</code></td><td><code>cross_entropy(logits, y)</code></td><td>两步融合，溢出与下溢一次解决</td></tr>
+<tr><td>sigmoid 的二分类损失</td><td><code>-log(sigmoid(x))</code></td><td><code>binary_cross_entropy_with_logits</code></td><td>同理，避免 <code>sigmoid</code> 饱和到 0 或 1</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>看到库里有 <code>xxx_with_logits</code>、<code>log_xxx</code>、<code>logsumexp</code>、<code>log1p</code> 这类名字，不要以为是可选的便利函数——它们的存在本身就是「这里有个数值坑」的标记。用它们，不要自己拼。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、其他高频不稳定模式</h2>
+
+<p>指数和连乘占了大头，但还有四类模式在代码评审里出现的频率很高，而且都有干净的标准解法。</p>
+
+<h3>除以一个可能为零的量：小常数要加在分母里</h3>
+
+<p>归一化、余弦相似度、注意力缩放都要除以一个由数据算出来的量，而这个量可以是 0。加一个小常数是对的，但<strong>加的位置决定它有没有用</strong>：</p>
+
+<pre><code># ✗ 加在结果上：分母仍可能为 0，nan 照样产生
+v = x / np.linalg.norm(x) + 1e-8
+# ✓ 加在分母里：分母有正下界
+v = x / (np.linalg.norm(x) + 1e-8)
+# ✓ 或者给分母兜个底（更适合分母量级未知的情况）
+v = x / np.maximum(np.linalg.norm(x), 1e-8)</code></pre>
+
+<p>常数取多少也不是随便填的：它必须<strong>和分母的量级相称</strong>。float32 的机器 epsilon 约 1.2e-7，在这个精度下填 1e-12 起不到作用（加上去等于没加），所以 float32 通道的经验值在 1e-6 到 1e-8 之间。另外注意归一化层的惯例是把常数放在<strong>根号里面</strong>——<code>(x - mean) / sqrt(var + eps)</code>，而不是 <code>sqrt(var) + eps</code>。PyTorch 的 <code>LayerNorm</code>、<code>BatchNorm</code> 的 <code>eps</code> 参数都是这个位置，自己复现时别放错。</p>
+
+<h3>方差的朴素公式会灾难性抵消</h3>
+
+<p>「平方的均值减去均值的平方」在数学上正确，在浮点下是个陷阱：当均值远大于标准差时，这两个量几乎相等，相减就把有效位全抵消掉了。下面这组数据的真实方差是 22.5，朴素公式在双精度下返回 <strong>0.0</strong>：</p>
+
+<pre><code>xs = [1e9 + 4, 1e9 + 7, 1e9 + 13, 1e9 + 16]
+m = sum(xs) / 4
+naive = sum(x * x for x in xs) / 4 - m * m   # -&gt; 0.0        ✗ 全损
+two_pass = sum((x - m) ** 2 for x in xs) / 4 # -&gt; 22.5       ✓ 正确
+# 朴素公式还可能返回负方差，接着 sqrt(负数) 就是 nan</code></pre>
+
+<p>正确解法有两个。能过两遍数据就用<strong>两遍算法</strong>：先求均值，再累加与均值的偏差平方——减法发生在同量级的数之间，没有抵消。只能过一遍（流式、在线统计）就用 <span class="term">Welford 在线算法</span>，它逐点更新均值和偏差平方和，数学上等价于两遍法但只需一次遍历和常数内存。顺带一句：<code>numpy.var</code> 和 <code>statistics.variance</code> 内部用的都是数值稳定的做法，<strong>只有自己手写才会踩这个坑</strong>——而手写在「不想为了算个方差引入依赖」的场景里非常常见。</p>
+
+<pre><code>n, mean, m2 = 0, 0.0, 0.0
+for x in stream:
+    n += 1
+    delta = x - mean
+    mean += delta / n
+    m2 += delta * (x - mean)      # 注意：用更新后的 mean
+var = m2 / n                       # 总体方差；样本方差用 m2 / (n - 1)</code></pre>
+
+<h3>大量数值求和会累积精度损失</h3>
+
+<p>朴素的顺序累加里，累加器越大、每一项被舍掉的比例越高，误差随项数线性增长（量级 O(n·ε)）。<span class="term">成对求和</span>（pairwise summation）把序列递归二分求和，误差降到 O(log n·ε)；<span class="term">补偿求和</span>（Kahan 及其改进）额外维护一个误差项把每次舍掉的部分补回来，精度最好、代价最大。实测对比很直观：把 100 万个 <code>np.float32</code> 的 <code>0.1</code> 加起来，这些值的精确和是 <strong>100000.0014901161…</strong>（不是 100000——因为 0.1 在 float32 里存的是 0.10000000149…，这一点属于表示误差，和求和方式无关，下表比的是各种做法相对这个精确和偏了多少）。</p>
+
+<table>
+<tr><th>做法</th><th>结果</th><th>相对误差</th><th>Python 里怎么用</th></tr>
+<tr><td>float32 顺序累加</td><td>100958.34</td><td>≈ 9.6e-3</td><td>手写 <code>for</code> 循环，累加器是 float32</td></tr>
+<tr><td>成对求和（float32 累加器）</td><td>100000.01</td><td>≈ 6.3e-8</td><td><code>arr.sum()</code>，NumPy 的默认归约策略</td></tr>
+<tr><td>成对求和 + float64 累加器</td><td>100000.00149011612</td><td>0（此例下已是精确和）</td><td><code>arr.sum(dtype=np.float64)</code>、<code>arr.mean(dtype=np.float64)</code></td></tr>
+<tr><td>正确舍入的精确求和</td><td>100000.00149011612</td><td>0</td><td><code>math.fsum(arr)</code>，慢但结果唯一</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>把这张表读成两个可执行的决定：</strong>第一行和第二行的相对误差差了五个数量级（<code>100958.34</code> 对 <code>100000.01</code>），差别仅仅是「自己写循环」还是「调 <code>arr.sum()</code>」——这是「能向量化就别手写循环」除性能之外的第二个理由。第三行那个参数值得单独记住：<strong>对 float32 数组求和或求均值时显式传 <code>dtype=np.float64</code>，一行代码就把剩下的累加误差抹平</strong>，代价只是一个 8 字节的累加器。NumPy 的归约行为与 dtype 提升规则在 NumPy 专卡里另有展开，本卡只取稳定性这一面。</p>
+</div>
+
+<h3>归一化前忘了检查全零输入</h3>
+
+<p>这一类的特征是「测试数据里不会出现，线上偶尔出现」。全零向量的模长是 0，除下去就是 0/0；空序列的 softmax、全被掩码的注意力行、分母为 0 的比率指标都属于这一族。它们不会在开发期暴露，因为没人会手工构造一条全零的输入。</p>
+
+<table>
+<tr><th>模式</th><th>出问题的写法</th><th>稳定做法</th><th>失效时的症状</th></tr>
+<tr><td>除以可能为零的量</td><td><code>x / norm</code> 或 <code>x / norm + eps</code></td><td><code>x / (norm + eps)</code> 或 <code>maximum(norm, eps)</code></td><td><code>nan</code> / <code>inf</code>，偶发且与输入相关</td></tr>
+<tr><td>方差 / 标准差</td><td><code>mean(x²) - mean(x)²</code></td><td>两遍算法或 Welford；直接用 <code>np.var</code></td><td>方差为 0 或为负，<code>sqrt</code> 后变 <code>nan</code></td></tr>
+<tr><td>长序列求和 / 求均值</td><td>手写循环、低精度累加器</td><td><code>arr.sum(dtype=np.float64)</code> / <code>math.fsum</code></td><td>结果稳定偏小或偏大，无报错</td></tr>
+<tr><td>全零 / 空输入归一化</td><td>直接除、直接 softmax</td><td>先判空、判全零，给明确的退化返回值</td><td>线上偶发 <code>nan</code>，测试全绿</td></tr>
+<tr><td>幂与开方</td><td><code>x ** 0.5</code>、<code>log(x)</code> 无域检查</td><td>先 <code>clip</code> 到合法域（<code>maximum(x, 0)</code> / <code>clip(p, eps, 1-eps)</code>）</td><td>负数开方或 <code>log(0)</code> 产生 <code>nan</code> / <code>-inf</code></td></tr>
+<tr><td>定宽整数运算</td><td>NumPy 整数数组累加计数</td><td>用 <code>int64</code> 或转成 Python <code>int</code></td><td>静默回绕成负数，Python <code>int</code> 无此问题</td></tr>
+</table>
+
+<p>最后一行是个容易被忽略的方向：<strong>Python 的 <code>int</code> 是任意精度的，永远不会溢出，但 NumPy 的整数是定宽的，溢出会回绕</strong>。用 <code>np.int32</code> 累加一个超过 21 亿的计数，结果会变成负数，而且不一定有报错。从纯 Python 迁到 NumPy 时这是一类新增风险。</p>
+
+<div class="intuition-box">
+<p>这五类模式共享一个特征：它们在「正常」输入上完全正确，只在边界输入上崩。所以靠观察平均行为永远发现不了，只能靠主动构造边界输入去撞。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、怎么发现与防住</h2>
+
+<p>前五节是知识，这一节是纪律。数值问题的特殊之处在于<strong>它不像普通 bug 那样会在出错处停下</strong>——<code>nan</code> 会一路传播，等它出现在你的日志里，产生它的那一帧栈早就返回了。所以防守策略的核心只有一句：<strong>把坏值的检测点尽量往产生点推</strong>。</p>
+
+<h3>把非数值和无穷当成必须报警的信号</h3>
+
+<p>默认配置是它们的反面：NumPy 对溢出、除零、无效运算只发 <code>RuntimeWarning</code>，而警告在生产环境里通常既不入日志也不触发告警，等于静默。改掉这个默认是最高性价比的一步。</p>
+
+<pre><code>import numpy as np
+# 全局：把溢出/除零/无效运算升级为异常，就地抛出
+np.seterr(all="raise")
+# 局部：只在某段代码里严格（推荐，避免影响第三方库）
+with np.errstate(over="raise", divide="raise", invalid="raise"):
+    p = softmax(scores)
+# 训练时定位 nan 是哪个算子产生的（有性能开销，仅调试用）
+# torch.autograd.set_detect_anomaly(True)</code></pre>
+
+<p>除了让运行时报警，还要在关键边界主动断言并<span class="term">快速失败</span>：模型输出交给下游前、损失回传前、写入缓存或数据库前。检测要用 <code>math.isfinite</code> / <code>np.isfinite</code> 这一族——它同时排除 <code>nan</code> 和 <code>±inf</code>，比只查 <code>isnan</code> 更完整；<strong>不要用比较运算符检测</strong>，因为所有与 <code>nan</code> 的比较都返回假。抛什么异常、带什么上下文（哪一批、哪个字段、当时的输入范围）属于异常体系设计的范畴，见 <a href="py_exception_design.html">PY24</a>；这里的要点只有一个：<strong>在边界上快速失败，代价远低于让坏值流进存储</strong>。上一节那个打分服务的 9 小时，几乎全花在「坏值是从哪一步开始的」上。</p>
+
+<pre><code>import numpy as np
+
+def guard(name: str, a: np.ndarray) -&gt; np.ndarray:
+    if not np.isfinite(a).all():
+        bad = int((~np.isfinite(a)).sum())
+        raise ValueError(f"{name}: {bad}/{a.size} 个非有限值, 范围 [{np.nanmin(a)}, {np.nanmax(a)}]")
+    return a
+
+logits = guard("logits", model(x))      # 在交给下游之前拦住</code></pre>
+
+<h3>用高精度算一遍作为参照</h3>
+
+<p>「结果不太对」和「结果错了」之间需要一个量化的判断。做法是把同一段计算用更高精度跑一遍当作参照值，再看你的实现相对它偏了多少：float32 的实现拿 float64 当参照，float64 的实现拿 <code>decimal.Decimal</code>（可设任意精度）或 <code>fractions.Fraction</code>（有理数精确运算）当参照。误差的相对量级如果远大于该精度的机器 epsilon，就说明算法本身不稳定，而不是精度不够。比较时一律用容差、不用相等，而且要注意下表里两个常用函数的<strong>默认容差差了四个数量级</strong>，混着用会得到自相矛盾的结论。</p>
+
+<table>
+<tr><th>手段</th><th>用途</th><th>要注意的点</th></tr>
+<tr><td><code>np.seterr</code> / <code>np.errstate</code></td><td>把溢出、除零、无效运算升级成异常</td><td><code>errstate</code> 是上下文管理器，作用域可控，优先用它</td></tr>
+<tr><td><code>np.isfinite</code> / <code>math.isfinite</code></td><td>同时检测 <code>nan</code> 与 <code>±inf</code></td><td>比 <code>isnan</code> 更完整；不能用比较运算符替代</td></tr>
+<tr><td><code>math.isclose</code></td><td>标量的容差比较</td><td>默认 <code>rel_tol=1e-9</code>、<code>abs_tol=0.0</code>；比较对象含 0 时必须显式给 <code>abs_tol</code></td></tr>
+<tr><td><code>np.allclose</code> / <code>np.isclose</code></td><td>数组的容差比较</td><td>默认 <code>rtol=1e-5</code>、<code>atol=1e-8</code>，<strong>比 <code>math.isclose</code> 松得多</strong></td></tr>
+<tr><td><code>np.testing.assert_allclose</code></td><td>测试里的断言</td><td>失败时打印最大偏差与位置，比裸 <code>assert</code> 好排查</td></tr>
+<tr><td><code>sys.float_info</code> / <code>np.finfo</code></td><td>查当前平台/dtype 的 epsilon、上下界</td><td>写阈值时用它取值，别硬编码魔数</td></tr>
+<tr><td><code>decimal</code> / <code>fractions</code></td><td>高精度或精确参照；金额等不容许误差的场景</td><td>慢几个数量级，只做参照或低频计算，不进热路径</td></tr>
+<tr><td><code>math.fsum</code></td><td>正确舍入的求和参照</td><td>结果唯一，可当作求和类实现的黄金标准</td></tr>
+</table>
+
+<h3>在测试里加入极端输入</h3>
+
+<p>数值 bug 的唯一可靠发现方式是主动构造边界输入。这些用例写起来很便宜，参数化一下就是一组，但能覆盖前五节所有的失效模式。测试的组织方式、参数化与 fixture 见 <a href="py_pytest_engineering.html">PY41</a>；这里给出必须覆盖的输入清单：</p>
+
+<div class="arch-diagram">  数值代码的必测输入清单
+  ────────────────────────
+  幅度极端     [1e3, 1e6] / [-1e3, -1e6] → 撞 exp 的上溢与下溢边界
+                                            （float32 通道的边界低得多，要单独测）
+  全相等       [5, 5, 5, 5]      → softmax 应返回均匀分布，而非 nan
+  全零         [0, 0, 0, 0]      → 归一化的除零路径
+  单元素 / 空  [7] 和 []         → 归约的退化分支，最常漏
+  含特殊值     [nan] [inf] [-inf]→ 是该报错还是该跳过？必须是明确选择
+  全掩码行     mask 全 False     → -inf 减 -inf，第三节那个坑
+  量级混杂     [1e9+4, 1e9+7]    → 方差与求和的抵消
+  长序列       1e6 个 0.1        → 累加误差，断言用相对容差
+
+  断言方式：
+    np.testing.assert_allclose(got, want, rtol=1e-6)   ← 不要用 ==
+    assert np.isfinite(got).all()                      ← 每个用例都加这一条</div>
+
+<div class="intuition-box">
+<p>判据：<strong>训练中出现 <code>nan</code> 损失时，先查数值稳定性，再查学习率。</strong>学习率过大通常表现为损失震荡上升然后才发散，过程是渐进的；数值问题往往是某一步<strong>突然</strong>从正常值跳到 <code>nan</code>，而且和特定 batch 绑定——换个随机种子或跳过那一批就正常了。这两个特征足以区分，而顺序搞反会浪费掉大量调参时间。</p>
+</div>
+
+<div class="arch-diagram">  训练出现 nan 损失时的排查顺序
+  ─────────────────────────────
+  是「突然」跳到 nan 还是「渐进」发散？
+     │
+     ├─ 突然（上一步还正常）───► 数值稳定性问题，先查这条线
+     │     1. 固定那个 batch，能否复现？能 → 数据相关，继续往下
+     │     2. 查输入：有 nan/inf 吗？极端值？全零或全掩码样本？
+     │     3. 逐层查前向，哪一层的输出先出现非有限值
+     │        （np.errstate，或 forward hook 里加 isfinite 断言）
+     │     4. 那一层有 exp / log / 除法 / sqrt / 连乘吗？
+     │     5. 换成融合的稳定实现（cross_entropy、logsumexp、log1p…）
+     │
+     └─ 渐进（损失先震荡上升）──► 优化问题
+           降学习率 / 加 warmup / 梯度裁剪 / 查离群标签
+
+  只有在第 1 步「换任何 batch 都立刻 nan」，或第 2~4 步都干净时，
+  才值得把时间花到学习率上。</div>
+
+<p>还有一类现象容易和溢出混淆：softmax 的输出饱和（某一项趋近 1、其余趋近 0）导致梯度趋近于零。这不是浮点溢出，而是函数本身的形状与温度参数的作用，症状是<strong>训练停滞而非 <code>nan</code></strong>，解法也完全不同（调温度、调缩放，而不是改写表达式）。这一侧的讨论见 <a href="../transformer/softmax_gradient_saturation.html">T19 · Softmax 梯度饱和与温度调节</a>。把「值算不出来」和「梯度传不回来」分开诊断，是不走弯路的前提。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>看到 <code>exp</code> 或概率连乘，先问稳定性：能不能改成减最大值或搬到对数域</li>
+<li>交叉熵、二分类损失一律用接受 logit 的融合版本（<code>cross_entropy</code>、<code>*_with_logits</code>）</li>
+<li>求和取对数用 <code>logsumexp</code> / <code>np.logaddexp</code>，不自己拼 <code>log(sum(exp(...)))</code></li>
+<li>参数可能接近 0 时用 <code>log1p</code> / <code>expm1</code></li>
+<li>小常数加在分母里（归一化层放进根号内），量级与该 dtype 的 epsilon 相称</li>
+<li>float32 数组求和求均值显式传 <code>dtype=np.float64</code>；方差用 <code>np.var</code> 或 Welford</li>
+<li>关键边界用 <code>np.isfinite(...).all()</code> 断言并快速失败，带上范围信息</li>
+<li>热点代码段包在 <code>np.errstate(over="raise", invalid="raise")</code> 里</li>
+<li>测试覆盖极大、极小、全零、全相等、单元素、空、全掩码七类输入</li>
+<li>断言用 <code>assert_allclose</code> 并显式写容差，不用 <code>==</code></li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>写 <code>np.exp(x) / np.exp(x).sum()</code>——第二节那个事故的原文</li>
+<li>先 <code>softmax</code> 再 <code>log</code>，或先 <code>sigmoid</code> 再 <code>log</code></li>
+<li>用 <code>np.prod(probs)</code> 算长序列的联合概率</li>
+<li>把 eps 加在结果上（<code>x / norm + eps</code>）而不是分母里</li>
+<li>手写 <code>mean(x²) - mean(x)²</code> 算方差</li>
+<li>用 <code>==</code> 比较浮点，或用 <code>x &gt; threshold</code> 试图拦住 <code>nan</code></li>
+<li>让 NumPy 的 <code>RuntimeWarning</code> 保持默认（只打印、不入日志、不告警）</li>
+<li>把 <code>nan</code> 无条件 <code>nan_to_num</code> 掉——那是掩盖根因，坏值会换个形式再出现</li>
+<li>float16 通道里直接算 softmax / 归约（<code>exp(12)</code> 就已经是 <code>inf</code>）</li>
+<li>看到 <code>nan</code> 损失第一反应就是降学习率</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>数值稳定性不是「算得更准」，而是「在坏输入上不给出荒谬答案」。判断一段数值代码合格的标准，是把极端输入扔进去它要么给出正确结果，要么明确报错——绝不能静悄悄返回一个错的数。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>softmax 减去最大值，会不会让结果产生误差？</summary>
+<div class="answer">不会引入任何理论误差，这是一个严格的恒等变形：给每个输入减去同一个常数 <code>m</code>，等价于给分子和分母同时乘上 <code>exp(-m)</code> 这个非零常数，约掉后完全回到原式，对任意实数 <code>m</code> 都成立。实际上稳定写法的浮点误差比朴素写法<strong>更小</strong>，因为所有指数项都落在 <code>(0, 1]</code> 里、分母恒 ≥ 1，中间量的量级差距被压缩了。唯一的代价是多一次沿该维的最大值归约，相对指数运算本身可以忽略。要注意的只有一处实现细节：最大值必须沿 softmax 作用的那一维取，取错维度不会报错，只会静默给出错误的概率分布。</div>
+</details>
+
+<details>
+<summary>float16 和 bfloat16 都是 16 位，为什么训练更常用 bfloat16？</summary>
+<div class="answer">因为它们把 16 位预算分给了不同的地方。float16 是 5 位指数 + 10 位有效位，最大值只有 65504，<code>exp(12)</code> 就已经溢出；bfloat16 是 8 位指数 + 7 位有效位，指数位和 float32 完全一样，所以范围也一样（约 ±3.4e38），代价是相对分辨率只有 2⁻⁷ ≈ 0.8%。训练过程中最怕的是激活值或梯度溢出成 <code>inf</code>，一旦发生整个参数表就报废；而梯度本身是带噪声的估计量，糙一点不影响收敛方向。所以「范围优先于精度」这个取舍在训练场景是划算的。float16 要用起来通常得配一整套损失缩放机制把梯度搬回可表示区间，bfloat16 常常可以省掉这一步。推理场景的取舍不一定相同，因为推理更在意输出的数值精度。</div>
+</details>
+
+<details>
+<summary>为什么交叉熵的 API 要我传 logit，不让我传概率？</summary>
+<div class="answer">因为把 softmax 和取对数融合成一个表达式，能同时消掉溢出和下溢两个风险。展开后是 <code>-log softmax(x)_y = logsumexp(x) - x_y</code>，其中 <code>logsumexp</code> 内部提出最大值，所以指数的输入全部 ≤ 0（不会上溢），对数的输入 ≥ 1（不会取到 0 或负数）。如果你自己先算 softmax 再取对数，正确答案概率很小时 softmax 的输出会下溢成 0，接着 <code>log(0)</code> 给出 <code>-inf</code>，梯度立刻变 <code>nan</code>——而且这种情况恰好在模型预测很自信但预测错了的时候出现，也就是训练最需要这个梯度的时候。所以 <code>torch.nn.CrossEntropyLoss</code>、<code>torch.nn.functional.cross_entropy</code>、<code>binary_cross_entropy_with_logits</code> 都要求未归一化的分数。反过来说，如果某个 API 明确要求传概率（例如 <code>nll_loss</code> 要求传 log 概率），那是在告诉你稳定化的责任在调用方。</div>
+</details>
+
+<details>
+<summary>训练损失变成 nan，我该从哪查起？</summary>
+<div class="answer">先判断是「突然」还是「渐进」。数值稳定性问题通常是上一步还完全正常、下一步直接 <code>nan</code>，并且和特定 batch 绑定——固定随机种子后能稳定复现，跳过那一批就正常；学习率过大则表现为损失先震荡、上升，然后才发散，过程是渐进可见的。如果是突然跳变，按这个顺序查：检查那一批输入里有没有 <code>nan</code>/<code>inf</code>、有没有极端值、有没有全零或全掩码样本；然后用 forward hook 加 <code>np.isfinite</code> 断言逐层定位哪一层的输出先变成非有限值；找到那一层后看它有没有 <code>exp</code>、<code>log</code>、除法、<code>sqrt</code> 或连乘，换成融合的稳定实现。只有在「换任何 batch 都立刻 <code>nan</code>」或者前面几步都干净的时候，才值得去调学习率、warmup 和梯度裁剪。顺序搞反的代价很大，因为降学习率有时能把问题压到不那么频繁出现，让你误以为找对了方向。</div>
+</details>
+
+<details>
+<summary>加一个小常数（eps）到底该加在哪里、取多大？</summary>
+<div class="answer">位置上有一条硬规则：加在<strong>分母里</strong>，不是加在结果上。<code>x / norm + eps</code> 完全没有防护作用，分母该为 0 还是为 0；要写 <code>x / (norm + eps)</code>，或者在分母量级未知时用 <code>x / np.maximum(norm, eps)</code> 兜底。归一化层还有个惯例：常数放在根号<strong>里面</strong>，即 <code>(x - mean) / sqrt(var + eps)</code>，PyTorch 的 <code>LayerNorm</code> 和 <code>BatchNorm</code> 的 <code>eps</code> 都是这个位置，自己复现时放到根号外会和框架结果对不上。取值上要和分母的量级以及该 dtype 的机器 epsilon 相称：float32 的 epsilon 约 1.2e-7，填 1e-12 在这个精度下加上去等于没加，经验区间是 1e-6 到 1e-8；float64 可以更小。写阈值时建议直接从 <code>np.finfo(dtype).eps</code> 取值而不是硬编码，这样换精度时不会失效。</div>
+</details>
+
+<details>
+<summary>我的结果换了机器 / 换了线程数就对不上第十几位，是哪里写错了吗？</summary>
+<div class="answer">大概率没写错。浮点加法不满足结合律——每一步都要舍入，而舍入误差取决于操作数的量级，所以求和顺序一变，末几位就会变。并行归约把数组切成若干块各自求和再合并，切法随线程数、设备、库版本而变，于是结果在最后几位上抖动是正常现象。真正该做的是把断言从「完全相等」改成「容差内相等」（<code>np.testing.assert_allclose</code> 并显式写 <code>rtol</code>），以及不要把浮点结果当作缓存键或做哈希。如果业务确实需要逐位可复现（比如要对齐两次训练的权重），就得付代价：固定线程数与归约顺序、关闭非确定性的算子实现、必要时用 <code>math.fsum</code> 这类正确舍入的求和。顺带说，如果偏差不是在末几位而是在前几位，那就不是结合律的问题了，要按第五节的抵消和累加误差去查。</div>
+</details>
+
+<details>
+<summary>直接把 nan 用 nan_to_num 替换掉不行吗？</summary>
+<div class="answer">作为兜底可以，作为修复不行。<code>nan_to_num</code> 把 <code>nan</code> 换成 0、<code>inf</code> 换成该 dtype 的最大值，做的是掩盖症状：产生 <code>nan</code> 的那一步仍然在跑，只是它的错误结论被换成了另一个同样没有意义的数字，然后继续往下游流。更糟的是它让问题变得不可观测——原先至少能看到 <code>nan</code> 这个明确信号，现在你得到的是一个看起来正常的数值，错误变成静默的。正确顺序是：先在关键边界用 <code>np.isfinite(...).all()</code> 断言并快速失败，把产生点定位出来，改掉表达式；只在确实需要保证服务不中断、且已经确认该位置的退化返回值有业务含义时，才用 <code>nan_to_num</code> 作为最外层的保险，并且<strong>同时打日志计数</strong>，让它的触发频率是可监控的。一个被静默 <code>nan_to_num</code> 掉的坑，通常会在几个月后以另一种面貌回来。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

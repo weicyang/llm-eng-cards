@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY31 · 取消、超时与并发限流</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么必须显式设限</a>
+<a href="#s2">二、取消是协作式的</a>
+<a href="#s3">三、超时与分层预算</a>
+<a href="#s4">四、并发限流三件套</a>
+<a href="#s5">五、退避与重试</a>
+<a href="#s6">六、上线前的落地清单</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY31 · 取消、超时与并发限流</h1>
+<p class="subtitle">失控的三种形态 / 取消是协作式的 / asyncio.timeout 与分层预算 / 信号量与令牌桶不是一回事 / 退避抖动与 Retry-After</p>
+
+<div class="intuition-box">
+<p>异步没有让下游变强，它只是让你把下游的容量用完得更快。前几张卡讲的是「怎么让一批任务同时跑起来」，这一张讲的是反面：怎么保证它们能停下来、会超时、且不会一拥而上。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、为什么必须显式设限</h2>
+
+<p>同步代码里发一个 HTTP 请求，你得占住一个线程；线程池满了，第 51 个请求自然排队。这个排队不是你设计出来的，是线程的成本替你挡住了。换成 asyncio 之后，这道天然的闸门消失了——<code>asyncio.create_task()</code> 只是往事件循环里塞一个对象，一万个在飞的请求和一个在飞的请求，在你这一侧的成本差别小到可以忽略。</p>
+
+<p>便宜的是「发起」这个动作，不是请求本身。下游的数据库连接数、上游 API 的每分钟配额、对端的 CPU，没有一样跟着变便宜。所以异步编程里有一条几乎没有例外的规律：<strong>凡是没有显式写出上限的地方，上限就是「你能生成任务的速度」</strong>，而这个数字通常比任何下游能承受的都大。</p>
+
+<div class="arch-diagram">  同一段业务逻辑，在两种模型下的自然上限
+  ─────────────────────────────────────────────
+
+  线程池（上限是被动给的）
+    ThreadPoolExecutor(max_workers=32)
+    ├─ 32 个在飞         ← 线程的内存和调度成本替你封了顶
+    └─ 第 33 个开始排队    你不写任何限流代码也不会打爆下游
+
+  asyncio（上限必须主动给）
+    for item in items:            # items 有 50000 条
+        tasks.append(asyncio.create_task(call_api(item)))
+    await asyncio.gather(*tasks)
+    │
+    ├─ 50000 个 Task 对象瞬间建好，全部进入事件循环
+    ├─ 客户端这边：内存涨、事件循环单轮回调数爆炸
+    └─ 下游那边：连接队列打满 / 触发限流 / 超时雪崩
+                 ↑ 这一行才是真正的故障现场</div>
+
+<h3>三种「没设限」各自长什么样</h3>
+
+<p>没有超时、没有并发上限、没有取消，这三件事经常被笼统地说成「要做好限流」，但它们是三个正交的维度，任何一个都不能替代另外两个。分开看，它们的故障形态完全不同。</p>
+
+<table>
+<tr><th>缺了什么</th><th>直接症状</th><th>最终故障形态</th><th>为什么另外两项救不了它</th></tr>
+<tr><td>无超时</td><td>某几个调用永远不返回</td><td>协程永久挂起，占着的信号量名额、连接、内存都不释放；请求数看着不多，但系统慢慢「冻住」</td><td>并发上限只会让这些僵尸任务把名额全占死，反而更快卡死</td></tr>
+<tr><td>无并发上限</td><td>瞬时在飞请求数没有天花板</td><td>下游连接池打满、对端返回 429/503；本端内存与事件循环延迟同步飙升</td><td>超时只能在打爆之后止损，挡不住这一波已经发出去的请求</td></tr>
+<tr><td>无取消</td><td>上游已经放弃了，下游还在跑</td><td>用户早已断开或网关已返回 504，后台仍在消耗配额；批处理中一个分片失败，其余分片继续白跑几分钟</td><td>超时能让单个调用停，但停不了「整批已经没有意义了」这件事</td></tr>
+</table>
+
+<p>第三行值得多说一句。取消常被当成「可选的优雅收尾」，实际上它是<span class="term">及时止损</span>的唯一手段：超时管的是「这一次调用等多久」，取消管的是「这件事还值不值得继续」。这两个判断来自不同的地方——前者是你预先设的阈值，后者是运行时才知道的信息（用户关掉了页面、同批里已经有致命错误、总预算用完了）。</p>
+
+<div class="intuition-box">
+<p>超时、并发上限、取消，分别回答「等多久」「同时几个」「还要不要做」。三个问题不重叠，所以三道闸门必须分别设，少一道就有一类故障接不住。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、取消是协作式的，不是强制的</h2>
+
+<p><code>task.cancel()</code> 这个名字很有误导性：它读起来像「杀掉这个任务」，实际做的事只是<strong>提出请求</strong>。具体地说，它给任务打上待取消的标记，如果任务此刻正挂起在某个 future 上（比如 <code>await asyncio.sleep()</code> 或等待网络可读），就把那个 future 取消掉；等任务下一次从挂起点恢复执行时，<code>CancelledError</code> 会从那一个 <code>await</code> 表达式的位置抛出来。</p>
+
+<p>由此推出两个必须记住的结论。第一，<span class="term">取消不是立即的</span>：它只在协程下一次<span class="term">让出点</span>（也就是 <code>await</code> 的地方）才生效，在此之前任务照跑不误。第二，<span class="term">取消不是强制的</span>：<code>CancelledError</code> 是一个普通的异常对象，协程完全可以捕获它然后继续干活——语言层面没有任何机制阻止你这么做。</p>
+
+<div class="arch-diagram">  cancel() 之后到底发生了什么（单线程事件循环）
+  ──────────────────────────────────────────────
+
+  t=0.00  task 开始跑，进入一段纯计算（没有任何 await）
+  t=0.22  别处调用了 task.cancel()
+          │  返回值是 True/False，只表示「请求是否被受理」
+          │  此时 task.cancelled() 仍然是 False
+          ▼
+          事件循环给 task 打上待取消标记 —— 然后就没事可做了
+          （纯计算没有让出点，循环根本拿不回控制权）
+
+  t=0.82  这段计算终于跑完，执行到第一个 await
+          ▼
+          CancelledError 从这个 await 表达式抛出
+          ├─ except Exception:        抓不到（下面解释）
+          ├─ except CancelledError:   抓得到，但抓了就必须再 raise
+          └─ finally:                 一定会执行 ← 收尾代码放这里
+  t=0.85  异常传播到任务边界，task.cancelled() 这时才变成 True
+
+  实测（CPython 3.12）：0.22s 发出取消，0.82s 才生效，
+  中间这 0.6 秒任务一直在跑。取消的延迟 = 到下一个让出点的距离。</div>
+
+<p>上面这组时间是在 3.12 上实际跑出来的：让一个协程做 0.6 秒纯计算，中途从另一个线程发起取消，任务确实跑满了全程才在下一个 <code>await</code> 处被打断。这解释了一个常见困惑——「我明明 cancel 了，日志里怎么还在打印」。没有 <code>await</code> 的代码块对取消是完全免疫的，想让长计算可被取消，要么拆成多段并在段间 <code>await asyncio.sleep(0)</code> 让出，要么本来就该把它挪到线程池或进程池里去。</p>
+
+<h3>为什么 <code>except Exception</code> 抓不到它</h3>
+
+<p>Python 3.8 起，<code>asyncio.CancelledError</code> 的基类从 <code>Exception</code> 改成了 <code>BaseException</code>（3.7 及更早继承自 <code>Exception</code>）。在 3.12 上验证：<code>CancelledError.__mro__</code> 是 <code>(CancelledError, BaseException, object)</code>，<code>issubclass(CancelledError, Exception)</code> 返回 <code>False</code>。</p>
+
+<p>这个改动的意图是保护你：业务代码里到处都是 <code>except Exception</code>，如果取消也落进这些分支，任何一处「记个日志继续跑」的容错逻辑都会把取消悄悄吞掉。改成 <code>BaseException</code> 之后，常规容错自动放行取消信号，这是个相当聪明的设计——但它只堵住了一种写法，另外两种写法照样会吞。异常体系本身的设计原则见 <a href="py_exception_design.html">PY24</a>。</p>
+
+<table>
+<tr><th>写法</th><th>会吞掉取消吗</th><th>说明</th></tr>
+<tr><td><code>except Exception:</code></td><td>不会</td><td>3.8 起 <code>CancelledError</code> 不在 <code>Exception</code> 分支下，安全</td></tr>
+<tr><td><code>except BaseException:</code></td><td><strong>会</strong></td><td>把取消、<code>KeyboardInterrupt</code>、<code>SystemExit</code> 一锅端，除非分支里无条件 <code>raise</code>，否则不要写</td></tr>
+<tr><td>裸 <code>except:</code></td><td><strong>会</strong></td><td>等价于 <code>except BaseException</code>，任何代码审查都该拦下它</td></tr>
+<tr><td><code>except CancelledError:</code> 后不 <code>raise</code></td><td><strong>会</strong></td><td>最隐蔽的一种：看起来是在「优雅处理取消」，实际是把任务变成不可取消</td></tr>
+<tr><td><code>finally:</code></td><td>不会</td><td>只执行不拦截，异常继续传播——收尾逻辑的正确位置</td></tr>
+</table>
+
+<p>第四行是实践中最容易出问题的：有人为了打一行「任务被取消了」的日志而捕获 <code>CancelledError</code>，忘了 <code>raise</code>，于是这个任务在外层看来是<em>正常完成</em>的。更糟的是 <code>asyncio.timeout()</code> 和 <code>TaskGroup</code> 都依赖取消能顺利传播到任务边界，吞掉它会让这些上层机制直接失灵。</p>
+
+<h3>三条取消纪律</h3>
+
+<p>纪律一，<strong>不吞</strong>：如果捕获了 <code>CancelledError</code>，分支的最后一行必须是 <code>raise</code>。纪律二，<strong>收尾放 <code>finally</code></strong>：关连接、回滚、把进度写回数据库这类事，不要放在 <code>try</code> 的正常路径末尾，因为取消会跳过那里。纪律三，<strong><code>finally</code> 里如果还要 <code>await</code>，要预设它会被二次取消</strong>——任务已经处在取消流程中，收尾时的 <code>await</code> 很可能立刻再抛一次 <code>CancelledError</code>，让收尾做到一半就断掉。</p>
+
+<pre><code>async def worker(conn):
+    try:
+        await do_work(conn)
+    except asyncio.CancelledError:
+        log.info("worker cancelled")   # 要记就记
+        raise                          # 但必须重新抛出
+    finally:
+        # 收尾尽量做不需要 await 的事；非 await 的清理一定做得完
+        conn.mark_abandoned()</code></pre>
+
+<p>纪律三的处理方式取决于收尾有多重要。最省事也最稳的做法是<strong>让收尾不需要 <code>await</code></strong>：把「必须落库」降级成「写进一个待处理队列，由别的常驻任务去消费」。如果确实躲不开异步收尾，可以用 <code>asyncio.shield()</code> 把它包起来，或者给它单独套一个很短的超时（比如 2 秒），保证收尾本身不会变成新的挂起点。这两种做法都有边界条件，不要当成万能盾牌——真正可靠的不可中断收尾，应该交给幂等重放机制，而不是指望进程一定活到收尾结束。上下文管理器如何承载这类成对的资源收尾，见 <a href="py_context_managers.html">PY19</a>。</p>
+
+<div class="intuition-box">
+<p>把 <code>cancel()</code> 读成「请你停下」而不是「你被停了」。任务什么时候真的停、停之前还会做多少事，取决于它自己的代码结构——这正是「协作式」三个字的全部含义。</p>
+</div>
+
+<p>补充一个版本细节：Python 3.11 给 <code>Task</code> 加了 <code>cancelling()</code> 和 <code>uncancel()</code>，用来区分「因为超时而发出的内部取消」和「外部真的要求取消」。这主要服务于 <code>asyncio.timeout()</code> 这类库的实现，应用层代码通常不需要直接调用它们，知道有这么个机制、别在自己的代码里乱调 <code>uncancel()</code> 就够了。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、超时的正确写法，以及分层预算</h2>
+
+<p>先把最重要的一句说在前面：<strong>超时不是一种独立机制，它就是「定时取消」</strong>。<code>asyncio</code> 的超时实现方式是挂一个定时器，到点了就去 <code>cancel</code> 被包住的任务，然后在自己这一层把冒上来的 <code>CancelledError</code> 转换成 <code>TimeoutError</code>。所以上一节讲的三条取消纪律在这里一条不少地适用——你吞掉了取消，超时就会失效。</p>
+
+<h3>两种写法的分工</h3>
+
+<p>Python 3.11 引入了 <code>asyncio.timeout()</code> 异步上下文管理器（同时引入的还有 <code>asyncio.timeout_at()</code>，按绝对时刻设截止点）。在此之前，标准写法是 <code>asyncio.wait_for()</code>，它现在仍然可用。</p>
+
+<table>
+<tr><th>维度</th><th><code>async with asyncio.timeout(n)</code></th><th><code>await asyncio.wait_for(aw, n)</code></th></tr>
+<tr><td>最低版本</td><td>3.11</td><td>很早就有，3.10 及以下只能用它</td></tr>
+<tr><td>能包住的范围</td><td>一整段代码块，里面可以有多次 await、循环、分支</td><td>只能包住单个 awaitable</td></tr>
+<tr><td>超时后抛什么</td><td><code>TimeoutError</code></td><td><code>TimeoutError</code></td></tr>
+<tr><td>能中途改期吗</td><td>能，上下文对象提供 <code>reschedule()</code> / <code>when()</code> / <code>expired()</code></td><td>不能，时限创建时就定死</td></tr>
+<tr><td>适合场景</td><td>「这一整段业务不能超过 N 秒」，包括整批并发、整个重试循环</td><td>「这一个调用不能超过 N 秒」，或者需要兼容 3.10 及以下</td></tr>
+</table>
+
+<p>结论很简单：<strong>项目最低版本 ≥ 3.11 就默认用 <code>asyncio.timeout()</code></strong>，它能覆盖代码块，而现实中你要限制的往往是一段流程而不是一次调用。<code>wait_for()</code> 留给单点调用和低版本兼容。顺带澄清一个历史遗留：3.11 起 <code>asyncio.TimeoutError</code> 已经是内置 <code>TimeoutError</code> 的别名（在 3.12 上实测 <code>asyncio.TimeoutError is TimeoutError</code> 为 <code>True</code>），新代码直接捕获内置的那个就行。</p>
+
+<pre><code># 3.11+：包住一整段，包括内部的重试循环
+try:
+    async with asyncio.timeout(5):
+        data = await fetch_with_retry(url)
+except TimeoutError:              # 注意：except 必须在 async with 外面
+    data = fallback()</code></pre>
+
+<p>上面那行注释是个真实的坑。<code>except TimeoutError</code> 如果写在 <code>async with</code> 块<em>内部</em>，是抓不到超时的——因为块内部抛出的是 <code>CancelledError</code>，只有当异常传播出上下文管理器、在它的退出逻辑里才被转换成 <code>TimeoutError</code>。这一点在 3.12 上验证过：超时到点时，被包住的协程内部确实收到的是 <code>CancelledError</code>，而块外面接到的是 <code>TimeoutError</code>。</p>
+
+<div class="intuition-box">
+<p>超时 = 定时器 + 取消 + 异常转换。理解这条等式，「为什么超时没生效」的排查就只剩三个问题：定时器挂上了吗、取消传到底了吗、异常在哪一层被转换的。</p>
+</div>
+
+<h3>超时必须分层，而且内层之和要小于外层</h3>
+
+<p>只在最外层设一个超时是不够的：外层超时一到，你只知道「整件事没做完」，不知道是哪一步慢，也没有任何一步得到过重试的机会。只在最内层设也不够：单次调用都很快，但重试了七八次、串了五个下游，总耗时照样超出上游的耐心。正确做法是<strong>每一层都有自己的预算，且内层的最坏情况之和要留在外层预算之内</strong>。</p>
+
+<table>
+<tr><th>层级</th><th>管什么</th><th>典型量级</th><th>设不合理会怎样</th></tr>
+<tr><td>连接超时</td><td>TCP 握手 + TLS</td><td>1–3 秒</td><td>设得过长时，对端宕机的场景要等满全程才发现</td></tr>
+<tr><td>单次调用超时</td><td>一次完整的请求-响应</td><td>依 P99 定，通常 P99 的 1.5–2 倍</td><td>按均值设会把正常的长尾请求误杀成超时，然后重试放大流量</td></tr>
+<tr><td>单次调用 + 重试</td><td>一次逻辑调用的全部尝试与退避</td><td>单次超时 × 次数 + 退避总和</td><td>最容易被忽略的一层：算的时候忘了把退避的等待时间计进去</td></tr>
+<tr><td>整批超时</td><td>一批并发任务作为整体</td><td>批量大小 ÷ 有效并发 × 单次耗时，再留余量</td><td>不设的话，一两个慢分片能把整批拖到没有上限</td></tr>
+<tr><td>请求总预算</td><td>从入口到返回给上游的全程</td><td>由上游 / 网关的超时倒推，再减去余量</td><td>比上游网关还长等于白设，永远是网关先返回 504</td></tr>
+</table>
+
+<div class="arch-diagram">  分层预算：内层之和必须留在外层之内
+  ────────────────────────────────────
+
+  错误示例（内层超预算）
+  网关总预算      |==================== 30s ====================|
+  本服务外层超时  |=================== 30s =====================|
+  单次调用 10s    |=== 10s ===|=== 10s ===|=== 10s ===|
+  退避              +2s          +4s
+                  |----------- 实际最坏 36s -----------|
+                                                  ↑
+                    30s 处外层先触发取消，第三次重试永远跑不完
+                    结果：重试逻辑写了，但一次都没真正生效过
+
+  正确示例（留出余量）
+  网关总预算      |==================== 30s ====================|
+  本服务外层超时  |=============== 25s ===============|  余 5s 给收尾和序列化
+  单次调用 6s     |== 6s ==|== 6s ==|== 6s ==|
+  退避               +1s      +2s
+                  |------- 最坏 21s -------|  留 4s 缓冲
+
+  口诀：单次超时 × 重试次数 + 退避总和 + 余量 ≤ 外层超时 ≤ 上游预算</div>
+
+<div class="highlight">
+<p><strong>事故片段：</strong>某聚合接口网关超时 30 秒，服务内部对三个下游各设了 10 秒超时并允许重试 2 次。灰度后监控显示：下游 A 的重试成功率是 0%——不是重试没用，而是第二次重试从来没跑完过。10+2+10+4+10 的最坏路径是 36 秒，外层 30 秒先到，整个请求被取消。把单次超时压到 6 秒、重试降到 2 次后，同样的下游抖动场景下端到端成功率从 91.4% 回到 99.2%，而 P99 延迟只涨了 300 毫秒。<strong>重试次数不是越多越好，它得先能在预算里跑完。</strong></p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、并发限流三件套</h2>
+
+<p>「限流」这个词在中文里太笼统，它至少盖住了两个完全不同的物理量：<strong>同时在飞的请求数</strong>（并发度，单位是「个」）和<strong>单位时间的请求数</strong>（速率，单位是「个/秒」）。很多线上事故的根因就是把这两者当成了一回事——用信号量控住了并发度，就以为速率也被控住了。</p>
+
+<div class="arch-diagram">  三道闸门，串联生效，任何一道过松都等于没设
+  ────────────────────────────────────────────
+
+   你的 50000 个任务
+          │
+          ▼
+  ┌─────────────────────┐
+  │ 闸门 1：信号量        │  限「同时在飞几个」
+  │ asyncio.Semaphore(N)│  拿不到名额的协程在这里 await 排队
+  └──────────┬──────────┘
+             ▼
+  ┌─────────────────────┐
+  │ 闸门 2：令牌桶        │  限「每秒/每分钟放行几个、几个 token」
+  │ 容量=突发量 速率=稳态 │  桶里没票就等到有票为止
+  └──────────┬──────────┘
+             ▼
+  ┌─────────────────────┐
+  │ 闸门 3：连接池上限    │  HTTP 客户端自己的天花板
+  │ 总连接数 / 每主机数   │  比闸门 1 小的话，它才是真正的并发上限
+  └──────────┬──────────┘
+             ▼
+        下游服务</div>
+
+<h3>信号量：管并发度</h3>
+
+<p><code>asyncio.Semaphore(value)</code> 内部维护一个计数，<code>async with</code> 进入时减一、退出时加一，减到 0 之后进来的协程会在 <code>await</code> 处排队。它的构造签名很朴素（3.12 实测为 <code>Semaphore(value=1)</code>），不需要传事件循环——<code>loop</code> 参数已在 3.10 移除。</p>
+
+<pre><code>sem = asyncio.Semaphore(20)
+
+async def guarded(item):
+    async with sem:                    # 拿不到名额就在这里排队
+        async with asyncio.timeout(6): # 超时要套在名额之内
+            return await call_api(item)</code></pre>
+
+<p>注意上面两个上下文管理器的<strong>嵌套顺序</strong>：超时在信号量里面。反过来写（超时在外、信号量在内）意味着排队等名额的时间也算进超时，于是队列一长，大批任务还没轮到就先超时了——你会看到一堆超时错误，但下游其实一点压力都没有。</p>
+
+<h3>为什么信号量控不住速率</h3>
+
+<p>关键在于这两个量之间隔着一个你不能决定的变量：时延。稳态速率约等于并发度除以平均单次耗时，而耗时是下游给的。</p>
+
+<div class="formula">稳态速率 ≈ 并发度 ÷ 平均单次耗时</div>
+
+<p>同一个 <code>Semaphore(20)</code>，下游平均 50 毫秒时是 400 请求/秒，下游平均 5 秒时是 4 请求/秒——相差 100 倍。也就是说，<strong>下游变快的时候，你的信号量会自动放大压力</strong>。这恰恰是最危险的方向：下游刚从故障中恢复、响应变快，你这边的实际速率瞬间翻几十倍，把它二次打死。</p>
+
+<h3>令牌桶：管速率，而且常常要管两个维度</h3>
+
+<p><span class="term">令牌桶</span>的模型很直观：一个桶按固定速率往里放票，请求要先取票才能发出；桶的容量决定了允许多大的突发，放票速率决定了长期的稳态速率。它和信号量互补——信号量看的是「此刻有几个在跑」，令牌桶看的是「过去这一秒放出去了几个」。</p>
+
+<p>大模型 API 的场景还要多一层：计费和限流通常同时按 RPM（每分钟请求数）和 TPM（每分钟 token 数）两个口径算，而一次请求消耗多少 token 是变量。这时单一维度的令牌桶不够，需要两个桶：请求桶按个数扣，token 桶按预估用量<strong>预扣</strong>、拿到响应后按实际用量补差。预估偏小会超限，预估偏大会浪费配额，所以预估值宁可略偏大。</p>
+
+<table>
+<tr><th>限的是什么维度</th><th>用什么工具</th><th>漏掉会怎样</th></tr>
+<tr><td>同时在飞的请求数</td><td><code>asyncio.Semaphore</code></td><td>瞬时并发无上限，下游连接队列被打满，内存与事件循环延迟同步飙升</td></tr>
+<tr><td>每秒 / 每分钟请求数（RPM）</td><td>令牌桶 / 漏桶，自己实现或用成熟库</td><td>下游按速率计费限流时，信号量完全挡不住突发，429 成片出现</td></tr>
+<tr><td>每分钟 token 数（TPM）</td><td>按预估 token 数扣票的第二个桶</td><td>请求数明明没超，却持续被限流——因为超的是 token 口径</td></tr>
+<tr><td>客户端连接数</td><td>HTTP 客户端的连接池参数（总数 / 每主机）</td><td>连接池比信号量小的话，真正的瓶颈在池子上，调信号量毫无效果；反过来则是池子形同虚设</td></tr>
+<tr><td>单个租户 / 单个 key 的用量</td><td>按 key 分桶，而不是全局一个桶</td><td>一个大客户的批量任务把全局配额吃光，所有租户一起被限流</td></tr>
+</table>
+
+<p>第四行经常被漏掉，因为连接池上限是客户端库的默认值，不写在你的代码里。上线前把这个默认值查出来、和信号量的取值放在一起看，是个成本极低的检查动作——两个数字必须是你有意选的，而不是一个被另一个偶然覆盖。</p>
+
+<div class="highlight">
+<p><strong>生产事故复盘：批量摘要任务把 429 放大成雪崩。</strong>一个夜间批处理，要给 12 万条工单调用大模型生成摘要。作者用 <code>Semaphore(20)</code> 把并发控在 20，压测时下游平均 1.8 秒返回，实测约 11 请求/秒，远低于账号 600 RPM（10 请求/秒）的限额——看起来只是刚好卡线。上线后的实际情况是：工单正文长度分布很宽，长文本请求的输入 token 是压测样本的 6 倍，于是 RPM 没超，<strong>TPM 先超了</strong>。下游开始返回 429，而客户端的重试写的是「固定间隔 1 秒、最多 5 次、无抖动」。<br>
+后果是一个标准的正反馈：429 的请求立刻释放信号量名额 → 新任务马上补位 → 并发始终顶在 20 → 加上 20 个客户端在同一秒整齐地重试，实际发出的请求速率反而涨到约 34 请求/秒。429 比例从 3% 一路爬到 61%，任务从预计 4 小时跑到 9 小时 40 分仍未完成，被人工中止。<br>
+修复是三件事一起做的：并发降到 12、补上按 TPM 预扣的第二个令牌桶、重试改成带抖动的指数退避并遵守 <code>Retry-After</code>。重跑后 429 比例降到 0.4%，全量完成耗时 3 小时 12 分——<strong>并发数降了 40%，总时长反而缩短了，因为不再把配额浪费在必然失败的重试上。</strong></p>
+</div>
+
+<table>
+<tr><th>指标</th><th>修复前</th><th>修复后</th></tr>
+<tr><td>信号量并发度</td><td>20</td><td>12</td></tr>
+<tr><td>速率控制</td><td>无（只有信号量）</td><td>RPM 桶 + TPM 预扣桶</td></tr>
+<tr><td>重试策略</td><td>固定 1 秒间隔，5 次，无抖动</td><td>指数退避 + 抖动，3 次，遵守 <code>Retry-After</code></td></tr>
+<tr><td>429 占比（峰值）</td><td>61%</td><td>0.4%</td></tr>
+<tr><td>12 万条总耗时</td><td>9 小时 40 分仍未完成，人工中止</td><td>3 小时 12 分完成</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>信号量限的是「同时几个」，令牌桶限的是「每秒几个」，连接池限的是「最多几条连接」。三个答案对应三个不同的问题，下游按哪个口径拒绝你，你就必须在哪个口径上有一道自己的闸门。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、退避与重试</h2>
+
+<p>重试是限流体系里最容易写错的一环，因为它是唯一一个<strong>会主动增加流量</strong>的组件。前面几道闸门做得再好，一个写错的重试循环就能把它们全部抵消掉。</p>
+
+<h3>先分类，再谈退避</h3>
+
+<p>重试之前必须先回答一个问题：这个错误<span class="term">重试一次有可能成功吗</span>？如果答案是否定的，重试只是在浪费配额、拉长故障时间，并且让下游更难恢复。</p>
+
+<table>
+<tr><th>类别</th><th>典型状态码 / 错误</th><th>该不该重试</th><th>理由</th></tr>
+<tr><td>限流</td><td>429</td><td>该，但必须退避</td><td>下游在明确告诉你「慢一点」，退避后大概率成功</td></tr>
+<tr><td>服务端临时故障</td><td>500 / 502 / 503 / 504</td><td>该</td><td>通常是单个实例或瞬时抖动，换一次可能命中健康实例</td></tr>
+<tr><td>网络层</td><td>连接超时、连接被重置、DNS 临时失败</td><td>该</td><td>请求很可能根本没到达下游，重试是安全的</td></tr>
+<tr><td>读取超时</td><td>请求已发出但响应超时</td><td>看幂等性</td><td>下游可能已经执行了。非幂等写操作要么带幂等键，要么不重试</td></tr>
+<tr><td>客户端错误</td><td>400 / 401 / 403 / 404 / 422</td><td><strong>不该</strong></td><td>是你的请求本身不对：参数错、凭证无效、资源不存在。重试一万次还是同样的结果</td></tr>
+</table>
+
+<p>不可重试那一类的危害不只是浪费。批量任务里如果有 5% 的数据会稳定触发 400，按 3 次重试算，这部分的实际请求量是 4 倍；而这些请求同样占用信号量名额和令牌桶配额，等于用必然失败的流量挤掉了本来能成功的任务。<strong>把不可重试错误快速失败掉，是提升批量吞吐最便宜的一招。</strong></p>
+
+<p>第四行的「读取超时」需要单独判断。超时意味着你不知道下游到底执行了没有——对于扣款、下单这类非幂等写操作，盲目重试就是重复执行。解决办法是让操作本身幂等（带上业务唯一键，下游按键去重），而不是靠猜。</p>
+
+<h3>指数退避必须带抖动</h3>
+
+<p>指数退避的思路是每失败一次就把等待时间翻倍：1 秒、2 秒、4 秒、8 秒。这个部分几乎人人都会写。被漏掉的是<span class="term">抖动</span>，而它才是关键。</p>
+
+<div class="formula">sleep = random.uniform(0, min(cap, base × 2 ^ attempt))</div>
+
+<div class="arch-diagram">  为什么不加抖动会形成新的尖峰
+  ──────────────────────────────
+
+  无抖动：20 个客户端在 t=0 同时被 429 拒绝
+    t=0     xxxxxxxxxxxxxxxxxxxx   20 个请求，全被拒
+    t=1s    xxxxxxxxxxxxxxxxxxxx   同时退避 1 秒 → 同时重试 → 又一个尖峰
+    t=3s    xxxxxxxxxxxxxxxxxxxx   同时退避 2 秒 → 再来一次
+            └ 退避把请求「对齐」到了同一时刻，尖峰不但没削平，还更尖了
+              这就是惊群：每一轮的瞬时压力都等于全部客户端之和
+
+  带抖动：等待时间在 [0, 上限] 内随机取
+    t=0     xxxxxxxxxxxxxxxxxxxx
+    t=0~1s  x  x x    x  xx   x    x x  x x   x  x  x x  x
+            └ 同样是 20 次重试，摊平在一整秒里，峰值降到约 1/10
+              下游看到的是平缓的水流，而不是一堵墙</div>
+
+<p>抖动的取法有几种，最常用的是「全抖动」：在 0 到当前退避上限之间均匀取一个随机数，也就是上面那个公式。它的效果是把原本对齐在同一时刻的重试摊平到一段时间里。<code>cap</code> 那个上限同样重要——没有它，指数增长几轮之后单次等待就会到分钟级，远超任何请求预算。</p>
+
+<h3><code>Retry-After</code> 优先于你自己的公式</h3>
+
+<p>当响应里带了 <code>Retry-After</code> 响应头时，应当优先遵守它。理由很直白：服务端知道自己的限流窗口什么时候重置，你不知道；你的指数退避只是在猜，猜早了继续被拒（还白白消耗一次配额），猜晚了平白拉长总耗时。这个头有两种取值格式——秒数，或者一个 HTTP 日期，解析时两种都要处理。</p>
+
+<p>稳妥的组合逻辑是：有 <code>Retry-After</code> 就用它，但仍然叠加一点随机抖动（否则所有客户端会在服务端指定的同一秒一起回来），同时用自己的 <code>cap</code> 兜底，防止对端给出一个离谱的大数值把你的任务挂住。</p>
+
+<h3>重试次数由预算决定，不是拍脑袋定的</h3>
+
+<p>「重试 3 次」是个流传很广的默认值，但正确的推导方向是反过来的：先有这一层的时间预算，再看这个预算能装下几次尝试。每次尝试消耗「单次超时 + 本次退避」，累加到超过预算的那一次就不该发起——发起了也会被外层超时打断，纯属浪费（第三节的事故正是如此）。</p>
+
+<table>
+<tr><th>这一层的预算</th><th>单次超时</th><th>退避序列（含抖动上限）</th><th>放得下几次尝试</th><th>最坏累计</th></tr>
+<tr><td>5 秒</td><td>2 秒</td><td>0.5 秒</td><td>2 次</td><td>4.5 秒</td></tr>
+<tr><td>10 秒</td><td>3 秒</td><td>0.5 / 1 秒</td><td>3 次</td><td>10.5 秒（已略超，应压到 2 次或缩短单次超时）</td></tr>
+<tr><td>25 秒</td><td>6 秒</td><td>1 / 2 秒</td><td>3 次</td><td>21 秒</td></tr>
+<tr><td>离线批处理（无上游等待）</td><td>30 秒</td><td>1 / 2 / 4 / 8 秒，上限 8 秒</td><td>5 次</td><td>165 秒</td></tr>
+</table>
+
+<p>最后一行说明一件事：预算宽松的离线场景确实可以多重试几次。但即使在这里，次数也不是无限的——<strong>连续 5 次都失败，说明大概率不是瞬时抖动，而是真的坏了</strong>，继续重试只是把故障时间摊长。这种情况应该让任务失败并进入死信队列，由人或后续的批次去处理。</p>
+
+<div class="intuition-box">
+<p>重试是唯一会自己制造流量的组件。写它的时候要反过来想：如果下游此刻已经挂了，我这段代码会让它更难恢复，还是给它留出了喘息的空间？</p>
+</div>
+
+<p>还有一个容易忽视的<span class="term">重试放大</span>效应：如果调用链上每一层都重试 3 次，三层叠起来最坏是 27 倍的请求量。规则是<strong>只在最靠近实际调用的那一层重试</strong>，上层遇到失败直接上抛。分层的超时预算能帮你发现这个问题——一旦某层的最坏耗时远超它的预算，多半就是下面还藏着一圈重试。</p>
+</div>
+
+<div class="section" id="s6">
+<h2>六、上线前的落地清单</h2>
+
+<p>前五节的内容压缩成可以逐条核对的东西，大致就是下面这张表。它的价值不在于有多深刻，而在于每一条都对应过一次真实的线上故障，且核对成本都在几分钟以内。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每个外部调用都有超时，包括连接超时和读取超时两个数字</li>
+<li>每批并发都有显式上限，并且和客户端连接池的上限对得上</li>
+<li>下游按速率或 token 计费限流时，额外配一个令牌桶，不要只靠信号量</li>
+<li>重试只对可重试错误做，并同时设次数上限和总时间预算</li>
+<li>退避一律带随机抖动，有 <code>Retry-After</code> 就优先遵守</li>
+<li>捕获 <code>CancelledError</code> 后无条件 <code>raise</code>，收尾逻辑放 <code>finally</code></li>
+<li>取消路径写进测试：任务跑到一半 <code>cancel()</code>，断言资源已释放、状态可恢复</li>
+<li>把信号量等待时长、429 比例、超时比例、重试次数分布做成指标看板</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>用裸 <code>except:</code> 或 <code>except BaseException:</code> 包住 await，会把取消一起吞掉</li>
+<li>捕获 <code>CancelledError</code> 只打日志不重新抛出，任务从此不可取消</li>
+<li>把 <code>await</code> 密集的收尾逻辑塞进 <code>finally</code>，却不考虑二次取消</li>
+<li>内层超时之和超过外层预算，重试从来没机会跑完</li>
+<li>对 400 / 401 / 403 / 404 重试，浪费配额还放大故障</li>
+<li>固定间隔无抖动重试，把一次限流变成周期性尖峰</li>
+<li>调用链每一层都重试，三层叠出 27 倍放大</li>
+<li>限流靠日志排查，没有任何指标能看出闸门有没有被打到</li>
+</ul>
+</div>
+</div>
+
+<h3>把闸门变成可观测的数字</h3>
+
+<p>清单最后一条单独展开。三道闸门有一个共同特点：<strong>它们生效的时候是安静的</strong>——信号量把任务挡在队列里不会报错，令牌桶让你等一会儿也不会报错。于是「闸门设得太紧，吞吐白白损失一半」和「闸门设得太松，等于没设」这两种相反的问题，在日志里长得一模一样：什么都没有。只有指标能区分它们。</p>
+
+<table>
+<tr><th>指标</th><th>说明</th><th>怎么判读</th></tr>
+<tr><td>信号量等待时长 P95</td><td>从请求名额到拿到名额的耗时</td><td>持续接近 0：闸门没起作用，并发上限形同虚设；持续很高：上限偏紧或下游变慢，要看是哪一种</td></tr>
+<tr><td>在飞任务数</td><td>当前占用名额的任务数</td><td>长期顶格说明瓶颈在这一层；从不顶格说明真正的瓶颈在别处（多半是连接池）</td></tr>
+<tr><td>429 / 限流命中比例</td><td>被下游拒绝的请求占比</td><td>稳态应接近 0。持续 &gt; 1% 说明本端的令牌桶参数和下游实际限额对不上</td></tr>
+<tr><td>超时比例（按层拆）</td><td>各层超时各自的触发次数</td><td>内层超时多而外层少：正常止损；外层超时多而内层少：预算分层错了</td></tr>
+<tr><td>重试次数分布</td><td>成功前重试了几次的直方图</td><td>大量任务用满次数才成功，说明退避参数偏激进或并发偏高</td></tr>
+<tr><td>取消发生次数</td><td>任务被主动取消的次数与原因</td><td>持续不为零且找不到对应的上游断开，往往意味着某处预算设错了</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>三道闸门都是「生效时静悄悄」的组件，所以它们的参数不能靠推理，只能靠指标校准。上线时先按保守值设，然后看等待时长和限流比例这两条曲线，往回调。</p>
+</div>
+
+<div class="highlight">
+<p><strong>一个反直觉的结论值得单独记住：</strong>在被限流的场景下，<strong>降低并发常常会缩短总耗时</strong>。第四节那个批量摘要任务就是例子——并发从 20 降到 12，总时长从跑不完变成 3 小时 12 分。原因是超过下游承受能力的那部分并发，产出的不是吞吐而是 429，而每一个 429 都要消耗一次配额、一次连接、一次重试。把并发压到下游的实际拐点以下，有效吞吐反而更高。这也是压测时该找的东西：不是最大并发数，是<strong>吞吐开始不再随并发上升的那个拐点</strong>。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>调用了 task.cancel()，为什么紧接着 task.cancelled() 还是 False？</summary>
+<div class="answer">因为 <code>cancel()</code> 只是提出请求，不是执行。它的返回值表示「取消请求是否被受理」，不表示任务已经结束。任务真正进入取消状态，要等它下一次从挂起点恢复、<code>CancelledError</code> 抛出并传播到任务边界之后。在 3.12 上实测：对一个正在做 0.6 秒纯计算的任务发起取消，<code>cancel()</code> 立刻返回，但任务又跑了 0.6 秒、到达下一个 <code>await</code> 才真正结束，此后 <code>cancelled()</code> 才变成 <code>True</code>。所以想确认任务确实停了，正确做法是 <code>await</code> 它（并捕获 <code>CancelledError</code>），而不是轮询状态。</div>
+</details>
+
+<details>
+<summary>既然 except Exception 抓不到取消，那我想写一个「什么都兜住」的处理该怎么办？</summary>
+<div class="answer">绝大多数情况下你要的就是 <code>except Exception</code>，它已经覆盖了所有业务异常，同时自动放行 <code>CancelledError</code>、<code>KeyboardInterrupt</code>、<code>SystemExit</code> 这些不该被业务代码吞掉的信号——这正是 3.8 把 <code>CancelledError</code> 改挂到 <code>BaseException</code> 下面的用意。如果确实需要在任何退出路径上都做点事（比如释放资源），用 <code>finally</code>，它只执行不拦截。真要写 <code>except BaseException</code>，那个分支的最后一行必须是无条件的 <code>raise</code>，否则你会同时失去取消能力和 Ctrl+C。裸 <code>except:</code> 在异步代码里没有任何正当用途。</div>
+</details>
+
+<details>
+<summary>asyncio.timeout() 和 asyncio.wait_for() 到底该选哪个？</summary>
+<div class="answer">项目最低版本在 3.11 及以上就默认用 <code>asyncio.timeout()</code>。它是异步上下文管理器，能包住一整段代码块——包括循环、多次调用、整个重试流程，而 <code>wait_for()</code> 只能包住单个 awaitable。现实中需要限制的往往是「这一段业务不超过 N 秒」而不是「这一次调用不超过 N 秒」，前者用 <code>wait_for</code> 表达不出来。<code>asyncio.timeout()</code> 返回的对象还提供 <code>reschedule()</code>，可以在运行中改期，适合「收到心跳就续命」这类场景。<code>wait_for()</code> 留给单点调用，以及必须兼容 3.10 及更早版本的代码。两者超时后抛的都是 <code>TimeoutError</code>。</div>
+</details>
+
+<details>
+<summary>为什么我在 async with asyncio.timeout() 块里面写 except TimeoutError 抓不到超时？</summary>
+<div class="answer">因为块内部抛出的不是 <code>TimeoutError</code>，而是 <code>CancelledError</code>。超时的实现方式是到点后取消被包住的任务，异常要一路传播出上下文管理器，在它的退出逻辑里才被转换成 <code>TimeoutError</code>。这在 3.12 上可以直接验证：给被包住的协程加一个 <code>except asyncio.CancelledError</code>，超时发生时它会先被触发，而块外面接到的是 <code>TimeoutError</code>。所以 <code>try/except TimeoutError</code> 必须写在 <code>async with</code> 的外面。顺带一提，如果块内部有人捕获了 <code>CancelledError</code> 却不重新抛出，超时机制就彻底失效了——这是「超时设了但没生效」最常见的一种根因。</div>
+</details>
+
+<details>
+<summary>finally 里的 await 被二次取消，收尾做了一半，怎么处理？</summary>
+<div class="answer">先接受一个前提：任何依赖「进程一定活到收尾结束」的设计都是脆弱的，因为进程还可能被 SIGKILL 或者机器掉电。所以优先级最高的做法是<strong>让收尾不需要 await</strong>——把「必须落库」降级成「写进内存队列，由常驻任务异步消费」，或者把状态设计成可以由下一次运行推导出来的形式。如果确实躲不开异步收尾，可以用 <code>asyncio.shield()</code> 包住它，或者给它单独套一个很短的超时（比如 2 秒），至少保证收尾本身不会变成新的挂起点。但这两种都只是提高成功概率，不是保证。真正可靠的方案是让操作幂等、让状态可重放，用外部的对账或补偿机制兜底。</div>
+</details>
+
+<details>
+<summary>信号量的并发数该设多少？</summary>
+<div class="answer">没有普适数字，但有一个可操作的推导顺序。第一步看硬约束：下游明确给出的连接数上限、你自己 HTTP 客户端的连接池大小，取两者较小值作为天花板。第二步看速率约束：用「稳态速率 ≈ 并发度 ÷ 平均耗时」倒推，如果下游有 RPM 限额，算出不超限额对应的并发度。第三步压测找拐点：并发从小往大加，看吞吐曲线在哪里不再上升——那个点之后增加的并发只会变成排队和超时。最后取三者的最小值，并且留 20% 余量，因为下游的耗时是会变的。要特别警惕下游恢复时的场景：它变快之后，同样的并发度对应的速率会成倍上升，这时候光有信号量是不够的，必须有令牌桶兜住速率。</div>
+</details>
+
+<details>
+<summary>429 是不是一律该重试？</summary>
+<div class="answer">不是。429 至少分两种：速率型和配额型。速率型是「你这一秒太快了」，退避之后重试大概率成功，该重试。配额型是「你这个月的额度用完了」，无论等多久、重试多少次都不会成功，继续重试只是白白消耗连接和时间，还会让下游的限流日志更难看。两者的区分依据通常在响应体的错误码或者 <code>Retry-After</code> 的数值上——如果对端给出的是一个小时以上的等待时间，那基本就是配额型，应该直接失败并告警，而不是在代码里睡一小时。另外，重试 429 时一定要遵守 <code>Retry-After</code> 并叠加抖动，否则一批客户端会在服务端指定的同一秒整齐地回来，形成新的尖峰。</div>
+</details>
+
+<details>
+<summary>asyncio.gather 里一个任务抛异常，其余任务会被自动取消吗？</summary>
+<div class="answer">不会。<code>gather()</code> 在默认的 <code>return_exceptions=False</code> 下，会把第一个抛出的异常立刻上抛给 await 它的那一方，但其余尚未完成的任务<strong>不会被取消，会继续在后台运行</strong>。这是一个很容易漏掉的细节：你在外层已经进入错误处理分支了，后台还有几十个请求在消耗配额。如果被取消的是 <code>gather()</code> 本身，那么它下面所有未完成的任务才会一起被取消。想要「一个失败、整组停下」的语义，应该用 3.11 引入的 <code>TaskGroup</code>，它在任一子任务失败时会取消同组其余任务。这也是本系列推荐用 <code>TaskGroup</code> 取代 <code>gather</code> 做并发编排的原因之一。</div>
+</details>
+
+<details>
+<summary>限流应该放在客户端还是服务端？</summary>
+<div class="answer">两边都要，但目的不同。服务端限流是<strong>自保</strong>，它必须存在，因为你不能指望所有调用方都守规矩；它的表现形式就是 429 和熔断。客户端限流是<strong>自律</strong>，目的是尽量不去撞服务端那道墙——被 429 拒绝的请求同样消耗了连接、往返时延和重试配额，撞墙的代价全都由你承担。只做服务端限流的系统，客户端会表现为大量 429 加上重试放大；只做客户端限流的系统，一旦有一个调用方配置错了就没有兜底。对本卡的读者来说重点在客户端这一侧：你的信号量和令牌桶，应该按服务端公布的限额<strong>打七到八折</strong>来设，把余量留给突发和多实例部署——多个实例共享同一个配额时，每个实例的本地桶都要按实例数分摊。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

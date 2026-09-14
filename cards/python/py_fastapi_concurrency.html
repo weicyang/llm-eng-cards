@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY57 · FastAPI 的并发模型</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、一个请求到底在哪里执行</a>
+<a href="#s2">二、最严重的一种写法</a>
+<a href="#s3">三、线程池不是免费的</a>
+<a href="#s4">四、依赖注入与生命周期</a>
+<a href="#s5">五、AI 应用特有的三个问题</a>
+<a href="#s6">六、部署与容量</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY57 · FastAPI 的并发模型</h1>
+<p class="subtitle">两种处理函数的调度差别 / async def 里阻塞的全局代价 / 线程池排队与容量估算 / 依赖项与应用级资源生命周期 / AI 接口写法判据与部署容量</p>
+
+<div class="intuition-box">
+<p>这个框架的并发能力不写在你的业务逻辑里，而写在 <code>def</code> 前面有没有 <code>async</code> 这三个字母上。写对了它替你把阻塞挪走，写错了它一句话都不说，只在压力上来时整个服务一起变慢。</p>
+</div>
+
+<p class="data-asof"><strong>数据截止 2026-09</strong> · 下文涉及的机制以 FastAPI 0.1xx + Starlette + AnyIO 4.x 的当前实现为准。<strong>默认线程池容量、配置项名、生命周期钩子的推荐写法都随版本演进</strong>，落地前请对照你锁定版本的官方文档再确认一遍，不要照抄任何教程里的数字。</p>
+
+<div class="section" id="s1">
+<h2>一、一个请求到底在哪里执行</h2>
+
+<p>先说清这张卡为什么单独存在。通用的异步机制（<a href="py_asyncio_eventloop.html">PY28</a> 事件循环、<a href="py_coroutines_tasks.html">PY29</a> 协程与任务、<a href="py_executor_bridge.html">PY33</a> 同步异步互通）本系列已经讲过，这里不重复。真正需要单独一卡的是：<strong>Web 框架在你和事件循环之间插了一层自动调度</strong>，这层调度让正确的写法变得很省事，也让错误的写法变得毫无征兆。</p>
+
+<p>FastAPI 同时接受两种处理函数。用 <code>async def</code> 定义的是<span class="term">协程函数</span>，框架直接 <code>await</code> 它，代码在<span class="term">事件循环</span>所在的那个线程里执行。用普通 <code>def</code> 定义的是普通函数，框架不会直接调用它——那样会把循环卡住——而是把它交给 <code>run_in_threadpool</code>，底层落到 <code>anyio.to_thread.run_sync</code>，在一个<span class="term">工作线程</span>里跑，事件循环则 <code>await</code> 它的结果。</p>
+
+<p>路由命中时，框架检查的只有一件事：这个函数是不是协程函数。它<strong>不看函数体</strong>，不知道你里面调了什么客户端、会不会阻塞。整个设计的便利与危险都来自这一点。</p>
+
+<p>这种「读函数签名来决定行为」的思路在这个框架里到处都是——参数校验和接口文档同样是从类型注解推导出来的（注解的语义与静态检查见 <a href="py_type_hints.html">PY20</a>）。注解写错了，静态检查或运行期校验会告诉你；但<code>async</code> 这个关键字写错了，没有任何工具会提醒，因为两种写法在框架看来<strong>都是合法的申报</strong>。</p>
+
+<div class="arch-diagram">  uvicorn 进程
+  ┌──────────────────────────────────────────────────────────────┐
+  │  事件循环（单线程，同一时刻只推进一段 Python 字节码）          │
+  │                                                              │
+  │   请求到达 → 路由匹配 → 框架判断处理函数是不是协程函数         │
+  │                              │                               │
+  │              ┌───────────────┴───────────────┐               │
+  │              ▼                               ▼               │
+  │      写的是 async def                  写的是普通 def         │
+  │      直接 await 这个协程               交给 run_in_threadpool │
+  │      就在事件循环里执行                      │                │
+  │              │                               │               │
+  └──────────────┼───────────────────────────────┼───────────────┘
+                 │                               ▼
+                 │                   ┌───────────────────────────┐
+                 │                   │  AnyIO 工作线程池          │
+                 │                   │  由一个容量限流器控制上限   │
+                 │                   │  令牌借完，后来的请求排队   │
+                 │                   └─────────────┬─────────────┘
+                 │                                 │ 线程执行完毕
+                 ▼                                 ▼
+            响应写回客户端              事件循环拿到结果，响应写回客户端
+
+  关键：这个分叉点只看函数的定义写法，不看函数体里做了什么。
+        写错了不报错、不告警，只会在并发压上来之后表现异常。</div>
+
+<div class="intuition-box">
+<p><code>async def</code> 是「我保证自己不会长时间占住循环」的承诺；普通 <code>def</code> 是「我可能会阻塞，请把我放到别处去」的申报。框架完全相信你的申报，从不核查。</p>
+</div>
+
+<h3>两种写法各自适合什么</h3>
+
+<pre><code># 同一个接口的两种写法，执行位置完全不同
+@app.get("/a")
+async def handler_a():             # 在事件循环里执行
+    return await async_client.get(url)   # 全程 await，不能有阻塞调用
+
+@app.get("/b")
+def handler_b():                   # 被交给工作线程池执行
+    return sync_client.get(url)          # 这里阻塞是合法的，占线程不占循环</code></pre>
+
+<table>
+<tr><th>写法</th><th>在哪执行</th><th>适合</th><th>写错的后果</th></tr>
+<tr><td><code>async def</code> + 全程 <code>await</code></td><td>事件循环</td><td>调异步 HTTP 客户端、异步数据库驱动、异步大模型 SDK；绝大多数 AI 接口</td><td>—— 这是目标状态</td></tr>
+<tr><td><code>async def</code> + 内含阻塞调用</td><td>事件循环（并把它卡住）</td><td>没有任何场景适合</td><td><strong>最严重</strong>：全服务并发一起崩坏，见第二节</td></tr>
+<tr><td>普通 <code>def</code> + 阻塞调用</td><td>工作线程池</td><td>只有同步驱动可用、单次耗时短、并发不高的接口</td><td>并发一高就在线程池门口排队，见第三节</td></tr>
+<tr><td>普通 <code>def</code> + 纯内存计算</td><td>工作线程池</td><td>几乎没必要，白付一次线程调度开销</td><td>轻微浪费；若计算很重则拖垮线程池</td></tr>
+<tr><td>普通 <code>def</code> + 重 CPU 计算</td><td>工作线程池（受解释器锁制约）</td><td>不适合，应当挪出进程</td><td>线程占满且无法真正并行，见第五节</td></tr>
+</table>
+
+<p>这张表的第二行和第五行是本卡的两个主角。前者的破坏面是全局的，后者的症状是隐形的——它们加起来覆盖了这类服务绝大部分「压测时延迟莫名其妙爆掉」的事故。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、最严重的一种写法：在 async def 里调用阻塞代码</h2>
+
+<p>这是本卡唯一一条「无论如何都不要做」的规则，因为它的后果不符合任何人的直觉。</p>
+
+<p>直觉是：我这个请求里调了一个慢的同步函数，那就是我这个请求慢。<strong>实际是：整个事件循环在这段时间里完全停止推进。</strong>循环是单线程的，你的协程在阻塞调用上不返回，循环就拿不回控制权，于是在这段时间内——所有已经进来的请求都无法继续、新连接无法被接受、已经算完的响应无法写回、keep-alive 心跳和健康检查探针一起超时。一个请求的写法错误，成本由整台服务的所有并发请求平摊。</p>
+
+<div class="arch-diagram">  正常：async def + 异步客户端
+  时间 ───────────────────────────────────────────────────────────▶
+   A   ■ await 下游（让出循环）………………………………………… ■ 组装响应
+   B      ■ await 下游（让出循环）………………………………………… ■
+   C         ■ await 下游（让出循环）………………………………………… ■
+  循环   每次让出都能去推进别人，三个请求几乎同时完成
+
+  故障：async def + 同步客户端
+  时间 ───────────────────────────────────────────────────────────▶
+   A   ■■■■■■■■■■ 同步 IO，3.2s 内没有一次 await ■■■■■■■■■■
+   B   ……（早就到了，但循环回不来）………………………………… ■ 才开始
+   C   ……（排在 B 后面，继续等）……………………………………………… ■
+  循环   全程被 A 独占：心跳、探针、别人的响应写回，一起卡住
+
+  A 自己的埋点：3.2s —— 和单请求压测完全一样，看不出任何异常
+  B 客户端实测：6.4s      C 客户端实测：9.6s
+  受害者的日志里没有线索，因为根因不在它们自己的代码路径上。</div>
+
+<p>上图最后三行是这类故障最难受的地方：<strong>从单个请求的日志里完全看不出来</strong>。出问题的那个接口埋点正常，被它拖慢的接口埋点异常但代码毫无问题。按「哪个接口慢就查哪个接口」的习惯排查，方向从第一步就错了。排查方法见 <a href="py_async_debugging.html">PY34</a>，本卡第六节给出应当常态化采集的信号。</p>
+
+<h3>典型的阻塞来源</h3>
+
+<table>
+<tr><th>来源</th><th>常见形态</th><th>为什么容易漏</th></tr>
+<tr><td>同步数据库驱动</td><td>同步 ORM 的查询、同步的数据库连接对象</td><td>接口写法和异步版几乎一样，只差一个 <code>await</code></td></tr>
+<tr><td>同步 HTTP 客户端</td><td>常见同步请求库；同步模式的云服务 SDK</td><td>SDK 通常同步、异步两套并存，同名方法很容易拿错那一套</td></tr>
+<tr><td>文件读写</td><td><code>open()</code> 读大文件、写日志到慢磁盘、算文件哈希</td><td>本地文件「感觉很快」，网络盘或容器卷上并不快</td></tr>
+<tr><td>长时间纯计算</td><td>大 JSON 序列化、批量正则、分词、向量归一化、图像解码</td><td>没有 IO，看不出「阻塞」的样子，但一样占住循环</td></tr>
+<tr><td>加密与压缩</td><td>密码哈希（如刻意设计成慢的口令哈希）、大响应体压缩、签名验签</td><td>单次几十到几百毫秒，单请求测试完全正常</td></tr>
+<tr><td>隐式阻塞</td><td><code>time.sleep</code>、同步锁等待、DNS 解析、导入期的网络调用</td><td>常藏在工具函数或第三方库内部，不在你写的那一行</td></tr>
+</table>
+
+<p>最后一类值得多说一句。阻塞不一定出现在你的接口代码里，也可能藏在中间件、日志处理器、指标上报、鉴权 SDK 里。日志写到慢的落地通道就是一个真实来源，<a href="py_logging_observability.html">PY43</a> 讲过为什么日志链路要做成非阻塞的。</p>
+
+<div class="highlight">
+<p><strong>纪律（只有两条路，不存在第三条）：</strong>要么<strong>全链路异步</strong>——处理函数、客户端、数据库驱动、中间件、依赖项一路都是可 <code>await</code> 的；要么<strong>老老实实用普通 <code>def</code></strong>，让框架把整个函数体放进工作线程池。不要在 <code>async def</code> 里靠「这次应该很快」蒙过去。已经是 <code>async def</code> 但必须调一段无法改造的同步代码时，显式把它推到线程或进程里执行（<a href="py_executor_bridge.html">PY33</a> 有完整做法），而不是直接调用。</p>
+</div>
+
+<pre><code># 反例：async def 里调同步客户端 —— 事件循环被焊死 3.2 秒
+@app.post("/answer")
+async def answer(q: str):
+    return sync_llm.chat(q)          # 没有 await，循环无法切走
+# 修法一：换异步客户端，全链路 await（首选）
+async def answer(q: str):
+    return await async_llm.chat(q)
+# 修法二：保持同步客户端，改回普通 def，交给线程池
+def answer(q: str):
+    return sync_llm.chat(q)</code></pre>
+
+<div class="intuition-box">
+<p>判断一个 <code>async def</code> 是否安全，只需扫一遍函数体：每一处可能耗时超过几毫秒的调用前面，是不是都有 <code>await</code>？没有 <code>await</code> 的耗时调用，就是一颗定时炸弹。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、线程池不是免费的：排队时间不体现在埋点里</h2>
+
+<p>知道了「阻塞就用普通 <code>def</code>」之后，很容易产生第二个误解：反正框架会帮我放线程池，那同步写法就没有代价。代价是有的，而且它的表现形式极难定位。</p>
+
+<p>工作线程池的并发量由一个<span class="term">容量限流器</span>控制。它不是无限的，也<strong>不是每个接口一份</strong>——同一个事件循环下，所有普通 <code>def</code> 处理函数、所有同步依赖项、所有同步中间件、以及框架内部需要放进线程的操作（静态文件读取、把同步迭代器转成异步迭代器等）<strong>共享同一份令牌</strong>。令牌借完，后来的请求就在限流器门口等，这段等待就是本节要讲的<span class="term">排队时延</span>。</p>
+
+<p class="data-asof"><strong>版本说明</strong> · 这个限流器就是 AnyIO 的默认线程限流器，可以通过 <code>anyio.to_thread.current_default_thread_limiter()</code> 拿到，用 <code>total_tokens</code> 读写容量。当前实现的默认值是 <strong>40</strong>，但这是<strong>库的默认值而非语言或框架的承诺</strong>，随版本可能变化；下文所有算例都按 40 演示，你的环境请先把它打印出来确认。</p>
+
+<div class="arch-diagram">  普通 def 处理函数在高并发下的真实路径
+  ─────────────────────────────────────
+  300 个并发请求
+        │
+        ▼
+  ┌──────────────────────────┐
+  │  容量限流器（默认 40 个令牌）│   ← 借完为止，全应用共享
+  └────────────┬─────────────┘
+               │
+     ┌─────────┴──────────┐
+     ▼                    ▼
+  拿到令牌的 40 个       没拿到的 260 个
+  进工作线程执行         在限流器门口等
+  单次耗时 3.2s          等多久取决于前面排了多少人
+        │                      │
+        │  ★ 关键：这段等待发生在处理函数被调用「之前」
+        │     所以函数内部的任何埋点都测不到它
+        ▼                      │
+   归还令牌 ───────────────────┘（唤醒一个等待者）
+
+  于是形成这类服务最难查的症状组合：
+     应用埋点 P95   =  3.7s   （正常，和单请求压测一致）
+     客户端观测 P95 = 25.6s   （灾难）
+     差出来的 21.9s 全部是门口的排队时间，代码里没有任何地方记录它</div>
+
+<div class="intuition-box">
+<p>处理函数内部的计时器，是在拿到线程之后才启动的。它测的是「服务时间」，客户端测的是「排队时间 + 服务时间」。这两个数一旦长期对不上，答案基本就写在差值里了。</p>
+</div>
+
+<h3>容量估算：一条够用的粗算式</h3>
+
+<p>同步写法的吞吐上限可以直接估出来。限流器容量记作 <em>N</em>，处理函数单次耗时记作 <em>T</em>，那么这台进程的吞吐上限大约是：</p>
+
+<div class="formula">吞吐上限 (QPS) ≈ N / T　　　　排队时延 ≈ (在飞请求数 / N - 1) × T</div>
+
+<p>按默认 40 个令牌算：单次 50 毫秒的接口能扛到约 800 QPS，基本不会成为瓶颈；单次 3.2 秒的接口只能扛到约 12 QPS，而且这个上限<strong>与机器有多少核完全无关</strong>——加 CPU 不会让它变大。这个反差正是同步写法在 AI 场景里格外危险的原因：大模型调用的 <em>T</em> 天生就是秒级的。</p>
+
+<div class="highlight">
+<p><strong>生产事故复盘 —— 埋点正常，客户端却慢了 7 倍。</strong>某文档问答服务的 <code>/v1/answer</code> 接口调用大模型生成答案。由于选用的 SDK 只有同步客户端，开发者按「阻塞就用普通 <code>def</code>」的规则写成了普通 <code>def</code>，评审也认为没问题。上线前压测暴露出问题：</p>
+<ul>
+<li>线程池容量：<strong>40</strong>（未调整，库默认值）；大模型单次调用 P50 <strong>3.2s</strong>、P95 <strong>6.8s</strong>；按 40 / 3.2 估算容量约 <strong>12 QPS</strong></li>
+<li>并发 40：吞吐 <strong>12.3 QPS</strong>，客户端 P95 <strong>3.9s</strong>，应用埋点 P95 <strong>3.6s</strong>——差 0.3s，看起来一切正常</li>
+<li>并发 300：吞吐 <strong>12.5 QPS</strong>（并发翻了 7.5 倍，吞吐一动不动），客户端 P95 <strong>25.6s</strong>，应用埋点 P95 <strong>3.7s</strong>——差 <strong>21.9s</strong></li>
+<li>排查走了三天弯路：因为埋点显示处理函数耗时正常，团队先后怀疑网关、负载均衡、客户端连接池，甚至给大模型供应商提了工单。转折点是有人把「在飞请求数」和「限流器已借出令牌数」两条曲线画在一起——后者常态贴死在 40，前者是 300。请求全堵在线程池门口。</li>
+<li>改造：换上该 SDK 的异步客户端，处理函数改 <code>async def</code>，同时按下游配额给自己加了 120 并发的限流。同样 300 并发下吞吐 <strong>37 QPS</strong>（约等于 120 / 3.2），客户端 P95 <strong>8.1s</strong>，事件循环延迟 P99 <strong>11ms</strong>；进程 CPU 从 <strong>28%</strong> 降到 <strong>9%</strong>（少了 40 个线程的上下文切换），内存基本未变。</li>
+</ul>
+<p>教训有两条，而且第二条更贵：一是<strong>秒级下游的接口不能走线程池路线</strong>；二是<strong>只埋处理函数内部的耗时，等于把最常见的一类容量问题做成了盲区</strong>——必须同时有客户端侧或接入层侧的端到端耗时，两者的差值才是线索。</p>
+</div>
+
+<h3>定位手段与处置顺序</h3>
+
+<table>
+<tr><th>信号</th><th>怎么拿</th><th>说明什么</th></tr>
+<tr><td>端到端耗时 与 处理函数耗时 的差值</td><td>接入层/客户端埋点 减去 应用内埋点</td><td>差值持续显著为正，就是排队（线程池门口或连接队列）</td></tr>
+<tr><td>已借出令牌数 / 等待者数量</td><td>读容量限流器的统计信息（字段名以当前版本为准）</td><td>借出数长期贴住容量 = 线程池饱和，罪魁是同步写法</td></tr>
+<tr><td>吞吐随并发增长的曲线</td><td>阶梯式压测，逐档抬并发</td><td>吞吐封顶而延迟按比例上涨 = 典型排队，不是下游变慢</td></tr>
+<tr><td>工作线程栈</td><td>抓一次全线程栈，看线程都停在哪一行</td><td>大量线程停在同一个同步调用上，直接指出改造点</td></tr>
+<tr><td>事件循环延迟</td><td>见第六节的自埋方式</td><td>区分「循环被卡」（第二节）与「线程池排队」（本节）</td></tr>
+</table>
+
+<p>处置顺序是有讲究的：<strong>先改写法，再谈调容量</strong>。把令牌数从 40 调到 400 看起来立刻缓解，但代价是 400 个线程的栈内存与调度开销，而且只是把排队从你的进程挪到了下游——下游被打满之后问题会以更难看的方式回来。真正的修法是让秒级等待回到事件循环里，那里等待几乎不占资源。</p>
+
+<pre><code># 确实需要调容量时：必须在事件循环内做，import 期设置无效
+import anyio.to_thread
+
+@asynccontextmanager
+async def lifespan(app):
+    limiter = anyio.to_thread.current_default_thread_limiter()
+    print("当前默认容量:", limiter.total_tokens)   # 先确认，别照抄数字
+    limiter.total_tokens = 100
+    yield</code></pre>
+</div>
+
+<div class="section" id="s4">
+<h2>四、依赖注入与生命周期：坑会从另一扇门进来</h2>
+
+<p>把处理函数改成 <code>async def</code> 之后，很多人以为这个接口就干净了。并不一定——<strong>依赖项也分同步与异步两种，而同步依赖同样会被放进那个共享的工作线程池</strong>。一个异步处理函数配一个阻塞的同步依赖，第三节的排队问题原封不动地存在，只是转移到了依赖项上。</p>
+
+<p>这件事在实践中比处理函数写错更常见，原因很简单：处理函数是每个人评审时都会看的，依赖项往往是「几个月前写好的公共鉴权」或者「从另一个项目抄过来的配置加载」，没人再去看它是 <code>def</code> 还是 <code>async def</code>。而依赖项挂在很多接口上，一处阻塞会同时污染所有挂了它的接口。</p>
+
+<table>
+<tr><th>组件形态</th><th>执行位置</th><th>要注意</th></tr>
+<tr><td><code>async def</code> 依赖</td><td>事件循环</td><td>里面同样不能有阻塞调用，规则与处理函数一致</td></tr>
+<tr><td>普通 <code>def</code> 依赖</td><td>工作线程池</td><td><strong>占用与处理函数同一份令牌</strong>；异步接口挂上它照样会排队</td></tr>
+<tr><td>带 <code>yield</code> 的同步依赖</td><td>工作线程池（进入与退出都算）</td><td>清理段也占线程；清理里做慢 IO 会放大占用时间</td></tr>
+<tr><td>带 <code>yield</code> 的异步依赖</td><td>事件循环</td><td>首选形态；语义与异步上下文管理器一致，见 <a href="py_async_context_generators.html">PY35</a></td></tr>
+<tr><td>同步中间件 / 同步处理器</td><td>视实现而定，多数落到线程池</td><td>作用于全站流量，是最容易被忽略的共享瓶颈</td></tr>
+</table>
+
+<h3>应用级资源：建一次，复用到进程结束</h3>
+
+<p>第二类坑与阻塞无关，纯粹是资源生命周期放错了位置。连接池、HTTP 客户端实例、大模型与向量库客户端、本地模型对象，这些都是<span class="term">应用级资源</span>：创建昂贵、可并发复用、应当随进程生死。正确的位置是<span class="term">生命周期钩子</span>——用 <code>lifespan</code> 参数接一个异步上下文管理器，在 <code>yield</code> 之前建好，在 <code>yield</code> 之后释放。</p>
+
+<p class="data-asof"><strong>版本说明</strong> · 当前推荐的写法是 <code>FastAPI(lifespan=...)</code> 配合 <code>@asynccontextmanager</code>；早期基于启动/停止事件装饰器的写法已被标注废弃，且两者<strong>不能混用</strong>（提供了 <code>lifespan</code> 后事件回调不再被调用）。废弃时间点与迁移细节请查你锁定版本的文档。</p>
+
+<div class="arch-diagram">  应用级资源的正确位置
+  ─────────────────────
+  进程启动
+     │
+     ▼
+  lifespan 进入（yield 之前）          ← 每进程建一次，全程复用
+     ├─ 异步 HTTP 客户端（内含连接池）
+     ├─ 数据库连接池
+     ├─ 大模型客户端 / 向量库客户端
+     └─ 本地模型权重（如果确实要在本进程里推理）
+     │
+     ▼
+  开始接收请求 ── 每个请求只「借用」上面这些对象
+     │           不新建连接池、不新建客户端、不重新加载权重
+     ▼
+  收到停止信号（先停止收新请求，等在飞请求收尾）
+     │
+     ▼
+  lifespan 退出（yield 之后）          ← 关连接池、关客户端、flush 指标
+
+  每请求新建连接池的代价：连接复用率归零，每次都要重新做
+  TCP 握手与 TLS 协商；并发一上来还会把下游的连接数配额打满，
+  并在本机堆积大量 TIME_WAIT。这是最常见的一类性能杀手。</div>
+
+<pre><code>@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with AsyncHTTPClient(timeout=30) as client:   # 建一次
+        app.state.http = client
+        yield                                           # 期间持续复用
+    # 退出 async with 时连接池被正确关闭（上下文管理见 PY19）
+
+async def get_http(request: Request):    # 依赖只负责「取出」
+    return request.app.state.http        # 绝不在这里 new 客户端</code></pre>
+
+<p>关闭路径同样重要，而且更容易被忽略，因为它在开发机上几乎从不出问题。没有正确释放的后果是：下游连接被挂住直到超时回收、缓冲区里的日志与指标丢失、滚动发布期间新旧实例同时占着连接把下游配额顶满。把释放逻辑交给上下文管理器的退出段（<a href="py_context_managers.html">PY19</a> 讲过为什么它比 <code>finally</code> 更难写漏），再配合服务器的优雅停止——先停止接受新连接，等在飞请求收尾，超时后再强制退出。</p>
+
+<div class="intuition-box">
+<p>判断一个对象该放 <code>lifespan</code> 还是放依赖项，就问一句：它贵不贵、能不能被并发共用。贵且能共用的（连接池、客户端、模型）放 <code>lifespan</code>；便宜或天然按请求隔离的（事务、请求上下文、用户身份）放依赖项。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、AI 应用特有的三个问题</h2>
+
+<p>前四节的规则对任何后端都成立。AI 应用把其中三处放大到了不得不单独处理的程度：下游耗时是秒级而不是毫秒级、响应是流式而不是一次写完、还可能有真正 CPU 密集的本地推理混在同一个进程里。</p>
+
+<h3>其一：秒级下游让同步写法直接失效</h3>
+
+<p>普通业务接口下游耗时几十毫秒，按第三节的算式，40 个令牌能撑到几百 QPS，同步写法一辈子都撞不到上限。大模型调用一次要等几秒（生成长文本时更久），同样 40 个令牌只够十几 QPS，而且这个上限加机器也不会变大。<strong>所以这类接口几乎是必须写成异步的</strong>——不是为了快，而是因为线程池路线的容量天花板低到不可接受。事件循环里等待几千个 <code>await</code> 的成本极小，等待本身几乎不占资源，这正是异步模型的价值所在。</p>
+
+<h3>其二：流式响应必须正确处理客户端断开</h3>
+
+<p>流式接口把一次请求变成了一条可能持续几十秒的长连接，客户端中途消失是常态而非异常：用户关掉页面、切走应用、网络抖动、网关超时。框架层面会监听断开事件并停止推进你的生成器，但<strong>上游那条连接是你开的，只有你能关</strong>。生成器被取消时如果没有清理逻辑，上游连接就泄漏了——它还在为一个早已不存在的客户端生成内容，同时占着下游的并发配额。</p>
+
+<p>做法是把清理写在 <code>finally</code> 里，让取消路径也一定经过它；异步迭代与取消时的资源释放语义见 <a href="py_async_context_generators.html">PY35</a>，取消与超时的传播见 <a href="py_cancel_timeout_ratelimit.html">PY31</a>。</p>
+
+<pre><code>async def gen(upstream):
+    try:
+        async for chunk in upstream:     # 客户端断开时这里会被取消
+            yield chunk
+    finally:
+        await upstream.aclose()          # 取消路径也必须走到这里
+                                         # 漏了它 = 上游连接泄漏 + 白烧配额</code></pre>
+
+<p class="data-asof"><strong>版本说明</strong> · 断开的具体表现（是抛出一个「客户端已断开」异常，还是生成器被直接取消）在不同版本和不同 ASGI 服务器组合下并不一致，近几个版本还在调整。<code>finally</code> 清理在所有形态下都有效，所以按它写；如果你的代码要显式捕获断开异常，异常类名与触发条件请对照当前版本的发布说明确认。另外注意：断开后仍需完成的业务（如把已生成内容落库计费）不能留在响应生成器里，要挪到独立的后台任务。</p>
+
+<h3>其三：本地推理是 CPU 密集的，两个位置都不该放</h3>
+
+<p>本地模型推理（小模型前向、重排序、本地嵌入、图像预处理）是真正的 CPU 密集工作。放事件循环里等于第二节的错误，循环会被整段占住。放线程池里也不行：这类计算在持有全局解释器锁期间无法真正并行（<a href="py_gil_free_threading.html">PY25</a>），几个线程只是轮流用同一个核，还把令牌全部借走，把同进程里那些正常的同步接口一起饿死。</p>
+
+<p>正确做法是把它挪出当前进程：小规模用<strong>独立进程池</strong>（<a href="py_multiprocessing.html">PY27</a> 讲进程模型，<a href="py_executor_bridge.html">PY33</a> 讲怎么从异步代码里把任务推过去），规模上去就拆成<strong>独立的推理服务</strong>，让 Web 进程退回到纯 IO 角色。这一步同时解决了另一个问题：推理服务可以按自己的节奏做批处理、独占显卡、独立扩容，而 Web 层不必为它的资源特征让路。</p>
+
+<p>需要注意一个例外：某些成熟的数值与推理库会在计算期间主动释放解释器锁，这类调用放在线程里确实能并行。但这是<strong>库的实现细节而非普遍规律</strong>，不要假设，要实测——把并发压上去看 CPU 是否真的吃到多核，不要凭库名下结论。</p>
+
+<table>
+<tr><th>AI 接口类型</th><th>该怎么写</th><th>为什么</th></tr>
+<tr><td>调用远端大模型（非流式）</td><td><code>async def</code> + 异步 SDK + 自设并发上限</td><td>单次秒级，线程池容量撑不住；等待应当发生在循环里</td></tr>
+<tr><td>调用远端大模型（流式）</td><td><code>async def</code> + 异步生成器 + <code>finally</code> 清理</td><td>长连接且客户端常中途消失，必须能正确释放上游</td></tr>
+<tr><td>向量检索 / 远端重排</td><td><code>async def</code> + 异步客户端</td><td>本质是网络 IO，几十到几百毫秒，异步收益直接</td></tr>
+<tr><td>本地嵌入 / 本地重排 / 小模型前向</td><td>挪到独立进程池或独立推理服务</td><td>CPU 密集，事件循环与线程池两处都不合适</td></tr>
+<tr><td>文档解析、切分、图像解码</td><td>独立进程池；量大则改成离线任务</td><td>纯计算且耗时波动大，放在请求链路上必然拖垮延迟</td></tr>
+<tr><td>只能用同步 SDK 且短耗时</td><td>普通 <code>def</code>，并按 N / T 估好容量</td><td>是可接受的过渡态，但必须知道自己的天花板在哪</td></tr>
+<tr><td>写库 / 记账 / 留痕</td><td>异步驱动；或拆成后台任务与队列</td><td>不该让用户等一次落库，更不该让它阻塞循环</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>AI 后端的接口按「等的是谁」分类就够清晰了：等远端服务的写异步，等本机 CPU 的挪出进程。同一个进程里既做 IO 编排又做重计算，两边都做不好。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、部署与容量：进程数、下游上限与三个必须监控的信号</h2>
+
+<p>部署层面最常见的误解是把「多进程」当成提升并发的通用手段。事件循环本身是单线程的，所以要用满多核确实需要多个工作进程；但对一个异步 IO 服务来说，<strong>单机并发上限往往不由本机 CPU 决定，而由下游决定</strong>。你的进程在等大模型返回时几乎不耗 CPU，此时再加进程不会让吞吐变大，只会让下游更快被打满，然后以限流、排队或超时的形式把问题退回给你。</p>
+
+<div class="arch-diagram">  单机并发能力是怎么组合出来的
+  ─────────────────────────────
+  容器 / 主机
+  ├── worker 进程 1 ── 事件循环 1 ── 在飞请求 N1 ── 工作线程池 1
+  ├── worker 进程 2 ── 事件循环 2 ── 在飞请求 N2 ── 工作线程池 2
+  └── worker 进程 W ── 事件循环 W ── 在飞请求 NW ── 工作线程池 W
+        ↑                                              ↑
+        进程数决定能用到几个核                   线程池是「每进程一份」的，
+        （单个事件循环只用一个核）               不是全机共享一份，
+                                                所以容量要按进程数乘起来看
+
+  异步接口的单机上限通常写在下游身上：
+      并发上限 ≈ 下游允许的并发数（或你自己设的限流额度）
+      吞吐上限 ≈ 该并发数 ÷ 下游单次耗时
+
+  所以扩容前先回答一个问题：瓶颈在本机 CPU，还是在下游配额？
+  答错了，加进程只会把下游打挂得更快，而账单先涨。</div>
+
+<p>进程数的选择因此分两种情况。如果接口是纯 IO 编排（典型的大模型网关），进程数只需覆盖住序列化、鉴权这些零碎 CPU 开销，通常远小于核数，然后把注意力放到<strong>自己给下游设的并发限额</strong>上——这是真正决定容量的旋钮。如果进程里确实有 CPU 工作（不该有，但过渡期可能有），进程数才需要接近核数，并且要为每进程一份的线程池乘上倍数重新算内存。</p>
+
+<p class="data-asof"><strong>实现差异</strong> · 工作进程数、单进程并发上限、连接积压队列长度、keep-alive 超时这些都有对应的服务器启动参数，不同 ASGI 服务器的参数名不同，同一服务器不同版本也可能调整。本节只给需要调的<strong>量</strong>，具体参数名请查你所用服务器当前版本的文档，也别忘了容器编排层的副本数与探针超时同样参与这笔账。</p>
+
+<h3>三个必须监控的信号</h3>
+
+<table>
+<tr><th>信号</th><th>含义</th><th>异常时指向</th></tr>
+<tr><td><strong>事件循环延迟</strong></td><td>一个本该按时被唤醒的回调实际晚了多久</td><td>持续几十毫秒以上 = 循环被阻塞，回去查第二节的阻塞来源</td></tr>
+<tr><td><strong>线程池排队</strong></td><td>限流器已借出令牌数、等待者数量</td><td>借出数贴住容量 = 同步写法饱和，按第三节改造</td></tr>
+<tr><td><strong><span class="term">在飞请求数</span></strong></td><td>已接收但尚未返回响应的请求数</td><td>持续上涨而吞吐不涨 = 正在积压，需要背压或限流</td></tr>
+</table>
+
+<p>这三个信号必须同时有，因为它们两两组合才能区分故障类型：循环延迟高而线程池空闲，是 <code>async def</code> 里有阻塞；线程池饱和而循环延迟正常，是同步写法撞了容量；在飞请求数高而前两者都正常，问题在下游或在你自己的限流额度上。缺任何一个，排查就会退化成第三节那种猜三天的过程。</p>
+
+<pre><code># 事件循环延迟：自己埋最直接，起一个后台任务持续测偏差
+async def loop_lag_probe(interval=0.5):
+    last = time.perf_counter()
+    while True:
+        await asyncio.sleep(interval)
+        now = time.perf_counter()
+        lag_ms = (now - last - interval) * 1000   # 偏差就是被占住的时长
+        metrics.observe("loop_lag_ms", lag_ms)
+        last = now</code></pre>
+
+<p>除自埋之外，解释器的异步调试模式也会在回调耗时超过阈值时记录告警，适合在预发环境常开；阈值与开启方式见 <a href="py_async_debugging.html">PY34</a>。指标与结构化日志的对接方式见 <a href="py_logging_observability.html">PY43</a>，注意上报链路本身必须是非阻塞的，否则监控会变成新的阻塞源。</p>
+
+<h3>压测纪律：必须包含慢下游场景</h3>
+
+<div class="highlight">
+<p><strong>阻塞类问题只在下游变慢时才暴露。</strong>这是本卡最容易被跳过的一条纪律。用本地假实现或毫秒级 mock 压测，第二节和第三节的两类问题<strong>一个都测不出来</strong>——单次耗时 5 毫秒时，40 个令牌足够支撑约 8000 QPS，线程池永远不会饱和；循环被占住 5 毫秒也看不出异常。所以压测必须包含：注入几百毫秒到数秒延迟的慢下游、下游超时与返回错误、以及流式场景下客户端中途断开。同时压测要按<strong>阶梯抬并发</strong>并同时记录端到端耗时与应用内耗时——正是「吞吐封顶、延迟按比例上涨、而应用埋点不变」这个组合，把复盘里那个服务的根因指了出来。</p>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>默认写 <code>async def</code> + 异步客户端；确认全链路都能 <code>await</code></li>
+<li>只有同步库可用时，老实写普通 <code>def</code>，并按 N / T 算清容量天花板</li>
+<li>依赖项、中间件、日志与指标链路一并检查同异步，别只看处理函数</li>
+<li>连接池、客户端、模型对象在 <code>lifespan</code> 建一次，退出时正确释放</li>
+<li>流式响应的清理写进 <code>finally</code>，保证断开时上游连接被关掉</li>
+<li>本地推理与重解析挪到独立进程或独立服务，Web 进程只做 IO 编排</li>
+<li>同时采集端到端耗时与应用内耗时，把差值本身做成一条曲线</li>
+<li>循环延迟、线程池排队、在飞请求数三条曲线常态化上报并配告警</li>
+<li>压测带上慢下游、下游报错与客户端断开，并阶梯抬并发</li>
+<li>自己给下游设并发限额，让排队发生在可控的地方（见 PY31）</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在 <code>async def</code> 里调同步客户端、同步 ORM 或做重计算</li>
+<li>拿「这次调用应该很快」当理由，在异步函数里保留阻塞调用</li>
+<li>把线程池容量往上调当作性能优化，而不去改写法</li>
+<li>异步处理函数配阻塞的同步依赖，然后以为这个接口已经异步了</li>
+<li>每个请求新建连接池、新建客户端或重新加载模型权重</li>
+<li>只埋处理函数内部耗时，没有任何端到端口径的数据</li>
+<li>把 CPU 密集的本地推理丢进线程池，指望它能并行</li>
+<li>用毫秒级 mock 压测就宣布容量达标</li>
+<li>遇到延迟高先加进程、加副本，不先判断瓶颈在本机还是下游</li>
+<li>把断开后仍需完成的业务逻辑留在响应生成器里</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>这张卡真正要留下的只有两句：阻塞的代价由全服务平摊，所以永远不要在事件循环里阻塞；排队的时间不在你的埋点里，所以永远要有一个端到端口径的数字作对照。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>我应该默认写 async def 还是普通 def？</summary>
+<div class="answer">默认写 <code>async def</code>，但前提是你确认函数体里所有耗时操作都能 <code>await</code>。这个前提不成立时，普通 <code>def</code> 反而是正确选择——它至少不会卡住事件循环。所以决策顺序是：先看有没有异步客户端可用，有就用 <code>async def</code> 全链路异步；没有，就用普通 <code>def</code> 让框架放进线程池，并按容量除以单次耗时算出这个接口的吞吐天花板，确认它能满足需求。最糟的选择是 <code>async def</code> 里留着阻塞调用，那比两种正确写法中任何一种都差得多。顺带一提，对于纯内存、微秒级的接口，两种写法都可以，普通 <code>def</code> 会多付一次线程调度开销，差别小到不值得考虑。</div>
+</details>
+
+<details>
+<summary>在 async def 里包一层把阻塞推到线程，和直接写普通 def 有什么区别？</summary>
+<div class="answer">两者最终都落到同一个工作线程池、共享同一份令牌，容量特征完全一样。区别在粒度和意图。写普通 <code>def</code> 是把<strong>整个函数体</strong>交给线程，包括里面那些本来很快的部分，写法最省事。在 <code>async def</code> 里显式推送，是只把<strong>那一段确实阻塞的调用</strong>交给线程，函数其余部分仍在循环里，可以自由地 <code>await</code> 别的异步资源。所以选择标准是：整个处理函数都是同步逻辑，就写普通 <code>def</code>；主体是异步编排、只有一两处必须调同步代码，就写 <code>async def</code> 并显式推送那几处。具体推送方式和它的取消语义见 <a href="py_executor_bridge.html">PY33</a>。</div>
+</details>
+
+<details>
+<summary>把线程池容量从默认值调到 500，是不是就能扛住高并发了？</summary>
+<div class="answer">短期会缓解，但它不是修法，而且有三笔代价。第一，每个线程都要占栈内存，几百个线程的内存和调度开销都是真实的，还会拖累同进程里其他工作。第二，这个容量是<strong>每进程一份</strong>的，多进程部署时要乘上进程数再算总量，很容易一不小心把机器内存算超。第三也最关键：抬高容量只是把排队从你的线程池挪到了下游——下游的连接数、配额、限流都有自己的上限，被打满之后问题会以更难排查的形式回来（下游超时、批量报错、限流拒绝）。正确顺序是先改写法把秒级等待搬回事件循环，再根据实测决定是否需要小幅调整容量，并且调整必须在事件循环内进行（在导入期设置是无效的）。</div>
+</details>
+
+<details>
+<summary>应用埋点显示接口耗时正常，客户端却观测到很高的延迟，怎么确认是排队？</summary>
+<div class="answer">做三件事就能定性。第一，把端到端耗时（接入层或客户端侧）与应用内耗时画在同一张图上，看差值是否随并发上升而放大——排队的特征是差值随并发线性增长，而应用内耗时几乎不动。第二，读容量限流器的统计信息，看已借出令牌数是否长期贴住容量、有多少任务在等待；同时看在飞请求数，两者的落差就是队列长度。第三，做阶梯压测：吞吐封顶而延迟按比例上涨，是排队；吞吐和延迟一起恶化，更可能是下游变慢。补充一个快捷手段：抓一次全线程栈，如果几十个工作线程都停在同一个同步调用上，改造点当场就找到了。</div>
+</details>
+
+<details>
+<summary>同步的数据库 ORM 还能在 FastAPI 里用吗？</summary>
+<div class="answer">能用，但必须清楚代价并守住两条线。第一条线是写法：使用同步 ORM 的处理函数和依赖项都要写成普通 <code>def</code>，绝不能出现在 <code>async def</code> 里。第二条线是容量：这类接口的吞吐上限约等于线程池容量除以单次查询耗时，查询快（毫秒级）时完全够用，一旦有慢查询或事务持有时间长，容量会掉得很快，而且它和同进程里所有其他同步代码抢同一份令牌。另外别忘了 ORM 自己的连接池上限会和线程数相互作用——线程数大于连接池容量时，多出来的线程只是在连接池门口再排一次队。如果这个服务的数据库访问是主要路径且并发目标高，迁移到异步驱动是更值得做的投资。</div>
+</details>
+
+<details>
+<summary>流式接口的客户端断开之后，我的生成器还在跑吗？</summary>
+<div class="answer">框架层面会监听断开事件并停止继续推进你的生成器，所以正常情况下它不会一直跑下去。但有两件事必须你自己做。一是<strong>释放上游</strong>：连向大模型的那条连接是你开的，必须在 <code>finally</code> 里关掉，否则它会挂着直到超时，白占下游并发配额（这也是流式服务最常见的连接泄漏来源）。二是<strong>决定业务语义</strong>：如果已经生成的内容需要落库或计费，这段逻辑不能写在响应生成器里——生成器会被取消，它不会执行完。把它挪到独立的后台任务，用「启动任务 + 单独的流式查看接口」这种结构，断开只影响查看，不影响任务。至于断开在代码里的具体表现（抛特定异常还是直接被取消），各版本和各服务器组合并不一致，按 <code>finally</code> 写最稳。</div>
+</details>
+
+<details>
+<summary>本地模型推理为什么不适合放线程池？我把它写成普通 def 不就行了吗？</summary>
+<div class="answer">写成普通 <code>def</code> 确实能让它离开事件循环，这一步是对的，但线程池不是终点。原因是解释器锁：纯 Python 或未释放锁的扩展代码在持锁期间无法真正并行，几个工作线程只是在轮流使用同一个核，总吞吐不会因为多开线程而变大（<a href="py_gil_free_threading.html">PY25</a> 讲清了这个约束）。更糟的是它把令牌长时间借走，同进程里那些本来很轻的同步接口会被一起饿死。所以正确做法是挪出进程：小规模用独立进程池（<a href="py_multiprocessing.html">PY27</a>），规模上去就拆成独立推理服务。例外是那些在计算期间主动释放解释器锁的数值库，放线程里确实能并行——但这是库的实现细节，必须实测确认 CPU 真的吃到了多核，不能靠库名推断。</div>
+</details>
+
+<details>
+<summary>一台机器该开几个工作进程？按核数开对不对？</summary>
+<div class="answer">要看进程里到底在等什么。如果接口是纯 IO 编排（调大模型、查向量库、读缓存），进程在等待期间几乎不耗 CPU，按核数开进程是浪费——真正的容量旋钮是你给下游设的并发限额，以及下游本身允许的并发数。这种服务通常用远小于核数的进程数就能跑满下游配额，多余的进程只会增加内存占用和连接数。如果进程里还有实打实的 CPU 工作（序列化很重、有本地推理没挪走），进程数才需要接近核数，同时要记得工作线程池是每进程一份的，内存要按进程数乘起来重新估。共同的前提是：扩容之前先用监控回答「瓶颈在本机 CPU 还是在下游」，这个判断错了，加进程和加副本都只会让下游更早崩、账单更早涨。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

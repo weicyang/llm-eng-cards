@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY50 · Polars 惰性执行与流式处理</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、换工具的真实动机</a>
+<a href="#s2">二、表达式是核心抽象</a>
+<a href="#s3">三、惰性与查询优化</a>
+<a href="#s4">四、流式与超过内存的数据</a>
+<a href="#s5">五、与现有生态的衔接</a>
+<a href="#s6">六、迁移与选型判据</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY50 · Polars 惰性执行与流式处理</h1>
+<p class="subtitle">列式布局与多线程 / 表达式与上下文 / 查询计划与两种下推 / 流式引擎与静默回退 / 生态互通与选型判据</p>
+
+<div class="intuition-box">
+<p>上一套工具让你一步一步算，Polars 让你先把「要算什么」完整说完，再由引擎决定「怎么算」。这一句差别带来的不是语法上的小改动，而是性能排查的入口整个换了位置——从「哪一行代码慢」变成「引擎给我生成了什么计划」。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、换工具的真实动机：三个结构性差异，而不是「新的更快」</h2>
+
+<p>「Polars 比 Pandas 快」这句话对决策没有任何帮助。快多少完全取决于你在做什么：一万行的表上两者的差别小于你敲回车的手速差异，而在一亿行上做多列聚合，差的可能是一个量级。真正值得换的理由不是速度这个结果，而是产生速度差的那三个结构性设计——因为这三点同时决定了「什么场景下它根本不会更快」。</p>
+
+<h3>差异一：列式内存布局 + 默认多线程</h3>
+
+<p><span class="term">列式内存布局</span>指同一列的所有值在内存里连续排放。这个安排对分析型负载天然有利：你算某列的均值时读到的每一个缓存行都是有用数据，而按行存放时每读一次缓存行都要顺带拖进来同一行里你并不关心的其它字段。Polars 的内存格式遵循 Apache Arrow 这一列式标准，这一点在第五节讲互通时还会再用到。</p>
+
+<p>更重要的是执行侧：Polars 的引擎用 Rust 写成，默认就会把工作切给多个线程，不受 CPython 全局解释器锁的约束——因为真正在跑的循环根本不在 Python 字节码层。这和 <a href="py_multiprocessing.html">PY27</a> 里为了绕开锁而开多进程的思路正好相反：这里不需要你做任何并行化动作，把任务描述交出去就行。</p>
+
+<div class="arch-diagram">  同一张表，两种内存排法，两种代价
+  ─────────────────────────────────────────────────────────────
+  按行存放（传统记录式）
+    [id0 ts0 amt0 city0][id1 ts1 amt1 city1][id2 ts2 amt2 city2]...
+     只想算 amt 的均值，却把 id / ts / city 一起拖进了缓存
+
+  按列存放（列式，Polars / Arrow）
+    id   : [ id0  id1  id2  id3  id4  id5 ... ]   ← 这一整条都没碰
+    ts   : [ ts0  ts1  ts2  ts3  ts4  ts5 ... ]   ← 这一整条也没碰
+    amt  : [amt0 amt1 amt2 amt3 amt4 amt5 ... ]   ← 只顺序扫这一条
+    city : [ c0   c1   c2   c3   c4   c5  ... ]
+
+  并行也变简单：amt 这一条可以直接切成 N 段
+    段1 → 线程1 ┐
+    段2 → 线程2 ├─→ 各自求 (sum, count) ─→ 合并 ─→ 均值
+    段3 → 线程3 ┘   这一层跑在 Rust 里，不经过解释器锁</div>
+
+<h3>差异二：表达式先构建，再整体优化</h3>
+
+<p>逐步执行的模型里，每一行代码都立刻产生一个中间结果，引擎没有机会知道你下一步要干什么。Polars 的写法是先把整段变换描述成一棵表达式树，执行时机由你显式触发——中间这段空隙就是优化器的工作窗口。第三节会讲它具体能做什么。</p>
+
+<h3>差异三：能处理超过内存的数据（有前提）</h3>
+
+<p>流式引擎按批处理数据，内存占用不随数据量线性增长，于是「数据比内存大」不再是一个硬墙。这是三点里收益最大、但也最容易踩坑的一点——第四节整节都在讲它的前提条件，请不要看到这句就直接上生产。</p>
+
+<h3>两者的关键差别放在一张表里</h3>
+
+<table>
+<tr><th>维度</th><th>Pandas</th><th>Polars</th><th>这个差别意味着什么</th></tr>
+<tr><td>执行模型</td><td>每一步立刻求值，产生中间对象</td><td>可选惰性：先构建查询计划，触发时整体执行</td><td>优化器有了介入窗口；代价是要学会看计划</td></tr>
+<tr><td>并行</td><td>默认单线程，多核要靠外部方案</td><td>引擎默认多线程，与解释器锁无关</td><td>单机多核不再需要你手写并行代码</td></tr>
+<tr><td>内存上限</td><td>大体上受「数据能否装进内存」约束</td><td>流式模式下可处理超内存数据（并非所有算子都支持）</td><td>数据规模天花板抬高，但需要主动验证</td></tr>
+<tr><td>行索引</td><td>有 <code>Index</code>，参与对齐、分组、连接</td><td><strong>没有行索引</strong>，行序就是唯一的行身份</td><td>去掉了一整类隐式对齐困惑，也废掉了一套写法习惯</td></tr>
+<tr><td>缺失值</td><td>数值列的缺失常借用浮点 NaN 表达</td><td>有独立的 null，与 NaN 是两回事</td><td>整型列带缺失不会被迫提升成浮点</td></tr>
+<tr><td>字符串列</td><td>默认是指向 Python 对象的数组</td><td>列式紧凑存储，扫描时不逐元素回解释器</td><td>字符串密集的表上差距最明显</td></tr>
+</table>
+
+<h3>「没有行索引」值得单独讲</h3>
+
+<p>Pandas 的 <code>Index</code> 是一个强大但昂贵的抽象。它带来的收益是按标签取数和自动对齐；带来的成本是一整类只有踩过才知道的困惑：两个 Series 相加时按索引对齐而不是按位置、<code>reset_index</code> 忘了加 <code>drop=True</code> 于是多出一列、分组后索引变成多层、切片有时按标签有时按位置。这些问题的共同点是——它们都不是你的业务逻辑，是索引这个机制的副作用。</p>
+
+<p>Polars 干脆不要行索引。表就是一组等长的列，行没有名字，只有位置。想要行号就显式造一列（<code>with_row_index</code>），想按某列对齐就显式写 <code>join</code>。代价很直接：习惯了 <code>df.loc[...]</code>、<code>set_index</code>、<code>reindex</code> 这套写法的人，等于要重新学一套。收益也很直接：<strong>没有隐式对齐，就没有隐式对齐带来的错</strong>。这类「去掉一个机制来消掉一类错误」的取舍，在工程上通常比「加一个机制来解决问题」更划算。</p>
+
+<div class="intuition-box">
+<p>换工具的决策依据不是「谁的跑分高」，而是「我的瓶颈是不是正好落在它改掉的那三件事上」。数据装得进内存、单次几秒钟跑完、团队全在旧生态上，那三个优势一个都用不上。</p>
+</div>
+
+<p class="data-asof"><strong>数据截止 2026-09</strong> · Polars 的稳定版为 1.44.1（2026-08-26），2.0 仍处于候选版阶段（2.0.0rc1，2026-09-02），最大的默认值变化是惰性查询默认走流式引擎。本卡凡涉及默认行为都会标注版本；API 名与参数以你实际安装版本的官方文档为准。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、表达式是核心抽象：它描述动作，不返回数据</h2>
+
+<p>学 Polars 最大的认知门槛不在语法，而在一个反直觉的事实：<code>pl.col("amount") * 0.93</code> 这个东西<strong>不是一列数据</strong>，它是一段「拿 amount 这一列乘 0.93」的描述。你可以把它存进变量、塞进列表、在四个不同地方复用，而它一次都还没有算过。</p>
+
+<p>这就是 <span class="term">表达式</span>：一个「对某些列做什么」的可组合描述。它之所以重要，是因为三件事都依赖这个性质——描述可以被优化器改写（第三节）、可以被并行调度（互不依赖的表达式同时跑）、可以被复用而不产生任何中间数据。</p>
+
+<h3>上下文决定表达式在哪里生效</h3>
+
+<p>表达式本身不知道自己要被用来干什么，这件事由 <span class="term">上下文</span> 决定。上下文就是那几个接收表达式的方法：<code>select</code>（选出这些结果作为新表）、<code>with_columns</code>（在原表上追加或覆盖列）、<code>filter</code>（把表达式当作布尔条件筛行）、<code>group_by(...).agg(...)</code>（分组后逐组求值）。</p>
+
+<p>关键在于同一个表达式在不同上下文里<strong>含义完全一致</strong>，变的只是它作用的范围。<code>pl.col("amount").mean()</code> 放在 <code>select</code> 里是全表均值，放在 <code>agg</code> 里是每组均值——你不需要为分组场景换一套写法，也不需要记「分组之后该用哪个方法」。这种一致性是这套 API 真正省脑子的地方。</p>
+
+<div class="arch-diagram">  表达式：一段描述，不是数据
+  ─────────────────────────────────────────────────────────
+    e = pl.col("amount") * 0.93          ← 此刻什么都没算
+        └ 意思是「取 amount 列，逐元素乘 0.93」
+
+  把同一个 e 放进不同上下文，含义不变，作用范围变
+  ┌──────────────────┬──────────────────────────────────────┐
+  │ select(e)        │ 求值，结果作为新表的一列              │
+  │ with_columns(e)  │ 求值，追加/覆盖到原表上               │
+  │ filter(e.gt(100))│ 求值成布尔列，用来选行                │
+  │ agg(e.mean())    │ 在每个分组内部求值                    │
+  └──────────────────┴──────────────────────────────────────┘
+
+  互不依赖的表达式天然可并行
+    with_columns(
+        pl.col("a").sum() ,   ← 线程 1  ┐
+        pl.col("b").mean(),   ← 线程 2  ├─ 同时跑，因为
+        pl.col("c").max() ,   ← 线程 3  ┘  它们读的是不同列
+    )
+  并且没有「先算 a 再基于 a 算 b」这种隐式顺序：
+  同一个 with_columns 里的表达式都看到调用前的那张表</div>
+
+<p>上图最后两行藏着一个必须记住的规则：同一个 <code>with_columns</code> 里的多个表达式，看到的都是<strong>调用之前</strong>的那张表。想用刚造出来的列，就再起一个 <code>with_columns</code>。这不是限制，正是它能并行的前提。</p>
+
+<h3>为什么这套写法天然没有链式赋值那类歧义</h3>
+
+<p>Pandas 里 <code>df[df.a &gt; 0]["b"] = 1</code> 这类写法之所以危险，根源在于「取出来的东西到底是原表的视图还是副本」这个问题<strong>取决于运行时的内存布局</strong>，你从代码上看不出来，只能收到一句警告或者干脆静默失败。这个话题在 <a href="py_copy_semantics.html">PY10</a> 里有更一般的讨论：任何「不确定手上是别名还是副本」的 API 都会长出这类坑。</p>
+
+<p>表达式模型从根上绕开了它：表达式不返回数据，所以你拿不到任何可以就地赋值的对象，也就写不出链式赋值。要改一列只有一条路——在 <code>with_columns</code> 里描述新值，得到一张新表。「改哪张表」和「改成什么」在语法上就被分开了，歧义没有生存空间。</p>
+
+<h3>从旧思维到表达式思维的对照</h3>
+
+<table>
+<tr><th>想做的事</th><th>旧生态的典型写法</th><th>表达式写法</th><th>思维上的变化</th></tr>
+<tr><td>按列取值</td><td><code>df["amount"]</code> 直接拿到一列数据</td><td><code>pl.col("amount")</code> 拿到一段描述</td><td>手上的东西从「数据」变成「计划」</td></tr>
+<tr><td>条件筛选</td><td><code>df[df["amt"] &gt; 100]</code> 用布尔数组做下标</td><td><code>df.filter(pl.col("amt") &gt; 100)</code></td><td>不再借用下标语法表达「筛行」</td></tr>
+<tr><td>新增列</td><td><code>df["net"] = df["amt"] * 0.93</code> 原地改</td><td><code>df.with_columns(net=pl.col("amt") * 0.93)</code></td><td>从就地修改变成返回新表</td></tr>
+<tr><td>分组聚合</td><td><code>df.groupby("city")["amt"].sum()</code></td><td><code>df.group_by("city").agg(pl.col("amt").sum())</code></td><td>聚合用的还是同一个表达式，只是换了上下文</td></tr>
+<tr><td>条件赋值</td><td><code>df.loc[cond, "tag"] = "vip"</code></td><td><code>pl.when(cond).then(...).otherwise(...)</code></td><td>分支也是表达式，可以嵌进任何上下文</td></tr>
+</table>
+
+<p>这张表里最值得体会的是最后一列。四行的共同方向是同一个：<strong>手上握着的从「一块数据」变成「一段还没执行的描述」</strong>。这个转变和 <a href="py_iterators_generators.html">PY12</a> 讲生成器时的那个转变是同一回事——生成器也是先描述「怎么产生」，直到被消费才真的产生。语言层面早就有这套思路，Polars 只是把它搬到了表结构上。</p>
+
+<pre><code>import polars as pl
+
+net = pl.col("amount") * 0.93          # 存起来，一次都没算
+q = (
+    df.filter(pl.col("status") == "paid")
+      .with_columns(net.alias("net"), pl.col("city").str.to_uppercase())
+      .group_by("city")
+      .agg(net.sum().alias("net_sum"), pl.len().alias("n"))
+)</code></pre>
+
+<p>注意 <code>net</code> 这个变量在 <code>with_columns</code> 和 <code>agg</code> 里各用了一次，含义一致、写法一致。这就是表达式可复用性的实际收益：业务口径（比如「净额 = 金额乘费率」）只定义一次，后面所有用到它的地方自动跟着变。</p>
+
+<div class="intuition-box">
+<p>把 <code>pl.col(...)</code> 读成「那一列」而不是「那一列的数据」。它是一个名词性的指代，等到被放进某个上下文里才有值。一旦这个语感建立起来，这套 API 剩下的部分基本可以靠猜。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、惰性与查询优化：性能问题先看计划，再看代码</h2>
+
+<p>Polars 有两套入口。<code>read_parquet</code> 这类函数立刻把数据读进来，返回一张真实的表；<code>scan_parquet</code> 这类函数什么都不读，只返回一个 <span class="term">惰性帧</span>——一个记录着「将来要做什么」的对象。你在它上面链式调用得到的还是惰性帧，直到调用 <code>collect()</code> 才真正执行。</p>
+
+<p>这个延迟不是为了省事，而是为了攒信息。当整段流水线都描述完之后，优化器能看到全貌，于是可以做一些在逐步执行模型里<strong>原理上不可能</strong>的事情。</p>
+
+<h3>两个最该知道的优化：谓词下推与投影下推</h3>
+
+<p><span class="term">谓词下推</span>是把过滤条件尽量推到靠近数据源的位置，最理想的情况是推进读取本身：读 Parquet 时，读取器先看每个行组的列统计信息（最小值、最大值），如果条件不可能成立就整组跳过，连解压都不做。<span class="term">投影下推</span>是只读真正被用到的列——表有 120 列而你的查询只碰 5 列，那就只解码这 5 列。</p>
+
+<p>这两条合起来解释了大文件上那种「不太合理」的速度：它并不是把同样的活干得更快，而是<strong>根本没干大部分活</strong>。也正因如此，收益高度依赖你的查询和文件结构：过滤性很强又落在有序列上，可能跳掉九成数据；全表全列聚合则一点都省不下来。这也是为什么本卡不给具体倍数——倍数是你的数据和查询决定的，不是工具属性。</p>
+
+<div class="arch-diagram">  同一段逻辑，两种执行方式
+  ═════════════════════════════════════════════════════════════
+  【立即执行】每一步都算完、都落一份中间结果
+
+    read_parquet("90天.parquet")
+        │  读进全部 120 列 / 全部 7.2 亿行      ← 内存峰值在这
+        ▼  中间结果 1（完整的一张大表）
+    filter(city == "SH")
+        │  刚读进来的绝大部分行，现在扔掉
+        ▼  中间结果 2
+    select("city","amount")
+        │  刚解码的 118 列，现在扔掉
+        ▼  中间结果 3
+    group_by("city").agg(...)
+        ▼  最终结果（很小）
+    代价：读了不需要的数据，解码了不需要的列，
+          还为每一步各留了一份中间对象
+
+  【惰性执行】先收集意图，整体优化，一次执行
+
+    scan_parquet(...).filter(...).select(...).group_by(...).agg(...)
+        │  这一整串什么都没做，只是攒起一棵计划树
+        ▼  collect()  ← 唯一的触发点
+    ┌──────────────── 优化器改写计划 ────────────────┐
+    │ 谓词下推：city == "SH" 推进 scan，按行组统计    │
+    │           信息跳过整组，不解压                  │
+    │ 投影下推：scan 只解码 city / amount 两列        │
+    │ 切片下推、公共子计划消除、表达式简化 ...        │
+    └────────────────────┬───────────────────────────┘
+                         ▼
+               一次扫过，边读边过滤边聚合
+    代价：少读了大部分数据，没有逐步的中间结果</div>
+
+<h3>优化器主要在做哪几类改写</h3>
+
+<table>
+<tr><th>优化</th><th>它做什么</th><th>什么时候收益大</th></tr>
+<tr><td>谓词下推</td><td>把过滤尽量推到扫描层，按文件统计信息跳过整块数据</td><td>过滤选择性强，且文件按该列有序或分区</td></tr>
+<tr><td>投影下推</td><td>扫描时只解码查询真正用到的列</td><td>宽表（几十上百列）只取少数列</td></tr>
+<tr><td>切片下推</td><td>只取需要的那一段，不为被切掉的部分物化结果</td><td>取前若干行看一眼的探索式查询</td></tr>
+<tr><td>公共子计划消除</td><td>同一份扫描或子树被多个分支使用时缓存一次</td><td>一份源数据算出多个口径再拼回去</td></tr>
+<tr><td>表达式简化</td><td>常量折叠、把昂贵算子换成等价的便宜算子</td><td>普遍有效，通常不用你操心</td></tr>
+<tr><td>类型强制</td><td>把类型对齐到能算且占内存最小的形态</td><td>混合类型运算，顺带省内存</td></tr>
+</table>
+
+<p>这张表出自 Polars 官方的优化列表，条目会随版本增减，具体清单请查你所用版本的用户指南。要记的不是清单本身，而是一件事：<strong>这些改写全部自动发生，你能做的是检查它有没有发生</strong>。</p>
+
+<h3>怎么查看计划</h3>
+
+<p><code>explain()</code> 打印将要执行的计划文本，默认给的是<strong>优化后</strong>的版本；传 <code>optimized=False</code> 得到你原样写下的那一版。把两者对着看，就能确认下推到底有没有生效。计划要<strong>从下往上</strong>读：最底下是扫描节点，上面逐层是变换。</p>
+
+<pre><code>q = (pl.scan_parquet("events/*.parquet")
+       .filter(pl.col("city") == "SH")
+       .select("city", "amount"))
+
+print(q.explain(optimized=False))   # 你写下的样子
+print(q.explain())                  # 优化器改写后的样子
+# 在 scan 节点上确认两件事：
+#   PROJECT 只列出 city / amount（投影下推生效）
+#   SELECTION 里出现 city == "SH"（谓词下推生效）</code></pre>
+
+<p>如果 <code>scan</code> 节点上写的是「全部列」，或者过滤条件还留在上层节点上，说明下推没发生。最常见的原因是你在中间插了一个优化器看不穿的操作——比如一个自定义 Python 函数。优化器无法知道那个函数会读哪些列、会不会依赖被过滤掉的行，只能保守地放弃下推。这就是为什么在惰性管道里插 Python 回调的代价远不止那个函数本身的耗时。</p>
+
+<div class="highlight">
+<p><strong>一条纪律：惰性管道的性能问题，先看计划，再看代码。</strong>理由是这类问题的根因分布和普通 Python 代码完全不同。普通代码慢，慢在你写的那些行里，<a href="py_profiling_optimization.html">PY42</a> 那套剖析方法直接可用；惰性管道慢，绝大多数时候慢在「优化器没能按你预期改写计划」——某个下推被一个不透明的操作挡住了，或者某个算子选了昂贵的实现。这类原因在剖析器里表现为「时间都花在引擎内部」，看不出任何线索，而在计划文本里一眼就能看到。顺序搞反的代价很实在：你会花半天优化一段本来只占 3% 耗时的代码。</p>
+</div>
+
+<div class="intuition-box">
+<p>惰性模式下你写的不是「执行步骤」，而是「需求说明」。既然交出去的是需求，验收的对象自然就是引擎返回的那份方案——看计划不是高级技巧，是这套模型里的基本操作。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、流式处理与超过内存的数据：以及那个不会报错的回退</h2>
+
+<p><span class="term">流式引擎</span>把查询拆成按批推进的流水线：读一批、算一批、把结果攒到聚合状态里、丢掉这一批，再读下一批。因为任何时刻内存里只有若干批数据加上聚合状态，内存占用就不随输入规模线性增长——这才是「能处理比内存大的数据」的机制来源。</p>
+
+<h3>先把版本差异说清楚</h3>
+
+<p>这块的默认行为正在变，写代码时必须知道自己在哪一侧：</p>
+
+<table>
+<tr><th>场景</th><th>Polars 1.x（含 1.44）</th><th>Polars 2.0（2026-09 为候选版）</th></tr>
+<tr><td><code>LazyFrame.collect()</code> 默认引擎</td><td><code>"auto"</code> 解析为 in-memory</td><td><code>"auto"</code> 解析为 streaming</td></tr>
+<tr><td>显式选流式</td><td><code>collect(engine="streaming")</code></td><td>同样支持，作为显式声明仍推荐写上</td></tr>
+<tr><td><code>sink_*</code>（如 <code>sink_parquet</code>）</td><td>本来就走流式</td><td>不受该默认值变化影响</td></tr>
+<tr><td><code>explain()</code> / <code>show_graph()</code></td><td>需显式传 <code>engine="streaming"</code> 才渲染流式计划</td><td>同样需要显式传</td></tr>
+<tr><td>行序保证</td><td>in-memory 下多数算子顺带稳定</td><td>流式下 <code>join</code>/<code>group_by</code>/<code>unpivot</code> 等<strong>不保证行序</strong></td></tr>
+<tr><td>退回旧默认</td><td>无需</td><td><code>pl.Config.set_engine_affinity("in-memory")</code> 或按查询传 <code>engine=</code></td></tr>
+</table>
+
+<p>行序那一行是 2.0 升级时最容易被忽略的坑：它不会报错，只会让依赖「偶然有序」的下游逻辑安静地出错。官方升级指南把这一条单独标成了危险提示。需要顺序就显式 <code>sort</code>，或者在支持的算子上传 <code>maintain_order</code>。另外 2.0 移除了 <code>LazyFrame.profile()</code>，理由是它为 in-memory 引擎设计，在并发的流式引擎下逐节点计时会给出误导性结果——这是个信号：<strong>流式下的性能观测手段和 in-memory 下不是一套</strong>。</p>
+
+<h3>最关键的一条：不支持流式的算子会静默回退</h3>
+
+<p>Polars 的很多算子有流式实现，但不是全部。有些操作本质上需要看到全量数据，有些只是还没实现流式版本。遇到这种算子时，引擎的处理方式是<strong>回退到 in-memory 引擎</strong>——官方文档的原话是「用户不需要知道这件事，但它对排查内存或性能问题可能有用」。</p>
+
+<p>请把这句话读两遍。「用户不需要知道」意味着：<strong>没有异常、没有警告、没有返回值上的任何区别</strong>。你的代码照样跑出正确结果。在测试数据上它甚至跑得更快——因为小数据本来就不该走流式。等上了全量数据，那个回退点会把整段数据拉进内存，然后你的进程被内核杀掉。</p>
+
+<div class="arch-diagram">  流式生效 vs 静默回退
+  ═════════════════════════════════════════════════════════════
+  【流式生效】内存占用与输入规模基本无关
+
+    源文件 96 GB
+      │  批1   批2   批3   批4  ...  批N
+      ▼   │     │     │     │         │
+    scan ─┼─────┼─────┼─────┼─── ... ─┤  一次只在手上拿几批
+      ▼   ▼     ▼     ▼     ▼         ▼
+    filter → 算 → 丢 → 算 → 丢 ... → 算
+      ▼
+    聚合状态（按分组键累加，只和分组基数有关，不和行数有关）
+      ▼
+    sink_parquet 边算边往外写
+    峰值内存 ≈ 批大小 × 并发 + 聚合状态   ← 常数级
+
+  【静默回退】管道中有一个算子没有流式实现
+
+    scan ──批──批──批──▶ ┌─────────────────────────┐
+                          │ 某算子：无流式实现       │
+                          │ 引擎决定：回退 in-memory │
+                          └───────────┬─────────────┘
+                                      ▼
+                          把上游结果全部物化到内存
+                          峰值内存 ≈ O(数据量)  ← 墙在这
+
+    发生了什么提示？没有。
+      · 不抛异常      · 不打警告（除非开了详细日志）
+      · 返回值完全正确 · 测试数据上更快
+    唯一的线索在执行计划里，而计划要你主动去看</div>
+
+<h3>怎么确认流式真的生效了</h3>
+
+<p>这一节是全卡最该落到手上的部分。按可靠性从低到高排，有这么几条手段。</p>
+
+<p><strong>一是读流式物理计划。</strong>注意一个陷阱：<code>explain()</code> 和 <code>show_graph()</code> <strong>只有在显式传 <code>engine="streaming"</code> 时</strong>才渲染流式计划，否则给的是优化后的逻辑计划——你从里面看不出哪里回退。图形化的 <code>show_graph(plan_stage="physical", engine="streaming")</code> 会画出物理图，图例标注各节点的内存强度，比读文本更容易发现问题（它需要本机装有 graphviz）。</p>
+
+<pre><code># 关键：不传 engine 的 explain 看不出流式，别拿它当依据
+print(q.explain(engine="streaming"))
+
+# 有 graphviz 的话画物理图，图例会标出各节点的内存强度
+q.show_graph(plan_stage="physical", engine="streaming")
+
+# 运行期日志（环境变量名以当前版本文档为准）
+with pl.Config(verbose=True):
+    q.collect(engine="streaming")</code></pre>
+
+<p><strong>二是开详细日志。</strong><code>pl.Config.set_verbose(True)</code>（或上面的上下文写法）会打开引擎的额外日志。Polars 还有一批 <code>POLARS_*</code> 环境变量可以控制详细程度、临时目录等，但这批变量长期处于「存在但未正式文档化」的状态，名称和语义在版本间变过。要用就先在你的版本上试一次确认，不要照抄博客。</p>
+
+<p><strong>三是做内存标定，这条最可靠。</strong>前两条都依赖你猜对了当前版本的 API 名，而这一条不依赖任何 API：用 1 倍、2 倍、4 倍规模的样本各跑一遍，记录进程峰值内存。流式真的生效时，峰值内存三次应该基本持平；如果峰值跟着样本规模一起翻倍，就是没流式，无论计划里写了什么。这个方法的好处是它验的是你真正关心的性质——内存不随数据量增长——而不是某个 API 的输出文本。</p>
+
+<p><strong>四是把内存上限变成测试失败。</strong>给批处理任务的测试环境设一个明确低于生产的内存上限（容器 <code>--memory</code>、cgroup、或进程内 <code>resource.setrlimit</code>），并用足够大的样本跑一遍。回退一旦发生，在 CI 里就会炸，而不是在生产的凌晨三点。<a href="py_memory_gc.html">PY23</a> 讲过 RSS 不降不代表泄漏；这里关心的是另一个方向——峰值 RSS 的增长斜率，而不是它的绝对值。</p>
+
+<p><strong>五是能用 <code>sink_*</code> 就不要用 <code>collect()</code>。</strong><code>collect()</code> 的语义是「把结果全部装进内存」，哪怕中间是流式的，最终结果也得装下。<code>sink_parquet</code> 这类接口边算边往外写，结果不需要驻留内存，因此才是真正意义上的「超内存输入 + 超内存输出」。批处理任务的默认写法应该是 sink，不是 collect。</p>
+
+<pre><code># 批处理任务的默认形状：scan 进来，sink 出去，中间不落地
+(pl.scan_parquet("s3://bucket/events/dt=*/*.parquet")
+   .filter(pl.col("event") == "order_paid")
+   .group_by("city", "dt")
+   .agg(pl.col("amount").sum().alias("gmv"), pl.len().alias("n"))
+   .sink_parquet("out/gmv.parquet"))
+# 结果不需要装进内存；collect() 则必须装下整个结果</code></pre>
+
+<div class="highlight">
+<p><strong>生产事故复盘：测试环境 40 秒跑完，全量上被内核杀掉。</strong>一个日级 GMV 聚合任务，测试用单天分区：约 820 万行、12 列、Parquet 压缩后 1.1 GB，跑 40 秒，容器峰值内存 2.3 GB，一切正常。上到全量 90 天：约 7.2 亿行、Parquet 约 96 GB，容器内存上限 16 GB。任务跑到第 6 分钟被 OOM 杀掉，退出码 137，日志里除了被截断的进度什么都没有——没有 Polars 的异常，没有警告。</p>
+<p>排查走了两天弯路：先怀疑数据倾斜，按城市拆分批跑，某几个分片照样挂；又怀疑读取层，把 96 GB 换成本地盘，无效。转折点是拿 <code>explain(engine="streaming")</code> 打了一次流式计划，和之前一直在看的 <code>explain()</code> 对照——后者看起来完全正常，前者里有一段落在了 in-memory 节点上：管道中一个算子在该版本没有流式实现，引擎把它上游的结果整体物化了。这个回退从第一天就存在，只是 1.1 GB 的数据物化进内存毫无压力，测试永远不会暴露它。</p>
+<p>修复是两件事：把那个算子改写成流式支持的等价形式（分组聚合 + 一次 join 替代原先的整表变换），以及把输出从 <code>collect()</code> 后再写盘改成 <code>sink_parquet</code> 直接落盘。修复后全量 90 天跑 28 分钟，容器峰值内存 3.4 GB，和单天的 2.3 GB 处在同一量级——这个「峰值不随规模增长」才是流式生效的验收标志。同时补了两条防线：CI 里用 8 天样本跑并把容器内存限到 4 GB，以及在管道的单元测试里断言流式计划中不出现 in-memory 节点。</p>
+</div>
+
+<div class="intuition-box">
+<p>流式这件事上，正确的心态是「默认它没生效，直到我验证过」。因为这套机制的失败方式是静默的：结果对、测试绿、小数据更快，唯一的症状出现在生产数据量上，而那时你已经没有排查的从容了。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、与现有生态的衔接：共存，而不是替换</h2>
+
+<p>「要不要换成 Polars」这个问题本身问错了。真实的工程现实是两者长期共存：用 Polars 做重活（读大文件、过滤、聚合），把体量已经缩小的结果交给旧生态去做画图、统计建模、以及那些只有旧生态才有的专门功能。决定用哪个的不是喜好，是<strong>这一步的数据规模和下游要什么</strong>。</p>
+
+<h3>列式内存标准让传数据不必序列化</h3>
+
+<p>这种混用之所以代价低，靠的是 Apache <span class="term">Arrow</span> 这个列式内存标准。当两个库都把数据按同一套列式布局放在内存里，「传数据」就退化成交换指向同一块内存的元信息——不需要序列化成字节流、不需要反序列化、不需要多占一份内存。这就是 <span class="term">零拷贝</span>。</p>
+
+<p>但零拷贝<strong>有条件</strong>，不满足条件就退化成一次完整复制。这是实践中最容易出问题的地方，所以值得一条条列清楚。</p>
+
+<table>
+<tr><th>转换方向</th><th>写法</th><th>拷贝行为</th><th>要注意</th></tr>
+<tr><td>Polars → pandas（默认）</td><td><code>df.to_pandas()</code></td><td><strong>会复制</strong>：Arrow 转 NumPy</td><td>峰值内存至少翻倍；数值列的 null 变成 NaN，整型列被迫提升为浮点</td></tr>
+<tr><td>Polars → pandas（Arrow 背后）</td><td><code>df.to_pandas(use_pyarrow_extension_array=True)</code></td><td>可零拷贝</td><td>需装 pyarrow；保留 null 语义；之后在 pandas 侧做 Arrow 不支持的运算仍可能触发转回 NumPy</td></tr>
+<tr><td>pandas → Polars</td><td><code>pl.from_pandas(df)</code></td><td>源列是 Arrow 背后时可零拷贝，NumPy 背后则复制</td><td>想零拷贝要让 pandas 侧先用 Arrow 类型（读取时指定 Arrow 后端）</td></tr>
+<tr><td>Polars ↔ Arrow 表</td><td><code>df.to_arrow()</code> / <code>pl.from_arrow(...)</code></td><td>通常零拷贝</td><td>和别的 Arrow 生态组件对接时的通用中转</td></tr>
+<tr><td>Polars → NumPy</td><td><code>df.to_numpy()</code></td><td>一般会复制</td><td>NumPy 要的是单一 dtype 的稠密数组，多类型表必然重排</td></tr>
+</table>
+
+<p>表里第一行是最常被忽略的一条：<code>to_pandas()</code> 这个看起来很轻的调用会把内存占用推到至少两倍。一个刚用流式把 96 GB 压成 200 MB 结果的管道，在最后一行 <code>to_pandas()</code> 上把内存翻倍通常没事；但如果中间结果还有几个 GB，这一行就是新的内存峰值。</p>
+
+<pre><code># 重活交给 Polars，结果小下来之后再过桥
+small = (pl.scan_parquet("events/*.parquet")
+           .filter(pl.col("dt") >= "2026-09-01")
+           .group_by("city").agg(pl.col("amount").sum())
+           .collect(engine="streaming"))
+
+pdf = small.to_pandas(use_pyarrow_extension_array=True)  # 走 Arrow，不复制
+# 只有在下游明确要 NumPy 语义时，才用默认的 to_pandas()</code></pre>
+
+<h3>什么情况下不该换</h3>
+
+<div class="highlight">
+<p><strong>三种情况下换工具是净亏损。</strong>第一，<strong>数据量小</strong>。几十万行以内、单次几秒钟跑完的活，两者的耗时差异被你读代码、查文档、改写逻辑的时间彻底盖住。这时切换成本是确定的支出，收益是零点几秒——这笔账怎么算都是亏。第二，<strong>团队与下游全在旧生态上</strong>。如果协作者读不懂表达式写法、下游脚本假定拿到的是带索引的对象、notebook 模板全按旧 API 写成，那么你引入的不是性能提升而是一道翻译层，每次交接都要付一次转换的代价和一次沟通的代价。第三，<strong>依赖只有旧生态才有的专门能力</strong>。围绕旧生态积累了十几年的专用库（统计建模、特定领域的时间序列工具、各种可视化封装）往往只接受旧生态的对象，硬换等于自己去补这些轮子。</p>
+</div>
+
+<p>这三条的共同点是：它们都不是技术能力问题，是<strong>总成本问题</strong>。换工具的收益只有在瓶颈真的落在第一节那三个差异上时才存在，而上面三种情况的瓶颈都在别处。</p>
+
+<div class="intuition-box">
+<p>不要问「该用哪个」，问「这一步的数据有多大、下一步要拿它干什么」。前一个问题没有答案，后一个问题每次都有明确答案——而且答案会随着管道推进而变化，所以同一个项目里两个工具同时在用是正常状态，不是设计缺陷。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、迁移与选型判据：从新写的管道开始</h2>
+
+<p>把前面五节收敛成可以直接用的判断。先是选型：按数据规模和场景查表，而不是按个人偏好。</p>
+
+<table>
+<tr><th>场景</th><th>建议</th><th>理由</th></tr>
+<tr><td>小数据交互式分析（十万行级，notebook 里探索）</td><td>用手上顺的那个，通常是旧生态</td><td>瓶颈是你的思考速度，不是执行速度；生态和肌肉记忆的价值更高</td></tr>
+<tr><td>单机大数据批处理（千万到十亿行，装得进内存或接近）</td><td>Polars 惰性模式，<code>scan_*</code> 进 <code>collect()</code> 出</td><td>多线程 + 两种下推的收益最集中，且不必引入分布式框架</td></tr>
+<tr><td>超过内存的数据（单机放不下）</td><td>Polars 流式，<code>scan_*</code> 进 <code>sink_*</code> 出，并按第四节验证</td><td>唯一能在单机上做完的路；前提是全链路真的流式</td></tr>
+<tr><td>需要 SQL 接口（口径由分析师维护）</td><td>Polars 的 SQL 入口，或直接用嵌入式分析数据库</td><td>SQL 写的口径仍能吃到同一套优化器；纯 SQL 团队用嵌入式数据库可能更顺</td></tr>
+<tr><td>规模已超单机（TB 级、需要多机）</td><td>分布式方案，Polars 只做单机那一段</td><td>单机引擎的上限终究是单机的内存带宽和磁盘</td></tr>
+<tr><td>下游是统计建模 / 特定领域专用库</td><td>Polars 做预处理，过桥后交给旧生态</td><td>专用库只认旧生态的对象，硬换等于重写轮子</td></tr>
+</table>
+
+<div class="arch-diagram">  选型决策：按问题走，不按偏好走
+  ═════════════════════════════════════════════════════════════
+   这一步的数据装得进内存吗？
+        │
+        ├── 装得进，而且只有十万行级
+        │      └─▶ 用你已经熟的那个。切换成本 大于 收益，别折腾
+        │
+        ├── 装得进，但是千万行以上 / 跑一次要分钟级
+        │      └─▶ Polars 惰性：scan_* ──▶ 链式变换 ──▶ collect()
+        │           先 explain() 确认两种下推都生效
+        │
+        └── 装不进
+               │
+               ├── 单机磁盘还放得下，算完结果也很大
+               │      └─▶ Polars 流式：scan_* ──▶ 变换 ──▶ sink_*
+               │           必须做第四节的四条验证，否则等于没流式
+               │
+               └── 连单机磁盘都放不下 / 需要多机
+                      └─▶ 分布式方案；Polars 退居为单机节点上的算子
+
+   横切一刀：下游要不要旧生态的专用能力？
+        要 ──▶ Polars 只做「把数据变小」那一段，之后过 Arrow 桥
+        不要 ─▶ 全链路留在 Polars 里，少一次转换就少一个内存峰值</div>
+
+<h3>SQL 入口值得单独提一句</h3>
+
+<p>Polars 提供 SQL 接口（<code>pl.SQLContext</code>，以及惰性帧上的 <code>sql</code> 方法），SQL 写出来的查询同样会进优化器。这在团队里很实用：业务口径由熟 SQL 的人维护，管道的读取、流式配置、输出由工程侧维护，两边在同一个引擎里汇合。如果你的团队几乎只写 SQL，那也该老实评估一下嵌入式分析数据库——那条路上 SQL 是一等公民，可能比在 Python 里包一层更顺手。</p>
+
+<pre><code>ctx = pl.SQLContext(events=pl.scan_parquet("events/*.parquet"))
+q = ctx.execute("""
+    SELECT city, SUM(amount) AS gmv
+    FROM events WHERE dt >= '2026-09-01' GROUP BY city
+""")                       # 返回惰性帧，仍然可以 explain / sink
+print(q.explain(engine="streaming"))</code></pre>
+
+<h3>迁移策略：从新写的管道开始</h3>
+
+<p>迁移最常见的失败模式是「为了统一而重写」。某人换了工具觉得好，于是提议把仓库里所有数据处理代码都迁过来，包括那些跑了两年、每晚三分钟跑完、从没出过问题的脚本。这类重写的收益是零（它们本来就没有性能问题），风险却是实打实的：口径在重写中被改掉、边界情况被漏掉，而这些错误往往要到下个月的报表对不上时才暴露。</p>
+
+<p>务实的顺序是三步。第一，<strong>新写的管道直接用新工具</strong>——没有历史包袱，学习成本落在本来就要花的开发时间里。第二，<strong>只迁真的有痛点的老管道</strong>：跑得太慢挡住了交付节奏，或者已经因为内存问题挂过。这时迁移有明确的验收标准（耗时、峰值内存），做完能说清收益。第三，<strong>迁移时保留一条对账通道</strong>：新旧两套并行跑一段时间，逐字段比对输出。前面提到的行序不保证问题，就是靠这种比对才能发现的——两套结果的集合一样但顺序不同，只看前几行完全看不出来。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>批处理默认写成 <code>scan_*</code> 进、<code>sink_*</code> 出，不要中途 <code>collect()</code> 落地</li>
+<li>性能问题先 <code>explain()</code>，确认两种下推都生效，再动代码</li>
+<li>要判断流式，用显式传 <code>engine="streaming"</code> 的计划，不要拿默认 <code>explain()</code> 当依据</li>
+<li>用 1／2／4 倍样本标定峰值内存，持平才算流式真的生效</li>
+<li>测试环境设一个明确低于生产的内存上限，让回退在 CI 里就炸</li>
+<li>把业务口径存成表达式变量复用，别在多处重复同一段计算</li>
+<li>依赖行序就显式 <code>sort</code>，或在支持的算子上传 <code>maintain_order</code></li>
+<li>在 <code>pyproject.toml</code> 里锁定次版本，升级前读一遍升级指南</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>因为「新工具更快」就把跑得好的老管道全部重写</li>
+<li>在小数据上换工具——切换成本远大于那零点几秒</li>
+<li>在惰性管道中间插自定义 Python 函数，那会挡住下推</li>
+<li>只在小样本上验证流式，就直接上全量数据</li>
+<li>默认 <code>to_pandas()</code> 处理还有几个 GB 的中间结果（内存翻倍）</li>
+<li>把「测试跑得快」当成流式生效的证据——小数据本来就不该走流式</li>
+<li>照抄博客里的 <code>POLARS_*</code> 环境变量名，不在自己版本上验证</li>
+<li>升级到 2.0 后不检查行序假设，就相信下游逻辑没受影响</li>
+</ul>
+</div>
+</div>
+
+<p>最后回到第一节那个判断。这套东西真正给你的不是「更快」，而是一个把「要算什么」和「怎么算」分开的模型：你负责说清需求，引擎负责生成方案，而你要学的新技能只有一个——<strong>看方案</strong>。<a href="py_comprehensions_lazy.html">PY13</a> 讲推导式与惰性时说过，惰性的价值在于把「描述」和「求值」解耦；Polars 是这条思路在表结构上的完整版本，代价也和那里一样：你得知道求值到底发生在哪一刻。</p>
+
+<div class="intuition-box">
+<p>迁移的正确单位是「一条管道」，不是「一个仓库」。每条管道单独判断：它有痛点吗？痛点落在那三个结构性差异上吗？验收标准是什么？三个问题都有答案再动手，剩下的老代码就让它继续安静地跑。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>惰性模式和流式模式是一回事吗？</summary>
+<div class="answer">不是，是两层不同的东西。惰性说的是「什么时候执行」：你链式写下的变换不立刻跑，先攒成一棵查询计划，等 <code>collect()</code> 或 <code>sink_*</code> 触发才执行。它的收益是给优化器一个改写计划的窗口（谓词下推、投影下推等），和内存无关——一个惰性查询完全可以把全部数据拉进内存再算。流式说的是「怎么执行」：把计划编译成按批推进的流水线，一次只在内存里拿几批数据。所以关系是单向的：流式必须建立在惰性之上（引擎需要看到完整计划才能编排流水线），但惰性不一定流式。实际后果是，你可能写了一个完美的惰性查询、也看到优化器漂亮地下推了条件，结果它还是把所有数据都装进了内存——因为你没选流式引擎，或者选了但被某个算子挡了回去。</div>
+</details>
+
+<details>
+<summary>为什么我的流式查询还是把内存吃满了？</summary>
+<div class="answer">按概率从高到低查四件事。第一，管道里有算子没有流式实现，引擎静默回退到了 in-memory——这是最常见的原因，用显式传 <code>engine="streaming"</code> 的执行计划确认，别用默认的 <code>explain()</code>，它渲染的不是流式计划。第二，你用 <code>collect()</code> 收尾：即使中间环节都是流式的，<code>collect()</code> 的语义就是把最终结果全部装进内存，结果本身很大时照样 OOM，改成 <code>sink_*</code> 边算边写。第三，聚合状态本身很大：流式的内存优势建立在「聚合状态远小于输入」上，如果你按一个基数上亿的键分组，那个哈希表就是新的内存墙，这时要么先降基数，要么改成分区跑。第四，管道里插了自定义 Python 函数，它既挡住下推也可能要求物化。顺序上先查第一条，它的性价比远高于其它三条。</div>
+</details>
+
+<details>
+<summary>没有行索引，那原来用索引做的事怎么办？</summary>
+<div class="answer">拆成三类分别处理。按标签取行（<code>loc</code> 那类）改成显式过滤：把原来的索引留作一个普通列，然后 <code>filter(pl.col("key") == ...)</code>，写出来更长但意图更明确。自动对齐（两个对象相加时按索引配对）改成显式 <code>join</code>：这是收益最大的一项，因为原来的隐式对齐在索引有重复值或部分缺失时行为相当反直觉，显式 join 则强迫你回答「用什么键、哪种连接方式、对不上怎么办」这三个本来就该回答的问题。需要行号的场合用 <code>with_row_index</code> 造一列出来，但先想清楚是不是真的需要——很多时候「需要行号」只是旧写法的残留，业务上并不依赖它。习惯之后你会发现代码变长了一点，但「这一步到底在按什么对齐」永远能从代码上看出来。</div>
+</details>
+
+<details>
+<summary>为什么不该在惰性管道里插自定义 Python 函数？</summary>
+<div class="answer">三重代价叠在一起。第一重是优化器失明：它不知道你的函数会读哪些列、会不会依赖被过滤掉的行，只能保守地不把下推穿过这个节点——于是投影和谓词下推同时失效，扫描退回成读全表全列，而这往往是整个查询最大的那笔开销。第二重是并行退化：Python 回调要回到解释器执行，受全局解释器锁约束，引擎那套多线程执行在这一段变成串行。第三重是流式受阻：这类节点常常需要把上游结果物化才能逐行喂进去，于是触发第四节那个静默回退。实际的处理顺序是：先花时间找内置表达式的等价写法（覆盖面比大多数人以为的宽，字符串、时间、列表、结构体都有成套的方法），确实找不到再考虑写扩展；万不得已要用 Python 函数时，尽量把它挪到管道的最后一段——那时数据已经小了，三重代价的绝对值也小了。</div>
+</details>
+
+<details>
+<summary>行序不保证这件事，实际会怎么咬到我？</summary>
+<div class="answer">它的危险在于症状极晚出现。流式引擎对不需要顺序的算子（连接、分组、逆透视等）不保证输出行序，而你的测试很可能一直在无意中依赖「偶然有序」：比对输出时只看了前几行、断言用的是「第 0 行等于某值」、或者下游拿结果直接往有序的文件里追加。这些在 in-memory 引擎下能稳定通过，换到流式后集合仍然正确、顺序变了，于是断言时好时坏——甚至同一份数据两次运行结果的顺序都不同，因为顺序取决于线程调度。处理办法有两条：真的需要顺序就显式 <code>sort</code>（成本诚实地写在代码里），或者在支持的算子上传 <code>maintain_order</code>。更重要的是排查手段：比对两套实现的输出时，永远先按业务键排序再逐字段比，不要比文件的字节。</div>
+</details>
+
+<details>
+<summary>官方说流式引擎快好几倍，我能按这个数字做容量规划吗？</summary>
+<div class="answer">不能，两个理由。第一，那个数字是厂商在自己的基准集上、拿新引擎和自家旧引擎比出来的聚合结果，它回答的是「同一个库换引擎能好多少」，不是「换掉另一个库能好多少」，两件事被舆论经常混为一谈。第二，这类收益的方差极大，因为它主要来自「少读数据」而不是「算得更快」：过滤性强、列很多而你只取几列、文件按过滤键有序，这些条件凑齐时可能跳掉九成数据；反过来全表全列做一次聚合，该读的一个字节都省不掉，差距就退回到列式布局和多线程带来的那部分。所以容量规划只能用你自己的数据和查询实测：拿一份有代表性的样本，记录耗时和峰值内存，按规模做两三个点的标定再外推。任何从博客上抄来的倍数，在你的场景里都只是一个先验，不是预算依据。</div>
+</details>
+
+<details>
+<summary>什么时候该放弃单机、上分布式？</summary>
+<div class="answer">判据不是数据量的绝对值，是三个信号。第一，流式已经确认生效、也用了 <code>sink_*</code> 不落地，单次任务耗时仍然长到挡住交付节奏（比如日级任务跑不完一天）。第二，瓶颈已经从内存转到了 I/O 带宽或单机磁盘容量——数据连落盘都放不下，再优化计算也没用。第三，任务本身有天然的分片维度（按日期、按地区），拆开后各片之间无需交换数据。前两个信号说明单机到顶了，第三个信号说明拆开的代价低。要强调的是先做前两条确认：分布式引入的运维复杂度、调试难度、以及数据在节点间移动的成本都是长期负担，而很多「必须上分布式」的场景，实际上是单机管道里有一个没被发现的静默回退，或者一个本来可以下推却被 Python 回调挡住的过滤。先把单机这条路走到真正的尽头，再谈多机。</div>
+</details>
+
+<details>
+<summary>现在该装 1.x 还是 2.0？</summary>
+<div class="answer">写到本卡时（2026-09）稳定版是 1.44.1，2.0 还处在候选版阶段，没有发布日期。默认装到的是 1.x，要拿 2.0 得显式指定版本号。建议是生产继续锁在 1.x 的具体版本上，同时开一个分支装 2.0 候选版跑一遍测试——目的不是追新，是提前发现那批默认值变化会不会咬到你，其中最值得查的就是行序假设，因为它不会报错。另外提醒两点。一是依赖里写宽松的版本范围有风险：正式版发布的那天，你的构建会在你没选的时间点上换掉默认执行引擎。二是 Rust 侧的版本号是另一条线，「2.0」说的是 Python 包；如果你的系统里嵌的是 Rust 库，这次变更暂时和你无关。所有这些结论都会随时间失效，升级前请读当前版本的升级指南，而不是照抄本卡。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

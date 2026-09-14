@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY27 · 多进程与 CPU 密集任务</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么 CPU 密集要换进程</a>
+<a href="#s2">二、三种启动方式与平台默认值</a>
+<a href="#s3">三、进程池的正确用法</a>
+<a href="#s4">四、数据传递才是瓶颈</a>
+<a href="#s5">五、典型陷阱</a>
+<a href="#s6">六、选型与替代</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY27 · 多进程与 CPU 密集任务</h1>
+<p class="subtitle">进程隔离换来真并行 / spawn·fork·forkserver 与 3.14 的默认变更 / ProcessPoolExecutor 与 chunksize / 序列化才是真正的瓶颈 / 上多进程之前的三个问题</p>
+
+<div class="intuition-box">
+<p>多进程不是「把线程换成进程」这么简单的替换。你换来的是真正吃满多核的能力，付出的是「两个进程之间没有共享内存」这个硬约束——从此每一个参数、每一个返回值都要被序列化再传过去。收益按核数算，代价按数据量算，这两笔账不算清楚，并行之后更慢是常态。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、为什么 CPU 密集要换进程</h2>
+
+<p>在决定用什么并发模型之前，只需要回答一个问题：这段代码的时间是花在<strong>算</strong>上，还是花在<strong>等</strong>上。这两类任务的最优解完全不同，而且互相用错时不但没有收益，还会显著变慢。下面这张表是判定依据，它比任何理论都管用——因为每一行你都能在自己的机器上当场验证。</p>
+
+<table>
+<tr><th>观察点</th><th>算为主（CPU 密集）</th><th>等为主（IO 密集）</th></tr>
+<tr><td>跑起来时单核占用</td><td>贴着 100% 不下来</td><td>个位数到几十，反复起落</td></tr>
+<tr><td>时间具体花在哪</td><td>循环、正则、编解码、压缩、数值计算</td><td>网络往返、磁盘、数据库、等外部命令</td></tr>
+<tr><td>把并发度从 1 调到 4</td><td>总耗时几乎不变</td><td>总耗时接近线性下降</td></tr>
+<tr><td>采样看调用栈</td><td>热点在你自己写的 Python 函数里</td><td>热点在 <code>recv</code> / <code>read</code> / <code>poll</code> 这类等待上</td></tr>
+<tr><td>对症的方案</td><td>向量化、原生扩展、<strong>多进程</strong></td><td>asyncio 或线程池，进程帮不上忙</td></tr>
+</table>
+
+<p>第三行是最省事的判据：不用装任何工具，把并发度翻两番跑一遍就知道了。如果总耗时纹丝不动，说明瓶颈是算力而不是等待，那才轮到本卡讨论的方案。</p>
+
+<h3>进程比线程多了什么</h3>
+
+<p>一个 Python 进程里跑着一份完整的解释器状态：它自己的对象堆、自己的模块表、自己的那把全局解释器锁。CPython 的默认构建里，同一个进程内<strong>同一时刻只有一个线程能执行 Python 字节码</strong>，所以纯 Python 的计算任务开再多线程也只能占满一个核。<span class="term">进程隔离</span>正是绕过这一点的办法：每开一个进程，就多出一份独立的解释器状态和一把独立的锁，多个核才真的能同时干活。</p>
+
+<div class="arch-diagram">  同一台 8 核机器上，两种模型跑同一个纯 Python 计算任务
+
+  多线程（单进程）                     多进程（8 个进程）
+  ┌──────────────────────────┐        ┌────┐┌────┐┌────┐┌────┐
+  │  一份对象堆 / 一份模块表  │        │堆 A││堆 B││堆 C││堆 D│
+  │  一把全局解释器锁         │        │锁 A││锁 B││锁 C││锁 D│
+  │                          │        └────┘└────┘└────┘└────┘
+  │  T1 ██░░░░░░░░░░░░░░░░   │         P1 ████████████████
+  │  T2 ░░██░░░░░░░░░░░░░░   │         P2 ████████████████
+  │  T3 ░░░░██░░░░░░░░░░░░   │         P3 ████████████████
+  │  T4 ░░░░░░██░░░░░░░░░░   │         P4 ████████████████
+  └──────────────────────────┘        （各占一个核，真并行）
+   实际吞吐 ≈ 1 个核                    实际吞吐 ≈ 6～7 个核
+   （字节码执行被那把锁串起来）          （少掉的是通信与调度开销）
+
+  代价写在中间那道墙上：
+    线程之间传对象 = 传一个引用，零成本
+    进程之间传对象 = 序列化 → 写管道 → 反序列化，按字节收费</div>
+
+<p>右边那句「实际吞吐 ≈ 6～7 个核」不是打折的客套话。进程数等于核数时，操作系统调度、主进程分发任务、结果回传都要占用时间，8 核拿到 6 到 7 倍加速已经算很健康；如果实测只有 2 到 3 倍，通常说明数据传递的成本吃掉了大半收益，第四节会专门算这笔账。</p>
+
+<div class="intuition-box">
+<p>线程共享内存所以通信免费、并行受限；进程隔离内存所以并行彻底、通信收费。选哪个，取决于你的任务是「算得多」还是「传得多」。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、三种启动方式与平台默认值</h2>
+
+<p>「创建一个子进程」在 <code>multiprocessing</code> 里有三种实现，官方称为<span class="term">启动方式</span>（start method）。它们的差别不是风格问题：启动开销能差一个数量级，能不能继承父进程的状态也完全不同，而且同一段代码换个平台就可能换了实现。这是多进程代码「在我 Linux 上好好的、到同事 Mac 上就崩」的头号原因。</p>
+
+<table>
+<tr><th>启动方式</th><th>子进程怎么来的</th><th>启动开销</th><th>继承父进程状态吗</th><th>主要风险</th></tr>
+<tr><td><code>spawn</code></td><td>全新启动一个解释器，重新导入主模块</td><td>最高（几十到几百毫秒）</td><td>不继承，只收到 pickle 过来的东西</td><td>必须写主模块守卫；参数必须可 pickle</td></tr>
+<tr><td><code>fork</code></td><td>直接复制当前进程的地址空间（<span class="term">写时复制</span>）</td><td>最低（毫秒级）</td><td>全盘继承，包括已 import 的模块和全局变量</td><td>与线程混用不安全，可能直接死锁</td></tr>
+<tr><td><code>forkserver</code></td><td>先起一个干净的单线程服务进程，之后由它来 fork</td><td>中等（首次起服务较慢，之后很快）</td><td>只继承服务进程启动那一刻的状态</td><td>仅 POSIX 可用；预加载要显式声明</td></tr>
+</table>
+
+<p>三者的取舍可以概括成一句话：<code>fork</code> 快但危险，<code>spawn</code> 慢但干净，<code>forkserver</code> 用一个「干净的分身」把两者的优点凑到了一起——它启动的那个服务进程是单线程的，从它身上 fork 出来的子进程自然躲开了 fork 的经典陷阱，同时又保留了 fork 的速度。</p>
+
+<h3>fork 到底危险在哪</h3>
+
+<p><code>fork</code> 只复制调用它的那一个线程，但会把整个进程的<strong>内存</strong>原样复制过去——包括其他线程当时正持有的那些锁。设想父进程里有一个后台线程正握着 <code>logging</code> 的内部锁，此时另一个线程调用了 <code>fork</code>：子进程一出生就拿到一份「已被锁住」的锁副本，而那个本该来解锁的线程在子进程里根本不存在。于是子进程第一次写日志就永久卡死，没有报错、没有超时、没有任何线索。</p>
+
+<p>麻烦在于「父进程里有别的线程」这件事往往不是你自己写的。一个 gRPC 客户端、一个 OpenTelemetry 导出器、一个连接池的健康检查、requests 底层的某个后台线程——任何一个第三方库都可能在你不知情的时候起了线程。这就是 CPython 逐步把 <code>fork</code> 从默认位置上撤下来的原因。</p>
+
+<table>
+<tr><th>版本</th><th>与启动方式有关的变化</th></tr>
+<tr><td>3.4</td><td><code>spawn</code> 在所有 POSIX 平台可用，部分 POSIX 平台加入 <code>forkserver</code></td></tr>
+<tr><td>3.8</td><td>macOS 默认从 <code>fork</code> 改为 <code>spawn</code>（系统库会自行起线程，fork 会导致子进程崩溃）</td></tr>
+<tr><td>3.12</td><td>能检测到进程是多线程时，<code>fork</code> 启动方式内部调用的 <code>os.fork()</code> 会发出 <code>DeprecationWarning</code></td></tr>
+<tr><td>3.14</td><td>POSIX 平台默认由 <code>fork</code> 改为 <code>forkserver</code>；<strong><code>fork</code> 不再是任何平台的默认值</strong>，需要它必须显式指定</td></tr>
+</table>
+
+<p class="data-asof"><strong>版本行为核对至 CPython 3.14 官方文档</strong> · 以上四行均取自 <code>multiprocessing</code> 与 <code>concurrent.futures</code> 文档中的「Changed in version」条目。需要提醒的是：3.14 在 POSIX 上把默认改成了 <code>forkserver</code>，而 macOS 自 3.8 起的默认是 <code>spawn</code>，这一条并没有被 3.14 改掉。任何时候都不要靠记忆推断当前默认值，直接打印 <code>multiprocessing.get_start_method()</code>。</p>
+
+<div class="arch-diagram">  同一段 pool.map(f, data)，三种启动方式下发生的事
+
+  spawn（Windows / macOS 默认）
+    父进程 ──┬─→ 启动全新解释器 → 重新 import 主模块 → 反 pickle 出 f → 执行
+             │        ↑
+             │        └─ 主模块顶层的代码会在这里再跑一遍！
+             └─→ …（每个 worker 重复一次）
+
+  fork（3.14 起不再是任何平台的默认）
+    父进程 ──┬─→ 复制整个地址空间 → 直接就有 f，无需 import、无需 pickle
+             │        ↑
+             │        └─ 也复制了别的线程持有的锁 → 可能一上来就死锁
+             └─→ …（极快）
+
+  forkserver（3.14 起 Linux 默认）
+    父进程 ──→ 先启一个单线程的 fork 服务进程（只在第一次付这份钱）
+                     │
+                     ├─→ fork 出 worker 1   ← 服务进程是单线程的，
+                     ├─→ fork 出 worker 2      所以 fork 是安全的
+                     └─→ fork 出 worker N
+             需要预热的模块用 set_forkserver_preload([...]) 显式声明</div>
+
+<h3>spawn 会重新导入主模块，所以守卫是必需的</h3>
+
+<p>看上图 <code>spawn</code> 那一支：子进程是一个全新的解释器，它必须重新 <code>import</code> 你的主模块才能找到要执行的那个函数。这意味着<strong>主模块顶层的每一行代码都会在每个子进程里再执行一遍</strong>。如果创建进程池的那行代码就写在顶层，子进程一导入主模块就又创建一个进程池，孙进程再导入再创建，直到把机器压垮。</p>
+
+<p>这就是 <code>if __name__ == "__main__":</code> 在多进程代码里从「好习惯」升级成「硬性要求」的原因：被导入时 <code>__name__</code> 是模块名而不是 <code>"__main__"</code>，守卫下面的代码就不会执行。<a href="py_modules_packages.html">PY08</a> 讲过这个变量的来历，这里只强调它在多进程语境下的后果。CPython 对这种情况有一层兜底检查，你通常会看到这样一段报错：</p>
+
+<pre><code>RuntimeError:
+    An attempt has been made to start a new process before the
+    current process has finished its bootstrapping phase.
+    This probably means that you are not using fork to start your
+    child processes and you have forgotten to use the proper idiom
+    in the main module</code></pre>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个数据清洗脚本在 Linux 上跑了半年没问题，某次同事在 Windows 上执行同一份代码，30 秒内机器上出现四百多个 python 进程，内存打满后被系统强制回收。代码没有任何改动，变的只是启动方式：Linux 上当时默认 <code>fork</code>，子进程不重新导入主模块；Windows 默认 <code>spawn</code>，于是顶层那行 <code>pool = Pool(8)</code> 递归自我复制。修复是加四行守卫。值得注意的是：从 3.14 起 Linux 默认也变成了 <code>forkserver</code>，同样会重新导入主模块——<strong>过去靠「Linux 上不写也没事」侥幸活着的代码，会在升级到 3.14 时集中暴露</strong>。</p>
+</div>
+
+<pre><code>import multiprocessing as mp
+from concurrent.futures import ProcessPoolExecutor
+
+def main() -&gt; None:
+    with ProcessPoolExecutor() as ex:
+        print(sum(ex.map(work, range(1000), chunksize=50)))
+
+if __name__ == "__main__":          # spawn / forkserver 下必须有
+    mp.set_start_method("spawn")    # 想固定行为就显式设置，只设一次
+    main()</code></pre>
+
+<p>显式调用 <code>set_start_method()</code> 有个额外好处：让代码在三个平台上表现一致，本地能复现线上的问题。它只能设置一次，且必须放在守卫里。如果你在写一个库而不是应用，官方的建议是<strong>不要替使用者选启动方式</strong>，而是允许对方传入自己的上下文对象（<code>get_context()</code> 的返回值）。</p>
+
+<div class="intuition-box">
+<p>启动方式决定了「子进程一出生知道多少事」。<code>fork</code> 全知，所以快也所以脏；<code>spawn</code> 一无所知，所以慢也所以干净。写代码时按「什么都不继承」的假设去写，三种方式下都不会错。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、进程池的正确用法</h2>
+
+<p>手写 <code>Process</code> 加 <code>Queue</code> 几乎总是走弯路：你要自己管生命周期、自己收结果、自己处理异常、自己保证退出时不留僵尸。标准库里已经有两套现成的池，日常应当优先用 <code>concurrent.futures.ProcessPoolExecutor</code>。</p>
+
+<table>
+<tr><th>接口</th><th>什么时候用</th><th>关键差异</th></tr>
+<tr><td><code>ProcessPoolExecutor</code></td><td><strong>默认选它</strong></td><td>与 <code>ThreadPoolExecutor</code> 同一套 API，切换只改一个类名；worker 异常终止会抛 <code>BrokenProcessPool</code>（3.3 起）</td></tr>
+<tr><td><code>multiprocessing.Pool</code></td><td>需要 <code>imap_unordered</code> 边算边出结果，或需要 <code>maxtasksperchild</code></td><td>API 更丰富但更老；worker 被外部杀死时的表现不如前者明确</td></tr>
+<tr><td><code>multiprocessing.Process</code></td><td>长期驻留的少量固定角色进程</td><td>不是池，适合「一个采集进程 + 一个写盘进程」这类拓扑</td></tr>
+</table>
+
+<p><code>ProcessPoolExecutor</code> 的最大好处不在功能，而在于它和线程池共用一套接口。你可以先用 <code>ThreadPoolExecutor</code> 把逻辑跑通，确认瓶颈确实在 CPU 之后，改一个类名就切到多进程——这个「一行切换」的能力，让你能用实测而不是猜测来决定用哪个。</p>
+
+<h3>max_workers 怎么定</h3>
+
+<p>不传 <code>max_workers</code> 时，<code>ProcessPoolExecutor</code> 自 3.13 起默认取 <code>os.process_cpu_count()</code>（此前是 <code>os.cpu_count()</code>）。这个改动对容器部署很重要：<code>os.cpu_count()</code> 报的是宿主机的核数，而 <code>os.process_cpu_count()</code> 会考虑 CPU 亲和性设置。在一个只分到 2 核的容器里，前者可能返回 96，于是你的池开出 96 个进程去抢 2 个核的时间片，上下文切换的开销远大于并行收益。</p>
+
+<table>
+<tr><th>场景</th><th>建议的 <code>max_workers</code></th><th>理由</th></tr>
+<tr><td>纯计算、独占机器</td><td>核数，或核数减一</td><td>留一个核给主进程收结果和系统本身</td></tr>
+<tr><td>容器里、有 CPU limit</td><td>按 limit 取整，别用宿主机核数</td><td>3.13 起的默认值已经会考虑亲和性，更早的版本要自己传</td></tr>
+<tr><td>每个 worker 吃几 GB 内存</td><td>可用内存 ÷ 单进程峰值内存</td><td>内存才是硬约束，超了会被 OOM Killer 收走</td></tr>
+<tr><td>Windows 平台</td><td>不超过 61</td><td>这是 <code>ProcessPoolExecutor</code> 的硬性上限，超过直接 <code>ValueError</code></td></tr>
+<tr><td>任务里还会调 NumPy / BLAS</td><td>核数 ÷ 每进程线程数</td><td>底层库自己也会开满线程，两层并行相乘会严重超订</td></tr>
+</table>
+
+<p>最后一行常被忽略：NumPy、PyTorch 这类库底层的 BLAS 默认就会开满物理核。你再开 8 个进程，实际线程数是 8 乘以每个进程的 BLAS 线程数，几十个线程抢 8 个核，性能反而低于单进程。这种情况下要么把 BLAS 的线程数限制成 1 再上多进程，要么干脆不上多进程——让底层库自己去并行。</p>
+
+<h3>chunksize：小任务的生死线</h3>
+
+<p><span class="term">chunksize</span> 这个参数默认是 1，意思是逐条派发：每一条数据都要单独走一遍「序列化 → 进管道 → 出管道 → 反序列化 → 回传结果」的流程。这套固定开销大约在几十微秒到几毫秒之间，取决于数据大小。如果单条任务本身只算几毫秒，开销和收益同量级，并行之后不会更快；如果只算几十微秒，那就是稳定的负优化。</p>
+
+<div class="arch-diagram">  40 万条小任务，8 个 worker
+
+  chunksize=1（默认）
+    主进程：打包 → 发 → 打包 → 发 → 打包 → 发 …  重复 40 万次
+            └─ 这一步是串行的，它就是新的瓶颈
+    worker：干 1.8 ms 的活 → 空转等下一条 → 干 1.8 ms → 空转 …
+    结果：主进程忙得冒烟，8 个核大部分时间在等
+
+  chunksize=2000
+    主进程：打包 200 个包裹 → 发完 → 收 200 次结果
+    worker：一口气干 2000 条（3.6 秒）→ 回传一次
+    结果：固定开销被摊薄 2000 倍，核基本吃满
+
+  经验起点：chunksize ≈ 任务总数 ÷ (worker 数 × 4 或 8)
+    ÷4 让每个 worker 只分到 4 批 → 摊薄最充分，但长尾会拖尾
+    ÷8 批次多一倍 → 负载更均匀，适合单任务耗时参差不齐的情况</div>
+
+<p>那个除以 4 到 8 的系数是在「摊薄固定开销」和「负载均衡」之间取平衡。批分得越大，调度开销越小，但最后一批可能让一个 worker 单独干很久而其他人都闲着；批分得越小越均匀，但固定开销的占比回升。任务耗时差异大就往小了调，任务耗时整齐就往大了调。</p>
+
+<h3>能传过去的只有可 pickle 的东西</h3>
+
+<p>子进程和父进程之间没有共享内存，函数和参数都要靠 <span class="term">pickle</span> 序列化后传输。pickle 序列化一个函数时存的其实只是「模块名 + 限定名」，靠子进程重新导入来还原——所以任何<strong>没有模块级名字</strong>的可调用对象都传不过去。</p>
+
+<table>
+<tr><th>对象</th><th>能传吗</th><th>说明与替代</th></tr>
+<tr><td>模块顶层定义的函数</td><td>可以</td><td>标准做法</td></tr>
+<tr><td><code>lambda</code></td><td>不行</td><td>没有限定名，改成具名函数</td></tr>
+<tr><td>闭包 / 嵌套函数</td><td>不行</td><td>把捕获的变量改成显式参数，函数提到模块顶层</td></tr>
+<tr><td>函数里局部定义的类的实例</td><td>不行</td><td>类定义提到模块顶层</td></tr>
+<tr><td><code>functools.partial(f, ...)</code></td><td>可以</td><td>前提是 <code>f</code> 和绑定的参数各自都能 pickle</td></tr>
+<tr><td>实例方法 <code>obj.method</code></td><td>可以</td><td>但整个 <code>obj</code> 会被一起序列化传过去，注意体积</td></tr>
+<tr><td>文件对象 / socket / 数据库连接</td><td>不行</td><td>在 worker 里用 <code>initializer</code> 各自建立，不要跨进程传</td></tr>
+</table>
+
+<p>倒数第二行是个容易忽略的体积陷阱：写 <code>ex.map(self.process, items)</code> 看着无害，但 <code>self</code> 上挂的所有属性都会跟着每一批任务被序列化一次。如果 <code>self</code> 里缓存着一个模型或一张大表，你就在无意中把它复制了几百遍。<a href="py_copy_semantics.html">PY10</a> 讲的深浅拷贝在这里有一个直接推论：<strong>跨进程传递永远是深拷贝，没有浅拷贝这个选项</strong>。</p>
+
+<pre><code># 每个 worker 启动时加载一次重资源，之后任务只传轻量参数
+_RULES = None
+
+def init_worker(path: str) -&gt; None:
+    global _RULES
+    _RULES = load_rules(path)      # 每进程一次，不随任务重复传
+
+def work(record_id: int) -&gt; int:
+    return apply_rules(_RULES, record_id)</code></pre>
+
+<p>这个 <code>initializer</code> 模式是多进程代码里最高频的一个写法，<code>ProcessPoolExecutor</code> 和 <code>Pool</code> 都支持。它把「重资源」的传输次数从「任务数」降到「worker 数」，量级差着好几个数量级——第四节的事故复盘就是这么修好的。</p>
+
+<div class="intuition-box">
+<p>进程池调优只有两个旋钮真正重要：<code>max_workers</code> 决定你能用几个核，<code>chunksize</code> 决定这些核有多少时间在真干活。前者错了浪费一半算力，后者错了可能一点收益都没有。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、数据传递才是瓶颈</h2>
+
+<p>多进程调优的直觉常常错在一个地方：以为瓶颈在「进程开得不够多」。绝大多数情况下瓶颈在数据。一次跨进程调用要付的钱，是把参数序列化成字节、写进管道、在对面反序列化，返回值再原路走一遍——这些工作全都不并行，其中序列化那一半还发生在主进程里，是彻头彻尾的串行段。</p>
+
+<div class="arch-diagram">  ex.submit(f, big_obj) 这一行背后发生的事
+
+  主进程                             管道（OS 内核缓冲）           worker
+  ────────                          ──────────────────           ────────
+  1. pickle.dumps(f)      ─┐
+  2. pickle.dumps(big_obj) ─┴─→ 字节流 ══════════════════→  3. pickle.loads()
+     （串行！所有 worker                                       4. 真正的计算
+       都排队等这一步）                                        5. pickle.dumps(结果)
+  8. pickle.loads(结果)  ←═══════════ 字节流 ══════════════─┘
+  ────────────────────────────────────────────────────────────────────
+  只有第 4 步是你想要的并行计算，
+  第 1、2、3、5、8 步都是为了跨越那道进程边界而付的过路费。
+
+  一个粗略的量级感（普通服务器，纯 Python 对象）：
+    pickle 往返 1 KB   ≈  几十微秒     ← 忽略不计
+    pickle 往返 1 MB   ≈  十几毫秒     ← 和一次中等计算同量级
+    pickle 往返 100 MB ≈  1 秒以上     ← 已经完全盖过并行收益
+    NumPy 数组走缓冲区协议会快不少，但「复制一份」这件事跑不掉</div>
+
+<p>把这张图记住，就能自己推出结论：<strong>并行的收益按核数增长，通信的成本按数据量增长</strong>。数据一大，后者会先撞线。所以真正的优化方向不是加进程，而是想办法让数据根本不用过管道。</p>
+
+<table>
+<tr><th>单次要传的数据量</th><th>推荐策略</th><th>怎么做</th></tr>
+<tr><td>几 KB 以内</td><td>值传递就好</td><td>直接当参数传，序列化开销可以忽略</td></tr>
+<tr><td>几十 KB 到几 MB</td><td>每个 worker 加载一次</td><td><code>initializer</code> 里读进全局变量，任务只传索引或切片边界</td></tr>
+<tr><td>几十 MB 到几 GB 的数值数组</td><td><span class="term">共享内存</span></td><td><code>multiprocessing.shared_memory</code>，worker 各自按名字挂载，零复制</td></tr>
+<tr><td>大到放不下内存的文件</td><td><span class="term">内存映射</span> 或直接落盘</td><td><code>mmap</code>，或者干脆只传路径与偏移量，让 worker 自己读</td></tr>
+<tr><td>结果集很大</td><td>让 worker 自己写出去</td><td>各写各的分片文件，主进程只收一个路径，别把结果回传</td></tr>
+</table>
+
+<p>最后一行常被漏掉：大家都记得优化入参，却忘了返回值走的是同一条管道。一个把 50 万行结果 <code>return</code> 回主进程的 worker，回传的成本可能比计算还高。让它自己写成 <code>part_003.parquet</code>，只把文件名传回来，管道上就只剩几十个字节。</p>
+
+<h3>共享内存与内存映射：给大块二进制数据用</h3>
+
+<p><code>multiprocessing.shared_memory</code>（3.8 起）申请的是一块由操作系统管理、多个进程都能按名字挂载的裸内存。它之所以对 NumPy 特别合适，是因为 NumPy 数组本身就是「一块连续内存 + 形状和 dtype 这些元信息」——把内存放进共享段，各进程只需要拿到名字、形状、dtype 三样小东西，就能就地构造出指向<strong>同一份数据</strong>的数组，全程零复制。反过来，一个装着几百万个 Python 对象的 <code>dict</code> 就享受不到这个待遇：它的数据本来就散落在堆上各处，不是一块连续内存。</p>
+
+<pre><code>from multiprocessing import shared_memory
+import numpy as np
+
+shm = shared_memory.SharedMemory(create=True, size=arr.nbytes)
+buf = np.ndarray(arr.shape, dtype=arr.dtype, buffer=shm.buf)
+buf[:] = arr[:]                      # 只在这里复制一次
+# worker 侧：SharedMemory(name=shm.name) 挂载，再用同样的 shape/dtype 构造
+shm.close(); shm.unlink()            # unlink 全局只调一次，否则会泄漏</code></pre>
+
+<p>最后一行的清理不是可选项。POSIX 上共享内存段的生命周期独立于进程，忘记 <code>unlink()</code> 会一直占着物理内存直到重启。<code>multiprocessing</code> 为此在 <code>spawn</code> 和 <code>forkserver</code> 下额外起了一个资源跟踪进程兜底，但被 <code>SIGKILL</code> 打断时仍可能漏。想省心就用 <code>SharedMemoryManager</code>，配合 <code>with</code> 语句自动释放。<code>mmap</code> 则更适合「数据在文件里、比内存大」的情况，它让多个进程共享同一份页缓存，谁读到哪页操作系统才加载哪页。</p>
+
+<div class="intuition-box">
+<p>判断该不该上共享内存，只问一句：这份数据是「一块连续的字节」还是「一堆 Python 对象」。前者能零复制共享，后者只能老老实实序列化——或者先想办法把它变成前者。</p>
+</div>
+
+<div class="highlight">
+<p><strong>生产事故复盘：并行之后反而慢了 1.6 倍。</strong>一个离线日志清洗作业，40 万条记录逐条走一套正则规则，单条纯计算约 <strong>1.8 ms</strong>，单进程全量跑完 <strong>720 秒</strong>。为了压进十分钟的窗口，改成 <code>ProcessPoolExecutor(max_workers=8)</code> 加 <code>ex.map(partial(clean, rules=RULES), records)</code>，上线后总耗时不降反升到 <strong>1180 秒</strong>，8 个核的 CPU 曲线全是锯齿，主进程那个核反而贴着 100%。<br>
+根因有两条，叠在一起：其一，<code>RULES</code> 是一个约 <strong>220 KB</strong> 的规则字典，被 <code>partial</code> 绑进了任务函数，于是<strong>每一条记录</strong>都要连着它一起序列化一次，实测单次 pickle 往返约 1.6 ms；其二，<code>chunksize</code> 用的是默认值 1，逐条派发又贴上约 0.4 ms 的调度开销。每条任务净增 2 ms，而计算本身只有 1.8 ms——序列化比干活还贵，且这部分开销发生在主进程，完全串行，40 万次累计就是 640 秒的纯序列化时间，这正是主进程满载而 worker 空转的原因。<br>
+修复只动了两处：把 <code>RULES</code> 改为 <code>initializer</code> 在每个 worker 启动时加载一次（传输次数从 40 万降到 8），<code>chunksize</code> 设为 <strong>2000</strong>（40 万 ÷ (8 × 25)）。总耗时降到 <strong>118 秒</strong>，相对单进程加速 <strong>6.1 倍</strong>，主进程 CPU 回落到 12% 左右。<br>
+留下的判断习惯是一条粗算：<strong>先估「单任务计算耗时」与「单任务序列化耗时」的比值，小于 10 就先别急着开进程池，去掉那些不该传的东西再说。</strong></p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、典型陷阱</h2>
+
+<p>多进程的 bug 有个共同特征：现象和原因隔得特别远。子进程里的问题传不回主进程，你看到的往往只是「卡住了」或者一句莫名其妙的报错。下面这张表把常见故障的表象和根因对上，排查时可以当索引用。</p>
+
+<table>
+<tr><th>现象</th><th>根因</th><th>处置</th></tr>
+<tr><td>进程无限增殖，或 <code>RuntimeError: bootstrapping phase</code></td><td>缺少 <code>if __name__ == "__main__":</code> 守卫</td><td>把所有启动逻辑收进守卫；3.14 起 Linux 也会中招</td></tr>
+<tr><td>并行后比单进程还慢</td><td>大对象被反复当参数传，或 <code>chunksize</code> 太小</td><td>改 <code>initializer</code> + 调大 <code>chunksize</code>，见第四节</td></tr>
+<tr><td>报错只有一行，看不到出错的那一行代码</td><td>异常跨进程要序列化，栈信息是拼回来的文本</td><td>在 worker 函数里包一层 <code>try</code>，把上下文写进异常消息</td></tr>
+<tr><td>日志行互相截断、交错</td><td>多个进程各自持有同一个文件句柄在追加写</td><td><code>QueueHandler</code> 汇总到一个进程写，或每进程一个文件</td></tr>
+<tr><td>任务莫名挂起，没有任何报错</td><td>worker 被 OOM Killer 用 <code>SIGKILL</code> 杀掉</td><td>查 <code>dmesg</code>；降 <code>max_workers</code> 或设 <code>max_tasks_per_child</code></td></tr>
+<tr><td><code>BrokenProcessPool</code>，之后整池不可用</td><td>有 worker 非正常终止，池进入损坏状态</td><td>池不可恢复，只能重建；把重建逻辑写进重试</td></tr>
+<tr><td>Ctrl-C 之后还剩一堆 python 进程</td><td>没有用 <code>with</code>，或子进程忽略了信号</td><td>始终用 <code>with</code> 语句管理池</td></tr>
+</table>
+
+<h3>子进程的异常信息为什么总是不完整</h3>
+
+<p>traceback 对象是不能 pickle 的。<code>concurrent.futures</code> 的做法是在 worker 侧把栈格式化成字符串带回来，作为异常链的一环展示；<code>multiprocessing.Pool</code> 则是把它拼进异常消息里。两种方式给你的都是<strong>文本</strong>，调试器没法在那一帧上停下来，也无法访问当时的局部变量。</p>
+
+<p>更隐蔽的是第二层：异常对象本身也必须能被 pickle 还原。如果你的自定义异常 <code>__init__</code> 收了几个必填参数而没有实现 <code>__reduce__</code>，反序列化时会因为参数对不上而失败，主进程最终收到的可能是一个和真实错误毫无关系的 <code>TypeError</code>。<a href="py_exception_design.html">PY24</a> 讲异常设计时提过让自定义异常保持可重建，多进程场景是这条建议最能兑现价值的地方。可靠的做法是不指望跨进程传递结构化错误：</p>
+
+<pre><code>def work(item_id: int) -&gt; tuple[int, str | None]:
+    try:
+        return item_id, do_work(item_id)
+    except Exception:
+        # 在 worker 侧就把完整栈变成文本，作为正常返回值带回去
+        return item_id, traceback.format_exc()</code></pre>
+
+<p>把失败当成一种正常返回值，就绕开了整个异常序列化链路。代价是调用方要自己判断，收益是你总能拿到出错时那一条数据的编号和完整栈——批处理场景下这个信息比异常类型有用得多。</p>
+
+<h3>多进程日志：唯一可靠的是汇总到一处写</h3>
+
+<p>多个进程用 <code>O_APPEND</code> 打开同一个文件时，单次小于管道原子大小的写入通常不会互相撕裂，但 Python 的 <code>logging</code> 一条记录可能拆成多次 <code>write</code>，再加上各进程自己的缓冲区，交错几乎必然发生。至于 <code>RotatingFileHandler</code>，多进程下轮转时会互相删掉对方正在写的文件，属于确定会坏的组合。</p>
+
+<p>标准解法是 <code>logging.handlers.QueueHandler</code>：所有 worker 把日志记录塞进一个 <code>multiprocessing.Queue</code>，由主进程侧的 <code>QueueListener</code> 单点落盘。次优解是每个进程写自己的文件、文件名带上 PID，事后合并。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个特征抽取作业跑到第 40 分钟左右稳定「卡住」，没有报错、没有 CPU 占用、没有日志新增，只能手动杀掉。查了三天进程池的用法都没问题，最后在 <code>dmesg</code> 里看到 <code>Out of memory: Killed process 24817 (python)</code>——容器内存限额 8 GB，12 个 worker 各自在处理某几条超大记录时峰值涨到 900 MB，加起来越线，内核挑了一个杀掉。<strong>被 <code>SIGKILL</code> 杀掉的进程没有机会说任何话</strong>，所以现象只是「静静地不动了」。修复是把 <code>max_workers</code> 从 12 降到 6 并设 <code>max_tasks_per_child=500</code>（3.11 起支持），既压住峰值也顺带回收了 worker 里累积的内存碎片，总耗时只增加 8%。经验：<strong>多进程任务挂起而无任何日志，第一件事是查内核日志，不是查代码。</strong></p>
+</div>
+
+<p>那个 <code>max_tasks_per_child</code> 值得单独说一句。它让 worker 每处理若干任务就退出重建，代价是重建的启动开销，收益是把「进程内存只涨不落」这个问题按下去。<a href="py_memory_gc.html">PY23</a> 解释过为什么释放了对象内存也未必还给操作系统——在长期运行的 worker 里，这个效应会一点点累积成 OOM。注意它设置后默认使用 <code>spawn</code>，与 <code>fork</code> 不兼容。</p>
+
+<div class="intuition-box">
+<p>多进程的故障排查有个固定顺序：先看内核日志（是不是被杀了），再看进程树（是不是没退干净），最后才看代码。反过来查会浪费掉大部分时间，因为最致命的那几种故障根本不在你的代码里留痕迹。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、选型与替代</h2>
+
+<p>多进程是一个有真实成本的决定：代码要重构成可序列化的形状，调试难度上一个台阶，内存占用按进程数翻倍，部署时还要考虑核数与内存的配比。所以在动手之前，先按顺序问三个问题——它们的共同点是<strong>都比多进程便宜</strong>。</p>
+
+<div class="arch-diagram">  确认瓶颈是 CPU 之后，按这个顺序往下走
+
+  问题一：能不能向量化？
+    把 Python 层的逐元素循环换成 NumPy / Polars / pandas 的整体操作。
+    循环从解释器搬到 C 层，常见 10～100 倍，且代码通常更短。
+    ─ 能 → 到此为止，别再往下看了
+    ─ 不能（逻辑分支多、依赖外部状态）↓
+
+  问题二：能不能下沉到原生扩展？
+    换一个 C/Rust 实现的库（orjson、regex、lxml…），
+    或用 Cython / numba 把热点函数编译掉。
+    这些库在计算时大多会释放全局解释器锁，用线程就能并行。
+    ─ 能 → 线程池即可，不需要进程
+    ─ 不能 ↓
+
+  问题三：能不能少算点？
+    加缓存、加索引、提前过滤、降采样、增量处理而非全量重算。
+    「把 40 万条降到 4 万条」比「把机器加到 10 倍」便宜得多。
+    ─ 能 → 先做这个，做完可能就不需要并行了
+    ─ 不能 ↓
+
+  这时候才轮到：单机多进程
+    再不够 → 任务队列（Celery / RQ / Arq）+ 多台机器</div>
+
+<p>这三个问题的顺序不是随意排的，而是按「改动量 ÷ 收益」从高到低。<span class="term">向量化</span>通常只改几十行就能拿到一个数量级；换原生扩展往往只改一行 import；减少工作量改的是业务逻辑但收益最直接。多进程排在它们之后，因为它是三者里唯一会同时增加<strong>代码复杂度、内存占用和运维复杂度</strong>的方案。</p>
+
+<table>
+<tr><th>方案</th><th>适用信号</th><th>并行粒度</th><th>主要代价</th></tr>
+<tr><td>向量化</td><td>数据是规整的数值数组，逐元素做同样的事</td><td>SIMD 与 C 层循环</td><td>逻辑要能表达成数组运算</td></tr>
+<tr><td>原生扩展 / 编译</td><td>热点集中在一两个函数，逻辑不规整</td><td>视库而定，多数可配合线程</td><td>引入构建依赖，调试链路变长</td></tr>
+<tr><td>线程池</td><td>热点在会释放解释器锁的库里（NumPy、压缩、加解密）</td><td>共享内存，线程</td><td>纯 Python 代码上无效</td></tr>
+<tr><td><strong>多进程</strong></td><td>纯 Python 计算、单任务足够重、数据能切片</td><td>单机多核</td><td>序列化成本、内存翻倍、调试变难</td></tr>
+<tr><td>子解释器池</td><td>3.14 起可用（<code>InterpreterPoolExecutor</code>），想要多核又嫌进程重</td><td>单进程内多解释器，各有各的锁</td><td>很新，生态与 C 扩展兼容性仍需实测</td></tr>
+<tr><td>自由线程构建</td><td>3.14 起正式支持，纯 Python 多核瓶颈明确</td><td>真正的多线程并行</td><td>非默认构建，部署链路都要跟着换</td></tr>
+<tr><td>任务队列 + 多机</td><td>单机核数已经吃满，或任务需要重试与可观测</td><td>跨机器</td><td>引入中间件与一整套运维</td></tr>
+</table>
+
+<p>表里后两行是这两年出现的新选项。子解释器和自由线程都在试图提供「多核并行但不必付序列化的钱」这件事，方向上确实是多进程的长期替代品。但在 2026 年这个时间点，它们的生态成熟度还不足以作为默认选择——尤其是任何依赖 C 扩展的场景，兼容性都要自己实测。多进程仍然是最稳妥的那一个。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先用采样工具确认瓶颈在 CPU，再决定要不要上进程</li>
+<li>默认用 <code>ProcessPoolExecutor</code>，配合 <code>with</code> 语句管理生命周期</li>
+<li>重资源用 <code>initializer</code> 每 worker 加载一次，任务只传轻量参数</li>
+<li>任务多且小的时候显式设 <code>chunksize</code>，别用默认值 1</li>
+<li>大块数值数组走 <code>shared_memory</code>，大文件走 <code>mmap</code> 或只传路径</li>
+<li>worker 里把异常抓成文本随返回值带回，别指望异常跨进程完整传递</li>
+<li>启动方式显式声明，并在守卫里只设一次</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在主模块顶层直接创建进程池——三种启动方式里有两种会递归自我复制</li>
+<li>把 <code>self</code>、大字典、模型对象当参数反复传给每个任务</li>
+<li>用 <code>lambda</code> 或闭包当任务函数，pickle 不了</li>
+<li>让多个进程用 <code>RotatingFileHandler</code> 写同一个日志文件</li>
+<li>在容器里按 <code>os.cpu_count()</code> 开进程，那是宿主机的核数</li>
+<li>上多进程之前没试过向量化和换库这两条更便宜的路</li>
+<li><code>BrokenProcessPool</code> 之后继续往同一个池里提交任务</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>多进程是拿工程复杂度换 CPU 时间的交易。做这笔交易之前，先确认前面三条更便宜的路都走不通——大多数「需要并行」的需求，在第一或第三个问题上就解决了。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>多进程和多线程到底怎么选？有没有一句话的判据？</summary>
+<div class="answer">看你的热点代码在不在 Python 字节码层。如果热点是你自己写的纯 Python 循环，同一个进程里同一时刻只有一个线程能执行字节码，线程数再多也只能占满一个核，这时候要用进程。如果热点在会主动释放全局解释器锁的库里——NumPy 的矩阵运算、zlib 压缩、hashlib、大部分数据库驱动的网络等待——线程就能并行，而且没有序列化开销，明显更划算。判断方法不用猜：用 <code>ThreadPoolExecutor</code> 先跑一版，把并发度从 1 调到 4，总耗时如果基本不变就说明卡在字节码执行上，换 <code>ProcessPoolExecutor</code>；因为两者 API 完全一致，这个实验的成本只有改一个类名。还有一个常被忽略的中间地带：任务里既有计算又有 IO 时，往往拆成「进程池算 + 线程池取数」比单一模型更好。</div>
+</details>
+
+<details>
+<summary>为什么我的代码在 Linux 上好好的，一到 Windows 就疯狂创建进程？</summary>
+<div class="answer">因为两个平台的默认启动方式不同。Windows 一直默认 <code>spawn</code>，子进程是一个全新的解释器，必须重新 <code>import</code> 主模块才能找到任务函数——于是主模块顶层的每一行都会在每个子进程里再执行一遍。如果创建进程池的代码写在顶层，子进程一导入就又建一个池，孙进程继续，指数级增殖。Linux 过去默认 <code>fork</code>，子进程直接复制父进程的内存，不需要重新导入，所以不写守卫也侥幸能跑。修复就是把所有启动逻辑放进 <code>if __name__ == "__main__":</code>。特别提醒：从 3.14 起 Linux 上的默认已经改成了 <code>forkserver</code>，它同样需要重新导入主模块，所以这类「只在 Windows 上炸」的代码会在升级 Python 时集中爆发，值得提前扫一遍。</div>
+</details>
+
+<details>
+<summary>3.14 把 Linux 的默认启动方式从 fork 改成 forkserver，我需要做什么？</summary>
+<div class="answer">先确认三件事。第一，主模块守卫是否齐全——<code>forkserver</code> 和 <code>spawn</code> 一样会重新导入主模块，这是升级后最常见的翻车点。第二，任务函数和参数是否都能 pickle：过去 <code>fork</code> 下子进程直接继承父进程内存，lambda、闭包、打开的文件对象都能「传」过去，改成 <code>forkserver</code> 后这些全部失效。第三，是否有代码依赖「子进程自动继承父进程的全局状态」，比如在模块顶层初始化好一个客户端然后指望 worker 里能直接用——现在需要改成 <code>initializer</code> 显式初始化。如果暂时来不及改，可以显式 <code>mp.set_start_method("fork")</code> 保持旧行为，但这只是缓冲期措施：<code>fork</code> 与多线程混用本来就不安全，3.12 起在多线程进程里用它已经会发出 <code>DeprecationWarning</code>。</div>
+</details>
+
+<details>
+<summary>chunksize 到底该设多少？有公式吗？</summary>
+<div class="answer">没有精确公式，但有一个够用的起点：<code>任务总数 ÷ (worker 数 × 4)</code>，任务耗时参差不齐时把系数从 4 调到 8 甚至 16。原理是在两个相反的力之间取平衡：批越大，每批摊到的固定开销（序列化、管道往返、调度）越小；批越小，负载越均匀，不容易出现「其他 worker 都干完了，就等最后一个」的长尾。判断当前设置好不好有个很直观的信号——看主进程那个核的 CPU 占用。如果主进程贴着 100% 而 worker 在空转，说明派发跟不上，<code>chunksize</code> 该往上调；如果各 worker 结束时间差很大，说明批太粗了，该往下调。另外注意 <code>ThreadPoolExecutor</code> 上 <code>chunksize</code> 完全无效，它只对 <code>ProcessPoolExecutor</code> 有意义。</div>
+</details>
+
+<details>
+<summary>大 NumPy 数组要传给每个 worker，有没有办法不复制？</summary>
+<div class="answer">有，用 <code>multiprocessing.shared_memory</code>（3.8 起）。做法是主进程申请一块和数组等大的共享内存段，把数据写进去一次，然后只把「名字 + shape + dtype」这三样小东西传给 worker；worker 侧按名字挂载，用同样的 shape 和 dtype 就地构造出 <code>np.ndarray</code>，指向的是同一份物理内存，全程零复制。这对只读的大数组几乎是免费的加速。三个注意点：一是 <code>unlink()</code> 全局只能调用一次且必须调用，否则 POSIX 上这块内存会一直占着直到重启，用 <code>SharedMemoryManager</code> 配合 <code>with</code> 最省心；二是共享内存没有任何并发保护，多个 worker 要写同一块区域时得自己划分好互不重叠的切片；三是如果数据本来就在磁盘上且比内存大，<code>mmap</code> 比共享内存更合适，多个进程共享同一份页缓存，按需加载。</div>
+</details>
+
+<details>
+<summary>fork 在 Linux 上是写时复制，那父进程里的大对象不就自动共享了吗？</summary>
+<div class="answer">理论上是，实践中撑不了多久。写时复制的粒度是内存页（通常 4 KB），只要子进程<strong>写</strong>了某一页，那一页就会被复制成私有副本。问题在于 CPython 的引用计数就存在对象头里，子进程哪怕只是遍历一遍这个大对象、只读不改，每次引用都会去改对象头上的计数——从内核的角度看这就是写操作，页面照样被复制。结果是一个几 GB 的只读大字典在几分钟内退化成每个子进程各有一份，内存曲线看起来像是「共享失效了」。<code>gc.freeze()</code>（3.7 起）能缓解一部分：在 fork 之前调用它，把当前所有对象移到一个不参与垃圾回收的永久代，减少 GC 遍历导致的页面写入。但引用计数本身仍会写。<a href="py_memory_gc.html">PY23</a> 讲的内存模型在这里是直接相关的背景。真要共享大块数据，还是用共享内存，别指望写时复制。</div>
+</details>
+
+<details>
+<summary>进程池里有一个 worker 崩了，为什么整个池都不能用了？</summary>
+<div class="answer">因为池的内部状态已经不可信了。worker 非正常终止时，它正在处理的那个任务的结果永远不会回来，管道里可能还残留着半条消息，池无法判断哪些任务完成了、哪些丢了。<code>ProcessPoolExecutor</code> 自 3.3 起的做法是明确地把池标记为损坏：当前所有未完成的 future 以及之后任何 <code>submit()</code> 都抛 <code>BrokenProcessPool</code>。这其实是个好设计——在此之前的行为是未定义的，常见表现是永久冻结或死锁，那种情况排查起来痛苦得多。所以正确的应对不是重试单个任务，而是<strong>重建整个池</strong>：把 <code>with ProcessPoolExecutor(...)</code> 连同任务分发一起包进一个重试循环，捕获 <code>BrokenProcessPool</code> 后新建一个池、只重跑没完成的那批任务。同时一定要去查 worker 为什么崩：最常见的原因是被 OOM Killer 杀掉，其次是某个 C 扩展段错误。</div>
+</details>
+
+<details>
+<summary>并行之后总耗时几乎没变，甚至更慢了，从哪里开始查？</summary>
+<div class="answer">按四步走，顺序很重要。第一步，确认瓶颈真的是 CPU：把并发度从 1 调到 4，如果单进程版本的单核占用本来就不满，那你要解决的是 IO 问题，进程帮不上忙。第二步，看主进程那个核的占用——如果它贴着 100% 而 worker 们在空转，说明卡在派发和序列化上，去查每个任务带了多少数据过去，以及 <code>chunksize</code> 是不是还在默认的 1。第三步，估一下单任务的计算耗时和序列化耗时的比值，小于 10 基本就没有并行的价值，先想办法把不该传的东西从参数里拿掉。第四步，检查有没有隐藏的第二层并行：任务里如果调用了 NumPy 或 PyTorch，底层 BLAS 会自己开满物理核，8 个进程乘以 8 个 BLAS 线程就是 64 个线程抢 8 个核，把 BLAS 线程数限制成 1 通常能立刻恢复。这四步能覆盖绝大多数「并行没效果」的情况。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

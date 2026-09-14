@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY19 · 上下文管理器与 contextlib</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、with 是「成对操作」的抽象</a>
+<a href="#s2">二、__enter__ 与 __exit__ 的契约</a>
+<a href="#s3">三、@contextmanager 生成器写法</a>
+<a href="#s4">四、contextlib 工具箱</a>
+<a href="#s5">五、释放顺序、可重入与嵌套</a>
+<a href="#s6">六、实战范式</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY19 · 上下文管理器与 contextlib</h1>
+<p class="subtitle">with 的等价展开 / __exit__ 返回值与异常传播 / 生成器写法的控制流 / suppress·nullcontext·ExitStack / 逆序释放与一次性陷阱 / 事务·计时·临时状态</p>
+
+<div class="intuition-box">
+<p>程序里有一类操作天生成对出现：开了要关，锁了要放，改了要恢复。这些成对操作的第二半永远是可选的——语法上没人强制你写，所以它总在某个异常分支里被漏掉。<code>with</code> 的全部价值就是把第二半从「你要记得写」变成「语言替你执行」。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、<code>with</code> 是「成对操作」的语言级抽象</h2>
+
+<p>先把这个语法的适用面铺开。它不是「读文件专用语法」，而是覆盖一整类问题：凡是<strong>获取之后必须收尾</strong>的东西，都属于它的射程之内。</p>
+
+<table>
+<tr><th>资源 / 状态</th><th>获取</th><th>必须的收尾</th><th>漏掉收尾的后果</th></tr>
+<tr><td>文件</td><td><code>open()</code></td><td><code>close()</code></td><td>缓冲区没刷盘，写进去的内容丢失</td></tr>
+<tr><td>线程锁</td><td><code>acquire()</code></td><td><code>release()</code></td><td>死锁，整个进程卡住不再退出</td></tr>
+<tr><td>数据库连接</td><td>从连接池取</td><td>归还连接池</td><td>池子耗尽，后续请求全部超时</td></tr>
+<tr><td>事务</td><td><code>BEGIN</code></td><td><code>COMMIT</code> 或 <code>ROLLBACK</code></td><td>行锁一直挂着，别的会话被堵死</td></tr>
+<tr><td>临时目录</td><td><code>mkdtemp()</code></td><td>递归删除</td><td>磁盘被慢慢吃满，几周后才爆</td></tr>
+<tr><td>环境变量 / 工作目录</td><td>赋新值</td><td>还原旧值</td><td>污染后续代码，测试之间互相干扰</td></tr>
+<tr><td>计时 / 埋点</td><td>记起始时间</td><td>上报耗时</td><td>失败路径的耗时全部缺失，监控只看得见成功</td></tr>
+</table>
+
+<p>这七行有个共同点：收尾动作和获取动作在代码里通常<strong>相隔很远</strong>。函数开头 <code>acquire()</code>，中间三十行业务逻辑，结尾 <code>release()</code>——期间任何一个 <code>return</code>、<code>break</code>、<code>raise</code> 都会跳过那行 <code>release()</code>。</p>
+
+<p><span class="term">上下文管理器</span>指的就是实现了进入/退出两个钩子的对象，把它交给 <code>with</code>，语言保证退出钩子一定被调用。它和 <code>try/finally</code> 的关系是：<code>with</code> 是 <code>try/finally</code> 的封装，但封装的位置变了——<code>try/finally</code> 写在<strong>调用方</strong>，<code>with</code> 把收尾逻辑写在<strong>资源自己身上</strong>。</p>
+
+<pre><code>lock.acquire()
+try:
+    shared["n"] += 1
+finally:
+    lock.release()        # 调用方每次都得自己写对
+
+with lock:                # 收尾逻辑归 lock 所有，调用方无从写错
+    shared["n"] += 1</code></pre>
+
+<p>省掉的三行不是重点。重点是<strong>把「可能漏掉」这件事从调用方手里拿走了</strong>：<code>try/finally</code> 有 N 个调用点就有 N 次写错的机会，而 <code>with</code> 只有一份实现，正确一次就永远正确。这是同一个道理的两种代价模型——前者是线性的风险，后者是常数的风险。</p>
+
+<h3>它到底展开成了什么</h3>
+
+<p>下面这张图是理解后面所有细节的地基。<code>with</code> 不是魔法，它编译成一段固定形状的代码，所有「为什么 <code>as</code> 拿到的不是这个对象」「为什么异常被吞了」的疑问，答案都能在这张图上直接读出来。</p>
+
+<div class="arch-diagram">  with open(path) as f:
+      body(f)
+
+  ── 等价展开（CPython 生成的字节码就是这个形状）──────────────
+
+  mgr   = open(path)
+  exit  = type(mgr).__exit__          ← 先从类上取好，中途改实例属性无效
+  value = type(mgr).__enter__(mgr)    ← 获取阶段在这里发生
+  hit_except = False
+  try:
+      f = value                       ← as 绑定的是 __enter__ 的返回值
+      body(f)                             （不一定是 mgr 本身！）
+  except:
+      hit_except = True
+      if not exit(mgr, *sys.exc_info()):
+          raise                       ← 返回假值 → 原异常继续往外飞
+  finally:
+      if not hit_except:
+          exit(mgr, None, None, None) ← 正常路径：三个参数都是 None
+
+  三个必须记住的结论
+  ────────────────
+  1. __enter__ 在 try 之外  → 它自己抛异常时，__exit__ 不会被调用
+  2. as 后面的名字 = __enter__ 的返回值，和 mgr 没有必然关系
+  3. __exit__ 的返回值是一个「要不要吞掉异常」的开关</div>
+
+<div class="intuition-box">
+<p><code>with</code> 是把 <code>try/finally</code> 的所有权从调用方转移到资源方。写 <code>try/finally</code> 时你在管纪律，写 <code>with</code> 时纪律已经内建在类型里了。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、协议细节：<code>__enter__</code> 与 <code>__exit__</code> 的契约</h2>
+
+<p><span class="term">上下文管理协议</span>只要求两个特殊方法。任何同时定义了它们的类都能用在 <code>with</code> 后面，不需要继承任何基类——这和 <a href="py_classes_dunder.html">PY15 · 类与特殊方法契约</a> 里讲过的鸭子协议是同一套思路。缺一个的表现也很直白：<code>TypeError: 'X' object does not support the context manager protocol</code>，3.11 起的报错还会明确告诉你缺的是哪一个。</p>
+
+<h3><code>__enter__</code>：返回什么完全由你决定</h3>
+
+<p>最常见的误解是「<code>__enter__</code> 一定返回 <code>self</code>」。它确实<strong>经常</strong>返回 <code>self</code>，但那只是实现者的选择。标准库里一眼就能看到反例：<code>open()</code> 返回的文件对象自己就是管理器，<code>__enter__</code> 返回自身；而 <code>tempfile.TemporaryDirectory()</code> 的 <code>__enter__</code> 返回的是一个<strong>字符串路径</strong>，不是那个管理器对象；<code>threading.Lock</code> 的 <code>__enter__</code> 返回布尔值，所以你几乎从不写 <code>with lock as x</code>。</p>
+
+<table>
+<tr><th>表达式</th><th><code>as</code> 拿到的是什么</th><th>说明</th></tr>
+<tr><td><code>with open(p) as f</code></td><td>文件对象（就是管理器本身）</td><td>自管理型，最常见</td></tr>
+<tr><td><code>with TemporaryDirectory() as d</code></td><td><code>str</code> 路径</td><td>管理器和产物是两个东西</td></tr>
+<tr><td><code>with lock as x</code></td><td><code>True</code></td><td>没有有意义的产物，所以不写 <code>as</code></td></tr>
+<tr><td><code>with suppress(KeyError) as x</code></td><td><code>None</code></td><td>同上，<code>as</code> 纯属浪费</td></tr>
+<tr><td><code>with conn.cursor() as cur</code></td><td>游标对象</td><td>退出时关游标，不关连接</td></tr>
+</table>
+
+<p>还有一条容易被忽略的边界：<code>__enter__</code> 位于 <code>try</code> <strong>之外</strong>。如果获取阶段自己就失败了（比如连接超时），<code>__exit__</code> 根本不会被调用。所以 <code>__enter__</code> 里做多步获取时，自己要保证中途失败也不留残留——别指望 <code>__exit__</code> 来兜底。</p>
+
+<h3><code>__exit__</code>：三个参数和一个危险开关</h3>
+
+<p>签名固定是 <code>__exit__(self, exc_type, exc_val, tb)</code>。无异常正常退出时，三个参数<strong>全是 <code>None</code></strong>；有异常时分别是异常类、异常实例、traceback 对象。所以「这次退出是正常的还是出错的」只要判断 <code>exc_type is None</code>。</p>
+
+<p>真正的陷阱在返回值上。返回真值意味着<span class="term">异常抑制</span>——告诉解释器这个异常已经被处理掉了，不要再往外传。这是个能力很强也很容易误用的开关。</p>
+
+<table>
+<tr><th><code>__exit__</code> 的返回值</th><th>异常传播结果</th><th>评价</th></tr>
+<tr><td><code>None</code>（没写 return）</td><td>原异常继续向外传播</td><td><strong>绝大多数实现都应该是这样</strong></td></tr>
+<tr><td><code>False</code> / <code>0</code> / <code>""</code> / <code>[]</code></td><td>同上，继续传播</td><td>等价于 <code>None</code>，但显式写 <code>return False</code> 容易被误读成「处理失败」</td></tr>
+<tr><td><code>True</code> / <code>1</code> / 非空字符串</td><td>异常被丢弃，<code>with</code> 之后的代码正常执行</td><td>只在 <code>suppress</code> 这类「就是为了吞异常」的场合用</td></tr>
+<tr><td>条件返回，如 <code>return isinstance(exc_val, KeyError)</code></td><td>只吞特定异常，其余继续传播</td><td>合理写法，但必须把判断条件写窄</td></tr>
+<tr><td><code>__exit__</code> 内部自己 <code>raise</code></td><td>外层看到<strong>新</strong>异常，原异常挂在 <code>__context__</code></td><td>会掩盖真实根因，收尾代码里要尽量避免</td></tr>
+</table>
+
+<p>注意第二行那个细节：<code>return False</code> 和 <code>return None</code> 行为完全一样，但前者在阅读时有歧义（像是在报告「我没处理成功」）。建议约定：<strong>不需要吞异常就什么都不返回</strong>。</p>
+
+<pre><code>class Quiet:
+    def __enter__(self):
+        return self
+    def __exit__(self, et, ev, tb):
+        return True            # ← 危险：吞掉 with 体内的一切异常
+
+with Quiet():
+    order.charge(amount)       # 扣款抛异常也一声不响
+print("下单成功")              # 照常打印，日志里一片祥和</code></pre>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某订单服务的连接管理器为了「让退出更干净」，在 <code>__exit__</code> 末尾写了 <code>return True</code>。上线后监控显示下单成功率 99.8%、错误日志每天不到 10 条，但财务对账发现 11 天里有 <strong>4,317 笔</strong>订单状态为「已支付」而扣款接口从未成功——每一次 <code>PaymentError</code> 都被那行 <code>return True</code> 吞掉，外层的 <code>except</code> 和告警一次都没触发。把 <code>return True</code> 删掉后当天就有 390 条异常暴露出来，成功率指标从 99.8% 掉到 96.4%。这里的教训是：<strong>吞异常不会减少故障，只会让故障延迟到无法归因的地方才被发现</strong>。</p>
+</div>
+
+<h3>在 <code>__exit__</code> 里再抛异常会发生什么</h3>
+
+<div class="arch-diagram">  签名与返回类型
+  def __exit__(self, exc_type, exc_val, tb) -&gt; bool | None
+
+  with 体内抛出 ValueError("库存不足")
+        │
+        ▼
+  __exit__(ValueError, ValueError("库存不足"), tb)
+        │
+        ├─ 什么都不返回        → 外层收到 ValueError("库存不足")   ✅ 推荐
+        │
+        ├─ return True         → 异常凭空消失，with 之后继续执行    ⚠️ 慎用
+        │
+        └─ 自己 raise ConnectionError("socket closed")
+                               → 外层收到 ConnectionError
+                                 原 ValueError 挂在 __context__ 上
+                                 traceback 打印成两段，中间夹着
+                                 "During handling of the above exception,
+                                  another exception occurred"
+
+  为什么这很糟：排查的人先看到的是 ConnectionError，
+  而真实根因「库存不足」被推到了 traceback 的上半截，
+  日志系统按最外层异常类型聚合时，这一类故障会被归错桶。</div>
+
+<p>所以收尾代码本身也要抗异常。<a href="py_files_exceptions.html">PY07 · 文件读写与异常处理</a> 里讲过的异常链在这里有直接用途：如果 <code>__exit__</code> 确实必须抛，用 <code>raise ... from exc_val</code> 显式建链，至少让因果关系写进 <code>__cause__</code> 而不是碰运气挂在 <code>__context__</code>。</p>
+
+<div class="intuition-box">
+<p><code>__exit__</code> 的返回值不是「我成功了吗」，而是「要不要把这个异常埋了」。默认答案永远是不要——所以默认写法是不写 return。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、<code>@contextmanager</code>：用生成器写上下文管理器</h2>
+
+<p>为一个只用一次的小需求写整个类太重了。<code>contextlib.contextmanager</code> 把生成器改造成上下文管理器，代码量常常从 12 行降到 6 行。它的映射规则只有三条：</p>
+
+<ul>
+<li><code>yield</code> <strong>之前</strong>的代码 = <code>__enter__</code> 的逻辑</li>
+<li><code>yield</code> <strong>出去的值</strong> = <code>as</code> 拿到的东西（不写值就是 <code>None</code>）</li>
+<li><code>yield</code> <strong>之后</strong>的代码 = <code>__exit__</code> 的逻辑</li>
+</ul>
+
+<p>这种写法依赖 <a href="py_iterators_generators.html">PY12 · 迭代器与生成器协议</a> 里的挂起/恢复机制，以及 <a href="py_closures_decorators.html">PY14 · 可变参数、闭包与装饰器</a> 里的装饰器语法。<span class="term">生成器上下文管理器</span>就是这样被装饰器包出来的对象：它在 <code>__enter__</code> 里调 <code>next(gen)</code> 推进到 <code>yield</code>，在 <code>__exit__</code> 里再把生成器唤醒一次。</p>
+
+<pre><code>@contextmanager
+def cd(path):
+    old = os.getcwd()
+    os.chdir(path)
+    try:
+        yield path        # as 拿到的就是这里 yield 出去的值
+    finally:
+        os.chdir(old)     # with 体内抛异常也一定会走到</code></pre>
+
+<h3>最常见的错误：忘记 <code>try/finally</code></h3>
+
+<p>下面这个版本看起来完全合理，也能通过所有「happy path」测试，但它在生产里是个定时炸弹。</p>
+
+<pre><code>@contextmanager
+def cd_broken(path):
+    old = os.getcwd()
+    os.chdir(path)
+    yield path
+    os.chdir(old)         # with 体内一抛异常，这行永远不会执行</code></pre>
+
+<p>原因在于异常是<strong>在 <code>yield</code> 这一行被重新抛出</strong>的。装饰器在 <code>__exit__</code> 里调用的是 <code>gen.throw(exc)</code>，效果等同于「把异常塞回生成器挂起的那个位置」。挂起点后面的语句因此被跳过，就像函数体里任意一行抛异常之后的代码被跳过一样。<strong>包住 <code>yield</code> 的 <code>try/finally</code> 不是风格问题，是这种写法的唯一正确形态。</strong></p>
+
+<p>这个机制反过来也给了你处理异常的入口：想对 <code>with</code> 体内的异常做点什么，就在 <code>yield</code> 外面写 <code>except</code>；想吞掉它，<code>except</code> 里不 <code>raise</code> 即可（等价于 <code>__exit__</code> 返回真值，同样危险）。</p>
+
+<div class="arch-diagram">  调用方                              生成器函数体
+  ──────                              ────────────
+  with cd("/tmp") as p:
+    │
+    │ ① __enter__ 内部调 next(gen)
+    ├──────────────────────────────►  old = os.getcwd()
+    │                                 os.chdir(path)
+    │                                 try:
+    │        ② yield 把值送回              yield path  ──┐
+    ◄──────────────────────────────                      │ 生成器在此挂起
+    │  p 绑定成功                                        │ 局部变量 old 还活着
+    │                                                    │
+    │  ┌─ body(p) 在这里执行 ─┐                          │
+    │  └──────────┬───────────┘                          │
+    │             │                                      │
+    ├─ 正常结束 ──┴─────────────►  gen.send(None) ────────┘
+    │   ③ __exit__(None,None,None)   从 yield 处继续
+    │                                 finally: os.chdir(old)
+    │                                 函数返回 → StopIteration（装饰器吞掉）
+    │
+    └─ body 抛 ValueError ──────►  gen.throw(ValueError)
+        ④ __exit__(ValueError,..)     异常在 yield 这一行「重新抛出」
+                                      finally: os.chdir(old)   ← 有 try 才会执行
+                                      没 except 接住 → 异常飞回调用方
+
+  没写 try/finally 时，第 ④ 条路径直接从 yield 跳到函数外，
+  os.chdir(old) 被完整跳过：工作目录被永久改坏。</div>
+
+<h3>类实现还是生成器实现</h3>
+
+<table>
+<tr><th>维度</th><th>类（<code>__enter__</code>/<code>__exit__</code>）</th><th><code>@contextmanager</code> 生成器</th></tr>
+<tr><td>代码量</td><td>多，样板明显</td><td>少，逻辑连贯得多</td></tr>
+<tr><td>可读性</td><td>获取与释放分在两个方法里</td><td>获取、释放上下相邻，顺序即时序</td></tr>
+<tr><td>能否重复进入</td><td>可以设计成可重入 / 可重用</td><td><strong>一次性</strong>，同一个对象第二次进入即报错</td></tr>
+<tr><td>能否保存状态给外部访问</td><td>可以，实例属性随便挂</td><td>不方便，状态只活在生成器帧里</td></tr>
+<tr><td>能否兼作装饰器</td><td>要额外继承 <code>ContextDecorator</code></td><td>自带这个能力（装饰器内部已混入）</td></tr>
+<tr><td>子类化 / 扩展</td><td>自然支持继承与覆写</td><td>基本做不到，只能复制改写</td></tr>
+<tr><td>适合场景</td><td>库的公开 API、需要携带状态或被继承</td><td>项目内部的小工具、一次性的临时状态切换</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>生成器写法的心智模型是「把一个函数从中间劈开，上半截当获取、下半截当释放，<code>with</code> 体塞进那道缝里」。而 <code>try/finally</code> 就是缝合这道口子的线——不缝，下半截会在异常时直接掉地上。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、contextlib 工具箱</h2>
+
+<p>标准库 <code>contextlib</code> 里的工具解决的是一类特定的表达力问题：有些「成对操作」的形状，用裸 <code>with</code> 写出来会很难看或者干脆写不出来。</p>
+
+<table>
+<tr><th>工具</th><th>用途</th><th>替代了什么写法</th></tr>
+<tr><td><code>suppress(*excs)</code></td><td>忽略指定类型的异常</td><td><code>try/except XError: pass</code>——后者的 <code>try</code> 块容易越写越大，不小心盖住了别的语句</td></tr>
+<tr><td><code>closing(obj)</code></td><td>把只有 <code>close()</code> 的对象包成管理器</td><td><code>try/finally: obj.close()</code>，适用于老库或第三方句柄</td></tr>
+<tr><td><code>redirect_stdout(f)</code></td><td>临时把 <code>sys.stdout</code> 指到别处</td><td>手工存旧值、赋新值、<code>finally</code> 还原三步；还有 <code>redirect_stderr</code></td></tr>
+<tr><td><code>nullcontext(x)</code></td><td>什么都不做的管理器，<code>as</code> 拿到 <code>x</code></td><td>把 <code>if 有资源: with ... else: 不用 with</code> 的两份重复逻辑压成一份</td></tr>
+<tr><td><code>ExitStack()</code></td><td>动态数量的资源，保证逆序释放</td><td>无法用嵌套 <code>with</code> 表达的场景（个数运行期才知道）</td></tr>
+<tr><td><code>ContextDecorator</code></td><td>让同一对象既能 <code>with</code> 又能当装饰器</td><td>为「进函数前做点事、出函数后收尾」单独再写一个装饰器</td></tr>
+<tr><td><code>contextmanager</code></td><td>生成器转管理器</td><td>整个样板类（见第三节）</td></tr>
+</table>
+
+<p><code>suppress</code> 值得多说一句。它和 <code>try/except: pass</code> 的功能等价，优势在<strong>表达意图</strong>和<strong>限定范围</strong>：读到 <code>with suppress(FileNotFoundError):</code> 就知道作者是刻意忽略，而不是写漏了处理逻辑；而 <code>with</code> 的缩进块天然比 <code>try</code> 块更难被后人随手扩大。</p>
+
+<pre><code>with suppress(FileNotFoundError):
+    os.remove(tmp)            # 文件不存在就算了，作用范围仅此一行
+
+cm = open(out, "w") if out else nullcontext(sys.stdout)
+with cm as sink:
+    sink.write(report)        # 分支只决定「写到哪」，主逻辑一份就够</code></pre>
+
+<p><code>nullcontext</code> 那三行解决的是一个真实的丑陋问题：没有它，你要么把 <code>write(report)</code> 这段逻辑复制两遍（一份在 <code>with</code> 里一份在外面），要么抽成函数再分别调用。它还有个常见用法是关闭某个功能开关，比如 <code>ctx = profiler() if enabled else nullcontext()</code>。</p>
+
+<h3><code>ExitStack</code>：嵌套 <code>with</code> 表达不了的那类场景</h3>
+
+<p>嵌套 <code>with</code> 有个硬约束：层数在写代码时就必须确定。要打开用户传进来的 N 个文件（N 是运行期才知道的），嵌套语法根本没法写。<code>ExitStack</code> 把「已进入的管理器」维护成一个<span class="term">动态资源栈</span>，退出时从栈顶往栈底逐个弹出调用，天然保证逆序。</p>
+
+<div class="arch-diagram">  ── 嵌套 with 能表达的：个数在写代码时已知 ──────────────
+  with open(a) as fa:
+      with open(b) as fb:
+          with open(c) as fc:       ← 想支持任意 N 个？写不出来
+              merge(fa, fb, fc)
+
+  ── ExitStack 能表达的：个数运行期才知道 ────────────────
+      stack = ExitStack()
+        │
+        │  enter_context(open(p1))  → 压入 p1.__exit__      栈底
+        │  enter_context(open(p2))  → 压入 p2.__exit__
+        │  enter_context(lock)      → 压入 lock.__exit__
+        │  callback(report.flush)   → 压入任意收尾函数        栈顶
+        ▼
+  ┌────────────────────────────────────────┐
+  │  退出时从栈顶往栈底依次调用              │
+  │    report.flush()                      │  ← 最后进的最先出
+  │    lock.__exit__(...)                  │
+  │    p2.__exit__(...)                    │
+  │    p1.__exit__(...)                    │  ← 最先进的最后出
+  └────────────────────────────────────────┘
+     某个收尾动作抛异常，剩下的仍然会被调用完
+     （异常会串成链，不会导致后面的资源泄漏）
+
+  两个进阶用法
+  ────────────
+  pop_all()  把已进入的资源整体转移出去 → 用于「构造成功才交付」
+  callback() 登记普通函数，不需要它是上下文管理器</div>
+
+<p><code>pop_all()</code> 是个不显眼但很有用的能力：在工厂函数里先用 <code>ExitStack</code> 托管半成品，全部构造成功后调 <code>pop_all()</code> 把资源所有权转交给返回的对象——中途任何一步失败，<code>with</code> 退出时自动清理已经建好的那部分。这就是「要么全成功、要么不留残留」的一种标准实现。</p>
+
+<div class="intuition-box">
+<p>嵌套 <code>with</code> 的层数是写死在语法里的，<code>ExitStack</code> 把它变成了运行期的一个列表。凡是资源个数由数据决定，就该想到它。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、释放顺序、可重入与嵌套</h2>
+
+<p>单个资源的 <code>with</code> 没什么可讲的。麻烦全在多个资源同时在手上时——而这恰恰是真实代码的常态：一个连接 + 一个事务 + 一把锁 + 一个临时文件。</p>
+
+<h3>一条 <code>with</code> 写多个管理器，等价于嵌套</h3>
+
+<p><code>with A() as a, B() as b:</code> 和两层嵌套的 <code>with</code> 在语义上<strong>完全相同</strong>，包括获取顺序（从左到右）和释放顺序（从右到左）。这也意味着：<code>B()</code> 这个表达式是在 <code>A.__enter__()</code> 成功之后才求值的，所以 <code>B</code> 可以依赖 <code>a</code>。</p>
+
+<div class="arch-diagram">  with A() as a, B() as b, C() as c:     ← 等价于三层嵌套 with
+      work()
+
+  时间轴 ──────────────────────────────────────────────────►
+
+    A.__enter__ ┐
+                │ B.__enter__ ┐
+                │             │ C.__enter__ ┐
+                │             │   work()    │
+                │             │ C.__exit__ ─┘   ← 先释放最后获取的
+                │ B.__exit__ ─┘
+    A.__exit__ ─┘                               ← 最后释放最先获取的
+
+  资源栈                  为什么必须逆序
+  ┌──────────┐            C 往往是「建在 B 之上」的：
+  │ C   栈顶 │ ← 先释放    B = 数据库连接，C = 这条连接上的事务
+  ├──────────┤            若先关连接再回滚事务，回滚语句会打在一个
+  │ B        │            已关闭的 socket 上 → InterfaceError，
+  ├──────────┤            而原始业务异常被这个二次异常盖住
+  │ A   栈底 │ ← 后释放
+  └──────────┘
+     顺序写对了不需要任何额外代码：
+     嵌套 with 和 ExitStack 都自动逆序，
+     手写 finally 才需要你自己保证</div>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某数据同步任务把收尾写成了一段手工 <code>finally</code>，里面先 <code>conn.close()</code> 再 <code>txn.rollback()</code>，顺序正好反了。平时全部走提交路径，问题不显形；某次上游给了脏数据触发回滚，<code>rollback()</code> 打在已关闭的连接上抛出 <code>InterfaceError</code>，把真正的 <code>ValidationError</code> 挤到了 <code>__context__</code> 里。结果那一批 <strong>1,842</strong> 条记录以「半提交」状态留在库里，告警面板上显示的却是数据库连接故障，值班同学按连接池问题排查了 <strong>2 小时 40 分钟</strong> 才在 traceback 上半截找到真实原因。改法是把两个资源都交给 <code>with</code>（或 <code>ExitStack</code>），逆序由语言保证，一行手写 <code>finally</code> 都不需要。</p>
+</div>
+
+<h3>可重入性：同一个管理器对象能不能进两次</h3>
+
+<p><span class="term">可重入性</span>指的是同一个上下文管理器实例在尚未退出时能否再次进入（或退出后能否重新进入）。这<strong>完全取决于实现</strong>，协议本身不作要求，而不同对象的行为差异很大——这正是它容易踩坑的原因。</p>
+
+<table>
+<tr><th>对象</th><th>嵌套进入同一实例</th><th>用完再次进入</th><th>踩坑表现</th></tr>
+<tr><td><code>threading.Lock</code></td><td>❌ 死锁</td><td>✅ 可以</td><td>同一线程递归调用两次 <code>with lock</code>，进程直接挂住，没有任何报错</td></tr>
+<tr><td><code>threading.RLock</code></td><td>✅ 同线程可重入</td><td>✅ 可以</td><td>计数式的，进几次要出几次；跨线程依然互斥</td></tr>
+<tr><td><code>@contextmanager</code> 产出的对象</td><td>❌</td><td>❌ <strong>一次性</strong></td><td><code>RuntimeError: generator didn't yield</code></td></tr>
+<tr><td>文件对象</td><td>—</td><td>❌</td><td>第二次进入不报错，但退出后文件已关，读写抛 <code>ValueError: I/O operation on closed file</code></td></tr>
+<tr><td><code>suppress</code> / <code>nullcontext</code></td><td>✅</td><td>✅</td><td>无状态，随便复用</td></tr>
+<tr><td><code>ExitStack</code></td><td>✅（嵌套入栈）</td><td>✅（退出后栈已清空）</td><td>基本无坑，但别把同一个 stack 跨线程共享</td></tr>
+</table>
+
+<p>第三行是实际项目里最常见的意外。把 <code>@contextmanager</code> 的<strong>调用结果</strong>存成模块级变量看起来很自然——"这不就是个可复用的工具吗"——但它其实是个一次性的生成器包装对象。</p>
+
+<pre><code>TIMER = timer("step")     # 存的是「调用结果」，不是函数
+with TIMER: step_one()    # 第一次正常
+with TIMER: step_two()    # RuntimeError: generator didn't yield
+
+def timed(name):          # 正确做法：每次进入前重新调用
+    return timer(name)    # 存函数，不存函数的返回值</code></pre>
+
+<p>错误信息 <code>generator didn't yield</code> 第一次见到会很困惑，原因其实很直接：生成器早已跑完，第二次 <code>__enter__</code> 里的 <code>next(gen)</code> 立刻拿到 <code>StopIteration</code>，装饰器于是报告「这个生成器没有 yield 出任何东西」。如果确实需要一个能反复进入的对象，就写成类，或者让工厂函数每次返回新实例。</p>
+
+<div class="intuition-box">
+<p>把「管理器」和「管理器工厂」分清楚：<code>timer</code> 是工厂，<code>timer("x")</code> 是一次性的管理器。可复用的东西是前者，能存起来的也只有前者。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、实战范式</h2>
+
+<p>把前五节的规则落到四个反复出现的形状上。它们的共同点是：进入时改变某个状态，退出时无条件还原——只是「状态」的含义各不相同。</p>
+
+<h3>范式一：事务上下文</h3>
+
+<p>事务是最典型的三分支收尾：正常提交、异常回滚、无论如何都要归还连接。注意 <code>except</code> 分支里那行 <code>raise</code>：回滚只是清理了数据库侧的状态，<strong>调用方仍然需要知道这次操作失败了</strong>。少写这一行，等于回滚成功而调用方以为写入成功，是最难查的一类数据不一致。</p>
+
+<pre><code>@contextmanager
+def transaction(conn):
+    try:
+        yield conn
+    except Exception:
+        conn.rollback()
+        raise          # ← 必须重抛：否则调用方以为提交成功了
+    else:
+        conn.commit()  # 只有无异常才走到这里</code></pre>
+
+<p>这里用 <code>try/except/else</code> 而不是 <code>finally</code>，因为提交和回滚是互斥的两条路。如果还需要「无论成败都要做」的动作（比如归还连接、清理临时表），再加一个 <code>finally</code> 分支。</p>
+
+<h3>范式二：计时与埋点</h3>
+
+<p>埋点上下文有个容易漏的点：<strong>失败路径的耗时同样要上报</strong>。只在成功路径记时间，监控看到的平均耗时会系统性偏低，因为超时失败的那些请求恰好是最慢的，却一条都没被统计进去。所以耗时上报要放在 <code>finally</code>，成败标记单独用 <code>except</code> 捕获。</p>
+
+<pre><code>@contextmanager
+def span(name):
+    t0, ok = time.perf_counter(), True
+    try:
+        yield
+    except Exception:
+        ok = False; raise
+    finally:
+        metrics.timing(name, time.perf_counter() - t0, ok=ok)</code></pre>
+
+<h3>范式三：临时修改全局状态</h3>
+
+<p>这一类的危险在于「忘记恢复」的后果是<strong>延迟且跨模块</strong>的：你在这里改了随机种子，两百行之外另一个函数的输出变了，两者之间看不出任何联系。全局状态一律用上下文管理器包起来，恢复由语言保证。</p>
+
+<table>
+<tr><th>全局状态</th><th>怎么临时改</th><th>不恢复的典型症状</th></tr>
+<tr><td>工作目录</td><td>自己写 <code>cd</code>（第三节那个）</td><td>后续相对路径全部找错位置，报 <code>FileNotFoundError</code> 但路径看着没错</td></tr>
+<tr><td>环境变量</td><td><code>os.environ</code> 存旧值改新值，<code>finally</code> 还原</td><td>同进程后续代码连到测试库，或凭据泄漏给不该看到的模块</td></tr>
+<tr><td>随机种子</td><td><code>random.getstate()</code> / <code>setstate()</code></td><td>测试之间互相污染，单跑全绿、全量跑随机失败</td></tr>
+<tr><td>日志级别</td><td>存旧 level、设 DEBUG、还原</td><td>整个服务一直刷 DEBUG，日志量暴涨，磁盘和检索成本一起上去</td></tr>
+<tr><td>标准输出</td><td><code>redirect_stdout</code>（现成的）</td><td><code>print</code> 永久写进某个已关闭的缓冲区</td></tr>
+<tr><td>浮点/Decimal 精度</td><td><code>decimal.localcontext()</code>（现成的）</td><td>后续无关计算的精度被悄悄改掉，结果差在小数第几位</td></tr>
+</table>
+
+<h3>范式四：测试里的临时资源</h3>
+
+<p>测试是上下文管理器密度最高的地方，因为每个测试都必须把世界还原成进来时的样子。<code>tempfile.TemporaryDirectory()</code>、<code>unittest.mock.patch</code>（它本身就是管理器，也能当装饰器）、以及自己写的「插一条测试数据、测完删掉」都属于这一类。资源个数由参数化用例决定时，<code>ExitStack</code> 就是那个答案。</p>
+
+<p>最后提一句异步。<span class="term">异步上下文管理器</span>把两个钩子换成 <code>__aenter__</code> / <code>__aexit__</code> 并用 <code>async with</code> 进入，直觉上没有新东西——只是获取和释放本身也可能需要等待 IO（比如异步连接池的归还），所以钩子必须是协程。语义、逆序释放、返回真值吞异常这些规则一条不变。这部分留给并发组（PY26）展开。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>凡是「获取—收尾」成对的操作，都写成上下文管理器，不留 <code>try/finally</code> 给调用方</li>
+<li><code>@contextmanager</code> 里<strong>一定</strong>用 <code>try/finally</code>（或 <code>except/else</code>）包住 <code>yield</code></li>
+<li><code>__exit__</code> 不需要吞异常时什么都不返回，别写 <code>return False</code> 增加歧义</li>
+<li>事务回滚后重新 <code>raise</code>，让调用方知道这次失败了</li>
+<li>耗时上报放 <code>finally</code>，保证失败路径的延迟也进监控</li>
+<li>资源个数运行期才定就用 <code>ExitStack</code>，顺带获得逆序释放</li>
+<li>存管理器工厂函数，不存工厂调用出来的一次性对象</li>
+<li>递归/嵌套可能重入同一把锁时用 <code>RLock</code></li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li><code>__exit__</code> 里 <code>return True</code> 图省事——异常会凭空消失，故障延后爆发</li>
+<li>在 <code>__exit__</code> 里抛新异常，把真实根因挤到 <code>__context__</code> 里</li>
+<li>假定 <code>as</code> 拿到的一定是管理器本身（<code>TemporaryDirectory</code> 给的是字符串）</li>
+<li>把 <code>@contextmanager</code> 的调用结果存成模块级常量反复进入</li>
+<li>手写 <code>finally</code> 且释放顺序和获取顺序相同</li>
+<li>用 <code>try/except: pass</code> 代替 <code>suppress</code>，让 <code>try</code> 块越写越大</li>
+<li>为「有资源/没资源」两种分支写两份重复逻辑，而不用 <code>nullcontext</code></li>
+<li>在 <code>__enter__</code> 里做多步获取却指望 <code>__exit__</code> 清理中途失败的残留</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>这四个范式其实是同一个：进入时记下旧状态，退出时无条件还原。事务的「旧状态」是未提交，计时的「旧状态」是还没上报，工作目录的「旧状态」就是那个路径字符串。认出这个形状，剩下的只是填空。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>with 和 try/finally 到底哪个更好？既然等价，为什么还要新语法？</summary>
+<div class="answer">两者在单个调用点上确实等价，<code>with</code> 编译出来就是一段 <code>try/finally</code>。差别在于「正确性由谁负责」：<code>try/finally</code> 要求每一个调用方都自己写对收尾，有 20 个调用点就有 20 次写错或写漏的机会；<code>with</code> 把收尾逻辑固定在资源类型自己身上，实现对一次就永远对。这个差别在代码规模上会放大——单文件脚本里看不出区别，几万行的项目里差的是一整类线上故障。另外 <code>with</code> 天然保证多资源逆序释放，手写 <code>finally</code> 时顺序完全靠人记。所以判断标准不是「哪个能跑」，而是「这个成对操作会被调用多少次」：一次性的临时代码用 <code>try/finally</code> 无所谓，会被反复使用的资源一定包成管理器。</div>
+</details>
+
+<details>
+<summary>as 后面拿到的一定是 with 后面那个对象吗？</summary>
+<div class="answer">不是。<code>as</code> 绑定的是 <code>__enter__()</code> 的<strong>返回值</strong>，返回什么完全由实现者决定。文件对象的 <code>__enter__</code> 返回自身，所以 <code>with open(p) as f</code> 里的 <code>f</code> 就是那个文件，这个最常见的例子造成了「一定返回自身」的错觉。但 <code>tempfile.TemporaryDirectory()</code> 的 <code>__enter__</code> 返回的是一个字符串路径，<code>threading.Lock</code> 返回 <code>True</code>，<code>contextlib.suppress</code> 返回 <code>None</code>。判断方法很简单：看文档或者看 <code>__enter__</code> 的 <code>return</code>。自己实现时也要想清楚——返回 <code>self</code> 意味着把整个管理器暴露给使用者（他们可以调你的其他方法），只返回真正需要的产物往往是更克制的设计。</div>
+</details>
+
+<details>
+<summary>__exit__ 返回 True 和返回 None 有什么区别？为什么说返回 True 危险？</summary>
+<div class="answer">返回真值告诉解释器「这个异常我处理完了，别往外传」，于是 <code>with</code> 语句之后的代码会照常执行，就像什么都没发生；返回 <code>None</code>（或任何假值）则让原异常继续向外传播。危险的地方在于它是<strong>无差别</strong>的：一旦写死 <code>return True</code>，不管 <code>with</code> 体内抛的是预期中的 <code>KeyError</code> 还是彻底不该发生的 <code>MemoryError</code>，全都被静默丢弃。后果不是少了几条日志，而是失败被伪装成成功——上游的重试、告警、事务补偿全都不会触发，问题会在离现场很远的地方以数据不一致的形式暴露。真的需要吞异常时，要么用 <code>contextlib.suppress</code> 明确列出异常类型，要么在 <code>__exit__</code> 里写 <code>return isinstance(exc_val, 具体类型)</code> 这样的窄条件。默认写法应该是干脆不写 <code>return</code>。</div>
+</details>
+
+<details>
+<summary>为什么 @contextmanager 里必须用 try/finally 包住 yield？不包会怎样？</summary>
+<div class="answer">因为 <code>with</code> 体内的异常是通过 <code>gen.throw()</code> <strong>在 <code>yield</code> 这一行重新抛出</strong>的。生成器挂起在 <code>yield</code>，异常被塞回这个位置，行为就和函数体里这一行抛异常一样：后面的语句全部被跳过。没有 <code>try/finally</code> 的话，<code>yield</code> 之后的释放代码在异常路径上一行都不会执行。这个 bug 的可怕之处在于它<strong>在测试里几乎抓不到</strong>——正常路径下一切正常，只有 <code>with</code> 体内抛异常时才会暴露，而那通常已经是线上了。后果取决于释放的是什么：锁没放就是死锁，工作目录没还原就是后续所有相对路径出错，事务没回滚就是行锁一直挂着。所以把 <code>try/finally</code>（或 <code>try/except/else</code>）当成这种写法的固定骨架，不要当成可选的防御。</div>
+</details>
+
+<details>
+<summary>什么时候该写类，什么时候用 @contextmanager？</summary>
+<div class="answer">默认用 <code>@contextmanager</code>，因为它把获取和释放写在上下相邻的位置，读起来就是时间顺序，代码量也小得多。改用类的判断依据有四条：一是需要携带状态供外部访问（比如让使用者在 <code>with</code> 期间读到 <code>cm.elapsed</code>），生成器的局部变量做不到这点；二是需要支持重复进入或嵌套进入，生成器版本是一次性的；三是这东西属于库的公开 API，别人可能要继承和覆写；四是需要携带比较复杂的配置，用属性表达比用一堆参数清楚。反过来，项目内部那些「临时改个环境变量」「给这段代码计个时」的小工具，用生成器写就够了，为它们造一个类是纯粹的样板负担。</div>
+</details>
+
+<details>
+<summary>多个资源为什么必须逆序释放？顺序错了具体会出什么问题？</summary>
+<div class="answer">因为后获取的资源常常<strong>建立在先获取的资源之上</strong>，它的收尾动作需要先获取的那个还活着。最典型的组合是连接和事务：事务的回滚要通过连接发语句，如果先把连接关了再回滚，回滚会打在一个已关闭的 socket 上，抛出 <code>InterfaceError</code> 之类的二次异常。这个二次异常还会盖住真正的业务异常，让排查的人先看到「数据库连接故障」，真实根因被推到 traceback 的上半截。类似的还有：临时目录里的文件句柄要先关再删目录（否则 Windows 上直接删不掉）、子资源要先释放再归还父连接池。好消息是你通常不需要自己操心——嵌套 <code>with</code>、一条 <code>with</code> 写多个管理器、<code>ExitStack</code> 三种方式都自动逆序。只有手写 <code>finally</code> 时才需要人工保证，这也是又一个应该用 <code>with</code> 的理由。</div>
+</details>
+
+<details>
+<summary>为什么把 @contextmanager 的结果存成变量复用会报 generator didn't yield？</summary>
+<div class="answer">因为 <code>@contextmanager</code> 装饰的函数<strong>调用一次只能进入一次</strong>。调用 <code>timer("x")</code> 得到的是一个包装着生成器对象的一次性管理器：第一次 <code>__enter__</code> 时它调 <code>next(gen)</code> 推进到 <code>yield</code>，退出时再唤醒一次让生成器跑完。此时生成器已经耗尽，第二次进入时的 <code>next(gen)</code> 立刻收到 <code>StopIteration</code>，装饰器把这个情况报告为 <code>RuntimeError: generator didn't yield</code>。修正办法是区分「工厂」和「产物」：可以存起来复用的是函数 <code>timer</code> 本身，每次进入前重新调用它得到一个新对象。如果确实需要一个能反复进入的对象，就写成类实现。这个坑在把管理器提到模块级当常量用时特别容易踩，因为看起来完全像个可复用的工具。</div>
+</details>
+
+<details>
+<summary>ExitStack 解决的是什么问题？和嵌套 with 有什么本质区别？</summary>
+<div class="answer">嵌套 <code>with</code> 的层数是写死在语法里的，因此只能处理「个数在编码时已知」的情况。<code>ExitStack</code> 把已进入的管理器维护成一个运行期的栈，个数可以由数据决定——比如打开用户传入的 N 个文件、为参数化测试准备数量不定的 mock。退出时它从栈顶往栈底依次调用，逆序是免费获得的，而且某个收尾动作抛异常时剩下的仍然会被调用完，不会因为一个失败而泄漏后面的资源。它还有两个进阶能力：<code>callback()</code> 可以登记任意普通函数作为收尾动作，被登记的东西不必是上下文管理器；<code>pop_all()</code> 能把已进入的资源整体转移出去，用来实现「全部构造成功才交付，中途失败自动清理」的工厂函数。判断标准就一句话：资源个数由数据决定，就用它。</div>
+</details>
+
+<details>
+<summary>suppress 和 try/except: pass 有区别吗？既然功能一样为什么要换？</summary>
+<div class="answer">运行结果一样，差别在可读性和可维护性两处。可读性上，<code>with suppress(FileNotFoundError):</code> 明确表达了「我知道这里可能抛，而且我是刻意忽略的」；而 <code>try/except: pass</code> 在代码审查里永远分不清是刻意忽略还是忘了处理，后人只能去问作者。可维护性上，<code>try</code> 块有个渐变式的腐化倾向：最初只包一行，后来有人在里面加了第二行第三行，某天一个不相关的异常也被静默吞掉了；<code>with</code> 的缩进块虽然技术上也能加东西，但语义上「这个块里的异常都被忽略」是显式声明的，扩大范围时会有明显的心理阻力。此外 <code>suppress</code> 可以一次列多个异常类型，写起来比长长的 <code>except (A, B, C)</code> 更紧凑。要注意的是它俩都不该被滥用——忽略异常本身就是需要理由的决定，只是 <code>suppress</code> 让这个决定变得可见。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

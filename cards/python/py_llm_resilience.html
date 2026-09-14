@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY55 · 大模型调用的客户端韧性</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、失败是常态而不是异常</a>
+<a href="#s2">二、限流有两个维度</a>
+<a href="#s3">三、退避要听服务端的</a>
+<a href="#s4">四、多档降级</a>
+<a href="#s5">五、成本也是可靠性问题</a>
+<a href="#s6">六、可观测性与验收</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY55 · 大模型调用的客户端韧性</h1>
+<p class="subtitle">失败形态的四种处置 / 请求数与 token 两套配额 / 退避听服务端的 / 多档降级与质量损失 / 成本超支就是可用性故障</p>
+
+<div class="intuition-box">
+<p>调用大模型和调用一个内部微服务，写法看着一样，可靠性假设完全不同：它更慢、更容易失败、失败形态更多，而且你为每一次失败付的是真金白银。把「失败是常态」当成设计前提，而不是异常分支，这一类调用的韧性问题就基本落地了。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、失败是常态而不是异常</h2>
+
+<p>内部服务之间的调用，我们习惯了三个九起步的可用性，失败率低到可以写成 <code>except Exception: log.error(...)</code> 然后就不再想它。模型服务这类外部依赖没有这个条件：它对外承诺的可用性通常在 99% 到 99.9% 这个量级，也就是说<strong>每天有分钟级到十分钟级的失败窗口是常态，不是事故</strong>。你的服务如果想做到比它更高的可用性，唯一的办法是在客户端侧主动补上这个差额。</p>
+
+<p class="data-asof"><strong>说明</strong> · 上面的可用性量级是对公开服务等级条款的一个粗略归纳，各家口径不同（有的只承诺月度可用率、有的把限流排除在外）。本卡不引用任何厂商的具体数值、响应头名称或错误码，只讲客户端侧的通用判据。</p>
+
+<h3>失败形态比普通接口多得多</h3>
+
+<p>比可用性更麻烦的是<strong>形态的多样性</strong>。普通接口的失败基本就是「连不上」「超时」「服务端出错」「参数不对」四类，模型调用至少要多认识两类：</p>
+
+<ul>
+<li><span class="term">限流错误</span>：你发得太快，或者这一分钟的用量已经用完了。</li>
+<li><strong>请求超时</strong>：生成式调用的单次耗时天然是秒级到几十秒级，超时既可能是下游变慢，也可能只是这次回答特别长。</li>
+<li><strong>服务端瞬时错误</strong>：单个实例抖动、路由异常，换一次大概率就好。</li>
+<li><span class="term">内容策略拒绝</span>：请求本身被判定不能处理。同样的输入重发一万次还是同样的结果。</li>
+<li><strong>模型过载</strong>：服务端明确表示当前容量不足、请稍后或换个规格。它像限流但不是限流，退避的收益远小于换档。</li>
+<li><span class="term">返回了但内容不可用</span>：调用在传输层完全成功，却给回一个空字符串、一段被截断的输出、或者不符合你约定结构的文本。</li>
+</ul>
+
+<p>最后一类是这类调用独有的，也最阴险：传输层的成功率是 100%，你的监控面板一片绿色，而业务侧的实际可用性可能只有八成。任何只统计「调用有没有抛异常」的成功率指标，在这类依赖上都是失真的——第六节会讲怎么把它拆开看。</p>
+
+<h3>把失败形态映射到四种处置</h3>
+
+<p>韧性设计的第一个动作不是写重试，而是<strong>分类</strong>。所有失败最终只会落到四种处置上：该重试、换档降级、直接失败、需要人工。分类错了，后面所有机制都是在放大错误。</p>
+
+<table>
+<tr><th>失败形态</th><th>典型表现</th><th>处置</th><th>理由</th></tr>
+<tr><td>限流错误</td><td>服务端明确拒绝并通常给出等待提示</td><td><strong>该重试</strong>（先降速）</td><td>下游在说「慢一点」，等一会儿大概率能成；但必须同时把自己的发送速率压下来，否则等于原地打转</td></tr>
+<tr><td>服务端瞬时错误</td><td>偶发、无规律、重发即好</td><td><strong>该重试</strong>（少量、带抖动）</td><td>多半是单实例抖动，换一次可能命中健康实例</td></tr>
+<tr><td>请求超时</td><td>发出去了，没在预算内拿到结果</td><td><strong>换档降级</strong></td><td>重试不改变「它就是慢」这个事实，而且服务端可能还在算，重试等于让同一份计算排两遍队</td></tr>
+<tr><td>模型过载</td><td>服务端表示当前规格容量不足</td><td><strong>换档降级</strong></td><td>换更小的规格或缩短请求，比等同一个规格腾出容量快得多</td></tr>
+<tr><td>内容策略拒绝 / 请求非法 / 凭证问题</td><td>稳定复现，同样输入同样结果</td><td><strong>直接失败</strong></td><td>问题在请求本身，重试只是把同一个错误乘以次数</td></tr>
+<tr><td>输出为空 / 被截断 / 结构不符</td><td>传输成功但内容不可用</td><td>一次<strong>纠正式重试</strong>，连续失败转<strong>人工</strong></td><td>换一次采样可能就好；但连续不符说明提示词或约束本身有问题，得人去改</td></tr>
+<tr><td>配额耗尽 / 账单被切断</td><td>全量失败，且不随时间恢复</td><td><strong>需要人工</strong></td><td>没有任何客户端策略能解决额度问题，重试只会让日志更难看</td></tr>
+</table>
+
+<p><strong>这一类调用上最常见、代价也最大的错误，是把不该重试的也重试了。</strong>它同时踩中两件坏事：把必然失败的流量塞进本就紧张的配额（浪费的是钱和额度），以及在下游最脆弱的时刻给它加压（把「变慢」推成「不可用」）。第三节的事故复盘就是这一条的完整演绎。</p>
+
+<div class="arch-diagram">  一次失败进来，先过分类器，再决定动作
+  ─────────────────────────────────────
+
+                      ┌──────────────┐
+       失败  ───────► │  失败分类器   │
+                      └──────┬───────┘
+         ┌───────────────────┼───────────────────┬──────────────────┐
+         ▼                   ▼                   ▼                  ▼
+    ┌─────────┐        ┌──────────┐        ┌──────────┐      ┌──────────┐
+    │ 该重试  │        │ 换档降级 │        │ 直接失败 │      │ 需要人工 │
+    └────┬────┘        └────┬─────┘        └────┬─────┘      └────┬─────┘
+         │                  │                   │                 │
+   限流 / 瞬时错误     超时 / 过载        策略拒绝 / 非法      配额耗尽
+         │                  │              凭证问题           账单切断
+         ▼                  ▼                   ▼                 ▼
+   退避后重试         走降级阶梯          立刻返回错误       告警 + 停止调用
+   （受重试预算约束）  （第四节）        （不占用任何配额）  （人工介入）
+
+  没有这个分类器时，代码通常长这样：
+    except Exception:  retry(3)
+  于是右边三列全部被当成左边第一列处理 —— 这就是放大器的开关</div>
+
+<div class="intuition-box">
+<p>写重试之前先写分类。重试是唯一会自己制造流量的组件，而分类器是它的保险栓；没有保险栓的重试在故障时会变成攻击工具。</p>
+</div>
+
+<p>异常类型该怎么设计、重试边界该画在哪一层，<a href="py_exception_design.html">PY24 异常体系设计</a>讲得更细。本卡只强调一点：<strong>分类结果应当是异常类型自带的属性</strong>（比如一个 <code>retryable</code> 字段或一组基类），而不是散落在各个调用点的 <code>if</code> 判断——散落的判断一定会有地方忘记更新。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、限流有两个维度</h2>
+
+<p>这是模型调用和普通接口差别最大的地方，也是最容易被漏掉的一点：<strong>你面对的是两套互相独立的配额</strong>——按请求个数算的，和按 token 数算的。它们各有各的窗口，任何一个先撞上，你都会被拒。</p>
+
+<p>普通接口的限流基本只有一个口径，所以「控住并发数」这个直觉在那里是够用的：并发度乘以往返次数就是你的速率上限，心里有数。这个直觉在模型调用上会失效，因为每个请求消耗的 token 数是<strong>变量</strong>，而且分布通常非常宽——同一个接口，短问答和长文档摘要的输入 token 可以差两个数量级。</p>
+
+<div class="arch-diagram">  同样 8 个并发，两种输入分布，token 速率差一个数量级
+  ──────────────────────────────────────────────────
+
+  场景 A：短问答      场景 B：长文档摘要
+  ─────────────      ──────────────────
+  单请求 ≈ 500 tok    单请求 ≈ 20,000 tok
+  单次耗时 ≈ 2 s      单次耗时 ≈ 20 s
+  并发 8              并发 8
+
+  请求速率            请求速率
+    8 ÷ 2  = 4 req/s    8 ÷ 20 = 0.4 req/s   ← 只有 A 的十分之一
+
+  token 速率          token 速率
+    4 × 500            0.4 × 20,000
+    = 2,000 tok/s      = 8,000 tok/s         ← 反而是 A 的 4 倍
+
+  结论：B 的并发更低、请求速率更低，却更容易打爆 token 配额。
+        只看「同时在飞几个请求」这个数字，你根本看不见 B 的风险。</div>
+
+<p>上面这张图是本节的全部要点：<strong>并发度和 token 速率之间隔着「单请求长度」和「单次耗时」两个你不控制的变量，所以控住前者控不住后者</strong>。一批长请求完全可以在并发个数很低、看起来非常保守的情况下，把 token 配额打满。</p>
+
+<div class="intuition-box">
+<p>并发数是你能看见的量，token 速率是真正被计费和限流的量。两者之间没有固定换算关系，所以必须分别设两道闸门，各自有自己的参数。</p>
+</div>
+
+<h3>为什么请求前的 token 估算是必要的</h3>
+
+<p>token 桶要工作，必须在<strong>请求发出之前</strong>就知道这次大概要花多少——可实际用量只有响应回来才知道。这看起来是个死循环，出路是接受不精确：<span class="term">预扣与回补</span>。发请求前按估算值预先扣掉额度，拿到响应后按实际用量补差。</p>
+
+<pre><code>async def call_guarded(req):
+    est = estimate_tokens(req.prompt) + req.max_output   # 宁可偏大
+    async with req_bucket.take(1), token_bucket.take(est):
+        resp = await call_model(req)
+    token_bucket.refund(est - resp.total_tokens)         # 按实际用量补差
+    return resp</code></pre>
+
+<p>估算函数不需要准。它需要的是<strong>偏差方向稳定且偏保守</strong>：宁可高估。高估的代价是配额没用满（吞吐损失几个百分点），低估的代价是撞上限流（然后触发退避、重试，损失远大于几个百分点）。一个够用的做法是先用字符数或分词数乘一个经验系数，然后拿一批真实调用的实际用量做一次离线校准，把系数取到 P90 那一侧而不是均值。</p>
+
+<p>估算里最容易漏的是<strong>输出</strong>。输入你能数，输出在生成完之前谁也不知道有多长——所以必须给每次调用显式设一个输出长度上限，并把这个上限整个预扣进去。不设上限意味着 token 桶的输入项是个未知数，这道闸门就形同虚设；顺带一提，这个上限同时也是第六节里超时取值的依据。</p>
+
+<h3>两组参数怎么定</h3>
+
+<p>信号量、令牌桶这些机制本身怎么实现、嵌套顺序怎么排，<a href="py_cancel_timeout_ratelimit.html">PY31 取消、超时与并发限流</a>已经讲透了，这里不重复。本卡要补的是这个场景下<strong>参数取值的依据</strong>——同样的机制，参数拍错了一样会被限流。</p>
+
+<table>
+<tr><th>参数</th><th>取值依据</th><th>定得太小</th><th>定得太大</th></tr>
+<tr><td>请求桶速率</td><td>账号的请求配额 × 安全系数（0.7–0.8）</td><td>吞吐白白浪费，长尾任务跑不完</td><td>撞限流，触发退避链，实际吞吐反而下降</td></tr>
+<tr><td>token 桶速率</td><td>账号的 token 配额 × 同一个安全系数</td><td>短请求被无谓地排队</td><td>长请求成批到来时成片被拒</td></tr>
+<tr><td>预扣用量</td><td>输入估算（取 P90 系数）+ 输出长度上限</td><td>持续低估，桶算出来的速率比真实速率低，等于没限</td><td>配额利用率下降，但这是可接受的一侧</td></tr>
+<tr><td>并发度</td><td>目标请求速率 × 平均单次耗时，再留一点余量</td><td>达不到目标速率，闸门变成瓶颈</td><td>下游恢复变快时速率被自动放大，容易二次打死下游</td></tr>
+<tr><td>输出长度上限</td><td>业务真正需要的最长回答 + 20% 余量</td><td>长回答被截断，落进「返回了但内容不可用」那一类</td><td>预扣虚高，配额利用率下降</td></tr>
+<tr><td>分桶粒度</td><td>按凭证分，再按调用方细分（见第五节）</td><td>桶太多，每个桶的突发容量都不够用</td><td>一个批量任务吃光全局配额，在线流量陪着一起被限</td></tr>
+</table>
+
+<div class="formula">预扣 = 输入估算(P90 系数) + 输出长度上限 &nbsp;&nbsp;→&nbsp;&nbsp; 响应后回补差额</div>
+
+<p>关于安全系数留 20%–30% 这件事，值得说清理由：配额的计量窗口是服务端定义的，它什么时候开始、按什么粒度滑动，你都不知道，你的本地计数和它天然不同步。想精确贴线，就等于把「两个不同步的计数器恰好对齐」当成了正常运行的前提。留出余量是这里最便宜的一笔保险——代价是可预测的百分之二三十吞吐，收益是不用处理限流引发的整条反应链。</p>
+
+<div class="intuition-box">
+<p>两道闸门，两组参数，一个安全系数。参数的每一个取值都要能说出「它是从哪个已知量推出来的」；凡是说不出来的，就是等着在半夜被验证的假设。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、退避要听服务端的</h2>
+
+<p>退避的等待时长有三个可能的来源，优先级是明确的：<strong>服务端给出的等待提示 &gt; 自己的指数退避 &gt; 固定间隔</strong>。第一条优先是因为一个简单的事实——服务端知道自己的配额窗口什么时候重置，你不知道。你的指数退避本质上是在猜：猜早了继续被拒，还白白消耗一次配额；猜晚了平添总耗时。</p>
+
+<p>但「听服务端的」不等于无条件照做。稳妥的组合是三件事一起：以服务端的提示为基准，叠加随机抖动，再用自己的上限兜底。上限的作用是防止对端给出一个离谱的大数值把你的任务整个挂住——尤其在有上游用户在等的链路里，一个超过请求预算的等待时长没有任何意义，不如直接降级。</p>
+
+<h3>抖动在这个场景下尤其不能省</h3>
+
+<p><span class="term">抖动</span>的原理和「不加抖动会形成惊群」的推演，<a href="py_cancel_timeout_ratelimit.html">PY31</a> 里有完整的图示，这里只补一句这个场景为什么更严重：模型调用的单次耗时是秒级到几十秒级，一批任务往往由同一个定时窗口启动、又在同一批数据上跑，<strong>它们天然是对齐的</strong>。加上并发度低、每个请求都很贵，一次同步重试的尖峰就足以把刚刚恢复的配额窗口重新打满。耗时越长、并发越低的调用，对齐效应越强，抖动越是刚需。</p>
+
+<h3>重试预算：最常缺的那一层闸门</h3>
+
+<p>大多数代码只有一层重试约束：单个请求最多试几次。这一层管的是「一个请求最坏放大几倍」，管不住<strong>系统级</strong>的放大——因为失败率一旦整体上升，每个请求都会各自用满自己的额度，总流量就成倍上涨。这正是局部正确、全局灾难的典型形态。</p>
+
+<p><span class="term">重试预算</span>就是补上这一层：在一个滑动窗口里统计「重试请求数 ÷ 总请求数」，超过阈值（常取 5%–10% 这个量级）就<strong>停止发放所有新的重试</strong>，失败直接进入降级或快速失败。它的效果很漂亮：平时几乎不起作用，故障时自动把重试流量归零，给下游留出恢复窗口。</p>
+
+<pre><code>def may_retry(err, attempt) -> bool:
+    if not classify(err).retryable:        # 第一层：类型对不对
+        return False
+    if window.retry_ratio() &gt; 0.10:       # 第二层：全局重试预算
+        return False
+    return attempt &lt; MAX_ATTEMPTS          # 第三层：单请求次数</code></pre>
+
+<table>
+<tr><th>闸门</th><th>限的是什么</th><th>缺了它会怎样</th></tr>
+<tr><td>失败分类</td><td>哪些错误才配得上一次重试</td><td>不可重试的错误也被乘以次数，纯浪费配额</td></tr>
+<tr><td>单请求最大尝试次数</td><td>一个请求最坏放大几倍</td><td>单个请求能无限占用配额与连接</td></tr>
+<tr><td>单请求总时间预算</td><td>上游用户最长等多久</td><td>退避把请求挂到分钟级，外层超时一刀砍掉，前面的等待全白费</td></tr>
+<tr><td><strong>全局重试占比</strong></td><td>整个系统最坏放大几倍</td><td>故障时每个请求各自放大，总流量成倍上涨，恢复窗口被自己堵死</td></tr>
+<tr><td>熔断</td><td>什么时候干脆不要再发了</td><td>明知下游已挂，仍持续发送并持续失败</td></tr>
+</table>
+
+<p>第四行是本节的重点，也是绝大多数实现里缺的那一行。熔断的状态机、半开探测这些通用机制属于接口稳定性的基本盘，<a href="../engineering/api_stability.html">ST03 大模型 API 调用稳定性</a>讲得很完整，本卡不重复；这里只提醒二者的分工：<strong>重试预算是连续的减速带，熔断是离散的总开关</strong>，前者在故障刚起来时就开始生效，后者在确认坏了之后才动作，两个都要有。</p>
+
+<p>把这套逻辑封装成一个装饰器，让调用点保持干净，是最自然的落法——闭包捕获窗口状态、装饰器包住调用，写法可以参考 <a href="py_closures_decorators.html">PY14 闭包与装饰器</a>。要注意的是重试预算的窗口必须是<strong>进程级共享</strong>的，如果每个调用点各自持有一个窗口，这层闸门就退化成了第二层。</p>
+
+<div class="highlight">
+<p><strong>生产事故复盘：上游变慢，被客户端的重试放大成完全不可用。</strong>一个面向内部的文档问答服务，稳态调用量约 1,800 次/分钟，日峰值约 2,000 次/分钟；账号的请求配额在 2,100 次/分钟这个量级，也就是说稳态就占了八成半、峰值几乎贴着上限——这本身就是个隐患，但一直没出事。某天上游模型服务开始变慢：平均单次耗时从约 2.1 秒涨到约 11 秒，P95 从 4 秒涨到 28 秒——注意此时它<strong>并没有挂</strong>，只是慢了。<br>
+客户端的超时设在 8 秒，于是大批请求开始超时。而重试逻辑是最朴素的那种：<code>except Exception</code> 之后一律重试 3 次、间隔 1 秒、无抖动、不分类型。失败率一上来，几乎每个请求都走满 4 次尝试，实测请求量放大到约 <strong>3.7 倍</strong>，峰值约 6,600 次/分钟——是配额上限的三倍多。限流错误占比从 0 升到 <strong>68%</strong>，而被限流的请求又被同一段代码重试——正反馈闭合。故障持续 <strong>46 分钟</strong>，其中成功率低于 5% 的完全不可用时段约 <strong>19 分钟</strong>。<br>
+止损分两步：先把重试次数改成 0（只保留单次尝试）并发布，8 分钟后限流错误归零、成功率回到 62%（剩下的失败是真的超时）；再把超时从 8 秒放宽到 25 秒、改走流式，成功率回到 97%——此时上游依然是慢的，只是不再被客户端放大。<br>
+复盘里最值得记的一条是：<strong>放大的根源是「超时也重试」</strong>。超时的请求服务端其实还在算，重试等于把同一份计算又排进队列一次，既不提高这次的成功率，又吃掉了本该给别人的配额。长期动作四项：按失败类型分流（超时与限流不再本地重试）、加 10% 的全局重试预算、补上小模型降级档、token 与请求双桶限流。</p>
+</div>
+
+<table>
+<tr><th>指标</th><th>故障前</th><th>故障峰值</th><th>整改后</th></tr>
+<tr><td>发出的调用量</td><td>约 1,800 次/分钟（配额约 2,100）</td><td>约 6,600 次/分钟（3.7 倍）</td><td>约 1,900 次/分钟</td></tr>
+<tr><td>限流错误占比</td><td>0</td><td>68%</td><td>&lt; 0.5%</td></tr>
+<tr><td>业务成功率</td><td>99.4%</td><td>低于 5%（持续 19 分钟）</td><td>97%（上游仍偏慢时）</td></tr>
+<tr><td>重试策略</td><td>一律 3 次，固定 1 秒，无抖动</td><td>—</td><td>按类型分流 + 抖动 + 10% 全局预算</td></tr>
+<tr><td>单次超时</td><td>8 秒（按平均耗时定的）</td><td>—</td><td>25 秒 + 流式的间隔超时</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>故障时该问的不是「我还能重试几次」，而是「我这段代码此刻是在帮下游恢复，还是在阻止它恢复」。答案不取决于重试次数写了几，取决于有没有人限制整体的重试占比。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、多档降级：把「失败」换成「差一点的答案」</h2>
+
+<p>前三节都在讲怎么少犯错，这一节讲的是这类调用真正的韧性来源。原因很直接：模型调用的失败率高、单次耗时长，靠重试把可用性抬到三个九以上是不现实的——重试只能对付瞬时抖动，对付不了「下游整体变慢」或者「配额确实不够」。真正能拉开差距的是<span class="term">多档降级</span>：不追求每次都给出最好的答案，而是保证<strong>任何时候都能给出一个可用的答案</strong>。</p>
+
+<h3>降级阶梯</h3>
+
+<p>阶梯的排法有个一致的原则：<strong>越靠前的档位质量损失越小，越靠后的档位对下游的依赖越轻</strong>。最后一档必须是完全不依赖下游的。</p>
+
+<table>
+<tr><th>档位</th><th>做什么</th><th>质量损失</th><th>要提前准备什么</th></tr>
+<tr><td>D0 正常</td><td>主模型 + 完整上下文</td><td>无</td><td>—</td></tr>
+<tr><td>D1 换小规格</td><td>切到更小更快的模型</td><td>看任务类型：分类、改写掉得很少；长链推理、结构化抽取掉得明显</td><td>逐任务类型的质量对比数据；常常还需要一套更具体的提示词（小模型对含糊指令更敏感）</td></tr>
+<tr><td>D2 缩规模</td><td>裁剪上下文、压低输出长度上限</td><td>细节丢失、回答变短，但方向通常还对</td><td>一个按相关度排序的裁剪策略，而不是简单截断头尾</td></tr>
+<tr><td>D3 用缓存</td><td>返回此前缓存过的相近结果</td><td>可能过时；「相近」不等于「相同」</td><td>缓存键设计、陈旧度上限、以及返回时的标注</td></tr>
+<tr><td>D4 退回规则</td><td>规则、模板或检索原文直出</td><td>明显更笨，但确定、可解释、零成本</td><td><strong>提前实现并保持可运行</strong>——这是最容易腐烂的一档</td></tr>
+<tr><td>D5 明确失败</td><td>告知失败、给出重试时间与替代路径</td><td>没有答案</td><td>一份像样的失败文案与状态码约定</td></tr>
+</table>
+
+<p>几档的准备工作里，D3 和 D4 最容易被低估。缓存不是「加个字典」就完事：键至少要包含任务类型、归一化后的输入、模型档位和提示词版本，缺了后两项，升级提示词之后你会拿老结果去回答新问题，而且没人会发现。D4 更极端——它平时零流量，是整条路径上腐烂速度最快的一段。</p>
+
+<pre><code>LADDER = [primary, smaller_model, trimmed_context, cached_answer, rule_based]
+
+async def answer(req):
+    for step in LADDER:
+        try:
+            return await step(req)      # 返回值带上档位标记，供上游与监控识别
+        except Degradable:
+            continue
+    return explain_failure(req)         # 最后一档：明确告知，不假装成功</code></pre>
+
+<p>这段骨架有两个细节值得强调。一是<strong>返回值必须带档位标记</strong>：上游需要知道这个答案是几档给的，才能决定要不要在界面上提示、要不要允许用户重试；监控也靠它算各档触发率。二是只有被分类为「可降级」的失败才继续往下走，剩下的直接上抛——否则一个参数错误会把整条阶梯从头到尾跑一遍，每一档都失败，白白花掉五倍的时间。</p>
+
+<div class="arch-diagram">  降级决策路径
+  ────────────
+
+  请求进来
+     │
+     ▼
+  重试预算还有余量吗 ── 没有 ──┐
+     │ 有                      │
+     ▼                         │
+  熔断器是打开的吗 ── 是 ──────┤     （熔断的状态机见 ST03）
+     │ 否                      │
+     ▼                         ▼
+  D0 主模型 ── 失败 ──► 这个失败可降级吗
+     │ 成功                │        │
+     │              不可降级│        │可降级
+     │                     ▼        ▼
+     │                 立刻上抛   D1 换小规格 ── 失败 ─┐
+     │                              │ 成功            │
+     │                              │                 ▼
+     │                              │      D2 缩上下文/压输出 ─ 失败 ─┐
+     │                              │              │ 成功            │
+     │                              │              │                 ▼
+     │                              │              │        D3 缓存相近结果 ─ 失败 ─┐
+     │                              │              │              │ 成功           │
+     │                              │              │              │                ▼
+     │                              │              │              │        D4 规则/模板 ─ 失败 ─┐
+     │                              │              │              │              │ 成功        │
+     ▼                              ▼              ▼              ▼              ▼             ▼
+  ┌──────────────────────────────────────────────────────────────────────────┐  ┌──────────────┐
+  │  返回结果，附带档位标记（D0…D4）→ 上游据此提示用户，监控据此算触发率      │  │ D5 明确失败  │
+  └──────────────────────────────────────────────────────────────────────────┘  └──────────────┘
+
+  注意左侧两道前置闸门：它们让系统在下游已经确认不行的时候
+  直接从 D2 或 D3 起跳，而不是每个请求都先去撞一次 D0</div>
+
+<h3>降级路径必须被测试过</h3>
+
+<p>这一节最重要的一句话：<strong>没被测过的降级路径，真到那天它自己也是坏的。</strong>这不是谨慎，是统计规律——降级分支平时零流量，没有任何日常信号能暴露它的腐烂，而它周围的代码在持续变化。</p>
+
+<div class="highlight">
+<p><strong>一个很典型的二次故障。</strong>某服务的降级档写好后一年没被触发过。真正需要它的那天，D1 的小模型档在第一个请求上就抛了异常——半年前提示词做过一次结构化改造，主链路的解析器跟着改了，小模型档用的还是老版提示词，产出的结构对不上新解析器。D3 的缓存档情况更隐蔽：它能返回结果，但缓存键里没有提示词版本，返回的是一批半年前语义的答案，字面上完全通顺，业务侧对了半小时才看出不对。结果是「降级」不但没兜住，还额外制造了一批需要人工回溯的脏数据。教训只有一条：<strong>降级路径是产品路径，不是应急预案，它要和主链路一起被测试、一起被发布、一起被复查。</strong></p>
+</div>
+
+<p>把降级路径保持在「随时可用」状态，三件事按成本从低到高：其一，每档都有单测，用注入的失败驱动，断言返回值的档位标记和结构；其二，在测试环境按档逐一注入故障做端到端演练，纳入发布前检查；其三，生产环境常态放行极小比例的真实流量走降级档（千分之几的量级即可），让每一档都有持续的、真实的信号。第三条的成本最高，但它是唯一能发现「环境漂移」类问题的办法。</p>
+
+<div class="intuition-box">
+<p>降级不是「出错时兜一下」的应急分支，而是一条需要长期维护的产品路径。判断它是否真的存在，标准很简单：上一次有人跑通它，是这个季度的事吗？</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、成本也是可靠性问题</h2>
+
+<p>把成本放进一张讲韧性的卡里，不是因为要省钱，而是因为这类依赖上存在一条很短的因果链：<strong>失控的调用 → 账单超支 → 配额被切断或被风控 → 全量不可用</strong>。普通接口的调用量失控只会让下游变慢，这里会直接变成硬性的服务中止，而且恢复过程涉及审批与付款，不是重启能解决的。所以成本纪律在这类调用上属于可靠性工作，不是财务工作。</p>
+
+<p>更微妙的是，它和前面几节是互相咬合的：重试放大既是可用性问题也是成本问题；上下文膨胀既推高延迟也推高账单；而给单个请求设成本上限，同时也就给它设了延迟上限。这几件事的手段是同一套。</p>
+
+<div class="arch-diagram">  从成本失控到可用性故障，只有四步
+  ────────────────────────────────
+
+   ① 调用量或单次用量失控
+      重试放大 / 上下文膨胀 / 输出无上限 / 请求内循环无上限
+                    │
+                    ▼
+   ② 账单与用量曲线脱离业务曲线
+      调用量涨了几倍，成功率没涨 ← 这个组合就是告警条件
+                    │
+                    ▼
+   ③ 配额被切断或被风控
+      硬性拒绝，不随时间恢复，重试一律无效
+                    │
+                    ▼
+   ④ 全量不可用
+      恢复过程涉及审批与付款，不是重启能解决的
+
+  可以在每一步之间插一道闸门：
+   ①→② 重试预算、上下文预算、输出上限、单请求总成本上限
+   ②→③ 按调用方分桶配额、放大倍数告警（不是绝对值阈值）
+   ③→④ 降级阶梯的后几档（缓存、规则）本来就不依赖下游</div>
+
+<table>
+<tr><th>失控形态</th><th>表现</th><th>防住的手段</th></tr>
+<tr><td>重试放大</td><td>账单随失败率同步上涨，成功率却没涨；账单曲线和错误率曲线形状一样</td><td>失败分类 + 全局重试预算（第三节）</td></tr>
+<tr><td>上下文膨胀</td><td>把整段历史或整篇文档塞进去，单次成本随会话轮数线性甚至更快增长</td><td>上下文 token 预算上限 + 按相关度裁剪，而不是「能塞就塞」</td></tr>
+<tr><td>输出不设上限</td><td>绝大多数回答很短，偶发几次极长输出，成本分布长尾很重</td><td>每次调用显式设输出长度上限（也是第二节预扣的输入）</td></tr>
+<tr><td>请求内循环</td><td>一个请求内部串联十几次调用（工具循环、自我修正），轮数无上限</td><td>单请求<strong>总</strong>成本上限 + 最大轮数，超了就降级或失败</td></tr>
+<tr><td>单一调用方吃光配额</td><td>一个批量任务把在线流量的额度挤掉，在线用户集体被限流</td><td>按调用方/用户分桶配额，在线优先于离线</td></tr>
+<tr><td>账不清</td><td>账单翻倍，无法定位是哪个功能、哪个调用方、哪一档造成的</td><td>每次调用的 token 消耗记成带维度的指标</td></tr>
+</table>
+
+<p>四条纪律，逐条说一下为什么是这四条。</p>
+
+<p><strong>按调用方或用户维度设配额上限。</strong>全局一个大池子的问题不是控不住总量，而是控不住<strong>分配</strong>：一个失控的批量任务会把在线请求的额度吃光，于是一个后台功能的 bug 变成了全站故障。分桶之后，失控被限制在它自己的桶里，别人不受影响。</p>
+
+<p><strong>把每次调用的 token 消耗记成指标。</strong>维度至少要有调用方、任务类型、模型档位，以及输入与输出分开记。没有这些维度，账单异常时你只能看到一个总数在涨，无法定位——而定位不了就只能全面降速，把一个局部问题处理成全局降级。指标怎么打、维度怎么设计，见 <a href="py_logging_observability.html">PY43 日志与可观测性</a>。</p>
+
+<p><strong>对异常放大的调用量告警。</strong>注意告警对象是<strong>放大</strong>而不是绝对值：调用量涨 3 倍且成功率没涨，几乎一定是重试或循环失控，这个组合条件比任何单一阈值都准。只对绝对值设阈值的话，业务自然增长会把阈值推高，等它真失控时阈值已经没有意义了。</p>
+
+<p><strong>给单个请求设总成本上限。</strong>关键词是「总」——它必须涵盖这个请求内部的所有调用、所有重试、所有降级尝试。只限制单次调用的成本，在会自我循环的请求里等于没限：十几轮各自合规的调用叠起来就是一个离谱的数字。实现上就是给请求挂一个预算计数器，每次调用前检查余额、之后扣减，余额不足时直接跳到降级档。这个计数器和请求级的时间预算是一对孪生兄弟，适合放在同一个上下文对象里传递；跨任务传递这类请求级状态的写法见 <a href="py_task_orchestration.html">PY30 并发编排原语</a>。</p>
+
+<div class="intuition-box">
+<p>在这类依赖上，账单是一个会触发熔断的指标。任何能让调用量意外翻倍的代码路径，都应该按「可用性风险」而不是「成本风险」来评审。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、可观测性与验收</h2>
+
+<p>前面五节的机制有一个共同特点：<strong>它们平时都不起作用</strong>。限流闸门在正常流量下不拦人，重试预算在低失败率下不生效，降级档在下游健康时零触发。这意味着你没有任何日常反馈能告诉你它们是否正确——除了刻意设计的指标，和上线前刻意做过的验证。</p>
+
+<h3>该看的指标</h3>
+
+<table>
+<tr><th>指标</th><th>怎么拆</th><th>它回答什么问题</th></tr>
+<tr><td>成功率</td><td>按失败类型拆：限流 / 超时 / 瞬时错误 / 内容拒绝 / 输出不可用</td><td>是下游的问题，还是我发太快，还是我的提示词有问题——一个合并的成功率回答不了任何一个</td></tr>
+<tr><td>各档降级触发率</td><td>按档位（D1…D5）分别统计</td><td>降级到底有没有在工作；某一档长期为 0 就是「它可能已经坏了」的信号</td></tr>
+<tr><td>重试率与预算占用</td><td>重试请求数 ÷ 总请求数，以及离阈值还有多远</td><td>此刻我在放大流量吗；预算这道闸门是不是已经顶住了</td></tr>
+<tr><td>token 消耗</td><td>按调用方、任务类型、模型档位；输入与输出分开</td><td>钱花在哪，以及哪个维度在异常增长</td></tr>
+<tr><td>首字延迟</td><td>分位数（P50 / P95 / P99）</td><td>流式场景下用户实际感受到的快慢</td></tr>
+<tr><td>总延迟</td><td>分位数，且与首字延迟分开看</td><td>配额占用与超时该怎么定</td></tr>
+<tr><td>自身闸门的排队时间</td><td>请求在信号量/令牌桶里等了多久</td><td>最容易漏的一个：没有它，你会把自己的排队时间当成「下游变慢」</td></tr>
+</table>
+
+<p>倒数第三和倒数第二行必须分开，这是这类调用特有的一条。流式输出下，用户的体验几乎完全由<strong>首字延迟</strong>决定，而配额占用、超时取值、并发估算全都取决于<strong>总延迟</strong>。两者的走向可以完全相反：首字延迟纹丝不动、总延迟翻倍，说明生成变慢或回答变长；首字延迟飙升、总延迟正常，说明排队或路由出了问题。只看合并后的一个延迟指标，这两种截然不同的故障长得一模一样。</p>
+
+<p>最后一行同样值得单列。客户端自己的闸门制造的等待，在大多数埋点里会被算进「调用耗时」，于是你的监控会显示下游变慢——而实际上下游很健康，是你的并发度设小了。把闸门内的排队时间单独记一个指标，这类误判就消失了。</p>
+
+<h3>上线前必须验过的三件事</h3>
+
+<div class="arch-diagram">  三件事，缺一件就等着在生产里验
+  ──────────────────────────────
+
+  ① 限流命中时行为正确
+     注入：让下游连续返回限流错误
+     断言：按服务端提示退避（而不是自己的固定间隔）
+           发送速率真的降下来了（不是原速重试）
+           重试预算顶住后不再放大
+           最终走降级或明确失败，不是无限等待
+
+  ② 降级路径真的能走通
+     注入：逐档让上一档失败（D0 失败 → 看 D1，D1 也失败 → 看 D2 …）
+     断言：每一档都返回结构正确、可用的结果
+           返回值带着正确的档位标记
+           最后一档 D5 给出的是明确失败，不是空对象或假装成功
+
+  ③ 超时不会把长回答掐断
+     注入：用你业务里最长的真实输入（不是平均输入）
+     断言：超时上限按最长回答定，长回答能完整返回
+           流式场景下超时作用在「两次数据之间的间隔」
+           而不是整个响应的总时长
+           —— 否则回答越长越必然被掐断，且只在生产才暴露</div>
+
+<p>第三件事是踩坑率最高的一件。超时参数如果是按平均耗时定的，它对长回答就是一把随机的铡刀：平时看不出来，因为长请求占比小；一旦上游稍微变慢，或者用户输入变长，长请求先成片超时，而超时又常常被错误地当成可重试错误——第三节那场事故的第一块多米诺，就是这么倒的。<strong>超时要按最长的合法回答来定，不是按平均。</strong>流式场景下还要换个口径：作用在两次数据之间的间隔上，这样「慢但在持续输出」和「真的卡死」才能被区分开。超时本身的分层与预算写法见 <a href="py_cancel_timeout_ratelimit.html">PY31</a>，异步链路上把超时切断点定位到哪一层可以配合 <a href="py_task_orchestration.html">PY30</a> 的编排原语。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>先分类再决定动作：该重试 / 换档降级 / 直接失败 / 需要人工，四条路各走各的</li>
+<li>请求数和 token 数各设一道闸门，token 按估算预扣、按实际回补</li>
+<li>每次调用显式设输出长度上限，它同时是预扣依据和超时依据</li>
+<li>优先遵守服务端给出的等待提示，再叠加抖动和自己的上限兜底</li>
+<li>加一层全局重试占比预算（5%–10% 量级），进程级共享</li>
+<li>降级阶梯的最后一档必须完全不依赖下游</li>
+<li>返回值带档位标记，让上游和监控都知道这答案是几档给的</li>
+<li>降级路径纳入常规测试，并常态放行千分之几的真实流量做演练</li>
+<li>按调用方分桶配额，在线流量优先于离线批量</li>
+<li>成功率按失败类型拆，首字延迟与总延迟分开看</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li><code>except Exception: retry(3)</code>——它把四种处置压成了一种</li>
+<li>对超时原样重试：服务端可能还在算，你只是把同一份计算排了两遍</li>
+<li>只控并发数就认为控住了速率——长请求能在低并发下打爆 token 配额</li>
+<li>不设输出长度上限，让 token 预扣的输入项成为未知数</li>
+<li>无抖动的固定间隔重试，尤其在批量任务里（它们天然对齐）</li>
+<li>只限单请求重试次数，不限全局重试占比</li>
+<li>无条件照做服务端给的等待时长，不设上限、不考虑请求预算</li>
+<li>把降级当应急预案写完就不再碰，等真需要时它自己是坏的</li>
+<li>缓存键里不含提示词版本和模型档位，升级后拿老语义答新问题</li>
+<li>超时按平均耗时定，然后在生产里靠长回答被掐断来发现</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>这类调用的韧性不体现在「失败少」，而体现在「失败时还能给出答案」。所以验收的标准也不是压测跑通，而是：把下游关掉，你的服务还返回什么？</p>
+</div>
+
+<p>补一句范围：本卡讲的是<strong>调用方一侧</strong>的韧性。同一个话题还有另外两个面向——服务端侧的容量与排队，以及客户端的连接复用与并发模型（同步、线程池、异步三种形态各自的取舍），后者站里另有一张专门的卡在讲，本卡不展开。</p>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>站里已经有 ST03 和 PY31 了，这张卡多出来的部分是什么？</summary>
+<div class="answer">三者的分工是「通用机制 / 异步原语 / 场景判据」。<a href="../engineering/api_stability.html">ST03 大模型 API 调用稳定性</a>讲通用的接口稳定性三层防线——智能重试、熔断降级、结果缓存，任何外部依赖都适用。<a href="py_cancel_timeout_ratelimit.html">PY31 取消、超时与并发限流</a>讲 asyncio 上的取消、超时、限流三件套怎么实现，以及退避抖动的原理。本卡不重复这两者的机制部分，讲的是这类调用<strong>特有</strong>的四块判据：token 维度和请求维度两套配额的参数怎么定、退避为什么要优先听服务端并加上重试预算这层全局闸门、多档降级的阶梯怎么排和怎么保持它不腐烂、以及成本超支为什么会变成可用性故障。读的顺序建议是 ST03 建立框架、PY31 学机制、本卡补场景。</div>
+</details>
+
+<details>
+<summary>请求前的 token 估算注定不准，还有必要做吗？</summary>
+<div class="answer">有，而且必要性不来自精度。token 桶要在请求发出前扣额度，而实际用量只有响应回来才知道，所以估算是这道闸门唯一可能的输入——没有它，你就只剩请求数那一道闸门，而第二节的图已经说明那一道挡不住长请求。估算需要的不是准，是<strong>偏差方向稳定且偏保守</strong>：宁可高估。高估的代价是配额没用满，损失几个百分点的吞吐；低估的代价是撞限流，然后触发退避、重试、延迟上涨一整条链，损失大得多。落地做法是先用字符数或分词数乘一个经验系数，再拿一批真实调用的实际用量做离线校准，系数取到 P90 那一侧而不是均值；输出部分直接用你设的输出长度上限整个预扣，响应回来后按实际用量补差。</div>
+</details>
+
+<details>
+<summary>超时到底该不该重试？我看到的说法不一致。</summary>
+<div class="answer">对这类生成式调用，默认答案是<strong>不该原样重试，应该换档降级</strong>。理由有两层。第一层是通用的幂等性问题：超时意味着你不知道服务端有没有执行，非幂等操作盲目重试就是重复执行。第二层是这类调用特有的，也更关键——超时通常不是「请求丢了」，而是「它还在算」。服务端仍在为你消耗算力，你的重试只是把同一份计算又排进队列一次：既不提高这次的成功率（下游还是那么慢），又吃掉了本该给别人的配额。第三节那场事故的放大器就是这一条。正确的动作是降档：换更小更快的规格，或者压低输出长度，从根上缩短这次生成需要的时间。只有一种情况可以重试超时——你确认请求根本没发出去（比如连接阶段就超时了），这时它等价于网络层失败。</div>
+</details>
+
+<details>
+<summary>降级到更小的模型，要不要告诉用户？</summary>
+<div class="answer">取决于这个答案会被怎么用，但<strong>系统内部一定要知道</strong>——返回值必须带档位标记，这是不可选的，否则监控算不出各档触发率，上游也无法做任何后续决策。对终端用户是否可见，按场景分：结果会被用来做判断或被进一步加工（分析报告、代码建议、结构化抽取）时应当标注，因为使用者需要知道要不要复核；纯辅助性的、对精度不敏感的场景（自动摘要、标签建议、文案润色）通常不必打扰用户，一个安静的降级比一条看不懂的提示体验更好。有一档例外：用缓存结果那一档（D3）建议无条件标注，因为它的失真方式和别的档不同——它不是「答得糙一点」，而是「答的是过去某个时刻的情况」，用户对这种失真没有直觉。</div>
+</details>
+
+<details>
+<summary>重试预算的阈值该定多少？</summary>
+<div class="answer">先看你正常状态下的重试率是多少，然后把阈值定在它的几倍，通常落在 5%–10% 这个量级。推导方式是这样：健康系统的重试率应该在千分之几到百分之一，因为真正的瞬时抖动本来就很少；一旦重试率上到 10%，不管原因是什么，都说明「这不是抖动了」，而继续放大流量对下游没有任何帮助。所以这个阈值不是精调出来的性能参数，而是一个「区分抖动与故障」的分界线，量级对了就行。两个实现细节比数值更要紧：一是窗口必须<strong>进程级共享</strong>，每个调用点各自持有一个窗口的话这层闸门就退化回了单请求次数限制；二是预算顶住之后的动作应该是<strong>降级</strong>而不是失败，否则你只是把「慢」换成了「错」，可用性并没有改善。</div>
+</details>
+
+<details>
+<summary>流式输出下超时该怎么设？</summary>
+<div class="answer">换口径：不要给整个响应设一个总时长上限，而是给<strong>两次数据之间的间隔</strong>设上限。原因是总时长和回答长度正相关，按平均回答定的总超时对长回答就是一把铡刀——回答越长越必然被掐断，而且这个问题只在生产环境、只在长输入上暴露。用间隔超时之后，判据变成了「它还在不在持续输出」，这才是你真正想区分的东西：持续输出说明健康，只是慢或者答得长；间隔超限说明真的卡住了。实践上通常两个一起用：一个较紧的间隔超时（秒级）负责及时发现卡死，一个很宽松的总时长上限（按最长合法回答估算，再留余量）作为最后兜底防止无限挂住。另外记得首字延迟要单独埋点，它是流式体验的主指标，和总延迟的走向可以完全相反。</div>
+</details>
+
+<details>
+<summary>降级用的缓存和普通的结果缓存有什么不同？</summary>
+<div class="answer">两个关键差别。一是<strong>陈旧度容忍不同</strong>：普通缓存追求命中即新鲜，过期就回源；降级缓存的前提恰恰是「回源这条路已经不通了」，所以它必须允许返回超出正常有效期的内容，同时带一个硬性的陈旧上限——超过这个上限，宁可下降到规则档也不要给一个太旧的答案。二是<strong>返回时必须标注</strong>，理由见前面那条关于用户提示的问答：它的失真方式是时间维度的，和其他档不一样。还有一个两者共同但在降级场景下后果更严重的坑：缓存键里必须包含<strong>提示词版本和模型档位</strong>。缺了它，提示词升级之后降级档会拿着老语义的答案回答新口径的问题，字面通顺、逻辑自洽、完全看不出问题——第四节那个二次故障就是这么来的，业务侧对了半小时才发现。</div>
+</details>
+
+<details>
+<summary>「返回了但内容不可用」这类失败怎么监控？</summary>
+<div class="answer">关键是承认<strong>传输层的成功率不等于业务成功率</strong>，然后在解析层补一道判定。具体做法是把每次响应过一遍轻量校验——是否为空、是否被截断（对照你设的输出长度上限，贴着上限结束的大概率是截断）、是否符合约定结构（有结构化约定时直接用结构校验器判）——校验失败就记成一个独立的失败类型，和限流、超时并列进成功率的拆分维度里。这件事的收益不只是指标更真实：它同时给你提供了处置依据。偶发的结构不符可以做一次纠正式重试（换一次采样常常就过了），而<strong>连续</strong>不符说明提示词或约束本身有问题，重试多少次都不会好，应该快速失败并告警，让人去改。这两种处置的区别只有在你把这类失败单独统计出来之后才有可能做对；合并在一个总成功率里，它就永远是那条「莫名其妙偏低几个点」的曲线。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY35 · 异步上下文管理器与异步迭代</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、为什么同步协议不够用</a>
+<a href="#s2">二、async with 与异步上下文协议</a>
+<a href="#s3">三、async for 与异步迭代协议</a>
+<a href="#s4">四、异步生成器的清理难题</a>
+<a href="#s5">五、实战范式</a>
+<a href="#s6">六、并发与异步小组收束</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY35 · 异步上下文管理器与异步迭代</h1>
+<p class="subtitle">获取与释放本身也是 I/O / async with 与 asynccontextmanager / async for 与 StopAsyncIteration / 异步生成器的清理难题与 aclosing / 并发与异步小组收束</p>
+
+<div class="intuition-box">
+<p>同步的 <code>with</code> 和 <code>for</code> 藏着一个假设：进入、退出、取下一个，这三件事都是瞬间完成的本地计算。一旦它们本身要走网络，这个假设就塌了。异步协议加的不是新能力，只是把「获取」和「释放」这两个动作也变成了可以挂起的点。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、为什么同步协议不够用</h2>
+
+<p>写异步代码的人最先注意到的是「计算过程」要 <code>await</code>：查数据库要等、调接口要等。但资源的<strong>获取与释放本身也是 I/O</strong>，这件事往往到出事故才被想起来。建一条数据库连接要完成 TCP 握手加认证往返；关一条 WebSocket 要按协议发出关闭帧并等对端回应；提交一个事务要等存储引擎确认落盘。这些动作没有一个是「瞬间完成的本地计算」。</p>
+
+<p>问题在于，同步的 <span class="term">上下文管理协议</span>把释放动作放在 <code>__exit__</code> 里，而 <code>__exit__</code> 是一个普通方法，不是协程——它的函数体里根本不允许出现 <code>await</code>，这是语法层面的限制。于是在协程里用同步上下文管理器包住一个网络资源，退出时只剩两条路，而两条都是坑。</p>
+
+<div class="arch-diagram">  需求：退出时要 await conn.close()（发关闭帧、等对端确认）
+  ─────────────────────────────────────────────────────────
+
+  同步协议： def __exit__(self, et, ev, tb)    ← 普通函数，体内不能 await
+
+     走法 A：调阻塞版本                    走法 B：发出去就不管
+     ──────────────────                    ─────────────────────
+     conn.close_blocking()                 create_task(conn.close())
+            │                                      │
+            ▼                                      ▼
+     整个事件循环停住                        with 块立刻结束，没人 await 它
+     同进程里几百个其它任务                  任务只是被排进队列
+     一起陪这一次 socket 往返                异常没人接、进程退出可能没跑完
+            │                                      │
+            ▼                                      ▼
+     一次关闭拖垮全局 P95                    「关了」只是你以为关了
+
+  异步协议： async def __aexit__(self, et, ev, tb)   ← 协程，体内可以 await
+     await conn.close()
+       → 只挂起当前这一个任务，其它任务照跑
+       → 而且真的等到它完成才离开 async with</div>
+
+<p>走法 B 尤其值得警惕，因为它<strong>看起来是对的</strong>：代码里确实写了 close，日志里也不会报错。但 <span class="term">即发即忘</span>（fire-and-forget）的任务如果没人持有引用、没人 <code>await</code>，它的异常会被静默丢弃，进程退出时也可能压根没被调度到。你以为的「释放」变成了一次概率性事件。第四节的事故就是这条路的一个变体。</p>
+
+<div class="intuition-box">
+<p>判断一个资源该不该用异步上下文管理器，只看一个问题：它的关闭动作里有没有网络或磁盘往返。有，就必须能 <code>await</code>；没有，同步的 <code>with</code> 在协程里用着完全没问题。</p>
+</div>
+
+<h3>两套协议是严格对称的</h3>
+
+<p>Python 没有为异步发明新概念，只是把已有的四个特殊方法各加了一个 <code>a</code> 前缀，并规定它们返回 <span class="term">可等待对象</span>（awaitable，实践中就是写成 <code>async def</code>）。同步侧的知识可以整体平移过来——包括 <a href="py_context_managers.html">PY19</a> 讲过的 <code>__exit__</code> 返回值语义，和 <a href="py_iterators_generators.html">PY12</a> 讲过的迭代器状态机。</p>
+
+<table>
+<tr><th>能力</th><th>同步协议</th><th>异步协议</th><th>使用它的语句</th></tr>
+<tr><td>上下文管理</td><td><code>__enter__</code> / <code>__exit__</code></td><td><code>__aenter__</code> / <code>__aexit__</code></td><td><code>with</code> / <code>async with</code></td></tr>
+<tr><td>迭代</td><td><code>__iter__</code> / <code>__next__</code></td><td><code>__aiter__</code> / <code>__anext__</code></td><td><code>for</code> / <code>async for</code></td></tr>
+<tr><td>迭代结束信号</td><td><code>StopIteration</code></td><td><code>StopAsyncIteration</code></td><td>由语句自己捕获，不外泄</td></tr>
+<tr><td>生成器写法</td><td><code>def</code> + <code>yield</code></td><td><code>async def</code> + <code>yield</code></td><td>后者 3.6 起（PEP 525）</td></tr>
+<tr><td>方法返回什么</td><td>直接就是结果</td><td>可等待对象，由语句负责 <code>await</code></td><td>这是全部差别</td></tr>
+</table>
+
+<p>标准库的配套设施也是一一对应的，只是引入版本参差不齐——用到时先确认自己的最低支持版本能不能覆盖。</p>
+
+<table>
+<tr><th>同步侧</th><th>异步对应物</th><th>引入版本</th><th>用途</th></tr>
+<tr><td><code>@contextmanager</code></td><td><code>@asynccontextmanager</code></td><td>3.7</td><td>用生成器写法定义上下文管理器</td></tr>
+<tr><td><code>ExitStack</code></td><td><code>AsyncExitStack</code></td><td>3.7</td><td>管理数量不定的资源，保证逆序释放</td></tr>
+<tr><td><code>closing</code></td><td><code>aclosing</code></td><td>3.10</td><td>离开块时调用对象的 <code>close()</code> / <code>aclose()</code></td></tr>
+<tr><td><code>AbstractContextManager</code></td><td><code>AbstractAsyncContextManager</code></td><td>3.7</td><td>抽象基类，供 <code>isinstance</code> 与类型标注</td></tr>
+<tr><td><code>iter()</code> / <code>next()</code></td><td><code>aiter()</code> / <code>anext()</code></td><td>3.10</td><td>内置函数，手工驱动迭代器</td></tr>
+<tr><td><code>nullcontext</code></td><td>同一个对象</td><td>3.10 起支持 <code>async with</code></td><td>「有时候需要管、有时候不需要」的占位</td></tr>
+</table>
+
+<p>还有一条纯语法的约束：<code>async with</code> 和 <code>async for</code> 只能出现在 <code>async def</code> 的函数体里，写在普通函数里是 <code>SyntaxError</code>，在导入阶段就会失败。这条限制本身不难受，难受的是它会传染——某个深处的工具函数改用异步资源，调用链上所有函数都得跟着变成协程。所以引入异步资源之前，先想清楚它的调用边界画在哪。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、<code>async with</code> 与异步上下文协议</h2>
+
+<p>把 <code>async with</code> 展开成等价的普通代码，是理解它最快的方式。下面这个展开来自语言参考对 <code>async with</code> 语义的定义，和同步 <code>with</code> 的展开逐行对照，你会发现差别只有三个 <code>await</code>。</p>
+
+<div class="arch-diagram">  async with EXPR as TARGET:
+      SUITE
+
+  语义上等价于（隐式特殊方法查找的细节已略）
+  ────────────────────────────────────────────────
+  manager = (EXPR)
+  aenter  = type(manager).__aenter__        ← 从类上查，不看实例属性
+  aexit   = type(manager).__aexit__         ← 进入前就把两个都取好
+  value   = await aenter(manager)                     ① 可挂起
+  hit_except = False
+  try:
+      TARGET = value
+      SUITE
+  except:
+      hit_except = True
+      if not await aexit(manager, *sys.exc_info()):   ② 返回假值才继续抛
+          raise
+  finally:
+      if not hit_except:
+          await aexit(manager, None, None, None)      ③ 正常路径
+
+  读这段能一次性回答三个常见疑问：
+    · 两个方法在进入前就从类上取好了 → 运行中改实例属性没用
+    · 异常路径和正常路径分别调用 aexit，参数不同 → 所以要判 exc_type
+    · aexit 的返回值被 not 了一下 → 真值 = 别再抛了</div>
+
+<p>第 ② 步是最容易写错的地方。<code>__aexit__</code> 的返回值不是「成功与否」，而是「要不要把这个异常吞掉」。协程函数如果不写 <code>return</code>，返回的是 <code>None</code>，那是假值，异常照常向外传播——这正是绝大多数实现想要的行为。但如果你在 <code>__aexit__</code> 里写了日志然后顺手 <code>return True</code>，异常就被静默压制了，调用方拿到的是一个「一切正常」的假象。</p>
+
+<table>
+<tr><th><code>__aexit__</code> 的返回值</th><th>块内有异常时的行为</th><th>什么时候该这么写</th></tr>
+<tr><td>不写 <code>return</code>（即 <code>None</code>）</td><td>异常继续向外抛</td><td>默认选择，绝大多数实现</td></tr>
+<tr><td><code>False</code> 或其它假值</td><td>异常继续向外抛</td><td>等价于上一行，只是把意图写显式</td></tr>
+<tr><td><code>True</code> 或其它真值</td><td>异常被吞掉，<code>async with</code> 之后的代码照常执行</td><td>仅当「压制这一类异常」就是这个管理器的职责时</td></tr>
+<tr><td>自己抛出新异常</td><td>新异常取代旧的，旧的挂在 <code>__context__</code> 上</td><td>包装成领域异常时用，注意别丢掉原始故障点</td></tr>
+</table>
+
+<p>要吞异常也必须<strong>按类型吞</strong>：先看 <code>exc_type</code> 是不是自己认识的那一类，是才返回真值，不认识的一律放行。无差别返回 <code>True</code> 会连 <code>asyncio.CancelledError</code> 一起吞掉，那意味着这个任务再也取消不掉了。异常分类的原则在 <a href="py_exception_design.html">PY24</a> 里有系统讨论。</p>
+
+<h3>类写法与生成器写法</h3>
+
+<p>类写法就是把两个特殊方法实现出来，适合状态多、需要被 <code>isinstance</code> 检查、或者要复用继承体系的场景。</p>
+
+<pre><code>class Transaction:
+    def __init__(self, pool):
+        self._pool = pool
+
+    async def __aenter__(self):
+        self._conn = await self._pool.acquire()
+        await self._conn.execute("BEGIN")
+        return self._conn</code></pre>
+
+<p>退出侧要处理三件事，而且顺序不能乱：按有没有异常决定提交还是回滚，无论如何都要还连接，最后什么都别返回。</p>
+
+<pre><code>    async def __aexit__(self, exc_type, exc, tb):
+        try:
+            sql = "COMMIT" if exc_type is None else "ROLLBACK"
+            await self._conn.execute(sql)
+        finally:
+            await self._pool.release(self._conn)
+        # 不写 return，返回 None（假值），异常照常向外抛</code></pre>
+
+<p>注意那个 <code>try</code>/<code>finally</code>：提交和回滚本身也可能抛异常（连接断了、超时了），如果不包住，连接就还不回池子。这是本卡反复出现的主题——<strong>清理代码自己也会失败，它需要自己的清理保护</strong>。</p>
+
+<p>更多时候用 <code>@contextlib.asynccontextmanager</code>（3.7 引入）更省事：写一个异步生成器，<code>yield</code> 之前是进入逻辑，之后是退出逻辑。3.10 起这样定义出来的管理器还可以直接当装饰器用。</p>
+
+<pre><code>from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def acquired(pool):
+    conn = await pool.acquire()        # yield 之前 = __aenter__
+    try:
+        yield conn                     # ← 让出点必须被 try 包住
+    finally:
+        await pool.release(conn)       # yield 之后 = __aexit__</code></pre>
+
+<div class="highlight">
+<p><strong>生成器写法唯一的硬纪律：<code>yield</code> 必须被 <code>try</code> 包住。</strong>原理是这样的——<code>async with</code> 块里抛出的异常，会被 <code>asynccontextmanager</code> 通过 <code>athrow</code> <em>扔回生成器的让出点</em>。如果 <code>yield</code> 裸在外面，这个异常会直接从生成器里穿出去，<code>yield</code> 之后那几行清理代码<strong>一行都不会执行</strong>。而正常路径下它们执行得好好的，所以这个 bug 只在出错时才发作——恰恰是最需要清理生效的时刻。用 <code>finally</code> 承载「无论如何都要做」的动作，用 <code>except</code> 承载「只在失败时做」的动作，两者别混。</p>
+</div>
+
+<div class="intuition-box">
+<p>把 <code>@asynccontextmanager</code> 的函数体读成一个 <code>try</code>/<code>finally</code> 骨架：<code>yield</code> 那一行是「用户代码插进来的位置」，它随时可能就地爆炸。这么读，该包 <code>try</code> 的地方一眼就能看出来。</p>
+</div>
+
+<h3>数量不定的资源：<code>AsyncExitStack</code></h3>
+
+<p>嵌套 <code>async with</code> 只能处理数量固定的资源。一旦资源个数由配置或运行时数据决定（每个分片一条连接、每个租户一个客户端），嵌套写法就没法表达了。<code>contextlib.AsyncExitStack</code>（3.7 引入）把「退出动作」变成一个可以运行时压栈的数据结构，离开时按登记的<strong>逆序</strong>退栈。</p>
+
+<div class="arch-diagram">  async with AsyncExitStack() as stack:
+      cfg  = await stack.enter_async_context(load_config())      ① 压栈
+      pool = await stack.enter_async_context(make_pool(cfg))     ② 压栈
+      for shard in cfg.shards:                                   ③ 数量不定
+          await stack.enter_async_context(pool.connect(shard))
+      stack.push_async_callback(flush_metrics)                   ④ 登记回调
+
+  离开块时按登记的逆序退出：
+      ④ flush_metrics
+      ③ shard 连接 N  …  shard 连接 2  →  shard 连接 1
+      ② pool
+      ① cfg
+
+  关键性质：③ 进行到一半抛异常时，已经压进去的那些
+  仍然会被逆序退干净 —— 手写嵌套做不到这一点，因为
+  异常发生时你根本不知道自己嵌到了第几层</div>
+
+<p>常用的三个方法要分清：<code>enter_async_context(cm)</code> 接一个异步上下文管理器并 <code>await</code> 它的 <code>__aenter__</code>；<code>push_async_callback(fn, *args)</code> 只登记一个收尾协程，不做任何进入动作；<code>aclose()</code> 手工把整个栈退干净，用于「资源的生命周期比某个语法块长」的场景，比如把 stack 挂在服务对象上、在 shutdown 钩子里统一退栈。</p>
+
+<p>逆序释放不是审美偏好，是正确性要求。连接依赖连接池、连接池依赖配置，反过来释放就会出现「池子已经没了，连接还想往里还」。同步侧的 <code>ExitStack</code> 也是同样的语义，<a href="py_context_managers.html">PY19</a> 有更细的展开。</p>
+</div>
+
+<div class="section" id="s3">
+<h2>三、<code>async for</code> 与异步迭代协议</h2>
+
+<p><code>async for</code> 解决的是另一类问题：<strong>取下一个元素这件事本身要等 I/O</strong>。分页 API 的下一页要发一次 HTTP 请求；数据库游标的下一批要走一次网络往返；大模型的流式响应，下一个 token 要等服务端算出来。这些都不是「集合里已经有了，取出来就行」。</p>
+
+<p><span class="term">异步迭代协议</span>由两个方法构成。<code>__aiter__</code> 必须<strong>返回一个异步迭代器对象</strong>——注意它自己不是协程，Python 3.7 起返回 awaitable 会直接报 <code>TypeError</code>。真正干活的是 <code>__anext__</code>，它返回一个可等待对象，<code>await</code> 之后给出下一个元素；没有下一个了就抛 <code>StopAsyncIteration</code>，这个异常由 <code>async for</code> 语句捕获，不会外泄给你。</p>
+
+<pre><code>class Cursor:
+    def __aiter__(self):            # 不是 async def！
+        return self
+
+    async def __anext__(self):
+        row = await self._fetch_one()
+        if row is None:
+            raise StopAsyncIteration
+        return row</code></pre>
+
+<p>手写这个类的机会其实不多，因为<span class="term">异步生成器</span>（3.6 引入，PEP 525）把同样的逻辑压缩成了几行：在 <code>async def</code> 的函数体里写 <code>yield</code>，调用它得到的就是一个现成的异步迭代器。和同步生成器一样，函数体在第一次迭代前不执行任何代码，每次 <code>yield</code> 交出一个值并原地冻结，下次迭代从冻结点继续。</p>
+
+<pre><code>async def fetch_pages(client, url):
+    while url:
+        page = await client.get(url)        # 这里等 I/O
+        for row in page["items"]:
+            yield row                       # 一条一条交出去
+        url = page.get("next")
+
+# 消费端：
+# async for row in fetch_pages(client, first_url):
+#     await handle(row)</code></pre>
+
+<p>有两个细节容易踩：异步生成器里<strong>不允许 <code>return</code> 带值</strong>（会得到 <code>SyntaxError: 'return' with value in async generator</code>），只能写光秃秃的 <code>return</code> 来提前结束；另外同一个异步生成器对象<strong>不能被并发迭代</strong>，两个任务同时对它 <code>__anext__</code> 会抛 <code>RuntimeError: anext(): asynchronous generator is already running</code>。想让多个消费者共享一个数据流，得自己在中间加一层队列做分发。</p>
+
+<h3>流式消费到底省下了什么</h3>
+
+<p>异步生成器最大的价值不在写法简洁，而在于它把「取数据」和「用数据」这两件事<strong>交错</strong>了起来。先全量收集再统一处理的写法，要等最后一页返回才能动第一条；流式写法第一页一到就能开工。</p>
+
+<div class="arch-diagram">  场景：分页 API，共 20 页 × 每页 500 条，单页往返 120 ms
+
+  先全量收集再处理
+  ─────────────────
+   拉1  拉2  拉3  ……………………………  拉20 │ 才开始处理第 1 条
+   ├120ms┼120ms┼ ………………………………………… ┤
+   0 ms                              2400 ms  ↑ 首个结果
+                                     此刻内存里同时躺着 10 000 条
+
+  异步生成器流式
+  ─────────────────
+   拉1 │处理500条│ 拉2 │处理500条│ …… 拉20 │处理│
+   ├120ms┤                 ↑ 常驻内存只有当前这一页的 500 条
+   0 ms  ↑ 首个结果（120 ms）
+
+  一个必须说清的限制：拉取和处理仍然是串行交替的，
+  总耗时不会变短。异步生成器改善的是「首个结果延迟」
+  和「峰值内存」；要压总耗时得让多页并发，那是编排问题</div>
+
+<table>
+<tr><th>维度</th><th>先全量收集再处理</th><th>异步生成器流式</th></tr>
+<tr><td>首个结果可用时刻</td><td>全部页拉完之后（例中 2400 ms）</td><td>第一页到手即可用（例中 120 ms）</td></tr>
+<tr><td>常驻内存</td><td>与总条数成正比（例中 10 000 条）</td><td>与单页大小成正比（例中 500 条）</td></tr>
+<tr><td>提前停止的收益</td><td>没有，反正已经全拉完了</td><td><code>break</code> 即停，剩余页根本不发请求</td></tr>
+<tr><td>中途失败</td><td>前面的工作全部白做</td><td>已产出的部分下游已经消化掉了</td></tr>
+<tr><td>背压</td><td>没有，上游多快就收多快</td><td>天然有：消费端不取，就不拉下一页</td></tr>
+<tr><td>清理责任</td><td>函数返回即结束，没有悬念</td><td><strong>需要显式关闭</strong>，见第四节</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>凡是「每取一条都要等一次 I/O」，且结果集大小不可控，就该用异步生成器。判据不是数据量有多大，而是<strong>你能不能承诺它一定不大</strong>——承诺不了，全量收集就是一颗定时炸弹。</p>
+</div>
+
+<div class="highlight">
+<p><strong>流式也有它的代价。</strong>下游处理慢的时候，<span class="term">背压</span>会一路传导回上游连接：连接被占着不放，服务端可能因为长时间没读而超时断开，某些分页 API 的游标也有有效期。所以流式管道里每一段都要有超时，而不是只在最外层包一个总超时——总超时到期时你只知道「整体慢了」，不知道慢在拉取还是处理。</p>
+</div>
+
+<p>最后一行「清理责任」是本卡的核心，下一节整节都在讲它。异步生成器和同步生成器在这一点上有本质区别，而这个区别在日常写法里完全看不出来——直到线上出事。<a href="py_iterators_generators.html">PY12</a> 讲过的同步生成器关闭机制，到了异步这边不再够用。</p>
+</div>
+
+<div class="section" id="s4">
+<h2>四、异步生成器的清理难题</h2>
+
+<p>先回顾同步侧的机制：一个同步生成器如果没被消费完就失去了所有引用，CPython 在回收它时会把 <code>GeneratorExit</code> 抛进它挂起的那个 <code>yield</code> 点，于是 <code>finally</code> 块得以执行，文件被关上、锁被释放。这一整套是<strong>同步完成的</strong>，在垃圾回收的那一刻就地做完，你几乎感觉不到它的存在。</p>
+
+<p>异步生成器的 <code>finally</code> 里可以有 <code>await</code>。这一个差别摧毁了上面那套机制：清理不再是一个能就地做完的动作，而是一个<strong>协程</strong>，需要一个还在运行的事件循环来驱动它。而对象什么时候被回收，取决于 <a href="py_memory_gc.html">PY23</a> 里讲的引用计数与 GC 时机——那是你控制不了的，完全可能落在事件循环已经关闭之后。</p>
+
+<div class="intuition-box">
+<p>同步生成器的清理是「回收时顺手做掉」，异步生成器的清理是「回收时预约一件将来要做的事」。预约能不能兑现，取决于那时候还有没有事件循环——这就是全部难点。</p>
+</div>
+
+<h3>CPython 是怎么兜这个底的</h3>
+
+<p>解释器通过 <code>sys.set_asyncgen_hooks</code> 提供了两个钩子，asyncio 的事件循环启动时会装上它们：<code>firstiter</code> 在某个异步生成器<strong>第一次被迭代</strong>时触发，循环借此把它登记进自己的一张表；<code>finalizer</code> 在它被回收时触发，循环借此把 <code>aclose()</code> 排成一个任务。有了这张表，循环在收尾阶段就能主动把所有还挂着的异步生成器关掉——这就是 <code>loop.shutdown_asyncgens()</code>（3.6 引入）。</p>
+
+<p>好消息是<strong><code>asyncio.run</code> 已经替你调了它</strong>。它的收尾顺序是固定的：先取消所有剩余任务，再 <code>await loop.shutdown_asyncgens()</code>，再关闭默认执行器，最后才 <code>loop.close()</code>。这是「不要手工 <code>new_event_loop</code> 再 <code>close</code>」这条建议的又一个理由——手工管理循环时，这三步收尾极少有人写全。</p>
+
+<p>下面这段行为是实测出来的，不是推测。同一个「取三条就 <code>break</code>」的异步生成器，用手工建的循环跑完直接 <code>close</code>，<code>finally</code> <strong>一次都没有执行</strong>，stderr 上只留下一行 <code>Task was destroyed but it is pending!</code>，任务名是 <code>async_generator_athrow</code>；换成 <code>asyncio.run</code> 跑同一段代码，<code>finally</code> 正常执行。</p>
+
+<div class="arch-diagram">  async for v in gen():          gen 的 finally 里有 await conn.release()
+      if v == 42:
+          break                  ← 只取了几条就跳出，gen 还挂在 yield 上
+
+  ① 什么都不做，指望 GC
+     gen 失去引用 → 等 GC → 触发 asyncio 装的 finalizer 钩子
+       → 把 gen.aclose() 排成一个任务
+       → 但此刻循环可能已经 close 了，任务永远跑不起来
+     现象：finally 一行没跑，stderr 上只有
+           Task was destroyed but it is pending! ... async_generator_athrow
+     最坏情况：连这行都被日志采集吃掉，故障完全静默
+
+  ② 靠 asyncio.run 的收尾兜底
+     run 退出前 await loop.shutdown_asyncgens() → finally 跑了
+     但时刻是「整个 run() 结束时」。常驻服务的 run 一跑就是几个月，
+     等于把资源泄漏拖满整个进程寿命 —— 兜底不等于及时
+
+  ③ async with aclosing(gen()) as it:
+     离开 async with 的那一刻立即 await gen.aclose()
+     break、异常、正常结束三条路径全覆盖，
+     且清理与迭代跑在同一个上下文里（上下文变量、任务归属都对得上）</div>
+
+<p>路径 ③ 用的是 <code>contextlib.aclosing</code>（3.10 引入）。它做的事很朴素——离开块时调用对象的 <code>aclose()</code>，等价于一个包着 <code>try</code>/<code>finally</code> 的两行上下文管理器。官方文档对它的定位说得很准：它保证生成器的退出代码<strong>与它的迭代运行在同一上下文中</strong>，因此异常和上下文变量的行为符合预期，退出代码也不会在它所依赖的某个任务已经结束之后才跑。</p>
+
+<pre><code>from contextlib import aclosing
+
+async with aclosing(fetch_pages(client, url)) as rows:
+    async for row in rows:
+        if row["id"] == target:
+            break            # ← 离开 async with 时立刻 aclose()
+# 等价的显式写法（3.10 之前）：
+#   agen = fetch_pages(client, url)
+#   try:  ...  finally:  await agen.aclose()</code></pre>
+
+<table>
+<tr><th>做法</th><th>清理发生在</th><th>覆盖 break / 异常</th><th>前提</th><th>评价</th></tr>
+<tr><td>什么都不做</td><td>GC 说了算，可能在循环关闭之后</td><td>不可靠</td><td>—</td><td>静默失败的来源</td></tr>
+<tr><td><code>asyncio.run</code> 收尾的 <code>shutdown_asyncgens</code></td><td>整个 <code>run()</code> 结束时</td><td>覆盖</td><td>用 <code>asyncio.run</code>，不手工建循环</td><td>兜底，但对常驻服务远远不够及时</td></tr>
+<tr><td>显式 <code>await agen.aclose()</code></td><td>你调用它的那一刻</td><td>要自己写进 <code>finally</code> 才覆盖</td><td>拿得到生成器对象</td><td>及时，但容易漏写</td></tr>
+<tr><td><code>async with aclosing(agen)</code></td><td>离开块的那一刻</td><td>三条路径全覆盖</td><td>3.10+</td><td>消费端的标准写法</td></tr>
+<tr><td>资源根本不放进生成器</td><td>由外层 <code>async with</code> 决定</td><td>覆盖</td><td>需要调整接口设计</td><td>最稳，见第五节</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>事故复盘：连接数每六天涨满一次。</strong>一个流式转发接口把上游模型服务的响应逐块转给客户端，实现方式是一个异步生成器：<code>finally</code> 里写着 <code>await resp.release()</code>，把连接还给连接池。上线后一切正常，直到第 6 天凌晨接口开始整片 5xx，重启后立刻恢复，被当成偶发问题放过；第 12 天、第 18 天又各来了一次，才有人注意到这个间隔太规整了。<br>
+<strong>数字：</strong>上游连接池上限 200，稳态占用约 55，可消耗余量 145。日均流式请求约 1600 次，其中约 1.6%（25 次左右）客户端会提前断开——用户关掉页面或切走。每断开一次，转发协程被取消，异步生成器没被消费完就丢弃，<code>finally</code> 里的 <code>release()</code> 排成任务后随循环状态一起消散，那条上游连接<strong>既没关闭也没归还</strong>。25 条/天的泄漏速率，145 ÷ 25 ≈ 5.8 天，正好对上「每六天一次」。<br>
+<strong>为什么难查：</strong>连接池占用是单调上涨的，任何一天的曲线看上去都很平缓；而重启会把计数清零，于是每次事后去看指标都是「一切正常」。真正定位靠的是把 <code>pool.size</code> 和 <code>pool.freesize</code> 打成指标后拉出<strong>跨重启的长周期曲线</strong>，一条不回头的斜线立刻就露馅了。<br>
+<strong>修复：</strong>把连接的获取与释放从生成器的 <code>finally</code> 里搬出来，交给外层的 <code>async with</code>；生成器本身只负责产出数据块，不再持有任何需要及时释放的东西。同时在消费端用 <code>aclosing</code> 包住生成器兜底。改动约 30 行，之后连续观察两周，连接占用稳定在 55 ± 8，不再有单调上涨。</p>
+</div>
+
+<p>这个事故的教训不是「记得写 <code>aclose</code>」，而是更结构性的一条：<strong>不要把「必须及时发生」的清理动作，托付给一个「什么时候结束由别人决定」的对象。</strong>异步生成器的生命终点掌握在消费方手里，你在它的 <code>finally</code> 里写什么，都只是一个愿望。</p>
+</div>
+
+<div class="section" id="s5">
+<h2>五、实战范式</h2>
+
+<p>把前面几节落到三个常见形状上。三段骨架都刻意写得很短，重点不在 API 细节，而在<strong>资源归谁管</strong>这一个问题上。</p>
+
+<h3>范式一：分页拉取封装成异步生成器</h3>
+
+<p>生成器只负责翻页和产出，HTTP 客户端由调用方从外面传进来——它的生命周期不属于这个生成器。这样即使调用方中途 <code>break</code>，被丢弃的生成器里也没有任何需要抢救的东西。</p>
+
+<pre><code>async def iter_orders(client, since):
+    """client 由外层 async with 管理，本生成器不持有需要释放的资源。"""
+    cursor = since
+    while cursor:
+        page = await client.get("/orders", params={"cursor": cursor})
+        for item in page["items"]:
+            yield item
+        cursor = page.get("next_cursor")</code></pre>
+
+<h3>范式二：异步事务封装成异步上下文管理器</h3>
+
+<p>事务是天生的上下文管理器：进入时开启，退出时按有没有异常决定提交还是回滚。注意这里把「归还连接」这一层单独交给了第二节那个 <code>acquired</code>——嵌套组合比把三件事挤在一个 <code>try</code> 里更不容易写错。</p>
+
+<pre><code>@asynccontextmanager
+async def tx(pool):
+    async with acquired(pool) as conn:   # 归还连接的事交给它
+        await conn.execute("BEGIN")
+        try:
+            yield conn
+        except BaseException:
+            await conn.execute("ROLLBACK")
+            raise
+        await conn.execute("COMMIT")     # 没抛异常才走得到这里</code></pre>
+
+<h3>范式三：流式转发，且保证连接一定被关闭</h3>
+
+<p>这是第四节那个事故的正确写法。关键是让 <code>async with</code>（而不是生成器的 <code>finally</code>）持有上游响应：无论客户端是正常读完还是中途断开，退出 <code>async with</code> 都是确定发生的。</p>
+
+<pre><code>async def relay(client, payload):
+    async with client.stream("POST", "/v1/chat", json=payload) as resp:
+        resp.raise_for_status()
+        async for chunk in resp.aiter_bytes():
+            yield chunk
+# 上游响应由 async with 持有：客户端提前断开时，
+# 取消会从 yield 点抛进来，async with 照样执行退出逻辑。
+# 消费端再用 aclosing(relay(...)) 包一层，双保险。</code></pre>
+
+<h3>一个反复出现的误用</h3>
+
+<p>把这三段放在一起看，一条设计原则就浮出来了：<strong>在异步生成器里持有需要及时释放的资源，同时又让调用方决定什么时候停止迭代，等于把释放时机交给了别人。</strong>调用方可以 <code>break</code>、可以被取消、可以在中间抛异常，甚至可以把生成器对象存起来放着不管——你在 <code>finally</code> 里写的任何东西，执行时机都不由你决定。</p>
+
+<p>识别这个误用有一个简单信号：如果一个异步生成器的文档里需要写「请务必迭代完，或者用 <code>aclosing</code> 包起来」，那它的设计就已经出问题了。文档约束不是约束，它只在有人读的时候生效。</p>
+
+<table>
+<tr><th>范式</th><th>内部持有什么</th><th>释放由谁负责</th><th>调用方需要额外做什么</th></tr>
+<tr><td>分页拉取（异步生成器）</td><td>只有游标位置和一个外部传入的客户端引用</td><td>客户端由外层 <code>async with</code> 管</td><td>什么都不用做，正常 <code>async for</code></td></tr>
+<tr><td>事务（<code>asynccontextmanager</code>）</td><td>连接 + 未完成的事务</td><td><code>__aexit__</code>，提交/回滚二选一后必还连接</td><td>用 <code>async with</code> 包住，别手工调</td></tr>
+<tr><td>流式转发（生成器 + 内层 CM）</td><td>由内层 <code>async with</code> 持有上游响应</td><td>内层 <code>async with</code> 的退出逻辑</td><td>建议再用 <code>aclosing</code> 兜一层</td></tr>
+<tr><td><strong>反例</strong>：生成器直接 <code>acquire</code> 连接</td><td>连接，且只在 <code>finally</code> 里还</td><td>名义上是生成器，实际是调用方</td><td>必须迭代完或 <code>aclosing</code>，漏一次泄漏一条</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>设计异步接口时问自己：如果调用方在任意一个 <code>await</code> 点被取消，我这里会漏掉什么？答不上来，就说明资源的归属还没理清楚。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、并发与异步小组收束</h2>
+
+<p>这一组卡从「为什么需要并发」讲到了「资源怎么释放」。回头看，所有内容其实都在回答同一串问题，而且顺序是固定的：先定并发模型，再定编排原语，再画边界，再处理混合代码，最后才是可观测性。跳过任何一步，后面的选择都会变成拍脑袋。</p>
+
+<div class="arch-diagram">  一个异步能力要落地，按顺序回答六个问题
+  ────────────────────────────────────────────────────
+  ① 时间花在「等」还是花在「算」？
+       等为主 → asyncio 单线程高并发
+       算为主 → 多进程；纯 Python 且已实测瓶颈 → 才谈自由线程构建
+  ② 这批任务的成败是绑定的吗？
+       绑定（要么全成要么全撤） → TaskGroup（3.11+）
+       不绑定，只是批量收集     → gather
+       只要最快的那一个         → wait(FIRST_COMPLETED)
+  ③ 每个出网调用都有超时和并发上限吗？
+       没有 = 没有边界。一次下游变慢就能把在飞任务数顶到天上
+  ④ 有没有同步阻塞代码混进来？
+       有 → 走执行器桥接，别让它站在事件循环上
+  ⑤ 每个资源的释放挂在谁身上？                        ← 本卡
+       挂在 async with / AsyncExitStack / aclosing 上
+       不要挂在异步生成器的 finally 上
+  ⑥ 出事时能不能分辨「慢」和「漏」？
+       事件循环滞后 + 在飞任务数 + 连接池占用，缺一个就分辨不了</div>
+
+<table>
+<tr><th>判据维度</th><th>要回答的问题</th><th>落到具体选择</th></tr>
+<tr><td>负载类型</td><td>时间花在等 I/O 还是花在算</td><td>等为主选 asyncio；算为主用多进程；纯 Python 计算且已实测瓶颈，才评估自由线程构建</td></tr>
+<tr><td>任务组织</td><td>一组任务的成败是否绑定</td><td>绑定用 <code>asyncio.TaskGroup</code>（3.11+，异常自动取消同组）；松散收集用 <code>gather</code>；竞速用 <code>wait(FIRST_COMPLETED)</code></td></tr>
+<tr><td>边界控制</td><td>失控时谁来踩刹车</td><td>每个出网调用套 <code>asyncio.timeout</code>（3.11+）；并发用 <code>Semaphore</code> 封顶；队列必须设 <code>maxsize</code></td></tr>
+<tr><td>同步桥接</td><td>有没有阻塞库混进事件循环</td><td><code>asyncio.to_thread</code>（3.9+）或 <code>run_in_executor</code>；线程池大小要显式设，别用默认值</td></tr>
+<tr><td>资源生命周期</td><td>释放动作挂在谁身上</td><td><code>async with</code> / <code>AsyncExitStack</code> / <code>aclosing</code>；不要挂在异步生成器的 <code>finally</code> 上</td></tr>
+<tr><td>取消语义</td><td>被取消时清理跑得完吗</td><td><code>CancelledError</code> 要放行不能吞；清理段里不要再做没有超时的 <code>await</code></td></tr>
+<tr><td>可观测性</td><td>出事时能分辨慢和漏吗</td><td>事件循环滞后、在飞任务数、连接池占用与等待时长；三个指标要在上线前就位</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>这张表的使用方式是自上而下、不能跳行。</strong>常见的返工路径都是从跳行开始的：先挑了 <code>gather</code>（第二行）才发现负载其实是 CPU 密集（第一行），整套异步化白做；或者边界（第三行）留到压测才补，而这时超时值该设多少已经没有依据了——因为没有第七行的指标。第一行错了，后面六行全都要重来。</p>
+</div>
+
+<div class="intuition-box">
+<p>异步不是「让程序变快」的开关，是「让等待的时间可以被复用」的机制。凡是没在等的场景，异步只带来复杂度；凡是在等的场景，边界和清理没做好，异步带来的是更难查的故障。</p>
+</div>
+
+<h3>异步服务上线检查清单</h3>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>入口统一用 <code>asyncio.run</code>，让 <code>shutdown_asyncgens</code> 这道兜底始终生效</li>
+<li>凡是关闭动作里有 I/O 的资源，一律用 <code>async with</code>；数量不定的用 <code>AsyncExitStack</code></li>
+<li>消费别人的异步生成器时，只要可能提前退出，就用 <code>aclosing</code> 包住</li>
+<li><code>@asynccontextmanager</code> 里的 <code>yield</code> 必须被 <code>try</code> 包住，清理放 <code>finally</code></li>
+<li><code>__aexit__</code> 默认不写 <code>return</code>；确实要吞异常时先判 <code>exc_type</code></li>
+<li>每个出网调用都有超时，每个并发点都有上限，每个队列都有 <code>maxsize</code></li>
+<li>上线前接好三个指标：事件循环滞后、在飞任务数、连接池占用与等待时长</li>
+<li>拿连接池占用画一条<strong>跨重启</strong>的长周期曲线，泄漏只在这条线上看得见</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在异步生成器的 <code>finally</code> 里释放连接、锁这类必须及时归还的资源</li>
+<li>手工 <code>new_event_loop</code> / <code>close</code>，把三步收尾漏掉两步</li>
+<li>在同步的 <code>__exit__</code> 里调阻塞的 close，或者 <code>create_task</code> 完就不管</li>
+<li><code>__aexit__</code> 里无条件 <code>return True</code>——会连 <code>CancelledError</code> 一起吞掉</li>
+<li>把「请务必迭代完」写进文档当约束用，文档只在有人读的时候生效</li>
+<li>让多个任务并发迭代同一个异步生成器对象（直接 <code>RuntimeError</code>）</li>
+<li>只在最外层包一个总超时，中间每一跳都没有</li>
+<li>结果集大小不可控时还先全量收集，再考虑要不要改流式</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>整组内容压成一句话：<strong>异步的难点从来不是怎么把任务发出去，而是怎么保证每一条发出去的路径，无论成功、失败还是被取消，都有人负责收尾。</strong></p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary><code>__aexit__</code> 到底该返回什么？我看有的库返回 False，有的什么都不返回。</summary>
+<div class="answer">两者行为完全一样。协程不写 <code>return</code> 时返回 <code>None</code>，<code>None</code> 是假值，而 <code>async with</code> 的展开里对返回值做的是 <code>if not await aexit(...): raise</code>——假值意味着「我没处理这个异常，继续往外抛」。写 <code>return False</code> 只是把这个意图显式化，风格问题。真正需要注意的是反面：返回任何真值都会<strong>吞掉</strong>块内的异常，调用方会以为一切正常。只有当「压制某一类异常」正是这个管理器存在的理由时（比如一个专门用来忽略清理期错误的包装器）才这么写，而且必须先判断 <code>exc_type</code> 是不是自己认识的那一类，不认识的一律放行。无差别返回 <code>True</code> 会连 <code>asyncio.CancelledError</code> 一起吞，那意味着这个任务再也取消不掉了。</div>
+</details>
+
+<details>
+<summary>类写法和 <code>@asynccontextmanager</code>，实际项目里怎么选？</summary>
+<div class="answer">默认用 <code>@asynccontextmanager</code>：它把进入、退出、异常处理写在同一个函数里，顺序即时序，读起来是线性的，短小的资源管理用它代码量能少一半。转用类写法的信号有三个：一是需要在管理器上暴露额外的方法或属性（生成器写法只能通过 <code>yield</code> 交出一个值）；二是需要参与继承体系或被 <code>isinstance(x, AbstractAsyncContextManager)</code> 检查；三是同一个对象要被重复进入或嵌套进入——<code>@asynccontextmanager</code> 产出的是一次性对象，进入第二次会失败（3.10 起可以当装饰器用，因为每次调用会新建一个生成器实例，这是另一回事）。顺带一提，生成器写法有个硬纪律：<code>yield</code> 必须被 <code>try</code> 包住，否则块内抛异常时 <code>yield</code> 之后的清理代码一行都不会执行。</div>
+</details>
+
+<details>
+<summary><code>async for</code> 里 <code>break</code> 会有什么后果？和同步 <code>for</code> 一样吗？</summary>
+<div class="answer">语句层面一样：跳出循环，不再请求下一个元素。但后果差别很大。同步生成器被丢弃时，解释器把 <code>GeneratorExit</code> 抛进挂起点，<code>finally</code> 就地同步执行完毕，你基本不用操心。异步生成器的 <code>finally</code> 里可能有 <code>await</code>，清理本身是个协程，需要一个还在运行的事件循环，而回收时机由 GC 决定，完全可能落在循环关闭之后。结果就是清理静默失败，最多在 stderr 留一行 <code>Task was destroyed but it is pending!</code>。所以只要你的 <code>async for</code> 可能提前退出，而生成器里有清理逻辑，就该用 <code>async with aclosing(gen()) as it:</code> 包住——离开块的那一刻立即 <code>aclose()</code>，<code>break</code>、异常、正常结束三条路径都覆盖。</div>
+</details>
+
+<details>
+<summary>我的异步生成器里 <code>finally</code> 明明写了，为什么没执行？</summary>
+<div class="answer">按三个可能性排查。第一，生成器没被消费完就丢弃了，而清理任务的排期赶不上事件循环关闭——这是最常见的，现象是 stderr 上一行 <code>Task was destroyed but it is pending!</code>，任务名里带 <code>async_generator_athrow</code>。第二，你手工建了事件循环并直接 <code>close()</code>，没有调 <code>loop.shutdown_asyncgens()</code>；换成 <code>asyncio.run</code> 就好了，它的收尾里包含这一步。第三，用 <code>@asynccontextmanager</code> 时 <code>yield</code> 没被 <code>try</code> 包住，异常被 <code>athrow</code> 扔回让出点后直接穿出去了。定位方法是在 <code>finally</code> 第一行打一条日志，先确认到底是「没进 finally」还是「进了但里面的 <code>await</code> 挂住了」——这两种的修法完全不同。</div>
+</details>
+
+<details>
+<summary><code>aclosing</code> 和 <code>AsyncExitStack</code> 有什么区别？什么时候用哪个？</summary>
+<div class="answer">解决的是两个不同问题。<code>aclosing(thing)</code>（3.10 引入）针对的是「这个对象有 <code>aclose()</code> 方法，但它本身不是上下文管理器」，最典型的就是异步生成器——你想在离开块时确定性地关掉它。<code>AsyncExitStack</code>（3.7 引入）针对的是「资源数量在运行时才知道」，它把退出动作做成一个可以随时压栈的结构，离开时逆序退栈。两者可以叠着用：在一个 <code>AsyncExitStack</code> 里 <code>await stack.enter_async_context(aclosing(agen))</code>，就把一个异步生成器的关闭也纳入了统一的逆序释放。选择判据很简单：资源个数固定且已知，用嵌套 <code>async with</code>；个数不定，用 <code>AsyncExitStack</code>；对象只有 <code>aclose()</code> 没有 <code>__aenter__</code>，用 <code>aclosing</code> 转接一下。</div>
+</details>
+
+<details>
+<summary>同一个异步生成器能不能给多个消费者同时用？</summary>
+<div class="answer">不能。两个任务同时对同一个异步生成器对象调 <code>__anext__</code>，会直接抛 <code>RuntimeError: anext(): asynchronous generator is already running</code>。这不是限制，是保护——生成器本质是个单线程状态机，并发推进它的状态没有合理语义。要让多个消费者共享一个数据流，标准做法是加一层分发：起一个任务专门迭代生成器，把每个元素扔进 N 个 <code>asyncio.Queue</code>（每个消费者一个），消费者各自从自己的队列取。这样做还有个附带好处——队列的 <code>maxsize</code> 天然成了背压开关，某个消费者慢下来时不会拖垮别人，只会让自己的队列先满。代价是要自己处理生产者提前结束和某个消费者提前退出的收尾。</div>
+</details>
+
+<details>
+<summary><code>__aiter__</code> 可以写成 <code>async def</code> 吗？</summary>
+<div class="answer">不可以。Python 3.7 起 <code>__aiter__</code> 必须直接返回一个异步迭代器对象，不能返回可等待对象（3.7 之前那种写法已经被移除）。写成 <code>async def __aiter__</code> 的话，调用它得到的是一个协程对象，而协程对象没有 <code>__anext__</code>，<code>async for</code> 会报 <code>TypeError: 'async for' received an object from __aiter__ that does not implement __anext__: coroutine</code>，同时还会附带一个「协程从未被 await」的 <code>RuntimeWarning</code>。记法很简单：只有 <code>__anext__</code> 是协程，<code>__aiter__</code> 是普通方法，通常就一行 <code>return self</code>。反过来说，如果你在写异步生成器（<code>async def</code> + <code>yield</code>），这两个方法解释器都替你生成好了，不用管。</div>
+</details>
+
+<details>
+<summary>协程里还能用普通的 <code>with</code> 和 <code>for</code> 吗？</summary>
+<div class="answer">能，而且大部分时候就该用普通的。判据只有一条：这个 <code>with</code> 的进入/退出、这个 <code>for</code> 的取下一个元素，会不会阻塞。遍历一个内存里的列表、用 <code>with</code> 包一个计时器或一次 <code>Decimal</code> 精度设置，这些都是纯本地计算，在协程里用同步写法完全正确，换成异步版本反而是无谓的开销。真正要警惕的是<strong>看起来同步、实际会阻塞</strong>的东西：同步的数据库驱动、<code>requests</code>、大文件的 <code>open</code>/<code>read</code>、<code>time.sleep</code>。它们在事件循环上一站就是几百毫秒，整个进程的所有任务陪着一起卡。这类代码要么换异步库，要么用 <code>asyncio.to_thread</code>（3.9+）桥接到线程池里去。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

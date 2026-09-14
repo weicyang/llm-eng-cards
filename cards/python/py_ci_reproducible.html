@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY39 · CI 中的可复现与缓存</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、CI 的两个矛盾要求</a>
+<a href="#s2">二、让 CI 严格按锁文件执行</a>
+<a href="#s3">三、缓存策略：缓存什么、键怎么算</a>
+<a href="#s4">四、多版本与多平台矩阵</a>
+<a href="#s5">五、关卡顺序：失败越早越省钱</a>
+<a href="#s6">六、怎么证明构建真的可复现</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY39 · CI 中的可复现与缓存</h1>
+<p class="subtitle">固定输入与可丢弃缓存的分界 / --locked 与 --frozen 的确切语义 / 缓存键与 uv cache prune --ci / 矩阵的成本与收敛 / 已安装清单的比对验收</p>
+<p class="data-asof"><strong>数据截止 2026-09</strong> · 本卡涉及的 uv 命令与标志语义以 <code>docs.astral.sh/uv</code> 的 0.12 系列文档为准（<code>--locked</code> / <code>--frozen</code> / <code>uv lock --check</code> / <code>uv cache prune --ci</code>）。CI 平台的 YAML 语法各不相同，文中只给缓存键与关卡顺序的构造思路，不写死某一家的配置。</p>
+
+<div class="intuition-box">
+<p>上一张卡讲的是「把依赖写死在锁文件里」，这张卡讲的是「怎么让 CI 真的照锁文件办事」。两件事之间隔着一个很容易被忽略的缺口：锁文件躺在仓库里不代表它被执行过，而默认行为恰好是「发现不一致就自己重新解析一遍」——于是构建绿了，锁文件却从未被验证。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、CI 的两个矛盾要求：既要可信，又要可用</h2>
+
+<p>CI 存在的全部理由是「在一台你没碰过的机器上把构建重放一次」。「你没碰过」是这句话的重点：只有在一个没有你的手工痕迹的环境里通过，结论才能推广到别的机器上去——包括生产环境那台。这就是第一个要求，<span class="term">可信</span>：每次都得从干净状态开始。</p>
+
+<p>第二个要求同样硬：CI 得在几分钟内给出结论。一个跑 40 分钟的流水线，开发者会开始绕过它——本地跑一下觉得没问题就合并，或者干脆把失败的作业重跑一遍碰运气。这叫<span class="term">可用</span>。不可用的 CI 最终会退化成一个没人看的红叉。</p>
+
+<p>这两个要求看起来互斥：干净意味着每次重新下载、重新编译，而那恰好是最慢的部分。很多团队的和解方式是「复用环境」——在自建 runner 上留着 <code>.venv</code>，检测到存在就跳过安装。这条路是错的，而且错得很隐蔽：它让构建结果依赖于「这台机器当下的状态」，而这个状态没有任何人记录过，也无法重建。一旦某次构建绿了，你无法回答「换台机器还绿吗」。</p>
+
+<div class="arch-diagram">  CI 的两个要求，看起来互斥
+  ──────────────────────────────────────────────
+  「可信」每次都从干净环境开始
+          → 不带上一次跑剩下的任何东西
+  「可用」十分钟内给出结论
+          → 不能每次都从零下载、从零编译
+
+  错误的和解方式：复用环境
+  ┌────────────────────────────────────────────┐
+  │ runner 上留着 .venv，检测到存在就跳过安装   │
+  │ 实际结论：「在这台机器当前状态下能通过」    │
+  │ 而这个状态没人记录，也无法在别处重建        │
+  └────────────────────────────────────────────┘
+
+  正确的和解方式：固定输入 ＋ 缓存中间产物
+  ┌─────────────────┐        ┌─────────────────┐
+  │ 固定的输入       │        │ 可丢弃的缓存     │
+  │ 决定「结果是什么」│  ≠    │ 只决定「跑多快」 │
+  │ 必须进版本控制   │        │ 随时可以整个删掉 │
+  └─────────────────┘        └─────────────────┘
+
+  一条判据：把缓存全删掉重跑，结果必须一模一样，
+            只是慢一点。做不到，就说明缓存越界了。</div>
+
+<p>上图最后那条判据值得单独记下来，本卡后面所有的缓存讨论都以它为准：<strong>缓存只允许影响速度，不允许影响结果</strong>。凡是「删了缓存就装出另一套依赖」「删了缓存就有测试挂掉」的情况，问题不在缓存本身，而在于有某个本该固定的输入没被固定，缓存只是替它遮住了不确定性。</p>
+
+<h3>该固定的是哪些输入</h3>
+
+<p>「固定」的意思是这个东西的取值被写进了仓库、可以随提交一起回溯，而不是由运行时的环境决定。下面这张表里的每一行，都对应过一类真实的「同一提交、不同结果」事故。</p>
+
+<table>
+<tr><th>输入</th><th>怎么固定</th><th>不固定的后果</th></tr>
+<tr><td>解释器版本</td><td><code>.python-version</code> 或 <code>requires-python</code>，并在 CI 里显式指定（如 <code>UV_PYTHON</code>）</td><td>不同 runner 的默认 Python 不同，解析出的依赖集也不同</td></tr>
+<tr><td>依赖集合</td><td><code>uv.lock</code> 进版本控制，CI 用严格模式读取</td><td>上游发新版本就悄悄换掉某个传递依赖</td></tr>
+<tr><td>基础镜像</td><td>用摘要（<code>image@sha256:...</code>）引用，不用 <code>latest</code> 这类浮动 tag</td><td>同一个 tag 被重新推送后，旧提交的构建内容变了</td></tr>
+<tr><td>检查与构建工具版本</td><td>写进 <code>[dependency-groups]</code> 一起锁，或在 action 里 pin 版本</td><td>lint 规则、类型检查器升级后，昨天过的今天不过</td></tr>
+<tr><td>包索引地址</td><td>在配置里显式写明 index，不依赖 runner 的全局设置</td><td>换 runner 就换了包的来源，供应链范围失控</td></tr>
+<tr><td>时区与语言环境</td><td>显式设 <code>TZ</code> / <code>LC_ALL</code></td><td>依赖时间格式或字符串排序的测试随机红</td></tr>
+</table>
+
+<h3>该缓存的是哪些中间产物</h3>
+
+<p>和固定输入相反，缓存的对象应当满足两个条件：它是<strong>可以由固定输入重新算出来的</strong>，并且算一遍比取一遍贵。按这个标准筛一遍，能缓存的东西其实不多。</p>
+
+<table>
+<tr><th>中间产物</th><th>为什么值得缓存</th><th>什么时候该失效</th></tr>
+<tr><td>下载的包（wheel 与源码分发）</td><td>占安装时间的大头，纯网络开销</td><td>锁文件变化时</td></tr>
+<tr><td>从源码编译出来的 wheel</td><td>最贵的一项，带 C 扩展的包一次几分钟</td><td>包版本或解释器版本变化时</td></tr>
+<tr><td>类型检查器的增量缓存</td><td>mypy 这类工具二次运行能快数倍</td><td>配置或依赖变化时</td></tr>
+<tr><td>大体积测试数据、模型权重</td><td>下载慢，且内容按哈希寻址、天然不变</td><td>内容哈希变化时</td></tr>
+<tr><td>虚拟环境目录本身</td><td><strong>不该缓存</strong>，理由见第三节</td><td>—</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>把 CI 里的每一样东西问一句：它决定结果，还是只决定速度？决定结果的进版本控制，决定速度的进缓存。分不清的那些，就是你下一次「同一提交两种行为」事故的来源。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、让 CI 严格按锁文件执行：本卡最关键的一节</h2>
+
+<p>uv 的锁与同步是<strong>自动的</strong>。<code>uv run</code> 在执行命令之前会先锁定并同步项目，<code>uv tree</code> 这类读取锁文件的命令也会先把锁文件更新到最新。这个设计对本地开发非常舒服：你往 <code>pyproject.toml</code> 里加了一行依赖，下一条 <code>uv run</code> 就自动把它解析好、装上、写进 <code>uv.lock</code>，不需要你记得手工执行任何东西。</p>
+
+<p>但把同一套默认行为放进 CI，就出现了一个很难察觉的漏洞：<strong>如果提交上来的锁文件已经和声明不一致，CI 会替你重新解析一遍，然后在这套临时解出来的依赖上跑测试并报绿。</strong>这时候「CI 通过」的含义已经变了——它不再证明「锁文件里那套依赖能工作」，只证明「今天这个时刻从索引里解出来的某套依赖能工作」。而那套依赖没有被写回仓库，没有人知道它是什么。可复现在这一刻就断了，而且断得无声无息。</p>
+
+<div class="intuition-box">
+<p>本地开发时「发现不一致就自动重新解析」是贴心，CI 里同一个行为是灾难：它把本该红掉的构建变成了绿的，而那套真实装上的依赖再也查不到。</p>
+</div>
+
+<h3>两个严格模式的确切语义</h3>
+
+<p>uv 提供两个标志来关掉自动行为，它们的差别常被混用，但在 CI 里选错会带来完全不同的后果。</p>
+
+<p><span class="term">--locked</span>（对应环境变量 <code>UV_LOCKED</code>）的官方表述是「断言 <code>uv.lock</code> 将保持不变」：它<strong>仍然会去检查</strong>锁文件是否与项目声明一致，只是把「不一致」的处理方式从「重新解析」改成了「报错退出」。锁文件缺失或需要更新，命令直接失败，锁文件不会被改动。</p>
+
+<p><span class="term">--frozen</span>（对应环境变量 <code>UV_FROZEN</code>）的官方表述是「在不更新 <code>uv.lock</code> 的情况下运行」：它<strong>根本不检查</strong>锁文件是否最新，而是把锁文件里的版本直接当作事实来源。锁文件缺失会报错退出；但如果 <code>pyproject.toml</code> 里有新增的依赖还没进锁文件，这些依赖<strong>不会</strong>出现在环境里，也不会有任何提示。</p>
+
+<p>一句话区分：<code>--locked</code> 校验「锁文件 ↔ 声明」这条一致性，<code>--frozen</code> 连声明都不看。前者是一道门禁，后者是一次纯执行。</p>
+
+<div class="arch-diagram">  三种模式的分岔点：要不要看 pyproject.toml 的声明
+  ──────────────────────────────────────────────────────
+                       读到 uv.lock
+                            │
+         ┌──────────────────┼──────────────────┐
+         ▼                  ▼                  ▼
+      默认行为           --locked           --frozen
+         │                  │                  │
+   与声明一致吗?       与声明一致吗?        不检查声明
+         │                  │                  │
+    ┌────┴────┐        ┌────┴────┐             │
+    是        否       是        否             │
+    │         │        │         │              │
+  照装   重新解析     照装    报错退出        照装锁文件
+         并改写                               （声明里新增
+         uv.lock                               的依赖不会装）
+            ▲
+            └── CI 里一旦走到这条路径，可复现就已经断了：
+                这次跑的依赖树没有任何地方记录下来</div>
+
+<table>
+<tr><th>模式</th><th>检查「锁文件 ↔ 声明」吗</th><th>锁文件过期时</th><th>锁文件缺失时</th></tr>
+<tr><td>默认（不带标志）</td><td>会</td><td>重新解析并改写 <code>uv.lock</code></td><td>自动生成一份</td></tr>
+<tr><td><code>--locked</code>（<code>UV_LOCKED=1</code>）</td><td>会</td><td>报错退出，不改动锁文件</td><td>报错退出</td></tr>
+<tr><td><code>--frozen</code>（<code>UV_FROZEN=1</code>）</td><td>不会</td><td>照锁文件装，新增声明被静默忽略</td><td>报错退出</td></tr>
+</table>
+
+<p>还有一个独立的校验入口：<code>uv lock --check</code>，它只回答「锁文件是不是最新的」，不安装任何东西，官方文档明确说它等价于其他命令上的 <code>--locked</code>。因为它不碰环境、不访问网络，几乎是零成本，所以特别适合当流水线的第一道关卡，第五节会再讲为什么要排在最前面。</p>
+
+<h3>什么叫「锁文件过期」</h3>
+
+<p>这里有个容易误解的点：uv 判断锁文件是否过期，看的是<strong>锁文件与项目声明的对应关系</strong>，不是「上游有没有发新版本」。官方文档对此有明确说明——新版本发布不会让锁文件被视为过期，想升级必须显式执行 <code>uv lock --upgrade</code> 一类命令。反过来，如果你改了某个依赖的版本约束，但改完之后原先锁定的那个版本仍然落在新约束范围内，锁文件依然算最新。</p>
+
+<p>理解这一点能消掉一类困惑：「我什么都没动，为什么 CI 报锁文件过期？」答案通常是有人改了 <code>pyproject.toml</code>（加依赖、收紧上下界、改 <code>requires-python</code>）却没有把重新生成的 <code>uv.lock</code> 一起提交。这正是 <code>--locked</code> 想抓的那件事。</p>
+
+<pre><code># 本地：改了声明就自动重解，这是开发的正常节奏
+uv add httpx
+
+# CI：不一致就让构建红掉，而不是替人解决
+uv lock --check                  # 只校验，什么都不装
+uv sync --locked --all-extras    # 严格按锁文件装
+uv run --no-sync pytest          # 上一步已装好，别再检查一遍</code></pre>
+
+<table>
+<tr><th>场景</th><th>该用哪种模式</th><th>理由</th></tr>
+<tr><td>本地日常开发</td><td>默认（<code>uv add</code> / <code>uv run</code>）</td><td>改了声明就该自动重解，拦着反而添乱</td></tr>
+<tr><td>CI 的校验作业</td><td><code>uv sync --locked</code></td><td>锁文件过期必须让 CI 红，这是 CI 的本职</td></tr>
+<tr><td>CI 里同一作业的后续步骤</td><td><code>--frozen</code> 或 <code>uv run --no-sync</code></td><td>已经 sync 过了，重复检查只是浪费，还多一次改动锁文件的机会</td></tr>
+<tr><td>容器构建 / 生产部署</td><td><code>--frozen</code></td><td>镜像里常常没有完整的项目上下文，只按锁文件装最稳</td></tr>
+<tr><td>独立的一道门禁作业</td><td><code>uv lock --check</code></td><td>只回答一致性问题，不建环境，秒级返回</td></tr>
+</table>
+
+<p>表里第三行和第四行都用 <code>--frozen</code>，但动机不同。同一作业的后续步骤用它是为了省时间；容器构建用它是因为多阶段镜像里经常只拷进了 <code>uv.lock</code> 和少量文件，此时「检查声明」既做不到也没必要。判断方法很简单：<strong>这一步需要发现「锁文件过期」这个问题吗？需要就用 <code>--locked</code>，不需要就用 <code>--frozen</code>。</strong>而整条流水线上至少要有一步用 <code>--locked</code>（或 <code>uv lock --check</code>），否则没人在看这件事。</p>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>某服务在 2026-03 遭遇一次线上故障，决定回滚到三周前的发布 tag。CI 重新构建该 tag 的镜像后，接口的 P95 从 180ms 涨到 420ms，还有一个返回体的字段顺序变了——同一个 commit，行为和三周前上线的那次不一样。根因是当时 CI 用的是裸 <code>uv sync</code>：那次提交的 <code>uv.lock</code> 已经过期（有人加依赖时忘了提交锁文件），CI 自动重新解析出一套依赖装上并报绿，而那套依赖树从未被写回仓库，也没有任何构建产物记录它。三周后再解析一遍时，传递依赖里已有 4 个包发了新版本，其中一个序列化库的次版本改掉了字典键的默认排序行为。整次回滚从决策到服务可用耗时 96 分钟，其中 71 分钟全花在「为什么同一个提交构建出来不一样」上。最终定位靠的是运气：在一台还没被回收的旧节点上找到了三周前那个容器，进去跑 <code>uv pip freeze</code> 和新构建的清单逐行比对，217 个已安装包里有 9 个版本不同，其中 7 个是传递依赖，没有一个出现在 <code>pyproject.toml</code> 里。整改只改了一行——CI 的安装命令换成 <code>uv sync --locked</code>——外加一条：把已安装清单归档成构建产物。</p>
+</div>
+
+<div class="intuition-box">
+<p>如果 CI 允许自己重新解析依赖，那么「CI 通过」证明的就只是「那一刻的索引状态下能通过」。这个结论在一周后毫无价值，而你恰恰会在出事的那一周需要它。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、缓存策略：该缓存什么、键怎么算、怎么不膨胀</h2>
+
+<p>严格锁定解决了「装什么」，但没解决「装多久」。每次从干净环境开始意味着每次都要把几百兆的包重新拉一遍，带 C 扩展的包还可能现场编译。缓存就是为这件事存在的，而它之所以安全，是因为在严格锁定的前提下，<strong>缓存里的内容和固定输入是一一对应的</strong>——同一个锁文件永远对应同一套包。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某项目在自建 runner 上跑了四个月没清理过缓存，<code>uv cache size</code> 显示 23 GB，而实际需要的包不到 900 MB——差额几乎全是历史锁文件留下的旧版本包。更糟的是缓存的恢复与回写被计入每个作业，单次流水线里光这两步就占 2 分 40 秒，超过了真正的安装耗时。加上作业末尾的 <code>uv cache prune --ci</code> 之后缓存稳定在 1.4 GB 上下，缓存相关耗时降到 20 秒以内。这里的教训是：<strong>缓存不是越大越好，恢复成本是真实成本</strong>。</p>
+</div>
+
+<h3>uv 的缓存为什么天然适合 CI</h3>
+
+<p>uv 维护一个全局缓存目录，安装时并不是把包重新解压一遍，而是<strong>从缓存里硬链接文件到目标环境</strong>。这带来两个和 CI 直接相关的性质。第一，缓存目录可以被多个项目、多个虚拟环境共享，体积不会随项目数线性增长。第二，也是最容易踩的一条：官方文档明确指出，缓存目录必须和目标 Python 环境<strong>位于同一个文件系统</strong>，否则 uv 无法硬链接，只能退化成逐个拷贝文件——在 CI 里把缓存挂到另一个卷上，性能收益会被这一步吃掉大半。</p>
+
+<p>缓存的失效规则也值得知道一点：注册表依赖（从 PyPI 这类索引下载的）遵循 HTTP 缓存头；Git 依赖按<strong>完全解析后的提交哈希</strong>缓存；本地目录依赖按 <code>pyproject.toml</code> / <code>setup.py</code> / <code>setup.cfg</code> 的最后修改时间判断。最后这条在 CI 里有个坑：<code>git clone</code> 出来的文件修改时间是 checkout 的时间，不是提交时间，所以本地包在 CI 里几乎总会被判定为「变了」并重新构建。</p>
+
+<h3>缓存键要包含什么</h3>
+
+<p>具体 YAML 各平台不同，但<span class="term">缓存键</span>的构造思路是通用的：<strong>它必须覆盖所有会影响缓存内容的固定输入，锁文件哈希是其中最重要的一项</strong>。锁文件不变就精确命中，锁文件一变就换一把新键，旧缓存自然被冷落。除此之外，操作系统、CPU 架构、Python 版本、uv 自身版本都会影响缓存里该有什么，都该进键。</p>
+
+<div class="arch-diagram">  缓存键的构造：让「输入没变」直接命中
+  ──────────────────────────────────────────────────
+  key = uv | 操作系统 | CPU 架构 | Python 版本
+          | uv 版本  | sha256(uv.lock) 的前若干位
+
+  恢复时逐级放宽（越往后越模糊，只为拿一个热起点）
+    1. uv|linux|x64|3.12|0.12.13|a1b2c3d4   ← 精确命中，零下载
+    2. uv|linux|x64|3.12|0.12.13|           ← 同环境的旧缓存，增量补齐
+    3. uv|linux|x64|3.12|                   ← 兜底，大概率还有一半能用
+
+  缓存目录在哪（uv cache dir 可直接查）
+    Linux / macOS   $XDG_CACHE_HOME/uv 或 ~/.cache/uv
+    Windows         %LOCALAPPDATA%\uv\cache
+    覆盖方式        --cache-dir / UV_CACHE_DIR / tool.uv.cache-dir
+
+  ⚠ 缓存目录要和目标环境在同一个文件系统，
+    否则 uv 无法从缓存硬链接，只能退化成逐个拷贝</div>
+
+<h3>最常见的错误：缓存虚拟环境目录</h3>
+
+<p>不少流水线会直接把 <code>.venv/</code> 塞进缓存，看起来收益最大——连安装步骤都能跳过。这个做法有三重问题，而且每一重都直接打在「可信」上。</p>
+
+<p>第一，虚拟环境里到处是绝对路径。<code>pyvenv.cfg</code> 记着真实解释器的路径，<code>bin</code>（Windows 上是 <code>Scripts</code>）里那些命令行工具的 shebang 也是写死的绝对路径。换一台机器、换一个工作目录，甚至只是 runner 的临时目录名变了，这些路径就全指向不存在的地方。第二，虚拟环境是<strong>有状态</strong>的：上一次跑里被临时装进去的东西会一起被缓存下来，于是「干净环境」这个前提没了，而这正是 CI 唯一不能妥协的东西。第三，它把「装了什么」这个结果也缓存了，直接违反第一节那条判据——删掉缓存后结果会变。</p>
+
+<p>正确的做法是只缓存<strong>包缓存</strong>，每次照样执行 <code>uv sync --locked</code> 重建虚拟环境。因为包内容已经在本地、装的时候只是硬链接，这一步通常只要一两秒，省下的时间和缓存 <code>.venv</code> 相差不大，风险却完全不同。</p>
+
+<table>
+<tr><th>缓存对象</th><th>跨机器可靠吗</th><th>说明</th></tr>
+<tr><td>uv 缓存目录</td><td>可靠</td><td>内容与元数据都不含机器相关信息，安装时硬链接进环境</td></tr>
+<tr><td><code>.venv/</code> 目录</td><td>不可靠</td><td><code>pyvenv.cfg</code> 与脚本 shebang 都是绝对路径；还会把上次的残留一起带过来</td></tr>
+<tr><td>本地编译产物目录</td><td>有条件</td><td>只在工具链、解释器、目标平台完全一致时可靠，否则宁可重编</td></tr>
+<tr><td>预构建 wheel 的下载</td><td>可靠但常不划算</td><td>恢复大缓存的耗时可能超过重新下载，见下文</td></tr>
+<tr><td>模型权重、测试数据集</td><td>可靠</td><td>按内容哈希组织，与解释器和平台无关，适合单独一把长期缓存键</td></tr>
+</table>
+
+<h3>膨胀与清理</h3>
+
+<p>缓存会无限长大，尤其在自建的非临时 runner 上。uv 提供三个不同粒度的清理命令，语义差别不小：<code>uv cache clean</code> 整个清空（也可以只清某个包，如 <code>uv cache clean ruff</code>）；<code>uv cache prune</code> 移除所有未使用的缓存条目以及集中式的项目环境，官方说它适合定期执行；<code>uv cache size</code> 看当前占用。</p>
+
+<p>专门为 CI 设计的是 <code>uv cache prune --ci</code>，它体现了一个反直觉的结论：官方文档指出，在 CI 环境里<strong>保留预构建 wheel 往往并不划算</strong>——每次从索引重新下载常常比恢复一个大缓存更快；而从源码编译出来的 wheel 值得留着，因为编译很贵，C 扩展尤其如此。所以 <code>--ci</code> 会剔除所有预构建 wheel 和解压后的源码分发，只保留自己编译出来的 wheel，建议在作业结束前执行一次，再把缓存存回去。</p>
+
+<pre><code>uv cache dir              # 缓存目录在哪
+uv cache size             # 现在占多大
+uv cache prune --ci       # 作业末尾：剔除预下载 wheel，保留自建 wheel
+uv cache clean            # 全清，只在排查缓存问题时用
+uv sync --refresh         # 不清缓存，只强制重新校验缓存数据</code></pre>
+
+<p>最后一行值得留意。排查问题时人的第一反应是 <code>--no-cache</code>，但官方建议多数情况下用 <code>--refresh</code>：它会更新缓存供后续操作使用，而 <code>--no-cache</code> 只是换用一个临时缓存，下一次还得再来一遍。另外 uv 的缓存按「桶」分版本，不同 uv 版本可以安全共享同一个缓存目录，只是跨版本时可能产生重复条目——这也是缓存键里带上 uv 版本的理由。</p>
+
+<div class="intuition-box">
+<p>缓存的边界就是「删掉它之后结果是否改变」。包缓存删了只是变慢，虚拟环境删了本来就该重建——所以前者能缓存，后者不能。这不是效率问题，是能不能相信构建结果的问题。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、多版本与多平台矩阵：库和应用的做法不一样</h2>
+
+<p>「要不要跨 Python 版本和操作系统跑测试」这个问题没有统一答案，因为它取决于一件事：<strong>运行环境由谁决定</strong>。库的运行环境由使用者决定，你声明了 <code>requires-python = "&gt;=3.10"</code>，就等于承诺 3.10 到最新版都能用，而这个承诺只能靠真跑来兑现。应用的运行环境由你自己决定——镜像是你构建的、解释器是你选的，那么在别的版本上测试是在为一个不会发生的场景付钱。</p>
+
+<p>跨操作系统同理。库必须至少覆盖 Linux 和 Windows，因为差异点多且真实：路径分隔符与大小写敏感性、换行符、文件锁语义、信号处理、临时目录行为、以及「已打开的文件能不能被删除」。这些问题在纯 Linux 环境里永远不会暴露，却会以「用户报了个我复现不出来的 bug」的形式找上门。</p>
+
+<table>
+<tr><th>对比项</th><th>库</th><th>应用</th></tr>
+<tr><td>运行环境由谁决定</td><td>使用者</td><td>你自己</td></tr>
+<tr><td>Python 版本</td><td><code>requires-python</code> 范围的下界与上界都要真跑</td><td>固定一个，和生产镜像一致</td></tr>
+<tr><td>操作系统</td><td>至少 Linux + Windows，涉及文件与信号的还要加 macOS</td><td>部署用的那一个</td></tr>
+<tr><td>锁文件的角色</td><td>不是依赖来源（使用者会自己解析），只保证开发与 CI 自身可复现</td><td>唯一的依赖来源</td></tr>
+<tr><td>矩阵规模</td><td>大，且必须真跑，不能靠推断</td><td>一格</td></tr>
+<tr><td>额外必须有的关卡</td><td>用最新依赖不锁定地解析一遍（定时跑），提前发现上游破坏性变更</td><td>锁文件一致性校验</td></tr>
+</table>
+
+<p>表里最后一行是库特有的一道关卡，容易被忽略。库的使用者会用<strong>最新</strong>的依赖来装你的库，所以库的 CI 除了按锁文件跑一遍（保证可复现），还应当定时跑一遍不锁定的解析（保证兼容性）。这两次跑的目的完全相反：前者要求结果永远一样，后者要求尽早发现结果变了。应用不需要后者，因为应用永远按自己的锁文件部署。</p>
+
+<h3>矩阵是乘法</h3>
+
+<p>矩阵的成本很容易被低估，因为它是乘法：3 个 Python 版本 × 3 个操作系统就是 9 个作业，每个 6 分钟就是 54 分钟机器时，而这是<strong>每次 push</strong> 的开销。更贵的其实不是钱，是墙上时钟时间——Windows 和 macOS 的 runner 通常排队更久，一个本来 6 分钟出结果的流水线会被拖到二十几分钟，然后第二节讲过的那个退化就开始了：没人等它，大家开始靠重跑和绕过。</p>
+
+<p>收敛<span class="term">构建矩阵</span>的正确方式不是砍掉组合，而是按<strong>触发时机分层</strong>：主干路径上跑最小可信集，边缘组合放到允许「晚一天发现」的时机去跑。判断哪些组合可以延后有个简单标准——这个组合挂了，能不能等到明天再修？主干的 Linux × 主版本不能，Windows × 最老版本通常可以。</p>
+
+<div class="arch-diagram">  按触发时机分层，而不是砍组合
+  ──────────────────────────────────────────────────
+  3 个 Python 版本 × 3 个操作系统 = 9 个作业
+  每个 6 分钟 → 54 分钟机器时 / 每次 push
+
+  ┌──────────────┬────────────────────────────────────┐
+  │ 每次 PR      │ 最小可信集：Linux × 最低版本        │
+  │ 目标: 快     │           ＋ Linux × 最高版本 = 2 格│
+  ├──────────────┼────────────────────────────────────┤
+  │ 合并到主干   │ 全 Python 版本 × Linux        = 4 格│
+  ├──────────────┼────────────────────────────────────┤
+  │ 每日定时     │ 全矩阵 ＋ 不锁定解析一遍     = 10 格│
+  │ 目标: 兜底   │ （上游破坏性变更在这里暴露）        │
+  ├──────────────┼────────────────────────────────────┤
+  │ 打发布 tag   │ 全矩阵 ＋ 构建 ＋ 产物冒烟测试      │
+  └──────────────┴────────────────────────────────────┘
+
+  取版本组合的经验：只测下界和上界，中间版本靠它们夹住
+  （下界决定「最老还能用」，上界决定「最新没坏」）</div>
+
+<p>为什么只测下界和上界就够？因为绝大多数版本相关的故障属于两类：用了新语法或新标准库 API（下界会挂）、依赖了被移除或改变行为的东西（上界会挂）。中间版本单独出问题的情况存在但罕见，把它放到每日定时里是个合理的风险定价。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某内部库的 CI 是 4 个 Python 版本 × 3 个操作系统全量跑，共 12 个作业，单次 push 平均 31 分钟出结果（Windows runner 排队占了 11 分钟）。改成 PR 只跑 2 格、主干跑 4 格、全矩阵每日定时之后，PR 的反馈时间降到 7 分钟，月度机器时下降约 68%。代价是有一次 Windows 上的路径问题晚了 14 小时才发现——但它发生在定时作业里，没有影响任何人的合并。这笔交换在绝大多数团队都是划算的，前提是<strong>定时作业失败真的有人看</strong>，否则等于把矩阵删了。</p>
+</div>
+
+<div class="intuition-box">
+<p>矩阵不是「测得越多越好」，而是一份风险定价表：每个组合都在回答「这里挂了我愿意多久之后知道」。愿意等一天的，就别放在每次 PR 上。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、CI 该跑哪些关卡，以及为什么顺序重要</h2>
+
+<p>流水线的关卡顺序有一条压倒性的原则：<strong>失败越早越省钱</strong>。这里的「钱」包括机器时、排队时间，更包括开发者的注意力——一个在第 9 分钟因为少了个空行而失败的流水线，浪费的不只是 9 分钟机器时，还有一次上下文切换。所以排序标准是「单位时间内否掉这次提交的概率」：便宜、快、覆盖面广的检查排前面。</p>
+
+<div class="arch-diagram">  关卡顺序：按「每秒能否否掉这次提交」排
+  ──────────────────────────────────────────────────
+  ① 锁文件一致性   uv lock --check              ~1s    ┐
+  ② 格式与静态检查 ruff format --check + ruff    ~5s    │ 秒级
+  ③ 类型检查       mypy / pyright               ~30s   ┘
+  ④ 单元测试       pytest（不碰网络、不碰数据库）~2min  ┐
+  ⑤ 构建           uv build ＋ 产物冒烟          ~40s   │ 分钟级
+  ⑥ 集成测试       起容器、连真实中间件         ~8min  ┘
+
+  为什么 ① 必须排在最前
+    它是后面五关结论的前提。锁文件过期时，②～⑥ 跑的是
+    一套临时解析出来的依赖，全绿也无法推广到别的机器。
+    而它的成本近似于零：纯本地比对，不访问网络。
+
+  并行的边界
+    ②③ 可以并行（互不依赖，且都希望一次看全所有问题）
+    ④⑤⑥ 串行（后面的依赖前面的产物，早失败才有意义）</div>
+
+<p>把锁文件一致性校验排在第一位，理由不是它容易失败，而是它<strong>决定后面所有结论的有效性</strong>。这是个很不一样的排序依据：其他关卡各自回答一个独立问题（格式对不对、类型对不对、行为对不对），而锁文件校验回答的是「这些答案能不能带走」。如果它失败了，后面五关即使全绿，你也只知道「在某套不知道是什么的依赖上是绿的」。</p>
+
+<table>
+<tr><th>顺序</th><th>关卡</th><th>它回答的问题</th><th>失败时该怎么办</th></tr>
+<tr><td>①</td><td>锁文件一致性（<code>uv lock --check</code>）</td><td>后面的结论能不能带到别的机器上</td><td>本地跑 <code>uv lock</code> 并把锁文件一起提交</td></tr>
+<tr><td>②</td><td>格式与静态检查</td><td>有没有明显的写法问题和风格分歧</td><td>本地跑格式化工具，绝大多数能自动修</td></tr>
+<tr><td>③</td><td>类型检查</td><td>接口契约有没有被破坏（详见 <a href="py_type_hints.html">PY20</a>）</td><td>看是真的类型错，还是注解没跟上实现</td></tr>
+<tr><td>④</td><td>单元测试</td><td>逻辑对不对（不依赖外部系统）</td><td>本地复现；不能复现就先查环境差异，别重跑</td></tr>
+<tr><td>⑤</td><td>构建</td><td>能不能打出可分发的产物、有没有漏文件</td><td>检查打包配置与包含规则，而不是测试</td></tr>
+<tr><td>⑥</td><td>集成测试</td><td>和真实依赖配合起来对不对</td><td>先分清是被测代码的问题还是测试环境的问题</td></tr>
+</table>
+
+<p>表里第④行那句「不能复现就先查环境差异，别重跑」是一条重要纪律。CI 挂了、本地不挂，几乎总是某个没被固定的输入在起作用——时区、语言环境、文件系统大小写敏感性、目录里残留的文件、测试执行顺序。把这些找出来的收益远大于修掉单个用例，因为同一个根因会以不同面目反复出现。顺带一提，要让这类排查成本可控，失败信息本身必须可读：异常类型分得清、日志带上足够的上下文，这部分的设计原则在 <a href="py_exception_design.html">PY24</a> 里展开过，CI 环境下的价值比本地更高——你没有断点，只有日志。</p>
+
+<h3>一条纪律：CI 里没有「顺手装一下」</h3>
+
+<p>流水线里每出现一条即席安装命令，就多了一个可复现的漏洞。典型面孔有这几种：<code>pip install pytest</code>（版本不定）、<code>apt-get install -y libfoo-dev</code>（版本随镜像的软件源浮动）、<code>curl ... | sh</code>（内容随上游变，连哈希都没有）、以及各种「临时补一个工具」的一次性命令。</p>
+
+<p>它们的共同问题不是不安全（虽然也不安全），而是<strong>没有版本、没有锁、没有记录</strong>。构建结果从此依赖「今天上游是什么样」，而你在事后无法回答「当初装的是哪个版本」。第二节那次事故的本质就是这个：真实依赖树从未被记录下来。处理方式有三条，按优先级：能锁进 <code>[dependency-groups]</code> 的工具就锁进去，跟着项目依赖一起被 <code>--locked</code> 管住；系统级依赖挪进基础镜像并用摘要固定；实在只能在流水线里装的，pin 死版本并附上校验和。</p>
+
+<pre><code># 用环境变量给整个作业上锁，避免某一步漏写标志
+UV_LOCKED=1                    # 锁文件过期即失败
+UV_CACHE_DIR=/tmp/.uv-cache    # 固定缓存位置，便于缓存这一个目录
+UV_PYTHON=3.12                 # 显式指定解释器版本，不看 runner 默认值</code></pre>
+
+<p>把严格模式做成环境变量而不是逐条命令加标志，是个实用技巧：它对作业里所有 uv 调用生效，包括后来被别人加上的那些步骤。人会忘记加标志，环境变量不会。</p>
+
+<div class="intuition-box">
+<p>关卡顺序的排法就一句话：让最便宜的检查最先说话。而锁文件校验之所以排第一，不是因为它便宜，是因为它决定了后面所有「绿」到底算不算数。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、怎么证明构建真的可复现</h2>
+
+<p>前面五节都在讲怎么做，这一节讲怎么<strong>验收</strong>。「我们的构建是可复现的」这句话如果没有一个能执行的检验方式，它就只是一个愿望——第二节那次事故里，团队在事发前也认为自己的构建是可复现的。</p>
+
+<p>可操作的定义是：<strong>同一个提交，在不同时间、不同机器上构建，装出来的已安装版本清单完全一致。</strong>注意这个定义刻意避开了「字节一致」。wheel 里带着构建时间戳、路径、文件顺序，追求字节级一致需要额外的大量工作，而它对排查线上问题的帮助远小于「版本清单一致」这一层。</p>
+
+<table>
+<tr><th>可复现的层次</th><th>要求</th><th>该不该追求</th></tr>
+<tr><td>已安装版本清单一致</td><td>两次构建的 <code>uv pip freeze</code> 输出逐行相同</td><td>该，用严格锁定模式就能达到，应当作为硬要求</td></tr>
+<tr><td>构建产物字节一致</td><td>两次 <code>uv build</code> 出的 wheel 哈希相同</td><td>视情况，需要额外控制时间戳与路径；发布库时值得做</td></tr>
+<tr><td>整个镜像字节一致</td><td>容器镜像各层哈希相同</td><td>多数团队不必追求，投入产出比很低</td></tr>
+</table>
+
+<h3>两份清单，两种事实</h3>
+
+<p>验收要用到两个不同的导出动作，它们证明的事情不一样，都需要。<code>uv export</code> 把 <code>uv.lock</code> 导出成 <code>requirements.txt</code>、<code>pylock.toml</code>（PEP 751）或 CycloneDX SBOM 等格式——它反映的是<strong>声明侧的事实</strong>：锁文件说该装什么。<code>uv pip freeze</code> 列出的是环境里实际装了什么——<strong>安装侧的事实</strong>。前者证明锁文件的内容，后者证明锁文件被遵守了。只有后者对不上前者时，你才知道中间有环节失控。</p>
+
+<pre><code># 安装侧的事实：环境里真的装了什么
+uv sync --locked
+uv pip freeze &gt; installed.txt
+
+# 声明侧的事实：锁文件说该装什么
+uv export --format requirements.txt -o from-lock.txt</code></pre>
+
+<div class="arch-diagram">  验收动作：同一提交，两次独立构建，比清单
+  ──────────────────────────────────────────────────
+  commit abc1234
+      │
+      ├─ 三月 · runner A ─ sync --locked ─ pip freeze ─┐
+      │                                                ├─ 逐行比对
+      └─ 九月 · runner B ─ sync --locked ─ pip freeze ─┘
+                                                        │
+                             ┌──────────────────────────┴──────┐
+                             ▼                                 ▼
+                        完全一致                            有差异
+                   可复现这一层成立              要么锁定模式没生效，
+                   清单归档为构建产物            要么索引里的包被改过
+
+  清单的两种用法
+    做成告警而非硬失败：合法的依赖升级也会产生差异，
+    差异本身不是错误，「差异没有对应的 PR 解释」才是错误</div>
+
+<p>把清单比对做成一道<strong>可选关卡</strong>是个务实的选择。原因是差异并不总意味着出错：正常的依赖升级 PR 必然会产生差异。真正要抓的是「清单变了，但没有任何提交解释为什么变」——这种情况说明有某个不受控的输入在动。所以这道关卡的产出应当是一份 diff 和一条告警，交给人判断，而不是直接把构建判红。</p>
+
+<p>还有一个低成本高价值的动作：把每次构建的 <code>uv pip freeze</code> 输出作为<span class="term">构建产物</span><strong>归档</strong>，文件名带上提交哈希。它平时毫无用处，但在需要回滚、需要回答「当初上线的到底是哪套依赖」的那一刻，它是唯一能给出答案的东西。第二节那次事故里，团队花掉的 71 分钟本来可以是一次 <code>diff</code>。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>CI 安装一律写 <code>uv sync --locked</code>，把锁文件过期当成构建失败</li>
+<li><code>uv lock --check</code> 放流水线第一关，它不到一秒且决定后面结论是否算数</li>
+<li>只缓存 uv 的缓存目录，键里带锁文件哈希、操作系统、Python 与 uv 版本</li>
+<li>作业末尾跑 <code>uv cache prune --ci</code>，控制缓存体积</li>
+<li>把 <code>uv pip freeze</code> 归档成构建产物，文件名带提交哈希</li>
+<li>基础镜像用摘要引用，检查工具版本锁进 <code>[dependency-groups]</code></li>
+<li>用 <code>UV_LOCKED</code> / <code>UV_CACHE_DIR</code> / <code>UV_PYTHON</code> 给整个作业兜底</li>
+<li>矩阵按触发时机分层，并确保定时作业的失败真的有人看</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>在 CI 里用裸 <code>uv sync</code>——锁文件过期时它会悄悄重新解析并报绿</li>
+<li>缓存 <code>.venv/</code>，或在自建 runner 上复用上一次留下的环境</li>
+<li>在流水线里插 <code>pip install</code> / <code>apt-get install</code> / <code>curl ... | sh</code> 这类即席安装</li>
+<li>把基础镜像写成 <code>python:3.12</code> 这类会被重推的浮动 tag</li>
+<li>每次 PR 都跑满矩阵，把预算烧在能等一天的边缘组合上</li>
+<li>用「重跑一次就好了」代替排查——不稳定的 CI 等于没有 CI</li>
+<li>把清单比对做成硬失败，导致正常的依赖升级 PR 全部被拦</li>
+<li>指望 <code>--frozen</code> 帮你发现锁文件过期，它根本不看声明</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>可复现不是一种性质，是一道能跑的检查。问自己一句：现在拿半年前的提交重新构建一次，你有办法证明装出来的东西和当初一样吗？答不上来，就说明它还只是个愿望。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary><code>--locked</code> 和 <code>--frozen</code> 到底该用哪个？</summary>
+<div class="answer">按「这一步需不需要发现锁文件过期」来选。<code>--locked</code> 的语义是「断言 <code>uv.lock</code> 将保持不变」：它仍然会检查锁文件与项目声明是否一致，不一致或锁文件缺失就报错退出，且不会改动锁文件。<code>--frozen</code> 的语义是「不更新 <code>uv.lock</code> 地运行」：它完全不检查一致性，直接把锁文件当作事实来源；锁文件缺失会报错，但 <code>pyproject.toml</code> 里新增却没进锁文件的依赖会被静默忽略、不出现在环境里。所以 CI 的校验作业用 <code>--locked</code>，因为那正是要抓的问题；容器构建和已经 sync 过的后续步骤用 <code>--frozen</code>，因为那里既没有完整上下文也不需要重复检查。整条流水线上至少要有一处用 <code>--locked</code> 或 <code>uv lock --check</code>，否则没有任何人在看锁文件是否有效。</div>
+</details>
+
+<details>
+<summary>为什么不能直接缓存 <code>.venv</code> 目录？那样不是最快吗？</summary>
+<div class="answer">三个理由，每一个都足以否掉它。第一，虚拟环境里有大量绝对路径：<code>pyvenv.cfg</code> 记着真实解释器的位置，<code>bin</code>/<code>Scripts</code> 下工具的 shebang 也是写死的路径，换机器或换工作目录就全指向不存在的地方。第二，它是有状态的，上一次跑里临时装进去的东西会一起被缓存，「干净环境」这个前提直接没了。第三，它缓存的是「装了什么」这个结果，删掉缓存后构建结果会变，违反了「缓存只影响速度不影响结果」这条判据。正确做法是只缓存 uv 的包缓存，每次照样跑 <code>uv sync --locked</code>；由于安装时是从缓存硬链接文件，这一步通常只要一两秒，省下的时间和缓存虚拟环境差不多，风险却完全不同。</div>
+</details>
+
+<details>
+<summary>缓存键里到底该放什么？只放锁文件哈希够不够？</summary>
+<div class="answer">不够。锁文件哈希是最重要的一项，因为它一变缓存内容就该变，但还有几项会影响「缓存里该有什么」：操作系统和 CPU 架构决定了下载哪个平台的 wheel；Python 版本决定了 wheel 的 ABI 标签；uv 自身版本也要带上，因为 uv 的缓存按桶分版本，跨版本共享是安全的但可能产生重复条目。所以一个够用的键形如「uv | 操作系统 | 架构 | Python 版本 | uv 版本 | 锁文件哈希」。另外要配一组逐级放宽的回退键：精确键没命中时，退到「同环境的任意旧缓存」也比从零开始快得多，剩下的部分增量补齐即可。具体 YAML 写法各平台不同，但这个构造思路是通用的。</div>
+</details>
+
+<details>
+<summary>为什么官方建议在 CI 里剔除预构建的 wheel？缓存得越多不是越快吗？</summary>
+<div class="answer">因为缓存本身有恢复成本。预构建 wheel 的价值只是省一次下载，而从索引下载通常很快；把它们留在缓存里会让缓存体积变大，而恢复一个大缓存的耗时可能超过重新下载的耗时。从源码编译出来的 wheel 就完全不同——编译很贵，带 C 扩展的包动辄几分钟，这部分绝对值得留。<code>uv cache prune --ci</code> 就是按这个逻辑设计的：剔除所有预构建 wheel 和解压后的源码分发，保留自己编译出来的 wheel。建议在作业结束、存回缓存之前执行一次。要注意它的实际收益取决于你的依赖构成：全是纯 Python 包的项目几乎感觉不到差别，有大量 C 扩展需要现场编译的项目差别很明显。</div>
+</details>
+
+<details>
+<summary>库和应用的 CI 矩阵到底差在哪？我的项目算哪种？</summary>
+<div class="answer">分界线是「运行环境由谁决定」。如果别人会把你的代码作为依赖装进他们的环境，那是库：运行环境不受你控制，你声明支持的 Python 版本范围和操作系统都必须真跑，锁文件只保证你自己的开发与 CI 可复现，不是使用者的依赖来源。如果代码是以服务或镜像的形式部署，解释器和基础镜像都由你选，那是应用：矩阵固定一格就够，多测的版本是在为不会发生的场景付钱，而锁文件是唯一的依赖来源。还有一个常被忽略的差别：库需要额外一道「用最新依赖不锁定地解析一遍」的定时关卡，用来提前发现上游的破坏性变更；应用不需要，因为它永远按自己的锁文件部署。内部共享的工具包属于库，即使使用者只有你们团队。</div>
+</details>
+
+<details>
+<summary>锁文件一致性校验为什么要排在流水线最前面？它又不容易失败。</summary>
+<div class="answer">排它在前不是因为失败概率高，而是因为它决定后面所有结论的有效性。其他关卡各自回答一个独立问题——格式对不对、类型对不对、行为对不对；锁文件校验回答的是「这些答案能不能带到别的机器上去」。如果锁文件已经过期而 CI 用的是默认模式，后面所有关卡跑的都是一套临时解析出来的依赖，全绿也只说明「在那一刻的索引状态下是绿的」，这个结论一周后就失效了。再加上它的成本近似于零：<code>uv lock --check</code> 是纯本地比对，不建环境、不访问网络，通常一秒内返回。一个几乎不花钱、却能否掉整次构建有效性的检查，没有理由放在后面。</div>
+</details>
+
+<details>
+<summary>怎么证明我的构建真的可复现？一定要做到字节一致吗？</summary>
+<div class="answer">不需要字节一致，那是另一个难度级别的目标。可操作的标准是：同一个提交在不同时间、不同机器上构建，<code>uv pip freeze</code> 输出的已安装版本清单逐行相同。做法是把每次构建的清单归档成构建产物（文件名带提交哈希），重建时和归档的那份比对。同时建议用 <code>uv export</code> 把锁文件导出一份——它是「声明侧该装什么」的事实，而 <code>uv pip freeze</code> 是「安装侧真的装了什么」的事实，两份对不上就说明中间有环节失控。这道比对适合做成告警而非硬失败：正常的依赖升级 PR 必然产生差异，真正要抓的是「清单变了却没有任何提交能解释为什么」。至于 wheel 字节一致，只有在发布公开库、需要供应链可审计时才值得投入。</div>
+</details>
+
+<details>
+<summary>CI 挂了、本地跑是好的，除了重跑还能做什么？</summary>
+<div class="answer">先别重跑——重跑是在放弃一次免费的诊断机会。这类差异几乎总能归到某个没被固定的输入上，按下面的顺序查通常很快：时区与语言环境（影响时间格式化和字符串排序）、文件系统的大小写敏感性与路径分隔符、工作目录里的残留文件或多出来的配置文件、测试执行顺序与并行度（暴露用例间的隐式依赖）、以及最容易被忽略的一条——本地环境里装了某个没写进锁文件的包。查的办法是把两边的事实摆出来比：两边都跑 <code>uv pip freeze</code> 比清单，都打印一遍关键环境变量。找到根因的收益远大于修掉这一个用例，因为同一个根因会换着面目反复出现。反过来说，如果一条流水线需要靠重跑才能绿，它已经不再提供任何信息了。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

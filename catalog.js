@@ -2132,5 +2132,385 @@ window.CATALOG = {
         }
       ]
     }
+  ],
+  "python": [
+    {
+      "label": "I · 零基础入门 (Getting Started)",
+      "cards": [
+        {
+          "code": "PY01",
+          "title": "Python 环境与解释器",
+          "tagline": "CPython 执行链路 / 版本选型与支持窗口 / uv 装解释器 / 虚拟环境原理 / python -m 的真实差别。",
+          "href": "./cards/python/py_environment_interpreter.html"
+        },
+        {
+          "code": "PY02",
+          "title": "变量与内置类型",
+          "tagline": "名字绑定与对象模型 / 任意精度整数与 IEEE 754 / 不可变性与单例 / 小整数缓存与字符串驻留。",
+          "href": "./cards/python/py_variables_builtin_types.html"
+        },
+        {
+          "code": "PY03",
+          "title": "容器四件套",
+          "tagline": "list / tuple / dict / set 的取舍 / 动态数组扩容 / 哈希表原理 / 复杂度对照 / collections 实用组件。",
+          "href": "./cards/python/py_containers_overview.html"
+        },
+        {
+          "code": "PY04",
+          "title": "控制流与真值判断",
+          "tagline": "falsy 完整清单与判定机制 / for 的取值过程 / for-else 的真实语义 / 短路兜底陷阱 / match-case。",
+          "href": "./cards/python/py_control_flow.html"
+        },
+        {
+          "code": "PY05",
+          "title": "函数入门与参数传递",
+          "tagline": "传对象引用的真实语义 / 四类参数与分隔符 / 可变默认值陷阱 / LEGB 作用域链 / 类型注解入门。",
+          "href": "./cards/python/py_functions_basics.html"
+        },
+        {
+          "code": "PY06",
+          "title": "字符串与编码",
+          "tagline": "str 与 bytes 的边界 / UTF-8 为什么赢了 / 两类 Unicode 报错的读法 / f-string 格式规格 / 拼接的 O(n²) 陷阱。",
+          "href": "./cards/python/py_strings_encoding.html"
+        },
+        {
+          "code": "PY07",
+          "title": "文件读写与异常处理",
+          "tagline": "open 的模式矩阵与编码陷阱 / with 与资源释放 / 惰性逐行读取 / pathlib 与工作目录 / 异常层次与 try 四分支。",
+          "href": "./cards/python/py_files_exceptions.html"
+        },
+        {
+          "code": "PY08",
+          "title": "模块、包与项目结构",
+          "tagline": "import 的三步机制与 sys.modules 缓存 / 命名空间与遮蔽 / 相对导入 / 入口守卫 / 循环导入与 src layout。",
+          "href": "./cards/python/py_modules_packages.html"
+        }
+      ]
+    },
+    {
+      "label": "II · 语言核心与数据模型 (Data Model)",
+      "cards": [
+        {
+          "code": "PY09",
+          "title": "对象模型与引用语义",
+          "tagline": "身份/类型/值三件套 / 名字绑定与引用计数 / 可变性分界线 / is 与 == / eq 与 hash 的联合契约。",
+          "href": "./cards/python/py_object_model.html"
+        },
+        {
+          "code": "PY10",
+          "title": "拷贝语义与共享状态陷阱",
+          "tagline": "赋值不是拷贝 / 浅拷贝只拷一层 / 共享状态的四类事故 / deepcopy 的真实代价 / 不可变优先。",
+          "href": "./cards/python/py_copy_semantics.html"
+        },
+        {
+          "code": "PY11",
+          "title": "序列协议与切片",
+          "tagline": "协议方法与语言特性的映射 / 负索引与越界责任 / slice 对象与静默裁剪 / memoryview 零拷贝。",
+          "href": "./cards/python/py_sequence_protocol.html"
+        },
+        {
+          "code": "PY12",
+          "title": "迭代器与生成器协议",
+          "tagline": "for 循环的展开过程 / 迭代器的状态与耗尽 / yield 挂起与恢复 / 惰性的收益与代价 / itertools 管道。",
+          "href": "./cards/python/py_iterators_generators.html"
+        },
+        {
+          "code": "PY13",
+          "title": "推导式与惰性求值",
+          "tagline": "四种推导式的统一结构 / 快在哪里与快多少 / 多重 for 的嵌套顺序 / 作用域与延迟绑定 / 何时拆回循环。",
+          "href": "./cards/python/py_comprehensions_lazy.html"
+        },
+        {
+          "code": "PY14",
+          "title": "可变参数、闭包与装饰器",
+          "tagline": "打包与解包的对称性 / 单元对象与自由变量 / 延迟绑定事故 / 装饰器三层结构 / wraps 与元信息。",
+          "href": "./cards/python/py_closures_decorators.html"
+        },
+        {
+          "code": "PY15",
+          "title": "类与特殊方法契约",
+          "tagline": "属性查找的读写不对称 / new 与 init 的分工 / repr 与 str 的受众差异 / 相等与哈希契约 / slots 的真实收益。",
+          "href": "./cards/python/py_classes_dunder.html"
+        },
+        {
+          "code": "PY16",
+          "title": "继承、MRO 与组合优先",
+          "tagline": "属性查找链与脆弱基类 / C3 线性化与 mro / super() 的真实语义 / 多继承四类故障 / 混入与抽象基类。",
+          "href": "./cards/python/py_inheritance_mro.html"
+        }
+      ]
+    },
+    {
+      "label": "III · 高阶特性 (Advanced Features)",
+      "cards": [
+        {
+          "code": "PY17",
+          "title": "描述符协议与 property",
+          "tagline": "属性访问的完整解析路径 / property 的演化友好性 / 数据与非数据描述符的优先级 / set_name 与存储位置。",
+          "href": "./cards/python/py_descriptors_property.html"
+        },
+        {
+          "code": "PY18",
+          "title": "元类与类创建钩子",
+          "tagline": "类是元类的实例 / 类创建的六步流程 / init_subclass 与 set_name / 元类冲突的代价 / 类装饰器选型路径。",
+          "href": "./cards/python/py_metaclasses.html"
+        },
+        {
+          "code": "PY19",
+          "title": "上下文管理器与 contextlib",
+          "tagline": "with 的等价展开 / exit 返回值与异常传播 / 生成器写法的控制流 / ExitStack / 逆序释放与一次性陷阱。",
+          "href": "./cards/python/py_context_managers.html"
+        },
+        {
+          "code": "PY20",
+          "title": "类型注解与静态检查",
+          "tagline": "注解的运行时地位 / 语法速查 / 泛型与型变 / mypy 与 pyright 落地 / 静态检查与入口校验的边界。",
+          "href": "./cards/python/py_type_hints.html"
+        },
+        {
+          "code": "PY21",
+          "title": "数据类三选一",
+          "tagline": "dataclass / pydantic / attrs 的分工 / 自动生成了什么 / 为什么注解不等于校验 / 边界校验与内层不可变的分层写法。",
+          "href": "./cards/python/py_dataclasses.html"
+        },
+        {
+          "code": "PY22",
+          "title": "枚举与 Protocol",
+          "tagline": "Enum 家族选型 / 别名与 missing 陷阱 / 名义与结构子类型 / Protocol 的依赖倒置用法。",
+          "href": "./cards/python/py_enum_protocol.html"
+        },
+        {
+          "code": "PY23",
+          "title": "内存模型与垃圾回收",
+          "tagline": "引用计数与分代 GC 的分工 / 循环引用与弱引用 / 内存池与碎片 / slots 与生成器 / tracemalloc 排查流程。",
+          "href": "./cards/python/py_memory_gc.html"
+        },
+        {
+          "code": "PY24",
+          "title": "异常体系设计",
+          "tagline": "异常与返回值的分工 / 自定义异常层次 / 分层处理与转译 / from 的三种形态 / 快速失败判据与重试边界。",
+          "href": "./cards/python/py_exception_design.html"
+        }
+      ]
+    },
+    {
+      "label": "IV · 并发与异步 (Concurrency & Asyncio)",
+      "cards": [
+        {
+          "code": "PY25",
+          "title": "全局解释器锁与自由线程",
+          "tagline": "GIL 保护的到底是什么 / 四类负载的真实加速比 / 线程·进程·异步的选型判据 / 自由线程构建的代价清单。",
+          "href": "./cards/python/py_gil_free_threading.html"
+        },
+        {
+          "code": "PY26",
+          "title": "多线程与 I/O 密集任务",
+          "tagline": "等待时间才是优化对象 / 线程池与 as_completed / 竞态与加锁纪律 / 并发度怎么反推出来。",
+          "href": "./cards/python/py_threading_io.html"
+        },
+        {
+          "code": "PY27",
+          "title": "多进程与 CPU 密集任务",
+          "tagline": "进程隔离换来真并行 / spawn·fork·forkserver 与 3.14 的默认变更 / chunksize / 序列化才是真正的瓶颈。",
+          "href": "./cards/python/py_multiprocessing.html"
+        },
+        {
+          "code": "PY28",
+          "title": "事件循环与异步基础",
+          "tagline": "线程模型的天花板 / 一轮事件循环的五步 / async 与 await 的确切语义 / 阻塞调用与循环延迟。",
+          "href": "./cards/python/py_asyncio_eventloop.html"
+        },
+        {
+          "code": "PY29",
+          "title": "协程、任务与 Future",
+          "tagline": "协程对象不会自己跑 / Task 才是被调度的单位 / 事件循环只持弱引用 / 异常停在 Task 上等人来取。",
+          "href": "./cards/python/py_coroutines_tasks.html"
+        },
+        {
+          "code": "PY30",
+          "title": "并发编排：gather 与 TaskGroup",
+          "tagline": "四个原语的形状对照 / gather 的顺序保证与孤儿任务 / TaskGroup 与结构化并发 / as_completed 的首字延迟。",
+          "href": "./cards/python/py_task_orchestration.html"
+        },
+        {
+          "code": "PY31",
+          "title": "取消、超时与并发限流",
+          "tagline": "失控的三种形态 / 取消是协作式的 / 分层超时预算 / 信号量与令牌桶不是一回事 / 退避抖动与 Retry-After。",
+          "href": "./cards/python/py_cancel_timeout_ratelimit.html"
+        },
+        {
+          "code": "PY32",
+          "title": "异步队列与生产者消费者",
+          "tagline": "速率解耦与反压 / Queue 的核心语义 / 消费者流水线骨架 / 两种优雅关闭 / 不丢任务的错误纪律。",
+          "href": "./cards/python/py_asyncio_queue.html"
+        },
+        {
+          "code": "PY33",
+          "title": "同步与异步的互通",
+          "tagline": "四种互通方向 / to_thread 与默认线程池 / CPU 密集只能进程池 / 跨线程提交协程 / 异步边界划在哪。",
+          "href": "./cards/python/py_executor_bridge.html"
+        },
+        {
+          "code": "PY34",
+          "title": "异步调试与故障排查",
+          "tagline": "堆栈不再等于因果链 / 四条告警的真实含义 / 调试模式与 -X dev / 挂起任务的栈定位 / contextvars 与关联标识。",
+          "href": "./cards/python/py_async_debugging.html"
+        },
+        {
+          "code": "PY35",
+          "title": "异步上下文管理器与异步迭代",
+          "tagline": "获取与释放本身也是 I/O / async with 与 asynccontextmanager / async for 与流式消费 / 异步生成器的清理难题。",
+          "href": "./cards/python/py_async_context_generators.html"
+        }
+      ]
+    },
+    {
+      "label": "V · 工程化 (Engineering)",
+      "cards": [
+        {
+          "code": "PY36",
+          "title": "依赖管理的问题域与 uv",
+          "tagline": "依赖管理的五个子问题 / 碎片化本身就是成本 / uv 的统一模型与性能来源 / 项目接口与兼容接口的分界。",
+          "href": "./cards/python/py_uv_intro.html"
+        },
+        {
+          "code": "PY37",
+          "title": "pyproject.toml 与依赖声明",
+          "tagline": "一个文件取代一堆文件 / 三个表区各管什么 / 约束写法与库应用之别 / 三类依赖分组 / 私有源的风险。",
+          "href": "./cards/python/py_pyproject_deps.html"
+        },
+        {
+          "code": "PY38",
+          "title": "锁文件与可复现安装",
+          "tagline": "声明是意图、锁是事实 / 依赖解析的搜索与回溯 / 跨平台通用锁与环境标记 / 可复现到哪一层为止。",
+          "href": "./cards/python/py_lockfile_reproducible.html"
+        },
+        {
+          "code": "PY39",
+          "title": "CI 中的可复现与缓存",
+          "tagline": "固定输入与可丢弃缓存的分界 / --locked 与 --frozen 的确切语义 / 缓存键设计 / 矩阵的成本与收敛。",
+          "href": "./cards/python/py_ci_reproducible.html"
+        },
+        {
+          "code": "PY40",
+          "title": "容器镜像与部署",
+          "tagline": "镜像固定了什么 / 层缓存与构建顺序 / 基础镜像选型 / 多阶段构建 / 运行时安全与部署纪律。",
+          "href": "./cards/python/py_docker_image.html"
+        },
+        {
+          "code": "PY41",
+          "title": "pytest 与测试工程化",
+          "tagline": "测试的价值在于支持改动 / 锁契约不锁实现 / fixture 作用域与状态泄漏 / 替身只替进程边界 / 覆盖率看增量。",
+          "href": "./cards/python/py_pytest_engineering.html"
+        },
+        {
+          "code": "PY42",
+          "title": "性能剖析与优化",
+          "tagline": "先测量再优化 / 指标、基线与目标 / 剖析工具的粒度与开销 / 六层优先顺序 / 微优化的边界。",
+          "href": "./cards/python/py_profiling_optimization.html"
+        },
+        {
+          "code": "PY43",
+          "title": "日志与可观测性",
+          "tagline": "三类信号的分工 / 记录器与传播机制 / 字段化与惰性格式化 / 关联标识贯穿全链路 / 采样与成本。",
+          "href": "./cards/python/py_logging_observability.html"
+        },
+        {
+          "code": "PY44",
+          "title": "打包、发布与版本管理",
+          "tagline": "源码包与轮子的真实差别 / 构建后端与隔离构建 / 语义化版本承诺的是公开 API / 不可撤销的版本号。",
+          "href": "./cards/python/py_packaging_release.html"
+        },
+        {
+          "code": "PY45",
+          "title": "调试工具箱与排查方法",
+          "tagline": "收敛式排查流程 / 回溯与异常链的读法 / breakpoint 与事后调试 / 不能打断点时的手段 / 工程化收束。",
+          "href": "./cards/python/py_debugging_toolbox.html"
+        }
+      ]
+    },
+    {
+      "label": "VI · AI 领域 Python (Python for AI)",
+      "cards": [
+        {
+          "code": "PY46",
+          "title": "NumPy 核心：数组、dtype 与轴",
+          "tagline": "列表与数组差在哪两层 / dtype 的性能与陷阱 / 轴与 keepdims 的心智模型 / 视图与拷贝的分界 / 向量化的内存代价。",
+          "href": "./cards/python/py_numpy_basics.html"
+        },
+        {
+          "code": "PY47",
+          "title": "广播规则与形状操作",
+          "tagline": "不复制数据的形状对齐 / 三条规则的逐维推演 / None 与 keepdims 这两个开关 / 中间结果的内存估算 / 形状断言与 bug 定位。",
+          "href": "./cards/python/py_numpy_broadcasting.html"
+        },
+        {
+          "code": "PY48",
+          "title": "数值稳定性与对数域计算",
+          "tagline": "浮点的三个后果 / 溢出与下溢的判据 / 稳定 softmax 的恒等变形 / logsumexp 与对数域 / 非数值检测与极端输入测试。",
+          "href": "./cards/python/py_numerical_stability.html"
+        },
+        {
+          "code": "PY49",
+          "title": "Pandas 核心模型与陷阱",
+          "tagline": "索引对齐是一切行为的起点 / loc 与 iloc 和链式赋值 / dtype 决定内存与速度 / 分组的三类操作 / 合并的行数放大。",
+          "href": "./cards/python/py_pandas_core.html"
+        },
+        {
+          "code": "PY50",
+          "title": "Polars 惰性执行与流式处理",
+          "tagline": "列式布局与多线程 / 表达式与上下文 / 查询计划与两种下推 / 流式引擎与静默回退 / 生态互通与选型判据。",
+          "href": "./cards/python/py_polars_lazy.html"
+        },
+        {
+          "code": "PY51",
+          "title": "PyTorch 张量的工程要点",
+          "tagline": "设备统一与异步同步 / dtype 与混合精度 / 梯度开关与显存 / NumPy 互操作与复制 / 可复现与三步排查。",
+          "href": "./cards/python/py_pytorch_tensors.html"
+        },
+        {
+          "code": "PY52",
+          "title": "数据集与数据加载管道",
+          "tagline": "先量出瓶颈在数据侧还是计算侧 / 映射式与迭代式两种抽象 / 批次拼接、填充与掩码 / 多进程加载的机制与四类坑 / 供给优化的收益顺序。",
+          "href": "./cards/python/py_dataloader_pipeline.html"
+        },
+        {
+          "code": "PY53",
+          "title": "用 Pydantic 约束大模型输出",
+          "tagline": "模型输出是不可信输入 / 一份定义同时是校验器与格式说明 / 错误要能定位到字段路径 / 修复循环的三条纪律 / 宽严边界与兜底取值。",
+          "href": "./cards/python/py_pydantic_llm_contract.html"
+        },
+        {
+          "code": "PY54",
+          "title": "大模型客户端的三种调用模式",
+          "tagline": "调用特性与超时预算 / 同步的线程代价 / 异步的并发上限反推 / 流式的首字延迟 / 流式带来的四个新问题。",
+          "href": "./cards/python/py_llm_client_modes.html"
+        },
+        {
+          "code": "PY55",
+          "title": "大模型调用的客户端韧性",
+          "tagline": "失败形态的四种处置 / 请求数与 token 两套配额 / 退避听服务端的 / 多档降级与质量损失 / 成本超支就是可用性故障。",
+          "href": "./cards/python/py_llm_resilience.html"
+        },
+        {
+          "code": "PY56",
+          "title": "批量任务的吞吐与续跑",
+          "tagline": "批量与交互的目标函数之别 / 瓶颈闸口定位 / 有界并发流水线 / 断点续跑与幂等 / 成本与质量的权衡。",
+          "href": "./cards/python/py_batch_inference.html"
+        },
+        {
+          "code": "PY57",
+          "title": "FastAPI 的并发模型",
+          "tagline": "两种处理函数的调度差别 / async def 里阻塞的全局代价 / 线程池排队与容量估算 / 依赖项与应用级资源生命周期 / AI 接口写法判据。",
+          "href": "./cards/python/py_fastapi_concurrency.html"
+        },
+        {
+          "code": "PY58",
+          "title": "AI 服务集成范式与系列收束",
+          "tagline": "四种集成形状与选型判据 / 围住不确定性的三道墙 / 状态外置与上下文裁剪 / 从下游配额反推容量 / 六个小组的学习与实践路径。",
+          "href": "./cards/python/py_ai_service_integration.html"
+        }
+      ]
+    }
   ]
 };

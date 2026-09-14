@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY38 · 锁文件与可复现安装</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、声明与锁的分工</a>
+<a href="#s2">二、依赖解析在解什么</a>
+<a href="#s3">三、锁文件里记了什么</a>
+<a href="#s4">四、锁定的日常操作</a>
+<a href="#s5">五、锁文件的维护纪律</a>
+<a href="#s6">六、可复现的边界</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY38 · 锁文件与可复现安装</h1>
+<p class="subtitle">声明是意图、锁是事实 / 依赖解析的搜索与回溯 / 跨平台通用锁与环境标记 / uv lock 与 uv sync / 可复现到哪一层为止</p>
+
+<div class="intuition-box">
+<p>声明文件说的是「我能接受哪些版本」，锁文件说的是「上一次我们真的装了哪些版本」。前者是意图，后者是事实。只有意图没有事实，同一份代码在两个时刻会装出两棵不同的依赖树，而且这个差异不会出现在任何一次 code review 里。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、声明说「我要什么」，锁说「上次解出来是什么」</h2>
+
+<p>上一张卡把依赖信息从口头约定搬进了声明文件，这是很大的一步：机器终于能读到「这个项目要什么」了。但把一个只有声明文件的项目交给两台机器，或者交给同一台机器的两个不同时刻，装出来的东西<strong>并不保证一样</strong>。声明文件没有做错什么，它本来就不是用来记录结果的。</p>
+
+<p>差异来自两处。第一处很明显：声明写的是范围。<code>httpx&gt;=0.27</code> 今天解出 0.27.0，三周后上游发了新版就解出 0.28.0，而你的仓库一个字符都没改过。第二处更要命：声明文件里通常只写<strong>直接依赖</strong>，也就是你真的 <code>import</code> 过的那些；它们自己还有依赖，这些<span class="term">传递依赖</span>由解析器在安装那一刻现场决定，从头到尾没有被任何文件记录过。一个声明了 20 个直接依赖的中型服务，实际落进环境的常常是 80 到 150 个包——其中绝大多数的名字你从来没写过，自然也就无从钉住。</p>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>某内部服务走的是「构建时重新解析依赖」的老流程，仓库里只有声明文件。3 月 4 日构建的镜像稳定跑了 11 天；3 月 15 日因为一个前端文案改动触发例行部署，同一个服务的 git 变更只有两行文案，上线 12 分钟后 5xx 比例从 0.02% 涨到 4.1%，触发回滚。排查一开始完全走错方向，因为<strong>代码 diff 里没有任何可疑的东西</strong>。最后是把两次构建的镜像拉下来逐包比对才定位到：两次装出的依赖树有 <strong>7 个包版本不同，全部是传递依赖，直接依赖一个都没变</strong>，其中一个 HTTP 协议层的包在新版本里收紧了对畸形响应头的处理，把原本被容忍的上游返回变成了异常。定位耗时 <strong>3 小时 40 分钟</strong>，而其中三个多小时花在「明明什么都没改」这个错误前提上。补救只有一步：引入锁文件并提交进仓库，从此「装出来的东西变了」必然对应一次可见的 diff。</p>
+</div>
+
+<div class="arch-diagram">  同一个 commit，两次构建，仓库里只有声明文件
+  ─────────────────────────────────────────────────────────────
+  第一次构建（3 月 4 日）           第二次构建（3 月 15 日）
+    声明文件逐字节相同                 声明文件逐字节相同
+          │                                  │
+          ▼  解析器此刻去问索引              ▼  解析器又问了一次索引
+    httpx      0.27.0                  httpx      0.27.0
+    h11        0.14.0                  h11        0.16.0    ← 变了
+    certifi    2025.01.31              certifi    2025.04.26 ← 变了
+    ……共 7 个传递依赖的版本不同……
+          │                                  │
+          ▼                                  ▼
+     稳定跑了 11 天                    上线 12 分钟后 5xx 飙升
+
+  git diff 是空的 —— 差异只存在于「解析发生的那一刻」，没落到磁盘上
+  ─────────────────────────────────────────────────────────────
+  加上锁文件之后
+    第一次构建 → 解析一次 → 结果写进锁文件 → 随代码提交
+    第二次构建 → 不解析，照锁文件装 → 与第一次逐个包一致
+    要升级？那就改锁文件，让它出现在 review 的 diff 里</div>
+
+<h3>三份东西，三种职责</h3>
+
+<p>可复现这件事牵涉三个对象，把它们的职责分清楚，后面所有命令的行为都会变得可预测。</p>
+
+<table>
+<tr><th>角色</th><th>典型载体</th><th>记录的是</th><th>谁写</th><th>变化频率</th></tr>
+<tr><td><span class="term">声明文件</span></td><td><code>pyproject.toml</code> 里的依赖表</td><td>可接受的版本<strong>范围</strong>（意图）</td><td>人手写，或工具代改</td><td>低——只在增删依赖时</td></tr>
+<tr><td><span class="term">锁文件</span></td><td><code>uv.lock</code>、<code>poetry.lock</code>、编译出的 <code>requirements.txt</code></td><td>某一次解析得到的<strong>确切结果</strong>（事实）</td><td>工具生成，不手改</td><td>中——增删依赖或主动升级时</td></tr>
+<tr><td>已安装环境</td><td><code>.venv</code> 里的 <code>site-packages</code></td><td>此刻磁盘上<strong>真实存在</strong>的包</td><td>安装器写</td><td>高——每次安装都在变</td></tr>
+</table>
+
+<p>顺带一提，锁文件还有个常被忽略的副作用：<strong>它让安装明显变快</strong>。照锁文件安装时不需要解析，也就不需要为了看某个候选版本依赖什么而反复拉元数据、反复回溯——直接按清单取文件即可。所以「加锁文件会不会拖慢 CI」这个担心是反的，通常是提速。</p>
+
+<p>可复现的前提是这三者<strong>对齐</strong>：锁文件是按当前声明解出来的，环境是按当前锁文件装出来的。任何一环脱节，症状都很像「灵异事件」。声明改了锁没重生成，你以为升级了其实没有；锁改了环境没同步，你以为在跑新版其实在跑旧的。后面第四节讲的那些命令，本质上都是在维护这两条对齐关系，以及在 CI 里把「不对齐」变成一次明确的失败而不是一次静默的重解析。</p>
+
+<div class="intuition-box">
+<p>判断一个文件该不该提交进仓库，问一句：它是「输入」还是「输出」。声明文件和锁文件都是构建的输入，都要提交；<code>.venv</code> 是输出，能从前两者重建，所以不提交。锁文件是工具生成的，但这不代表它是产物——它是被固化下来的一次决策。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、依赖解析到底在解什么</h2>
+
+<p>「装依赖」听起来像是下载几个文件，实际上下载之前有一个真正的计算问题要解。原因是 Python 环境里<strong>同一个包只能存在一个版本</strong>：<code>site-packages</code> 下就一个 <code>httpx/</code> 目录，放不下两份。于是当多个包对同一个传递依赖提出各自的版本要求时，必须找出一个同时满足所有人的版本。</p>
+
+<p><span class="term">依赖解析</span>就是这件事：给定一组约束，找出一组版本赋值，使每条约束都成立。这是个搜索问题而不是查表问题——因为选定某个包的版本会<strong>引入新的约束</strong>（它自己的依赖），新约束又可能和已选的版本冲突，于是需要<span class="term">回溯</span>：退回上一步，换一个版本重试。最坏情况下搜索空间随包数量指数增长，这就是为什么复杂项目的依赖解析会慢到分钟级。</p>
+
+<div class="arch-diagram">  你只声明了两个直接依赖，解析器要解的却是这张图
+  ──────────────────────────────────────────────────────
+              项目
+             ╱      ╲
+        web-a        task-b
+          │             │
+   要 lib 2.0 及以上    要 lib 低于 2.0
+          ╲             ╱
+              lib   ← 环境里只有一个位置，必须放下同时满足两边的版本
+
+  lib 可用版本      1.4    1.9    2.0    2.3
+  web-a  能接受                   ●      ●
+  task-b 能接受     ●      ●
+  两者交集          ——————— 空 ———————     这组组合无解
+
+  解析器不会就此报错，它会回溯：
+    退回上一层，换一个 task-b 的版本重试
+      task-b 3.1  仍然要求 lib 低于 2.0        ✗
+      task-b 2.8  只要求 lib 1.4 及以上        ✓  与 web-a 取交集得 lib 2.3
+    得到一组可行解：web-a 最新 + task-b 2.8 + lib 2.3
+
+  代价：每回溯一层，都要重新取候选版本的元数据来看它依赖什么
+        慢就慢在这里，而不是慢在下载</div>
+
+<h3>约束写得越紧，越容易无解</h3>
+
+<p>回溯的次数取决于约束有多紧，而紧不紧往往不由你决定。一个包如果在自己的依赖里写死了上界（「某某库必须低于 2.0」），它就替所有用它的人做了决定：只要项目里还有别的包需要 2.x，两者就无法共存——而这个矛盾既不是你的代码造成的，也不在你的仓库里。这类上界大多出于「下一个大版本可能不兼容」的预防性心理，实际效果却是把一次<strong>可能</strong>的不兼容，变成了一次<strong>确定</strong>的解析失败，并且失败发生在所有下游的机器上。</p>
+
+<p>所以写声明的纪律是不对称的：<strong>下界要写准，上界要慎写</strong>。下界表达的是「低于这个版本我确实用不了」，那是可验证的事实；上界表达的是「高于这个版本我猜会坏」，多数时候只是猜测。真撞上别人写死的错误上界时，解析器层面留了逃生口——可以用依赖覆盖把那条声明整个替换掉，让解析继续下去。这是明确的最后手段：用之前要先自己验证那个组合真的能跑，用之后要在配置旁边写清为什么，否则它会变成下一个没人敢动的历史遗留。</p>
+
+<h3>解析失败和安装失败是两件事</h3>
+
+<p>把这两者分开，能省掉大量排查时间。解析失败发生在<strong>还没有下载任何包</strong>的时候，它是一个逻辑结论：你给的约束互相矛盾，不存在任何一组版本能同时满足。这类报错的信息量其实很大，现代解析器会给出一条完整的推理链（「因为 A 要求 B 低于 2，而 C 要求 B 高于 3，所以 A 和 C 不兼容」），值得一个字一个字读完，而不是直接去搜报错标题。</p>
+
+<p>安装失败则发生在解析成功之后：版本已经定下来了，卡在把字节搬到磁盘上这一步——网络不通、私有源没配、没有对应平台的预编译包所以要现场编译、校验和对不上。这两类失败的处理方向完全不同，混为一谈会让人在错误的地方使劲。</p>
+
+<table>
+<tr><th>阶段</th><th>失败长什么样</th><th>根因在哪</th><th>处理方向</th></tr>
+<tr><td>解析期（还没下载任何包）</td><td>「找不到满足条件的组合」，附一段推理链</td><td>约束之间互相矛盾</td><td>逐条读推理链；放宽自己的上界；必要时用<span class="term">约束文件</span>或依赖覆盖兜底</td></tr>
+<tr><td>下载／安装期</td><td>网络超时、404、校验和不匹配</td><td>索引不可达、源漂移、镜像不同步</td><td>检查索引配置与凭据，不要靠重试掩盖</td></tr>
+<tr><td>构建期</td><td>一大段编译器输出，最后一行才是关键</td><td>没有匹配的预编译包，退化成源码编译</td><td>确认该平台／Python 版本有没有轮子</td></tr>
+<tr><td>运行期（装完才炸）</td><td><code>ImportError</code>、莫名其妙的 <code>AttributeError</code></td><td>环境里存在自相矛盾的版本组合</td><td>用 <code>pip check</code> 查一致性，然后重建环境</td></tr>
+</table>
+
+<h3>为什么「一条一条装」会装出自相矛盾的环境</h3>
+
+<p>最后一行那种「装完才炸」的情况，最常见的成因是分多次安装。安装器只在<strong>单次调用内部</strong>保证一致性，它不知道你上一条命令装了什么、那些包有什么要求。于是后装的包为了满足自己的约束，可以悄悄把先装的包的依赖降级，而整个过程一句警告都没有。</p>
+
+<pre><code># 分两条命令执行，安装器只在每一次调用内部保证一致
+pip install web-a           # 解出并装上 lib 2.3
+pip install "task-b==3.1"   # 为满足它，把 lib 降到 1.9
+
+# 此刻 web-a 已经被破坏，但两条命令都显示成功
+pip check                   # 只有这条会说：web-a 需要 lib&gt;=2.0，实际装的是 1.9</code></pre>
+
+<p>顺带澄清一个常见误解：pip 本身是有解析器的。<strong>pip 20.3（2020 年 11 月 30 日发布）</strong>起，带回溯的新解析器成为 Python 3 上的默认行为，此前的旧解析器是「先到先得」，遇到冲突直接按第一个见到的约束装完了事。所以「pip 不解析依赖」这句话在 2020 年之后已经不成立了。真正的问题不在有没有解析器，而在于<strong>解析的作用域是一次命令，不是一个项目</strong>——这正是锁文件要补上的东西：把整个项目的解析结果一次性固定下来，以后每次安装都照它来，不再重新解析。</p>
+
+<div class="intuition-box">
+<p>解析器回答的是「哪一组版本能同时成立」，锁文件保存的是「上一次它回答出来的那一组」。有了保存，就不必每次重新问；不必重新问，答案才不会变。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、锁文件里到底记了什么</h2>
+
+<p>锁文件不是一张版本号清单。仅有版本号还不够——同一个版本号在不同时刻、不同索引上，对应的字节可能不一样。所以一份能用的锁文件至少要记四类信息，外加一类让它能跨环境使用的结构。</p>
+
+<table>
+<tr><th>记录项</th><th>解决什么问题</th><th>缺了会怎样</th></tr>
+<tr><td>确切版本</td><td>把「一个范围」收敛成「一个点」</td><td>同一份声明在不同时刻解出不同结果</td></tr>
+<tr><td>来源（索引地址、Git 提交、本地路径）</td><td>说清这个版本是从哪儿拿的</td><td>换个私有源就可能拿到同名不同物的包</td></tr>
+<tr><td><span class="term">校验和</span>（如 sha256）</td><td>保证拿到的字节与当初完全一致</td><td>上游重传、镜像不同步、中间人篡改都无从察觉</td></tr>
+<tr><td>依赖关系（谁把谁带进来的）</td><td>让传递依赖可追溯</td><td>想删一个包时不知道还有谁在用它</td></tr>
+<tr><td><span class="term">环境标记</span>分叉</td><td>让一份文件覆盖多个平台</td><td>锁文件只在生成它的那台机器上可用</td></tr>
+</table>
+
+<p>「来源」这一条在有私有源的团队里格外重要。很多公司会配一个内部索引，既缓存公共包也放自研包，于是同一个包名在公共源和内部源上都可能存在。锁文件把每个包是从哪个索引取的记下来，「我以为装的是官方那个 <code>utils</code>，实际装的是内部同名包」这类事情才不至于悄无声息地发生——这也是抢注同名包这种供应链攻击手法能奏效的前提。</p>
+
+<p>校验和这一条值得单独说。它防的不是「上游发了个新版本」——那由版本号管；它防的是<strong>同一个版本号背后的字节变了</strong>。这在现实里有好几种来路：上游作者删掉旧文件重新上传、企业内部镜像源和上游不同步、构建缓存被污染、以及有意的供应链投毒。校验和把「我要 1.2.3」升级成「我要 sha256 等于这一串的那个文件」，这是可复现和可审计之间的分界线。</p>
+
+<h3>难点在跨平台：一套版本号锁不住所有环境</h3>
+
+<p>这是锁文件设计里最容易被低估的部分。同一个项目部署到 Linux 和 Windows、跑在 3.11 和 3.12 上，<strong>依赖树本身就是不同的</strong>——不是「装的版本不同」，而是「该装哪些包都不同」。有的包只在某个操作系统上需要；有的功能在旧版 Python 上要靠 backport 包补齐、新版标准库自带；还有的库新版本只提供了给较新 Python 的预编译包，旧 Python 上只能停在老版本。</p>
+
+<p>这意味着锁文件如果只记「一套版本号」，它就只对生成它的那个环境有效。Python 打包生态给出的答案是<span class="term">环境标记</span>（environment marker，PEP 508 定义）：在依赖后面挂一个条件表达式，安装时在本机对表达式求值，为真才装。锁文件于是可以按这些条件<strong>记录分支</strong>——同一个包在一份锁文件里出现多次、各自带不同的适用条件，都是正常的。</p>
+
+<div class="arch-diagram">  为什么一套版本号锁不住所有环境
+  ────────────────────────────────────────────────────────────
+  同一个项目，同一份声明，四个部署目标：
+
+    Linux x86_64  + Py3.12        macOS arm64   + Py3.12
+    Windows AMD64 + Py3.12        Linux aarch64 + Py3.11
+
+  它们的依赖树天然不同：
+    · 某些包只在 Windows 上需要（系统调用封装一类）
+    · 某些能力在 3.11 上要装 backport 包，3.12 起标准库自带
+    · 某库的新版只发了面向较新 Python 的轮子，旧 Python 上只能停在老版本
+
+  平台专用锁                          通用锁（uv.lock 走的这条路）
+    在 macOS 上生成，只记 macOS         一次解析，覆盖全部目标环境
+    要覆盖四个目标 = 四个锁文件         同一个包可以出现多条记录，
+    四份文件之间还得自己保证不漂移       各自带上生效条件
+
+  环境标记就是那个生效条件，形如：
+    某依赖 ; sys_platform == 'win32'
+    某依赖 ; python_version == '3.11'
+  安装时先在本机求值，结果为真的那一条才会被装上</div>
+
+<p>常用的标记名值得记住，写 CI 矩阵和读锁文件 diff 时都要用到。注意 Windows 上 <code>sys_platform</code> 永远是 <code>win32</code>，即使是 64 位系统也一样，这是个历史遗留、经常让人写错条件的地方。</p>
+
+<table>
+<tr><th>标记名</th><th>Linux</th><th>macOS</th><th>Windows</th></tr>
+<tr><td><code>sys_platform</code></td><td><code>linux</code></td><td><code>darwin</code></td><td><code>win32</code>（64 位也是它）</td></tr>
+<tr><td><code>platform_system</code></td><td><code>Linux</code></td><td><code>Darwin</code></td><td><code>Windows</code></td></tr>
+<tr><td><code>platform_machine</code>（x86-64）</td><td><code>x86_64</code></td><td><code>x86_64</code></td><td><code>AMD64</code></td></tr>
+<tr><td><code>platform_machine</code>（ARM64）</td><td><code>aarch64</code></td><td><code>arm64</code></td><td><code>ARM64</code></td></tr>
+<tr><td><code>python_version</code></td><td colspan="3">解释器的主次版本号，如 <code>3.12</code>；跨版本分叉主要靠它</td></tr>
+</table>
+
+<h3>uv.lock 是跨平台的通用锁</h3>
+
+<p>这是 uv 与不少老办法的一个关键差别。uv 官方文档把 <code>uv.lock</code> 明确描述为<strong>跨平台（universal）的锁文件</strong>：一次解析要同时对所有支持的操作系统、CPU 架构和 Python 版本成立，需要分叉的地方用环境标记记下分支。与之相对，<code>uv pip compile</code> 这套 pip 兼容接口默认产出的是<strong>平台专用</strong>的解析结果，和 pip-tools 的行为一致——它只对当前这台机器负责。</p>
+
+<p>通用解析的代价是它<strong>比平台专用解析更受约束</strong>：一个版本组合必须对所有目标环境都成立才能入选，所以有时解出来的版本会比「只管本机」时更旧，甚至在某些包完全不提供某平台的分发件时直接失败。如果项目只支持有限的几个平台，可以在配置里把求解范围收窄到这几个环境，让解析器不必为用不到的平台让步。</p>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>一个数据处理服务，开发机全是 macOS，部署目标是 Linux 容器。团队用平台专用的编译方式在开发机上生成 <code>requirements.txt</code> 并提交。某次有人在依赖里加了一个带可选加速后端的库，它在 macOS 上不需要额外的运行时支持包，在 Linux 上需要。生成出来的锁文件里自然没有那个包，CI 装依赖一路绿灯（因为 CI 的镜像里恰好已经预装过它），直到部署到一个新建的干净节点上，容器启动 2 秒就 <code>ImportError</code> 退出，连健康检查都没来得及注册。定位耗时 <strong>50 分钟</strong>，修复方式是改用能对 macOS 与 Linux 一起求解的通用锁文件，之后两个平台的依赖差异由环境标记明确写在同一份文件里、也出现在同一次 diff 里。</p>
+</div>
+
+<p>还有一个值得知道的动向：<strong>PEP 751 已于 2025 年 3 月 31 日通过并定稿</strong>，它给 Python 生态定义了一个标准化的锁文件格式 <code>pylock.toml</code>。在此之前，每个工具的锁文件格式都是自定义的、彼此不通。这个标准不会立刻取代各家的原生格式，但它让「把锁文件交给另一个工具消费」这件事第一次有了共同语言。uv 支持把 <code>uv.lock</code> 导出成这个格式，也支持导出成 <code>requirements.txt</code> 或者 SBOM，用来对接还不认识 uv 的旧流程。</p>
+
+<div class="intuition-box">
+<p>锁文件不是「版本号清单」，而是「这一次解析的完整判决书」：判了哪个版本、从哪儿取、字节的指纹是什么、在什么条件下适用。少记任何一项，可复现就会在某个具体场景下漏气。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、锁定的日常操作：三个文件，几条命令</h2>
+
+<p>把第一节那张职责表记在脑子里，命令就不必硬背了——每条命令无非是在两对关系（声明↔锁、锁↔环境）之间搬运信息，区别只在方向和范围。</p>
+
+<div class="arch-diagram">  三个文件，几条命令，方向不能记反
+  ─────────────────────────────────────────────────────────────
+   pyproject.toml            uv.lock                    .venv
+   （意图：范围）            （事实：确切版本）         （现实：磁盘）
+         │                       │                        │
+         │      uv lock          │                        │
+         ├──────────────────────▶│                        │
+         │   读声明、解析、写锁    │                        │
+         │                       │        uv sync         │
+         │                       ├───────────────────────▶│
+         │                       │   照锁装，并删掉多余的   │
+         │                       │                        │
+         │              uv add httpx                      │
+         ├──────────────────────▶├───────────────────────▶│
+         │        一条命令走完三步：改声明 → 重解析 → 同步  │
+   ─────────────────────────────────────────────────────────────
+   uv run 每次执行前会先确认「锁与声明一致、环境与锁一致」，
+   所以本地开发几乎不用手动敲 lock 和 sync。
+   CI 里要反过来：加上 --locked，让「锁需要更新」直接变成构建失败，
+   而不是让 CI 悄悄替你重解析出一份没人 review 过的依赖树。</div>
+
+<table>
+<tr><th>我想做什么</th><th>命令</th><th>它动了什么</th></tr>
+<tr><td>加一个依赖</td><td><code>uv add httpx</code></td><td>改声明 + 重新解析写锁 + 同步环境，三件事一起做</td></tr>
+<tr><td>去掉一个依赖</td><td><code>uv remove httpx</code></td><td>同上，反方向</td></tr>
+<tr><td>只重新解析，先不装</td><td><code>uv lock</code></td><td>只写锁文件，不碰环境</td></tr>
+<tr><td>让环境和锁完全一致</td><td><code>uv sync</code></td><td>默认<strong>精确同步</strong>：缺的装上，多的删掉</td></tr>
+<tr><td>保留环境里手工装的包</td><td><code>uv sync --inexact</code></td><td>关掉「删多余」这一半</td></tr>
+<tr><td>CI 里禁止隐式更新锁</td><td><code>uv sync --locked</code></td><td>锁不是最新就报错退出，绝不静默重解析</td></tr>
+<tr><td>只校验锁是否最新</td><td><code>uv lock --check</code></td><td>等价于 <code>--locked</code>，适合单独放一个 lint 作业</td></tr>
+<tr><td>整体升级</td><td><code>uv lock --upgrade</code></td><td>在声明允许的范围内把所有包往上推</td></tr>
+<tr><td>只升一个包</td><td><code>uv lock --upgrade-package httpx</code></td><td>其余保持锁里的旧版本不动</td></tr>
+<tr><td>导给别的工具</td><td><code>uv export --format requirements.txt</code></td><td>也能导成 <code>pylock.toml</code> 或 SBOM</td></tr>
+</table>
+
+<p>表里最值得展开的是 <code>uv sync</code> 的<span class="term">精确同步</span>。它默认会<strong>删掉环境里存在、但锁文件里没有的包</strong>，这一点 <code>pip install -r requirements.txt</code> 做不到——pip 的语义是「确保这些都装上」，它没有「环境应当只有这些」的概念，多出来的包会一直留着。</p>
+
+<p>多余的包并非无害。你为了调试临时装的某个库，会让「本地能跑、CI 跑不了」重新出现；更隐蔽的是它可能影响导入行为——顶层包名相互遮蔽，或者让某段 <code>try: import x / except ImportError:</code> 的可选分支在你机器上意外走通，于是你测的根本不是生产会走的那条路径。模块查找的具体规则在<a href="py_modules_packages.html">PY08</a>里讲过，这里只需要记住结论：环境里有什么，和你声明了什么，必须是同一件事。</p>
+
+<pre><code># CI 的安装步骤：锁不是最新就直接失败，而不是默默重解析
+uv sync --locked --no-dev
+
+# 本地日常：不用手动 lock/sync，uv run 每次都会先对齐
+uv add httpx
+uv run pytest
+
+# 看清某个包到底是被谁带进来的
+uv tree</code></pre>
+
+<p>另外两个 CI 里常见的开关值得区分：<code>--locked</code> 断言「锁文件已经是最新的」，不是就报错；<code>--frozen</code> 则是「别管锁是不是最新，直接照它用」，连检查都跳过。前者适合大多数流水线，它能拦住「有人改了声明却忘了重新生成锁」；后者适合确定环境不该变、又想省掉一次校验开销的场合，代价是它不会提醒你声明和锁已经脱节。</p>
+
+<h3>锁文件的 diff 该怎么看</h3>
+
+<p>锁文件的 diff 动辄几百行，逐行读既不现实也没必要。实用的看法是只盯三件事：有没有<strong>全新的包名</strong>出现（说明依赖图长出了新枝，多半来自某个包新增的依赖，值得问一句这是什么）；有没有<strong>跨大版本的跳跃</strong>（主版本号变了的那几行才是风险集中处）；以及<strong>直接依赖有没有被动变化</strong>（你没主动升它却变了，说明是被别人的约束拖动的）。剩下那些补丁版本号的变动扫一眼过去就行。</p>
+
+<p>另一个值得养成的习惯是让依赖升级<strong>单独成 PR</strong>。业务改动和依赖升级混在一起时，锁文件那几百行 diff 会把真正需要审的代码淹掉；更糟的是出问题时无法二分——你分不清是新写的逻辑坏了还是某个包升级坏了。分开之后，回滚一次依赖升级就只是 revert 一个提交。</p>
+
+<div class="intuition-box">
+<p>本地开发的默认动作是 <code>uv run</code>，让工具替你保持对齐；CI 的默认动作是 <code>--locked</code>，让不对齐立刻变成红灯。同一套文件，两种态度：一个求方便，一个求确定。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、锁文件的维护纪律</h2>
+
+<p>锁文件的价值全部来自「它被当真」。只要有一个环节可以绕过它，它就退化成一个偶尔更新的装饰品。下面四条纪律，每一条都对应一种常见的退化方式。</p>
+
+<h3>第一条：锁文件必须提交进版本库</h3>
+
+<p>对应用项目而言，这是唯一一条没有例外的规矩。不提交锁文件，等于把「装什么」的决定权交给每一次构建发生的那个时刻，第一节那个事故就会以各种形式反复发生。判据还是那个：它是构建的输入，不是输出。顺带一提，锁文件会让 diff 变长，有人因此想把它加进 <code>.gitignore</code> 或者标成二进制不显示——不要这么做，那些 diff 行正是你唯一能看见依赖变化的地方，把它藏起来就等于回到了没有锁文件的状态。</p>
+
+<h3>第二条：锁文件冲突不要手改，重新生成</h3>
+
+<p>两个人各自加了依赖，合并时锁文件必然冲突，而且冲突块往往几百行。手工挑选保留哪些行看起来可行，实际上几乎必错：你选中的那些版本从来没有被一起解析验证过，很可能是一组互相不兼容的组合，而且校验和与依赖关系也会跟着对不上。</p>
+
+<p>正确做法是把锁文件当成可再生的产物：先只解决<strong>声明文件</strong>的冲突（那是人写的，语义清楚，通常就是两边各加了一行），然后丢掉锁文件的冲突结果、重新生成一份，再跑一遍测试。整个过程通常不到一分钟，比手工挑行又快又可靠。</p>
+
+<h3>第三条：升级要有节奏，而不是有心情</h3>
+
+<p>锁文件会把依赖冻住，这既是它的价值也是它的风险——冻太久，某天被迫升级时就是一次跨越两年的大跳跃，几十个包同时变，出问题也无从二分定位。所以锁文件必须配一个明确的升级节奏。</p>
+
+<table>
+<tr><th>策略</th><th>怎么做</th><th>好处</th><th>代价</th></tr>
+<tr><td>定期整体升级</td><td>固定窗口（比如每两周）跑一次整体升级，单独开一个 PR</td><td>变更集中、回滚点清晰、不会攒成大跳跃</td><td>需要一套像样的测试兜底，否则只是在赌</td></tr>
+<tr><td>只升出事的包</td><td>有安全公告或踩到具体 bug 时才单包升级</td><td>改动面最小，风险可控</td><td>长期只做这个，早晚要还一次大的</td></tr>
+<tr><td>完全不锁，跟随最新</td><td>每次构建重新解析</td><td>不用维护锁文件</td><td>就是本卡第一节那个事故</td></tr>
+<tr><td>加冷却期</td><td>配一个时间窗，解析时忽略过新的发布</td><td>躲开「刚发布就被撤回」和投毒包被发现前的那段窗口</td><td>安全修复也会被一起延后，得留单独的绕过口子</td></tr>
+</table>
+
+<p>最后那一行在 uv 里是 <code>exclude-newer</code> 这个能力：它既可以给一个绝对时间点（只考虑该时刻之前上传的分发件），也可以给一段时长（比如「一周」），后者就是常说的依赖冷却期。它对提升供应链安全姿态挺有用，但要注意它依赖索引提供上传时间信息，并且会连安全更新一起挡住，所以通常要配合单包例外来用。</p>
+
+<h3>第四条：库和应用的规矩不一样</h3>
+
+<p>这是一个经常被搞反的判据。<strong>库不应该把锁文件用作发布约束</strong>。库被别人装进他们的项目，那个项目里还有几十个别的包，只有下游自己的解析器才知道怎么在全局范围内找出一组兼容版本。如果库把自己的锁强加下去，下游要么装不上，要么被迫接受一组和自己项目其余部分打架的版本。</p>
+
+<p>但这不等于「库的仓库里不能有锁文件」。库的仓库同样要固定自己的开发和 CI 环境，锁文件在这里完全合理——关键区别是它<strong>只作用于这个仓库自己的开发流程，不会被打包进发布件</strong>，下游根本看不到它。发布件里能被下游看到的只有声明的版本范围。</p>
+
+<table>
+<tr><th>关注点</th><th>应用（服务 / CLI / 定时任务）</th><th>库（要发布给别人用的包）</th></tr>
+<tr><td>声明里的版本范围</td><td>可以收得紧一些，方便控制</td><td>要尽量宽，上界尤其要谨慎，写死上界会污染整个下游生态</td></tr>
+<tr><td>仓库里要不要有锁文件</td><td>要，这是可复现的基础</td><td>可以有，但只用于固定自己的开发与 CI 环境</td></tr>
+<tr><td>锁文件影响谁</td><td>影响所有部署环境</td><td>只影响本仓库的贡献者；发布件里不含锁文件</td></tr>
+<tr><td>下游拿到什么</td><td>不适用</td><td>只拿到你声明的范围，由下游自己解析</td></tr>
+<tr><td>版本下界重要吗</td><td>不太关键</td><td>关键——要声明真正支持的最低版本，并在 CI 里用「取最低版本解析」的模式专门跑一轮测试来验证它没写错</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>某团队把一个内部工具库当应用来维护，声明里把所有依赖都写成了等号精确版本，理由是「这样最稳」。这个库被 9 个内部服务依赖。半年后一个服务因为安全公告必须升级某个基础 HTTP 库，结果这个工具库的精确版本把它死死卡住，升级请求穿透到工具库、再穿透回其余 8 个服务，一次本该 10 分钟的补丁最终排期 <strong>3 天</strong>，涉及 <strong>9 个仓库</strong>的协调发布。改法是把库的声明改回宽范围、只保留必要的下界，同时在库自己的仓库里保留锁文件来固定 CI。这之后同类安全升级的耗时回到单个服务内部解决，不再扩散。</p>
+</div>
+
+<div class="intuition-box">
+<p>应用锁的是「我要部署的这一套」，库声明的是「我能配合的那个范围」。锁是给自己用的确定性，范围是给别人留的余地；把两者搞反，要么你不可复现，要么整个下游生态跟着你一起僵住。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、可复现的边界：锁文件盖不住的那几层</h2>
+
+<p>有了跨平台锁文件，是不是就端到端可复现了？不是。锁文件锁住的是「装哪些包的哪个版本、从哪拿、字节指纹是什么」，这一层它做得很干净。但从「拿到这些字节」到「环境里跑起来的东西完全一样」，中间还隔着好几层它管不到的东西。</p>
+
+<div class="arch-diagram">  「可复现」是分层的，锁文件只盖住了最底下那一层
+  ─────────────────────────────────────────────────────────────
+  第四层  操作系统与系统库     glibc 版本、时区数据、显卡驱动、BLAS 实现
+          ↑ 锁文件完全管不到。同一个二进制包在不同底座上行为可能不同
+
+  第三层  构建期              编译器版本、构建后端、构建期依赖、环境变量
+          ↑ 源码包要在本机现场编译；构建期依赖本身通常还取最新版
+
+  第二层  分发件的选择        同一个版本号往往对应十几个不同的轮子
+          ↑ 装哪一个由本机的平台标签决定，不由版本号决定
+
+  第一层  版本与来源          包名 + 版本 + 索引 + 校验和
+          ↑ 这一层锁文件能完全盖住 ✓
+
+  再往上一层：把第二到第四层一起冻结，现实中唯一可靠的做法是
+  把整个文件系统固化成一个容器镜像，并按内容摘要引用它。
+  容器化是后面工程化那一组的话题，这里只点到为止。</div>
+
+<h3>源码分发包：同一份源码，不同的产物</h3>
+
+<p>包可以以两种形态发布：预编译好的<strong>轮子</strong>，和只含源码的<span class="term">源码分发包</span>。装轮子就是解压拷贝，结果确定；而源码分发包必须在你的机器上现场编译，编译结果取决于本机的编译器版本、可用的系统头文件和库、甚至某些自动探测的 CPU 指令集。锁文件能保证你拿到的<strong>源码</strong>字节一致，却没法保证<strong>编译出来的产物</strong>一致——这两件事之间隔着整台机器。</p>
+
+<p>这也解释了一个常见现象：同一份锁文件，在有完整工具链的开发机上装得又快又顺，在精简的生产基础镜像里却编译失败或者跑出不同的性能特征。规避办法是尽量让所有依赖都有可用的轮子，并在 CI 里显式检查这一点，而不是等部署时才发现某个包退化成了源码编译。</p>
+
+<p>第二层那个「一个版本号对应十几个轮子」也值得展开一句。预编译包的文件名里带着一组平台标签，标明它是给哪个 Python 版本、哪个操作系统、哪种 CPU 架构准备的；安装器拿本机的信息去匹配这些标签，挑出一个能用的。所以锁文件锁定的是「这个版本以及它那一组分发件的校验和」，而<strong>最终解压进 <code>site-packages</code> 的到底是哪一个</strong>，仍然由执行安装的那台机器决定。同一份锁文件在 x86 和 ARM 机器上装出不同的二进制，是设计如此，不是出了问题。</p>
+
+<h3>构建期依赖：锁文件之外的一小块灰色地带</h3>
+
+<p>需要编译的包会先声明自己的<strong>构建期依赖</strong>（构建后端、代码生成工具等），安装器通常会在一个隔离的临时环境里把它们装好，再执行构建。这些构建期依赖<strong>往往不在你的项目锁文件里</strong>，而且不受你的解析策略约束——uv 在讲解析策略时就明说过，构建依赖一律取最新版本。于是理论上存在这样一条路径：你的锁文件一个字节没变，但某个构建后端发了新版，源码包编译出的产物跟着变了。这条路径不常触发，但排查起来极其费劲，知道它存在本身就有价值。</p>
+
+<h3>还有一些更琐碎的来源</h3>
+
+<p>构建过程会读环境变量（要不要开某项优化、链接哪个系统库、用不用某个加速后端），这些变量在你的 shell 里和在 CI 容器里常常不一样。有些包会在安装或首次运行时下载额外的数据文件（模型权重、词表、编译好的二进制），那些下载完全在锁文件的视野之外。这类东西没有统一解法，只能逐个识别、逐个固定。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>锁文件和声明文件一起提交进仓库，当成构建的输入对待</li>
+<li>CI 里用 <code>--locked</code> 装依赖，让「锁没更新」变成红灯</li>
+<li>用能覆盖全部部署目标的通用锁，而不是在开发机上生成只管本机的那种</li>
+<li>升级走固定节奏、单独开 PR，不要混在业务改动里</li>
+<li>锁文件冲突一律重新生成，然后跑一遍测试</li>
+<li>库的声明保持宽范围，锁文件只用来固定自己的 CI</li>
+<li>确认关键依赖在目标平台上都有现成轮子，不要退化成源码编译</li>
+<li>真正需要端到端一致时，把固定的层次上推到容器镜像</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>把锁文件加进 <code>.gitignore</code>，或者嫌 diff 长而隐藏它</li>
+<li>手工编辑锁文件，或者手工挑选合并冲突里保留哪些行</li>
+<li>用多次 <code>pip install</code> 拼出一个环境，然后指望它自洽</li>
+<li>在库的发布声明里写死精确版本，把约束甩给所有下游</li>
+<li>以为 <code>pip install -r</code> 能让环境和清单完全一致（它不删多余的包）</li>
+<li>在 macOS 上生成锁文件、直接拿去部署 Linux，且不做任何校验</li>
+<li>把「装上了就行」当作可复现，忽略校验和与来源</li>
+<li>锁住之后一年不升级，等到出安全公告时被迫一次跨几十个版本</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>锁文件让「装出来的东西」可复现，容器镜像让「整台机器」可复现。前者便宜、日常、必须有；后者贵一些，但只有它能盖住编译器和系统库那几层。先把锁文件这一层做扎实，再讨论要不要往上加。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>既然要确切版本，为什么不干脆在声明文件里把所有版本都写死，省掉锁文件？</summary>
+<div class="answer">两个原因让这条路走不通。第一，你只能写死自己知道的那些包，也就是直接依赖；传递依赖你根本不知道名字，而它们才是数量的大头，一个 20 个直接依赖的服务实际会装进 80 到 150 个包。写死 20 个、放任 130 个，可复现仍然是假的。第二，声明文件是给人读和给下游读的，它表达的是「我能配合什么」；把它变成一张精确版本清单，等于放弃了表达兼容范围的能力，一旦这个项目被别的项目依赖，你的精确版本会直接污染对方的解析空间（第五节那个 9 个仓库的事故就是这么来的）。正确的分工是：声明保持范围，锁文件承担精确，两个文件各司其职。</div>
+</details>
+
+<details>
+<summary>uv.lock 和 requirements.txt 到底什么关系？能互相替代吗？</summary>
+<div class="answer">这两者不在一个层面上。<code>requirements.txt</code> 只是一种文本格式，它既可以当声明用（手写几行宽范围），也可以当锁用（由工具编译出的、带全部传递依赖和校验和的完整清单）——同一个文件名承担两种角色，本身就是混乱的来源之一。<code>uv.lock</code> 则明确只有一个角色：uv 生成和维护的锁文件，格式是 TOML、人能读，但官方明确说了不要手工编辑。能力上最大的差别是跨平台：<code>uv.lock</code> 是通用锁，一份文件覆盖所有目标环境；而用 pip 兼容接口编译出来的 <code>requirements.txt</code> 默认只对生成它的那个平台有效。需要对接还不认识 uv 的旧流程时，可以用 <code>uv export</code> 从 <code>uv.lock</code> 导出一份 <code>requirements.txt</code>，但方向是单向的——真源始终是 <code>uv.lock</code>。</div>
+</details>
+
+<details>
+<summary>合并代码时锁文件冲突了几百行，怎么处理最快？</summary>
+<div class="answer">不要看那几百行。把锁文件当成可再生的产物：先只解决声明文件里的冲突，那部分是人写的、语义清楚，通常就是两边各加了一行依赖；然后用工具重新生成一份锁文件，覆盖掉冲突的结果；最后跑一遍测试确认新解出来的组合确实能用。整个过程一般不到一分钟。反过来，手工挑选保留哪些行几乎必错，因为你选出的那组版本从来没有被一起解析验证过，校验和与依赖关系也会跟着对不上——而这种错误往往要到运行期才暴露。如果冲突太频繁，说明依赖变动过于分散，可以考虑把依赖升级集中到固定窗口、单独开 PR，这样冲突面会小很多。</div>
+</details>
+
+<details>
+<summary>我在写一个要发到内部源的库，到底该不该提交锁文件？</summary>
+<div class="answer">该提交，但要清楚它的作用范围。锁文件在库的仓库里只做一件事：固定贡献者和 CI 的开发环境，让「在我机器上测试通过」这句话有意义。它不会被打包进你发布出去的分发件，下游根本看不到它，所以不存在「强加约束给下游」的问题。真正会影响下游的是你在声明里写的版本范围，那里的纪律正好相反：范围要宽，上界要极其谨慎，因为一个写死的上界会阻止整个下游生态升级那个依赖。另外库还有一条应用不需要的功课：下界要写准，并且在 CI 里专门跑一轮「按最低允许版本解析」的测试，否则你声明支持 1.0 但其实用了 1.4 才有的接口，下游会拿到一个装得上却跑不了的组合。</div>
+</details>
+
+<details>
+<summary>uv sync 和 pip install -r requirements.txt 差在哪？</summary>
+<div class="answer">最大的差别是语义方向。<code>pip install -r</code> 的语义是「确保清单里这些都装上」，它对环境里多出来的包没有任何意见，会一直留着；<code>uv sync</code> 默认做的是精确同步，语义是「让环境恰好等于锁文件」，缺的装上、多的删掉。这个差别在本地不明显，在长期复用的构建缓存或者开发容器里会积累成真问题：你临时装来调试的库一直在，于是「本地能跑、干净环境跑不了」，或者某个 <code>try: import</code> 的可选分支在你这里意外走通，导致你测的根本不是生产那条路径。次要差别还有两个：<code>uv sync</code> 天然消费带校验和与环境标记的锁文件，而 pip 要靠额外配置才能强制校验哈希；以及 <code>uv sync --locked</code> 能在锁和声明脱节时直接让 CI 失败，pip 没有对应概念。如果确实要保留手工装的包，用 <code>--inexact</code> 显式关掉删除行为。</div>
+</details>
+
+<details>
+<summary>都有锁文件了，为什么两次构建出来的东西还是可能不一样？</summary>
+<div class="answer">因为锁文件只锁住了「拿哪些字节」，没锁住「拿到之后发生了什么」。至少四条路径能绕过去。一是源码分发包要在本机现场编译，编译器版本、系统头文件、自动探测到的 CPU 指令集都会影响产物。二是同一个版本号往往对应十几个不同的预编译包，装哪一个由本机的平台标签决定，不由版本号决定。三是需要编译的包会先装自己的构建期依赖，这些依赖通常不在你的项目锁文件里、而且一般取最新版，它们变了产物也可能跟着变。四是构建和运行时会读环境变量，有些包还会在首次运行时下载模型或数据文件，这些完全在锁文件的视野之外。想把这些一起冻住，只能把固定的层次往上推到容器镜像，按内容摘要引用一个具体镜像。</div>
+</details>
+
+<details>
+<summary>换成跨平台的通用锁之后，为什么有些包解出来的版本反而更旧了？</summary>
+<div class="answer">因为通用解析要同时对所有目标环境成立，它天然比「只管本机」的平台专用解析更受约束——一个版本组合必须在每个支持的操作系统、架构和 Python 版本上都站得住，才有资格入选。这里其实有两种不同的情况要分开。一种是能分叉的：某个包的新版只支持较新的 Python，默认策略下 uv 会为每个 Python 版本各选它能用的最新版，于是同一个包在锁文件里出现多条记录、各带自己的环境标记，这是正常且理想的结果。另一种是分不动的：约束跨环境互相牵制，只能退到一个所有人都能接受的较旧版本。遇到第二种时，最直接的办法是把求解范围收窄——如果项目根本不部署到 Windows、也不支持某个旧 Python，就在配置里把支持环境明确声明出来，解析器不必再为用不到的目标让步。另外还有一个取舍开关，可以在「尽量用新版本」和「尽量少出现不同版本」之间选边。</div>
+</details>
+
+<details>
+<summary>锁文件里的校验和到底防住了什么？版本号不是已经唯一了吗？</summary>
+<div class="answer">版本号唯一的只是「名字」，不是「内容」。校验和防的是同一个版本号背后字节发生变化的那些情况，现实里至少有四类：上游作者删掉已发布的文件重新上传（有些索引允许，或者通过撤回再发同号变相做到）；企业内部镜像源和上游不同步，或者同步过程中损坏；构建缓存被污染，拿到了一个来路不明的同名文件；以及有意的供应链投毒。有了校验和，安装这一步就从「我要 1.2.3」变成了「我要摘要等于这一串的那个文件」，任何一个字节对不上都会立刻失败而不是静默装上。这也是锁文件能用于审计的前提——没有校验和，你只能证明装了哪个版本号，不能证明装了哪份内容。顺带一提，pip 也支持强制校验哈希，但那需要额外配置且要求清单里每一项都带哈希，不是默认行为。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

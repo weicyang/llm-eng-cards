@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY43 · 日志与可观测性</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、可观测性要回答什么</a>
+<a href="#s2">二、标准库日志的四个零件</a>
+<a href="#s3">三、日志该写什么</a>
+<a href="#s4">四、结构化日志与关联标识</a>
+<a href="#s5">五、指标与追踪怎么落地</a>
+<a href="#s6">六、成本与纪律</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY43 · 日志与可观测性</h1>
+<p class="subtitle">三类信号的分工 / 记录器与传播机制 / 字段化与惰性格式化 / 关联标识贯穿全链路 / 采样、保留与成本</p>
+
+<div class="intuition-box">
+<p>日志不是写给「以后可能有人看」的，是写给凌晨三点被叫起来的那个人看的。判断一条日志该不该留，只有一个标准：它能回答某个具体问题吗？答不上来的日志不是保险，是账单。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、可观测性要回答什么：三个问题，三类信号</h2>
+
+<p>大多数团队的「加日志」都是被故障推着走的：出了一次事，事后发现关键位置没打日志，于是补一条；再出一次事，再补一条。几年下来日志量涨了两个数量级，排障却没变快多少。原因不是日志太少，而是从没想清楚日志要回答什么问题。</p>
+
+<p>告警响起之后，你实际上要依次回答三个不同的问题，而它们需要的数据形态完全不同。</p>
+
+<div class="arch-diagram">  告警响了，接下来依次要回答三个问题
+  ──────────────────────────────────────────────────────────────
+  ①「出了什么事？」          ②「为什么？」            ③「影响了谁？」
+    错误率 0.2% 跳到 7%        某个下游调用在超时       哪些用户、多少笔单
+        │                          │                        │
+        ▼                          ▼                        ▼
+    ┌────────┐              ┌──────────────┐          ┌────────────┐
+    │  指标  │              │   链路追踪   │          │    日志    │
+    └────────┘              └──────────────┘          └────────────┘
+   聚合后的数值序列          一次请求在各段的耗时      每一次具体调用的现场
+   秒级、便宜、留得久        通常抽样、成本中等        最贵、体量最大
+        │                          │                        │
+        └─── 先看趋势 ────► 再定位到具体哪一段 ────► 最后翻这几条记录
+
+  顺序反了就会很贵：
+  用日志去算「错误率有没有涨」，等于每次告警都全量扫一遍文本。</div>
+
+<p>这三种数据有各自的名字。<span class="term">日志</span>是离散的事件记录，回答「某一次具体发生了什么」；<span class="term">指标</span>是按时间聚合的数值序列，回答「整体趋势正不正常」；<span class="term">链路追踪</span>把一次请求在多个组件之间的流转串成一条链，回答「时间花在哪一段」。三者不是替代关系，而是分工。</p>
+
+<table>
+<tr><th>信号</th><th>粒度</th><th>成本量级</th><th>典型保留期</th><th>擅长回答</th><th>答不了</th></tr>
+<tr><td>指标</td><td>按时间窗聚合，无个案</td><td>最低（一条曲线一天几 KB）</td><td>13 个月以上</td><td>是否异常、趋势、容量规划</td><td>「张三那单为什么失败」</td></tr>
+<tr><td>链路追踪</td><td>一次请求 × 每一段调用</td><td>中（通常按比例抽样）</td><td>7～15 天</td><td>耗时分布、依赖关系、跨服务瓶颈</td><td>业务字段级的细节</td></tr>
+<tr><td>日志</td><td>一次具体事件</td><td>最高（体量与请求量同阶）</td><td>热存 3～7 天，冷存更久</td><td>某一次到底发生了什么、参数是什么</td><td>「全站错误率是多少」</td></tr>
+</table>
+
+<p>两种误用几乎每个团队都犯过。第一种是<strong>用日志统计趋势</strong>：想知道昨天的失败率，写一条全文检索去数关键字命中次数。这类查询要扫过全部原始文本，慢、贵，而且关键字一改口径就断。第二种是<strong>用指标查个案</strong>：指标已经把维度聚合掉了，你只能看到「失败 137 次」，看不到是哪 137 次——想按用户下钻就得给指标加上用户维度，而高基数维度会让指标系统的存储成本爆炸。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某团队用日志平台的检索功能做核心看板，一块「近 7 天下单成功率」的面板每 30 秒自动刷新一次，每次查询扫过约 2.1 TB 原始日志。这块面板单独一项在当月日志平台账单里占到 34%，而同一个数字用一个计数器指标表达，一天的存储不到 10 KB。把这块面板迁到指标之后，看板加载从 22 秒降到 0.4 秒。这里的教训不是「日志检索不好」，而是<strong>每类问题都有成本低一两个数量级的正确信号</strong>。</p>
+</div>
+
+<div class="intuition-box">
+<p>指标告诉你「该不该慌」，追踪告诉你「去哪儿看」，日志告诉你「到底怎么了」。用错一个，要么查不出来，要么查得出来但付不起钱。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、标准库日志的四个零件与传播机制</h2>
+
+<p>标准库的 <code>logging</code> 常被吐槽复杂，但它的复杂几乎全部来自一个设计目标：<strong>库作者和应用作者要能各管一段，互不干扰</strong>。库作者只想说「这里发生了一件值得记录的事」，应用作者才决定「这件事要不要写、写到哪、写成什么格式」。理解这个分界，这套东西立刻就讲得通了。</p>
+
+<h3>四个零件各管一段</h3>
+
+<table>
+<tr><th>零件</th><th>职责</th><th>一条日志经过它时</th><th>谁负责创建它</th></tr>
+<tr><td><span class="term">记录器</span>（Logger）</td><td>日志的入口，按名字组织成层级</td><td>先按有效级别判断要不要继续；要，就打包成一条记录</td><td>库和应用都用 <code>getLogger()</code> 取，不是 new 出来的</td></tr>
+<tr><td><span class="term">处理器</span>（Handler）</td><td>决定写到哪：控制台、文件、网络、队列</td><td>按自己的级别再筛一次，然后输出</td><td><strong>只有应用</strong>该创建</td></tr>
+<tr><td><span class="term">格式化器</span>（Formatter）</td><td>把记录变成最终的一行文本或一个 JSON 对象</td><td>取记录上的字段拼成字符串</td><td>只有应用该创建，挂在处理器上</td></tr>
+<tr><td><span class="term">过滤器</span>（Filter）</td><td>更细的放行判断，也可以顺手改记录</td><td>返回真则放行；官方明确允许它就地修改记录</td><td>应用创建，可挂在记录器或处理器上</td></tr>
+</table>
+
+<p>记录器的名字用点号分层，<code>shop.order.pay</code> 天生是 <code>shop.order</code> 的子记录器。这个层级有两个作用：一是<strong>级别可以按层级配</strong>（给 <code>shop</code> 设一个级别，整棵子树都受它管），二是<strong>记录会沿层级向上传播</strong>去找处理器。第二点是重复输出问题的全部来源，值得看清楚。</p>
+
+<div class="arch-diagram">  logger = logging.getLogger("shop.order.pay"); logger.info("...")
+
+  第一步 · 级别检查（只发生一次）
+    沿层级向上，找第一个显式设过级别的记录器，它的级别就是「有效级别」
+      shop.order.pay   未设 ─┐
+      shop.order       未设 ─┤
+      shop             INFO ─┘  ← 用 INFO 判断，本条通过
+    一路都没设，就用 root 的级别（默认 WARNING，所以裸用时 info 看不见）
+
+  第二步 · 打包成一条记录，沿层级向上交给各级处理器
+      shop.order.pay ── 处理器：无
+             │  propagate 为真
+      shop.order ───── 处理器：无
+             │  propagate 为真
+      shop ─────────── 处理器：文件           ← 写一份
+             │  propagate 为真
+      root ─────────── 处理器：控制台         ← 又写一份
+
+  关键细节：向上传播时只使用祖先的「处理器」，不再检查祖先的「级别」。
+  若一路到 root 都没有任何处理器，标准库会用内置的兜底处理器
+  把 WARNING 及以上的记录扔到标准错误，这就是那种「没配日志却
+  莫名在终端看到一行 WARNING」的来历。</div>
+
+<h3>纪律一：库代码只取记录器，绝不配置处理器</h3>
+
+<p>库不知道自己会被谁用、部署在什么环境，所以它无权决定日志写到哪。库唯一该做的是按模块名取一个记录器，然后正常记录。用 <code>__name__</code> 作为名字，层级会自动跟包结构一致，使用方就能按包名精确调节某个库的日志级别。</p>
+
+<pre><code># mylib/client.py —— 库代码只做这两件事
+import logging
+
+logger = logging.getLogger(__name__)   # 名字随模块路径，天然形成层级
+
+def fetch(url, timeout):
+    logger.debug("发起请求", extra={"url": url, "timeout_ms": timeout * 1000})
+    ...</code></pre>
+
+<p>一个例外：库可以给自己的顶层记录器挂一个「什么都不做」的空处理器。这不是在配置输出，而是为了在使用方完全没配日志时，避免库的警告被兜底处理器直接喷到标准错误上。除此之外，库代码里出现 <code>basicConfig()</code>、添加控制台处理器、设置根记录器级别，都属于越界——它会替使用方做决定，而且往往是错的决定。</p>
+
+<h3>纪律二：应用在入口集中配置一次</h3>
+
+<p>配置是应用的职责，而且应该在进程入口<strong>只做一次</strong>。分散在各个模块里「用到哪配到哪」是重复输出和配置互相覆盖的温床。<code>logging.config</code> 提供的字典配置方式适合这件事：整套配置是一份数据，可以从配置文件读进来，也便于不同环境给不同的值。</p>
+
+<pre><code># app/main.py —— 应用在入口配置一次，此后任何模块都不再碰配置
+import logging.config
+
+logging.config.dictConfig({
+    "version": 1,
+    "disable_existing_loggers": False,   # 不写默认为真，会静音已建好的库记录器
+    "formatters": {"line": {"format": "%(asctime)s %(levelname)s %(name)s %(message)s"}},
+    "handlers": {"out": {"class": "logging.StreamHandler", "formatter": "line"}},
+    "root": {"level": "INFO", "handlers": ["out"]},
+})</code></pre>
+
+<p>那行 <code>disable_existing_loggers</code> 是个真实的坑：它默认为真，含义是「把此刻已经存在的记录器全部停掉」。而模块级的 <code>getLogger(__name__)</code> 在 import 阶段就执行了，所以只要你的配置调用发生在 import 之后（几乎总是如此），不显式写成假就会把所有库的日志静音掉，表现为「明明配好了却什么都不输出」。</p>
+
+<table>
+<tr><th>事情</th><th>库代码</th><th>应用入口</th><th>部署配置</th></tr>
+<tr><td>取记录器 <code>getLogger(__name__)</code></td><td>✅ 该做</td><td>✅ 该做</td><td>—</td></tr>
+<tr><td>调用 <code>debug/info/warning/error</code></td><td>✅ 该做</td><td>✅ 该做</td><td>—</td></tr>
+<tr><td>创建处理器、格式化器</td><td>❌ 越界</td><td>✅ 只在这里</td><td>—</td></tr>
+<tr><td>设置根记录器级别</td><td>❌ 越界</td><td>✅ 只在这里</td><td>—</td></tr>
+<tr><td>决定输出到文件还是标准输出</td><td>❌ 越界</td><td>读配置</td><td>✅ 这里定</td></tr>
+<tr><td>某个吵闹的库降到 WARNING</td><td>—</td><td>写进配置</td><td>✅ 这里定</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个服务上线后日志量比压测预估高出整整 3 倍，排查发现每条日志被写了三份：应用入口调了字典配置给根记录器挂了处理器，某个内部工具库在导入时又自作主张调了一次 <code>basicConfig()</code>，同时还有一处历史代码给中间层记录器单独加了文件处理器——三份处理器沿传播链各写一次。删掉库里那次配置、去掉中间层的处理器之后，日志量回落到预估值，当月日志费用少了约 2.6 万元。定位这件事花了 5 小时，而验证方法只需要一行：把根记录器的处理器列表打出来看看有几个。</p>
+</div>
+
+<div class="intuition-box">
+<p>一条日志走的是「记录器判级别 → 打包 → 沿层级向上交给每一级的处理器」。看到重复输出，不要怀疑代码打了两次，先数一数这条链上挂了几个处理器。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、日志该写什么：级别、字段、堆栈与红线</h2>
+
+<p>决定「写什么」比决定「怎么配」难得多，因为它没有报错提醒你写错了。一条格式糟糕的日志和一条好日志在写下的那一刻看起来一样，差别只在半年后出事故那天显现。</p>
+
+<h3>级别的语义边界</h3>
+
+<p>级别不是「重要程度的形容词」，而是<strong>给读者的路由</strong>：谁在什么场合会看到它。把这一点想清楚，级别就不难选了。</p>
+
+<table>
+<tr><th>级别</th><th>数值</th><th>判据（选它的唯一理由）</th><th>谁会看到</th></tr>
+<tr><td>DEBUG</td><td>10</td><td>只在定位问题时有用的内部细节，生产默认关</td><td>开发本人，临时打开</td></tr>
+<tr><td>INFO</td><td>20</td><td>正常流程里的关键节点，事后需要用它复原发生过什么</td><td>排障时按关联标识拉出来看</td></tr>
+<tr><td>WARNING</td><td>30</td><td>降级了但还能工作，且<strong>存在一个人该去做的动作</strong></td><td>值班巡检、周报</td></tr>
+<tr><td>ERROR</td><td>40</td><td>这次请求确定失败了，功能没完成</td><td>进告警，有人被叫</td></tr>
+<tr><td>CRITICAL</td><td>50</td><td>整个服务不可用或有数据损坏风险</td><td>立即上升，通常还要拉群</td></tr>
+</table>
+
+<p>实践中被滥用得最厉害的是 WARNING，它成了「不好说算不算错」的垃圾桶：参数不合规、命中重试、缓存没命中、用户输错密码，一律 WARNING。结果是这个级别每天几十万条，没有人看，于是真正需要人干预的那两条也没人看见。一条可操作的判据：<strong>如果这条 WARNING 没有任何对应的人工动作，它就该降成 INFO 或者删掉</strong>。用户输错密码是业务的正常分支，不是系统的警告。</p>
+
+<h3>纪律：变量走字段，不要拼进消息</h3>
+
+<p>这是整张卡里最值钱的一条。把值拼进消息字符串，日志系统看到的只是一串各不相同的文本；把值放进字段，它才能被索引、被按维度过滤、被聚合计数。</p>
+
+<pre><code># 反例：值拼进消息，每条文本都不一样，检索只能靠全文匹配
+logger.info(f"订单创建成功 user={uid} amount={amt}")
+
+# 正例：消息是稳定的模板，值走字段，可按 user_id 过滤与聚合
+logger.info("订单创建成功", extra={"user_id": uid, "amount_cents": amt})
+
+# 需要把值放进消息文本时，用惰性格式化：参数交给日志库，别自己提前拼
+logger.debug("命中缓存 %s，剩余 %d 秒", key, ttl)</code></pre>
+
+<p>第三种写法解释一下。<code>logger.debug("... %s", key)</code> 和 <code>logger.debug(f"... {key}")</code> 的差别在于<strong>什么时候做字符串拼接</strong>：前者把模板和参数一起交给日志库，只有这条记录真的要被输出时才拼；后者在调用发生之前就把字符串拼好了，哪怕这条 DEBUG 因为级别不够被直接丢弃，拼接的开销也已经花掉了。生产环境 DEBUG 通常是关的，而热路径上的 DEBUG 可能每秒执行几万次，这笔白花的开销并不小。</p>
+
+<p>还要注意 <code>extra</code> 里的键名不能和日志记录自带的属性撞车（比如 <code>message</code>、<code>name</code>、<code>levelname</code> 这些），撞了会直接抛异常。稳妥做法是给业务字段统一加个短前缀，或者约定一套固定的字段名清单。</p>
+
+<h3>异常一定要带堆栈</h3>
+
+<p>只写 <code>logger.error(f"失败了: {e}")</code> 会丢掉最有价值的信息——异常是从哪一行抛出来的。正确做法是让日志库把当前的异常信息一起记下来：在异常处理块里用 <code>logger.exception(...)</code>，它等价于 ERROR 级别加上「附带异常信息」这个开关，堆栈会被完整写进这条记录。</p>
+
+<pre><code>try:
+    charge(order)
+except PaymentError:
+    # exception() = error() + 自动附带当前异常的完整堆栈
+    logger.exception("扣款失败", extra={"order_id": order.id})
+    raise          # 记了日志不等于处理了异常，该往上抛还得抛</code></pre>
+
+<p>最后一行的 <code>raise</code> 也是纪律：日志是观测手段，不是错误处理手段。「记一条日志然后吞掉异常」会让上层以为一切正常，这类问题在异常体系设计那一张卡（<a href="py_exception_design.html">PY24</a>）里有更完整的讨论，文件与异常入门（<a href="py_files_exceptions.html">PY07</a>）也讲过吞异常的代价。</p>
+
+<h3>绝对不能写进日志的东西</h3>
+
+<p>日志的存储期限通常比你想象的长，副本比你想象的多：落盘一份、转发到日志平台一份、备份里还有一份，还可能被导出到表格里给人做分析。一旦敏感数据进了日志，就等于进了一个权限宽松、留存期长、你无法完整召回的地方。</p>
+
+<table>
+<tr><th>不能写</th><th>为什么</th><th>替代做法</th></tr>
+<tr><td>口令、令牌、密钥、会话标识</td><td>拿到日志即可直接冒用身份</td><td>完全不记；必须区分时记它的哈希前 8 位</td></tr>
+<tr><td>完整身份证件号、银行卡号</td><td>属于个人敏感信息，留存与跨境都受约束</td><td>只记掩码形式，或记一个内部标识</td></tr>
+<tr><td>原始请求体 / 响应体</td><td>看着方便，但里面什么都有，且体量巨大</td><td>白名单挑出需要的字段，其余丢弃</td></tr>
+<tr><td>手机号、邮箱、详细地址</td><td>可直接定位到自然人</td><td>掩码，或只记内部用户标识</td></tr>
+<tr><td>完整的 SQL 参数值</td><td>参数里常带上述所有内容</td><td>记语句模板与耗时，不记参数值</td></tr>
+</table>
+
+<p>把脱敏做成过滤器挂在处理器上，比指望每个人写日志时都记得脱敏可靠得多——前者是一处代码，后者是每次代码评审。需要处理编码与截断时，字符串与编码那一张卡（<a href="py_strings_encoding.html">PY06</a>）讲过按字符截断和按字节截断的区别，日志里截长字段容易在这里踩坑。</p>
+
+<div class="intuition-box">
+<p>写每条日志时问一句：半年后有人拿着它排障，他会想按什么维度筛？答案里出现的每个东西都该是字段，而不是消息文本里的一段。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、结构化日志与关联标识</h2>
+
+<p>单机单进程时代，纯文本日志配上 <code>grep</code> 是够用的。放到今天的部署形态下它会失效，原因有两个，而且都无法靠「写得再仔细一点」绕过。</p>
+
+<p>第一是<strong>多实例</strong>：同一个服务跑着 20 个副本，日志汇集到一处，同一次请求的记录散落在不同来源里。第二是<strong>高并发交错</strong>：一个实例上同时有几百个请求在推进，日志按时间顺序落盘，同一次请求的几条记录之间隔着上百条别人的记录。这时候「把日志翻出来看看流程」这个动作在物理上做不到——你看到的是几百个流程的碎片被随机洗过一遍。</p>
+
+<div class="arch-diagram">  同一个实例、同一秒内落下的日志（时间从上到下）
+
+  纯文本，没有关联标识：
+    12:00:01.102  INFO  收到下单请求
+    12:00:01.103  INFO  校验库存
+    12:00:01.104  INFO  收到下单请求          ← 这是另一个请求
+    12:00:01.109  INFO  校验库存
+    12:00:01.118  ERROR 扣款失败              ← 哪个请求失败的？答不出来
+    12:00:01.121  INFO  下单完成              ← 那这条是谁的？也答不出来
+
+  结构化 + 关联标识（每行一个 JSON 对象，此处只列关键字段）：
+    ts=...102  trace=a1f9  user=1001  event=order.received
+    ts=...103  trace=a1f9  user=1001  event=stock.checked
+    ts=...104  trace=7c3d  user=2087  event=order.received
+    ts=...109  trace=7c3d  user=2087  event=stock.checked
+    ts=...118  trace=a1f9  user=1001  event=pay.failed   err=TIMEOUT
+    ts=...121  trace=7c3d  user=2087  event=order.done
+
+  一条查询 trace=a1f9 就能把这次请求的全过程按序拉出来，
+  而且 user=1001 可以直接聚合：受影响的用户到底是哪一批。</div>
+
+<p>两件事一起做才有意义。<strong>结构化输出</strong>让每条日志成为一个带命名字段的对象（生产里通常就是一行 JSON），日志平台才能对字段建索引；<span class="term">关联标识</span>让属于同一次请求的记录能被一次查询捞全。缺了结构化，字段查不了；缺了关联标识，查得到字段也拼不回一次完整的请求。</p>
+
+<h3>关联标识怎么贯穿</h3>
+
+<p>规则很简单：<strong>在最外层入口生成一次，之后所有日志都带上它，所有下游调用都把它传过去</strong>。如果入口收到的请求已经带了标识（说明上游已经生成过），就沿用而不是新建，否则跨服务又断了。网关、消息消费者、定时任务的第一行代码，都是这个「生成或沿用」的动作。</p>
+
+<p>难点不在生成，在<strong>传递</strong>。让每个函数都多一个 <code>trace_id</code> 参数在工程上不可接受——它会污染所有函数签名，还会漏在你没改到的地方。正确工具是 <code>contextvars</code>（Python 3.7 起的标准库）：它提供一种「随执行上下文走」的变量，读写时不必经过函数参数。</p>
+
+<pre><code>import contextvars, logging
+
+trace_id = contextvars.ContextVar("trace_id", default="-")
+
+class TraceFilter(logging.Filter):
+    def filter(self, record):
+        record.trace_id = trace_id.get()   # 官方允许过滤器就地修改记录
+        return True                        # 返回真 = 放行这条日志</code></pre>
+
+<p>把这个过滤器挂在处理器上，再让格式化器输出 <code>trace_id</code> 字段，此后<strong>所有</strong>日志自动带上标识，业务代码一行都不用改。入口处负责设值，并且一定要在结束时还原，避免这个值泄漏给复用同一条执行线的下一个任务。</p>
+
+<pre><code># 入口：生成或沿用，用完还原
+token = trace_id.set(incoming_trace or uuid.uuid4().hex)
+try:
+    await handle(request)
+finally:
+    trace_id.reset(token)      # set() 返回的令牌就是给 reset() 用的</code></pre>
+
+<p>为什么不能用「每线程独有变量」那套老办法？因为在异步模型下，一个线程上同时跑着成百上千个并发请求——它们共享同一个线程，因此也共享那份「线程独有」的数据，后一个请求设的值会盖掉前一个。<code>contextvars</code> 的语义正好对上：每个并发任务启动时会拿到当前上下文的一份副本，任务内部的赋值不会互相污染。这也是为什么即便你的服务是纯同步的，也建议直接用它——将来改异步不用重写。</p>
+
+<table>
+<tr><th>传递方式</th><th>同步多线程</th><th>异步并发</th><th>代价</th></tr>
+<tr><td>模块级全局变量</td><td>❌ 互相覆盖</td><td>❌ 互相覆盖</td><td>并发下必错</td></tr>
+<tr><td>函数参数逐层透传</td><td>✅ 正确</td><td>✅ 正确</td><td>污染所有签名，必漏</td></tr>
+<tr><td>每线程独有变量</td><td>✅ 正确</td><td>❌ 同线程多任务串味</td><td>只适合一线程一请求</td></tr>
+<tr><td><code>contextvars</code> 上下文变量</td><td>✅ 正确</td><td>✅ 正确</td><td>需要在入口设值并还原</td></tr>
+</table>
+
+<p>附带一句：把「取上下文里的标识并塞进日志」这类横切逻辑做成装饰器也是常见做法，闭包与装饰器那一张卡（<a href="py_closures_decorators.html">PY14</a>）讲过怎么写不破坏函数签名的装饰器。但对日志字段注入来说，过滤器方案更彻底——它覆盖包括第三方库在内的所有日志，装饰器只能覆盖你自己加了装饰的函数。</p>
+
+<div class="highlight">
+<p><strong>示例场景（重点复盘）：</strong>某支付链路出现小比例重复扣款，需要回答「哪些用户受影响、每人几次」。当时的日志有两个问题：一是所有值都拼进了消息字符串（<code>f"回调处理完成 user={uid} order={oid}"</code>），日志平台里 <code>user_id</code> 根本不是一个字段，无法按用户聚合，只能用关键字全文检索再人工数；二是三个服务（网关、订单、支付）各自打日志且没有关联标识，只能按时间戳正负 2 秒的窗口人工对齐，一旦并发高就对错。当天日志量约 4.2 亿条 / 380 GB，关键字命中 27 万条，3 个人轮班翻了 <strong>6 小时 40 分钟</strong>才确认受影响用户是 214 人。</p>
+<p>之后做了三件事：消息模板固定、值全部改走字段；入口生成关联标识并用过滤器注入所有日志；跨服务调用在请求头里传递这个标识。两周后同类问题再次出现时，按关联标识一次查询直接拉出完整链路，从收到告警到确认影响范围用了 <strong>4 分钟</strong>。顺带一个意外收益：整理字段时删掉了大量答不上任何问题的 INFO 日志，日志量下降约 41%。</p>
+</div>
+
+<div class="intuition-box">
+<p>没有关联标识的日志，在并发环境下只是一堆碎片。先确保「拿一个标识能把一次请求拉全」，再去操心日志写得漂不漂亮。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、指标与追踪怎么落地</h2>
+
+<p>日志做好之后，剩下两类信号解决的是日志天生做不到的事：指标回答「现在正不正常」，追踪回答「慢在哪一段」。这一节只讲概念与定位——具体用哪个库、埋点怎么写，取决于你的技术栈，而概念是通用的。</p>
+
+<h3>先监控这四类信号</h3>
+
+<p>不知道该监控什么的时候，从这四类开始，它们覆盖了绝大多数服务级故障。</p>
+
+<table>
+<tr><th>信号</th><th>看什么</th><th>典型告警形态</th><th>常见误区</th></tr>
+<tr><td>流量</td><td>单位时间请求数</td><td>同比骤降（比骤升更可疑）</td><td>只看总量，不按接口拆</td></tr>
+<tr><td>错误率</td><td>失败请求占比，而非绝对条数</td><td>比例超阈值且持续 N 分钟</td><td>用绝对条数，流量一涨就误报</td></tr>
+<tr><td>延迟</td><td>分位数：中位数、P95、P99</td><td>P99 超出约定的服务目标</td><td>看平均值——它会被大量快请求稀释</td></tr>
+<tr><td>饱和度</td><td>最紧的那个资源用了多少（连接池、队列、内存）</td><td>逼近上限，用于提前预警</td><td>只看 CPU，漏掉连接池和队列积压</td></tr>
+</table>
+
+<p>延迟那一行要多说一句。平均延迟是最容易误导人的数字：99 个 10 毫秒的请求加 1 个 5 秒的请求，平均值只有 60 毫秒，看起来毫无问题，但那个用户等了 5 秒。所以延迟一律看分位数。还有个容易踩的坑是<strong>分位数不能跨实例求平均</strong>——20 个实例各自的 P99 取平均，得不到整体 P99；要得到正确结果，指标系统需要收集延迟的分布（直方图）再统一计算。</p>
+
+<h3>追踪：把一次调用链拆成段</h3>
+
+<p>追踪的模型只有三个概念。一次完整的调用过程叫一条<span class="term">调用链</span>；链上每一段可计时的工作（一次数据库查询、一次下游调用、一段本地计算）叫一个<strong>段</strong>；段之间有父子关系，于是这条链是一棵树。跨进程时，父段的标识要通过<strong>上下文传播</strong>交给被调用方，被调用方创建的段才能挂到正确的父段下面。HTTP 上的事实标准是 W3C Trace Context，它规定用 <code>traceparent</code> 请求头承载调用链标识与父段标识；用标准格式而不是自定义头的好处是，链路经过网关、消息队列、第三方服务时不会在中途断掉。</p>
+
+<div class="arch-diagram">  一次下单请求的调用链（横轴是时间，共 780ms）
+
+  网关 /api/order  ├────────────────────────────────────────────┤ 780ms
+    订单服务       │  ├──────────────────────────────────────┤   740ms
+      查库存        │    ├──┤                                     35ms
+      写订单库      │        ├───┤                                48ms
+      调支付服务    │             ├──────────────────────────┤   620ms
+        风控查询    │              ├─┤                             22ms
+        银行网关    │                ├────────────────────┤      580ms  ← 这里
+                   │
+  一眼就能定位：780ms 里有 580ms 花在银行网关这一段上，
+  优化订单服务的代码是没用的。
+
+  跨进程时，父段标识随请求头传给下游；下游没有沿用它，
+  这棵树就断成两棵，追踪界面上表现为「链路残缺」。</div>
+
+<p>关于 <span class="term">OpenTelemetry</span>，这里只讲定位：它是一套厂商中立的可观测数据采集标准，规定了数据模型、上下文传播格式和采集组件的职责，各语言提供对应的实现。它的核心价值只有一句——<strong>埋点代码和后端厂商解耦</strong>。自己写埋点或用某个厂商的专用探针，换后端就得把埋点全改一遍；按中立标准埋点，换后端只改采集端的输出配置。具体的接口名与包名各语言各版本差异不小，用之前查当时的官方文档，不要凭记忆写。</p>
+
+<p class="data-asof"><strong>数据截止 2026-06</strong> · 本节只涉及概念与定位。<code>contextvars</code> 自 Python 3.7 起进入标准库（PEP 567）；采集标准的接口细节请以官方文档为准。</p>
+
+<div class="intuition-box">
+<p>指标和追踪不是「等规模大了再说」的东西。最小可用版本只有两件事：四类信号各一条曲线，加上一个能贯穿全链路的标识。这两件事在项目第一周就能做完。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、成本与纪律：每条日志都要能回答一个问题</h2>
+
+<p>日志是少数「写的时候免费、留着才收费」的东西，所以它的量总是单向增长：加日志有人推动，删日志没人推动。结果是账单里日志平台的占比逐年上升，而排障效率没跟着涨。控制它靠三件事：源头少写、中间采样、后端分层保留。</p>
+
+<div class="arch-diagram">  日志量与费用的关系（成本发生在三个环节，不只是存储）
+
+  产生 ── 传输 ── 索引 ── 存储 ── 查询
+                   ↑                  ↑
+              最贵的一段         次贵的一段
+         （建索引按写入量计费） （扫描量按查询计费）
+
+  一个粗算例子：每请求 12 条日志、每条约 900 字节
+    1000 QPS × 12 × 900B ≈ 10.4 MB/s ≈ 890 GB/天
+
+  把每请求 12 条压到 4 条（删掉答不上问题的那些）
+    → 约 297 GB/天，降幅 67%，而排障能力基本没变
+      因为被删掉的大多是「进入函数 / 离开函数」这类无信息量的日志</div>
+
+<p>核算一下：1000 QPS、每请求 12 条、每条 900 字节，一天就是 890 GB。这个规模下任何日志平台都不便宜，而里面通常有一多半是「进入方法 A」「参数校验通过」这类无信息量的记录。<strong>判据只有一条：每条日志都该能回答某个具体问题，答不上来就删掉它。</strong>「以后可能有用」不是回答。</p>
+
+<h3>采样与保留期分层</h3>
+
+<p>剩下的日志里，也不是每条都值得全量留。采样的原则是<strong>按价值区分</strong>：出错的路径必须全留（它们稀少且信息量最大），正常路径按比例留（它们大量重复，留一部分就够描述分布）。</p>
+
+<table>
+<tr><th>类别</th><th>采样策略</th><th>热存（可秒级检索）</th><th>冷存（归档，查询慢且贵）</th></tr>
+<tr><td>ERROR / CRITICAL</td><td>全量，不采样</td><td>15 天</td><td>180 天</td></tr>
+<tr><td>WARNING</td><td>全量</td><td>7 天</td><td>90 天</td></tr>
+<tr><td>INFO（正常链路）</td><td>按关联标识整链抽样，如 1%～10%</td><td>3 天</td><td>30 天</td></tr>
+<tr><td>DEBUG</td><td>生产默认关，按需临时开</td><td>1 天</td><td>不留</td></tr>
+<tr><td>审计 / 合规相关</td><td>全量，且不可采样</td><td>按合规要求</td><td>按合规要求</td></tr>
+</table>
+
+<p>INFO 那一行的「整链抽样」是个关键细节：抽样要以<strong>一次请求</strong>为单位，抽中就留下这次请求的全部日志，没抽中就全丢。如果逐条独立按 5% 抽，你会得到每次请求的零星碎片——每条都在，但没有一次请求是完整的，这比不采样更没用。</p>
+
+<h3>上线前验证三件事</h3>
+
+<p>可观测性最讽刺的失败模式是：一切都配好了，出事那天才发现不好用。所以它需要像功能一样被验证。上线前在预发环境跑一遍这三件事，每件都要有明确的「做到了」标准。</p>
+
+<table>
+<tr><th>验证项</th><th>怎么验</th><th>通过标准</th></tr>
+<tr><td>全链路可串联</td><td>发一个请求，拿到它的关联标识去查</td><td>一次查询能按序拉出所有服务的全部日志，无缺口</td></tr>
+<tr><td>报错可定位到代码行</td><td>人为触发一个异常</td><td>日志里有完整堆栈，能直接读出文件与行号</td></tr>
+<tr><td>告警可执行</td><td>拿最近 10 条告警逐条问：收到后第一步做什么</td><td>每条都有明确动作；答不出的直接删掉这条告警</td></tr>
+</table>
+
+<p>第三项最容易被跳过，但它决定了告警系统是不是在帮忙。一条没有对应动作的告警，唯一效果是消耗值班人的注意力，并训练所有人学会忽略告警——之后真正重要的那条也会被一起忽略。宁可只有 5 条告警条条有用，不要 50 条条条被静音。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>库代码只 <code>getLogger(__name__)</code>，配置全部收在应用入口一处</li>
+<li>消息用固定模板，所有变量走 <code>extra</code> 字段；输出成结构化对象</li>
+<li>需要把值放进文本时用惰性格式化参数，不提前拼字符串</li>
+<li>异常用 <code>logger.exception()</code> 记全堆栈，记完该抛还抛</li>
+<li>入口生成或沿用关联标识，用 <code>contextvars</code> + 过滤器自动注入所有日志</li>
+<li>先做四类信号各一条曲线，延迟一律看分位数</li>
+<li>错误日志全留、正常链路按请求整链抽样、保留期按级别分层</li>
+<li>脱敏做成挂在处理器上的过滤器，不依赖每个人的自觉</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>用 <code>f"...{uid}..."</code> 把值拼进消息——事后无法按字段聚合</li>
+<li>在库代码里调 <code>basicConfig()</code> 或添加处理器，替使用方做决定</li>
+<li>字典配置里漏掉 <code>disable_existing_loggers: false</code>，把库日志全静音</li>
+<li>把 WARNING 当「不好说算不算错」的垃圾桶，让它每天几十万条</li>
+<li>用日志检索做常态化的趋势看板——扫描费用会远超指标方案</li>
+<li>拿「每线程独有变量」在异步服务里传关联标识，并发下必然串味</li>
+<li>日志里写口令、令牌、完整证件号，或直接打印原始请求体</li>
+<li>逐条独立采样正常日志，得到一堆谁也拼不完整的碎片</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>可观测性做得好不好，不看接了多少工具，只看一个动作：拿到一个关联标识，能不能在一分钟内还原出那一次请求发生了什么。做不到，工具接得再多也没用。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>为什么我配好了日志却什么都不输出？</summary>
+<div class="answer">按顺序查四件事。第一，字典配置里是不是漏了 <code>disable_existing_loggers: false</code>——它默认为真，会把配置调用之前就已创建的记录器（包括所有在 import 阶段执行 <code>getLogger(__name__)</code> 的库）全部停掉，这是最常见的原因。第二，级别：根记录器默认是 WARNING，所以没配置时 <code>info()</code> 天然看不见；另外记录器和处理器各有一道级别，两道都要过。第三，处理器：整条传播链上一个处理器都没有，日志无处可去；只有 WARNING 及以上会被内置的兜底处理器扔到标准错误。第四，配置执行顺序：如果某处先用 <code>basicConfig()</code> 给根记录器挂了处理器，之后再调 <code>basicConfig()</code> 默认不会生效（它发现已有处理器就直接返回）。排查手法很直接：把目标记录器的有效级别和整条链上的处理器列表打出来看。</div>
+</details>
+
+<details>
+<summary>日志重复输出两三份，是代码写重了吗？</summary>
+<div class="answer">几乎不是。重复输出的成因是同一条记录沿记录器层级向上传播时，遇到了多个处理器。典型有三种：一是应用入口配置了根记录器，某个库又自己调了 <code>basicConfig()</code>；二是给中间层记录器加了处理器，但没有关闭它的传播，于是自己写一份、根记录器再写一份；三是配置代码被执行了两次（比如模块被以两种不同的名字导入，或热重载）。定位方法是打印每一级记录器的处理器列表。修法优先选「只保留根记录器一处处理器」，而不是去关某一级的传播——关传播会让那棵子树的日志绕过集中配置，日后更难理解。</div>
+</details>
+
+<details>
+<summary>惰性格式化参数和 f-string 的性能差别真的值得在意吗？</summary>
+<div class="answer">在两种情况下值得。第一种是热路径上的 DEBUG：生产环境 DEBUG 通常关闭，用 f-string 时字符串在调用发生前就拼好了，这笔开销无论日志是否输出都要付；用惰性参数则在级别检查不通过时完全不做拼接。一个每秒执行几万次的循环里，这个差别是可测量的。第二种是参数本身的格式化很贵——比如把一个大字典或一个需要序列化的对象放进消息，f-string 会立刻序列化它。反过来说，如果这条日志本来就是 ERROR、一定会输出，两者的差别可以忽略。所以这条建议的真实价值不在性能数字，而在于它顺带引导你把值留在字段里：写惰性参数的人更容易接着想到该用 <code>extra</code>。</div>
+</details>
+
+<details>
+<summary>关联标识为什么不能用「每线程独有变量」来传？</summary>
+<div class="answer">因为在异步模型里，「一个线程 = 一个请求」这个前提不成立。事件循环所在的那一个线程上同时推进着成百上千个协程任务，它们共享同一份线程局部数据，后设的值会覆盖先设的值，最终表现为日志里的标识错乱：A 请求的日志带着 B 请求的标识，而且这种错乱随并发度升高而加剧，压测时才暴露。上下文变量（<code>contextvars</code>，Python 3.7 起标准库）的语义正好匹配：并发任务启动时会得到当前上下文的一份副本，各自的赋值互不影响。即使当下服务是纯同步的也建议直接用它——线程模型下它同样正确，将来改异步不必重写这一层。唯一要注意的是在入口设值后务必还原，否则值可能泄漏给复用同一条执行线的下一个任务。</div>
+</details>
+
+<details>
+<summary>结构化日志会不会让人读起来很难受？</summary>
+<div class="answer">会，所以分场景。生产环境的日志给机器读：输出 JSON 这类结构化格式，交给日志平台建索引，人通过查询界面看，字段整齐反而更好用。本地开发给人读：用带颜色的单行文本格式，一眼能扫。这两者是同一份配置的两个分支，靠环境变量切换即可，不需要写两套打日志的代码——因为字段化的关键在<strong>调用方把值放进字段</strong>，格式化成什么样是格式化器的事。另外提醒一点：既然要输出 JSON，就要保证字段值都能被序列化，直接把任意对象塞进字段会在格式化阶段抛错，而<strong>日志系统自身报错通常是静默的</strong>，很容易变成「有一部分日志神秘消失」。</div>
+</details>
+
+<details>
+<summary>我们规模不大，指标和追踪能不能以后再说？</summary>
+<div class="answer">指标不能等，追踪可以缓。原因是成本结构不同。四类信号（流量、错误率、延迟分位数、饱和度）各一条曲线，存储成本可以忽略，而它能在没人报障之前告诉你出事了——没有它，你的故障发现渠道就是用户投诉。追踪的实现成本相对高一些（要埋点、要跨服务传播上下文、要一个后端存储），在单体服务里价值也有限，因为耗时分布往往能从日志的时间戳推出来。但有一件事无论规模多小都该第一天就做：<strong>关联标识</strong>。它的实现成本是入口几行代码加一个日志过滤器，而它是追踪的前提——将来接追踪时，标识已经贯穿全链路，接入工作量会小一个数量级。</div>
+</details>
+
+<details>
+<summary>日志费用超预算了，从哪里砍？</summary>
+<div class="answer">按投入产出排四步。第一步砍源头，也是收益最大的一步：把每条日志拿出来问「它能回答什么问题」，答不上的直接删。实践中「进入函数 / 离开函数」「参数校验通过」这类日志常占到总量一半以上，删掉它们不影响排障。第二步砍字段：不要打印整个请求体或整个对象，白名单挑出真正需要的字段，单条日志体积往往能降到三分之一。第三步做采样：错误全留，正常链路按关联标识<strong>整链</strong>抽样（抽中就留全，别逐条独立抽，否则得到的是拼不起来的碎片）。第四步调保留期：把热存时间压到真实排障窗口（多数团队 3～7 天够用），更久的需求走成本低得多的冷存归档。顺序很重要——先砍源头，再谈采样和保留期，否则你只是在为无用的日志买一个便宜点的仓库。</div>
+</details>
+
+<details>
+<summary>WARNING 和 ERROR 到底怎么划？</summary>
+<div class="answer">用「这次请求成功了吗」和「有人要做什么吗」两个问题来划，而不是凭严重程度的感觉。ERROR 的判据是：这次请求确定失败了，用户想做的事没做成，并且原因在系统侧。WARNING 的判据是：功能完成了但走了降级路径，而且<strong>存在一个人该去做的动作</strong>——比如主库连不上降级到只读、某个配置项缺失用了默认值。这里的关键是后半句。如果一条 WARNING 没有任何对应的人工动作，它就该降成 INFO 或者删掉。特别提醒两类常见错判：用户输错密码、参数校验不通过，这些是业务的正常分支，用户侧的问题不该进系统的警告；而重试最终成功了通常记 INFO（把重试次数作为字段），只有重试耗尽仍失败才是 ERROR。判断标准始终是「会不会有人因为这条记录去做点什么」。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

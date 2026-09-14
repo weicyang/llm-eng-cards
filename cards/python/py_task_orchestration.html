@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY30 · 并发编排：gather、TaskGroup 与 as_completed</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、四个原语先看形状</a>
+<a href="#s2">二、gather：顺序对齐与孤儿任务</a>
+<a href="#s3">三、TaskGroup：结构化并发</a>
+<a href="#s4">四、as_completed：先完成先处理</a>
+<a href="#s5">五、wait 与超时该归谁管</a>
+<a href="#s6">六、选型路径与并发度上限</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY30 · 并发编排：gather、TaskGroup 与 as_completed</h1>
+<p class="subtitle">四个原语的形状对照 / gather 的顺序保证与孤儿任务 / TaskGroup 与结构化并发 / as_completed 的首字延迟 / wait 的低层控制与超时归属</p>
+
+<div class="intuition-box">
+<p>会创建 Task 只解决了「怎么让它们同时跑」。真正决定系统稳不稳的是下一个问题：这一批任务<strong>怎么收口</strong>——谁等谁、结果按什么顺序拿、其中一个炸了剩下的那些归谁管。四个编排原语的区别，几乎全在最后这半句上。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、四个原语先看形状，再看 API</h2>
+
+<p>前两张卡把事件循环和 Task 讲完之后，你已经能让十个请求同时发出去了。但实际写业务时你会很快撞上一类问题：这十个请求里有一个失败了，剩下九个怎么办？结果要不要按发出的顺序排好？第一个结果出来能不能马上用，而不是干等最慢的那个？</p>
+
+<p>这些问题 <code>create_task</code> 一个都不回答。回答它们的是一层叫做<span class="term">并发编排</span>的东西——把「一批任务」当成一个整体来管理的原语。标准库里主要有四个：<code>asyncio.gather</code>、<code>asyncio.TaskGroup</code>、<code>asyncio.as_completed</code>、<code>asyncio.wait</code>。它们不是四个同义词，选错的代价也不是「慢一点」，而是本卡第二节那种真金白银的事故。</p>
+
+<h3>先在脑子里装四张图</h3>
+
+<p>不要一上来背参数。这四个原语的差别在「形状」上最好认：一批任务进去，什么时候、以什么形态出来。</p>
+
+<div class="arch-diagram">  四个原语，四种「一批任务怎么收口」的形状
+  ──────────────────────────────────────────────────────────────
+
+  gather：全部等完，结果按入参顺序排好
+     ┌─ t1 ━━━━━━━━━━┓
+     ├─ t2 ━━━━━━━━━━━━━━━┓
+     ├─ t3 ━━━━━┓         ┃
+     └─ t4 ━━━━━━━━━━━┓   ┃
+                          ▼
+                      [r1, r2, r3, r4]   ← 顺序 = 入参顺序
+
+  TaskGroup：一个 async with 块就是一条生死线
+     ┌────────── async with tg ──────────┐
+     │  t1 ━━━━━━━━━╳   ← 被取消          │
+     │  t2 ━━━━━✗       ← 它先失败        │
+     │  t3 ━━━━━━━╳     ← 被取消          │
+     └───────────────────────────────────┘
+        出块时保证：组内没有任何任务还活着
+        抛出 ExceptionGroup
+
+  as_completed：先完成先交付
+     t3 ✓ ──▶ 下游
+             t1 ✓ ──▶ 下游
+                      t4 ✓ ──▶ 下游
+                               t2 ✓ ──▶ 下游
+        产出顺序 = 完成顺序，与入参顺序无关
+
+  wait：只告诉你「谁完成了、谁还没完」
+     ┌── done ──┐   ┌── pending ──┐
+     │  t1  t3  │   │   t2   t4   │ ← 这一堆要你自己决定
+     └──────────┘   └─────────────┘   取消还是继续等</div>
+
+<p>把这四张图和下面这张表对起来看。表里最该盯住的是「某个任务失败时其余任务的命运」那一列——它是四者最本质的分野，也是绝大多数线上事故的落点。</p>
+
+<table>
+<tr><th>原语</th><th>返回值形态</th><th>结果顺序</th><th>其中一个失败时，其余任务</th><th>适用场景</th></tr>
+<tr><td><code>gather(*aws)</code></td><td>结果列表</td><td>与入参一一对应</td><td><strong>不取消</strong>，继续在后台跑完</td><td>固定几路调用，结果要拼装成一个对象</td></tr>
+<tr><td><code>TaskGroup</code>（3.11+）</td><td>不返回结果，自己取</td><td>由你的收集容器决定</td><td><strong>立即取消</strong>同组其余任务</td><td>同生共死的一组子任务</td></tr>
+<tr><td><code>as_completed(aws)</code></td><td>可迭代对象，逐个产出</td><td>按完成先后</td><td>不取消；异常在取该项结果时抛出</td><td>流式处理，先到先交给下游</td></tr>
+<tr><td><code>wait(aws)</code></td><td><code>(done, pending)</code> 两个集合</td><td>集合无序</td><td>不取消，<code>pending</code> 要你自己收尾</td><td>需要细粒度控制的低层场景</td></tr>
+</table>
+
+<div class="intuition-box">
+<p><code>gather</code> 管「结果」，<code>TaskGroup</code> 管「生命周期」，<code>as_completed</code> 管「时序」，<code>wait</code> 什么都不管、只给你一份现状快照。先想清楚自己缺的是哪一样，再去查参数。</p>
+</div>
+
+<h3>版本先对一遍，省得写完发现跑不了</h3>
+
+<p>这一组里有好几样东西是 3.11 才有的，而 3.11 恰恰是很多存量项目还没迈过去的坎。动笔前先确认运行环境的版本，比写完再改要便宜得多。</p>
+
+<table>
+<tr><th>能力</th><th>最低版本</th><th>备注</th></tr>
+<tr><td><code>asyncio.gather</code> / <code>as_completed</code> / <code>wait</code></td><td>长期可用</td><td>3.10 起都移除了 <code>loop</code> 参数</td></tr>
+<tr><td><code>asyncio.TaskGroup</code></td><td>3.11</td><td>3.13 起：组已不活跃时 <code>create_task</code> 会关闭传入的协程并抛 <code>RuntimeError</code></td></tr>
+<tr><td><code>ExceptionGroup</code> 与 <code>except*</code> 语法</td><td>3.11</td><td>PEP 654；<code>except*</code> 是语法，无法用第三方包补上</td></tr>
+<tr><td><code>asyncio.timeout()</code> / <code>timeout_at()</code></td><td>3.11</td><td>异步上下文管理器形态的超时</td></tr>
+<tr><td><code>wait()</code> 禁止传裸协程</td><td>3.11 起禁止</td><td>3.8 起已弃用；必须先包成 Task 或 Future</td></tr>
+<tr><td><code>as_completed()</code> 支持 <code>async for</code></td><td>3.13</td><td>此前只能当普通迭代器用</td></tr>
+</table>
+
+<p class="data-asof"><strong>数据截止 2026-06</strong> · 以上版本信息取自 CPython 官方 <code>asyncio</code> 任务文档中的「Added in / Changed in」标注；具体行为以你实际部署的小版本为准。</p>
+
+<p>还有一条容易被忽略的版本细节：3.11 起 <code>asyncio.TimeoutError</code> 已经是内置 <code>TimeoutError</code> 的别名，<code>wait_for</code> 抛的就是内置的那个。新代码直接 <code>except TimeoutError</code> 即可，不用再从 <code>asyncio</code> 里导入。</p>
+</div>
+
+<div class="section" id="s2">
+<h2>二、asyncio.gather：顺序对齐，以及那些没人管的任务</h2>
+
+<p><code>gather</code> 是大多数人接触的第一个编排原语，原因很简单：它长得最像「把几个函数一起调用」。它也确实提供了一个极其有用的保证——<strong>返回值的顺序和入参顺序一一对应</strong>，与谁先跑完毫无关系。</p>
+
+<pre><code>async def build_profile(uid):
+    user, orders, coupons = await asyncio.gather(
+        fetch_user(uid),
+        fetch_orders(uid),
+        fetch_coupons(uid),
+    )
+    # 三个变量一定各就各位，哪怕 coupons 第一个返回
+    return Profile(user, orders, coupons)</code></pre>
+
+<p>这个性质的价值在于它让并发代码读起来和串行代码一样。上面那段拆成三个 <code>await</code> 也能跑，只是慢三倍；换成 <code>gather</code> 之后语义完全没变，只有耗时从三段之和变成了三段里的最大值。绝大多数「把几路独立查询并起来」的需求，到这里就结束了。</p>
+
+<h3>问题出在失败路径上</h3>
+
+<p>默认参数 <code>return_exceptions=False</code> 的行为，官方文档写得非常直白：第一个抛出的异常会立刻传播给 <code>await gather()</code> 的那一方，而 <strong>aws 里的其余 awaitable 不会被取消，会继续运行</strong>。</p>
+
+<p>请把这句话读两遍。它意味着 <code>gather</code> 抛异常给你的那一刻，这批任务并没有结束——只是你不再等它们了。它们仍然挂在事件循环上，仍然会发出网络请求、仍然会写数据库、仍然会消耗对方的配额。你以为「这批失败了」，事实是「这批里有一部分你放弃了追踪，但它们照样干完了活」。</p>
+
+<div class="arch-diagram">  gather(return_exceptions=False) 里一个任务失败之后
+  ─────────────────────────────────────────────────────────────
+  时间 →   0s          1.2s                        4.8s
+
+  t1  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━✓ 写下游
+  t2  ━━━━━━━━━━✗ 抛 UpstreamError
+  t3  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━✓ 写下游
+  t4  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━✓ 写下游
+                 │
+  调用方         │ await gather(...) 在 1.2s 就抛出来了
+                 └─▶ except: 记日志 → 整批重试
+                      ▲
+                      └── 但 t1 / t3 / t4 一个都没停
+                          没人 await，结果没人要，
+                          副作用（写库、扣配额、发消息）照做不误
+
+  文档原话：Other awaitables in the aws sequence
+            won't be cancelled and will continue to run.</div>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>某内容审核链路把待审条目按<strong>批大小 200</strong> 分批，每批用 <code>gather</code> 并发调用下游打分服务。下游偶发 5xx，命中率约 0.8%，于是平均每批都会有一两个任务抛错。默认模式下第一个异常在约 1.2 秒时抛到外层，外层按「整批失败就整批重试」的既定策略重新提交 200 个请求——而上一批里那 198 个没失败的任务<strong>一个都没被取消</strong>，它们在随后几秒内照常跑完并写入了下游。当天下游实际收到 <strong>287,400</strong> 次调用，按业务量本应只有 <strong>148,000</strong> 次，<strong>重复请求 139,400 次</strong>；<strong>日配额 200,000 次在 15:40 被耗尽</strong>，之后两小时全部 429，审核队列积压。从告警到定位花了 2 小时 10 分，难点在于我方监控上「主动发出的请求数」完全正常——多出来的那一半是「已经放弃、但还在跑」的任务发的，没有任何一处代码认为自己发过它们。修复是把这一层换成 <code>TaskGroup</code>，重试前组内任务必然已经全部结束，次日调用量回落到 149,000 次。</p>
+</div>
+
+<h3>return_exceptions=True 不是「安全模式」</h3>
+
+<p>置为真时语义变成：异常被当作普通结果收集进列表，<code>gather</code> 本身不再抛出，并且会等所有任务都结束才返回。这解决了「有任务没跑完就被放弃」的问题，但引入了一个新的、更隐蔽的问题——<strong>调用方必须自己逐项判断每个元素到底是结果还是异常</strong>。</p>
+
+<pre><code>results = await asyncio.gather(*calls, return_exceptions=True)
+ok, failed = [], []
+for payload, r in zip(payloads, results):
+    if isinstance(r, BaseException):      # 这一行漏掉就出事
+        failed.append((payload, r))
+    else:
+        ok.append(r)</code></pre>
+
+<p>注意判断用的是 <code>BaseException</code> 而不是 <code>Exception</code>：被取消的任务会带回 <code>CancelledError</code>，而它在 3.8 起就直接继承自 <code>BaseException</code>，用 <code>Exception</code> 判断会漏掉。漏判的后果不是报错，而是<strong>把一个异常对象当成正常数据往下传</strong>——它会一路流进你的序列化、入库、返回给前端的链路，最后在某个离现场很远的地方炸成一个莫名其妙的类型错误。</p>
+
+<table>
+<tr><th>维度</th><th><code>return_exceptions=False</code>（默认）</th><th><code>return_exceptions=True</code></th></tr>
+<tr><td>第一个异常</td><td>立刻抛给 <code>await gather()</code> 的一方</td><td>当作结果放进列表，不抛</td></tr>
+<tr><td>其余任务</td><td><strong>不取消</strong>，继续跑到底</td><td>全部跑完才返回</td></tr>
+<tr><td>返回值</td><td>抛异常，一个结果都拿不到</td><td>长度与入参相同，元素可能是异常对象</td></tr>
+<tr><td>调用方必须做</td><td>想真正收口，得自己取消整批</td><td>逐项 <code>isinstance</code> 判断</td></tr>
+<tr><td>漏做的后果</td><td>孤儿任务继续产生副作用</td><td>异常对象被当成正常数据继续流转</td></tr>
+<tr><td>成功路径的结果</td><td>抛异常时全部丢失</td><td>完整保留，可做部分成功</td></tr>
+</table>
+
+<p>所以这两种模式其实各自适合一类场景：默认模式适合「任何一路失败整件事就没意义」且你会立即退出进程或整体放弃的情况；真值模式适合「部分成功也算数」的批处理，比如批量刷新缓存、批量补数据。它们都不适合「失败就重试整批」这种模式——那个场景要的是 <code>TaskGroup</code>。</p>
+
+<div class="intuition-box">
+<p><code>gather</code> 的默认行为不是「失败就停」，而是「失败就<strong>不告诉你</strong>后面还在跑」。把它当成「全部等完并按序返回」的工具用是安全的；把它当成失败控制手段，就等着被孤儿任务咬一口。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、asyncio.TaskGroup：让「没人管的任务」在语法上不成立</h2>
+
+<p>3.11 引入的 <code>TaskGroup</code> 是对上一节那个坑的正面回答。它的设计思想叫<span class="term">结构化并发</span>：任务的生命周期必须被一个语法块框住，就像局部变量的作用域被花括号框住一样。块里创建的任务，不可能活过块的结尾。</p>
+
+<pre><code>results = {}
+
+async def load_all(endpoints):
+    async with asyncio.TaskGroup() as tg:
+        for name, url in endpoints.items():
+            tg.create_task(fill(results, name, url))
+    # 执行到这一行时，组内任务保证已经全部结束
+    return results</code></pre>
+
+<p>它用的是异步上下文管理器（<code>async with</code> 的机制见 <a href="py_context_managers.html">PY19</a>），退出逻辑写在 <code>__aexit__</code> 里：先等组内所有任务结束，再决定是正常返回还是抛异常。这个「先等齐」的动作不是可选项，也不依赖你记得写什么——它是语法块退出的一部分。</p>
+
+<div class="arch-diagram">  结构化并发：任务的生命周期被语法块框住
+  ─────────────────────────────────────────────────────────────
+
+  async with asyncio.TaskGroup() as tg:      ← 进入：组被创建
+      tg.create_task(fetch(a))               ← 任务只能在块内创建
+      tg.create_task(fetch(b))
+      tg.create_task(fetch(c))
+  # ─────────── 离开块的那一刻 ───────────
+  #  正常路径：等到三个全部结束，才继续往下走
+  #  异常路径：其中一个抛出非 CancelledError 的异常
+  #            ├─ 组内其余任务收到 cancel
+  #            ├─ 等它们真正结束（含 finally 里的清理）
+  #            └─ 把非取消类异常打包成 ExceptionGroup 抛出
+
+  与 gather 的关键差别只有一句：
+      块外面不可能存在「本组还没结束的任务」
+      于是「孤儿任务」这个状态在语法层面就不成立</div>
+
+<h3>错误以 ExceptionGroup 抛出，用 except* 分类</h3>
+
+<p>既然一组任务可能同时失败好几个，只抛「第一个异常」就会丢信息。<code>TaskGroup</code> 的做法是把所有非取消类异常合并成一个 <span class="term">ExceptionGroup</span>（必要时是 <code>BaseExceptionGroup</code>）一并抛出，再由 3.11 同期引入的 <code>except*</code> 语法按类型分流。异常体系本身的设计原则见 <a href="py_exception_design.html">PY24</a>，这里只看编排相关的部分。</p>
+
+<pre><code>try:
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(score(a))
+        tg.create_task(score(b))
+except* TimeoutError as eg:
+    log.warning("超时 %d 个", len(eg.exceptions))
+except* UpstreamError as eg:
+    alert("上游异常", eg.exceptions)</code></pre>
+
+<p><code>except*</code> 和普通 <code>except</code> 有两处实质区别，都容易踩。第一，同一个 <code>try</code> 语句里<strong>不能混用</strong>二者，要么全是 <code>except*</code>，要么全是 <code>except</code>。第二，多个 <code>except*</code> 分支<strong>可能都会执行</strong>——一个异常组里同时装着超时和上游错误时，上面两个分支会各跑一次，各自拿到属于自己的那部分。这和普通 <code>except</code> 的「只命中第一个匹配分支」完全不同。</p>
+
+<p>另外有两个基类被特殊对待：如果某个任务以 <code>KeyboardInterrupt</code> 或 <code>SystemExit</code> 结束，任务组仍会取消并等待其余任务，但最终重新抛出的是原本那个 <code>KeyboardInterrupt</code> / <code>SystemExit</code>，而不是异常组。这保证了 Ctrl+C 和进程退出不会被包装成一个你没接住的类型。</p>
+
+<div class="intuition-box">
+<p><code>gather</code> 回答「结果呢」，<code>TaskGroup</code> 回答「人都到齐了吗」。前者失败时留下一地还在跑的任务，后者退出时连 <code>finally</code> 里的清理都已经跑完。这不是风格差异，是能不能安全重试的差异。</p>
+</div>
+
+<h3>它不返回结果列表，这一点要提前设计</h3>
+
+<p><code>TaskGroup</code> 没有 <code>gather</code> 那样的返回值。结果有两种取法：把 <code>create_task</code> 的返回值（<code>Task</code> 对象）存下来，出块后逐个 <code>.result()</code>；或者干脆让每个协程自己把结果写进一个外部容器，像上面例子里的 <code>results</code> 字典。前者保留了异常信息，后者代码更短，按需要选。</p>
+
+<p>顺序也要自己管。如果你需要结果严格按输入顺序排列，得用列表预占位或者用字典按键回填，不能指望组内任务的完成顺序。这是 <code>TaskGroup</code> 相对 <code>gather</code> 唯一实打实的退让。</p>
+
+<table>
+<tr><th>维度</th><th><code>gather</code></th><th><code>TaskGroup</code>（3.11+）</th></tr>
+<tr><td>结果获取</td><td>直接返回列表，顺序对齐</td><td>自己从 <code>Task</code> 或收集容器里取</td></tr>
+<tr><td>一个任务失败</td><td>其余继续跑（默认模式）</td><td>其余立即被取消并等待收尾</td></tr>
+<tr><td>异常形态</td><td>抛第一个 / 收进结果列表</td><td><code>ExceptionGroup</code>，配 <code>except*</code></td></tr>
+<tr><td>退出后的保证</td><td>无</td><td>组内任务一定都已结束</td></tr>
+<tr><td>能否中途加任务</td><td>入参一次定死</td><td>块内任意处 <code>create_task</code>，组失活后拒绝</td></tr>
+<tr><td>最低版本</td><td>长期可用</td><td>3.11</td></tr>
+</table>
+
+<p>官方文档里有一句对选型很有指导性的话：<code>TaskGroup</code> 对<strong>嵌套的子任务</strong>提供了比 <code>gather</code> 更强的安全保证——任务里再起的任务失败时，<code>TaskGroup</code> 会取消其余已调度任务，而 <code>gather</code> 不会。业务代码一旦有两层以上的并发，这条差别会被放大得非常明显。</p>
+</div>
+
+<div class="section" id="s4">
+<h2>四、asyncio.as_completed：按完成先后产出</h2>
+
+<p>前两个原语都要求你「等齐」。但有一类需求不需要等齐：结果能被逐条消费的时候，让先跑完的先进下游，能把<span class="term">首字延迟</span>从「最慢那个的耗时」降到「最快那个的耗时」。给前端推 SSE、往 Kafka 里灌、边算边写文件，都属于这一类。</p>
+
+<div class="arch-diagram">  同一批 4 个请求，两种收口方式下「第一个结果」出现的时刻
+  ─────────────────────────────────────────────────────────────
+  各自耗时：t1=0.9s   t2=3.1s   t3=0.4s   t4=1.6s
+
+  await gather(t1, t2, t3, t4)
+    0.4 ─┐   0.9 ─┐   1.6 ─┐              3.1 ─┐
+         ·        ·        ·                   ▼
+         └── 三个结果都握在手里，但谁也交不出去 ──┘
+                                    [r1, r2, r3, r4] 一次性交付
+                                    首个结果可用时刻 = 3.1s
+
+  for fut in as_completed([t1, t2, t3, t4])
+    0.4 ──▶ r3 交给下游
+    0.9 ──▶ r1 交给下游
+    1.6 ──▶ r4 交给下游
+    3.1 ──▶ r2 交给下游
+                                    首个结果可用时刻 = 0.4s
+                                    总时长仍是 3.1s，没有变快
+                                    变的是「下游什么时候开始有活干」</div>
+
+<p>图里最后两行值得强调：<code>as_completed</code> <strong>不会让整批更快</strong>，总时长仍然由最慢那个决定。它改变的是结果的交付节奏。如果下游必须拿到全部结果才能开始工作，用它一点收益都没有，反而平白多写几行代码。</p>
+
+<h3>代价是丢掉了对应关系</h3>
+
+<p>产出顺序由完成先后决定，和输入顺序完全无关。所以「第三个产出的结果对应哪个输入」这个问题，<code>as_completed</code> 本身答不上来。需要对应关系时，唯一稳妥的做法是<strong>把标识和结果绑在一起返回</strong>，别指望从迭代顺序反推。</p>
+
+<pre><code>async def tagged(key, coro):
+    return key, await coro          # 标识随结果一起回来
+
+tasks = [asyncio.create_task(tagged(u, fetch(u))) for u in urls]
+for fut in asyncio.as_completed(tasks):
+    key, body = await fut
+    await sink.write(key, body)     # 先完成的先进下游</code></pre>
+
+<p>这个写法在所有版本上都成立，值得作为默认模板。原因是 <code>as_completed</code> 的产出形态本身有版本差异：当成<strong>普通迭代器</strong>用时（3.13 之前唯一的用法），每次产出的是一个<strong>新的协程</strong>，而不是你传进去的那个 Task——所以拿它去查字典、做 <code>is</code> 比较都不成立。3.13 起它也可以用 <code>async for</code> 迭代，这种模式下产出的才是原始的 Task 或 Future，可以直接做身份比对。</p>
+
+<p>还有两条行为要记住。其一，<code>timeout</code> 到点时会抛 <code>TimeoutError</code>，但 <code>as_completed</code> <strong>不会取消</strong>剩下的任务，它们继续跑——这和 <code>gather</code> 的孤儿问题是同一类。其二，某个任务失败时异常在你 <code>await</code> 那一项时才抛出，所以异常处理要写在循环体里面，而不是包住整个循环，否则第一个错误就会把后面全部还没消费的结果一起丢掉。</p>
+
+<table>
+<tr><th>你真正要的</th><th>选</th><th>理由</th></tr>
+<tr><td>结果按输入顺序拼成一个对象</td><td><code>gather</code></td><td>顺序对齐是它的语义保证，不用自己对表</td></tr>
+<tr><td>全部结果一起落库 / 一起返回</td><td><code>gather</code> 或 <code>TaskGroup</code></td><td>反正要等齐，流式没有任何收益</td></tr>
+<tr><td>下游能逐条消费（SSE、Kafka、写文件）</td><td><code>as_completed</code></td><td>首个结果延迟从最慢降到最快</td></tr>
+<tr><td>只要最快的那一个（对冲请求）</td><td><code>wait(FIRST_COMPLETED)</code></td><td>拿到就取消其余，见下一节</td></tr>
+<tr><td>要边出边算，最后还要按序汇总</td><td><code>as_completed</code> + 标识</td><td>顺序在汇总阶段按标识还原</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>选 <code>as_completed</code> 的唯一理由是「下游能提前开工」。它不缩短总时长，只把等待重新分配。下游必须等齐才能动的场景用它，是自找麻烦。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、asyncio.wait 与超时该归谁管</h2>
+
+<p><code>wait</code> 是这四个里最低层的一个，也是最不该当日常工具用的一个。它不替你做任何决定：把一批 Task 交给它，它按你指定的条件返回，交还给你两个集合——<code>done</code> 和 <code>pending</code>。剩下的事全是你的。</p>
+
+<table>
+<tr><th><code>return_when</code></th><th>何时返回</th><th>要注意</th></tr>
+<tr><td><code>ALL_COMPLETED</code>（默认）</td><td>全部完成或被取消</td><td>形似 <code>gather</code>，但返回的是无序集合，且异常不会自动抛</td></tr>
+<tr><td><code>FIRST_COMPLETED</code></td><td>任意一个完成或被取消</td><td>对冲请求的典型用法，拿到后要主动取消其余</td></tr>
+<tr><td><code>FIRST_EXCEPTION</code></td><td>任意一个以异常结束；若全程无异常则等同 <code>ALL_COMPLETED</code></td><td>它只负责「告诉你」，同样不会替你取消其余任务</td></tr>
+</table>
+
+<p>三个常量里最容易误解的是 <code>FIRST_EXCEPTION</code>。名字听起来像「出错就整批停」，但它做的只是提前返回；那些还在跑的任务原封不动地待在 <code>pending</code> 里，继续跑。想要「出错就整批停」的语义，正确答案是 <code>TaskGroup</code>，不是这个常量。</p>
+
+<h3>pending 是你的责任，忘了就是泄漏</h3>
+
+<div class="arch-diagram">  wait 的返回值：两个集合，以及第二个集合的归属
+  ─────────────────────────────────────────────────────────────
+
+  done, pending = await asyncio.wait(
+      tasks, timeout=2.0, return_when=asyncio.FIRST_COMPLETED)
+
+        ┌──────── done ────────┐   ┌────── pending ───────┐
+        │  已完成 / 已取消      │   │  还在跑，一个都没停   │
+        │  结果与异常都在这里   │   │  wait 不会替你收尾    │
+        └──────────┬───────────┘   └──────────┬───────────┘
+                   │                          │
+        逐个 .result() 取值            必须显式处理，二选一：
+        （异常在取值那一刻才抛）        ① 取消 + 等它们真的结束
+                                        ② 存起来，之后还要 await
+
+        漏掉这一步的表现：进程内 Task 数量只涨不落，
+        内存缓慢上升，下游持续收到「这次调用早就返回了」
+        之后才发出的请求</div>
+
+<pre><code>done, pending = await asyncio.wait(
+    tasks, timeout=2.0, return_when=asyncio.FIRST_COMPLETED)
+
+for t in pending:                   # wait 绝不会替你做这一步
+    t.cancel()
+await asyncio.gather(*pending, return_exceptions=True)
+
+winner = done.pop().result()        # 异常在 .result() 时才抛</code></pre>
+
+<p>取消之后那一行 <code>gather(..., return_exceptions=True)</code> 不是多余的。<code>cancel()</code> 只是<strong>请求</strong>取消，任务要到下一次挂起点才会真正响应，中间还可能有 <code>finally</code> 里的清理逻辑要跑。不等它们结束就往下走，等于又制造了一批孤儿任务，只不过这次是你亲手安排的。</p>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>一个「主备双查」的接口用 <code>wait(..., return_when=FIRST_COMPLETED)</code> 同时打主库和备库，谁先回用谁。代码取完 <code>done</code> 就直接 <code>return</code>，<code>pending</code> 里那一路从来没被取消。单次看毫无问题——慢的那一路自己也会跑完。但这个接口 QPS 约 120，意味着每秒稳定有 120 个「结果没人要」的查询打在库上。上线后备库连接池使用率从 30% 涨到 94%，P95 从 45ms 劣化到 310ms，排查时因为业务侧 QPS 曲线毫无变化而绕了很久。补上 <code>cancel()</code> 与后续 <code>gather</code> 之后，备库连接池回到 32%，P95 回到 48ms，改动 3 行。</p>
+</div>
+
+<p>另外记住 <code>wait</code> 接收的是<strong>任务/Future 的集合</strong>：3.11 起直接传裸协程已被禁止（3.8 起就已弃用），要先 <code>asyncio.create_task</code> 包一层。这条限制在 3.10 上不会报错只会警告，跨版本升级时容易被它绊一下。</p>
+
+<h3>超时不该顺手交给 wait 的 timeout 参数</h3>
+
+<p><code>wait</code> 确实有 <code>timeout</code> 参数，但它的语义是「到点就返回」，<strong>既不抛异常也不取消任何任务</strong>——没完成的只是被塞进 <code>pending</code>。把它当超时用，等于每次超时都默默漏一批任务出去，而且调用方拿不到任何「超时了」的信号，只能靠检查 <code>pending</code> 非空来反推。</p>
+
+<p>正确的做法是让超时归超时的原语管。3.11 起首选 <code>asyncio.timeout()</code>：它是个异步上下文管理器，到点向块内发取消，块外抛 <code>TimeoutError</code>。它和 <code>TaskGroup</code> 是天生一对——超时触发取消，任务组保证取消后所有任务都收了尾。</p>
+
+<pre><code>try:
+    async with asyncio.timeout(2.0):          # 3.11 起
+        async with asyncio.TaskGroup() as tg:
+            for u in urls:
+                tg.create_task(fetch(u))
+except TimeoutError:
+    # 超时 → 取消 → TaskGroup 已保证组内任务全部收尾
+    metrics.incr("batch.timeout")</code></pre>
+
+<table>
+<tr><th>写法</th><th>版本</th><th>超时发生时</th><th>适用</th></tr>
+<tr><td><code>async with asyncio.timeout(d)</code></td><td>3.11+</td><td>向块内发取消，块<strong>外</strong>抛 <code>TimeoutError</code></td><td>给「一整段逻辑」加截止时间，首选</td></tr>
+<tr><td><code>await asyncio.wait_for(aw, d)</code></td><td>长期可用</td><td>取消那一个 awaitable 并抛 <code>TimeoutError</code></td><td>只给单个调用加超时</td></tr>
+<tr><td><code>asyncio.wait(..., timeout=d)</code></td><td>长期可用</td><td>直接返回，<strong>不抛不取消</strong></td><td>仅当你确实要亲自处置 <code>pending</code></td></tr>
+</table>
+
+<p>有一个细节值得单独提：<code>asyncio.timeout()</code> 是靠把内部的 <code>CancelledError</code> 转换成 <code>TimeoutError</code> 实现的，而这个转换发生在退出上下文管理器的时候。所以 <code>except TimeoutError</code> 必须写在 <code>async with</code> 块<strong>外面</strong>，写在块里面接不住。</p>
+
+<div class="intuition-box">
+<p>一个判断标准：如果你写下 <code>wait</code> 之后，接下来三行里没有出现 <code>cancel()</code>，那大概率用错了原语。<code>wait</code> 唯一的价值就是把处置权交给你，你不打算行使这个权力，就别用它。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、选型路径与并发度上限</h2>
+
+<p>四个原语讲完，把它们收成一条可执行的决策路径。绝大多数场景走两三步就能落地，不需要在四者之间反复权衡。</p>
+
+<div class="arch-diagram">  选型路径：从「你要什么」倒推用哪个
+  ─────────────────────────────────────────────────────────────
+
+  结果需要按输入顺序一一对应吗？
+        │
+        ├─ 需要 ────────▶ gather
+        │                  └ 同时想清楚失败路径：默认模式会留孤儿，
+        │                    不能接受就改用 TaskGroup 或自己取消整批
+        │
+        └─ 不需要
+             │
+             └ 任何一个失败就整组作废，且不能留下还在跑的任务？
+                   │
+                   ├─ 是 ───────▶ TaskGroup（3.11+）
+                   │               └ 结果自己收进容器或从 Task 取
+                   │
+                   └─ 否
+                        │
+                        └ 希望先完成的结果先进入下游？
+                              │
+                              ├─ 是 ──▶ as_completed（记得带标识）
+                              │
+                              └─ 否 ──▶ wait（并自己处置 pending）
+
+  三条路都别扭时，通常说明你要的不是编排原语，
+  而是一个有并发上限的队列 —— 见下面</div>
+
+<h3>一次性创建上万个任务，本身就是故障源</h3>
+
+<p>上面这条路径回答的是「用哪个原语」，但它回答不了一个更要命的问题：<strong>这一批到底有多少个</strong>。新手最容易写出的一行代码是把整张表捞出来，一口气 <code>gather(*[fetch(x) for x in rows])</code>——rows 有十万条，这行代码就创建十万个任务，并且在下一个事件循环周期里几乎同时把十万个请求发出去。</p>
+
+<p>这不是「压力大一点」，是四类问题同时爆发。任务对象本身占内存，十万个响应体会同时驻留；下游连接池瞬间打满，多余的请求在客户端排队，你自己的 P95 被自己拖垮；对方的限流开始返回 429，而重试逻辑会把请求量再放大一轮；事件循环要在十万个任务之间调度，调度开销本身变成可观的 CPU 占用。这四条里任意一条都足以让这次调用比串行还慢。</p>
+
+<table>
+<tr><th>并发上限的约束来源</th><th>怎么定这个数</th><th>忽略它的典型表现</th></tr>
+<tr><td>下游服务的承载与连接池</td><td>取连接池大小，不要超过它</td><td>请求在客户端排队，P95 被自己拖垮</td></tr>
+<tr><td>对方的配额与限流阈值</td><td>按每秒允许的调用数倒推</td><td>429 雪崩，重试再放大一轮</td></tr>
+<tr><td>本进程内存</td><td>单任务峰值内存 × 并发数，留一半余量</td><td>任务对象与响应体一起驻留，OOM</td></tr>
+<tr><td>事件循环调度能力</td><td>任务数上万后调度开销显著</td><td>CPU 占用上涨，所有任务一起变慢</td></tr>
+</table>
+
+<p>最简单的上限手段是信号量：把并发许可数写死，拿不到许可的任务就在那儿等着。它配 <code>TaskGroup</code> 用起来很顺手。</p>
+
+<pre><code>sem = asyncio.Semaphore(32)           # 并发上限显式写在代码里
+
+async def guarded(u):
+    async with sem:                   # 拿不到许可就在这里等
+        return await fetch(u)
+
+async with asyncio.TaskGroup() as tg:
+    for u in urls:
+        tg.create_task(guarded(u))</code></pre>
+
+<p>但要看清这个写法的边界：信号量限的是<strong>同时在飞的请求数</strong>，任务对象仍然是一次性全部创建出来的。<code>urls</code> 只有几千条时这没问题；到十万量级，光是任务对象的内存和调度开销就已经不可接受了。那种规模的正确形态是<span class="term">生产者消费者</span>——用一个队列喂数据，固定起 N 个 worker 消费，任务数量永远等于 N 而不是数据条数。</p>
+
+<p>并发上限只是<span class="term">流量控制</span>的入门形态。真正完整的一套还包括限流器、超时预算在多层之间的分配、取消信号如何穿透到最底层的 IO、以及任务被取消时的清理约定——这些是下一张卡的主题，这里先把「并发度必须有上限」这条立住。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>需要结果顺序对齐就用 <code>gather</code>，这是它不可替代的价值</li>
+<li>3.11 及以上、且「一个失败就整组作废」，一律用 <code>TaskGroup</code></li>
+<li>用 <code>gather(return_exceptions=True)</code> 时，逐项用 <code>isinstance(r, BaseException)</code> 判断</li>
+<li><code>as_completed</code> 配上「标识随结果一起返回」的写法，别靠迭代顺序反推</li>
+<li>用了 <code>wait</code> 就在同一屏代码里处理掉 <code>pending</code>：取消，然后等它们真的结束</li>
+<li>超时交给 <code>asyncio.timeout()</code>（3.11+）或 <code>wait_for</code>，并写在 <code>async with</code> 块外面接</li>
+<li>任何批量并发都显式写出并发上限，数字来自下游能力而不是拍脑袋</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>把 <code>gather</code> 的异常当成「整批已停止」，然后直接重试整批</li>
+<li>用 <code>Exception</code> 而不是 <code>BaseException</code> 去筛 <code>return_exceptions=True</code> 的结果</li>
+<li>指望 <code>FIRST_EXCEPTION</code> 能帮你取消其余任务——它只是提前返回</li>
+<li>拿 <code>wait</code> 的 <code>timeout</code> 参数当超时用，然后不管 <code>pending</code></li>
+<li>给 <code>wait</code> 传裸协程（3.11 起直接报错）</li>
+<li>把 <code>as_completed</code> 的异常处理写在循环外面，第一个错就丢掉后面所有结果</li>
+<li><code>gather(*[coro(x) for x in rows])</code> 里的 <code>rows</code> 是一张全表</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>编排原语决定「这批任务怎么收口」，并发上限决定「这批任务有多大」。前者选错会在故障时咬你一口，后者不设会在业务增长时咬你一口——两者都不是能事后再补的东西。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>gather 抛出异常之后，剩下那些任务到底怎么了？</summary>
+<div class="answer">它们还在跑。官方文档对默认的 <code>return_exceptions=False</code> 写得很明确：第一个异常会立刻传播给等待 <code>gather()</code> 的那一方，而序列里其余的 awaitable 不会被取消，会继续运行。也就是说异常抛出只代表「你不再等它们了」，不代表「它们停了」。它们照样发请求、写库、扣配额，只是结果没人接收；如果这些任务本身也没被别处强引用，还可能在被回收时留下一条 <code>Task exception was never retrieved</code> 的日志。想真正停掉，要么在 <code>except</code> 里对每个 Task 显式 <code>cancel()</code> 再 <code>await</code> 它们结束，要么直接换成 <code>TaskGroup</code>。顺带一提，如果是 <code>gather</code> 对象本身被取消，那么未完成的 awaitable 才会一并被取消——但在异常已经抛出、gather 已被标记完成之后再调 <code>cancel()</code> 是没用的。</div>
+</details>
+
+<details>
+<summary>还在 3.10，用不了 TaskGroup，怎么接近它的效果？</summary>
+<div class="answer">思路是手工复刻 <code>TaskGroup</code> 做的三件事：出错时取消同组其余任务、等它们真正结束、再把错误报出去。具体做法是自己 <code>create_task</code> 把这批任务收在一个列表里，用 <code>asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)</code> 等待，返回后对 <code>pending</code> 里每个任务调 <code>cancel()</code>，再 <code>await asyncio.gather(*pending, return_exceptions=True)</code> 确认它们收尾完毕，最后从 <code>done</code> 里挑出异常抛出。把这一套包成一个异步上下文管理器，调用处就能接近 <code>TaskGroup</code> 的写法。异常合并这一块没法完全对齐：<code>except*</code> 是语法，无法用第三方包补上；社区的 <code>exceptiongroup</code> 包提供了 <code>ExceptionGroup</code> 类型和一个 <code>catch()</code> 上下文管理器作为替代，但这是额外依赖，要不要引入自己权衡。如果这一块对项目很关键，把升级到 3.11 排进计划通常比长期维护这套手工实现划算。</div>
+</details>
+
+<details>
+<summary>TaskGroup 里怎么拿到每个任务的结果？</summary>
+<div class="answer">两种做法。一是把 <code>tg.create_task()</code> 的返回值存下来——它就是一个 <code>Task</code> 对象——在 <code>async with</code> 块<strong>退出之后</strong>逐个调 <code>.result()</code>。必须是退出之后，因为块内任务还没结束，那时取值会抛 <code>InvalidStateError</code>。二是让每个协程自己把结果写进一个外部的字典或列表，键用业务标识，这样代码更短，也天然解决了顺序问题。需要注意的是顺序不再由原语保证：<code>gather</code> 那种「返回值和入参一一对应」的性质在 <code>TaskGroup</code> 这里没有，要按序就用列表预先占位或用字典按键回填。另外从 3.13 起，如果在任务组已经不活跃（尚未进入、已结束、或正在收尾）时调 <code>create_task</code>，它会关闭你传进去的协程并抛 <code>RuntimeError</code>，这比早期版本悄悄泄漏一个未 await 的协程要好排查。</div>
+</details>
+
+<details>
+<summary>except* 和普通 except 有什么区别，能混用吗？</summary>
+<div class="answer">不能混用：同一个 <code>try</code> 语句里要么全是 <code>except*</code>，要么全是 <code>except</code>，混写是语法错误。行为上还有一个更容易踩的差别——多个 <code>except*</code> 分支<strong>可能都会执行</strong>。异常组里同时装着 <code>TimeoutError</code> 和 <code>UpstreamError</code> 时，两个分支会各跑一次，每个分支拿到的 <code>eg</code> 只包含匹配自己那一类的子异常；而普通 <code>except</code> 是「命中第一个匹配的分支就结束」。写 <code>except*</code> 时因此要习惯每个分支处理的是「一组」而不是「一个」，<code>eg.exceptions</code> 才是真正的异常列表。还有个特例值得知道：任务组里若有任务以 <code>KeyboardInterrupt</code> 或 <code>SystemExit</code> 结束，任务组仍会取消并等待其余任务，但最终重新抛出的是原始的那个异常而不是异常组，这样 Ctrl+C 不会被包装成一个你没接住的类型。</div>
+</details>
+
+<details>
+<summary>as_completed 产出的到底是什么东西？为什么我拿它查字典查不到？</summary>
+<div class="answer">因为版本行为不同。当成<strong>普通迭代器</strong>用时（这是 3.13 之前唯一的用法，也是现在写兼容代码的默认形态），每次产出的是一个<strong>新建的协程</strong>，你 <code>await</code> 它才拿到下一个完成者的结果或异常；它不是你传进去的那个 Task 对象，所以 <code>tasks[fut]</code> 和 <code>fut is some_task</code> 都不成立。3.13 起 <code>as_completed</code> 返回的对象也可以用 <code>async for</code> 迭代，这种模式下产出的才是原始的 Task 或 Future（传进去的若不是 Task/Future，则产出为它隐式创建的 Task），可以直接做身份比对。跨版本都安全的写法是别依赖产出对象的身份，改成把标识包进结果里：写一个 <code>async def tagged(key, coro): return key, await coro</code> 的小包装，标识就随结果一起回来了。另外记住 <code>as_completed</code> 的 <code>timeout</code> 到点会抛 <code>TimeoutError</code>，但不会取消剩下的任务。</div>
+</details>
+
+<details>
+<summary>wait 为什么不建议当日常工具用？</summary>
+<div class="answer">因为它把所有决策都推给了你，而这些决策很容易漏。它返回 <code>(done, pending)</code> 两个集合：<code>done</code> 里的异常不会自动抛，要你逐个 <code>.result()</code> 才暴露；<code>pending</code> 里的任务一个都没停，要你自己 <code>cancel()</code> 并等它们真正结束。它的 <code>timeout</code> 参数也不抛异常、不取消任何东西，只是到点返回。<code>FIRST_EXCEPTION</code> 这个名字尤其误导——它只负责提前返回，不负责取消其余任务。这些「你必须记得做」的点，正是 <code>TaskGroup</code> 用语法帮你兜住的。所以 <code>wait</code> 应该留给那些确实需要亲自处置的场景：对冲请求（拿第一个、取消其余）、需要在若干轮之间保留 <code>pending</code> 继续等的调度逻辑等等。日常的「并发调几个接口」用 <code>gather</code> 或 <code>TaskGroup</code>，不要用它。还要注意 3.11 起禁止直接给它传裸协程，必须先包成 Task。</div>
+</details>
+
+<details>
+<summary>超时到底该写在哪一层？wait_for 和 asyncio.timeout 怎么选？</summary>
+<div class="answer">原则是超时属于「调用方对一段逻辑的耐心上限」，应该显式声明在调用方，而不是散落在各处。只给<strong>单个</strong> awaitable 加时限，用 <code>asyncio.wait_for(aw, delay)</code>，它超时会取消那个 awaitable 并抛 <code>TimeoutError</code>。给<strong>一整段逻辑</strong>（里面可能有好几个 await，甚至嵌着任务组）加截止时间，用 3.11 引入的 <code>async with asyncio.timeout(delay)</code>，到点它向块内发取消信号，块外抛 <code>TimeoutError</code>；<code>asyncio.timeout_at()</code> 是它的绝对时刻版本。有个实现细节要记住：这个转换发生在退出上下文管理器时，所以 <code>except TimeoutError</code> 必须写在 <code>async with</code> 块外面，写在里面接不住。<code>asyncio.wait()</code> 的 <code>timeout</code> 参数不属于这一类，它只是「到点就返回」，既不抛也不取消，只在你打算亲自处置 <code>pending</code> 时才用。最后，3.11 起 <code>asyncio.TimeoutError</code> 已是内置 <code>TimeoutError</code> 的别名，直接写内置的那个即可。</div>
+</details>
+
+<details>
+<summary>一次 gather 一万个协程会发生什么？</summary>
+<div class="answer">会全部被包装成 Task 并立即调度，也就是几乎同时把一万个请求发出去。后果通常是四件事一起来：一万个任务对象加上同时驻留的响应体把内存推高；下游连接池瞬间打满，多出来的请求在客户端排队，你自己的 P95 先垮；对方开始限流返回 429，而重试逻辑会把请求量再放大；事件循环在一万个任务之间调度，调度本身的 CPU 开销变得可观。综合下来经常比分批串行还慢，还多了一堆错误要处理。正确做法是给并发度设上限：几千条以内用 <code>asyncio.Semaphore(n)</code> 包住每个协程最简单，<code>n</code> 取自下游连接池大小或配额倒推，不要拍脑袋。但要看清它的边界——信号量限的是同时在飞的请求数，任务对象还是一次性全建出来了。到十万量级就该换形态：用一个队列喂数据、固定起 N 个 worker 消费，任务数量等于 N 而不是数据条数。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

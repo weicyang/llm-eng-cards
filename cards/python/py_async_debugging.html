@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY34 · 异步调试与故障排查</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、异步为什么难查</a>
+<a href="#s2">二、告警与报错逐条解读</a>
+<a href="#s3">三、调试模式能告诉你什么</a>
+<a href="#s4">四、挂起怎么定位</a>
+<a href="#s5">五、日志与可观测性</a>
+<a href="#s6">六、测试异步代码</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY34 · 异步调试与故障排查</h1>
+<p class="subtitle">堆栈不再等于因果链 / 四条告警的真实含义 / 调试模式与 -X dev / 挂起任务的栈定位 / contextvars 与关联标识</p>
+
+<div class="intuition-box">
+<p>同步程序出问题，你手里有一份堆栈，从上到下就是「谁调用了谁」，也就是因果链。异步程序出问题，你手里那份堆栈只告诉你「当前这一小段代码是被事件循环挑中来跑的」——上游是谁、它在等什么、别的任务此刻停在哪，一个字都没写。异步排查的全部技巧，就是把这三件缺失的信息重新拿回来。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、异步为什么难查：被切碎的执行与消失的因果链</h2>
+
+<p>前面几张卡讲的是机制——协程怎么挂起、事件循环怎么调度、任务怎么编排。这张卡讲另一件事：机制运转不正常的时候，你怎么把原因找出来。之所以值得单独占一张卡，是因为异步把三样排查时最依赖的东西同时破坏掉了。</p>
+
+<p>根源只有一句话：<strong>一次逻辑请求的执行被切成了很多段，这些段和其他请求的段交错地跑在同一个线程上</strong>。同步模型里「一个请求 = 一条连续的执行路径」这个前提没了，而几乎所有排查直觉都建立在那个前提上。</p>
+
+<div class="arch-diagram">  同步：一个请求 = 一条连续的执行路径（每请求一线程）
+  ──────────────────────────────────────────────────────────
+  线程 A  ██████████████████████████  请求 1 从头跑到尾
+  线程 B        ███████████████████████████  请求 2
+          ↑ 堆栈 = 因果链，日志天然按逻辑顺序排
+
+  异步：一个请求 = 若干执行片段，交错在同一个线程上
+  ──────────────────────────────────────────────────────────
+  单线程  ▓▓░░░░░░▓▓░░░░░░░░▓▓      ← 请求 1 的三段
+            ▒▒░░░░░░░░▒▒░░░░▒▒▒▒    ← 请求 2 的三段
+              ██░░░░░░░░░░░░██      ← 请求 3 的两段
+          └┬┘   └───┬───┘  └┬┘
+           │        │        └ 恢复执行（等到了）
+           │        └ 挂起：让出控制权，事件循环去跑别人
+           └ 真正占用 CPU 的片段
+
+  被破坏的三件事
+    1. 堆栈只覆盖「当前这一段」，看不到是谁触发的这次请求
+    2. 日志按「片段结束的时刻」落盘，不按逻辑顺序排列
+    3. 单请求耗时 = 自己算的时间 + 等 IO 的时间 + 等别人让出的时间</div>
+
+<p>第 3 条最容易误导人。你看到某个接口 P95 是 800 毫秒，于是去逐个函数看耗时，结果每一段都只有几毫秒——剩下的时间既不在你的代码里，也不一定在上游那里，而是消耗在「排队等事件循环重新挑中我」。这种耗时在任何单点计时里都看不见，只能靠事件循环延迟这个整体指标暴露（第五节会讲）。</p>
+
+<div class="intuition-box">
+<p>异步排查的第一个心态转变：不要问「这行代码为什么慢」，先问「这段时间里事件循环在忙什么」。前者在异步里经常没有答案，后者总有答案。</p>
+</div>
+
+<h3>四类异步特有的故障形态</h3>
+
+<p>同步程序的故障大多会「说话」——抛异常、返回错误码、进程退出。异步程序多出了一批<strong>安静的故障</strong>：程序照常运行、日志照常刷、健康检查照常通过，但某件事根本没发生。下面这四类值得单独记住，因为它们的排查入口完全不同。</p>
+
+<table>
+<tr><th>故障形态</th><th>外部表现</th><th>典型根因</th><th>第一步该看什么</th></tr>
+<tr><td><span class="term">静默不执行</span></td><td>没报错，但那件事就是没做</td><td>协程被创建却没有被 await，也没被包成任务</td><td>进程 stderr 里的 <code>RuntimeWarning</code></td></tr>
+<tr><td><span class="term">静默吞异常</span></td><td>任务失败了，主流程毫不知情</td><td><code>create_task</code> 后不保存引用、不检查结果</td><td>事件循环异常处理器打出的日志</td></tr>
+<tr><td><span class="term">整体变慢</span></td><td>全站 P95 抬升，但每个函数自测都正常</td><td>某处同步阻塞调用把事件循环整体卡住</td><td>事件循环延迟指标 + 调试模式的慢回调告警</td></tr>
+<tr><td><span class="term">永久挂起</span></td><td>CPU 归零、无报错、进程活着、不再前进</td><td>在等一个永远不会到的东西</td><td>打印全部任务的栈</td></tr>
+</table>
+
+<p>注意前两类的共同特征：<strong>故障信息存在，但它去了一个你平时不看的地方</strong>。协程未被等待的警告走的是 <code>warnings</code> 机制，落在 stderr；任务异常未被取回走的是 asyncio 的异常处理器，落在 <code>asyncio</code> 这个 logger 上。如果你的服务只采集应用自己的 logger、或者把 stderr 丢给了 <code>/dev/null</code>，这两类故障就真的完全无声了。第五节会把这件事补上。</p>
+
+<p>第三类的成因值得单独说一句：事件循环是单线程的，一段不让出控制权的同步代码（读大文件、CPU 密集计算、用了阻塞版的数据库驱动）在执行期间，<strong>整个进程的所有请求都在等它</strong>。所以症状是全局变慢而不是某个接口变慢，而排查时如果只看那个「最慢的接口」，会完全找错方向——它可能只是受害者。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某异步网关升级了一个日志脱敏依赖，该依赖内部用同步正则对每条消息做一次全量扫描，单次约 40 毫秒。上线后全部 12 个接口的 P95 从 60 毫秒涨到 520 毫秒，而每个接口自身的埋点耗时都没变。逐接口排查两小时无果，最后开调试模式跑了一次压测，慢回调告警直接点出那个脱敏函数。<strong>教训不是「要埋点」，而是异步里「全局变慢」和「某处变慢」要用不同的工具查</strong>：前者看事件循环，后者看链路。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、告警与报错逐条解读：它们分别在说什么</h2>
+
+<p>asyncio 的几条告警文案写得相当克制，代价是它们几乎从不指向真正的问题点。下面四条覆盖了日常九成的异步告警，先看对照表，再逐条说清「真实原因」和「该去哪儿找」。</p>
+
+<table>
+<tr><th>文案</th><th>渠道</th><th>真实原因</th><th>该去哪儿找</th></tr>
+<tr><td><code>RuntimeWarning: coroutine 'X' was never awaited</code></td><td>stderr（warnings）</td><td>调了 async 函数但没 await，协程对象被垃圾回收</td><td>所有调用 <code>X</code> 的地方，找漏掉 <code>await</code> 的那处</td></tr>
+<tr><td><code>Task exception was never retrieved</code></td><td><code>asyncio</code> logger</td><td>任务抛了异常，但没有任何人 await 它或读它的结果</td><td>紧随其后的 traceback 就是真实异常；再找创建该任务的代码</td></tr>
+<tr><td><code>Task was destroyed but it is pending!</code></td><td><code>asyncio</code> logger</td><td>事件循环已结束，但还有任务停在挂起状态就被回收了</td><td>关停逻辑：谁没等这些任务收尾</td></tr>
+<tr><td><code>RuntimeError: Event loop is closed</code></td><td>异常</td><td>往一个已关闭的循环上提交工作</td><td>关停顺序，或跨循环复用了客户端/连接池</td></tr>
+<tr><td><code>RuntimeError: no running event loop</code></td><td>异常</td><td>在没有运行中循环的线程里调了需要循环的 API</td><td>调用点所在的线程，或同步函数里误用异步 API</td></tr>
+</table>
+
+<h3>协程未被等待：漏了一个 await</h3>
+
+<p>调用一个 <code>async def</code> 函数<strong>不会执行它</strong>，只会返回一个协程对象。这是异步最反直觉的一点：<code>send_email(user)</code> 这一行看起来干了活，实际上只是造了个待办事项然后扔掉。真正的告警要等到这个对象被垃圾回收时才发出——所以它出现的时刻和出错的位置可能隔得很远。</p>
+
+<pre><code>async def send_email(user): ...
+
+async def register(user):
+    save(user)
+    send_email(user)          # 漏了 await：邮件永远发不出，且不报错
+    # RuntimeWarning: coroutine 'send_email' was never awaited</code></pre>
+
+<p>这条告警是 <code>RuntimeWarning</code>，默认会显示，但很容易被淹在日志里。它还会附带一行 <code>RuntimeWarning: Enable tracemalloc to get the object allocation traceback</code>——这是在提示你，加上 <code>-X tracemalloc=5</code> 就能拿到<strong>这个协程对象是在哪一行创建的</strong>，而不只是它叫什么名字。在一个函数有十几处调用点的项目里，这一步能把定位时间从十几分钟压到几秒。</p>
+
+<h3>任务异常未被取回：异常被存起来了，没人去看</h3>
+
+<p>这一条的机制值得讲清楚，因为它是异步里最常见的「静默吞异常」。<code>create_task</code> 创建的任务会立刻被事件循环调度执行，但它抛出的异常不会自动往外传播——异常被<strong>存在任务对象里</strong>，等着谁来 <code>await</code> 它或调 <code>result()</code> 取走。如果这个任务对象被丢弃时异常还没人取，asyncio 会在回收时打这条日志，后面附上真正的 traceback。</p>
+
+<div class="arch-diagram">  一个协程从创建到回收，可能在四处掉队
+  ─────────────────────────────────────────────────────────────
+
+  async def work() 被调用
+        │
+        ▼
+  ┌──────────────────┐   仅创建协程对象，一行代码都没跑
+  │  coroutine 对象  │
+  └────┬─────────┬───┘
+       │         └──── 直接丢弃 ──▶ ① coroutine ... was never awaited
+       │                             （那件事根本没发生）
+       ▼
+  await work()  或  create_task(work())
+       │
+       ├── await：异常沿调用栈正常上抛，和同步一样  ✅
+       │
+       └── create_task：任务独立执行，异常存进任务对象
+             │
+             ├── 有人 await 这个任务 ──▶ 异常正常抛出  ✅
+             │
+             ├── 没人取，任务被回收 ──▶ ② Task exception was never retrieved
+             │
+             └── 循环先结束了，任务还挂着 ──▶ ③ Task was destroyed but it is pending!
+                   │
+                   └── 此后再提交工作 ──▶ ④ RuntimeError: Event loop is closed</div>
+
+<p>图里 ② 和 ③ 的区别在于任务的终态：② 是任务<strong>跑完了并且失败了</strong>，失败信息没人看；③ 是任务<strong>还没跑完</strong>就随着循环一起没了，它做到哪一步谁也不知道。前者是漏了错误处理，后者是漏了优雅关停。</p>
+
+<p>这也解释了一个常见反模式：<code>asyncio.create_task(work())</code> 不保存返回值。任务对象只被事件循环弱引用着，在某些情况下可能在完成前就被垃圾回收，于是既丢了异常也可能丢了任务本身。正确做法是把任务引用存起来，或者直接用结构化并发（<code>asyncio.TaskGroup</code>，3.11 起）——它在退出时会等齐所有子任务并把异常聚合成 <code>ExceptionGroup</code> 抛出，② 和 ③ 两类告警在结构上就消失了。异常聚合与分层处理的思路见 <a href="py_exception_design.html">PY24</a>。</p>
+
+<h3>循环相关的两条 RuntimeError</h3>
+
+<p><code>Event loop is closed</code> 几乎总是关停顺序问题：某个 HTTP 客户端或连接池是在一个循环里创建的，循环关了它却还活着，下次用到时它想往那个循环上提交工作。典型触发场景是「模块级全局客户端 + 每次调用 <code>asyncio.run()</code>」——<code>asyncio.run()</code> 每次都新建并关闭一个循环，而全局客户端只创建一次，第二次调用就炸。</p>
+
+<p><code>no running event loop</code> 则是线程/上下文错位：你在一个普通同步函数里调了需要「当前循环」的 API。值得注意的是 <code>asyncio.all_tasks()</code> 也属于这一类，在没有运行中循环时调用它会直接抛这个错——这个细节在第四节写排查骨架时会用到。</p>
+
+<div class="intuition-box">
+<p>这几条告警的共同点是：它们报的是「发现问题的时刻」，不是「问题发生的位置」。看到它们不要试图从文案里读出行号，要把它们当成一个分类标签，按标签决定去哪儿找。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、调试模式能告诉你什么：三个开关与它们的叠加</h2>
+
+<p>asyncio 有一个专门的调试模式，日常几乎没人开，但它能直接回答上一节那些「该去哪儿找」的问题。之所以不常态开启，是因为它会给每次协程创建都记录调用位置、给每次回调都计时，运行明显变慢——<strong>它是排查手段，不是默认配置</strong>。</p>
+
+<h3>三种打开方式的区别</h3>
+
+<table>
+<tr><th>方式</th><th>作用范围</th><th>顺带做的事</th><th>适合</th></tr>
+<tr><td><code>asyncio.run(main(), debug=True)</code></td><td>只开 asyncio 调试模式</td><td>无</td><td>本地跑一次复现脚本，改动最小</td></tr>
+<tr><td><code>PYTHONASYNCIODEBUG=1</code></td><td>整个进程的 asyncio</td><td>无</td><td>不改代码就想在容器里开一次</td></tr>
+<tr><td><code>-X dev</code>（等价 <code>PYTHONDEVMODE=1</code>）</td><td>开 asyncio 调试模式 + 一整套运行时检查</td><td>启用 faulthandler、放宽默认警告过滤、给内存分配器装调试钩子</td><td>CI 与开发环境常驻</td></tr>
+<tr><td>补一个 <code>-X tracemalloc=5</code></td><td>记录对象分配位置</td><td>让告警带上「对象在哪一行创建」</td><td>定位漏 await 的具体调用点</td></tr>
+</table>
+
+<p>最后一行是最容易漏的一步。<strong><code>-X dev</code> 并不会自动开启 tracemalloc</strong>（官方明确说明是因为性能与内存开销太大），而 asyncio 的几条告警恰恰要靠 tracemalloc 才能给出创建位置。所以实际排查时的组合是两个开关一起上：</p>
+
+<pre><code># 排查一次异步问题的标准起手式
+python -X dev -X tracemalloc=5 app.py
+
+# 不方便改命令行时（容器、托管平台）
+PYTHONASYNCIODEBUG=1 PYTHONDEVMODE=1 python app.py</code></pre>
+
+<div class="arch-diagram">  三个开关的覆盖范围（外圈包含内圈）
+  ─────────────────────────────────────────────────────────────
+
+  ┌─────────────────────────────────────────────────────┐
+  │  -X dev  /  PYTHONDEVMODE=1                         │
+  │  faulthandler、默认警告过滤放宽、分配器调试钩子      │
+  │                                                     │
+  │   ┌─────────────────────────────────────────────┐   │
+  │   │  PYTHONASYNCIODEBUG=1                       │   │
+  │   │  进程级 asyncio 调试模式                     │   │
+  │   │                                             │   │
+  │   │   ┌─────────────────────────────────────┐   │   │
+  │   │   │  asyncio.run(main(), debug=True)    │   │   │
+  │   │   │  单次运行的 asyncio 调试模式         │   │   │
+  │   │   └─────────────────────────────────────┘   │   │
+  │   └─────────────────────────────────────────────┘   │
+  └─────────────────────────────────────────────────────┘
+
+  正交的一项，需要单独加：
+  ┌─────────────────────────────────────────────────────┐
+  │  -X tracemalloc=5   记录「对象在哪一行创建」          │
+  │  不加这个，告警只告诉你协程叫什么名字，不告诉你在哪    │
+  └─────────────────────────────────────────────────────┘
+
+  验证当下到底开没开（三种方式都汇聚到同一个标志位）
+    asyncio.get_running_loop().get_debug()   →  True / False</div>
+
+<p>最后那行自查很有用：三种方式最终都体现在同一个标志位上，所以不用猜环境变量有没有生效，直接在代码里问一次循环就行。</p>
+
+<h3>开了之后多出来的信息</h3>
+
+<p>调试模式最有价值的产出是<strong>慢回调告警</strong>。事件循环会给每个回调计时，超过阈值就往 <code>asyncio</code> logger 打一条警告，阈值是 <code>loop.slow_callback_duration</code>，<strong>默认 0.1 秒</strong>，可以按需调小：</p>
+
+<pre><code>async def main():
+    asyncio.get_running_loop().slow_callback_duration = 0.05  # 收紧到 50ms
+    ...
+
+asyncio.run(main(), debug=True)
+# WARNING Executing &lt;Task ... created at app.py:31&gt; took 0.203 seconds</code></pre>
+
+<p>这条日志正是第一节那个「全站变慢」故障的直接答案：<strong>凡是能被慢回调告警点出来的，都是没有让出控制权的同步阻塞</strong>。注意日志里那段 <code>created at app.py:31</code>——这是调试模式额外记录的协程创建位置，非调试模式下的任务 repr 里没有这一段。</p>
+
+<table>
+<tr><th>调试模式下多出来的能力</th><th>解决哪类问题</th></tr>
+<tr><td>超过 <code>slow_callback_duration</code> 的回调被记录</td><td>整体变慢：揪出阻塞事件循环的同步代码</td></tr>
+<tr><td>未被等待的协程会被检测并报告</td><td>静默不执行</td></tr>
+<tr><td>任务与协程的 repr 带上创建位置</td><td>把告警里的「名字」变成「行号」</td></tr>
+<tr><td>非线程安全的循环 API 被跨线程调用时抛异常</td><td>多线程混用事件循环的隐蔽错误</td></tr>
+<tr><td>IO 选择器耗时过长时被记录</td><td>循环自身的 IO 等待异常</td></tr>
+</table>
+
+<div class="intuition-box">
+<p>把 <code>-X dev</code> 设成 CI 和开发环境的默认值，把 <code>-X tracemalloc</code> 留给真的要查的时候。前者几乎没有心理成本却能在测试阶段就暴露掉漏 await，后者的开销不适合一直背着。</p>
+</div>
+</div>
+
+<div class="section" id="s4">
+<h2>四、挂起怎么定位：让每个任务自己报出停在哪一行</h2>
+
+<p>永久挂起是异步最难查的一类，因为它<strong>什么都不产生</strong>：没有异常、没有新日志、CPU 归零、进程还在、健康检查可能还通过。而它的根因其实高度收敛——挂起几乎总是「在等一个永远不会到的东西」。</p>
+
+<table>
+<tr><th>永久等待的来源</th><th>具体形态</th><th>结构性解法</th></tr>
+<tr><td>没有超时的等待</td><td>网络调用、锁、<code>Event.wait()</code> 没有任何时间上界</td><td>一切外部等待都包 <code>asyncio.timeout()</code>（3.11 起）</td></tr>
+<tr><td>计数没有归零的队列</td><td><code>join()</code> 等待未完成计数归零，某条路径漏调 <code>task_done()</code></td><td>取任务后立刻用 <code>try/finally</code> 保证 <code>task_done()</code> 一定被调</td></tr>
+<tr><td>互相等待</td><td>A 等 B 的结果，B 又在等 A 让出的资源</td><td>固定资源获取顺序，或改成单向的数据流</td></tr>
+<tr><td>等一个不会被完成的对象</td><td><code>await</code> 一个没人 <code>set_result()</code> 的 Future</td><td>谁创建谁负责在所有分支上完成它</td></tr>
+</table>
+
+<p>这四类靠读代码几乎找不出来——它们都是「某条少见分支上少了一行」。真正有效的手段是让进程<strong>自己报出全部任务此刻停在哪</strong>。标准库给了这个能力，只是很少有人用。</p>
+
+<h3>三个把任务撬开的 API</h3>
+
+<p><code>asyncio.all_tasks()</code> 返回当前循环里所有<strong>尚未完成</strong>的任务集合。拿到任务之后，<code>task.get_coro()</code> 告诉你它跑的是哪个协程，<code>task.get_name()</code> 给出任务名（所以创建任务时就该起个有意义的名字），而最关键的是 <code>task.get_stack()</code>——对一个挂起中的任务，它返回<strong>这个任务被挂起时所在的那一串栈帧</strong>，也就是「它停在哪一行」。想直接看可读输出，用 <code>task.print_stack()</code>。</p>
+
+<pre><code>def dump_tasks():
+    for t in asyncio.all_tasks():
+        print(f"--- {t.get_name()}  {t.get_coro()}")
+        t.print_stack(limit=8)      # 挂起中的任务：停在哪一行
+
+# 注意：all_tasks() 必须在运行中的循环里调，
+# 否则抛 RuntimeError: no running event loop</code></pre>
+
+<p>最后那条注释是实践中的主要障碍：<strong>你不能从外面「进去」看</strong>，采集动作本身必须跑在那个循环上。所以要把它接到一个能被外部触发、又运行在循环里的入口上。思路是：进程启动时注册一个信号处理，收到信号就在循环上排一次上面这个采集动作，把结果打到日志。</p>
+
+<div class="arch-diagram">  「收到信号就打印全部任务状态」的排查骨架（思路）
+  ─────────────────────────────────────────────────────────────
+
+  启动阶段（在 async main 里，此时循环已在运行）
+        │
+        ├─ 取当前运行中的循环
+        │
+        └─ 给一个不影响业务的信号注册处理函数
+              （事件循环层面的信号注册在 Windows 上不可用，
+                Windows 侧改用别的触发入口，见下）
+                    │
+                    ▼
+  运行期：进程卡住了，你在外面发一个信号
+        │
+        ▼
+  处理函数被排到循环上执行 ──▶ 遍历 all_tasks()
+        │                        每个任务打印：
+        │                          名字、协程对象、挂起处的栈帧
+        ▼
+  日志里出现一份「全部任务的快照」
+        └─ 挂住的那个任务，栈顶那一行就是它在等的东西
+
+  跨平台的替代触发入口（信号方式不可用时）
+    · 暴露一个仅内网可达的诊断接口，命中时执行同一份采集逻辑
+    · 起一个后台任务，每隔 N 秒把任务数与最老任务的年龄打一条日志
+      （任务数只增不减 = 有任务再也没退出，不用等到彻底卡死才发现）</div>
+
+<p>骨架里那个括号值得单独记：<strong>事件循环层面的信号注册在 Windows 上不可用</strong>，调用会直接抛 <code>NotImplementedError</code>；标准库里那个「按信号打印全部线程栈」的能力同样在 Windows 上缺席。所以如果你的开发机是 Windows、生产是 Linux，这套排查手段在本地验证不了，得靠诊断接口那条路。</p>
+
+<p>Python 3.14 起还多了一条更省事的路：标准库带了命令行工具，可以<strong>从外部按 PID 窥看另一个进程的任务图</strong>，不需要改代码、不需要重启，也不在目标进程里执行任何代码。<code>python -m asyncio ps PID</code> 给出全部挂起任务的平铺表格（含任务名、协程栈、以及谁在等它），<code>python -m asyncio pstree PID</code> 给出按 await 关系嵌套的树，卡在哪个分支一眼就能看到。这是在 3.14 才有的能力；在此之前只能靠上面那套自己埋的骨架。</p>
+
+<div class="highlight">
+<p><strong>生产事故复盘：</strong>一个异步批处理作业每晚跑约 40 分钟，处理 120 万条记录。某晚跑到第 26 分钟后<strong>永久停住</strong>：CPU 占用 0%、无任何报错、进程存活、最后一条日志停在「已处理 783,000 条」。因为进程没死，容器编排层的存活探针一直通过，没有触发重启，直到早上 9 点被人发现，<strong>卡住 7 小时 12 分钟</strong>。</p>
+<p>前两次排查都失败了：加日志重跑一次要 26 分钟且不必然复现，看代码也看不出问题。第三次改了思路，接了一个诊断接口打印全部任务状态，命中后拿到 <strong>1 个生产者任务 + 16 个消费者任务</strong>的快照——16 个消费者全部停在等队列取数，而生产者停在 <code>join()</code> 那一行。<strong>队列是空的，但未完成计数不为零</strong>，根因立刻清楚：消费者里有一条异常分支提前 <code>continue</code> 了，漏调 <code>task_done()</code>，于是 <code>join()</code> 永远等不到归零。触发条件是某类脏数据，约每 80 万条出现一次，这就是它难以复现的原因。</p>
+<p>修复是把 <code>task_done()</code> 移到 <code>try/finally</code> 里，<strong>1 行改动</strong>。前两次盲查合计约 <strong>6 小时</strong>，第三次从接上诊断接口到定位根因 <strong>11 分钟</strong>。事后补了两条兜底：存活探针改为检查「最后进度更新时间」而非进程存活，以及那条「任务数与最老任务年龄」的周期日志。</p>
+</div>
+
+<div class="intuition-box">
+<p>挂起排查的正确顺序不是读代码，是先拿快照。代码里有几十条分支，但任务快照只有十几行，而且直接写着每个任务停在哪一行——先看快照再回代码，几乎总能一步定位。</p>
+</div>
+
+<p>这也反过来说明了给任务起名的价值。快照里一屏都是 <code>Task-17</code>、<code>Task-23</code> 时，你还得靠协程名反推它在干什么；而如果创建时就写了 <code>name="consumer-3"</code>，快照本身就是可读的。这个习惯的成本是零，收益要等到真的卡住那天才体现。</p>
+</div>
+
+<div class="section" id="s5">
+<h2>五、日志与可观测性：让交错的日志重新可读</h2>
+
+<p>第一节说过，异步的日志不按逻辑顺序排列。这不是配置问题，是执行模型的必然结果：日志在片段结束时落盘，而片段是交错的。所以异步服务的日志有一个硬性前提——<strong>每条日志必须带上能把同一逻辑请求串起来的关联标识</strong>，否则它在物理上就是不可读的。</p>
+
+<div class="arch-diagram">  没有关联标识：三个请求的日志交错在一起，无法阅读
+  ─────────────────────────────────────────────────────────────
+    12:00:01.100  收到请求
+    12:00:01.103  收到请求
+    12:00:01.108  查库开始
+    12:00:01.110  收到请求
+    12:00:01.240  查库返回 0 行          ← 这是哪个请求的？
+    12:00:01.242  查库开始
+    12:00:01.390  查库返回 37 行         ← 又是哪个？
+    12:00:01.391  处理失败：结果为空      ← 对应上面哪一次查库？
+
+  带上关联标识：同一个 id 一过滤，逻辑顺序就回来了
+  ─────────────────────────────────────────────────────────────
+    12:00:01.100  [req=a7f1]  收到请求
+    12:00:01.103  [req=b2c9]  收到请求
+    12:00:01.108  [req=a7f1]  查库开始
+    12:00:01.110  [req=c4e0]  收到请求
+    12:00:01.240  [req=a7f1]  查库返回 0 行
+    12:00:01.242  [req=b2c9]  查库开始
+    12:00:01.390  [req=b2c9]  查库返回 37 行
+    12:00:01.391  [req=a7f1]  处理失败：结果为空     ← 因果链完整了
+
+    过滤 req=a7f1 得到：收到 → 查库开始 → 返回 0 行 → 失败
+    这才是那一次请求真实的执行顺序</div>
+
+<h3>为什么 threading.local 在异步里行不通</h3>
+
+<p>在同步的「每请求一线程」模型里，请求级上下文的标准做法是 <code>threading.local</code>——数据挂在线程上，同一请求的所有代码都在同一线程里，天然隔离。异步把这个前提打碎了：<strong>一个线程上跑着许多并发请求</strong>，它们共享同一个 <code>threading.local</code>。于是请求 A 写进去的 id 会被切过来的请求 B 覆盖，日志里的关联标识开始张冠李戴——比没有标识更糟，因为它看起来是对的。</p>
+
+<p>正确工具是 <span class="term">contextvars</span>（3.7 起，标准库）。它提供的是<strong>按执行上下文</strong>隔离的变量，而不是按线程隔离。关键机制在于：创建任务时会<strong>复制</strong>当前上下文，之后子任务对上下文变量的修改不会影响父任务，父任务的后续修改也不会影响已经启动的子任务。这正好对上「一次逻辑请求」的边界。</p>
+
+<pre><code>import contextvars
+request_id = contextvars.ContextVar("request_id", default="-")
+
+async def handle(req):
+    request_id.set(new_id())      # 只影响这一次请求的上下文
+    await do_work()               # 深层任意位置都能读到
+
+# 日志 filter 里取 request_id.get()，无需层层传参</code></pre>
+
+<table>
+<tr><th></th><th><code>threading.local</code></th><th><code>contextvars</code></th></tr>
+<tr><td>隔离粒度</td><td>线程</td><td>执行上下文（协程/任务）</td></tr>
+<tr><td>异步里能用吗</td><td>不能：一个线程上有多个并发请求</td><td>能，正是为此设计</td></tr>
+<tr><td>创建任务时</td><td>不涉及</td><td>复制当前上下文，子任务的修改不外泄</td></tr>
+<tr><td>引入版本</td><td>很早</td><td>3.7</td></tr>
+<tr><td>同步代码里能用吗</td><td>能</td><td>能，所以混合代码库可以统一用它</td></tr>
+</table>
+
+<p>最后一行是个实用结论：<code>contextvars</code> 在纯同步代码里同样工作，所以正在从同步迁移到异步的项目可以先把上下文传递统一换成它，不必等异步改造完成。</p>
+
+<div class="intuition-box">
+<p>异步日志的可读性不取决于你写了多少条日志，只取决于这些日志能不能被重新归组。没有关联标识，写得再详细也只是一堆无法拼装的碎片。</p>
+</div>
+
+<h3>该盯的三个指标</h3>
+
+<p>应用层的 QPS、错误率、P95 在异步服务里照旧要看，但它们解释不了异步特有的那几类故障。下面三个指标是异步专属的，缺了它们第一节那张表里的「整体变慢」和「永久挂起」都只能靠人肉发现。</p>
+
+<table>
+<tr><th>指标</th><th>含义</th><th>异常时说明什么</th><th>怎么得到</th></tr>
+<tr><td><span class="term">事件循环延迟</span></td><td>一个本该立刻执行的回调，实际等了多久才被执行</td><td>持续偏高 = 有同步代码在阻塞循环；这是异步健康度的第一指标</td><td>周期任务：记录「预期唤醒时刻」与实际唤醒时刻之差</td></tr>
+<tr><td><span class="term">在飞任务数</span></td><td>当前未完成的任务数量</td><td>只增不减 = 有任务再也没退出；突然飙升 = 上游变慢导致堆积</td><td>周期采样 <code>len(asyncio.all_tasks())</code></td></tr>
+<tr><td><span class="term">任务时长分布</span></td><td>任务从创建到完成的耗时分布（不只是均值）</td><td>长尾变厚 = 存在缺超时的调用路径</td><td>任务收尾处记录时长，按任务名分组统计</td></tr>
+</table>
+
+<p>事件循环延迟的采集思路很简单，也不需要任何额外依赖：起一个后台任务，睡固定间隔，醒来后比较「应该醒的时刻」和「真的醒的时刻」，差值就是这一刻循环的拥塞程度。健康的服务这个值通常在毫秒量级；一旦看到几百毫秒，说明有回调把循环占住了，直接对应去开第三节的慢回调告警。</p>
+
+<p>「在飞任务数只增不减」是永久挂起最好的早期信号——它在故障发生的那一刻就开始偏离，而不是等到彻底卡死。上一节事故里那个卡了 7 小时的作业，如果有这条曲线，会在几分钟内就被看出来。顺带一提，任务对象持续堆积也会表现为内存缓慢上涨，如果你是先从内存侧发现异常的，可以对照 <a href="py_memory_gc.html">PY23</a> 的排查路径。</p>
+
+<p>关于日志采集还有一条容易被忽略的配置：第二节那两条告警分别走 stderr 和 <code>asyncio</code> logger，<strong>都不在你的应用 logger 下</strong>。所以务必确认采集配置覆盖了 stderr，并且没有把第三方 logger 的级别整体调到 WARNING 以上——否则最有价值的两条线索在生产上永远看不到。给日志统一挂上关联标识通常用装饰器或 filter 实现，写法可参考 <a href="py_closures_decorators.html">PY14</a>。</p>
+</div>
+
+<div class="section" id="s6">
+<h2>六、测试异步代码：把超时和取消路径提前走一遍</h2>
+
+<p>异步测试的难点不在「怎么跑一个协程」，那是工具问题；难在<strong>默认永远测不到的那两条路径</strong>：超时和取消。这两条路径在生产上一定会走到——上游抖一下就超时，服务关停就取消——但正常用例里它们一次都不会执行。于是它们成了整个异步代码库里唯一没被覆盖、又必然被触发的部分。</p>
+
+<h3>先把工具选定</h3>
+
+<table>
+<tr><th>方案</th><th>定位</th><th>适合</th></tr>
+<tr><td><code>pytest-asyncio</code></td><td>pytest 插件，让异步测试函数能被收集和运行</td><td>项目只用 asyncio，想要最直接的接入</td></tr>
+<tr><td><code>anyio</code> 的 pytest 插件</td><td>同时支持多种异步运行时的测试与工具集</td><td>库作者，或需要跨运行时验证</td></tr>
+<tr><td>手工 <code>asyncio.run()</code></td><td>在同步测试里跑一次协程</td><td>只有零星几个异步用例，不想引依赖</td></tr>
+</table>
+
+<p>两个插件都需要显式声明「这是个异步测试」（标记或配置项），漏了声明的直接后果是：测试函数<strong>被当成同步函数收集，返回一个协程对象就算通过了</strong>，里面一行断言都没跑。这正是第二节第一条告警的典型场景，也是为什么 <code>-X dev</code> 该在 CI 里常驻——它会把这类「假绿」变成可见的警告。</p>
+
+<h3>超时与取消必须有专门的用例</h3>
+
+<p>取消在 Python 里是通过<strong>在挂起点抛出取消异常</strong>实现的。这意味着你的协程可能在任何 <code>await</code> 处被打断，而清理逻辑写在哪里就变得很要紧：写在 <code>await</code> 之后的普通语句里，取消发生时它不会执行；写在 <code>finally</code> 里才有保证。同样重要的是别把取消异常当普通异常吞掉——裸 <code>except Exception</code> 通常不会捕获它，但<strong>裸 <code>except</code> 会</strong>，吞掉的后果是任务拒绝退出，关停时挂住。</p>
+
+<div class="arch-diagram">  该被测到、但默认一条都测不到的四条路径
+  ─────────────────────────────────────────────────────────────
+
+  正常路径          ──▶ await 成功返回 ──▶ 断言结果     ← 大家都写了
+  ─────────────────────────────────────────────────────────────
+  ① 超时路径        ──▶ 上游慢于超时上限
+                        · 抛出的是超时异常吗
+                        · 连接、游标、临时文件都释放了吗
+                        · 上游随后返回了，有没有产生重复写入
+
+  ② 取消路径        ──▶ 任务在 await 处被取消
+                        · finally 里的清理跑到了吗
+                        · 取消异常有没有被裸 except 吞掉
+                        · 任务最终是否真的进入了取消终态
+
+  ③ 部分失败路径    ──▶ 并发的 N 个子任务里有一个失败
+                        · 其余子任务被正确取消了吗
+                        · 已经产生的副作用回滚了吗
+
+  ④ 关停路径        ──▶ 收到终止信号
+                        · 在飞任务被等齐了，还是被直接丢弃
+                        · 有没有留下「destroyed but pending」告警
+  ─────────────────────────────────────────────────────────────
+  判据：这四条在生产上都必然发生，所以它们都属于功能，不属于边角</div>
+
+<h3>怎么稳定地制造慢下游</h3>
+
+<p>测超时的天然障碍是：真实的超时要等真实的时间。把用例写成「睡 30 秒看它超不超时」会让测试套件变得没人愿意跑。两条可用的路子：</p>
+
+<p>第一条是<strong>把时间参数化</strong>。让超时上限从配置读取，测试里设成几十毫秒，配一个睡得比它久一点的假下游。这条路不需要任何特殊工具，缺点是仍然要睡真实时间，只是量级从秒降到毫秒。</p>
+
+<p>第二条是<strong>用受控的假时钟</strong>——让测试能手工推进「当前时间」，从而在零真实耗时的情况下触发超时。这条路更快也更稳，代价是需要相应的测试工具支持，且断言写起来更绕。实践里的取舍很清楚：<strong>用例少、超时值小就用第一条；有大量超时用例、或超时上限本身是分钟级的就上第二条</strong>。</p>
+
+<p>不管走哪条路，假下游都要覆盖三种形态，因为它们触发的代码路径不同：慢（触发超时）、报错（触发异常处理）、以及最坏的一种——<strong>先慢后成功</strong>。第三种专门用来验证一个容易被忽略的问题：超时之后上游其实成功了，你的重试会不会造成重复写入。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>卡住先拿快照：遍历未完成任务，打印名字、协程、挂起处的栈帧</li>
+<li>创建任务时就起名字（<code>name=</code>），快照才是可读的</li>
+<li>本地与 CI 常驻 <code>-X dev</code>；真要查时再加 <code>-X tracemalloc=5</code></li>
+<li>怀疑「全站变慢」就开调试模式，按慢回调告警找阻塞点</li>
+<li>一切外部等待都设时间上界，用 <code>asyncio.timeout()</code>（3.11 起）</li>
+<li>用 <code>asyncio.TaskGroup</code>（3.11 起）替代裸 <code>create_task</code>，异常与关停都被兜住</li>
+<li>队列消费用 <code>try/finally</code> 保证 <code>task_done()</code> 在所有分支上被调</li>
+<li>每条日志带关联标识，上下文用 <code>contextvars</code> 传</li>
+<li>常态监控事件循环延迟、在飞任务数、任务时长分布</li>
+<li>存活探针检查「业务进度有没有推进」，而不是「进程在不在」</li>
+<li>给超时、取消、部分失败、关停四条路径各写专门的用例</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>看到 <code>coroutine ... was never awaited</code> 当成噪音忽略——那件事真的没做</li>
+<li><code>create_task</code> 之后不保存引用、不检查结果，异常会被静默吞掉</li>
+<li>用 <code>threading.local</code> 存请求上下文——一个线程上有多个并发请求，会串号</li>
+<li>把 <code>PYTHONASYNCIODEBUG</code> 或调试模式常态开在生产上，运行会明显变慢</li>
+<li>只采集应用自己的 logger，丢掉 stderr 和 <code>asyncio</code> logger 的输出</li>
+<li>指望 <code>-X dev</code> 顺带开了 tracemalloc——它没开，要单独加</li>
+<li>用裸 <code>except</code> 兜异步任务，会把取消异常一起吞掉，导致任务拒绝退出</li>
+<li>在异步函数里直接调阻塞版的客户端库，整个进程的请求都会一起等</li>
+<li>靠「加日志再跑一次」排查挂起——很多挂起不必然复现，一次要等几十分钟</li>
+<li>测试函数漏了异步标记，它会返回协程对象就算通过，断言一行都没跑</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>异步代码的测试覆盖率要分开看：正常路径的覆盖率往往很高，超时与取消路径的覆盖率通常是零。而线上出事的，基本都是后面那一半。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>为什么异步程序的堆栈「不等于因果链」？同步程序不也是看堆栈吗？</summary>
+<div class="answer">同步程序里一次请求的执行是一条连续的调用路径，堆栈自底向上就是完整的「谁调用了谁」。异步里一次请求被切成多段，每次 <code>await</code> 挂起后，控制权回到事件循环，下一段是被事件循环重新调度起来的——所以你在某个片段里抓到的堆栈，底部往往是事件循环的内部帧，而不是发起这次请求的那段业务代码。真正的因果信息存在别处：谁在 <code>await</code> 这个任务（等待关系）、这个任务是在哪一行创建的（创建位置）。前者要靠任务快照或 3.14 的 <code>pstree</code> 这类工具重建，后者要靠调试模式加 tracemalloc 记录。这也是为什么异步排查更依赖关联标识和任务快照，而不是单份堆栈。</div>
+</details>
+
+<details>
+<summary>看到 coroutine ... was never awaited，但找不到是哪一行漏的怎么办？</summary>
+<div class="answer">这条告警默认只给协程的名字，不给位置，因为记录「对象在哪儿创建的」需要额外开销。解决办法是加 <code>-X tracemalloc=5</code> 重跑一次——告警后面会附上该协程对象的分配回溯，直接指到调用行。告警里那句 <code>Enable tracemalloc to get the object allocation traceback</code> 说的就是这件事。注意 <code>-X dev</code> 不会顺带开 tracemalloc，两个开关要一起加。还有个细节：这条告警是在协程对象被垃圾回收时才发出的，所以它出现的时间点可能远晚于漏 await 的那一刻，甚至是在进程退出时才刷出来一批——不要按日志时间戳去对应业务时间线。</div>
+</details>
+
+<details>
+<summary>Task exception was never retrieved 和 Task was destroyed but it is pending 有什么区别？</summary>
+<div class="answer">区别在任务的终态。前者是任务<strong>已经跑完并且失败了</strong>：异常被存在任务对象里等人取走，结果没人 await 它也没人读它的结果，于是回收时把这条日志打出来，后面跟着的 traceback 就是真实异常——这是漏了错误处理。后者是任务<strong>还没跑完</strong>：事件循环已经结束，它仍停在某个挂起点就被回收了，所以它做到哪一步、有没有留下半成品的副作用，谁都不知道——这是漏了优雅关停。排查入口也不同：前者去看创建该任务的代码为什么不检查结果，后者去看关停逻辑为什么不等在飞任务收尾。两者用 <code>asyncio.TaskGroup</code>（3.11 起）都能在结构上避免。</div>
+</details>
+
+<details>
+<summary>asyncio 调试模式能不能一直开着？开销到底有多大？</summary>
+<div class="answer">不建议常态开在生产上。调试模式会给每次协程创建记录调用位置、给每个回调计时、对循环 API 做额外的线程检查，这些都是按次计费的开销，在高并发下累积明显。合理的分层是：开发机和 CI 常驻 <code>-X dev</code>（它包含 asyncio 调试模式，能在测试阶段就把漏 await 这类问题暴露出来，开销可接受）；生产默认关闭，怀疑有问题时临时用 <code>PYTHONASYNCIODEBUG=1</code> 起一个实例或压测一轮；<code>-X tracemalloc</code> 只在定位具体调用点时加。想确认当下到底开没开，不要猜环境变量，直接在代码里读运行中循环的调试标志位。</div>
+</details>
+
+<details>
+<summary>程序挂住了、CPU 是零、也没有任何报错，第一步该做什么？</summary>
+<div class="answer">第一步是拿任务快照，不是读代码。遍历当前未完成的任务，逐个打印任务名、它跑的协程、以及它挂起处的栈帧，得到一份「每个任务此刻停在哪一行」的清单。这份清单通常十几行，比几十条代码分支好读得多，而且挂住的那个任务栈顶那行往往就是它在等的东西。难点是采集动作必须运行在那个循环上，不能从外面直接进去，所以要提前埋入口：注册一个信号处理（注意事件循环层面的信号注册在 Windows 上不可用），或者暴露一个仅内网可达的诊断接口。Python 3.14 起可以直接用标准库的命令行工具按 PID 从外部窥看任务图，不需要预先埋点。</div>
+</details>
+
+<details>
+<summary>挂起的根因有那么多可能，怎么快速收敛？</summary>
+<div class="answer">挂起的形态多，根因其实高度收敛成一句话：在等一个永远不会到的东西。拿到任务快照后按四类对照即可。一是没设时间上界的等待——网络调用、锁、事件等待，栈顶停在这些地方就基本确认；二是计数没归零的队列，症状很特征：消费者全停在取数、生产者停在等待队列清空，而队列其实是空的，说明某条分支漏调了完成通知；三是互相等待，表现为两个任务的栈顶各自指向对方持有的资源；四是等一个没人完成的 Future。四类里前两类占绝大多数。结构性的预防也对应清楚：所有外部等待都设超时，队列的完成通知放进 <code>finally</code>。</div>
+</details>
+
+<details>
+<summary>为什么不能用 threading.local 存请求上下文，一定要用 contextvars？</summary>
+<div class="answer">因为异步打破了「一个线程一个请求」这个前提。<code>threading.local</code> 按线程隔离数据，而异步服务里同一个线程上同时跑着几十上百个并发请求，它们共享同一份线程局部数据——请求 A 写进去的 id 会被切过来的请求 B 覆盖。这比没有标识更危险，因为日志看起来是有 id 的、格式是对的，只是张冠李戴，你会顺着错误的线索查很久。<code>contextvars</code>（3.7 起）按执行上下文隔离，而且创建任务时会复制当前上下文，子任务的修改不会外泄回父任务，这个边界正好对应「一次逻辑请求」。它在纯同步代码里也能用，所以正在做异步改造的项目可以先统一换成它，不必等改造完成。</div>
+</details>
+
+<details>
+<summary>异步服务除了常规的 QPS、错误率、P95，还该监控什么？</summary>
+<div class="answer">三个异步专属指标。第一是事件循环延迟：一个本该立刻执行的回调实际等了多久，采集方式是起个后台任务定时睡醒、比较预期唤醒时刻和实际唤醒时刻。它是异步健康度的第一指标，持续偏高就说明有同步代码在阻塞循环，接下来开调试模式看慢回调告警即可定位。第二是在飞任务数，周期采样未完成任务的数量：只增不减说明有任务再也没退出，这是永久挂起最好的早期信号，在故障发生的那一刻就开始偏离。第三是任务时长分布，看长尾而不是均值，长尾变厚通常意味着存在缺超时的调用路径。另外别忘了确认日志采集覆盖 stderr 和 <code>asyncio</code> logger，那两条最有价值的告警不在应用 logger 下。</div>
+</details>
+
+<details>
+<summary>超时和取消路径的测试，值得投入到什么程度？</summary>
+<div class="answer">值得当成功能来测，不是边角。理由很直接：这两条路径在生产上必然会走到——上游抖一下就超时，服务关停就取消——但正常用例一次都不会执行到它们，所以它们往往是整个异步代码库里唯一没被覆盖、又必然被触发的部分。最低限度要覆盖四件事：超时抛出的异常类型对不对、超时后连接和临时资源有没有释放、取消时 <code>finally</code> 里的清理有没有跑到、以及取消异常有没有被裸 <code>except</code> 吞掉（吞掉会导致任务拒绝退出，关停时挂住）。构造手段上，用例少就把超时上限参数化成几十毫秒配一个稍慢的假下游；超时用例多或上限是分钟级，就上受控的假时钟。假下游记得覆盖「先慢后成功」这一种，它专门用来验证超时重试会不会造成重复写入。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

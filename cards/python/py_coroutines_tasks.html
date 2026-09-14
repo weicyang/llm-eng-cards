@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PY29 · 协程、任务与 Future</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.interview-box{background:rgba(67,56,202,.06);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin-top:1.2rem}
+.interview-box::before{content:"💡 知识要点";display:block;font-weight:700;color:var(--accent);margin-bottom:.5rem;font-size:1rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.qa-section .answer::before{content:"A: ";font-weight:700;color:var(--green)}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.5rem;margin:1rem 0;font-family:'Courier New',monospace;font-size:.85rem;line-height:1.8;color:var(--accent2);white-space:pre;overflow-x:auto}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.tag{display:inline-block;background:rgba(67,56,202,.12);color:var(--accent);padding:.1rem .5rem;border-radius:4px;font-size:.82rem;margin:.1rem .2rem}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:#78716c}
+.data-asof strong{color:#c2410c}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem 1.4rem;margin:1rem 0;font-size:1.05rem}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.9rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1.2rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+@media(max-width:640px){.practice-grid{grid-template-columns:1fr}}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">一、三个东西各是什么</a>
+<a href="#s2">二、调用了却没 await</a>
+<a href="#s3">三、并发的真正起点</a>
+<a href="#s4">四、任务引用必须自己留住</a>
+<a href="#s5">五、异常去哪了</a>
+<a href="#s6">六、三种写法的取舍</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<div class="container">
+
+<h1>PY29 · 协程、任务与 Future</h1>
+<p class="subtitle">协程对象不会自己跑 / Task 才是被调度的单位 / Task 是 Future 的子类 / 事件循环只持弱引用 / 异常停在 Task 上等人来取</p>
+
+<div class="intuition-box">
+<p>上一张卡讲清了事件循环怎么转、<code>await</code> 怎么让出。这张卡回答紧接着的那个问题：循环手里被调度的到底是什么东西。答案不是协程——协程只是一段配好参数、等人来推的代码；真正被排队、被轮询、能被取消、能承载结果和异常的，是 Task。</p>
+</div>
+
+<div class="section" id="s1">
+<h2>一、三个东西各是什么：协程对象、Future、Task</h2>
+
+<p>写 <code>async def</code> 的人几乎都会在某个时刻问一句：我明明都用 asyncio 了，为什么代码还是串行的？追下去往往发现，问题出在把「协程」和「并发单位」当成了同一个东西。这三个名词在日常交流里被混着用，但它们在运行期是三种不同的对象，职责不重叠。</p>
+
+<h3>协程函数与协程对象不是一回事</h3>
+
+<p><span class="term">协程函数</span>是你用 <code>async def</code> 定义的那个函数本身，它和普通函数一样只是个可调用对象。调用它<strong>不会执行函数体里的任何一行</strong>，而是返回一个<span class="term">协程对象</span>——一段已经装好参数、随时可以从头开始推进、并且能在中途暂停的调用。这个「能暂停」的能力来自生成器的同一套底层机制，如果对暂停与恢复还没感觉，可以先回头看 <a href="py_iterators_generators.html">PY12 迭代器与生成器</a>。</p>
+
+<p>协程对象本身没有任何主动性。它躺在那里，需要有人反复调用它的 <code>send()</code> 把它往前推。<code>await</code> 就是「我来推它，推不动的时候我陪它一起等」；<code>asyncio.create_task()</code> 则是「交给事件循环去推，我先干别的」。</p>
+
+<div class="intuition-box">
+<p>协程对象是一张点好的菜单，不是一盘菜。你把菜单放在桌上放一晚上，厨房什么都不会做。</p>
+</div>
+
+<h3>Future 是占位符，Task 是「带执行器的占位符」</h3>
+
+<p><span class="term">Future</span> 表示「将来某个时刻会有一个结果」的占位符。它不知道结果从哪来，也不负责去算——它只有三种状态（待定、有结果、有异常，外加被取消），以及一个「结果到了就通知我」的回调机制。典型用途是把回调式的底层 API 桥接到 <code>await</code> 语法上。</p>
+
+<p><span class="term">Task</span> 是 Future 的子类，多出来的那部分职责恰好就是 Future 缺的那块：它包着一个协程对象，并且已经在事件循环里登记，循环会一轮一轮地去推它，推到底之后把返回值填进自己（Future 的那一半），或者把异常存进自己。</p>
+
+<div class="arch-diagram">  可等待对象（能写在 await 后面的东西）
+  ├── 协程对象        async def 函数调用后的返回值
+  ├── Future          「将来会有结果」的占位符
+  │     └── Task      包着一个协程、已被事件循环接管的 Future
+  └── 自己实现了 __await__ 的对象
+
+  CPython 3.12 实测：
+      issubclass(asyncio.Task, asyncio.Future)   结果为 True
+      asyncio.Task.__mro__  依次是  Task → Future → object
+
+  一句话分工：
+      Future 只回答「结果什么时候到」
+      Task 在这之上还回答「谁负责一步步把那个协程推到有结果」</div>
+
+<p>这个继承关系不是冷知识。它解释了为什么 <code>task.result()</code>、<code>task.done()</code>、<code>task.add_done_callback()</code> 这些方法存在——它们全是 Future 的接口，Task 只是继承下来。理解了这点，第五节那套取结果的规则就不用背了。</p>
+
+<h3>从协程对象到结果，中间发生了什么</h3>
+
+<div class="arch-diagram">  async def fetch(uid): ...        ← 协程函数（定义）
+          │
+          │  fetch(7)   ← 调用它
+          ▼
+  ┌──────────────────────────┐
+  │   协程对象                │  参数已绑定，函数体一行都没执行
+  └────────────┬─────────────┘
+               │
+      ┌────────┴─────────────────────────────┐
+      │                                      │
+  await coro                     asyncio.create_task(coro)
+      │                                      │
+      ▼                                      ▼
+  在当前任务里「就地展开」          ┌────────────────────────┐
+  没有新的调度单位诞生             │  Task（Future 子类）    │
+  调用方挂起，直到它返回            │  状态：PENDING          │
+      │                          └───────────┬────────────┘
+      │                                      │ 循环反复推进
+      │                                      ▼
+      │                          ┌────────────────────────┐
+      └─────────────────────────▶│  结果 / 异常 / 已取消    │
+                                 └────────────────────────┘
+                                 取结果的方式见第五节</div>
+
+<p>图里最值得停一下的是左边那条路。<code>await coro</code> 并<strong>没有</strong>创造新的调度单位：协程在当前这个 Task 的上下文里就地展开，就像函数调用一样。所以一串顺序的 <code>await</code> 从头到尾只有一个 Task 在跑，自然是串行的。这是第三节的全部前提。</p>
+
+<h3>四个维度的对照</h3>
+
+<table>
+<tr><th>维度</th><th>协程对象</th><th>Future</th><th>Task</th></tr>
+<tr><td>谁创建的</td><td>你调用 <code>async def</code> 函数</td><td>库或框架，官方推荐 <code>loop.create_future()</code></td><td><code>asyncio.create_task()</code>、<code>ensure_future()</code>、任务组</td></tr>
+<tr><td>会不会自己跑起来</td><td>不会，必须有人推</td><td>不适用，它本身不执行代码</td><td>会，创建后即被事件循环排队</td></tr>
+<tr><td>能不能被取消</td><td>不能，它没有取消接口</td><td><code>fut.cancel()</code>，直接置为已取消</td><td><code>task.cancel()</code>，向协程内抛 <code>CancelledError</code></td></tr>
+<tr><td>能不能 await</td><td>能，但同一个对象只能 await 一次</td><td>能，可重复 await，结果相同</td><td>能，可重复 await，结果相同</td></tr>
+<tr><td>有没有身份</td><td>没有，循环不认识它</td><td>有，可被 <code>add_done_callback</code> 观察</td><td>有名字、有 <code>repr</code>、能被 <code>asyncio.all_tasks()</code> 列出</td></tr>
+</table>
+
+<p>「同一个协程对象只能 await 一次」这条值得记住。重复 await 会抛 <code>RuntimeError: cannot reuse already awaited coroutine</code>。想重试就得重新调用一次协程函数造一个新对象——这也是为什么重试装饰器要接收「函数和参数」而不是「一个协程对象」。</p>
+
+<div class="intuition-box">
+<p>判断手上这个东西是协程还是 Task，有个很实在的办法：如果我不去 await 它，会不会有事情发生？协程对象——不会，什么都不会发生；Task——会，它已经在跑了。</p>
+</div>
+</div>
+
+<div class="section" id="s2">
+<h2>二、调用了协程函数却没 await：最常见的第一个坑</h2>
+
+<p>几乎每个人都会踩一次这个坑，而且踩的时候往往毫无察觉。代码长这样：</p>
+
+<pre><code>async def handle(order):
+    validate(order)
+    save_audit(order)          # 少了 await
+    return {"ok": True}</code></pre>
+
+<p>这段代码不报错、不崩溃、返回值完全正常，只是 <code>save_audit</code> 的函数体一行都没执行过。<code>save_audit(order)</code> 这个表达式做的唯一一件事是造出一个协程对象，然后因为没人接收它，引用计数归零，对象被回收。</p>
+
+<h3>为什么这不是报错，只是一条警告</h3>
+
+<p>因为「造出协程对象但不立刻 await」是完全合法且常用的写法。<code>asyncio.gather(f(1), f(2))</code> 传进去的就是一串没被 await 的协程对象；把协程对象存进列表稍后统一调度也是标准做法。Python 在调用发生的那一刻，没有任何办法区分你是「忘了」还是「打算稍后用」。</p>
+
+<p>所以这个检查只能推迟。协程对象的析构逻辑会检查它是否从未被推进过，是的话就发一条 <code>RuntimeWarning: coroutine 'save_audit' was never awaited</code>。这条信息有两个先天缺陷：<strong>时机晚</strong>（取决于垃圾回收，不取决于你的代码执行到哪），以及<strong>通道弱</strong>（它走 <code>warnings</code> 模块打到 stderr，默认每个代码位置只打一次，且完全不经过 <code>logging</code>）。很多服务的日志采集只收 <code>logging</code> 的输出，于是这条警告在生产环境里基本等于不存在。</p>
+
+<div class="arch-diagram">  t0    执行到 save_audit(order) 这一行
+        ┌────────────────────────────────┐
+        │ 协程对象已创建                  │  返回值没人接，引用计数 = 0
+        │ 函数体：一行都没跑              │
+        └────────────────────────────────┘
+
+  t0+ε  对象被回收，析构逻辑发现「从未被推进过」
+        warnings.warn(...)  →  stderr:
+        RuntimeWarning: coroutine 'save_audit' was never awaited
+
+  注意两个错位：
+    报告的位置 = 创建它的那一行（对）
+    报告的时机 = 它被回收的那一刻（可能晚得多，甚至跨测试用例）
+    报告的通道 = stderr，不是你的 logging 管道</div>
+
+<p>开了 asyncio 调试模式（<code>asyncio.run(main(), debug=True)</code> 或环境变量 <code>PYTHONASYNCIODEBUG=1</code>）之后，这条警告会附带一段 <code>Coroutine created at</code> 的创建堆栈，定位会容易很多。但调试模式不适合常开，它会额外做很多检查。</p>
+
+<h3>为什么测试里容易漏过</h3>
+
+<p>这类 bug 在测试中生还率极高，原因不止一个。协程对象<strong>是真值</strong>——它没有定义 <code>__bool__</code> 也没有 <code>__len__</code>，所以 <code>if fetch_user(uid):</code> 恒为真，条件分支照样走对的那一支。断言「没有抛异常」的用例照样通过。返回值被丢弃的调用（写日志、发消息、落库）本来就没有可观察的返回值，断言不到。</p>
+
+<p>更麻烦的是那条 <code>RuntimeWarning</code> 的时机：它在对象被回收时才发，完全可能在下一个测试用例执行期间才打印出来，看起来像是别的用例的问题。而 pytest 默认会把警告收集到末尾汇总，很容易被当成噪音略过。</p>
+
+<table>
+<tr><th>写法</th><th>实际发生了什么</th><th>你会收到什么提示</th></tr>
+<tr><td><code>save_audit(order)</code> 单独一行</td><td>造出协程对象后立刻丢弃</td><td>回收时一条 <code>RuntimeWarning</code>，仅此而已</td></tr>
+<tr><td><code>if fetch(uid):</code></td><td>条件恒为真，分支判断失效</td><td>没有任何提示，逻辑静默走错</td></tr>
+<tr><td><code>rows = [fetch(u) for u in users]</code></td><td>得到一串协程对象，<code>len(rows)</code> 正确但内容没跑</td><td>每个对象回收时各一条警告</td></tr>
+<tr><td><code>await fetch(uid)</code></td><td>就地展开，串行执行</td><td>正常</td></tr>
+<tr><td><code>asyncio.gather(fetch(1), fetch(2))</code></td><td>合法，gather 内部会把协程包成 Task</td><td>正常，但异常语义要留意（见 Q&amp;A）</td></tr>
+<tr><td><code>asyncio.wait([fetch(1)])</code></td><td>Python 3.11 起禁止直接传协程对象</td><td>直接抛 <code>TypeError</code>，反而是好事</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个消息消费者的单元测试套件有 140 个用例，全绿运行了三个月。上线后发现某类事件的下游通知一条都没发出去。回查代码，是 <code>notify(event)</code> 漏了 <code>await</code>。测试为什么没发现：断言只检查了 <code>handle()</code> 的返回码和数据库落库结果，通知本身用的是 mock，而 mock 对象「被调用过」这件事恰好是成立的——协程函数确实被调用了，只是产物被丢掉了。把 pytest 配置里的 <code>filterwarnings</code> 设成 <code>error</code> 之后，同一批用例立刻暴露出 3 处同类问题，其中 2 处还没上线。</p>
+</div>
+
+<div class="intuition-box">
+<p>把 <code>RuntimeWarning</code> 升级成错误，是这套东西里性价比最高的一条配置。它让「忘了 await」从一个静默的逻辑 bug 变成一个必定在 CI 里红掉的失败。</p>
+</div>
+</div>
+
+<div class="section" id="s3">
+<h2>三、并发的真正起点：create_task 而不是 await</h2>
+
+<p>第一节说过，<code>await</code> 不产生新的调度单位。所以下面这段代码虽然每一行都写着 <code>await</code>，但它是彻头彻尾的串行：三个各耗时 200 毫秒的请求，墙钟时间 600 毫秒。</p>
+
+<p>并发的起点是 <code>asyncio.create_task()</code>。它把协程对象包成 Task 并登记到事件循环，从这一刻起这个 Task 就是一个独立的调度单位，循环会在任何一次让出机会里去推进它。</p>
+
+<pre><code># 串行：总耗时 = 三次之和
+a = await fetch(1)
+b = await fetch(2)
+
+# 并发：先全部交给循环，再统一等
+t1 = asyncio.create_task(fetch(1))
+t2 = asyncio.create_task(fetch(2))
+a = await t1
+b = await t2</code></pre>
+
+<h3>create_task 之后，任务并没有立刻开始跑</h3>
+
+<p>这是最容易产生错觉的一点。因为是单线程，<code>create_task()</code> 返回之后，CPU 仍然在你这段代码里。新任务只是被放进了循环的待运行队列，它<strong>一行都还没执行</strong>。要等到你这段代码碰到下一个 <code>await</code>（或者协程返回）主动让出控制权，循环才有机会去推进它。</p>
+
+<div class="arch-diagram">  单线程时间轴（横向表示 CPU 实际在执行谁）
+
+  t1 = create_task(A)    ← A 进入待运行队列，一行都没跑
+  t2 = create_task(B)    ← 同上
+  log.info("已提交")      ← 仍然是 main 在跑
+  do_some_sync_work()    ← A、B 依旧原地不动，哪怕这里耗时 2 秒
+  await t1               ← main 在这里让出，循环才终于开始推 A、B
+
+  ┌── main ────────────────────────────────┐          ┌─ main ─┐
+  │ create A │ create B │ 同步代码          │ 让出      │ 收结果 │
+  └────────────────────────────────────────┘   ↓       └────────┘
+                                            ┌── A ──────┐
+                                            └───────────┘
+                                            ┌── B ──────┐
+                                            └───────────┘
+
+  结论：create_task 保证的是「已排队」，不是「已开始」。
+        中间夹一段阻塞的同步代码，并发收益会被整段吃掉。</div>
+
+<p>这个细节有一个直接的工程后果：<code>create_task()</code> 和第一个 <code>await</code> 之间，不要放耗时的同步代码。它不只是延迟了任务开始，而是在这段时间里整个事件循环都是停摆的——所有其他任务也一起被卡住。</p>
+
+<p>Python 3.12 起有一个例外设施可以改变这个语义：<span class="term">急切任务工厂</span>（<code>asyncio.eager_task_factory</code>），启用后协程会在 Task 构造期间就同步执行，一直跑到第一次真正阻塞为止。第四节会说明它解决什么、不解决什么。</p>
+
+<div class="intuition-box">
+<p><code>await</code> 是「我要结果，现在就等」，<code>create_task</code> 是「这件事交给循环，我稍后来收」。一段代码有没有并发，看的不是写了几个 await，而是同一时刻有几个 Task 在飞。</p>
+</div>
+
+<h3>墙钟时间对照</h3>
+
+<p>假设 <code>fetch()</code> 是一个耗时约 200 毫秒的网络请求，三次调用互不依赖。</p>
+
+<table>
+<tr><th>写法</th><th>同时在飞的任务数</th><th>三次调用的墙钟时间</th><th>说明</th></tr>
+<tr><td>顺序 <code>await fetch(i)</code> 三次</td><td>1</td><td>约 600 ms</td><td>每次都等到彻底完成才发下一个</td></tr>
+<tr><td>先 <code>create_task</code> 三个，再依次 await</td><td>3</td><td>约 200 ms</td><td>第一个 await 让出时，三个都已排队</td></tr>
+<tr><td><code>await asyncio.gather(...)</code></td><td>3</td><td>约 200 ms</td><td>内部替你把协程包成 Task</td></tr>
+<tr><td>建了任务但函数直接 return</td><td>不确定</td><td>约 0 ms，且结果全丢</td><td>没让出过，任务可能一行都没跑就随调用栈消失</td></tr>
+<tr><td><code>create_task</code> 后夹一段 300 ms 同步计算</td><td>3</td><td>约 500 ms</td><td>同步代码期间循环停摆，并发收益被吃掉</td></tr>
+</table>
+
+<p>最后两行是实际项目里最常见的两种「用了 asyncio 但没变快」。第四行还额外埋着第四节要讲的引用问题，第五行则说明 asyncio 的并发收益完全建立在「让出得够勤」这个前提上——一段不让出的 CPU 密集代码会让整个循环退化成单线程同步程序。</p>
+</div>
+
+<div class="section" id="s4">
+<h2>四、任务引用必须自己留住</h2>
+
+<p>这条规则反直觉到官方文档专门用加粗的「Important」标出来：<strong>事件循环只对任务持有<span class="term">弱引用</span></strong>。一个没有被别处引用的 Task，可能在任何时刻被垃圾回收掉，哪怕它还没执行完。这个行为到 Python 3.14 的文档里依然是这么写的。</p>
+
+<p>所以 <code>asyncio.create_task(coro)</code> 这种「发出去就不管」的写法，不只是缺少错误处理的问题——它本身就不保证任务会跑完。</p>
+
+<div class="arch-diagram">  你写：  asyncio.create_task(write_audit(row))   ← 返回值没接住
+                        │
+                        ▼
+              ┌────────────────────┐
+              │        Task        │
+              └────────────────────┘
+                 ▲              ▲
+        弱引用   │              │  强引用（只在它「就绪待运行」时存在）
+                 │              │
+        循环的任务登记表     循环的待运行回调队列
+
+  任务挂起在一个 await 上时，它是否还有强引用，
+  取决于它当时在等什么：若所等对象也无人引用，
+  这一小团对象就成了孤岛，可以被 GC 整体收走。
+
+  症状 A：stderr 出现  Task was destroyed but it is pending!
+  症状 B：什么都没有，只是那件事再也没有发生过</div>
+
+<h3>标准写法：存进集合，完成回调里移除</h3>
+
+<p>官方文档给出的写法很简单：用一个集合持住强引用，再用 <code>add_done_callback()</code> 在任务完成时把自己从集合里摘掉，避免集合无限增长。<code>discard</code> 比 <code>remove</code> 合适，因为它在元素已不存在时不抛异常。</p>
+
+<pre><code>_background = set()
+
+def spawn(coro):
+    task = asyncio.create_task(coro)
+    _background.add(task)                        # 强引用，挡住 GC
+    task.add_done_callback(_background.discard)  # 完成即移除，避免堆积
+    return task</code></pre>
+
+<p>但要看清这个写法解决了什么、没解决什么。它解决的是「任务中途消失」，<strong>没有</strong>解决「任务失败了没人知道」——它从头到尾没有 await 过任何任务，所以下一节那条 <code>Task exception was never retrieved</code> 照样会出现。这两个问题必须分别处理，这也是 Python 3.11 引入任务组的直接动机（任务组的细节是下一张卡的主题，这里只作纯文本提及）。</p>
+
+<div class="intuition-box">
+<p>「后台任务」这个说法本身就有误导性。asyncio 没有后台，只有你这一个线程。所谓后台任务只是另一个排在同一条队伍里的 Task，它没有任何特权，也没有任何人替你照看它。</p>
+</div>
+
+<h3>与之相关的设施，各自管什么</h3>
+
+<table>
+<tr><th>设施</th><th>可用版本</th><th>它解决什么</th><th>它不解决什么</th></tr>
+<tr><td>自己存进 <code>set</code> + 完成回调移除</td><td>任何版本</td><td>强引用，任务不会中途被回收</td><td>不会替你取结果或异常</td></tr>
+<tr><td><code>asyncio.TaskGroup</code></td><td>3.11 起</td><td>内部持强引用、退出时统一 await、异常聚合</td><td>需要一个明确的代码作用域，不适合跨请求长驻的任务</td></tr>
+<tr><td><code>asyncio.eager_task_factory</code></td><td>3.12 起</td><td>让协程在 Task 构造时就同步跑到第一个阻塞点</td><td>与引用无关，不能替代强引用</td></tr>
+<tr><td><code>Task(..., eager_start=True)</code></td><td>3.12 起（Task 构造器参数）</td><td>单个任务的急切启动</td><td>同上</td></tr>
+<tr><td><code>create_task(..., eager_start=...)</code></td><td>3.14 起</td><td>在 <code>create_task</code> 这一层指定急切启动</td><td>同上</td></tr>
+<tr><td><code>asyncio.all_tasks()</code></td><td>3.7 起</td><td>运行期观测当前还未完成的任务，便于排查</td><td>返回的是一次快照，不是保活手段</td></tr>
+</table>
+
+<p>急切任务工厂常被误解成「顺手解决了引用问题」，并不是。它改的是<strong>什么时候开始执行</strong>：启用后协程在 <code>Task</code> 构造期间同步执行，如果它不阻塞就直接跑完、根本不进循环调度。文档明确提醒这是一处语义变更，会改变应用的任务执行顺序，不要为了省一点调度开销随手打开。</p>
+
+<p>另外提一句版本内情：Python 3.14 重写了任务登记的内部结构，把全局的 <code>WeakSet</code> 换成了每线程的链表，主要目的是自由线程构建下的性能和线程安全。这是实现细节的变化，<strong>对外承诺没变</strong>——3.14 的文档里那句「事件循环只持有弱引用，请自己保存引用」原样保留。不要指望升版本能免掉这件事。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>一个 WebSocket 网关在每条连接建立时用 <code>asyncio.create_task()</code> 起一个心跳协程，返回值没保存。灰度期间一切正常，全量后开始出现零星的「连接还在、但对端认为已断开」。排查了两天才在 stderr 里翻到几条 <code>Task was destroyed but it is pending!</code>——心跳任务在两次 <code>sleep</code> 之间被回收了。发生概率和内存压力正相关，所以低流量时永远复现不出来。修复就是把任务存进连接对象的一个属性上，改动 2 行。</p>
+</div>
+</div>
+
+<div class="section" id="s5">
+<h2>五、异常去哪了：存在 Task 上，等人来取</h2>
+
+<p>同步代码里，异常沿调用栈往上抛，不处理就一路抛到顶层，你一定会看到它。异步代码里这条规律失效：Task 内部抛出的异常<strong>不会</strong>冒到创建它的那段代码，因为那段代码早就往下走了，栈上根本没有它的位置。异常被存在 Task 对象里，任务标记为完成，然后——就在那里等着。</p>
+
+<div class="arch-diagram">  同步世界                         asyncio 世界
+  ──────────                       ─────────────
+  函数里 raise                     Task 的协程里 raise
+       │                                  │
+       ▼                                  ▼
+  沿调用栈逐层上抛                  停在 Task 边界，不再往外走
+       │                                  │
+       ▼                                  ▼
+  调用方接住，或者进程崩溃          异常存进 Task，状态标记为已完成
+                                          │
+                        ┌─────────────────┴──────────────────┐
+                        │                                    │
+                有人 await / result()                  没有人来取
+                        │                                    │
+                        ▼                                    ▼
+              在取的那一行原样抛出               Task 被回收时，asyncio 的
+              堆栈完整、时间点明确               日志器打一条 ERROR：
+                                                Task exception was never retrieved
+
+  最后这条的两个要命之处：
+    时间点由垃圾回收决定，可能离故障发生已经过去很久
+    内容里只有异常本身，没有订单号、没有 trace_id，和业务日志对不上</div>
+
+<h3>四个取结果的接口，时机各不相同</h3>
+
+<p><code>done()</code> 回答的是「跑完了没有」，它对<strong>成功、失败、被取消三种情况一律返回 True</strong>。用 <code>done()</code> 判断成功是很常见的错误。</p>
+
+<p><code>result()</code> 是「把结果拿出来」：正常完成返回返回值，内部抛过异常就在这一行原样重新抛出，被取消则抛 <code>CancelledError</code>，还没完成则抛 <code>InvalidStateError</code>。<code>exception()</code> 是同一件事的非抛出版本：完成且失败时返回那个异常对象，完成且成功时返回 <code>None</code>；但被取消时它同样抛 <code>CancelledError</code>，未完成时同样抛 <code>InvalidStateError</code>。</p>
+
+<p><code>add_done_callback(cb)</code> 注册一个<span class="term">完成回调</span>，回调收到的唯一参数就是这个 Task。注意它<strong>不是同步调用</strong>：回调通过 <code>loop.call_soon()</code> 排队，在任务完成之后的下一轮事件循环迭代里才执行。还要注意，回调被调用这件事本身<strong>不算取过异常</strong>，你必须在回调里真的调用 <code>exception()</code> 或 <code>result()</code>，才能消掉那条 never retrieved 日志。</p>
+
+<pre><code>def on_done(task):
+    if task.cancelled():          # 先判取消，否则 exception() 会抛
+        return
+    exc = task.exception()        # 取过了，不会再有 never retrieved
+    if exc is not None:
+        log.error("审计写入失败 order=%s", task.get_name(), exc_info=exc)
+
+task.add_done_callback(on_done)</code></pre>
+
+<h3>异常会在什么时候、以什么形式出现</h3>
+
+<table>
+<tr><th>你对 Task 做了什么</th><th>异常出现的时机</th><th>出现的形式</th><th>能拿到原始堆栈吗</th></tr>
+<tr><td><code>await task</code></td><td>立刻，就在 await 那一行</td><td>原异常被重新抛出</td><td>能，完整</td></tr>
+<tr><td><code>task.result()</code></td><td>调用的那一刻</td><td>原异常被重新抛出；未完成则 <code>InvalidStateError</code></td><td>能，完整</td></tr>
+<tr><td><code>task.exception()</code></td><td>调用的那一刻</td><td>返回异常对象，不抛；被取消时抛 <code>CancelledError</code></td><td>能，挂在对象上</td></tr>
+<tr><td>完成回调里调 <code>exception()</code></td><td>任务完成后的下一轮循环迭代</td><td>由你自己决定记日志还是上报</td><td>能，完整</td></tr>
+<tr><td>只调 <code>done()</code>，不取结果</td><td>不出现</td><td><code>done()</code> 对成功和失败都返回 True</td><td>拿不到</td></tr>
+<tr><td>什么都不做</td><td>Task 被垃圾回收时</td><td>asyncio 日志器一条 ERROR：<code>Task exception was never retrieved</code></td><td>有堆栈，但没有业务上下文</td></tr>
+<tr><td>任务还没完成就被回收</td><td>对象析构时</td><td><code>Task was destroyed but it is pending!</code></td><td>没有</td></tr>
+</table>
+
+<p>还有一个容易踩的边界：<code>CancelledError</code> 从 Python 3.8 起直接继承 <code>BaseException</code> 而不是 <code>Exception</code>。这是刻意的设计——取消是控制信号，不是业务错误。它带来的实际影响是，你那个「兜底不让它崩」的 <code>except Exception</code> 不会误吞取消信号；反过来说，写了裸 <code>except:</code> 或 <code>except BaseException</code> 的地方会把取消也接住，导致任务拒绝退出、关停流程挂起。异常分层该怎么设计，可以参考 <a href="py_exception_design.html">PY24 异常体系设计</a>。</p>
+
+<div class="highlight">
+<p><strong>事故复盘：</strong>某订单服务在下单主链路返回前，用 <code>asyncio.create_task(write_audit(row))</code> 把审计流水异步写到对象存储，写完就不管。对象存储偶发 503，<code>write_audit</code> 抛出异常，但没有任何人 await 这批 Task，异常就停在 Task 上；进程常驻、内存充裕，这些对象很久以后才被回收，<code>Task exception was never retrieved</code> 才被打出来。更糟的是它走的是 asyncio 自己的日志器，内容里没有订单号也没有 trace_id，而告警规则是按业务关键字过滤的，一条都没触发。这个状态持续了 <strong>11 天</strong>，直到月末对账才发现审计流水比订单表少了 <strong>4217 条</strong>（同期约 100 万单，缺失率 0.42%），且缺失分布零散、看不出任何时间规律。修复分两步：把后台任务统一收进一个集合、在完成回调里检查 <code>exception()</code> 并按业务字段记日志；给写入加上有次数上限的重试和失败落盘。真正的教训不是「该加重试」——而是这段代码从第一天起，就没有任何人对这批任务的成败负责。</p>
+</div>
+
+<div class="intuition-box">
+<p>异步系统里最难查的故障，共同特征是「报错时间点和故障时间点脱钩」。<code>Task exception was never retrieved</code> 就是典型：它告诉你确实出过事，但不告诉你是什么时候、哪一笔业务。想避免，只能保证每个异常都有人在确定的时刻取走。</p>
+</div>
+</div>
+
+<div class="section" id="s6">
+<h2>六、三种写法的取舍，以及唯一那条纪律</h2>
+
+<p>前面五节的内容可以压成一句可执行的纪律：<strong>每一个被创建出来的任务，都必须有一个明确的<span class="term">归属者</span>，负责 await 它或者取消它。</strong>「发出去就不管」不是一种写法，它是一个待爆的故障。</p>
+
+<p>在这条纪律之下，日常写代码只需要在三种形态里选一个。</p>
+
+<table>
+<tr><th>场景</th><th>用什么</th><th>理由</th></tr>
+<tr><td>下一步马上就要用它的结果</td><td>裸 <code>await</code></td><td>本来就没有并发可言，包成 Task 只是多一个要管的对象和一点调度开销</td></tr>
+<tr><td>同一时刻要发出多个互不依赖的 IO</td><td><code>create_task</code> 后统一等，或交给任务组</td><td>并发收益来自「一起在飞」，前提是创建之后尽快让出</td></tr>
+<tr><td>一个请求作用域内的一批子任务，要求一损俱损</td><td>任务组（3.11 起，下一张卡展开）</td><td>内部持强引用、退出时统一 await、异常聚合、一个失败其余自动取消</td></tr>
+<tr><td>生命周期超出当前函数的常驻任务（心跳、消费循环）</td><td><code>create_task</code> + 自己存引用 + 明确的停止与收尾路径</td><td>没有天然的作用域能兜住它，归属者只能是你自己维护的那个对象</td></tr>
+<tr><td>只想「发出去不等结果」</td><td>没有这种选项</td><td>必须指定归属者，否则就是第五节那个事故</td></tr>
+</table>
+
+<p>第三行和第四行的分界就是「有没有一个天然的作用域」。请求处理、批量抓取、扇出查询这类有明确起止的场景，交给任务组最省心；而心跳、后台消费者这类活得比任何一次函数调用都久的任务，作用域只能由你自己建立——通常是挂在连接对象、服务对象上，并在关停流程里显式取消。</p>
+
+<div class="intuition-box">
+<p>问自己一个问题就能定位绝大多数异步 bug：这个任务出错了，谁会知道？如果答不出一个具体的代码位置，那它现在就已经是隐患，只是还没轮到它爆。</p>
+</div>
+
+<h3>关停路径同样要写</h3>
+
+<p>常驻任务的另一半是收尾。服务退出时如果直接关掉循环，还在跑的任务会被当成「pending 时被销毁」处理，正在写的数据可能只写了一半。标准做法是先逐个 <code>cancel()</code>，再用一次带 <code>return_exceptions=True</code> 的收集等它们全部退出，最后再关闭资源。协程内部则用 <code>try/finally</code> 保证清理一定执行。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>每个 <code>create_task</code> 产生的任务都指定一个归属者，负责 await 或 cancel 它</li>
+<li>长驻的后台任务存进集合，并在 <code>add_done_callback</code> 里移除</li>
+<li>完成回调里显式调 <code>exception()</code>，翻译成带业务字段的日志</li>
+<li>关停时先 <code>cancel()</code> 再统一收集，协程内用 <code>try/finally</code> 做清理</li>
+<li>测试配置里把 <code>RuntimeWarning</code> 升成错误，让漏 await 在 CI 红掉</li>
+<li>有明确作用域的一批任务，优先交给任务组而不是手工管理</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>把 <code>create_task</code> 当成「扔出去就不用管」的语法糖</li>
+<li>用 <code>done()</code> 判断任务是否成功——它对失败和取消也返回 True</li>
+<li>在 <code>create_task</code> 和第一个 <code>await</code> 之间夹耗时的同步代码</li>
+<li>用裸 <code>except:</code> 兜底，把 <code>CancelledError</code> 一起吞掉</li>
+<li>只把任务存在局部变量里，函数一返回引用就没了</li>
+<li>指望 stderr 上那条 <code>RuntimeWarning</code> 在生产环境提醒你</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>协程负责「怎么写」，Task 负责「怎么被调度」，Future 负责「结果怎么送达」。三者搞混的代价不是写不出来，而是写出来的东西在低负载下一切正常，在你最不希望的时候静默地少做一件事。</p>
+</div>
+</div>
+
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+<summary>协程对象和 Task 到底差在哪，能不能用一句话说清？</summary>
+<div class="answer">协程对象是「配好参数、等人来推的一段代码」，它自己不会动；Task 是「已经交给事件循环、循环会反复来推」的那个包装。最实用的判别方法是问一句：如果我不去 await 它，会不会有事情发生？协程对象——不会，一行都不会执行，最后只留下一条回收时的警告；Task——会，它已经排进队列了，你 await 只是去收结果。另外 Task 是 <code>asyncio.Future</code> 的子类，所以它天然带着 <code>done()</code>、<code>result()</code>、<code>cancel()</code>、<code>add_done_callback()</code> 这一整套接口，而协程对象一个都没有。</div>
+</details>
+
+<details>
+<summary>为什么忘了 await 只是一条警告，不是报错？</summary>
+<div class="answer">因为「造出协程对象但暂时不 await」是合法且常用的：<code>asyncio.gather(f(1), f(2))</code> 收到的就是没被 await 的协程对象，把协程存进列表稍后统一调度也很常见。Python 在调用那一刻无法区分你是忘了还是打算稍后用，所以检查只能推迟到对象被回收、确认它从未被推进过时才发出 <code>RuntimeWarning: coroutine '...' was never awaited</code>。代价是时机晚（取决于垃圾回收）、通道弱（走 <code>warnings</code> 打到 stderr，不经过 <code>logging</code>）。要把它变硬，在 pytest 配置里把 <code>filterwarnings</code> 设为 <code>error</code>，或用 <code>python -W error::RuntimeWarning</code> 跑。</div>
+</details>
+
+<details>
+<summary>create_task 之后要不要加一句 await asyncio.sleep(0) 来「启动」它？</summary>
+<div class="answer">技术上确实有效：<code>await asyncio.sleep(0)</code> 会让出一次控制权，让刚创建的任务跑到它自己的第一个阻塞点。但不建议把它当成固定手法，因为这是对调度顺序的隐式依赖，读代码的人看不出这一行为什么存在，以后有人删掉它也不会有任何测试失败。正常的做法是在真正需要结果的地方 await，让出自然会发生。如果确实需要「创建时就跑一段」的语义，Python 3.12 起有 <code>asyncio.eager_task_factory</code>，通过 <code>loop.set_task_factory()</code> 启用，这是有文档支持的正式设施——但要先读清楚它会改变任务执行顺序这件事。</div>
+</details>
+
+<details>
+<summary>asyncio.gather 和自己 create_task 再一起等，有什么区别？</summary>
+<div class="answer">gather 会把传进来的协程对象自动包装成 Task，所以在「创建 + 等待」这件事上它更紧凑，归属者也明确。区别主要在异常语义上，这里要小心：默认 <code>return_exceptions=False</code> 时，第一个抛出的异常会立刻传播给 await gather 的那一方，但<strong>其余任务不会被取消</strong>，它们继续在后台跑，而且它们的异常同样可能变成「没人取」的状态。<code>return_exceptions=True</code> 则把异常当成普通结果收集进返回列表，需要你自己逐个检查类型。如果你要的是「一个失败、其余全部取消」，那是任务组的语义，从 3.11 起可用。</div>
+</details>
+
+<details>
+<summary>我需要自己创建 Future 吗？</summary>
+<div class="answer">业务代码里基本不需要。官方文档的建议是不要在面向用户的 API 里暴露 Future 对象，并且推荐用 <code>loop.create_future()</code> 而不是直接构造，这样替换事件循环实现时能用上对方优化过的版本。真正需要它的场景只有一类：把回调式的底层接口桥接到 <code>await</code> 语法上。做法是建一个 Future 交给上层去 await，然后在回调触发时调用 <code>set_result()</code> 或 <code>set_exception()</code>。协议实现、驱动层、包装只提供回调的第三方 SDK 时会用到。日常写业务，用 Task 就够了。</div>
+</details>
+
+<details>
+<summary>为什么 except Exception 接不住任务取消？</summary>
+<div class="answer">因为 <code>CancelledError</code> 从 Python 3.8 起直接继承 <code>BaseException</code>，不再是 <code>Exception</code> 的子类。这是刻意为之：取消是一个控制信号而不是业务错误，不应该被「兜底不让它崩」的代码顺手吞掉。实际影响有两面。好的一面是你那些 <code>except Exception</code> 的保护层不会干扰取消。要警惕的一面是，裸 <code>except:</code> 和 <code>except BaseException</code> 会把取消也接住，任务因此拒绝退出，关停流程会一直挂着等它。需要在取消时做清理，正确写法是 <code>try/finally</code>，或者在 <code>except asyncio.CancelledError</code> 里清理完之后重新 <code>raise</code>。</div>
+</details>
+
+<details>
+<summary>「保存任务引用」用一个全局 list 行不行？</summary>
+<div class="answer">能保命，但有两个问题。一是必须在任务完成时把它移出去，否则这个容器只增不减，就是一处内存泄漏——长驻服务跑上几天就能看出来。二是 <code>list.remove()</code> 是 O(n)，任务多了会变成热点，官方文档给的示例用的是 <code>set</code> 加 <code>add_done_callback(背景集合.discard)</code>，<code>discard</code> 还有个好处是元素已不存在时不抛异常。更重要的是要认清这个集合的边界：它只解决「任务被中途回收」，完全不解决「任务失败了没人知道」。异常仍然停在 Task 上，你得在完成回调里主动去取。</div>
+</details>
+
+<details>
+<summary>Task exception was never retrieved 到底什么时候打出来？</summary>
+<div class="answer">在这个 Task 对象被垃圾回收的时候，由 asyncio 通过自己的日志器记录，级别是 ERROR。关键在于「被回收的时候」——这个时间点由引用计数和垃圾回收决定，和异常实际发生的时刻可能隔着很久，长驻进程里隔上几小时甚至几天都不奇怪。这就是它难查的根本原因：日志时间戳无法用来定位故障窗口。另外它的内容只有异常和堆栈，没有任何业务字段，和你的请求日志对不上。所以不要把它当成告警来源，它只是一个「你这里漏了一个归属者」的事后提示。真正的解法是在完成回调或 await 处主动取走异常，并且带上业务上下文记日志。</div>
+</details>
+
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>
