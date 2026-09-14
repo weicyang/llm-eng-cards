@@ -1381,6 +1381,24 @@ window.CATALOG = {
           "title": "LLM 推理网关",
           "tagline": "虚拟钥与项目预算 / 多厂商熔断 fallback / 语义缓存必须含模型与提示哈希 / 与 MCP 网关分家。",
           "href": "./cards/architecture/llm_inference_gateway.html"
+        },
+        {
+          "code": "S09",
+          "title": "容器化与镜像工程",
+          "tagline": "namespace 与 cgroup 决定三条硬约束 / 层缓存失效让 COPY 顺序决定构建快慢 / 权重打不打进镜像的五维权衡 / nvidia-container-toolkit 怎么把 GPU 送进容器。",
+          "href": "./cards/architecture/containerization_image_engineering.html"
+        },
+        {
+          "code": "S10",
+          "title": "Docker 还是 K8s：AI 应用部署形态选型",
+          "tagline": "进程管理与控制循环的本质差异 / 收益按事件计而成本按月计 / 九行决策表 / 张量并行为何与无状态假设冲突。",
+          "href": "./cards/architecture/docker_vs_k8s_deployment.html"
+        },
+        {
+          "code": "S11",
+          "title": "K8s 上运行 LLM 推理服务",
+          "tagline": "GPU 整数资源不可超卖 / 权重交付四条路径的冷启动代价 / 启动探针预算算错就是重启循环 / 优雅退出怎么不截断流式响应。",
+          "href": "./cards/architecture/k8s_llm_serving_practice.html"
         }
       ]
     },
@@ -1768,6 +1786,24 @@ window.CATALOG = {
           "title": "规约驱动开发",
           "tagline": "规格作为跨会话长期上下文 / 提案-设计-任务-验收 / 规格漂移治理 / 何时不要上四件套。",
           "href": "./cards/engineering/spec_driven_development.html"
+        },
+        {
+          "code": "ST27",
+          "title": "CI/CD 流水线原理与设计",
+          "tagline": "持续集成与持续部署不是同一件事 / 只有确定且可操作的信号才配阻断 / 制品不可变与一次构建多处部署 / 分支寿命决定冲突成本。",
+          "href": "./cards/engineering/cicd_pipeline_design.html"
+        },
+        {
+          "code": "ST28",
+          "title": "CI/CD 工具链与 GitOps",
+          "tagline": "选型实质是选谁持有生产凭据 / 控制平面与执行平面分离 / Argo CD 反直觉的同步默认值 / DORA 已从四项改为五项度量。",
+          "href": "./cards/engineering/cicd_toolchain_gitops.html"
+        },
+        {
+          "code": "ST29",
+          "title": "AI 项目 CI/CD 的特殊代价",
+          "tagline": "传统流水线的三条基石假设全部失效 / 层缓存对大权重几乎无效 / GPU 闲置与冷启动都贵所以没有中间态 / 回滚要重载权重，秒级回滚不成立。",
+          "href": "./cards/engineering/ai_project_cicd.html"
         }
       ]
     },

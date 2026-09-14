@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST29 · AI 项目 CI/CD 的特殊代价</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#a8a29e;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、镜像与权重的矛盾</a>
+<a href="#s2">二、GPU 跑 CI 的经济学</a>
+<a href="#s3">三、三条版本线的协同</a>
+<a href="#s4">四、不确定输出让测试断言失效</a>
+<a href="#s5">五、构建可复现的难点</a>
+<a href="#s6">六、发布节奏的现实</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>ST29 · AI 项目 CI/CD 的特殊代价</h1>
+<p class="subtitle">权重内置与外置的成本对照 / GPU runner 排队与替身策略 / 代码与 Prompt 与权重的发布单元 / 测试分层与编排 / CUDA 锁定与 engine 硬件绑定 / 回滚代价与人工闸门</p>
+
+<div class="intuition-box">
+传统 CI/CD 的三条基石假设，AI 项目全部不完全成立：制品是小的（几十 MB 到几百 MB）、构建是可复现的（同输入同输出）、测试是可断言的（结果非真即假）。权重让制品涨到几十 GB，硬件与算子让构建结果随机器变化，采样与模型更新让同一输入产出不同输出。这张卡不重讲流水线原理，只讲这三条假设失效之后各自要付的账。
+</div>
+
+<!-- ==================== 一 ==================== -->
+<div class="section" id="s1">
+<h2>一、镜像与权重的矛盾</h2>
+
+<p>第一个决策看起来很小：模型权重要不要放进容器镜像？放进去，一切都很干净——镜像还是那个不可变的、自包含的、可按摘要部署的制品，完全符合 <a href="./cicd_pipeline_design.html">ST27 · CI/CD 流水线原理与设计</a> 第三章说的一次构建多处部署。代价是镜像从几百 MB 变成几十 GB，而这个量级变化会同时恶化交付链上的每一个环节。</p>
+
+<h3>恶化是全链条的，不是某一处</h3>
+
+<table>
+<tr><th>环节</th><th>几百 MB 镜像</th><th>几十 GB 镜像</th><th>恶化的机制</th></tr>
+<tr><td>构建</td><td>秒级到分钟级</td><td>需读写并压缩数十 GB</td><td>大文件的层打包与压缩是 CPU 与磁盘密集操作</td></tr>
+<tr><td>推送</td><td>分钟内</td><td>受构建机出网带宽约束</td><td>每次权重变动都要重传整层</td></tr>
+<tr><td>拉取</td><td>冷启动可忽略</td><td>每个新节点都要拉一遍</td><td>扩容与故障替换时直接转化为不可用时长</td></tr>
+<tr><td>Registry 存储</td><td>可忽略</td><td>按 tag 数量线性累积</td><td>没有保留策略时，每次构建都留一份数十 GB</td></tr>
+<tr><td>跨区复制</td><td>可忽略</td><td>按区域数量倍增，且计出网流量</td><td>多区部署时成本乘以区域数</td></tr>
+<tr><td>节点磁盘</td><td>无压力</td><td>需为镜像层预留数倍空间</td><td>同节点多版本共存时磁盘被打满</td></tr>
+</table>
+
+<h3>为什么层缓存对大权重文件几乎无效</h3>
+
+<p>直觉上会想：镜像层是有缓存的，权重不变时应该不会重复传输。这个直觉一半对一半错，而错的那一半正是痛点。Docker 官方对构建缓存的说明是：Dockerfile 的每条指令对应一层，可以把层想象成一个栈；<strong>某一层发生变化时该层需要重建，并且它之后的所有层也都受影响、都需要重新执行</strong>，即使那些层的构建逻辑本身毫无改动。</p>
+
+<p>这带来两个具体后果。第一，<strong>层是缓存的最小单位，不是文件</strong>——一个 30 GB 的权重文件改动一个字节，整层 30 GB 全部失效并重新推送，内容级增量传输不存在。第二，<strong>层的顺序决定一切</strong>：如果 <code>COPY</code> 权重的指令排在拷贝代码之后，那么每一次代码改动都会让权重层连带失效。很多团队"改了一行 Prompt 就要重推 30 GB"的怪现象，根因就是这个顺序。把权重层放在最前、代码层放在最后能缓解，但只是缓解——权重本身一更新，代价照样全额支付。</p>
+
+<div class="intuition-box">
+镜像层缓存是按"指令"而不是按"内容块"做增量的。对代码这种小而碎的东西很有效，对单个巨大的二进制文件基本等于没有：要么整层命中，要么整层重传。
+</div>
+
+<div class="arch-diagram">
+层顺序决定重传代价（同样的内容，两种排法）
+
+ ❌ 错排：权重层在代码之后
+   L1 基础镜像 2GB      [缓存命中]
+   L2 依赖     3GB      [缓存命中]
+   L3 COPY 代码 5MB     ← 改一行就失效
+   L4 COPY 权重 30GB    ← 被 L3 连带失效，重新打包+推送 30GB
+   改一行 Prompt 的代价 ≈ 30 GB
+
+ ✅ 正排：权重层在代码之前
+   L1 基础镜像 2GB      [缓存命中]
+   L2 依赖     3GB      [缓存命中]
+   L3 COPY 权重 30GB    [缓存命中]
+   L4 COPY 代码 5MB     ← 只有这层重建
+   改一行 Prompt 的代价 ≈ 5 MB
+
+ 但注意：权重自己一更新，正排也要全额付 30GB。
+         顺序只解决"代码改动的连带失效"，不解决量级问题。
+</div>
+
+<h3>权重外置的三种做法与各自的代价</h3>
+
+<p><span class="term">权重外置</span>指镜像里只放代码与运行时，权重在容器启动时或启动前从别处获得。三种常见形态的取舍完全不同，不存在通用最优解。</p>
+
+<table>
+<tr><th>方案</th><th>镜像大小</th><th>冷启动</th><th>不可变性</th><th>主要代价</th><th>适合</th></tr>
+<tr><td>启动时从对象存储或模型仓库拉取</td><td>小</td><td>慢（数十 GB 下载 + 加载）</td><td>弱：需自行固定版本与校验摘要</td><td>依赖外部服务可用性；每个副本各拉一遍；限流与带宽争用</td><td>副本数少、扩容不频繁、模型常换</td></tr>
+<tr><td>持久卷或共享文件系统预置</td><td>小</td><td>快（本地或近端读取）</td><td>中：卷内容需另设版本目录与只读挂载</td><td>需预热流程；跨可用区与跨集群难；卷成为有状态依赖</td><td>固定集群、副本多、模型更新有计划</td></tr>
+<tr><td>权重单独打成镜像，作为初始化容器或挂载卷</td><td>代码镜像小，权重镜像大</td><td>中（仍走镜像拉取，但可被节点缓存）</td><td>强：复用镜像摘要与签名链路</td><td>大层问题依旧存在，只是与代码解耦</td><td>看重可审计与不可变、且已有镜像分发体系</td></tr>
+</table>
+
+<p>第三种值得多说一句，因为它常被忽略。它并没有消灭"几十 GB 要搬来搬去"这个物理事实，但它把<strong>权重的版本纳入了和代码同一套不可变制品体系</strong>：权重镜像有自己的摘要、可以被签名、可以有来源证明（见 <a href="./cicd_toolchain_gitops.html">ST28 · CI/CD 工具链与 GitOps</a> 第五章），并且代码的高频迭代不再触发权重的重传。对合规要求高或需要审计"线上跑的到底是哪份权重"的场景，这个收益往往超过它的运维复杂度。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某团队把一个 14B 模型的 FP16 权重（约 28 GB）直接 <code>COPY</code> 进服务镜像，且该指令排在拷贝应用代码之后。表现出来的症状是：修改一行提示词模板的流水线耗时 41 分钟，其中 34 分钟花在镜像打包与推送；Registry 在两个月内积累了 60 多个 tag 共约 1.7 TB；生产扩容一个副本需要 6 分钟才能就绪，导致流量突增时自动扩容形同虚设。改造只做了两步——把权重改成独立的权重镜像并以只读方式挂载，代码镜像回落到约 900 MB；节点上对权重镜像做预拉取。之后提示词改动的流水线耗时降到 5 分钟，扩容就绪时间降到 50 秒，Registry 存储稳定在约 200 GB（权重镜像仅保留 3 个版本）。（本例为构造的典型场景，用于说明层顺序与外置策略的量级影响，非实测数据。）</p>
+</div>
+
+<p>容器化与镜像分层的通用工程实践见 <a href="../architecture/containerization_image_engineering.html">S09 · 容器化与镜像工程</a>，部署形态的选型见 <a href="../architecture/docker_vs_k8s_deployment.html">S10 · Docker 还是 K8s：AI 应用部署形态选型</a>。</p>
+</div>
+
+<!-- ==================== 二 ==================== -->
+<div class="section" id="s2">
+<h2>二、GPU 跑 CI 的经济学</h2>
+
+<p>GPU 算力的成本结构与 CPU 完全不同，而 CI 的负载形态恰好是最不适合 GPU 计费模型的那一种：<strong>脉冲式</strong>。工作日白天集中爆发，夜间与周末接近空闲。CPU 上这不是问题（弹性便宜、冷启动快），GPU 上这就是核心矛盾。</p>
+
+<h3>排队与闲置：一个两难，且两边都在烧钱</h3>
+
+<p>预留 GPU 机器常驻，好处是作业提交即跑，坏处是按小时付费而利用率可能只有个位数百分比——夜间那十几个小时是纯损失。改成按需拉起，账面利用率漂亮了，但冷启动的构成很可观：申请实例、拉起镜像（见第一章，可能几十 GB）、加载权重、预热内核与显存。于是作业的墙钟时间里很大一部分是等待，而这段时间同样计费。两难的本质是：<strong>GPU 的闲置成本与冷启动成本都很高，没有便宜的中间态</strong>。</p>
+
+<div class="intuition-box">
+CPU 的弹性几乎免费，所以"用完就关"是默认答案。GPU 的冷启动足够贵，使得"用完就关"未必划算。判断门槛是：如果日均有效 GPU 作业时长超过机器成本的盈亏平衡点（常在 30% 到 40% 利用率附近），预留反而更省。
+</div>
+
+<table>
+<tr><th>策略</th><th>等待时间</th><th>闲置浪费</th><th>适合的负载特征</th><th>配套要求</th></tr>
+<tr><td>常驻预留</td><td>近零</td><td>高（夜间与周末全额浪费）</td><td>日均利用率高、团队大、作业连续</td><td>作业队列与优先级管理，否则大作业饿死小作业</td></tr>
+<tr><td>纯按需</td><td>高（冷启动分钟级）</td><td>低</td><td>作业稀疏、可容忍等待、按夜间批次跑</td><td>镜像与权重的预热缓存，否则冷启动吞掉收益</td></tr>
+<tr><td>小池预留 + 溢出按需</td><td>常态低，高峰有等待</td><td>中</td><td>大多数团队的实际形态</td><td>需要按队列长度自动扩缩的编排</td></tr>
+<tr><td>竞价/可抢占实例</td><td>中，且可能被中断</td><td>最低</td><td>可重跑的无状态评测与批处理</td><td>作业必须可断点重跑（呼应 ST27 的幂等要求）</td></tr>
+</table>
+
+<h3>哪些阶段真的需要 GPU</h3>
+
+<p>这是降本最有效的一步，因为多数团队的 GPU 作业里有相当比例根本不需要 GPU。判据很简单：<strong>这个检查是否必须执行真实的模型前向计算或依赖 GPU 专有工具链？</strong>不是，就该下沉到 CPU。</p>
+
+<table>
+<tr><th>阶段</th><th>需要 GPU</th><th>理由</th></tr>
+<tr><td>代码风格、类型检查、依赖审计</td><td>否</td><td>纯静态分析</td></tr>
+<tr><td>提示词模板渲染与变量校验</td><td>否</td><td>字符串与结构校验，不涉及推理</td></tr>
+<tr><td>输出解析器、结构化校验、工具参数构造</td><td>否</td><td>用固定响应桩即可完整覆盖</td></tr>
+<tr><td>编排与状态机逻辑单测</td><td>否</td><td>模型调用可替换为桩</td></tr>
+<tr><td>检索层单测（分块、索引读写）</td><td>否</td><td>向量计算量小，CPU 足够</td></tr>
+<tr><td>模型形状与前向连通性冒烟测试</td><td>否（用小模型替身）</td><td>验证流程正确性而非质量，可用极小配置在 CPU 跑</td></tr>
+<tr><td>真实模型的小样本质量筛查</td><td>是</td><td>必须真实前向</td></tr>
+<tr><td>推理引擎编译（如 engine 构建）</td><td>是</td><td>编译产物与目标硬件绑定，见第五章</td></tr>
+<tr><td>显存占用与吞吐回归</td><td>是</td><td>测量对象本身是硬件行为</td></tr>
+<tr><td>算子或内核级单测</td><td>是</td><td>被测对象就是 GPU 代码</td></tr>
+</table>
+
+<h3>CPU 假跑与小模型替身：两种不同的替代物</h3>
+
+<p><span class="term">响应桩</span>（把模型调用替换成预设返回值）验证的是<strong>调用方的逻辑</strong>：解析对不对、异常分支走不走、重试与超时有没有生效。它完全不需要模型，也因此完全测不出模型相关的任何东西。</p>
+
+<p><span class="term">小模型替身</span>（把层数、隐藏维度、词表缩到极小的同架构模型，通常随机初始化）验证的是<strong>数据通路</strong>：张量形状对不对、注意力掩码有没有错位、批处理与填充逻辑是否正确、显存是否泄漏。它的输出毫无质量意义，但它能在 CPU 上秒级跑完，且能抓到一大类只有真跑模型才会暴露的错误。两者不能互相替代，成熟的流水线两者都用。</p>
+
+<div class="arch-diagram">
+算力分层：把 GPU 用在只有 GPU 能做的事上
+
+  ┌─ CPU 层（每次推送，几分钟，阻断）─────────────────┐
+  │ lint · 类型 · 依赖审计 · 提示词模板校验            │
+  │ 解析器/状态机单测（响应桩）                        │
+  │ 前向连通性冒烟（小模型替身，随机初始化）            │
+  └────────────────────┬──────────────────────────────┘
+                       │ 全绿才申请 GPU
+  ┌─ GPU 层（合并/定时，分钟到小时）──────────────────┐
+  │ 真实模型小样本筛查 · engine 编译 · 显存与吞吐回归  │
+  │ 算子级单测                                        │
+  └────────────────────┬──────────────────────────────┘
+                       │
+  ┌─ 缓存层（跨作业持久，不进 CI 通用缓存）────────────┐
+  │ 权重（持久卷/对象存储 + 本地磁盘）                 │
+  │ 编译产物（按硬件×版本组合的缓存键，见第五章）       │
+  └───────────────────────────────────────────────────┘
+</div>
+
+<h3>权重与编译产物的缓存位置：不要用 CI 的通用缓存</h3>
+
+<p>这是一个具体且高频的错误。CI 平台的通用缓存是为依赖包设计的，配额与生命周期都不适合权重。以 GitHub Actions 为例，单仓库所有缓存的总大小<strong>默认上限只有 10 GB</strong>，且超过 7 天未被访问的条目会被删除（驱逐规则与缓存抖动的成因见 <a href="./cicd_pipeline_design.html">ST27 · CI/CD 流水线原理与设计</a>第六章）。</p>
+
+<p>把这几个数字和第一章的量级对照一下就很清楚：一个 28 GB 的权重根本放不进 10 GB 的仓库配额；即使切分后勉强塞进去，它会把所有依赖缓存挤掉，然后整体进入抖动状态。正确位置是持久卷或对象存储，并在执行机本地磁盘做一级缓存（例如把模型缓存目录指向持久盘而不是临时工作区）。自托管执行器在这里有天然优势——它本来就不为每次作业重置，本地磁盘上的权重可以跨作业复用。</p>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某团队把 GPU 作业挂在每次推送上，共 3 类作业（真实模型小样本评测、engine 编译、显存回归），使用 2 张常驻 GPU。日均 47 次推送，GPU 队列在上午形成 40 分钟以上的积压，同时夜间利用率低于 4%。审计发现 3 类作业里有 2 类的大部分用例并不需要真实前向：显存回归里 60% 的用例实际在验证配置解析，engine 编译只在依赖或模型版本变动时才有意义。调整为三条规则——CPU 可做的一律下沉、engine 编译改为仅在权重摘要或 CUDA 相关依赖变化时触发、真实模型评测从"每次推送"改为"合并到主干时 + 每晚全量"。GPU 作业数从日均 141 降到 19，上午积压消失，机器数从 2 张减到 1 张常驻加高峰按需溢出。（本例为构造的典型场景，用于说明分层裁剪的效果，非实测数据。）</p>
+</div>
+</div>
+
+<!-- ==================== 三 ==================== -->
+<div class="section" id="s3">
+<h2>三、三条版本线的协同</h2>
+
+<p>传统服务的线上行为基本由一个东西决定：代码。AI 服务的线上行为至少由三个独立演进的东西共同决定——<strong>代码、Prompt、模型权重</strong>。它们的变更节奏、变更人、变更审批路径全都不同，但用户看到的结果是三者的组合。流水线在这里的职责非常具体：把三条独立的线，在发布这一刻锁成一个可复现的单元。</p>
+
+<table>
+<tr><th>版本线</th><th>典型变更节奏</th><th>谁在改</th><th>失控表现</th><th>流水线要提供什么</th></tr>
+<tr><td>代码</td><td>小时到天</td><td>工程师，走 PR</td><td>相对可控</td><td>常规门禁</td></tr>
+<tr><td>Prompt 与工具描述</td><td>小时级，可能绕过代码评审</td><td>工程师、产品、运营</td><td>线上改了但没人知道改了什么</td><td>把它纳入同一个发布单元，禁止运行时读取"最新版"</td></tr>
+<tr><td>模型权重或模型版本</td><td>周到月；托管 API 可能被供应商静默更新</td><td>算法团队或外部供应商</td><td>你没发版但行为变了</td><td>固定到具体版本，把"模型升级"当成一次独立发布</td></tr>
+</table>
+
+<div class="intuition-box">
+三条线各自都有版本号并不等于系统可复现。可复现要求的是"它们的组合"有一个版本号。缺了这个组合层，你能说清每一条线的历史，却说不清上周四线上到底是哪三个版本在一起工作。
+</div>
+
+<h3>把组合物化成一个不可变的发布清单</h3>
+
+<p>做法是让流水线在构建阶段产出一份<span class="term">发布清单</span>：一个小的、不可变的、被版本化的文件，把这次发布涉及的所有维度的精确标识固定下来，并把它当成制品的一部分随部署一起走。运行时只允许按清单里的标识去取资源，不允许读取任何形式的"最新版"。</p>
+
+<pre><code>release: 2026-09-13.4
+code_sha:      a91f3c7
+prompt_bundle: prompts@v37   (sha256:1be0…)
+model:         qwen3-14b-instruct  (weights sha256:9f3c…)
+tool_schema:   tools@v12
+runtime:       trt 11.2 / cuda 12.4 / driver 550.54</code></pre>
+
+<p>这份清单解决三个具体问题：故障时能一眼看出四个维度分别是什么；回滚有一个原子对象；以及<strong>它让"谁变了"这个问题可回答</strong>——两次发布的清单做差集，就是本次变更的全部面。资产本身的版本策略（Prompt 怎么做 SemVer、工具 schema 的兼容性判定、快照机制）见 <a href="./version_management.html">ST10 · Prompt/Tool/Memory/Workflow 版本管理</a>；模型注册表与实验追踪见 <a href="../architecture/mlops_guide.html">S02 · MLOps / LLMOps</a>。本卡只负责流水线怎么把它们组合成一个发布单元。</p>
+
+<div class="arch-diagram">
+发布单元：三条线在流水线里被锁成一个原子对象
+
+  代码仓库        Prompt 仓库/配置中心      模型仓库/注册表
+  a91f3c7          prompts@v37              weights sha256:9f3c…
+     │                   │                        │
+     └─────────┬─────────┴────────────┬───────────┘
+               ▼                      ▼
+        ┌──────────────────────────────────┐
+        │ 构建阶段：生成不可变发布清单       │
+        │ release 2026-09-13.4             │
+        │ = (code, prompt, weights, schema,│
+        │    runtime 版本)                  │
+        └──────────────┬───────────────────┘
+                       │ 清单随制品一起晋升
+          dev ────→ staging ────→ prod
+                       │
+        回滚 = 切回上一份清单（原子，四维一起退）
+        ❌ 反模式：只回代码，Prompt 仍读"最新版"
+           → 新 Prompt 引用了新代码才有的工具 → 运行时报错
+</div>
+
+<h3>版本矩阵：不要做笛卡尔积，要做锚定加邻域</h3>
+
+<p>三条线各有几个在用版本，全组合测试立刻爆炸——3 个代码分支 × 5 个 Prompt 版本 × 4 个模型版本就是 60 种组合，而每种组合跑一轮评测是分钟到小时级。可行的策略是<strong>锚定加邻域</strong>：把当前生产组合作为锚点，只测试"锚点 + 被改动的那一维的新值"，外加一条所有维度都取最新的前瞻组合用于提前发现冲突。</p>
+
+<table>
+<tr><th>策略</th><th>组合数（以 3×5×4 为例）</th><th>能发现</th><th>发现不了</th><th>结论</th></tr>
+<tr><td>全笛卡尔积</td><td>60</td><td>一切</td><td>——</td><td>成本不可承受</td></tr>
+<tr><td>只测最新组合</td><td>1</td><td>最新组合的问题</td><td>是哪一维导致的（无法归因）</td><td>信息量太低</td></tr>
+<tr><td>锚定 + 单维邻域</td><td>1 + 改动维数（通常 2–4）</td><td>本次改动的影响，且可归因到具体维度</td><td>多维同时变化时的交互作用</td><td>日常首选</td></tr>
+<tr><td>锚定 + 单维邻域 + 全最新前瞻</td><td>3–5</td><td>上一行全部，外加多维交互</td><td>——</td><td>发布前推荐</td></tr>
+</table>
+
+<h3>回滚必须三维一致</h3>
+
+<p>最容易踩的坑：出事了回滚代码，但 Prompt 和模型没回。这在技术上完全可能发生，因为三者往往由三套不同的系统管理（Git、配置中心、模型注册表），而回滚操作通常只针对其中一套。后果不是"回到了旧行为"，而是<strong>进入了一个从未被测试过的新组合</strong>——新版 Prompt 里引用了只有新代码才提供的工具，回滚代码后这个工具不存在，于是运行时直接报错，故障从"质量下降"升级成"完全不可用"。</p>
+
+<p>防御手段有两条，都要有。一是回滚的操作对象必须是发布清单而不是单条资产，把原子性做进机制里。二是配置中心按清单版本读取而不是读最新版，否则即使清单回滚了，运行时仍然会去拿新 Prompt。</p>
+</div>
+
+<!-- ==================== 四 ==================== -->
+<div class="section" id="s4">
+<h2>四、不确定输出让测试断言失效</h2>
+
+<p>传统测试的基石是"同样的输入产生同样的输出，因此可以断言相等"。大模型打破这一条的原因有三个，而且三个都无法通过写更好的测试来消除：采样本身是随机的（温度大于零时）；服务端的批处理与内核调度会让浮点结果产生微小差异，进而在某些位置改变采样结果；托管 API 背后的模型可能在你没发版的情况下被供应商更新。</p>
+
+<div class="intuition-box">
+输出不确定并不意味着无法测试，而是意味着"断言什么"要换。确定性的部分（结构、字段、类型、调用序列）照旧严格断言；不确定的部分（措辞、质量）改为统计性判断，并且必须放在能承担其时长与噪声的流水线位置上。
+</div>
+
+<h3>四层策略与各自的流水线位置</h3>
+
+<table>
+<tr><th>层</th><th>测什么</th><th>需要真实模型</th><th>典型时长</th><th>放在流水线哪里</th><th>阻断性</th><th>能发现</th><th>发现不了</th></tr>
+<tr><td>L1 确定性单测</td><td>解析器、结构校验、路由与状态机、模板渲染、工具参数构造</td><td>否（响应桩）</td><td>秒级</td><td>每次推送</td><td>阻断</td><td>代码逻辑缺陷、异常分支、契约违背</td><td>任何与模型质量有关的东西</td></tr>
+<tr><td>L2 录制回放</td><td>用录制的真实响应驱动完整下游链路</td><td>否（回放）</td><td>分钟级</td><td>每次推送</td><td>阻断</td><td>代码改动导致的解析崩溃与链路断裂</td><td>模型自身变差（录像是旧的）</td></tr>
+<tr><td>L3 小样本判分</td><td>几十条金标上的粗筛</td><td>是</td><td>分钟级</td><td>合并到主干时（PR 上仅子集且限额）</td><td>大幅劣化才阻断</td><td>明显的质量退化</td><td>细微回归（样本量不足，方差大）</td></tr>
+<tr><td>L4 全量离线评测</td><td>完整金标集 + 判分器，产出可比基线</td><td>是</td><td>小时级</td><td>定时与发布前，不挂 PR</td><td>阻断发布，不阻断合并</td><td>细微回归、分群体退化</td><td>真实流量分布下的问题（需线上评测）</td></tr>
+</table>
+
+<h3>录制回放这一层为什么值得单独存在</h3>
+
+<p><span class="term">录制回放</span>指把真实模型的响应录成固定样本，之后用这份录像代替真实调用来驱动测试。它的性价比最高，也最常被跳过。把真实模型的响应录成固定样本后，回放不花模型成本、不需要 GPU、结果完全确定，却能覆盖"从模型响应到最终用户可见结果"之间的全部代码——解析、字段映射、工具调用分发、错误处理、多轮状态累积。这一段代码是改动最频繁的，也是最容易在重构中被悄悄破坏的。</p>
+
+<p>它有一个必须管理的代价：<strong>录像会过期</strong>。模型升级后真实响应的形态可能变化（更爱输出 Markdown、字段顺序不同、拒答措辞改变），而回放仍然基于旧录像通过，于是测试是绿的但线上会崩。治理方式是给录像设刷新周期，并在模型版本变化时强制重录——这正好可以挂在第三章发布清单的模型维度变化上。回放与故障复现的通用机制见 <a href="./replay_mechanism.html">ST13 · Replay 机制与故障复现</a>。</p>
+
+<div class="arch-diagram">
+四层编排：越往下越贵越慢越噪，位置随之后移
+
+  每次推送（预算：分钟级，必须阻断）
+  ├─ L1 确定性单测        秒级   桩      ▓
+  └─ L2 录制回放          分钟   录像    ▓▓
+       └─ PR 上可选：L3 子集（几条，限额，仅拦明显崩坏） ▓▓▓
+
+  合并到主干（预算：十分钟级）
+  └─ L3 小样本判分        分钟   真实模型 ▓▓▓▓
+
+  定时 / 发布前（预算：小时级，不阻断合并）
+  └─ L4 全量离线评测      小时   真实模型 ▓▓▓▓▓▓▓▓
+       └─ 与基线对比 → 决定能否进入发布流程
+
+  上线后：线上抽样与发布门禁 → 见 EV09
+</div>
+
+<h3>为什么不能把评测全塞进 PR</h3>
+
+<p>这个要求听起来很负责——每个 PR 都验证质量，为什么不好？三个硬约束让它不可行，而且三者是叠加的。</p>
+
+<p><strong>时长。</strong>全量评测是分钟到小时级，而 PR 的反馈预算是分钟级（见 <a href="./cicd_pipeline_design.html">ST27</a> 第二章：提交阶段超过十分钟就会压低团队合并频率，进而把每次合并的改动量变大，反而更危险）。</p>
+
+<p><strong>成本。</strong>评测调用真实模型，成本正比于"金标条数 × 每天 PR 数 × 每 PR 推送次数"。一天几十个 PR、每个 PR 平均推送三四次，这个乘积会让评测账单超过生产推理账单，而它买到的信息高度重复——同一个 PR 连续三次推送的质量分几乎不会变。</p>
+
+<p><strong>噪声。</strong>这条最致命。<span class="term">判分方差</span>指同一被测对象在不同抽样批次上得到的分数波动，样本量越小它越大。小样本上的判分方差大，于是阈值无论怎么设都错：设紧了假阳性频发，拦住大量无辜 PR，团队很快学会"重跑一次看看"，这个习惯一旦形成，所有门禁的可信度同时崩塌；设松了则真实的细微回归根本拦不住，门禁变成装饰。</p>
+
+<p>正确的分工是：<strong>PR 上放确定性可断言的东西（L1、L2）并严格阻断；质量判断放在样本量足够、可与基线对比的位置（L4）并阻断发布而不阻断合并。</strong>评测的方法论、指标定义、判分器设计、基线对比与成本控制这些内容已有专卡完整展开，见 <a href="./evaluation_testing.html">EV01 · 评估与测试</a> 第三章与 SG03 · AI 应用全链路性能评测指南 的 CI/CD 一章；本卡只负责分层原则与它们在流水线中的位置。</p>
+</div>
+
+<!-- ==================== 五 ==================== -->
+<div class="section" id="s5">
+<h2>五、构建可复现的难点</h2>
+
+<p>ST27 第三章那条"一次构建、多处部署"的原则，在 AI 项目里遇到了第一个真正的例外。原因不是工程纪律不够，而是<strong>部分制品在物理上就与构建它的硬件和软件栈绑定</strong>。</p>
+
+<h3>依赖与 CUDA 驱动版本锁定</h3>
+
+<p>Python 依赖树本身已经够复杂，深度学习栈又在上面叠了三层：框架的 CUDA 变体、CUDA 运行时与工具包版本、以及宿主机的驱动版本。任何一维漂移都可能让实际执行的内核实现发生变化，进而产生数值差异。一个典型陷阱是直接安装框架而不指定索引源与变体——不同时间、不同机器上会拿到不同的 CUDA 构建，而版本号看起来完全一样。锁定必须覆盖到变体级别，并且把驱动版本作为环境的一部分记录进第三章的发布清单。</p>
+
+<h3>随机种子不够：有些算子本身就不确定</h3>
+
+<p>固定随机种子只能消除框架层面的伪随机来源。GPU 上还有一类不确定性来自算子实现：使用原子累加的归约操作其累加顺序取决于线程调度、某些矩阵乘法库会根据输入形状和批大小选择不同的分块策略、稀疏或散射类算子的写入顺序不保证。这些都会导致同一输入在同一张卡上多次运行产生末位差异。要真正确定，需要显式启用框架提供的<span class="term">确定性算法</span>开关——它强制算子选用结果可复现的实现路径，代价是部分算子退化到较慢的实现、而且有些算子在确定性模式下直接不可用。即使这样做了，<strong>跨 GPU 型号的结果仍然可能不同</strong>。</p>
+
+<div class="intuition-box">
+"固定了种子为什么结果还不一样"是个常见困惑。种子管的是伪随机数序列，管不了浮点加法的结合顺序。而 GPU 的并行归约天生不保证顺序，所以不确定性在种子之下的那一层。
+</div>
+
+<h3>编译产物与硬件绑定：换卡即失效</h3>
+
+<p><span class="term">序列化 engine</span>是推理引擎把模型编译优化后落盘的二进制计划文件，它是这一章最硬的约束。NVIDIA TensorRT 官方的表述非常明确：<strong>默认情况下，序列化的 engine 只保证在与序列化它时相同的操作系统、CPU 架构、GPU 型号和 TensorRT 版本下正确工作</strong>。官方的常见问题里对"engine 能跨 TensorRT 版本移植吗"的回答是"默认不能"；对校准表的回答同样是不能，因为内部实现持续优化、版本间不保证二进制兼容，换版本必须重新生成 INT8 校准表。</p>
+
+<p>违反时的报错信息也很具体，值得记住以便快速定位：版本不匹配时是 <code>The engine plan file is not compatible with this version of TensorRT … please rebuild</code>；算力不匹配时是 <code>The engine plan file is generated on an incompatible device, expecting compute … got compute … please rebuild</code>。还有一个更隐蔽的中间态——算力相同但型号不同时，只会给出警告而不是错误，官方的措辞是这样做"很可能影响性能甚至导致错误"，并强烈建议生成与部署使用同一型号设备。这种"只警告不报错"的情形最危险，因为流水线是绿的，问题在生产才出现。</p>
+
+<p>官方也提供了放宽约束的构建选项：版本兼容性可以让 engine 在更新的 TensorRT 版本上工作，硬件兼容性可以让它跨受支持的 GPU 世代运行，跨平台构建可以在 Linux 上构建给 Windows 用的 engine。但三者都有代价——<strong>性能可能低于为目标平台原生构建的版本</strong>，并且跨平台构建出来的 engine 不能在构建它的宿主平台上运行。所以这些选项是在"部署矩阵复杂度"和"性能损失"之间做交换，不是免费的。</p>
+
+<table>
+<tr><th>复现性风险维度</th><th>漂移后的症状</th><th>是否会被 CI 发现</th><th>锁定手段</th></tr>
+<tr><td>框架 CUDA 变体</td><td>数值末位差异，偶发结果不一致</td><td>通常不会（测试阈值掩盖）</td><td>锁定索引源与变体标识，不只锁版本号</td></tr>
+<tr><td>CUDA 工具包与驱动</td><td>内核实现切换，性能或数值变化</td><td>不会</td><td>写入基础镜像并记进发布清单</td></tr>
+<tr><td>非确定算子</td><td>同输入多次运行结果不同</td><td>表现为 flaky 测试，常被误判</td><td>启用确定性算法开关，接受性能损失</td></tr>
+<tr><td>GPU 型号（算力不同）</td><td>engine 反序列化直接失败</td><td>会（有明确报错）</td><td>按目标算力分别构建</td></tr>
+<tr><td>GPU 型号（算力相同）</td><td>仅警告，性能下降或偶发错误</td><td><strong>不会</strong>（只是警告）</td><td>严格按部署型号构建，把型号纳入缓存键</td></tr>
+<tr><td>推理引擎版本</td><td>engine 与校准表均失效</td><td>会（有明确报错）</td><td>引擎版本纳入缓存键与清单</td></tr>
+</table>
+
+<h3>缓存键该包含什么</h3>
+
+<p>既然编译产物与环境绑定，那么复用它的唯一安全方式就是让缓存键<strong>完整表达它的全部绑定条件</strong>。键少写一维，就会在那一维变化时错误命中，拿到一个不匹配的产物——而如上所述，有些不匹配只给警告，于是错误会一路漏到生产。ONNX Runtime 的 TensorRT 集成文档列出的失效条件是同一组内容：模型本身变化（拓扑、算子集版本、算子）、运行时版本变化、TensorRT 版本变化、以及硬件变化，并直接说明 engine 与优化配置文件不可移植、是针对特定硬件优化的。</p>
+
+<pre><code>engine_cache_key = hash(
+  model_id, weights_sha256,
+  precision,                  # fp16 / int8 / fp8
+  trt_version, cuda_version, driver_version,
+  gpu_arch,                   # 算力，且建议精确到型号
+  opt_profile,                # 动态 shape 的范围
+  max_batch_size )</code></pre>
+
+<div class="arch-diagram">
+engine 是矩阵制品：ST27 的"一次构建多处部署"在此处让位
+
+  普通应用制品            engine 编译产物
+  ───────────             ──────────────
+  构建一次                 按 (GPU型号 × 引擎版本 × 精度) 各构建一份
+     │                          │       │       │
+     ▼                       A100    L40S    H100
+  dev/staging/prod          fp16    fp16    fp8
+  同一 sha256                │       │       │
+                             └───┬───┴───────┘
+                                 ▼
+                        制品库按矩阵坐标存放
+                        部署时按节点硬件选取对应产物
+
+  仍然保留的原则：每一份矩阵产物自身不可变、有摘要、可回滚。
+  被迫放弃的原则：全环境共用同一份二进制。
+</div>
+
+<p>结论要说清楚：这不是允许在每个环境各自重建，而是<strong>把制品从"一个"变成"一组按硬件坐标索引的不可变产物"</strong>。每一份仍然构建一次、仍然有摘要、仍然可按摘要回滚，只是部署时要按节点硬件选取对应坐标。TensorRT 与推理编译栈的机制细节见 <a href="../deploy/tensorrt_compilation_stack.html">DP27 · TensorRT 与推理编译栈</a>。</p>
+</div>
+
+<!-- ==================== 六 ==================== -->
+<div class="section" id="s6">
+<h2>六、发布节奏的现实</h2>
+
+<h3>模型与代码的周期不同步，还有一条你控制不了</h3>
+
+<p>代码是日更或周更，模型是月度或季度。这个不同步本身可以管理——把模型升级当成一次独立的、走完整流程的发布即可。真正麻烦的是第三种情况：<strong>使用托管 API 时，模型可能在你完全没有发版的情况下发生变化</strong>。如果代码里引用的是一个指向"最新稳定版"的别名，那么供应商切换快照的那一刻，你的线上行为就变了，而你的所有制品、清单、部署记录都显示"什么都没动"。这是 AI 项目独有的一类故障，排查起来极其痛苦，因为所有的变更审计都是干净的。防御只有一条且必须做：<strong>固定到具体的版本标识而不是别名</strong>，并把它写进第三章的发布清单，这样供应商发布新快照时你是主动选择升级、并且要走一遍发布流程。</p>
+
+<div class="intuition-box">
+传统系统里"我没动过"等价于"它没变"。接了托管模型之后这个等价关系断了。把模型版本固定到具体快照，本质上是把这个等价关系重新买回来。
+</div>
+
+<h3>影子流量在 AI 场景的三个特殊考量</h3>
+
+<p><span class="term">影子流量</span>指把生产请求复制一份发给新版本，但不把它的结果返回给用户。在传统服务里这是一个近乎免费的验证手段，在 AI 服务里三个维度都要重新算账。</p>
+
+<table>
+<tr><th>考量</th><th>传统服务</th><th>AI 服务</th><th>应对</th></tr>
+<tr><td>成本</td><td>双倍 CPU，通常可忽略</td><td>双倍 GPU 推理或双倍 token 费用，可能是主要成本项</td><td>按比例抽样而非全量镜像；优先抽长尾与高价值场景</td></tr>
+<tr><td>副作用</td><td>影子请求可只读</td><td>Agent 会真的调用工具——下单、发邮件、写库</td><td>工具层必须有沙箱或空转实现，否则影子会造成真实副作用</td></tr>
+<tr><td>可比性</td><td>响应可直接逐字节对比</td><td>输出本就不同，无法对比相等</td><td>只对比可离线判定的维度：结构合法性、工具调用序列、拒答率、长度分布、成本</td></tr>
+</table>
+
+<h3>渐进放量的维度不只是流量比例</h3>
+
+<p>均匀按百分比放量在 AI 场景有一个盲区：<strong>质量退化常常只出现在某一类输入上</strong>，而这类输入可能只占总流量的百分之几。均匀抽 5% 很可能根本采不到足够样本，于是各项指标看起来都正常，放到全量才暴露。所以放量维度除了比例，还要考虑按场景类型、按租户、按输入难度分层，确保每一层都有足够的观测样本量。灰度机制本身——四层架构、版本注册与粘性路由、渐进放量状态机与自动回滚——已有专卡完整展开，见 <a href="../agent/canary_release_system.html">A61 · Agent 灰度发布系统设计</a>；门禁阈值与晋升条件的设计见 <a href="./online_eval_release_gate.html">EV09 · 在线评测与发布门禁</a>。本卡不重复这两套机制。</p>
+
+<h3>回滚代价：秒级回滚的假设在这里不成立</h3>
+
+<p>传统服务的回滚是切换镜像，配合已有副本可以做到秒级。AI 服务的回滚要付的是<strong>权重重新加载</strong>的代价：从缓存或存储读入数十 GB、传输进显存、预热内核、重新分配 KV 缓存。这是分钟级的，而且期间该副本不可用。这条差异会推翻很多自动化设计的前提——一个"检测到劣化后自动回滚"的机制，如果回滚本身要三分钟，那么在这三分钟里劣化仍在持续发生。</p>
+
+<table>
+<tr><th>回滚方式</th><th>耗时量级</th><th>额外成本</th><th>适用</th></tr>
+<tr><td>路由权重切回（旧版本副本仍常驻）</td><td>秒级</td><td>双份显存，成本近乎翻倍</td><td>关键业务，且能承担常驻成本</td></tr>
+<tr><td>发布清单回滚 + 重新加载权重</td><td>分钟级</td><td>无常驻成本</td><td>可容忍分钟级劣化窗口</td></tr>
+<tr><td>仅回滚 Prompt 或配置（代码与权重不动）</td><td>秒级</td><td>无</td><td>问题确认来自 Prompt 维度时的最快路径</td></tr>
+<tr><td>整体重新部署</td><td>十分钟级</td><td>无</td><td>兜底手段，不应作为主路径</td></tr>
+</table>
+
+<p>这张表的实际用法是<strong>倒推</strong>：先定"最长可容忍的劣化窗口"，再据此决定要不要为旧版本常驻副本付双份显存。多数团队没有做这个推导，默认以为自己有秒级回滚能力，直到第一次真正需要回滚时才发现要等三分钟。另一个常被忽略的点是：<strong>Prompt 维度的回滚是秒级的</strong>，所以在故障处置流程里应该优先判断"是不是 Prompt 变更导致的"，这是最快的止血路径。</p>
+
+<div class="arch-diagram">
+自动化边界：按"决策是否可被确定性判定"划线
+
+  ┌─ 该自动化 ────────────────────────────────────┐
+  │ 确定性门禁（结构、schema、解析、契约）         │
+  │ 影子对比可离线判定的维度                       │
+  │ 指标采集与基线对比                             │
+  │ 达到预设阈值时的自动回滚（前提：回滚够快）      │
+  └───────────────────────────────────────────────┘
+  ┌─ 必须留人工闸门 ──────────────────────────────┐
+  │ 首次把新版本放给真实付费用户                   │
+  │ 涉及合规、口径、品牌表述的输出变更             │
+  │ 供应商模型的大版本切换（行为可能整体位移）      │
+  │ 判分器自身的更新（改了尺子，历史基线不再可比）  │
+  └───────────────────────────────────────────────┘
+
+  划线依据：结果能否被确定性规则判定对错。
+  能 → 交给机器；不能 → 由人承担判断与责任。
+</div>
+
+<p>最后一条值得单独强调：<strong><span class="term">判分器</span>自身的更新必须走人工闸门</strong>。判分器是给模型输出打分的那套规则或模型，也就是那把尺子，换了尺子之后所有历史基线都不再可比，而自动门禁完全依赖基线对比来工作。如果判分器能被自动更新，就会出现"门禁通过了，但它对比的是用不同尺子量出来的旧基线"这种无声失效。正确做法是判分器更新时重跑基线并显式标注口径变更。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>Dockerfile 里权重层排在代码层之前，避免代码改动连带重传</li>
+<li>权重放持久卷或对象存储，不放 CI 通用缓存（默认单仓 10 GB 上限且 7 天淘汰）</li>
+<li>每次发布产出不可变的发布清单，锁定代码、Prompt、权重、工具 schema、运行时版本</li>
+<li>回滚以发布清单为原子对象，配置中心按清单版本读取而非读最新版</li>
+<li>托管模型固定到具体版本快照，拒绝使用指向最新版的别名</li>
+<li>把 GPU 型号、引擎版本、精度、shape 范围全部写进编译产物的缓存键</li>
+<li>Ansible 之外的环境锁定也要覆盖驱动版本，并记入清单</li>
+<li>先定最长可容忍劣化窗口，再倒推是否为旧版本常驻副本付双份显存</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要把全量评测挂在每次 PR 上，时长、成本与噪声三重不可行</li>
+<li>不要用录制回放去判断模型质量，录像是旧的，只能验证下游链路</li>
+<li>不要只回滚代码而让 Prompt 与权重留在新版，那是未测试过的新组合</li>
+<li>不要做版本矩阵的全笛卡尔积，用锚定加单维邻域</li>
+<li>不要假设固定随机种子就能复现，GPU 归约顺序在种子之下那一层</li>
+<li>不要跨 GPU 型号复用 engine，算力相同但型号不同时只警告不报错，最危险</li>
+<li>不要让影子流量直接调用有副作用的工具，Agent 会真的去下单发信</li>
+<li>不要让判分器自动更新，换了尺子历史基线就不可比，门禁会无声失效</li>
+</ul>
+</div>
+</div>
+
+<h3>延伸阅读</h3>
+
+<p>流水线原理、阶段划分与制品原则见 <a href="./cicd_pipeline_design.html">ST27 · CI/CD 流水线原理与设计</a>；工具链、GitOps 与供应链安全见 <a href="./cicd_toolchain_gitops.html">ST28 · CI/CD 工具链与 GitOps</a>。发布门禁阈值与线上抽样见 <a href="./online_eval_release_gate.html">EV09 · 在线评测与发布门禁</a>，Agent 灰度机制见 <a href="../agent/canary_release_system.html">A61 · Agent 灰度发布系统设计</a>，评测方法与指标见 <a href="./evaluation_testing.html">EV01 · 评估与测试</a> 与 SG03 · AI 应用全链路性能评测指南，资产版本策略见 <a href="./version_management.html">ST10 · Prompt/Tool/Memory/Workflow 版本管理</a>，机器学习流水线与模型注册见 <a href="../architecture/mlops_guide.html">S02 · MLOps / LLMOps</a>，AI 写码门禁见 <a href="./ai_codegen_skill_monitoring.html">ST21 · AI 代码生成与 Skill 调用监控</a>，推理编译栈见 <a href="../deploy/tensorrt_compilation_stack.html">DP27 · TensorRT 与推理编译栈</a>，压测方法见 <a href="../deploy/inference_benchmark_methodology.html">DP16 · 推理服务压测方法论</a>，K8s 上的推理服务实践见 <a href="../architecture/k8s_llm_serving_practice.html">S11 · K8s 上运行 LLM 推理服务</a>，调用侧稳定性见 <a href="./api_stability.html">ST03 · 大模型 API 调用稳定性</a>，技能维护见 <a href="../agent/skills_maintenance_methodology.html">A18 · Skills 技能维护方法论</a>。</p>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>模型权重到底该不该打进容器镜像？</summary>
+<div class="answer">
+<p>先看副本数与模型更新频率这两个量。权重内置的唯一优势是制品自包含且不可变，完全符合一次构建多处部署；代价是镜像涨到几十 GB，于是构建、推送、拉取、Registry 存储、跨区复制、节点磁盘全线恶化，最直接的痛点是扩容时每个新节点都要拉几十 GB，自动扩容在流量突增时形同虚设。如果副本少、扩容不频繁、模型经常换，外置更合适。如果看重可审计与不可变，推荐把权重单独打成一个镜像并以只读方式挂载：它不消灭"几十 GB 要搬运"这个物理事实，但把权重纳入了和代码同一套摘要、签名、来源证明体系，同时让代码的高频迭代不再触发权重重传。另外无论选哪种，都要检查 Dockerfile 的层顺序——权重层必须排在代码层之前，否则改一行提示词都会让权重层连带失效。</p>
+</div>
+</details>
+
+<details>
+<summary>既然镜像层有缓存，为什么权重不变也要重复传输几十 GB？</summary>
+<div class="answer">
+<p>因为层缓存的最小单位是层，不是文件，也不是内容块。Docker 官方对构建缓存的说明是每条指令对应一层，某层变化时该层需要重建，并且它之后的所有层也都受影响、都必须重新执行，即使那些层的构建逻辑毫无改动。由此产生两个后果。第一，一个 30 GB 的权重文件改动一个字节，整层 30 GB 全部失效并重新打包推送，没有内容级增量传输这回事。第二，也是更常见的那个坑：层的顺序决定连带失效范围。如果拷贝权重的指令排在拷贝代码之后，那么每次代码改动都会让权重层失效——这就是很多团队"改一行提示词要等四十分钟"的根因。把权重层前置能解决连带失效，但权重自身更新时代价照样全额支付，那是量级问题，只能靠外置或分离权重镜像来缓解。</p>
+</div>
+</details>
+
+<details>
+<summary>GPU runner 是该常驻预留还是按需拉起？</summary>
+<div class="answer">
+<p>先做裁剪再做选择，顺序反了会买多余的机器。裁剪的判据是"这个检查是否必须执行真实前向计算或依赖 GPU 专有工具链"，不是就下沉到 CPU：风格与类型检查、依赖审计、提示词模板校验、解析器与状态机单测（用响应桩）、检索层单测都不需要 GPU；甚至前向连通性冒烟也可以用极小配置的随机初始化模型在 CPU 上秒级完成。真正需要 GPU 的只有真实模型的质量筛查、推理引擎编译、显存与吞吐回归、算子级单测。裁剪之后再选形态：GPU 的特殊之处是闲置成本与冷启动成本都很高，没有便宜的中间态——常驻则夜间与周末全额浪费，按需则冷启动要申请实例、拉几十 GB 镜像、加载权重、预热，这段等待同样计费。多数团队的实际答案是小池常驻加高峰按需溢出；可重跑的批量评测适合用可抢占实例，前提是作业本身能断点重跑。</p>
+</div>
+</details>
+
+<details>
+<summary>能不能把模型权重放进 CI 平台的缓存里加速？</summary>
+<div class="answer">
+<p>不能，配额与生命周期都不匹配。CI 的通用缓存是为依赖包设计的。以 GitHub Actions 为例，单仓库缓存总量默认上限只有 10 GB，且 7 天未访问即淘汰（驱逐规则见 ST27 第六章）。把这个数字和权重的量级对照：一个 28 GB 的权重根本放不进 10 GB 配额；即使切分后勉强塞进，它会把所有依赖缓存挤掉，然后整体进入抖动状态，比不用缓存更慢。正确位置是持久卷或对象存储，并在执行机本地磁盘做一级缓存，例如把模型缓存目录指向持久盘而不是临时工作区。自托管执行器在这件事上有天然优势，因为它本来就不为每次作业重置，本地磁盘上的权重可以跨作业复用。</p>
+</div>
+</details>
+
+<details>
+<summary>代码、Prompt、权重三条线怎么保证组合可复现？</summary>
+<div class="answer">
+<p>关键认识是：三条线各自都有版本号，并不等于系统可复现——可复现要求的是"它们的组合"有一个版本号。做法是让流水线在构建阶段产出一份发布清单：一个小的、不可变的、被版本化的文件，把代码提交哈希、Prompt 包版本及其摘要、模型标识及权重摘要、工具 schema 版本、运行时与驱动版本全部固定下来，并把它当作制品的一部分随部署一起晋升。运行时只允许按清单里的标识取资源，绝不允许读取任何形式的"最新版"。这份清单买到三样东西：故障时能一眼看清各维度是什么；回滚有了一个原子对象；以及两次发布的清单做差集就是本次变更的全部面，"谁变了"这个问题变得可回答。至于每类资产内部怎么做版本策略、兼容性怎么判定，那是另一个主题，见 ST10；模型注册表与实验追踪见 S02。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么只回滚代码会把故障变得更严重？</summary>
+<div class="answer">
+<p>因为回滚代码而不回滚 Prompt 与权重，得到的不是旧行为，而是<strong>一个从未被测试过的新组合</strong>。这种情况在技术上非常容易发生，因为三者通常由三套不同系统管理（版本库、配置中心、模型注册表），而回滚操作往往只针对其中一套。典型的恶化路径是：新版 Prompt 里引用了只有新代码才提供的工具或字段，代码回滚后这个工具不存在，于是运行时直接抛错——故障从"质量下降"升级成"完全不可用"，而且发生在你以为已经止血之后，排查方向还会被"我们已经回滚了"误导。防御要两条一起做：回滚的操作对象必须是发布清单而不是单条资产，把原子性做进机制；配置中心必须按清单版本读取而不是读最新版，否则即使清单回滚了，运行时仍会去拿新 Prompt。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么不能把质量评测全部放进 PR 门禁？</summary>
+<div class="answer">
+<p>三个硬约束叠加，任何一条单独都足以否决。时长：全量评测是分钟到小时级，而提交阶段的反馈预算是分钟级，超过之后团队的合并频率会被压低，每次合并的改动量变大，反而更危险。成本：评测调用真实模型，开销正比于"金标条数 × 每天 PR 数 × 每 PR 推送次数"，而这个乘积买到的信息高度重复——同一个 PR 连续三次推送的质量分几乎不变。噪声最致命：小样本判分的方差大，阈值设紧了假阳性频发、拦住大量无辜 PR，团队很快学会"重跑一次看看"，这个习惯一旦形成，所有门禁的可信度同时崩塌；设松了则真实的细微回归根本拦不住。正确分工是把确定性可断言的东西（确定性单测、录制回放）放 PR 并严格阻断，把质量判断放在样本量足够、能与基线对比的定时或发布前位置，阻断发布而不阻断合并。评测的指标定义与判分器设计见 EV01 与 SG03。</p>
+</div>
+</details>
+
+<details>
+<summary>录制回放这一层到底能测出什么，测不出什么？</summary>
+<div class="answer">
+<p>它能测出的是"从模型响应到最终用户可见结果"之间的全部代码：解析、字段映射、工具调用分发、错误处理、多轮状态累积。这一段恰好是改动最频繁、最容易在重构中被悄悄破坏的部分，而回放不花模型成本、不需要 GPU、结果完全确定，所以性价比极高。它测不出的是模型自身变差——因为录像是旧的，回放永远在验证"代码能不能正确处理那份旧响应"。这就带来它唯一但必须管理的代价：录像会过期。模型升级后真实响应的形态可能变化（更爱输出 Markdown、字段顺序不同、拒答措辞改变），而回放基于旧录像仍然通过，于是测试是绿的但线上会崩。治理方式是给录像设刷新周期，并在模型版本变化时强制重录；实现上正好可以挂在发布清单的模型维度变化事件上。</p>
+</div>
+</details>
+
+<details>
+<summary>固定了随机种子，为什么同一输入还是复现不出同样结果？</summary>
+<div class="answer">
+<p>因为种子只能消除框架层面的伪随机来源，管不了浮点加法的结合顺序。GPU 上还有一类不确定性来自算子实现本身：使用原子累加的归约操作其累加顺序取决于线程调度、某些矩阵乘法库会根据输入形状与批大小选择不同的分块策略、稀疏与散射类算子的写入顺序不保证。这些都会让同一输入在同一张卡上多次运行产生末位差异，而在采样解码的场景里，末位差异可能翻转某个 token 的选择，于是输出整段不同。要真正确定需要显式启用框架提供的确定性算法开关，代价是部分算子退化到较慢实现、有些算子在确定性模式下直接不可用；即使这样做了，跨 GPU 型号的结果仍然可能不同。实践上的影响是：这类不确定性在流水线里会表现为 flaky 测试，如果不知道根因就会被当成测试质量问题反复"修"，所以值得在团队内明确这条知识。</p>
+</div>
+</details>
+
+<details>
+<summary>推理引擎的编译产物能不能一次构建多处部署？</summary>
+<div class="answer">
+<p>不能，这是"一次构建多处部署"原则在 AI 项目里的真正例外。NVIDIA TensorRT 官方明确写道：默认情况下，序列化的 engine 只保证在与序列化它时相同的操作系统、CPU 架构、GPU 型号和 TensorRT 版本下正确工作；常见问题里对"engine 能否跨 TensorRT 版本移植"的回答是默认不能，对 INT8 校准表的回答同样是不能，换版本必须重新生成。最危险的情形不是报错而是警告：算力相同但 GPU 型号不同时，官方只给警告而非错误，措辞是这样做很可能影响性能甚至导致错误——流水线是绿的，问题到生产才出现。官方确实提供了版本兼容、硬件兼容与跨平台构建选项来放宽约束，但都以性能损失为代价，且跨平台构建出的 engine 不能在构建它的宿主平台运行。正确的表述是：制品从"一个"变成"一组按硬件坐标索引的不可变产物"，每一份仍然构建一次、有摘要、可回滚，只是部署时按节点硬件选取坐标。相应地，缓存键必须完整包含模型标识与权重摘要、精度、引擎与 CUDA 与驱动版本、GPU 算力乃至型号、动态 shape 范围、最大批大小。</p>
+</div>
+</details>
+
+<details>
+<summary>用托管 API 的模型，为什么"我什么都没改"线上行为却变了？</summary>
+<div class="answer">
+<p>因为代码里引用的很可能是一个指向"最新稳定版"的模型别名，而不是具体的版本快照。供应商切换别名指向的那一刻，你的线上行为就变了，但你的所有制品、发布清单、部署记录都显示什么都没动。这是 AI 项目独有的一类故障，排查特别痛苦，因为变更审计全是干净的，团队会把时间花在检查自己的代码和数据上。传统系统里"我没动过"等价于"它没变"，接了托管模型之后这个等价关系就断了。防御只有一条并且必须做：把模型固定到具体的版本标识而不是别名，并写进发布清单。这样供应商发布新快照时，升级变成你的一次主动选择，要走一遍完整的发布流程——小样本筛查、全量离线评测、影子对比、渐进放量。顺带一个配套动作：模型版本变化应当触发录制回放的录像强制重录，因为旧录像已经不代表新模型的响应形态。</p>
+</div>
+</details>
+
+<details>
+<summary>AI 服务的回滚为什么做不到秒级，该怎么办？</summary>
+<div class="answer">
+<p>因为回滚要付的不是切换镜像的代价，而是权重重新加载的代价：从缓存或存储读入数十 GB、传输进显存、预热内核、重新分配 KV 缓存，这是分钟级的，而且期间该副本不可用。这条差异会推翻很多自动化设计的前提——一个"检测到劣化就自动回滚"的机制，如果回滚本身要三分钟，那么这三分钟里劣化仍在持续。处理方式是倒推：先确定业务能容忍的最长劣化窗口，再据此选择回滚方式。要秒级就必须让旧版本副本保持常驻并用路由权重切回，代价是双份显存、成本近乎翻倍；能容忍分钟级就用发布清单回滚加重新加载，没有常驻成本。多数团队没做这个推导，默认以为自己有秒级能力，第一次真正需要回滚时才发现要等三分钟。还有一个实用要点：Prompt 维度的回滚是秒级且零成本的，所以故障处置流程里应该优先判断"是不是 Prompt 变更导致的"，这是最快的止血路径。</p>
+</div>
+</details>
+
+<details>
+<summary>AI 项目的发布里，什么必须留人工闸门？</summary>
+<div class="answer">
+<p>划线依据是这个决策的结果能否被确定性规则判定对错。能判定的交给机器：结构与 schema 校验、解析与契约检查、影子流量在可离线判定维度上的对比、指标采集与基线对比、以及达到预设阈值时的自动回滚（前提是回滚速度跟得上）。不能判定的必须留人：首次把新版本放给真实付费用户；涉及合规、口径、品牌表述的输出变更；供应商模型的大版本切换，因为行为可能整体位移而不是局部退化；以及最容易被忽略的一项——判分器自身的更新。最后这项值得单独强调：判分器是那把尺子，换了尺子之后所有历史基线都不再可比，而自动门禁完全依赖基线对比工作。如果判分器能被自动更新，就会出现"门禁通过了，但它对比的是用不同尺子量出来的旧基线"这种无声失效。正确做法是判分器更新时重跑基线并显式标注口径变更。门禁阈值本身怎么设见 EV09，灰度机制见 A61。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; AI 项目 CI/CD 的特殊代价 &middot; ST29</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

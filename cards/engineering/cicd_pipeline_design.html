@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ST27 · CI/CD 流水线原理与设计</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#a8a29e;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、三个被混用的概念：持续集成、持续交付与持续部署</a>
+<a href="#s2">二、阶段划分与门禁矩阵</a>
+<a href="#s3">三、制品：不可变与一次构建多处部署</a>
+<a href="#s4">四、多环境晋升与配置代码分离</a>
+<a href="#s5">五、分支策略如何决定流水线形态</a>
+<a href="#s6">六、流水线自身的工程质量</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>ST27 · CI/CD 流水线原理与设计</h1>
+<p class="subtitle">持续集成与交付的准入条件 / 阶段划分与反馈预算 / 不可变制品 / 环境晋升与配置分离 / 分支策略与特性开关 / 缓存并行与 flaky 治理</p>
+
+<div class="intuition-box">
+CI/CD 不是"把脚本搬到服务器上定时跑"。它解决的是一个组织问题：当多人并行改同一份代码时，"当前代码是否可发布"这个判断必须便宜、快速、且自动得出，否则这个判断就会退化成靠人记、靠会议、靠发布前一周的集体加班。流水线的每一个设计决策——阶段怎么切、什么阻断什么告警、制品能不能重建——都是在为"降低这个判断的成本"服务。
+</div>
+
+<!-- ==================== 一 ==================== -->
+<div class="section" id="s1">
+<h2>一、三个被混用的概念：持续集成、持续交付与持续部署</h2>
+
+<p>日常对话里，"我们上了 CI/CD"这句话的信息量接近于零，因为它至少可能指三件性质完全不同的事。把这三件事分清楚是后面所有设计的前提，因为它们的<strong>准入条件不同、卡住团队的瓶颈不同、需要的组织授权也不同</strong>。</p>
+
+<h3>持续集成：一个团队纪律，不是一个工具</h3>
+
+<p><span class="term">持续集成</span>指团队成员把各自的改动高频地合并进主干，并且每一次合并都自动触发构建与测试，一旦主干变红就立即停下来修。它的核心不在"自动构建"这半边，而在"高频合并"这半边。trunk-based development 官方站点把这条准入条件写得很直白：持续集成的核心要求是<strong>所有团队成员至少每 24 小时把改动提交进主干一次</strong>，而 trunk-based development 正是让这条要求变得容易满足的分支模型。</p>
+
+<p>这就解释了一个常见的误会。一个团队装了 Jenkins，给十几条长生命周期的特性分支各配了一条构建任务，每晚定时跑一遍全量测试——这是<strong>自动化构建</strong>，不是持续集成。因为集成这个动作（把各人的改动合到一起并验证冲突）仍然被推迟到了分支合并那一天。分支各自都是绿的，合到一起是红的，这种"绿色的谎言"恰恰是持续集成要消灭的东西。判断一个团队有没有真的在做持续集成，问工具是问不出来的，要问两个数字：<strong>分支从创建到合入主干的中位寿命是多少天</strong>，以及<strong>主干变红后恢复绿色的中位时长是多少分钟</strong>。</p>
+
+<div class="intuition-box">
+持续集成的反面不是"手工构建"，而是"延迟集成"。工具解决的是自动化，纪律解决的是频率，只有后者才决定你有没有 CI。
+</div>
+
+<h3>持续交付与持续部署：差的那一步是授权，不是技术</h3>
+
+<p><span class="term">持续交付</span>要求每一次通过流水线的提交都产出一个<strong>随时可以上线的制品</strong>，上线与否是一个业务决策，由人按一个按钮触发。<span class="term">持续部署</span>则把这最后一步也自动化：通过全部门禁的提交直接进入生产环境，没有人工按钮。</p>
+
+<p>很多团队卡在持续交付到持续部署之间，误以为差的是技术。实际上差的是三样配套能力：能把"代码上线"与"功能对用户可见"解耦的<span class="term">特性开关</span>机制（见本卡第五章）、能在指标劣化时自动收敛的回滚路径、以及足够可信的线上可观测性。缺了这三样而强推自动部署，等于把风险从"发布日的集中爆发"改成了"每天随机爆发"，并没有变好。</p>
+
+<table>
+<tr><th>维度</th><th>持续集成</th><th>持续交付</th><th>持续部署</th></tr>
+<tr><td>准入条件</td><td>主干高频合并（≤24h）+ 快速可信的自动测试</td><td>不可变制品 + 环境晋升链路 + 自动化验收</td><td>特性开关 + 自动回滚 + 线上指标门禁</td></tr>
+<tr><td>自动化终点</td><td>主干构建与测试通过</td><td>产出可发布制品并推进到预生产</td><td>制品自动进入生产并承接流量</td></tr>
+<tr><td>组织含义</td><td>团队工程纪律</td><td>工程交付能力</td><td>风险偏好与授权决策</td></tr>
+<tr><td>失败时谁被阻塞</td><td>整个团队（主干红了大家都别提交）</td><td>发布窗口</td><td>线上用户</td></tr>
+<tr><td>验证问句</td><td>分支中位寿命几天？主干修复几分钟？</td><td>任意一个绿色提交能否立即上线？</td><td>上一次上线有人按按钮吗？</td></tr>
+</table>
+
+<div class="arch-diagram">
+三个概念的覆盖边界（外层包含内层的全部前提）
+
+  ┌──────────────────────── 持续部署 ────────────────────────┐
+  │  ┌────────────────── 持续交付 ──────────────────┐        │
+  │  │  ┌──────── 持续集成 ────────┐                │        │
+  │  │  │  提交 → 构建 → 单测      │                │        │
+  │  │  │  主干每日合并 · 红了即修  │                │        │
+  │  │  └──────────────────────────┘                │        │
+  │  │        ↓ 产出不可变制品                       │        │
+  │  │   集成测试 → 预生产晋升 → 验收通过            │        │
+  │  │        ↓ 此处有一个人工按钮 ←──────────────── 交付止于此
+  │  └──────────────────────────────────────────────┘        │
+  │            ↓ 按钮被自动化替换（需开关+回滚+指标门禁）      │
+  │        生产环境 · 渐进放量 · 劣化自动收敛                 │
+  └──────────────────────────────────────────────────────────┘
+</div>
+</div>
+
+<!-- ==================== 二 ==================== -->
+<div class="section" id="s2">
+<h2>二、阶段划分与门禁矩阵</h2>
+
+<p>流水线为什么要分阶段？如果只是为了界面上好看，那随便分都行。真正的原因是<strong>反馈时长与信息量之间存在一个取舍，而阶段划分是对这个取舍的显式编排</strong>：越便宜越快的检查放越前面，让大多数错误在几秒到几分钟内被打回；越昂贵越慢的检查放后面，只有前面全绿才值得花这个钱。</p>
+
+<h3>反馈时长预算：为什么第一阶段要控制在几分钟内</h3>
+
+<p>第一个阶段通常叫<span class="term">提交阶段</span>，它的时长预算一般设在 5 到 10 分钟。这个数字不是拍出来的，它对应一个人的注意力窗口：如果提交后几分钟内拿到结果，开发者还停在同一个心智上下文里，修起来是"接着改"；如果要等半小时，人已经切去做别的事，回来要重新装载上下文，修复成本翻倍，而且这段时间里他很可能已经在这个未验证的基础上继续提交了。更糟的是排队效应——提交阶段慢一倍，等待中的提交就堆积，团队的实际集成频率被迫下降，第一章说的那条 24 小时准入条件就守不住了。</p>
+
+<div class="intuition-box">
+反馈时长不是体验问题，是吞吐问题。提交阶段的时长直接决定团队敢不敢高频合并，而合并频率又决定了每次合并要解决的冲突有多大。慢流水线会把团队推回延迟集成。
+</div>
+
+<h3>快失败：把检查按"成本除以信息量"排序</h3>
+
+<p><span class="term">快失败</span>原则说的是：如果一次流水线注定要失败，让它在最便宜的那一步就失败。实现方式是给每个检查估两个量——执行成本（时长、机器、外部额度）与信息量（能拦住多少比例的真实缺陷），然后按比值排序。格式检查和静态分析几秒就跑完却能拦住相当一部分低级错误，理应最先执行；端到端测试需要拉起整套依赖、跑几十分钟，就不该挡在提交阶段的入口。</p>
+
+<p>现代流水线工具把这件事做成了一等能力。GitLab CI 的 <code>needs</code> 关键字让作业不必等整个上游阶段跑完，只要它自己依赖的那几个作业完成就能启动；官方还专门提供了 <code>needs: []</code>，让 lint 与扫描类作业在流水线创建的瞬间就开始跑，因为它们只依赖源码、不依赖构建产物。</p>
+
+<pre><code>lint_code:
+  stage: test
+  needs: []          # 不等 build，流水线一创建立即开跑
+  script: echo "Linting code..."</code></pre>
+
+<h3>门禁矩阵：哪些必须阻断，哪些只告警</h3>
+
+<p>门禁的分类标准只有一条：<strong>这个信号是否既确定又可操作</strong>。确定的意思是它为真时缺陷一定存在（假阳性率低）；可操作的意思是收到信号的人知道该改什么。同时满足才配得上阻断权，否则只能告警。把不确定的信号设成阻断，后果是团队学会了"重跑一次看看"，而这个习惯一旦养成，真正的阻断信号也会被同样对待，门禁整体失效。</p>
+
+<table>
+<tr><th>阶段</th><th>该拦什么</th><th>时长预算</th><th>阻断 / 告警</th><th>理由</th></tr>
+<tr><td>预检（提交前）</td><td>格式、密钥泄露、提交信息规范</td><td>&lt; 10 秒</td><td>阻断（本地钩子）</td><td>确定、零歧义、修复成本最低</td></tr>
+<tr><td>提交阶段</td><td>编译失败、单元测试、类型检查、依赖高危漏洞</td><td>5–10 分钟</td><td>阻断</td><td>确定且可操作，是主干可信度的底线</td></tr>
+<tr><td>构建与打包</td><td>制品能否成功产出并带上来源元数据</td><td>3–10 分钟</td><td>阻断</td><td>后续所有阶段都消费这个制品</td></tr>
+<tr><td>集成测试</td><td>跨服务契约、数据库迁移、配置可加载</td><td>10–25 分钟</td><td>阻断（合并到主干时）</td><td>确定性尚可，但不适合挡住每次推送</td></tr>
+<tr><td>端到端 / 验收</td><td>关键业务路径可用</td><td>20–60 分钟</td><td>关键路径阻断，其余告警</td><td>易 flaky，全量阻断会摧毁门禁可信度</td></tr>
+<tr><td>性能与容量</td><td>相对基线的延迟与吞吐回归</td><td>定时执行</td><td>大幅回归阻断，小幅波动告警</td><td>测量噪声大，需设死区</td></tr>
+</table>
+
+<div class="arch-diagram">
+门禁矩阵：一次提交穿过流水线时被过滤的层次
+
+ 提交
+  │
+  ├─[预检 10s]──── 格式/密钥 ──✗ 本地即拒（不消耗 CI 资源）
+  │                              │
+  ├─[提交阶段 6min]─ 编译+单测+类型+依赖审计 ──✗ 阻断，红灯归提交者
+  │                              │ 绿
+  ├─[构建 5min]──── 产出不可变制品 + 来源证明
+  │                              │
+  ├─[集成 18min]─── 契约/迁移/配置 ──✗ 阻断合并
+  │                              │ 绿
+  ├─[E2E 35min]──── 关键路径 ✗ 阻断 · 边缘用例 ✗ 只告警并记账
+  │                              │
+  └─[性能 定时]──── 对比基线，超出死区才阻断
+
+ 信息量/成本 递减 ───────────────────────────────→ 昂贵且噪声大
+</div>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某中台团队把全套端到端测试放在提交阶段，每个 PR 必须等 34 分钟才拿到结果，日均合并 6 次，主干平均每周红 3 次且平均 2 小时才恢复。改造做了两件事：把提交阶段裁到编译、单测、类型检查共 4 分钟并保持阻断；端到端拆成"12 条关键业务路径"在合并主干时阻断、其余 200 余条转为每晚定时跑且失败只开工单。结果 PR 中位等待从 34 分钟降到 5 分钟，日均合并升到 21 次，主干红灯次数反而降到每周不到 1 次——因为提交频率上去之后，每次合并的改动量变小了。（本例为构造的典型场景，用于说明反馈时长与集成频率的耦合关系，非实测数据。）</p>
+</div>
+
+<p>门禁矩阵里有几类检查有专门的卡片展开：自动化评测怎么接进流水线、触发条件与基线对比怎么设计，见 <a href="./evaluation_testing.html">EV01 · 评估与测试</a> 第三章与 SG03 · AI 应用全链路性能评测指南 的 CI/CD 一章；发布阶段的线上门禁阈值怎么定，见 <a href="./online_eval_release_gate.html">EV09 · 在线评测与发布门禁</a>；AI 生成代码的静态扫描、覆盖率与突变测试门槛，见 <a href="./ai_codegen_skill_monitoring.html">ST21 · AI 代码生成与 Skill 调用监控</a> 与 <a href="./ai_code_review_graph.html">ST19 · Graph Engineering 代码审查工程化</a>。本卡不重复这些阈值细节，只负责把它们放在流水线的正确位置上。</p>
+</div>
+
+<!-- ==================== 三 ==================== -->
+<div class="section" id="s3">
+<h2>三、制品：不可变与一次构建多处部署</h2>
+
+<p><span class="term">制品</span>是构建阶段的输出：一个容器镜像、一个 jar、一个静态包。围绕制品有一条几乎没有例外的原则——<strong>一次构建，多处部署</strong>。同一个字节序列依次进入测试、预生产、生产，中间不重新构建。</p>
+
+<h3>为什么必须不可变</h3>
+
+<p>假设每个环境各自重新构建一次。表面上代码是同一个提交，但构建过程要做依赖解析，而依赖解析在两个时刻可能给出不同答案：某个间接依赖发布了新的补丁版本、某个基础镜像的 <code>latest</code> 标签指向了新内容、某个编译工具链在两次构建之间升级了。于是你在预生产验证过的那一坨二进制，和生产实际运行的那一坨，并不是同一个东西。此时预生产的全部验证价值归零——你验证的是一个再也不会运行的制品。</p>
+
+<p>Docker 的层缓存机制也从反面印证了重建的不可靠。官方文档说明，Dockerfile 的每条指令对应一层，<strong>一旦某层发生变化，它之后的所有层都必须重新构建</strong>，即使那些层的构建逻辑毫无改动。这意味着"同样的 Dockerfile 在不同时间构建会得到同样的镜像"从来不是一个可依赖的假设。</p>
+
+<div class="intuition-box">
+不可变制品的真正价值是让"测试通过"这句话有指向对象。如果制品会重建，测试通过说的是某个已经消失的东西，等于什么都没说。
+</div>
+
+<h3>可变标签与不可变摘要：部署必须引用后者</h3>
+
+<table>
+<tr><th>引用方式</th><th>例子</th><th>指向是否唯一</th><th>适合用途</th><th>风险</th></tr>
+<tr><td>可变标签</td><td><code>myapp:latest</code></td><td>否，可被重新推送覆盖</td><td>本地开发便利</td><td>两台机器拉到不同内容，问题无法复现</td></tr>
+<tr><td>语义化版本标签</td><td><code>myapp:2.4.1</code></td><td>约定唯一，技术上仍可覆盖</td><td>对外沟通兼容性</td><td>依赖发布纪律，被重推后无感知</td></tr>
+<tr><td>内容摘要</td><td><code>myapp@sha256:9f3c…</code></td><td>是，由内容哈希决定</td><td>部署清单、回滚、审计</td><td>不可读，需配套元数据映射</td></tr>
+</table>
+
+<h3>语义化版本与构建号：两个受众，两种职责</h3>
+
+<p><span class="term">语义化版本</span>（主版本.次版本.补丁）是一个面向消费者的兼容性契约：主版本变了意味着你需要改代码，次版本变了意味着有新能力但可以不改，补丁变了意味着可以无脑升级。它承载的是<strong>意图</strong>，由人决定。<span class="term">构建号</span>（单调递增序号或提交哈希）是一个面向流水线的可追溯标识，它承载的是<strong>事实</strong>，由机器生成。两者不能互相替代：语义化版本回答"我能不能升"，构建号回答"这个二进制是从哪个提交、哪次运行、哪台机器出来的"。生产环境的部署记录必须同时保留两者，否则要么无法判断影响范围，要么无法定位来源。</p>
+
+<table>
+<tr><th>标识</th><th>受众</th><th>生成者</th><th>回答的问题</th><th>能否复用</th></tr>
+<tr><td>语义化版本</td><td>下游使用者、产品、支持</td><td>人（发布决策）</td><td>这次升级会不会破坏我</td><td>不能，一个版本号对应一份内容</td></tr>
+<tr><td>构建号 / 运行 ID</td><td>流水线、审计、故障定位</td><td>CI 系统</td><td>这个制品是怎么来的</td><td>不能，单调递增</td></tr>
+<tr><td>源码提交哈希</td><td>开发者</td><td>版本控制系统</td><td>代码是哪一版</td><td>可复用（同一提交可多次构建）</td></tr>
+<tr><td>内容摘要</td><td>部署系统、安全</td><td>内容哈希</td><td>运行的字节是否被换过</td><td>相同内容天然相同</td></tr>
+</table>
+
+<div class="arch-diagram">
+一次构建多处部署：制品是唯一实体，环境只是它的位置
+
+              ┌──────────────┐
+  提交 abc123 │  构建一次     │  → 制品 app@sha256:9f3c…
+              └──────┬───────┘     + 来源元数据(提交/运行ID/依赖清单)
+                     │  推送
+                     ▼
+              ┌──────────────┐
+              │   制品库      │  不可变存储 · 保留策略 · 访问控制
+              └──┬────┬───┬──┘
+       晋升(仅元数据变更，不重建)
+         ┌───────┘    │   └────────┐
+         ▼            ▼            ▼
+     ┌───────┐   ┌─────────┐   ┌──────┐
+     │  dev  │ → │ staging │ → │ prod │   同一 sha256 贯穿三处
+     └───────┘   └─────────┘   └──────┘
+   配置从环境注入 ↑           ↑          ↑
+   （代码里不含任何环境差异）
+</div>
+
+<h3>制品库的作用不止是存储</h3>
+
+<p>把制品扔进对象存储也能"存起来"，但制品库额外提供四件事：不可变性保证（同一坐标不允许覆盖推送）、保留与清理策略（否则存储成本随构建次数线性膨胀）、来源元数据与签名的承载位置（谁构建的、从哪个提交、用了哪些依赖，见 <a href="./cicd_toolchain_gitops.html">ST28 · CI/CD 工具链与 GitOps</a> 第五章）、以及晋升语义（用仓库或标签表达"这个制品已通过预生产验证"）。缺了这些，制品的可信度就只能靠流水线日志口头保证。</p>
+</div>
+
+<!-- ==================== 四 ==================== -->
+<div class="section" id="s4">
+<h2>四、多环境晋升与配置代码分离</h2>
+
+<p>多环境的存在理由是<strong>把"验证什么"分摊到不同置信度与不同成本的位置上</strong>。如果三个环境干的是同样的事，那就只需要一个。</p>
+
+<table>
+<tr><th>环境</th><th>核心职责</th><th>数据</th><th>谁在用</th><th>失败的后果</th><th>常见误用</th></tr>
+<tr><td>dev</td><td>让改动能跑起来，快速试错</td><td>合成或脱敏小样本</td><td>开发者本人</td><td>只影响自己</td><td>当成集成环境，多人抢占</td></tr>
+<tr><td>staging</td><td>验证与生产同构的集成行为</td><td>脱敏的生产同分布数据</td><td>流水线、验收</td><td>拦住发布</td><td>配置与拓扑和生产不一致，验证失效</td></tr>
+<tr><td>prod</td><td>承接真实流量，是唯一的事实</td><td>真实数据</td><td>用户</td><td>影响收入与信任</td><td>在这里第一次执行未验证的迁移</td></tr>
+</table>
+
+<div class="intuition-box">
+staging 的价值完全取决于它与生产的同构程度。一个拓扑、配置、数据分布都和生产不一样的 staging，提供的是虚假的安全感——它会让你以为验证过了，而实际验证的是另一个系统。
+</div>
+
+<h3>晋升是元数据变更，不是重新构建</h3>
+
+<p>承接第三章：环境晋升的正确实现是把"某个制品摘要已通过某个阶段"记录下来，部署时按这个记录去拉同一个摘要。晋升动作本身不碰构建。一旦某个环境的部署触发了重新构建，不可变链条就断了，而且断裂位置往往是最关键的那一段（预生产到生产）。</p>
+
+<h3>配置与代码分离：十二要素的那条试纸</h3>
+
+<p>既然同一个制品要进三个环境，那么环境之间的差异（数据库地址、外部服务凭据、功能开关、副本数）就必须来自制品外部。<a href="https://12factor.net/config">十二要素应用</a>的配置一章给出了一条非常好用的判定标准：<strong>把代码库随时开源出去，会不会泄露任何凭据？</strong>如果会，说明配置还没有真正从代码里分离出去。</p>
+
+<p>该文还指出一个容易被忽略的反模式：把配置按"环境"打包成命名组（development / test / production）。它不扩展——项目一大就会出现 staging、qa，然后是某个人的 <code>joes-staging</code>，配置组合爆炸，部署变得脆弱。十二要素主张配置项是<strong>彼此正交的细粒度开关</strong>，按每次部署独立管理，而不是按环境名分组。这条主张放在今天看更重要了，因为预览环境、按 PR 拉起的临时环境已经是常态，环境的数量本身就是动态的。</p>
+
+<div class="arch-diagram">
+配置注入：制品不变，环境变量随部署位置变化
+
+      不可变制品 app@sha256:9f3c…（三处完全相同的字节）
+            │              │              │
+   ┌────────┴──┐   ┌───────┴───┐   ┌──────┴────┐
+   │  dev 部署  │   │ staging   │   │  prod     │
+   ├───────────┤   ├───────────┤   ├───────────┤
+   │DB_URL=... │   │DB_URL=... │   │DB_URL=... │  ← 正交的细粒度变量
+   │LOG=debug  │   │LOG=info   │   │LOG=warn   │    不是"环境包"
+   │FLAG_X=on  │   │FLAG_X=on  │   │FLAG_X=off │
+   └───────────┘   └───────────┘   └───────────┘
+
+   试纸：把仓库开源，上面任何一个值会泄露吗？
+         会 → 配置还在代码里，没分离干净
+</div>
+
+<h3>环境漂移：成因与治理</h3>
+
+<p><span class="term">环境漂移</span>指环境的实际状态逐渐偏离它应有的、被记录下来的状态。它几乎总是由"绕过流水线的善意操作"累积而成，而且极难察觉，因为每一次单独的操作都看起来合理。</p>
+
+<table>
+<tr><th>漂移成因</th><th>典型场景</th><th>为什么难发现</th><th>治理手段</th></tr>
+<tr><td>紧急手工修复</td><td>半夜直接改生产配置止血，事后忘记回填到仓库</td><td>系统恢复了，没人再看</td><td>手工变更必须留 24 小时内回填任务，并用漂移检测兜底</td></tr>
+<tr><td>非声明式变更</td><td>用命令行直接改副本数、加环境变量</td><td>仓库里看不到，只在集群里存在</td><td>声明式期望状态 + 控制器持续纠偏（见 ST28 第三章）</td></tr>
+<tr><td>快照式基础设施</td><td>从一台"配好的机器"做镜像，原始配置步骤已失传</td><td>能用，没人敢动</td><td>基础设施即代码，从零可重建</td></tr>
+<tr><td>配置副本分叉</td><td>staging 配置从生产复制后各自演进</td><td>两边都"正常工作"</td><td>同一模板 + 差异项显式列出，禁止整份复制</td></tr>
+<tr><td>依赖隐式升级</td><td>基础镜像用可变标签，重建后底座换了</td><td>构建是绿的</td><td>基础镜像按摘要固定</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某支付服务连续两个季度出现"预生产通过、生产报错"的发布事故，共 5 次。复盘发现根因是同一类漂移：预生产的连接池上限是仓库里声明的 50，而生产在一年前的一次容量救火中被手工改成 200 并从未回填。于是所有与连接数相关的行为在两个环境里表现不同。治理动作只有两条——打开控制器的自动纠偏让集群侧的手改在秒级被拉回，以及把所有手工变更强制走"临时授权 + 到期自动回填检查"。之后两个季度该类事故为 0。（本例为构造的典型场景，用于说明漂移的隐蔽性，非实测数据。）</p>
+</div>
+</div>
+
+<!-- ==================== 五 ==================== -->
+<div class="section" id="s5">
+<h2>五、分支策略如何决定流水线形态</h2>
+
+<p>分支策略常被当成一个团队偏好问题，其实它是一个<strong>约束流水线形态的结构性选择</strong>：分支模型决定了"集成在什么时候发生"，而流水线只能围绕这个时刻来组织门禁。</p>
+
+<h3>两种模型的对比</h3>
+
+<p><span class="term">trunk-based development</span> 主张所有人在一条主干上协作，用短生命周期分支做代码评审与构建校验，坚决不开长期并存的开发分支。官方站点把它的目标写成"避免合并地狱、不弄坏构建"，并明确指出：短生命周期的特性分支用于评审与 CI，<strong>但不用于制品的创建与发布</strong>；发布分支只在需要时从主干即时切出、硬化后发布、发布后删除。</p>
+
+<p>Git Flow 则设计了 <code>master</code> 与 <code>develop</code> 两条无限生命周期的主分支，外加 feature、release、hotfix 三类支撑分支。值得注意的是原文作者在 2020 年补了一段反思：这个模型是 2010 年为<strong>显式版本化、需要同时支持多个在野版本</strong>的软件设计的；如果你的团队在做持续交付的 Web 应用，应该采用更简单的工作流（如 GitHub flow），而不是硬把 Git Flow 套进去。这段自述很重要，因为它把选型标准从"哪个更先进"换成了"你的软件是什么形态"。</p>
+
+<table>
+<tr><th>维度</th><th>trunk-based development</th><th>Git Flow</th></tr>
+<tr><td>长期分支数</td><td>1 条（主干）</td><td>2 条（master + develop）</td></tr>
+<tr><td>集成时刻</td><td>每天多次，持续发生</td><td>特性完成时、发布分支切出时</td></tr>
+<tr><td>分支寿命</td><td>小时到 1–2 天</td><td>数天到数周</td></tr>
+<tr><td>流水线形态</td><td>主干一条主线 + PR 校验；发布从主干切</td><td>多分支多形态：develop 夜构建、release 硬化、hotfix 双向回并</td></tr>
+<tr><td>冲突成本</td><td>低且分散</td><td>集中在合并期，规模大</td></tr>
+<tr><td>适用软件</td><td>持续交付的服务、单一在线版本</td><td>显式版本化、需支持多个在野版本（客户端、私有化交付）</td></tr>
+<tr><td>对开关的依赖</td><td>强依赖（未完成功能必须能关掉）</td><td>弱（未完成功能留在分支上）</td></tr>
+</table>
+
+<div class="intuition-box">
+分支寿命是一个可测量的杠杆：分支活多久，冲突就积累多久，集成风险就攒多大。把分支寿命从两周压到一天，不需要任何新工具，但它会把流水线的门禁效果放大数倍。
+</div>
+
+<div class="arch-diagram">
+分支模型决定流水线形态
+
+  trunk-based                        Git Flow
+  ───────────                        ────────
+  main ●──●──●──●──●──●──●           master ●─────────●────────●
+        ↑  ↑  ↑  ↑  ↑  ↑                      ↖tag     ↖tag
+        │  │  │  │  │  │             release       ●──●─┘
+      短分支(数小时)各自 PR 校验                   ↗      ↘
+        └─ 合并前串行验证合并结果      develop ●──●──●──●──●──●──●
+           （合并队列）                          ↑        ↑
+                                       feature ●──●──●──┘ (数周)
+  流水线：一条主线 + PR 校验
+  发布：需要时从 main 切出并硬化      流水线：4 种分支 4 套规则
+</div>
+
+<h3>合并门禁：为什么"每个 PR 都是绿的"还不够</h3>
+
+<p>一个反直觉但常见的失败模式：两个 PR 各自在自己的分支上测试全绿，合并后主干却红了。原因是它们改动了彼此的<strong>语义</strong>而非同一行文本——A 删了一个函数，B 新增了对它的调用；Git 看不出冲突，编译器才看得出。分支越多、寿命越长，这类语义冲突越多。</p>
+
+<p>解法是<span class="term">合并队列</span>：不再验证"分支自身"，而是串行验证"分支与当前主干合并后的结果"，只有这个结果绿了才真正落地。trunk-based development 官方把合并队列列为超大规模场景下的形态。代价是合并吞吐受串行验证限制，所以它反过来又要求提交阶段足够快——第二章的时长预算在这里再次成为瓶颈。</p>
+
+<h3>特性开关：把"发布"与"上线"解耦</h3>
+
+<p>trunk-based development 要求未完成的功能也能进主干，这只有在功能可以被关掉时才成立，所以特性开关不是可选配件，而是这个模型的承重结构。它带来的根本转变是：<strong>部署变成一个技术动作，发布变成一个业务动作</strong>，两者可以在不同时间由不同角色执行。这也正是第一章里持续部署所缺的那块配套能力。</p>
+
+<table>
+<tr><th>开关类型</th><th>用途</th><th>预期寿命</th><th>由谁操作</th><th>治理要点</th></tr>
+<tr><td>发布开关</td><td>让未完成功能安全地待在主干里</td><td>天到周，功能上线后必须删</td><td>开发者</td><td>设到期日，过期进技术债清单</td></tr>
+<tr><td>运维开关</td><td>故障时降级、限流、关闭重负载特性</td><td>长期</td><td>值班工程师</td><td>必须能在不发版的情况下改</td></tr>
+<tr><td>实验开关</td><td>A/B 分流</td><td>实验周期</td><td>产品/数据</td><td>分流需稳定，同一用户结果一致</td></tr>
+<tr><td>权限开关</td><td>按客户或套餐放开能力</td><td>长期</td><td>业务配置</td><td>属于业务逻辑，不该混进技术开关系统</td></tr>
+</table>
+
+<p><strong>开关的代价必须一起算：</strong>每个开关都在代码里引入一个分支，n 个开关理论上就是 2ⁿ 种运行组合，而你的测试只覆盖其中几条。所以发布开关必须有到期纪律——用完即删。开关长期不清理的团队最终会得到一份没人敢动的配置，这本身就是一种新形态的环境漂移。</p>
+</div>
+
+<!-- ==================== 六 ==================== -->
+<div class="section" id="s6">
+<h2>六、流水线自身的工程质量</h2>
+
+<p>流水线是生产系统。它有可用性、有延迟、有成本、有故障率，也需要被当作代码来维护。团队常犯的错是把流水线当成一堆"能跑就行"的脚本，直到它变成交付的瓶颈。</p>
+
+<h3>缓存与增量：省时间的同时别省掉正确性</h3>
+
+<p>缓存的核心是<span class="term">缓存键</span>设计，它必须精确表达"什么变了就该失效"。以 GitHub Actions 的缓存为例，其查找顺序是：先精确匹配 <code>key</code>，未命中则按 <code>key</code> 做前缀匹配，仍未命中则按顺序尝试 <code>restore-keys</code>，当前分支都没有才回退到默认分支查找。这个由精确到模糊的阶梯让你能在"完全命中"与"部分复用"之间取舍。</p>
+
+<pre><code>- uses: actions/cache@v4
+  with:
+    path: ~/.npm
+    key: ${{ runner.os }}-npm-${{ hashFiles('**/package-lock.json') }}
+    restore-keys: |
+      ${{ runner.os }}-npm-</code></pre>
+
+<p>注意缓存不是免费的。官方限制是：<strong>超过 7 天未被访问的缓存条目会被删除，单仓库缓存总量默认上限 10 GB</strong>，超限后按最后访问时间从旧到新驱逐。文档还特别提醒这会引发<strong>缓存抖动</strong>——缓存被高频创建又删除，于是既花了上传时间又几乎没有命中收益。所以缓存的粒度要控制：别把巨大的产物塞进通用缓存，那属于制品或持久卷的职责。</p>
+
+<table>
+<tr><th>缓存层级</th><th>缓存什么</th><th>失效条件（应写进键）</th><th>失效错了的后果</th></tr>
+<tr><td>依赖缓存</td><td>包管理器下载目录</td><td>锁文件哈希 + 运行环境 + 语言版本</td><td>装到旧版本依赖，构建结果与锁文件不符</td></tr>
+<tr><td>编译缓存</td><td>中间目标文件</td><td>源码哈希 + 编译器版本 + 编译参数</td><td>混用不同参数的产物，出现诡异运行时错误</td></tr>
+<tr><td>镜像层缓存</td><td>Dockerfile 各层</td><td>由指令与被 COPY 内容决定（工具自动）</td><td>某层变化导致其后全部层重建，命中率骤降</td></tr>
+<tr><td>测试结果缓存</td><td>未受影响模块的测试结论</td><td>模块及其依赖闭包的哈希</td><td>跳过了本该重跑的测试，漏过真实缺陷</td></tr>
+</table>
+
+<div class="intuition-box">
+缓存键是一份"我认为什么会影响结果"的声明。键写得太宽会拿到不该复用的东西，得到一个能构建成功但内容错误的制品；写得太窄则永远不命中，白付上传成本。缓存出的怪问题，根因几乎总在键里。
+</div>
+
+<h3>并行与依赖图</h3>
+
+<p>把流水线从"阶段串行"改成"依赖图"，能砍掉大量无意义的等待。GitLab CI 的 <code>needs</code> 就是把流水线变成有向无环图：作业只等它真正依赖的上游，常见形态有一对多的 fan-out、多对一的 fan-in 以及两者组合的菱形依赖。官方甚至支持完全省略 <code>stages</code>、只用 <code>needs</code> 描述顺序的"无阶段流水线"。</p>
+
+<div class="arch-diagram">
+阶段串行 vs 依赖图：同一组作业，关键路径不同
+
+ 阶段串行（木桶效应：每阶段等最慢的那个）
+  ├─ build ─────┤        ├─ test ──────┤       ├─ deploy ─┤
+  A:  3min ▓▓▓            A: 2min ▓▓             A: 1min ▓
+  B: 12min ▓▓▓▓▓▓▓▓▓▓▓▓   B: 4min ▓▓▓▓          B: 1min ▓
+  总时长 = 12 + 4 + 1 = 17 min
+
+ 依赖图（needs：只等真实上游）
+  A: build 3 ─→ test 2 ─→ deploy 1        = 6  min ✔ 提前上线
+  B: build 12 ─→ test 4 ─→ deploy 1       = 17 min
+  关键路径 = 17 min，但 A 在第 6 分钟就交付完毕
+
+ 另有 needs: [] ── lint/scan 在第 0 秒即启动，不等任何构建
+</div>
+
+<h3>幂等与可重跑</h3>
+
+<p><span class="term">幂等</span>在流水线语境下有两层含义。第一层是<strong>重跑同一个提交应当得到同一个结论</strong>——做不到就说明流水线依赖了不该依赖的东西（当前时间、外部可变服务、上一次运行残留的工作目录、机器本地状态）。自托管执行机尤其容易犯这个错，因为它们默认不为每个作业提供干净实例。第二层是<strong>带副作用的步骤本身幂等</strong>：部署同一个制品两次应当收敛到同一状态；制品上传遇到同一坐标应当拒绝覆盖而非静默替换；数据库迁移应当可安全重放。两层都满足，"重跑"才是一个安全操作而不是赌博。</p>
+
+<h3>流水线即代码</h3>
+
+<p><span class="term">流水线即代码</span>指把流水线定义写成文件、放进被交付项目的版本库。Jenkins 官方把这称为 Pipeline-as-Code，并列出了四项直接收益：所有分支与 PR 自动获得构建流程、流水线改动可以像代码一样评审与迭代、天然具备审计轨迹、以及成为流水线的唯一事实来源。最后一条最关键——界面里手工点出来的任务配置没有历史、没有评审、没有回滚，而且往往只有一个人知道它为什么是那样。</p>
+
+<h3>构建时长与 flaky 测试的治理</h3>
+
+<p><span class="term">flaky 测试</span>指同一份代码多次运行结果不一致的测试。它的破坏性不在于偶尔挡住一次合并，而在于<strong>它训练团队忽略红灯</strong>。一旦"红了就点重跑"成为肌肉记忆，所有门禁的可信度同时下降，这时流水线仍在运行，但已经不再提供保护。</p>
+
+<p>正确的治理是把它当缺陷管理，而不是靠自动重试掩盖。自动重试有两个隐性代价：它把非确定性的根因（竞态、时序依赖、共享状态未隔离）永久藏起来，而这些根因往往在生产环境同样存在；同时它成倍拉长流水线时长，又回头挤压第二章的反馈预算。</p>
+
+<table>
+<tr><th>阶梯</th><th>动作</th><th>目的</th><th>判定标准</th></tr>
+<tr><td>1 量化</td><td>记录每个测试的历史失败率与失败模式</td><td>把"感觉很flaky"变成数字</td><td>同提交多次运行失败率 &gt; 0</td></tr>
+<tr><td>2 隔离</td><td>移出阻断门禁，进入观察集</td><td>立刻恢复门禁可信度</td><td>失败率超过约定阈值即自动隔离</td></tr>
+<tr><td>3 定责</td><td>指派到代码所有者，设修复期限</td><td>避免进入"无人认领"黑洞</td><td>有负责人与到期日</td></tr>
+<tr><td>4 修复或删除</td><td>到期未修复则删除该测试</td><td>不确定的测试不如没有测试</td><td>隔离集规模不得持续增长</td></tr>
+<tr><td>5 防复发</td><td>补测试隔离能力（时钟注入、独立数据、禁止跨测试共享状态）</td><td>消除滋生土壤</td><td>新增 flaky 数量趋零</td></tr>
+</table>
+
+<div class="highlight">
+<p><strong>示例场景：</strong>某团队流水线端到端阶段有 180 条用例，其中 14 条长期间歇性失败，平均每 3 次运行有 1 次红灯，团队的标准操作是重跑。一次真实缺陷（并发下订单状态回写丢失）被端到端测试正确捕获，但因为落在"经常红的那一片"，被连续重跑 3 次后放行，最终在生产暴露。此后团队把 14 条用例全部移出阻断集并限期两周修复，其中 9 条的根因是共享测试数据未隔离、3 条是固定 sleep 等待、2 条确实是被测代码的竞态。修复后阻断集失败即真缺陷，重跑习惯随之消失。（本例为构造的典型场景，用于说明 flaky 对门禁可信度的破坏，非实测数据。）</p>
+</div>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li>提交阶段死守 5–10 分钟预算，超了就把慢检查往后挪，而不是加机器硬扛</li>
+<li>部署清单只引用内容摘要，让"运行的字节"可被审计</li>
+<li>基础镜像与第三方动作按摘要或提交哈希固定，不用可变标签</li>
+<li>配置按正交的细粒度变量管理，用"仓库能否开源"做泄露试纸</li>
+<li>阻断权只给确定且可操作的信号，其余转告警并记账</li>
+<li>发布开关设到期日，功能上线即删除</li>
+<li>flaky 测试先隔离再限期修复，隔离集规模纳入月度复盘</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li>不要在每个环境重新构建，这会让预生产的验证结论失去指向对象</li>
+<li>不要把端到端全量测试挡在提交阶段，它会压低团队的合并频率</li>
+<li>不要用自动重试掩盖非确定性测试，根因通常在生产同样存在</li>
+<li>不要把配置按环境名打包成组，环境一多就是组合爆炸</li>
+<li>不要在界面里手工维护流水线配置，它没有历史也没有评审</li>
+<li>不要把几十 GB 的产物塞进通用构建缓存，会触发驱逐与缓存抖动</li>
+<li>不要让长生命周期分支与"我们在做 CI"这句话共存</li>
+</ul>
+</div>
+</div>
+
+<h3>延伸阅读</h3>
+
+<p>工具链的执行模型差异、GitOps 的 reconcile 机制、基础设施即代码与供应链安全，见 <a href="./cicd_toolchain_gitops.html">ST28 · CI/CD 工具链与 GitOps</a>；AI 与大模型项目在镜像权重、GPU 算力、版本协同、不确定输出上的额外代价，见 <a href="./ai_project_cicd.html">ST29 · AI 项目 CI/CD 的特殊代价</a>。质量与交付速度的整体取舍见 <a href="./software_quality_triangle.html">ST14 · 软件开发质量三角</a>；把规约作为流水线上游输入见 <a href="./spec_driven_development.html">ST26 · 规约驱动开发</a>；AI 辅助编码的稳定交付流程见 <a href="./ai_stable_delivery_workflow.html">ST25 · AI 编程稳定交付工作流</a>；机器学习专用流水线（数据验证、训练、评估门控）见 <a href="../architecture/mlops_guide.html">S02 · MLOps / LLMOps</a> 第四章。</p>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>装了 Jenkins、每次推送都自动构建，为什么还不算持续集成？</summary>
+<div class="answer">
+<p>因为持续集成的主语是"集成"，不是"构建"。自动构建解决的是"有人帮我跑测试"，持续集成解决的是"所有人的改动尽早合到一起并验证兼容"。如果团队有十几条各活两周的特性分支，每条分支自己的构建都是绿的，那这些绿灯只证明了每个人在自己的世界里没问题，没有任何一次构建验证过"大家合到一起"这个状态。trunk-based development 官方把持续集成的准入条件量化为所有成员至少每 24 小时向主干提交一次，正是因为频率才是这件事的实质。判断方法不看工具看两个数字：分支从创建到合入主干的中位寿命、以及主干变红后恢复绿色的中位时长。前者应当以小时或一两天计，后者应当以分钟计。</p>
+</div>
+</details>
+
+<details>
+<summary>持续交付和持续部署之间差的那一步，到底难在哪？</summary>
+<div class="answer">
+<p>难点通常不在技术管道，而在三样配套能力与一个授权决策。第一样是把"代码上线"与"功能对用户可见"解耦的特性开关机制，否则自动部署就等于自动发布未完成的功能。第二样是可靠的自动回滚路径，即指标劣化时系统能在无人干预下收敛回上一个已知良好状态。第三样是足够可信的线上可观测性，因为取消人工按钮意味着你放弃了"发布前人眼扫一遍"这道防线，必须用线上指标门禁替代它。授权决策则是组织层面的：谁来承担"没有人按按钮就上线了"的责任。缺了配套能力而强推自动部署，只是把风险从发布日的集中爆发改成了每天随机爆发。</p>
+</div>
+</details>
+
+<details>
+<summary>提交阶段为什么一定要控制在几分钟内，慢一点有什么实质坏处？</summary>
+<div class="answer">
+<p>坏处有三层，且会互相放大。第一层是上下文切换：几分钟内拿到结果，开发者还在同一个心智上下文里，修复是"接着改"；等半小时回来就要重新装载上下文，修复成本显著上升。第二层是排队堆积：提交阶段慢一倍，等待验证的提交就积压，团队的实际合并频率被迫下降。第三层是最致命的——合并频率下降会让每次合并的改动量变大，冲突与语义冲突随之增多，主干变红的概率上升，于是团队更不敢频繁合并，形成正反馈。所以提交阶段的时长不是体验指标而是吞吐指标，它直接决定团队能不能守住持续集成那条 24 小时准入条件。超预算时正确做法是把慢检查往后挪到集成或定时阶段，而不是加机器硬扛。</p>
+</div>
+</details>
+
+<details>
+<summary>什么检查才配得上"阻断合并"的权力？</summary>
+<div class="answer">
+<p>判定标准只有一条：这个信号必须既确定又可操作。确定的意思是它为真时缺陷一定存在，假阳性率足够低；可操作的意思是收到信号的人立刻知道该改什么。编译失败、单元测试失败、依赖高危漏洞、密钥泄露都同时满足，理应阻断。容易 flaky 的端到端用例、噪声较大的性能微小回归、刚引入还没清理完历史违规的新 lint 规则都不满足，应当转为告警并记账。把不确定的信号设成阻断有一个连带破坏：团队会学会"红了就点重跑"，而这个习惯一旦形成，真正确定的阻断信号也会被同样对待，整套门禁的可信度一起崩塌。换句话说，门禁的有效性取决于最不可信的那一条规则，而不是最严格的那一条。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么不能在每个环境各自重新构建一次，代码明明是同一个提交？</summary>
+<div class="answer">
+<p>因为同一个提交不保证产出同一个制品。构建过程包含依赖解析，而依赖解析在两个时刻可能给出不同答案：某个间接依赖发布了新补丁版本、某个基础镜像的可变标签指向了新内容、编译工具链在两次构建之间升级了。Docker 官方也说明层缓存是以指令为粒度的，某一层变化会导致其后所有层重建，所以"同样的 Dockerfile 必然得到同样的镜像"从来不是可依赖的假设。后果是你在预生产验证过的那个二进制，和生产实际运行的那个不是同一个东西，于是预生产的全部验证价值归零——你验证的是一个再也不会运行的制品。正确做法是构建一次、产出不可变制品，之后的环境晋升只是元数据变更，部署时按内容摘要而非可变标签拉取。</p>
+</div>
+</details>
+
+<details>
+<summary>已经有了语义化版本，为什么还需要构建号？</summary>
+<div class="answer">
+<p>因为两者服务的受众和回答的问题完全不同。语义化版本是面向消费者的兼容性契约，由人根据变更意图决定：主版本变了意味着你需要改代码，次版本变了意味着有新能力但可以不改，补丁变了意味着可以无脑升级。它回答"我能不能升级"。构建号是面向流水线与审计的可追溯标识，由机器单调生成，它回答"这个二进制是从哪个提交、哪次运行、用了哪些依赖产出的"。一个语义化版本在发布过程中可能对应多次构建尝试，而生产事故定位需要精确到那一次。生产部署记录必须同时保留语义化版本、构建号、源码提交哈希与内容摘要：缺了第一个无法判断升级影响范围，缺了后三个无法定位来源，缺了摘要则无法证明运行的字节没有被换过。</p>
+</div>
+</details>
+
+<details>
+<summary>trunk-based 和 Git Flow 到底该怎么选？</summary>
+<div class="answer">
+<p>选型标准不是"哪个更先进"，而是"你交付的软件是什么形态"。Git Flow 原作者在 2020 年亲自补的反思注记说得最清楚：这个模型是为显式版本化、需要同时支持多个在野版本的软件设计的；如果团队在做持续交付的 Web 应用，应该用更简单的工作流而不是硬套 Git Flow。所以判据是：你是否需要同时维护多个已发布版本并向它们各自打补丁。需要（客户端应用、私有化部署、有长期支持版本承诺的产品）则 Git Flow 那套 release 与 hotfix 分支确有价值；不需要（线上只有一个版本的服务）则它引入的长期并存分支纯属成本，会把集成推迟、把冲突攒大。选了 trunk-based 就必须同时接受它的承重结构：特性开关是必需品，因为未完成的功能也要进主干。</p>
+</div>
+</details>
+
+<details>
+<summary>特性开关看起来很好用，它的代价是什么？</summary>
+<div class="answer">
+<p>最大的代价是组合爆炸与随之而来的认知负担。每个开关都在代码里引入一个运行时分支，n 个开关理论上对应 2ⁿ 种运行组合，而测试只覆盖其中极少数几条，于是线上可能跑在一个从未被验证过的组合上。第二个代价是清理纪律：发布开关本该功能上线后立即删除，但删除没有紧迫性，于是长期堆积，最终形成一份没人敢动的配置——这本身就是一种新形态的环境漂移。治理办法是按类型区别对待：发布开关必须设到期日，过期自动进技术债清单；运维开关长期存在但要求能在不发版的情况下修改；实验开关随实验周期回收；权限开关属于业务逻辑，应该放在业务配置里而不是混进技术开关系统。另外要记住开关本身是生产配置，它的变更同样需要审计与回滚能力。</p>
+</div>
+</details>
+
+<details>
+<summary>flaky 测试能不能靠自动重试解决？</summary>
+<div class="answer">
+<p>不能，自动重试是把问题藏起来而不是解决。它有两个隐性代价。第一个是掩盖根因：测试非确定的原因通常是竞态、时序依赖或共享状态未隔离，而这些缺陷在生产环境同样存在，重试让你失去了发现它们的唯一信号。第二个是成倍拉长流水线时长，回头挤压提交阶段的反馈预算，触发第二章说的那条负反馈链。更深的问题在于它训练团队忽略红灯：一旦"红了就点重跑"成为肌肉记忆，真正的缺陷信号也会被同样处理，这时流水线仍在运行但已不再提供保护。正确做法是把它当缺陷管理走五步阶梯：量化每个测试的历史失败率、超阈值自动移出阻断集、指派代码所有者并设修复期限、到期未修复则删除（不确定的测试不如没有测试）、最后补齐测试隔离能力防止复发。关键约束是隔离集的规模不能持续增长。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; CI/CD 流水线原理与设计 &middot; ST27</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>

@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S11 · K8s 上运行 LLM 推理服务</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--cyan:#15803d}
+body{background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;line-height:1.7;padding:2rem 1rem 2rem 300px}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.container{max-width:960px;margin:0 auto}
+h1{font-size:2.4rem;text-align:center;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2.5rem;font-size:1.05rem}
+h2{color:var(--accent);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:1px solid var(--border);font-size:1.5rem}
+h3{color:var(--accent2);margin:1.5rem 0 .8rem;font-size:1.15rem}
+p{margin:.6rem 0}ul,ol{margin:.6rem 0 .6rem 1.5rem}li{margin:.3rem 0}
+code{background:#e8e1d4;padding:.15rem .4rem;border-radius:4px;font-size:.9em;color:var(--orange)}
+pre{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1rem;overflow-x:auto;margin:1rem 0}
+pre code{background:none;padding:0;color:var(--text)}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.92rem}
+th,td{border:1px solid var(--border);padding:.5rem .8rem;text-align:left}
+th{background:var(--surface);color:var(--accent)}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:2rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.arch-diagram{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0;font-family:"JetBrains Mono","SF Mono",Consolas,monospace;font-size:.82rem;line-height:1.5;color:var(--cyan);overflow-x:auto;white-space:pre}
+.intuition-box{background:rgba(21,128,61,.06);border-left:4px solid var(--green);border-radius:0 8px 8px 0;padding:1rem 1.2rem;margin:1rem 0}
+.intuition-box::before{content:"⚡ 直觉理解";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.1rem .45rem;border-radius:4px;font-size:.88em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:#44403c}
+.formula{background:#e8e1d4;border:1px solid var(--border);border-left:4px solid var(--purple);border-radius:8px;padding:1.2rem 1.5rem;margin:1.2rem 0;text-align:center;font-size:1.05rem;font-family:'Courier New',monospace;color:var(--orange);overflow-x:auto}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.4rem}
+.practice-grid .dont{background:rgba(185,28,28,.06);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.4rem}
+.qa-section{margin-top:3rem}
+.qa-section details{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--accent2);list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::before{content:"Q";background:var(--accent);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section .answer{padding-left:1.9rem;color:#44403c}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+.footer{text-align:center;padding:3rem 0 1rem;color:#a8a29e;font-size:.85rem;border-top:1px solid var(--border);margin-top:3rem}
+@media(max-width:980px){.sidebar{display:none}body{padding:2rem 14px}.practice-grid{grid-template-columns:1fr}h1{font-size:1.8rem}}
+</style>
+</head>
+<body>
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+<aside class="sidebar">
+<h2>Contents</h2>
+<a href="#s1">一、GPU 资源模型与它的三个硬限制</a>
+<a href="#s2">二、模型权重怎么交付到 Pod</a>
+<a href="#s3">三、探针的重灾区：加载分钟级的服务怎么设参数</a>
+<a href="#s4">四、滚动更新与优雅退出对流式推理的破坏</a>
+<a href="#s5">五、扩缩容为什么对 LLM 特别难</a>
+<a href="#s6">六、打包与平台化：Helm、Operator、KServe 与 Ray Serve</a>
+<a href="#qa">Q&amp;A</a>
+</aside>
+
+<div class="container">
+<h1>S11 · K8s 上运行 LLM 推理服务</h1>
+<p class="subtitle">GPU 整数资源与不可超卖 / device plugin 与 MIG 暴露 / 权重四种交付路径 / startupProbe 预算 / preStop 与连接排空 / 队列深度扩缩 / Helm 多环境与 KServe</p>
+
+<div class="intuition-box">
+<p>K8s 的默认假设是"副本秒级可换、资源连续可分、就绪即可服务"。LLM 推理把这三条全部破坏：副本启动要几分钟、GPU 是不可切分不可超卖的整数、进程报告就绪时首次编译可能还没做完。这张卡讲的就是这三处错配各自会怎么炸，以及怎么把参数与形态改成适配的样子。K8s 的通用概念不在这里重讲——Pod 与探针机制见 <a href="./kubernetes_pod_deep.html">S05</a>，YAML 与运维痛点见 <a href="./k8s_porter.html">S06</a>。</p>
+</div>
+
+<!-- ==================== 一 ==================== -->
+<div class="section" id="s1">
+<h2>一、GPU 资源模型与它的三个硬限制</h2>
+
+<p>CPU 和内存在 K8s 里是连续可分的：<code>500m</code> 是半核，requests 与 limits 可以不等，因此可以超卖。GPU 完全不是这样。<code>nvidia.com/gpu</code> 是通过 <span class="term">device plugin</span>（设备插件）机制注册的<strong>扩展资源</strong>，而扩展资源在 K8s 里只支持整数、且不允许超卖——requests 必须等于 limits。这一条约束是后面所有 GPU 调度话题的起点。</p>
+
+<h3>1.1 三个硬限制及其后果</h3>
+<table>
+<tr><th>硬限制</th><th>机制原因</th><th>直接后果</th><th>能做什么</th></tr>
+<tr><td>只能是整数</td><td>扩展资源不支持小数量纲</td><td>写不出 <code>nvidia.com/gpu: 0.5</code></td><td>要共享必须让插件"多报几个"</td></tr>
+<tr><td>不可超卖</td><td>扩展资源的 requests 必须等于 limits</td><td>一张卡被占后调度器认为它没了</td><td>只能靠时间片/MIG 改变"报几个"</td></tr>
+<tr><td>调度器看不见卡内情况</td><td>调度器只做整数账本，不读显存与利用率</td><td>占了 5% 显存的 Pod 和占满的 Pod 一样"占用 1 卡"</td><td>把显存意图编码进资源名（MIG）或节点池划分</td></tr>
+</table>
+
+<p>第三条是最容易造成浪费的一条。调度器分配的只是一个整数，它不知道你的进程用了 2 GB 还是 80 GB 显存，也不知道算力利用率是 5% 还是 95%。所以十个各用 15% 算力的小服务，在默认配置下要占十张物理卡——真实需求约 1.5 张。</p>
+
+<h3>1.2 GPU 共享的三条路径与它们在 K8s 里的样子</h3>
+<p>既然不能超卖，那"共享"只能通过改变<strong>插件对外声称的数量</strong>来实现。这就是理解 K8s 上 GPU 共享的关键：kube-scheduler 从来不懂 GPU，它只是照着 device plugin 报上来的整数做账。</p>
+
+<div class="arch-diagram">device plugin 如何决定调度器看到什么
+
+  物理机：1 张 A100 80GB
+        │
+        ▼
+  ┌───────────────────────── nvidia device plugin (DaemonSet) ─────────────┐
+  │                                                                        │
+  │  A) 默认           → 上报 nvidia.com/gpu: 1                            │
+  │                      调度器：这台机器有 1 个可分配单位                  │
+  │                                                                        │
+  │  B) time-slicing   → 配置 replicas: 4                                  │
+  │     replicas=4       上报 nvidia.com/gpu: 4                            │
+  │                      调度器：有 4 个单位（但物理上还是同一张卡）        │
+  │                      ⚠ 无显存隔离：一个 Pod 吃 70GB，其余三个 OOM      │
+  │                      ⚠ 无算力保证：replicas 不等于按比例分配算力        │
+  │                                                                        │
+  │  C) MIG mixed      → 硬件切成 7 个实例，按 profile 起独立资源名        │
+  │                      上报 nvidia.com/mig-1g.10gb: 7                    │
+  │                      调度器：有 7 个"另一种资源"                        │
+  │                      ✔ 显存与算力硬隔离                                 │
+  │                      ⚠ 同一容器不能同时请求 gpu 和 mig-* 两种资源       │
+  │                                                                        │
+  │  D) MIG single     → 所有 MIG 设备仍叫 nvidia.com/gpu                  │
+  │                      切分规格靠 nodeSelector 表达                       │
+  └────────────────────────────────────────────────────────────────────────┘
+
+  调度器视角：始终只是"某个资源名 + 一个整数"，卡内发生什么它一概不知</div>
+
+<p>三条路径的取舍在 <a href="../deploy/model_serving.html">DP04 · 模型部署与 Serving</a> 已有 Serving 视角的介绍，这里补的是<strong>它们在调度层暴露成什么</strong>。<span class="term">时间片</span>（time-slicing）通过在 ConfigMap 里设置 <code>replicas</code> 让插件把一张卡报成多个副本，调度器于是能放多个 Pod 上去，靠驱动层的上下文切换轮转执行；它的致命短板是零显存隔离，NVIDIA 也建议配 <code>failRequestsGreaterThanOne: true</code> 以免用户误以为"请求 2 个 replica 就有 2 倍算力"。<span class="term">MIG</span>（Multi-Instance GPU）在 Ampere 及更新架构上做硬件级切分，最多 7 个实例，各有独立显存与算力；在 <code>mixed</code> 策略下每种切分规格暴露成独立资源名（形如 <code>nvidia.com/mig-&lt;切片数&gt;g.&lt;显存&gt;gb</code>），官方明确限制同一容器不能同时请求 <code>nvidia.com/gpu</code> 和某个 <code>mig-*</code>，混请求会拿到未定义的设备；<code>single</code> 策略则保持资源名不变，用 nodeSelector 表达规格，代价是一台机器上的切分必须同构。另外要注意 MIG 与 MPS 在 GPU Operator 里不能组合，时间片与 MPS 也是互斥的。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>某平台把 8 个小模型服务（各自实际用 6~10 GB 显存、算力利用率长期低于 20%）按默认方式部署，每个请求 <code>nvidia.com/gpu: 1</code>，占满了 8 张 A100。改用 MIG <code>mixed</code> 策略把两张 A100 切成 <code>1g.10gb</code> 规格后，8 个服务全部落在这两张卡上，释放出 6 张卡给在线主服务，卡利用率账面上从不足 20% 提升到 60% 以上。踩到的坑有两个：一是切换 MIG 规格要求卡上没有运行中的负载，必须当成一次运维事件排期；二是有一个服务的峰值显存实际会摸到 11 GB，落在 <code>1g.10gb</code> 上直接 OOM，最后单独给它切了 <code>2g.20gb</code>。这说明 MIG 的前提是<strong>你得先量准每个服务的真实显存上界</strong>，而不是按感觉切。</div>
+
+<div class="intuition-box">
+<p>把 K8s 的 GPU 调度理解成"记账"而不是"分配"：device plugin 是唯一的记账员，它说这台机器有几个单位，调度器就照着排；卡里实际发生什么，账本上一个字都没有。所以所有 GPU 共享方案的本质都是"改账本"——时间片改数量但不改物理隔离，MIG 改数量的同时也真的把硬件切开了。选哪个，取决于你能不能承受"账本和现实不一致"的后果。</p>
+</div>
+</div>
+
+<!-- ==================== 二 ==================== -->
+<div class="section" id="s2">
+<h2>二、模型权重怎么交付到 Pod</h2>
+
+<p>权重交付路径直接决定了副本的冷启动时间，而冷启动时间又决定了扩缩容策略与滚动更新窗口——所以这是一个看起来像存储问题、实际上影响整条链路的决策。单机侧的四种做法见 <a href="./containerization_image_engineering.html">S09 · 容器化与镜像工程</a> 第四章，这里讲它们在 Pod 上的形态与代价。其中反复出现的 <span class="term">initContainer</span>（初始化容器）是指在主容器之前运行并必须成功退出的容器，常用来在启动前把权重下载到共享卷里。</p>
+
+<div class="arch-diagram">四种交付路径的时间线对比（同一个 14B 模型，示例量级）
+
+  ① 镜像内置
+     [ 拉镜像 ██████████████████████ 数分钟~十几分钟 ][ 加载 ██ ][ 就绪 ]
+     首次拉取最慢；同节点二次启动因镜像已在本地而很快
+
+  ② PVC 共享卷（RWX）
+     [ 拉镜像 █ ][ 挂卷 ▏][ 从网络存储加载 ████████ ][ 就绪 ]
+     镜像小；加载受网络吞吐与并发副本争用影响
+
+  ③ initContainer 启动时拉取
+     [ 拉镜像 █ ][ init 下载 ██████████████ ][ 加载 ██ ][ 就绪 ]
+     任何节点可自举；每次扩容都付一次完整下载
+
+  ④ 节点本地缓存预热（DaemonSet / 预置盘）
+     [ 拉镜像 █ ][ 命中本地 SSD ▏][ 加载 ██ ][ 就绪 ]  ← 最快
+     未命中时退化为 ②或③；需要一套预热与淘汰机制
+
+  经验组合：④ 做主路径 + ③ 做兜底，把"是否命中缓存"做成可观测指标</div>
+
+<table>
+<tr><th>路径</th><th>启动时延</th><th>扩容行为</th><th>运维代价</th><th>适合场景</th></tr>
+<tr><td>镜像内置</td><td>首次最慢（几十 GB 镜像拉取）</td><td>新节点必须完整拉一遍</td><td>低（无额外组件），但 Registry 存储与带宽成本高</td><td>模型小、版本一致性要求极高</td></tr>
+<tr><td>PVC 共享卷</td><td>中，取决于存储带宽</td><td>多副本同时加载会争抢同一存储</td><td>中，需要支持多点读写的存储类</td><td>多副本共用同一模型、更新不频繁</td></tr>
+<tr><td>initContainer 拉取</td><td>中到慢，每次扩容都重下</td><td>受出网带宽约束，扩容越多越慢</td><td>中，需要校验与重试逻辑</td><td>节点无状态、需要任意节点自举</td></tr>
+<tr><td>节点本地缓存预热</td><td>最快（命中时几乎只剩加载时间）</td><td>命中即快，未命中退化</td><td>高，要维护预热、淘汰与一致性</td><td>对扩容速度敏感的在线服务</td></tr>
+</table>
+
+<h3>2.1 权重之外的第二个挂载</h3>
+<p>只解决权重还不够：除了权重，还有一份编译产物缓存需要单独持久化，否则每个新容器都会从头编译一遍。这份缓存的默认路径与复用机制属于容器层的问题，见 <a href="./containerization_image_engineering.html">S09 · 容器化与镜像工程</a>第四章。这里只说它在 K8s 上的后果：<strong>你要声明的是两个 volumeMount，而不是一个</strong>，而且漏掉第二个既不会报错、也不影响探针转绿。忽略这一条的典型症状是"权重明明挂上了，扩容出来的新副本还是要慢好几分钟才真正能扛流量"——它也是下一章"就绪不等于可用"的主要根因。</p>
+
+<pre><code>        volumeMounts:
+        - { name: weights, mountPath: /models, readOnly: true }
+        - { name: compile-cache, mountPath: /root/.cache/vllm }
+        - { name: shm, mountPath: /dev/shm }   # 张量并行依赖共享内存</code></pre>
+
+<p>第三个挂载同样是 LLM 特有的：vLLM 底层用 PyTorch，进程间通过共享内存传数据，张量并行推理尤其依赖它，官方给的处方是 <code>--ipc=host</code> 或加大 <code>--shm-size</code>；在 Pod 里对应的写法是挂一个 <code>emptyDir</code> 的内存介质卷到 <code>/dev/shm</code>。忘了它的表现是张量并行启动即崩。</p>
+
+<div class="intuition-box">
+<p>权重交付方案的选择，等价于回答一个问题：<strong>你愿意把加载成本付在哪个环节</strong>。付在镜像分发（内置）、付在网络存储（PVC）、付在每次扩容的下载（initContainer），还是付在维护一套缓存预热机制（本地缓存）。在线服务对扩容速度敏感，通常值得付最后一种；离线批处理反过来，最省事的方案就是最好的方案。</p>
+</div>
+</div>
+
+<!-- ==================== 三 ==================== -->
+<div class="section" id="s3">
+<h2>三、探针的重灾区：加载分钟级的服务怎么设参数</h2>
+
+<p>探针有哪几种、四种探测方式怎么工作、失败后各自的动作是什么，<a href="./kubernetes_pod_deep.html">S05 · Kubernetes Pod 核心机制</a> 第四章已经完整展开了，这里不重复。本节只讲一件事：<strong>当启动时间是分钟量级时，这套参数会怎么把服务打进死循环</strong>。核心角色是 <span class="term">startupProbe</span>（启动探针）——它在通过之前会把 liveness 与 readiness 全部挂起，是慢启动服务唯一的保护伞。</p>
+
+<h3>3.1 无限重启循环是怎么产生的</h3>
+<p>官方文档给出的判据很明确：如果容器通常需要超过 <code>initialDelaySeconds + failureThreshold × periodSeconds</code> 才能启动，就必须配 <code>startupProbe</code>。反过来读这句话就是失效条件——只配 liveness、不配 startup，而 liveness 的时间预算小于真实加载时间时，会发生这样的事：容器启动、开始加载权重、liveness 连续失败达到阈值、kubelet 杀掉容器、按重启策略重启、再次开始加载……<strong>永远走不到加载完成那一刻</strong>。这不是偶发故障，而是一个稳定的确定性死循环，且日志里看不到应用错误，只有反复的"Liveness probe failed"。</p>
+
+<div class="arch-diagram">同一个加载耗时 6 分钟的服务，两种配置的命运
+
+  配置 A（错）：只有 livenessProbe，periodSeconds=10, failureThreshold=3
+    t=0    容器启动，开始加载权重
+    t=0    liveness 开始探测（无 startupProbe 保护）
+    t=10s  失败 1/3      ← 权重才读了不到 3%
+    t=20s  失败 2/3
+    t=30s  失败 3/3 ──► kubelet kill 容器
+    t=30s  按 restartPolicy 重启 ──► 回到 t=0
+    ⇒ CrashLoopBackOff，永远到不了 t=360s。日志无应用报错。
+
+  配置 B（对）：startupProbe 预算 > 最坏加载时间
+    startupProbe: periodSeconds=15, failureThreshold=40  → 预算 600s
+    t=0     startupProbe 开始；liveness/readiness 全部被挂起
+    t≈360s  startupProbe 首次成功 ──► 交棒
+    t>360s  liveness 接管（快失败，只管进程死没死）
+            readiness 接管（频繁探测，控制流量接入）
+    ⇒ 加载期不会被误杀，加载后仍保留对死锁的快速反应
+
+  预算公式：startupProbe 预算 = failureThreshold × periodSeconds
+            要覆盖【权重下载 + 加载 + 图编译/预热】的最坏情况，再留余量</div>
+
+<table>
+<tr><th>参数</th><th>Web 服务常见值</th><th>LLM 推理该怎么设</th><th>设错的后果</th></tr>
+<tr><td><code>startupProbe.failureThreshold</code></td><td>30（配 10s 周期 = 5 分钟）</td><td>按最坏加载时间倒推，冷缓存场景常要几十分钟预算</td><td>预算不足 → 加载中被杀 → CrashLoopBackOff</td></tr>
+<tr><td><code>startupProbe.periodSeconds</code></td><td>10</td><td>15~30，加载期没必要频繁探</td><td>过密只增加无谓请求，过疏则就绪判定被拖后</td></tr>
+<tr><td><code>startupProbe</code> 的探测路径</td><td><code>/healthz</code></td><td>要选"权重已加载"才返回成功的端点</td><td>选了端口存活类检查 → 提前放行，流量打到未就绪进程</td></tr>
+<tr><td><code>livenessProbe.failureThreshold</code></td><td>3</td><td>保持小值，让它专注检测死锁</td><td>设大 → 卡死的副本长时间不被重启</td></tr>
+<tr><td><code>readinessProbe.periodSeconds</code></td><td>10</td><td>5 或更小，故障副本要快摘流量</td><td>过疏 → 已异常的副本继续收请求</td></tr>
+<tr><td><code>readinessProbe</code> 的语义</td><td>进程能应答即可</td><td>应包含"能真正完成一次推理"的判定</td><td>只查端口 → 就绪但不可用（见 3.2）</td></tr>
+</table>
+
+<p>参考量级：社区的 vLLM 探针方案里，<code>startupProbe</code> 用 30 秒周期配 60 次阈值，也就是给到 30 分钟的启动预算，探测的是 <code>/v1/models</code>（模型列出即视为加载完成），而 liveness 探 <code>/health</code> 且只给 3 次失败。这个组合体现了正确的分工——<strong>startupProbe 负责"别急"，liveness 负责"别装死"，readiness 负责"别硬撑"</strong>。</p>
+
+<h3>3.2 为什么"就绪"不等于"可用"</h3>
+<p>更隐蔽的一类问题是探针全绿、服务却明显不可用。原因是"进程能应答 HTTP"和"能按 SLA 完成一次推理"之间还隔着好几步：权重已从磁盘读入显存，但 <code>torch.compile</code> 的图编译还没做（上一章提到新容器的编译缓存默认是空的）；CUDA 上下文与算子的首次调用还要现场编译内核；KV Cache 的显存池还没预分配完；前缀缓存是冷的。这些工作往往由<strong>第一批真实请求触发</strong>，表现就是"刚扩容出来的副本，前几十个请求的首字延迟是稳态的数倍"。</p>
+
+<p>治理这件事的手段有三个层次。最轻的是把 readiness 的判定改成一次真实的小推理（比如生成 1 个 token）而不是端口探活，这样进程会在真正能干活之后才被加入端点。中等的是在容器启动脚本里做主动预热——加载完成后自己先跑几次短请求把编译与显存池走通，再让 readiness 转绿。最重的是把编译缓存持久化（挂卷复用），从根上缩短这段时间。三者可以叠加。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>某服务上线后每次扩容都会出现一段"新副本拉低整体延迟"的现象：扩容后约 90 秒内，P95 首字延迟从 700 ms 恶化到 3 s 以上，之后自行恢复。排查发现 readiness 探的是 <code>/health</code>（进程活着就返回 200），而副本被加入端点后还要现场做图编译和显存池预分配，负载均衡按轮询给它分了 1/N 的流量，这部分请求全部变慢。修复分两步：readiness 改为探一个执行 1 token 生成的端点，并在启动脚本里加 3 次预热请求。改完后扩容期间 P95 抖动幅度降到 15% 以内。这里真正的错误不是探针参数写错了数字，而是<strong>把"进程存活"当成了"能提供服务"的证据</strong>。</div>
+
+<div class="intuition-box">
+<p>三个探针对应三个完全不同的问题，混用就一定出事：<strong>startupProbe 回答"还在启动吗"，liveness 回答"是不是死锁了"，readiness 回答"现在能不能接客"</strong>。LLM 服务的特殊性只在于第一个问题的答案是"分钟级"，以及第三个问题不能只看进程状态。把 startupProbe 的预算按最坏加载时间给足，把 readiness 的判定做成一次真实推理，这两条做到了，探针相关的事故会少掉绝大部分。</p>
+</div>
+</div>
+
+<!-- ==================== 四 ==================== -->
+<div class="section" id="s4">
+<h2>四、滚动更新与优雅退出对流式推理的破坏</h2>
+
+<p>滚动更新对普通 Web 服务几乎是无感的：请求短、无状态、连接秒级完结。流式推理完全不同——一次生成可能持续几十秒到几分钟，通过 SSE 或长连接持续吐字。Pod 被终止时，这些连接会在半句话中间被切断，用户看到的是回答突然停住。要避免这件事，需要的是<span class="term">连接排空</span>（connection draining）——停止接入新请求、但让已在途的生成跑完再退出。</p>
+
+<h3>4.1 终止序列里的两条并行时间线</h3>
+<p>要理解破坏是怎么发生的，得看清 Pod 终止时<strong>两件事是并行发生的</strong>：一边是端点摘除（Service 的 EndpointSlice 更新要传播到集群各节点的转发规则），另一边是 kubelet 执行 <code>preStop</code>、然后向容器主进程发 TERM 信号。kubelet 不会等端点传播完成。K8s 官方教程明确把"实现优雅的连接排空"列为需要显式处理的事项，并指出终止中的端点其 <code>ready</code> 状态一定是 <code>false</code>（为了兼容性），如果需要对终止中的 Pod 继续排空流量，要看 <code>serving</code> 这个条件。</p>
+
+<div class="arch-diagram">Pod 终止时的两条时间线（流式推理为什么会被截断）
+
+  t=0  收到删除请求
+       ├──────────────── 时间线 A：端点摘除 ────────────────┐
+       │  EndpointSlice 更新 → 各节点转发规则同步（需传播时间）│
+       │  期间仍可能有新请求被路由到这个 Pod                  │
+       └──────────────────────────────────────────────────┘
+       ├──────────────── 时间线 B：容器终止 ────────────────┐
+       │  kubelet 执行 preStop（阻塞，必须先跑完）           │
+       │  → 发送 TERM 信号给主进程                           │
+       │  → 到期未退出则 KILL                                │
+       └──────────────────────────────────────────────────┘
+
+  两条线不同步 ⇒ 若无 preStop，TERM 可能早于端点传播完成
+              ⇒ 新请求还在进来，进程已在关闭 → 5xx / 连接被截断
+
+  官方口径要点：
+   · 默认 terminationGracePeriodSeconds = 30
+   · preStop 必须在 TERM 之前跑完；宽限期涵盖 preStop + 进程退出的总时长
+   · preStop 挂住不返回 → Pod 停在 Terminating，直到宽限期到点被 KILL
+   · 无 sidecar 时，多容器收到 TERM 的顺序是任意的</div>
+
+<p>官方文档在细节上有一处极易读错，值得原样记住：宽限期覆盖的是 <code>preStop</code> 执行与容器正常停止的<strong>总时长</strong>。文档给的例子是——<code>terminationGracePeriodSeconds</code> 为 60、<code>preStop</code> 花了 55 秒、容器收到信号后还需 10 秒才能停干净，那么容器会在正常停止前被杀掉，因为 55+10 超过了 60。所以设参数时不能只按"生成时长"算，要按 <code>preStop 时长 + 最坏排空时长</code> 之和再留余量。</p>
+
+<h3>4.2 "停止接新、跑完旧的"要怎么实现</h3>
+<table>
+<tr><th>目标</th><th>机制</th><th>LLM 场景的具体设法</th><th>不做的后果</th></tr>
+<tr><td>不再接新请求</td><td><code>preStop</code> 中先 sleep，给端点传播留时间</td><td>sleep 时长覆盖端点传播的观测上界（通常数秒到十几秒）</td><td>TERM 早于端点摘除，新请求打到正在关闭的进程</td></tr>
+<tr><td>旧请求跑完</td><td>应用收到 TERM 后停止接受新连接、等在途生成结束</td><td>需要引擎/网关支持"排空模式"；否则靠 <code>preStop</code> 轮询在途计数</td><td>在途生成被 KILL 截断，用户看到半句话</td></tr>
+<tr><td>给足预算</td><td><code>terminationGracePeriodSeconds</code></td><td>≥ preStop 时长 + P99 生成时长 + 余量；长文本场景常需数百秒</td><td>到点 KILL，前面所有排空努力作废</td></tr>
+<tr><td>限制并发中断</td><td>PodDisruptionBudget（机制见 S05）</td><td>保证滚动更新与节点维护期间的最小可用副本</td><td>多副本同时下线，容量瞬时不足</td></tr>
+<tr><td>更新节奏</td><td><code>maxSurge</code> / <code>maxUnavailable</code></td><td>GPU 紧张时 <code>maxSurge</code> 抬不起来，需先扩容再更新</td><td>新 Pod 因无卡可用 Pending，更新卡死</td></tr>
+</table>
+
+<p>GPU 那一行是 LLM 特有的死结，值得单独说：普通服务做零中断滚动更新的标准做法是 <code>maxUnavailable: 0</code> 加 <code>maxSurge: 1</code>——先起一个新的，就绪后再下一个旧的。但这要求集群里有<strong>一张空闲的卡</strong>。GPU 打满的集群做不到这件事，于是只有三个选择：临时扩容节点、接受 <code>maxUnavailable: 1</code>（更新期间容量下降一个副本），或者把发布安排在低峰期。这一条经常在发布当天才被发现，因为在测试环境卡是够的。</p>
+
+<div class="highlight">
+<strong>示例场景：</strong>某对话服务在一次常规发布中收到大量用户反馈"回答说到一半就断了"。复盘发现三处叠加：一是没有 <code>preStop</code>，TERM 早于端点传播完成，更新期间仍有新请求被路由到正在关闭的副本；二是 <code>terminationGracePeriodSeconds</code> 用的是默认 30 秒，而该服务 P99 生成时长约 70 秒，所有超过 30 秒的在途生成都被 KILL 截断；三是引擎进程收到 TERM 后立即退出，完全没有排空逻辑。修复后的组合是 <code>preStop</code> 先 sleep 15 秒（覆盖端点传播）、宽限期设到 180 秒、应用侧收到 TERM 后转入拒新接旧的排空模式。发布期间的截断投诉归零，代价是单次滚动更新的总时长从约 2 分钟拉长到约 8 分钟——这是必须接受的交换。</div>
+
+<div class="intuition-box">
+<p>优雅退出的本质是让<strong>两条本来不同步的时间线对齐</strong>：K8s 摘端点是异步传播的，kubelet 发信号是不等传播的。<code>preStop</code> 里的那段等待不是"迷信写法"，它是唯一能让 kubelet 停下来等一等的杠杆。而 <code>terminationGracePeriodSeconds</code> 要按"preStop + 最坏在途时长"之和来给——流式推理的在途时长以分钟计，用默认 30 秒等于宣布所有长回答都会被砍。</p>
+</div>
+</div>
+
+<!-- ==================== 五 ==================== -->
+<div class="section" id="s5">
+<h2>五、扩缩容为什么对 LLM 特别难</h2>
+
+<p>自动扩缩在普通 Web 服务上是成熟能力：CPU 利用率上去了就加副本，秒级起新 Pod，很快追上。这套逻辑在 LLM 上三个环节同时失效——信号错、反馈慢、成本结构不同。平台侧有哪些能力可用（HPA、KEDA、GPU Operator 等）在 <a href="./ai_platform_design.html">S04 · AI 平台设计</a> 第八章已经罗列，本节讲的是这些能力<strong>为什么会失效以及失效长什么样</strong>。</p>
+
+<h3>5.1 信号错：CPU 利用率是彻底的错误指标</h3>
+<p>推理服务的 CPU 主要花在请求解析、分词、序列化这些边角工作上，真正的瓶颈在 GPU 的算力与显存带宽。一个 GPU 已经打满、请求在队列里排长龙的副本，CPU 利用率可能只有 20%——按 CPU 扩缩的 HPA 会认为它很闲，一个副本都不加。反过来，一波短请求的批量分词能把 CPU 顶起来，触发无谓扩容。</p>
+
+<p>可用的信号按有效性排序：<span class="term">队列深度</span>（引擎里排队等待、尚未开始生成的请求数，最直接反映供不应求）、<strong>并发在途序列数</strong>（与引擎的最大批容量对比即知饱和度）、<strong>KV Cache 占用率</strong>（显存侧的真实压力）、以及首字延迟的滑动分位数（最贴近用户体验但滞后）。GPU 利用率看起来合理，实际是个次优信号——连续批处理下它常年在高位，区分不出"忙碌但从容"和"已经过载"。KServe 的 Workload Variant Autoscaler 正是按这个思路做的：明确以 KV Cache 利用率、队列深度、请求饱和度作为扩缩依据，而不是通用的 CPU/内存。</p>
+
+<table>
+<tr><th>信号</th><th>反映什么</th><th>有效性</th><th>坑</th></tr>
+<tr><td>CPU 利用率</td><td>边角计算量</td><td>无效</td><td>与 GPU 饱和度几乎不相关，会同时漏扩和误扩</td></tr>
+<tr><td>GPU 利用率</td><td>算力占用</td><td>次优</td><td>连续批处理下常年高位，区分不出从容与过载</td></tr>
+<tr><td>队列深度</td><td>供需差</td><td>好</td><td>阈值要按引擎最大批容量定，不能拍数字</td></tr>
+<tr><td>在途并发序列数</td><td>饱和度</td><td>好</td><td>需引擎暴露该指标</td></tr>
+<tr><td>KV Cache 占用率</td><td>显存侧压力</td><td>好</td><td>受上下文长度分布影响大</td></tr>
+<tr><td>首字延迟分位数</td><td>用户体验</td><td>可用但滞后</td><td>指标本身有窗口延迟，作为扩缩输入会加剧震荡</td></tr>
+</table>
+
+<h3>5.2 反馈慢：HPA 的节奏与冷启动完全不匹配</h3>
+<p>把两组时间尺度并排放，问题就自明了。HPA 控制器的调谐周期默认是 15 秒；扩容方向默认没有稳定窗口（<code>stabilizationWindowSeconds</code> 为 0），也就是一有信号立刻扩；缩容方向默认稳定窗口 300 秒，取窗口内最高的推荐值，避免抖动。这套默认值是为"秒级起 Pod"的服务设计的。而 LLM 副本从被创建到能真正扛流量，要走完调度、拉镜像、加载权重、图编译与预热，通常是分钟量级。</p>
+
+<div class="arch-diagram">HPA 的反馈延迟为什么会让副本数震荡
+
+  流量  ▁▁▁▂▄███████▇▅▃▁▁▁▁▁▁
+  时间  0    2min      6min      10min
+
+  t=2min  队列深度超阈值 → HPA 立刻决定扩容（默认无扩容稳定窗口）
+  t=2min  新 Pod 创建 → 调度 → 拉镜像 → 加载权重 → 编译预热
+  t=7min  新 Pod 才真正就绪 ← 此时高峰已过大半
+  t=7min  指标已回落，300s 缩容窗口开始计时
+  t=12min 副本被缩掉
+  → 峰期请求大量超时，峰后却在为无用副本付费
+
+  副本震荡的成因：控制环的死区时间（分钟级冷启动）
+                 远大于控制器的采样周期（15 秒）
+  ⇒ 控制器在用"五分钟前的世界"做决策，必然过冲与欠冲交替
+
+  有效的组合（不是只靠 HPA）：
+   ① 按历史流量定时预扩容：峰前把副本拉到位
+   ② 常驻热副本吃溢出：把首个峰值的冲击接住
+   ③ 权重放节点本地缓存 + 复用编译缓存：把死区时间本身压小
+   ④ 扩容方向设非零稳定窗口、缩容窗口拉长：换稳定性
+   ⑤ 自动扩缩当兜底，不当主力</div>
+
+<p>控制论的语言能把这件事说得更准：这是一个<strong>死区时间远大于采样周期</strong>的控制系统，必然过冲。所以对 LLM 服务，正确的心态是把自动扩缩当兜底而非主力，主力交给定时预扩容与常驻热副本。另外 KEDA 相比原生 HPA 在这个场景有两个实用差异：它支持 <code>idleReplicaCount</code>（缩到闲置档而不是被卡在最小 1 副本）以及为模型加载留出的初始冷却期，这两项都直接针对冷启动。</p>
+
+<h3>5.3 成本结构：热副本要不要养</h3>
+<p>预留热副本是唯一能对抗冷启动的手段，问题只是养几个。这笔账的算法是：<strong>预留成本 = 热副本数 × 单副本单价 × 全时长</strong>，而它买到的是"峰值前 N 分钟的容量"。判断依据是峰值的爬升速度与副本就绪时间的比值——爬升比就绪快得多时，热副本几乎是唯一选项；爬升以小时计时，自动扩缩就够了。经验上把预留容量设在"能独立扛住日常峰值的 60%~70%"是个常见起点，剩余靠扩容补，但这个比例必须用真实流量曲线校准，不能照抄。容量该怎么从压测结果反推，见 <a href="../deploy/inference_benchmark_methodology.html">DP16 · 推理服务压测方法论</a>。</p>
+
+<div class="practice-grid">
+<div class="do">
+<ul>
+<li><strong>用队列深度或在途并发做扩缩信号</strong>，阈值按引擎最大批容量定</li>
+<li><strong>把冷启动时间当成一等指标监控</strong>，它决定其他所有策略</li>
+<li><strong>峰前定时预扩容</strong>，用历史流量曲线驱动</li>
+<li><strong>常驻热副本吃溢出流量</strong>，把首波冲击接住</li>
+<li><strong>缩容窗口设长</strong>，一次误缩的代价是几分钟的空档</li>
+<li><strong>把权重与编译缓存都做本地复用</strong>，从根上压缩死区时间</li>
+</ul>
+</div>
+<div class="dont">
+<ul>
+<li><strong>不要用 CPU 利用率做扩缩信号</strong>，它与 GPU 饱和度几乎无关</li>
+<li><strong>不要照抄 Web 服务的 HPA 默认节奏</strong>，扩容零稳定窗口会加剧过冲</li>
+<li><strong>不要指望缩容到零省钱</strong>，除非能接受首个请求等几分钟</li>
+<li><strong>不要只看均值指标</strong>，扩缩决策要看分位数与队列</li>
+<li><strong>不要在同一负载上叠两套扩缩控制器</strong>，它们会互相打架</li>
+<li><strong>不要把 GPU 节点池和普通业务混用</strong>，节点扩容速度会被拖慢</li>
+</ul>
+</div>
+</div>
+
+<div class="intuition-box">
+<p>一句话概括：<strong>自动扩缩解决的是"容量跟得上"，而 LLM 的问题是"容量来不及"</strong>。这两件事不是同一个问题。要缩短"来不及"，只有三条路——把冷启动时间压小（缓存与预热）、提前扩（定时预测）、常备余量（热副本）。指标调得再准，也没法让一个需要五分钟才能就绪的副本在一分钟内到岗。</p>
+</div>
+</div>
+
+<!-- ==================== 六 ==================== -->
+<div class="section" id="s6">
+<h2>六、打包与平台化：Helm、Operator、KServe 与 Ray Serve</h2>
+
+<p>前面五章的所有配置——GPU 资源名、卷挂载、探针预算、宽限期、扩缩参数——最终都要落成可维护的交付物。这一章讲的是选择哪一层抽象来承载它们，以及什么时候不需要抽象。</p>
+
+<h3>6.1 Helm：把多环境差异收敛成一组值</h3>
+<p><span class="term">Helm</span> 在这个场景里的核心用途只有一个：<strong>让"同一套模板 + 不同的值"表达多环境差异</strong>。它的取值来源有明确的优先级顺序——chart 自带的 <code>values.yaml</code> 最低，然后是父 chart 的值，然后是命令行用 <code>-f</code> 传入的值文件（可以重复传，后面的覆盖前面的），最高的是 <code>--set</code> 逐项参数。这个顺序就是多环境方案的全部机制：把所有环境共同的部分留在 <code>values.yaml</code>，把每个环境的差异写成独立的值文件，发布时按需叠加。</p>
+
+<pre><code># base 保持共性，环境文件只写差异，后传的覆盖先传的
+helm upgrade --install llm ./chart \
+  -f values.yaml \
+  -f values-prod.yaml \
+  --set image.tag=2026.09.1</code></pre>
+
+<p>对 LLM 服务，值得抽成变量的通常是这几项：副本数与热副本数、GPU 资源名（生产用整卡、测试用 MIG 切片）、模型标识与权重卷来源、<code>startupProbe</code> 预算（测试环境模型小、预算可短）、<code>terminationGracePeriodSeconds</code>、以及扩缩阈值。反过来，探针的探测路径、卷挂载结构这类跨环境一致的东西应该留在模板里，不要开成变量——每开一个变量就多一处漂移可能。多环境配置漂移的危害与其他治理路径（可视化平台、GitOps）见 <a href="./k8s_porter.html">S06</a>，此处不重复。</p>
+
+<h3>6.2 Operator 与 CRD：什么时候值得写</h3>
+<p><span class="term">Operator</span> 是把运维知识写成控制器：定义一个自定义资源（CRD）描述"我要一个什么样的模型服务"，然后由控制器把它展开成 Deployment、Service、HPA 等一堆原生对象，并持续调谐。它的收益点很具体——当你有<strong>反复执行的多步运维流程</strong>时（比如"换模型版本要先起新副本预热、验证通过再切流量、然后回收旧副本"），Operator 能把这套流程变成声明式的一次提交。</p>
+
+<p>但自己写 Operator 的门槛不低，判断标准可以简化成三问：同一套多步流程是否每周都要执行数次？流程中是否有必须按状态机推进的顺序？是否有多个团队需要复用同一套语义？三个都是"是"才值得自研；只有一两个"是"时，一份 Helm chart 加一段 CI 脚本通常更划算。更常见的情形是——你需要的 Operator 已经有人写好了，那就是下一节的两个选项。</p>
+
+<h3>6.3 KServe 与 Ray Serve 各自解决什么</h3>
+<table>
+<tr><th>维度</th><th>KServe</th><th>Ray Serve</th></tr>
+<tr><td>核心契约</td><td>Kubernetes 资源（CRD）是主要接口</td><td>Python 应用代码是主要接口</td></tr>
+<tr><td>最擅长的事</td><td>标准化的模型端点生命周期：版本、金丝雀、流量切分</td><td>可编程的服务图：预处理、检索、重排、生成多级流水线</td></tr>
+<tr><td>接口标准</td><td>Open Inference Protocol，多运行时通用，客户端与后端解耦</td><td>无统一协议约束，按应用自定义</td></tr>
+<tr><td>扩缩形态</td><td>基于 Knative 的请求/并发扩缩，原生支持缩容到零；生成式场景有专门的推理感知扩缩</td><td>基于在途请求与队列深度的副本扩缩，各阶段可独立伸缩</td></tr>
+<tr><td>多机分布式</td><td>可对接 LeaderWorkerSet 做多节点部署</td><td>Ray 集群天然跨节点，分布式是原生能力</td></tr>
+<tr><td>主要代价</td><td>把整套 K8s 生态带进来；会隐藏引擎的部分调优旋钮</td><td>Ray 集群本身成为第二个需要运维的平台</td></tr>
+<tr><td>适合谁</td><td>平台团队要给多个业务方提供统一的模型服务契约</td><td>推理形态本身就是多模型多阶段流水线，或团队已在用 Ray</td></tr>
+</table>
+
+<div class="arch-diagram">四层抽象，各自承载什么
+
+  原生 YAML ──► Helm ──► Operator/CRD ──► 推理平台（KServe / Ray Serve）
+     │            │            │                    │
+  能力：       能力：       能力：              能力：
+  完全控制     多环境差异   把多步运维流程      端点生命周期、金丝雀、
+  无额外概念   模板复用     变成声明式提交      协议标准化、推理感知扩缩
+
+  代价：       代价：       代价：              代价：
+  复制粘贴     模板抽象度   要自己写控制器      多一层抽象与其自身故障面
+  多环境漂移   要拿捏       并长期维护          引擎旋钮可能被遮住
+
+  什么时候不需要往右走：
+   · 服务数量少（一两个模型）、环境少（一两套）
+   · 团队还没吃透原生对象的行为
+   · 引擎参数仍在频繁调整（抽象层会挡住你）
+  经验顺序：先原生跑通并稳定，再上 Helm，最后才考虑平台层</div>
+
+<p>选择顺序上有一条经验值得强调：<strong>不要跳级</strong>。在还没把原生 Deployment 的探针、宽限期、GPU 资源、卷挂载调稳之前就上平台层，遇到问题会同时面对两层不熟悉的语义，排障成本翻倍。合理的路径是原生跑通并稳定运行一段时间，把配置抽成 Helm chart 治理多环境，只有当服务数量、业务方数量或运维流程复杂度真的上来了，才引入 KServe 这类平台层。至于引擎本身怎么选，见 <a href="../deploy/inference_framework_selection.html">DP05 · 大模型推理框架选型</a>；网关层的职责划分见 <a href="./llm_inference_gateway.html">S08 · LLM 推理网关</a>；Pod 被 OOMKilled 的排查流程见 <a href="../engineering/ai_memory_troubleshooting.html">ST12 · AI 服务内存问题排查</a>。</p>
+
+<div class="intuition-box">
+<p>每一层抽象都是在用"少写点重复配置"交换"多一层需要理解的语义"。判断该停在哪一层的标准很朴素：<strong>当前这一层让你重复劳动的次数，是否已经超过了下一层带来的认知与故障成本</strong>。两个模型两套环境时，原生 YAML 加一点复制粘贴完全够用；二十个模型五套环境时，不上模板层就是自找麻烦。</p>
+</div>
+</div>
+
+<!-- ==================== Q&A ==================== -->
+<div class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+
+<details>
+<summary>为什么 GPU 在 K8s 里不能像 CPU 一样超卖或者按小数请求？</summary>
+<div class="answer">
+<p>因为 <code>nvidia.com/gpu</code> 不是内建资源，而是通过 device plugin 机制注册的扩展资源，而扩展资源在 K8s 里只支持整数量纲、且不允许超卖（requests 必须等于 limits）。所以你既写不出 <code>nvidia.com/gpu: 0.5</code>，也没法让两个 Pod 各"申请"同一张卡的一部分。更重要的是第三层限制：调度器只维护一个整数账本，它完全看不见卡内情况——一个只用 2 GB 显存、算力利用率 5% 的 Pod 和一个把 80 GB 吃满的 Pod，在账本上都是"占用 1 个单位"。这造成了很直接的浪费：十个各用 15% 算力的小服务在默认配置下要占十张物理卡，真实需求约 1.5 张。要实现共享，唯一的办法是改变 device plugin<strong>对外声称的数量</strong>——时间片让它把一张卡报成多个副本，MIG 则真的把硬件切开再按规格上报。</p>
+</div>
+</details>
+
+<details>
+<summary>时间片和 MIG 在 K8s 里暴露成什么样，选择依据是什么？</summary>
+<div class="answer">
+<p>时间片通过在 device plugin 的 ConfigMap 里设置 <code>replicas</code>（比如 4）让一张物理卡被上报成 4 个 <code>nvidia.com/gpu</code> 单位，调度器于是能放 4 个 Pod 上去，靠驱动层上下文切换轮转执行。它的致命短板是零显存隔离——一个 Pod 在 80 GB 卡上分配了 70 GB，其余三个直接 OOM，没有任何机制阻止；而且 replicas 数不等于按比例分配算力，NVIDIA 建议配 <code>failRequestsGreaterThanOne: true</code> 避免这个误解。MIG 在 Ampere 及更新架构上做硬件级切分，最多 7 个实例，各有独立显存与算力；<code>mixed</code> 策略下每种规格暴露成独立资源名（形如 <code>nvidia.com/mig-1g.10gb</code>），官方限制同一容器不能同时请求 <code>nvidia.com/gpu</code> 和某个 <code>mig-*</code>，混请求会拿到未定义设备；<code>single</code> 策略保持资源名不变、用 nodeSelector 表达规格，代价是单机切分必须同构。选择依据的第一位是隔离要求：面向用户的生产端点用 MIG，开发测试用时间片。另外 MIG 规格切换要求卡上没有运行负载，得当成运维事件排期。</p>
+</div>
+</details>
+
+<details>
+<summary>模型权重交付到 Pod 有哪几种方式，怎么选？</summary>
+<div class="answer">
+<p>四种，选择的实质是"把加载成本付在哪个环节"。镜像内置最省事、版本语义最干净（镜像摘要同时锁定代码与权重），但几十 GB 的镜像让每个新节点首次拉取变成冷启动瓶颈，Registry 存储与带宽成本也随版本数放大。PVC 共享卷让镜像保持小巧、多副本共用一份权重，代价是加载速度受存储带宽限制，而且多副本同时启动会争抢同一存储。initContainer 启动时拉取的好处是任何节点都能自举、天然适配弹性，代价是每次扩容都要付一次完整下载，扩得越多越慢。节点本地缓存预热最快，命中时几乎只剩加载时间，但要维护一套预热、淘汰与一致性机制。生产上常见组合是本地缓存做主路径、对象存储拉取做兜底，并把"是否命中缓存"做成可观测指标。此外别忘了第二和第三个挂载：编译缓存（vLLM 官方指出 <code>VLLM_CACHE_ROOT</code> 每个新容器默认为空，会重新编译）和 <code>/dev/shm</code>（张量并行依赖共享内存，不够会启动即崩）。</p>
+</div>
+</details>
+
+<details>
+<summary>模型加载要好几分钟，探针参数该怎么设才不会陷入重启循环？</summary>
+<div class="answer">
+<p>核心是必须配 <code>startupProbe</code>，并且它的时间预算要盖住最坏加载时间。官方判据是：如果容器通常需要超过 <code>initialDelaySeconds + failureThreshold × periodSeconds</code> 才能启动完，就必须用 startupProbe。反过来读就是失效条件——只配 liveness 而它的预算小于真实加载时间时，会形成确定性死循环：启动、加载、liveness 连续失败到阈值、被杀、重启、再加载，永远走不到加载完成那一刻，且日志里只有反复的探针失败、没有应用错误。预算公式是 <code>failureThreshold × periodSeconds</code>，要覆盖权重下载、加载、图编译与预热的最坏情况再留余量；社区的 vLLM 方案用 30 秒周期配 60 次阈值，也就是 30 分钟预算，探的是 <code>/v1/models</code>。同时 liveness 要保持小的 failureThreshold（3 左右）专注检测死锁，readiness 要探得频（5 秒左右）以便快速摘掉故障副本。三者的分工是：startupProbe 负责"别急"，liveness 负责"别装死"，readiness 负责"别硬撑"。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么探针全绿了服务还是不可用？</summary>
+<div class="answer">
+<p>因为"进程能应答 HTTP"和"能按 SLA 完成一次推理"之间还隔着好几步工作，而这些工作常常由第一批真实请求触发：权重虽已读入显存，但 <code>torch.compile</code> 的图编译还没做（新容器的编译缓存默认是空的）、CUDA 上下文与算子首次调用要现场编译内核、KV Cache 的显存池还没预分配完、前缀缓存是冷的。表现就是刚扩容出来的副本，前几十个请求的首字延迟是稳态的数倍，而负载均衡按轮询照样给它分了 1/N 的流量，把整体分位数拉坏。治理有三个层次可以叠加：最轻的是把 readiness 判定从端口探活改成一次真实的小推理（比如生成 1 个 token），这样进程只有真正能干活才会被加入端点；中等的是在启动脚本里做主动预热，加载完成后自己先跑几次短请求，把编译与显存池走通再让 readiness 转绿；最重的是把编译缓存挂卷持久化复用，从根上缩短这段时间。</p>
+</div>
+</details>
+
+<details>
+<summary>滚动更新时流式回答被截断，怎么彻底解决？</summary>
+<div class="answer">
+<p>要同时处理三件事，少一件都不够。第一，<strong>让 kubelet 等一等端点传播</strong>：Pod 终止时端点摘除和发 TERM 信号是两条并行时间线，kubelet 不会等 EndpointSlice 传播到各节点，所以没有 <code>preStop</code> 时新请求还可能被路由到正在关闭的进程。<code>preStop</code> 里 sleep 一段覆盖传播上界的时间是唯一能让 kubelet 停下来的杠杆。第二，<strong>给足宽限期</strong>：<code>terminationGracePeriodSeconds</code> 默认只有 30 秒，而流式生成 P99 常达一两分钟，超时的在途生成会被 KILL 截断；要按 <code>preStop 时长 + 最坏在途时长 + 余量</code> 来设。注意官方特别说明宽限期覆盖的是 preStop 与容器正常停止的<strong>总时长</strong>——文档举的例子是宽限期 60 秒、preStop 用了 55 秒、容器还需 10 秒，结果容器仍被提前杀掉。第三，<strong>应用侧要有排空逻辑</strong>：收到 TERM 后停止接受新连接、等在途生成结束再退出，否则前两步的努力都白费。此外 GPU 打满的集群做不到 <code>maxSurge: 1</code> 加 <code>maxUnavailable: 0</code>（没有空闲卡起新副本），只能临时扩容节点、接受容量下降一个副本，或安排在低峰期发布。</p>
+</div>
+</details>
+
+<details>
+<summary>为什么不能用 CPU 利用率给 LLM 推理服务做自动扩缩？</summary>
+<div class="answer">
+<p>因为 CPU 在推理服务里只承担请求解析、分词、序列化这些边角工作，真正的瓶颈在 GPU 算力与显存带宽，两者几乎不相关。后果是双向的：一个 GPU 已打满、请求在队列里排长龙的副本，CPU 可能只有 20% 利用率，HPA 认为它很闲、一个副本都不加（漏扩）；反过来一波短请求的批量分词能把 CPU 顶起来，触发无谓扩容（误扩）。按有效性排序，可用的信号是队列深度（最直接反映供需差）、在途并发序列数（与引擎最大批容量对比即知饱和度）、KV Cache 占用率（显存侧真实压力），再往后是首字延迟分位数（最贴近体验但有窗口滞后，作为扩缩输入会加剧震荡）。GPU 利用率看起来合理其实是次优信号——连续批处理下它常年在高位，区分不出"忙碌但从容"和"已经过载"。KServe 的 Workload Variant Autoscaler 就是明确按 KV Cache 利用率、队列深度、请求饱和度做决策的。阈值不能拍数字，要按引擎的最大批容量来定。</p>
+</div>
+</details>
+
+<details>
+<summary>HPA 为什么追不上 LLM 的流量高峰，副本数还会震荡？</summary>
+<div class="answer">
+<p>把两组时间尺度并排就清楚了：HPA 控制器默认 15 秒调谐一轮，扩容方向默认没有稳定窗口（一有信号立刻扩），缩容方向默认 300 秒稳定窗口并取窗口内最高推荐值。这套默认值是为秒级起 Pod 的服务设计的。而 LLM 副本从创建到真正能扛流量要走完调度、拉镜像、加载权重、图编译与预热，通常是分钟量级。于是典型剧本是：第 2 分钟指标超阈值、立刻决定扩容，第 7 分钟新副本才就绪、而高峰已过大半，随后指标回落、300 秒窗口一到副本被缩掉——峰期大量超时，峰后却在为无用副本付费。用控制论的说法，这是一个死区时间（分钟级冷启动）远大于采样周期（15 秒）的系统，必然过冲与欠冲交替。有效的做法不是继续调 HPA 参数，而是换策略组合：按历史流量定时预扩容、常驻热副本吃溢出、把权重与编译缓存做本地复用以压小死区时间本身、扩容方向设非零稳定窗口、并把自动扩缩当兜底而非主力。KEDA 在这个场景有两个实用差异：支持 <code>idleReplicaCount</code> 缩到闲置档，以及为模型加载留出初始冷却期。</p>
+</div>
+</details>
+
+<details>
+<summary>要不要预留热副本，怎么算这笔账？</summary>
+<div class="answer">
+<p>预留热副本是唯一能真正对抗冷启动的手段，问题只在养几个。成本侧的算法很直白：预留成本等于热副本数乘单副本单价乘全时长，是按月计费的固定支出；收益侧买到的是"峰值前若干分钟的容量"，属于按事件计的。所以判断依据是<strong>峰值爬升速度与副本就绪时间的比值</strong>：如果流量能在十分钟内涨到平时数倍，而副本就绪要五六分钟，那么自动扩缩基本救不到场，热副本几乎是唯一选项；如果峰谷是以小时为尺度缓慢变化的（白天忙夜里闲），自动扩缩就够了，预留反而是浪费。一个常见起点是让预留容量能独立扛住日常峰值的六到七成，剩余靠扩容补，但这个比例必须用真实流量曲线校准而不能照抄。同时要把三条降本路径一起考虑：压缩冷启动时间（权重本地缓存加编译缓存复用）能直接减少需要预留的量，定时预扩容能把预留时段从全天缩短到峰前时段，两者都比单纯加热副本便宜。容量数字怎么从压测反推见 DP16。</p>
+</div>
+</details>
+
+<details>
+<summary>Helm、Operator、KServe、Ray Serve 这些层，什么时候该上、什么时候不需要？</summary>
+<div class="answer">
+<p>判断标准很朴素：当前这一层让你重复劳动的次数，是否已经超过下一层带来的认知与故障成本。Helm 的价值点很单一——用"同一套模板加不同的值"表达多环境差异，机制就是它的取值优先级（chart 的 <code>values.yaml</code> 最低，然后是父 chart，然后是可重复传入的 <code>-f</code> 值文件、后传覆盖先传，最高是 <code>--set</code>）。对 LLM 服务值得抽成变量的是副本数、GPU 资源名、模型标识与权重来源、startupProbe 预算、宽限期、扩缩阈值；探针路径、卷结构这类跨环境一致的东西该留在模板里，每开一个变量就多一处漂移可能。自研 Operator 的门槛高，三问都为"是"才值得：同一套多步流程每周执行数次、流程必须按状态机推进、多团队需要复用同一语义。KServe 适合平台团队要给多个业务方提供统一契约的场景，它的长期价值在 Open Inference Protocol 带来的客户端与后端解耦以及 Knative 的请求级扩缩与缩容到零，代价是把整套生态带进来、可能遮住引擎的调优旋钮。Ray Serve 适合推理形态本身就是多模型多阶段流水线、或团队已在用 Ray 的情况，代价是 Ray 集群成为第二个要运维的平台。最重要的一条是不要跳级：先把原生对象的探针、宽限期、GPU 资源、卷挂载调稳，再上 Helm，最后才考虑平台层。</p>
+</div>
+</details>
+</div>
+
+<footer class="footer">
+  <p>AI Knowledge &middot; K8s 上运行 LLM 推理服务 &middot; S11</p>
+</footer>
+</div>
+
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));});
+</script>
+</body>
+</html>
