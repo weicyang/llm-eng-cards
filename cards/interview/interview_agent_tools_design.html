@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IA-14 · Agent 结合 RAG 时的工具(Tools)设计</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心问题</a>
+<a href="#s2">工具设计原则</a>
+<a href="#s3">工具类型设计</a>
+<a href="#s4">工具链编排</a>
+<a href="#s5">工具实现示例</a>
+<a href="#s6">高频考点</a>
+<a href="#s7">延伸思考</a>
+</aside>
+<div class="container">
+        <a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+        <h1>IA-14 · Agent 结合 RAG 时的工具(Tools)设计</h1>
+
+        <section>
+            <h2 id="s1">核心问题</h2>
+            <div class="highlight-box">
+                <p>当 Agent 与 RAG 结合时，工具设计面临特殊挑战：</p>
+                <ul>
+                    <li><strong>何时调用 RAG？</strong> - 不是所有问题都需要检索</li>
+                    <li><strong>检索什么？</strong> - query 不等于用户原始问题</li>
+                    <li><strong>结果怎么用？</strong> - 检索结果需要筛选和验证</li>
+                    <li><strong>多轮检索</strong> - 复杂问题需要迭代式检索</li>
+                </ul>
+                <p>工具设计决定了 Agent 能否"聪明地"使用 RAG 能力。</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s2">工具设计原则</h2>
+            <div class="key-concept">
+                <p>好的 RAG 工具应该遵循<strong>三个核心原则</strong>：</p>
+            </div>
+
+            <div class="content-card">
+                <h3>原则1：职责单一</h3>
+                <p>每个工具只做一件事，降低 Agent 的决策负担：</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>反面案例</th>
+                            <th>正面案例</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>search_and_summarize(query)</code></td>
+                            <td><code>retrieve_documents(query)</code></td>
+                        </tr>
+                        <tr>
+                            <td>"一个函数干所有事"</td>
+                            <td>"检索归检索，总结归 Agent 做"</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="content-card">
+                <h3>原则2：语义清晰</h3>
+                <p>工具的描述要让 Agent "一看就懂"：</p>
+                <div class="highlight-box">
+                    <pre><code>// 差的描述
+"search the database"
+
+// 好的描述
+"从公司知识库中检索与用户问题相关的文档片段。
+适用场景：用户询问产品功能、技术问题、内部政策时调用。
+不适用场景：闲聊、数学计算、实时信息查询。
+返回：最多5个相关文档片段，每个包含内容和来源。"</code></pre>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <h3>原则3：容错友好</h3>
+                <p>工具返回要帮助 Agent 处理异常情况：</p>
+                <ul>
+                    <li><strong>空结果</strong> - 返回明确的提示和建议的替代查询</li>
+                    <li><strong>超时</strong> - 返回部分结果和重试建议</li>
+                    <li><strong>低相关性</strong> - 返回相关度分数，让 Agent 自行判断</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s3">工具类型设计</h2>
+            <div class="key-concept">
+                <p>一个完整的 RAG 工具集通常包含以下类型：</p>
+            </div>
+
+            <h3>类型1：检索工具</h3>
+            <div class="content-card">
+                <div class="highlight-box">
+                    <pre><code>{
+  "name": "knowledge_retrieve",
+  "description": "从知识库检索相关文档",
+  "parameters": {
+    "query": {
+      "type": "string",
+      "description": "检索查询，应该是精炼的问题或关键词"
+    },
+    "top_k": {
+      "type": "integer",
+      "description": "返回结果数量，默认5",
+      "default": 5
+    },
+    "filters": {
+      "type": "object",
+      "description": "可选过滤条件",
+      "properties": {
+        "category": "文档类别",
+        "date_range": "时间范围"
+      }
+    }
+  },
+  "returns": {
+    "chunks": [
+      {
+        "content": "文档内容",
+        "source": "来源",
+        "relevance_score": 0.85
+      }
+    ]
+  }
+}</code></pre>
+                </div>
+            </div>
+
+            <h3>类型2：查询优化工具</h3>
+            <div class="content-card">
+                <p>帮助 Agent 优化检索 query：</p>
+                <ul>
+                    <li><strong>query_rewrite</strong> - 将用户问题改写为更适合检索的形式</li>
+                    <li><strong>query_decompose</strong> - 将复杂问题拆解为多个子查询</li>
+                    <li><strong>query_expand</strong> - 扩展同义词、相关术语</li>
+                </ul>
+                <div class="highlight-box">
+                    <p><strong>示例流程：</strong></p>
+                    <p>用户问："我们公司的 AI 产品今年营收如何？"</p>
+                    <p>→ query_decompose 拆解为：</p>
+                    <ul>
+                        <li>"公司 AI 产品列表"</li>
+                        <li>"2024年 AI 产品营收数据"</li>
+                        <li>"AI 产品销售报告"</li>
+                    </ul>
+                </div>
+            </div>
+
+            <h3>类型3：结果处理工具</h3>
+            <div class="content-card">
+                <p>帮助 Agent 处理检索结果：</p>
+                <ul>
+                    <li><strong>chunk_rerank</strong> - 对初步检索结果进行重排序</li>
+                    <li><strong>chunk_filter</strong> - 过滤低相关性或过时的内容</li>
+                    <li><strong>chunk_merge</strong> - 合并来自多个来源的相关信息</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s4">工具链编排</h2>
+            <div class="key-concept">
+                <p>Agent 需要根据场景动态编排工具调用：</p>
+            </div>
+
+            <div class="content-card">
+                <h3>模式1：单次检索</h3>
+                <p>适用于简单、明确的问题：</p>
+                <div class="highlight-box">
+                    <pre><code>用户: "Python 的 list 有哪些内置方法？"
+Agent: knowledge_retrieve(query="Python list 内置方法") → 直接回答</code></pre>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <h3>模式2：迭代检索</h3>
+                <p>适用于复杂、需要多步推理的问题：</p>
+                <div class="highlight-box">
+                    <pre><code>用户: "比较 A 产品和 B 产品的定价策略"
+Agent:
+  1. knowledge_retrieve(query="A 产品定价")
+  2. knowledge_retrieve(query="B 产品定价")
+  3. 整合对比 → 生成回答</code></pre>
+                </div>
+            </div>
+
+            <div class="content-card">
+                <h3>模式3：自适应检索</h3>
+                <p>Agent 判断是否需要检索：</p>
+                <div class="highlight-box">
+                    <pre><code>用户: "1+1等于几？"
+Agent: 不需要检索，直接回答 "2"
+
+用户: "我们公司上个月的客户满意度是多少？"
+Agent: 需要检索内部数据 → knowledge_retrieve(...)</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s5">工具实现示例</h2>
+            <div class="content-card">
+                <div class="highlight-box">
+                    <pre><code>class RAGToolkit:
+    def __init__(self, vector_db, reranker=None):
+        self.vector_db = vector_db
+        self.reranker = reranker
+    
+    def retrieve(self, query: str, top_k: int = 5) -> List[Chunk]:
+        """基础检索"""
+        results = self.vector_db.search(query, top_k=top_k * 2)
+        
+        # 可选：重排序
+        if self.reranker:
+            results = self.reranker.rerank(query, results, top_k)
+        else:
+            results = results[:top_k]
+        
+        # 添加来源追踪
+        for chunk in results:
+            chunk.metadata['retrieved_at'] = datetime.now()
+            chunk.metadata['query'] = query
+        
+        return results
+    
+    def retrieve_with_fallback(self, query: str) -> Dict:
+        """带降级策略的检索"""
+        # 尝试精确检索
+        results = self.retrieve(query, top_k=5)
+        
+        if not results or results[0].score < 0.5:
+            # 降级：扩展查询重试
+            expanded = self.expand_query(query)
+            results = self.retrieve(expanded, top_k=5)
+        
+        if not results:
+            return {
+                "status": "no_results",
+                "suggestion": f"尝试询问：{self.suggest_alternative(query)}",
+                "chunks": []
+            }
+        
+        return {
+            "status": "success",
+            "chunks": [c.to_dict() for c in results]
+        }</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s6">高频考点</h2>
+            <div class="interview-points">
+                <h3>这道题考察什么？</h3>
+                <ol>
+                    <li><strong>工具设计能力</strong> - 能否设计清晰、职责单一的工具</li>
+                    <li><strong>Agent 思维</strong> - 理解 Agent 如何决策工具调用</li>
+                    <li><strong>RAG 实践</strong> - 是否真正做过 Agent+RAG 的项目</li>
+                    <li><strong>工程化思维</strong> - 考虑容错、优化、可维护性</li>
+                </ol>
+            </div>
+
+            <h3>标准回答思路</h3>
+            <div class="highlight-box">
+                <p><strong>第一步：</strong>说明挑战 - Agent+RAG 的工具设计难点</p>
+                <p><strong>第二步：</strong>设计原则 - 职责单一、语义清晰、容错友好</p>
+                <p><strong>第三步：</strong>工具类型 - 检索、查询优化、结果处理</p>
+                <p><strong>第四步：</strong>编排模式 - 单次、迭代、自适应检索</p>
+                <p><strong>第五步：</strong>代码示例 - 展示具体实现</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s7">延伸思考</h2>
+            <div class="content-card">
+                <p>更高级的工具设计还可以考虑：</p>
+                <ul>
+                    <li><strong>工具学习</strong> - Agent 根据历史调用记录优化工具选择</li>
+                    <li><strong>动态工具注册</strong> - 运行时添加/移除工具</li>
+                    <li><strong>工具组合</strong> - 自动生成工具链（Tool Chain）</li>
+                    <li><strong>工具评估</strong> - 监控工具调用成功率，持续优化</li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="tags">
+            <span class="tag">Tools设计</span>
+            <span class="tag">Agent</span>
+            <span class="tag">RAG</span>
+            <span class="tag">Function Calling</span>
+            <span class="tag">工具编排</span>
+        </div>
+    </div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

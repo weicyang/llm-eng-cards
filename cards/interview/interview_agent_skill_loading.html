@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IA-16 · Agent 海量 Skill 加载方案</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--accent:#4338ca;--accent-light:#0f766e;--text:#1c1917;--text-dim:#78716c}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px}
+.container{max-width:900px;margin:0 auto}
+.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}
+
+h1{font-size:2.2rem;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--accent-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:2rem}
+h2{font-size:1.5rem;color:var(--accent-light);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border)}
+h3{font-size:1.2rem;color:var(--text);margin:1.5rem 0 .8rem}
+p{margin-bottom:1rem}
+ul,ol{margin-bottom:1rem;padding-left:1.5rem}
+li{margin-bottom:.5rem}
+strong{color:var(--accent-light)}
+.highlight{background:linear-gradient(135deg,rgba(67,56,202,.1),rgba(15,118,110,.1));border-left:3px solid var(--accent);padding:1rem;border-radius:0 8px 8px 0;margin:1.5rem 0}
+table{width:100%;border-collapse:collapse;margin:1.5rem 0;font-size:.95rem}
+th,td{padding:.75rem;border:1px solid var(--border);text-align:left;vertical-align:top}
+th{background:var(--surface);color:var(--accent-light);font-weight:600}
+.qa-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;overflow:hidden}
+.qa-question{padding:1rem 1.5rem;background:rgba(67,56,202,.1);border-bottom:1px solid var(--border);font-weight:600;color:var(--accent-light)}
+.qa-answer{padding:1.5rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心观点</a>
+<a href="#s2">为什么全量加载会失效</a>
+<a href="#s3">三层渐进式披露架构</a>
+<a href="#s4">工程难点</a>
+<a href="#s5">高频问答</a>
+</aside>
+<div class="container">
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<h1>IA-16 · Agent 海量 Skill 加载方案</h1>
+<p class="subtitle">提问：Agent 如何加载海量 Skill？</p>
+
+<h2 id="s1">核心观点</h2>
+<div class="highlight">
+<strong>核心结论：</strong>海量 Skill 不能全量塞进 Prompt。真正稀缺的不是 token，而是模型的注意力预算。Skill 数量一多，系统必须改成按需逐层加载。
+</div>
+
+<h2 id="s2">为什么全量加载会失效</h2>
+<p>当 Skill 数量从十几个增长到上百个时，问题不再只是上下文贵，而是模型很难在一大堆工具说明里做出稳定选择。字幕里强调了两个后果：</p>
+<ul>
+<li>上下文里信息过多，模型知道“有很多工具”，却分不清当前到底该用哪一个</li>
+<li>工具说明写得越细，决策噪声越大，最终表现成选错 Skill 或调用参数错误</li>
+</ul>
+<p>因此高分答案不能只说“做个 RAG 检索 Skill”，而是要回答 Skill 如何被分层暴露、如何避免一次性把所有说明塞给模型。</p>
+
+<h2 id="s3">三层渐进式披露架构</h2>
+<table>
+<tr><th>层级</th><th>职责</th><th>输出内容</th></tr>
+<tr><td><strong>L1 元数据索引层</strong></td><td>快速知道系统里有哪些 Skill</td><td>名称、标签、适用场景、输入输出概览</td></tr>
+<tr><td><strong>L2 意图理解层</strong></td><td>判断当前任务需要哪些能力</td><td>候选 Skill 集合、路由结果、优先级</td></tr>
+<tr><td><strong>L3 深水执行层</strong></td><td>只对命中的 Skill 加载完整说明</td><td>完整参数、边界条件、Few-shot、必要 RAG 片段</td></tr>
+</table>
+<p>这套架构的重点是“先知道大概，再理解意图，最后展开细节”。模型在每一层只看自己真正需要的信息，所以上下文利用率和调用精度都会更稳。</p>
+
+<h2 id="s4">工程难点</h2>
+<h3>冷启动延迟</h3>
+<p>如果每次都重新检索和组装 Skill，上线后会出现首轮响应慢的问题。字幕提到的方向是结合 Prompt Cache 或 KV Cache，让稳定的公共部分尽量复用。</p>
+
+<h3>Skill 切换后的状态续接</h3>
+<p>切到新 Skill 时，如果历史任务状态没有保留下来，模型很容易“重新理解一遍”。因此除了 Skill 描述本身，还要保存任务快照，让新一轮执行能接上旧状态。</p>
+
+<h2 id="s5">高频问答</h2>
+<div class="qa-item">
+<div class="qa-question">Q1: 为什么不能把 100 个 Skill 全写进 System Prompt？</div>
+<div class="qa-answer"><p>因为问题不只是 token 成本，更是注意力预算有限。Skill 越多，模型对每条说明分到的注意力越少，最终会出现工具选择准确率下降、参数格式错误、明明有工具却不会用的情况。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q2: 海量 Skill 的标准架构应该怎么答？</div>
+<div class="qa-answer"><p>可以按三层答：L1 建元数据索引，L2 做意图理解和候选筛选，L3 再加载完整 Skill 说明和必要示例。核心是按需逐层披露，而不是一次性全量暴露。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q3: Skill RAG 和文档 RAG 有什么不同？</div>
+<div class="qa-answer"><p>文档 RAG 解决的是内容检索，Skill RAG 检索的是工具能力、参数约束和成功样例。它服务的是“该调用谁、怎么调用”，而不是“该读哪段知识”。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q4: 什么时候不需要这套复杂架构？</div>
+<div class="qa-answer"><p>当 Skill 数量还很少、模型全量读取也稳定时，直接写进 Prompt 反而最简单。只有当技能规模突破临界点，出现失忆、误选或延迟成本明显上升时，渐进式加载才值得引入。</p></div>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

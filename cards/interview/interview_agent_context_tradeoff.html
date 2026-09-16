@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IA-08 · Agent 上下文取舍方案</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--accent:#4338ca;--accent-light:#0f766e;--text:#1c1917;--text-dim:#78716c;--green:#15803d;--orange:#a16207;--red:#b91c1c}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px}.container{max-width:900px;margin:0 auto}.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}h1{font-size:2.2rem;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--accent-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent}.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:2rem}h2{font-size:1.5rem;color:var(--accent-light);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border)}h3{font-size:1.2rem;color:var(--text);margin:1.5rem 0 .8rem}p{margin-bottom:1rem}ul,ol{margin-bottom:1rem;padding-left:1.5rem}li{margin-bottom:.5rem}strong{color:var(--accent-light)}.highlight{background:linear-gradient(135deg,rgba(67,56,202,.1),rgba(15,118,110,.1));border-left:3px solid var(--accent);padding:1rem;border-radius:0 8px 8px 0;margin:1.5rem 0}table{width:100%;border-collapse:collapse;margin:1.5rem 0;font-size:.95rem}th,td{padding:.75rem;border:1px solid var(--border);text-align:left}th{background:var(--surface);color:var(--accent-light);font-weight:600}.qa-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;overflow:hidden}.qa-question{padding:1rem 1.5rem;background:rgba(67,56,202,.1);border-bottom:1px solid var(--border);font-weight:600;color:var(--accent-light)}.qa-answer{padding:1.5rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心观点</a>
+<a href="#s2">四大取舍维度</a>
+<a href="#s3">四套实战组合拳</a>
+<a href="#s4">量化评价体系</a>
+<a href="#s5">高频问答</a>
+</aside>
+<div class="container">
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<h1>IA-08 · Agent 上下文取舍方案</h1>
+<p class="subtitle">提问：如何设计一套 Agent 的上下文取舍方案？</p>
+
+<h2 id="s1">核心观点</h2>
+<div class="highlight">
+<strong>核心命题：</strong>上下文窗口已经越来越长（128K 甚至 1M），为什么还要做取舍？三个硬伤：(1) 首字延迟（KV Cache 计算量爆炸）；(2) 成本（Agent 循环跑，每次带几万 token 计费）；(3) Lost in the Middle（中间信息召回断崖式下降）。做取舍不是为了偷懒，而是保持极高的信息密度和决策质量——少即是多。
+</div>
+
+<h2 id="s2">四大取舍维度</h2>
+<table>
+<tr><th>维度</th><th>说明</th></tr>
+<tr><td><strong>时效性</strong></td><td>用户刚才的指令比半小时前的废话更重要</td></tr>
+<tr><td><strong>相关性</strong></td><td>语义向量计算，找与当前任务目标最贴近的历史记忆</td></tr>
+<tr><td><strong>重要性</strong></td><td>系统级指令、用户核心偏好（如"不吃辣"）必须焊死在上下文里</td></tr>
+<tr><td><strong>多样性</strong></td><td>避免全是重复报错信息，保留不同阶段的思考逻辑</td></tr>
+</table>
+
+<h2 id="s3">四套实战组合拳</h2>
+<h3>1. 动态滑动窗口</h3>
+<p>保留最近 N 轮原始对话，但窗口大小动态调整——当工具描述占空间大时自动缩小，给工具说明腾地方。</p>
+
+<h3>2. 层级化总结</h3>
+<p>旧对话不直接删，而是启动后台任务压缩成精炼摘要（脱水）。像人的记忆：忘掉具体吃了什么，但记住见了重要的人。</p>
+
+<h3>3. 向量检索回旋（RAG）</h3>
+<p>冷热数据分离：暂时用不到的背景知识移出 prompt，塞进向量库。Agent 推理时觉得"以前处理过"再通过语义检索精准捞回。</p>
+
+<h3>4. 逻辑脱水 / 推理减脂</h3>
+<p>工具返回的原始 JSON 又臭又长，80% 都是括号和冗余字段。存入长效记忆时只保留核心结果，剔除繁琐思考链路，省 50%+ 无效空间。</p>
+
+<h2 id="s4">量化评价体系</h2>
+<div class="highlight">
+用测试集对比：裁剪上下文后任务成功率是否下降。如果成功率不变但 token 节省 60%、首字延迟降低 40%，就是教科书级优化。追求<strong>帕累托最优解</strong>：用最少的钱、最快的速度办最漂亮的事。
+</div>
+
+<h2 id="s5">高频问答</h2>
+<div class="qa-item">
+<div class="qa-question">Q1: 上下文窗口已经很长了，为什么还要做取舍？</div>
+<div class="qa-answer"><p>三个硬伤：(1) <strong>首字延迟</strong>：KV Cache 计算量随长度爆炸，用户等 3 秒就关掉；(2) <strong>成本</strong>：Agent 循环跑，每次带几万重复 token 计费，项目可能被砍；(3) <strong>Lost in the Middle</strong>：无关信息一多，中间信息召回断崖式下降，Agent 跑着跑着忘了最初目标。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q2: 动态滑动窗口和普通滑动窗口有什么区别？</div>
+<div class="qa-answer"><p>普通滑动窗口死板按时间删最早的对话。动态滑动窗口会检测当前任务需要调用的工具数量——如果工具描述占了很大空间，自动缩小对话窗口给工具说明腾地方，避免对话把指令给顶掉。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q3: 什么是"逻辑脱水"？能省多少空间？</div>
+<div class="qa-answer"><p>Agent 推理时工具返回的原始 JSON 数据又臭又长，80% 是括号和冗余字段。存入长效记忆时只保留核心结果（如计算器的答案、搜索的关键结论），剔除繁琐思考链路。至少省 50% 以上无效空间，模型读起来也更顺畅。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q4: 怎么证明取舍方案是科学的？</div>
+<div class="qa-answer"><p>建立测试集量化评估：对比裁剪前后的任务成功率。如果成功率不变但 token 节省 60%、首字延迟降低 40%，就是帕累托最优解。用任务成功率和成本曲线持续优化，不拍脑袋定策略。</p></div>
+</div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

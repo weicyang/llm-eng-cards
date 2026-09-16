@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IR-10 · Query 改写策略</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心问题</a>
+<a href="#s2">不做改写的三个大坑</a>
+<a href="#s3">五大核心策略</a>
+<a href="#s4">工程落地权衡</a>
+<a href="#s5">高频考点</a>
+</aside>
+<div class="container">
+        <a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+        <h1>IR-10 · Query 改写策略</h1>
+
+        <section>
+            <h2 id="s1">核心问题</h2>
+            <div class="highlight-box">
+                <p>在RAG系统中，为什么要做query改写？有哪些常用策略？</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s2">不做改写的三个大坑</h2>
+            <div class="content-card">
+                <table>
+                    <thead><tr><th>坑</th><th>表现</th><th>例子</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>表达不规范</strong></td>
+                            <td>口语 vs 书面语脱节</td>
+                            <td>用户："那啥报错咋整啊" vs 文档："ERROR500解决方案"</td>
+                        </tr>
+                        <tr>
+                            <td><strong>语义不匹配</strong></td>
+                            <td>描述现象 vs 描述原理</td>
+                            <td>用户："头疼发烧流鼻涕" vs 文档："感冒的病理特征"</td>
+                        </tr>
+                        <tr>
+                            <td><strong>意图太复杂</strong></td>
+                            <td>单次检索搞不定</td>
+                            <td>对比A和B区别、需要推理好几步的题</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="highlight-box">
+                    <p><strong>改写的目的：</strong>填平用户提问和文档之间的语义鸿沟</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s3">五大核心策略</h2>
+
+            <h3>1. Query Rewrite（好好说话）</h3>
+            <div class="content-card">
+                <p>加一个大模型当"翻译官"，把大白话翻译成标准的技术关键词查询语句：</p>
+                <ul>
+                    <li>"那啥报错" → "HTTP500排查"</li>
+                </ul>
+                <div class="highlight-box">
+                    <p>哪怕只做这一步，效果就能好一大截</p>
+                </div>
+            </div>
+
+            <h3>2. Multi-Query（广撒网）</h3>
+            <div class="content-card">
+                <p>把一个问题扩展成3~5个不同角度的变体：</p>
+                <ul>
+                    <li>拿着这5个问题并行去搜</li>
+                    <li>最后把结果凑一块儿</li>
+                </ul>
+                <div class="highlight-box">
+                    <p><strong>饱和式救援：</strong>不管答案藏哪儿，都能给他捞上来</p>
+                </div>
+            </div>
+
+            <h3>3. Decomposition（治复杂症）</h3>
+            <div class="content-card">
+                <p>自动把复杂问题拆成子任务：</p>
+                <ul>
+                    <li>"对比大模型A和大模型B" → 任务1：查大模型A，任务2：查大模型B</li>
+                    <li>拆开查完再汇总</li>
+                </ul>
+            </div>
+
+            <h3>4. HyDE（假设性文档嵌入）</h3>
+            <div class="content-card">
+                <p>问题和文档字面上完全不搭界时：</p>
+                <ul>
+                    <li>让大模型先编一个假答案（假设性文档）</li>
+                    <li>虽然内容是编的，但用词风格和真实文档特别像</li>
+                    <li>用这个假答案去库里搜，往往有奇效</li>
+                </ul>
+                <div class="highlight-box">
+                    <p><strong>长尾问题：</strong>绝对是利器</p>
+                </div>
+            </div>
+
+            <h3>5. Step Back（以退为进）</h3>
+            <div class="content-card">
+                <p>用户问的细节太细，库里压根没有：</p>
+                <ul>
+                    <li>让模型后退一步，去问一个更高层级的原理性问题</li>
+                    <li>先把大背景知识拿回来</li>
+                    <li>再让模型去推理</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s4">工程落地权衡</h2>
+            <div class="content-card">
+                <ul>
+                    <li><strong>平衡：</strong>在召回率和系统延迟之间找平衡（改写虽好，但会消耗更多token，增加延迟）</li>
+                    <li><strong>Rerank必须：</strong>改写了一堆，召回回来的文档变多、噪音变大，必须加重排序筛掉没用的</li>
+                    <li><strong>AB测试：</strong>任何改写策略上线前都得拿数据说话，持续验证</li>
+                </ul>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s5">高频考点</h2>
+            <div class="interview-points">
+                <div class="highlight-box">
+                    <ol>
+                        <li><strong>先说痛点：</strong>三个大坑（表达不规范、语义不匹配、意图太复杂）</li>
+                        <li><strong>再列举策略：</strong>五大核心策略</li>
+                        <li><strong>最后谈权衡：</strong>召回率 vs 延迟，Rerank必须，AB测试</li>
+                    </ol>
+                </div>
+            </div>
+        </section>
+
+        <div class="tags">
+            <span class="tag">Query改写</span>
+            <span class="tag">HyDE</span>
+            <span class="tag">Multi-Query</span>
+            <span class="tag">Decomposition</span>
+        </div>
+    </div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

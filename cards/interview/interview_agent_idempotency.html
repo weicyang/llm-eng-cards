@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IA-17 · Agent 幂等性设计</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--accent:#4338ca;--accent-light:#0f766e;--text:#1c1917;--text-dim:#78716c}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px}.container{max-width:900px;margin:0 auto}.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}h1{font-size:2.2rem;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--accent-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent}.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:2rem}h2{font-size:1.5rem;color:var(--accent-light);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border)}p{margin-bottom:1rem}ul,ol{margin-bottom:1rem;padding-left:1.5rem}li{margin-bottom:.5rem}strong{color:var(--accent-light)}table{width:100%;border-collapse:collapse;margin:1.5rem 0;font-size:.95rem}th,td{padding:.75rem;border:1px solid var(--border);text-align:left;vertical-align:top}th{background:var(--surface);color:var(--accent-light)}.highlight{background:linear-gradient(135deg,rgba(67,56,202,.1),rgba(15,118,110,.1));border-left:3px solid var(--accent);padding:1rem;border-radius:0 8px 8px 0;margin:1.5rem 0}.qa-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;overflow:hidden}.qa-question{padding:1rem 1.5rem;background:rgba(67,56,202,.1);border-bottom:1px solid var(--border);font-weight:600;color:var(--accent-light)}.qa-answer{padding:1.5rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心观点</a>
+<a href="#s2">为什么 Agent 比普通接口更需要幂等</a>
+<a href="#s3">三层幂等设计</a>
+<a href="#s4">常见的落地例子</a>
+<a href="#s5">高频问答</a>
+</aside>
+<div class="container">
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<h1>IA-17 · Agent 幂等性设计</h1>
+<p class="subtitle">提问：AI Agent 为什么更需要幂等性？</p>
+
+<h2 id="s1">核心观点</h2>
+<div class="highlight">
+<strong>核心结论：</strong>Agent 幂等性的本质是“允许重复执行，但只允许一次有效副作用”。它不是接口层的小技巧，而是工作流级可靠性能力。
+</div>
+
+<h2 id="s2">为什么 Agent 比普通接口更需要幂等</h2>
+<p>字幕强调，Agent 天生运行在会重试、会恢复、会超时、会重复投递的环境里。一次调用失败，并不代表外部副作用没发生；如果没有幂等保护，系统就会出现重复扣费、重复发消息、重复写库等问题。</p>
+<ul>
+<li>模型输出不稳定，容易多次触发相同操作</li>
+<li>外部系统可能执行成功，但回包失败，导致上层再次重试</li>
+<li>长链路任务中局部成功、局部失败很常见，没有幂等就无法安全恢复</li>
+</ul>
+
+<h2 id="s3">三层幂等设计</h2>
+<table>
+<tr><th>层级</th><th>目标</th><th>典型手段</th></tr>
+<tr><td><strong>请求层</strong></td><td>阻止入口重复执行</td><td>Idempotency Key、Request ID、去重表、唯一约束</td></tr>
+<tr><td><strong>工具层</strong></td><td>限制外部副作用只生效一次</td><td>幂等接口、唯一业务键、外部系统幂等令牌</td></tr>
+<tr><td><strong>流程层</strong></td><td>支持长链路恢复与补偿</td><td>状态机、Checkpoint、补偿机制、重试策略</td></tr>
+</table>
+<p>真正高分的回答，不能只停在“入口加唯一键”。入口层只解决“不要重复开始”，流程层才决定“已经跑了一半怎么接着跑”。</p>
+
+<h2 id="s4">常见的落地例子</h2>
+<p>视频里用“订票超时重试”来说明这个问题：如果票已经锁住，但回包超时，上层再次重试时必须能够识别“这是同一次业务请求”，否则就会出现重复锁票甚至重复扣费。</p>
+
+<h2 id="s5">高频问答</h2>
+<div class="qa-item">
+<div class="qa-question">Q1: 幂等性的标准定义应该怎么说？</div>
+<div class="qa-answer"><p>可以直接说三点：重复执行、结果一致、副作用只生效一次。对 Agent 来说，重点在第三点，因为它经常会和支付、通知、工单、数据库写入等外部系统交互。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q2: 为什么 Agent 场景下幂等比普通接口更重要？</div>
+<div class="qa-answer"><p>因为 Agent 天生有重试、恢复和长链路特性。一次任务可能跨多个工具、多个服务，任何一步网络抖动都可能让系统误以为没成功，于是再次执行同一副作用。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q3: 只靠 Request ID 就够了吗？</div>
+<div class="qa-answer"><p>不够。Request ID 只能防入口重复，真正安全的方案还要让工具层和流程层也能识别重复执行。否则入口幂等了，链路中间的副作用仍可能重复发生。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q4: 幂等和 Exactly Once 是一回事吗？</div>
+<div class="qa-answer"><p>不是。Exactly Once 是系统语义目标，现实里很多系统更接近 At Least Once。幂等设计的价值，就是让 At Least Once 的重试语义尽量在业务效果上接近 Exactly Once。</p></div>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IL-02 · FlashAttention 显存优化原理</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心问题</a>
+<a href="#s2">标准 Attention 的问题</a>
+<a href="#s3">FlashAttention 的核心思想</a>
+<a href="#s4">FlashAttention 算法流程</a>
+<a href="#s5">性能对比</a>
+<a href="#s6">GPU 内存层次</a>
+<a href="#s7">FlashAttention 演进</a>
+<a href="#s8">高频考点</a>
+<a href="#s9">延伸思考</a>
+</aside>
+<div class="container">
+        <a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+        <h1>IL-02 · FlashAttention 显存优化原理</h1>
+
+        <section>
+            <h2 id="s1">核心问题</h2>
+            <div class="highlight-box">
+                <p>标准 Attention 的显存瓶颈：</p>
+                <ul>
+                    <li><strong>注意力矩阵</strong> - N x N 的矩阵，长文本时显存爆炸</li>
+                    <li><strong>中间激活</strong> - Softmax 前后都需要完整存储</li>
+                    <li><strong>读写瓶颈</strong> - GPU HBM ↔ SRAM 的数据搬运成为性能瓶颈</li>
+                </ul>
+                <p>例如：序列长度 8K 时，注意力矩阵需要 ~512MB；128K 时直接爆到 ~128GB。</p>
+                <p><strong>FlashAttention 的目标：</strong>显存占用降低 80%，同时速度更快。</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s2">标准 Attention 的问题</h2>
+            <div class="key-concept">
+                <p>先回顾标准 Attention 的计算流程：</p>
+            </div>
+
+            <div class="content-card">
+                <div class="highlight-box">
+                    <pre><code># 标准 Attention 计算
+Q, K, V = linear(X)          # 形状: (B, N, d)
+S = Q @ K.T / sqrt(d)        # 形状: (B, N, N) ← 这里爆炸
+P = softmax(S)               # 形状: (B, N, N) ← 这里也爆炸
+O = P @ V                    # 形状: (B, N, d)</code></pre>
+                </div>
+                <p><strong>问题所在：</strong></p>
+                <ol>
+                    <li>矩阵 S 和 P 的大小是 N²（N=序列长度）</li>
+                    <li>这些中间结果必须存储在 HBM（显存）中</li>
+                    <li>反向传播时还需要这些中间值计算梯度</li>
+                </ol>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s3">FlashAttention 的核心思想</h2>
+            <div class="key-concept">
+                <p>两大关键技术：<strong>Tiling（分块计算）</strong> + <strong>Recomputation（重计算）</strong></p>
+            </div>
+
+            <h3>技术1：Tiling（分块计算）</h3>
+            <div class="content-card">
+                <p>不在 HBM 中构建完整的 N×N 矩阵，而是分块在 SRAM 中计算：</p>
+                <div class="highlight-box">
+                    <p><strong>传统方式：</strong></p>
+                    <pre><code>HBM: [完整的 N×N 矩阵] ← 显存爆炸</code></pre>
+                    <p><strong>FlashAttention 方式：</strong></p>
+                    <pre><code>SRAM (快速但小):
+  ┌─────────┐
+  │ block 1 │ → 计算完写回 HBM
+  │ block 2 │ → 计算完写回 HBM
+  │ block 3 │ → 计算完写回 HBM
+  └─────────┘
+  
+HBM: 只存储最终输出 O</code></pre>
+                </div>
+                <p><strong>关键：</strong>每个 block 只在 SRAM 中计算，不存储中间矩阵。</p>
+            </div>
+
+            <h3>技术2：Online Softmax（在线 Softmax）</h3>
+            <div class="content-card">
+                <p>标准 Softmax 需要完整数组才能计算，但 FlashAttention 使用增量式计算：</p>
+                <div class="highlight-box">
+                    <pre><code># 标准 Softmax（需要完整数组）
+def softmax(x):
+    max_val = max(x)          # 需要先看完所有元素
+    exp_x = exp(x - max_val)
+    return exp_x / sum(exp_x) # 需要再遍历一次
+
+# Online Softmax（增量计算）
+def online_softmax_stream():
+    m = -inf  # 当前最大值
+    d = 0     # 当前分母和
+    
+    for block in blocks:
+        m_new = max(m, max(block))
+        # 修正之前的计算
+        d = d * exp(m - m_new) + sum(exp(block - m_new))
+        m = m_new
+    
+    return d  # 最终的分母</code></pre>
+                </div>
+                <p><strong>核心洞察：</strong>维护两个统计量 (m, d)，就能增量计算 Softmax，不需要存储完整矩阵。</p>
+            </div>
+
+            <h3>技术3：Recomputation（重计算）</h3>
+            <div class="content-card">
+                <p>反向传播时不存储中间激活，而是重新计算：</p>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>方法</th>
+                            <th>前向</th>
+                            <th>反向</th>
+                            <th>显存</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>标准</td>
+                            <td>计算并存储 S, P</td>
+                            <td>直接用 S, P</td>
+                            <td>O(N²)</td>
+                        </tr>
+                        <tr>
+                            <td>FlashAttention</td>
+                            <td>只存储 Q, K, V, O</td>
+                            <td>重算 S, P</td>
+                            <td>O(N)</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p><strong>为什么重算反而更快？</strong>因为省去了 HBM 的读写，而 SRAM 计算极快。</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s4">FlashAttention 算法流程</h2>
+            <div class="content-card">
+                <div class="highlight-box">
+                    <pre><code>输入: Q, K, V (分块存储在 HBM)
+输出: O (注意力输出)
+
+初始化: O = 0, m = -inf, d = 0
+
+for each Q_block (从 HBM 加载到 SRAM):
+    for each K_block, V_block (从 HBM 加载到 SRAM):
+        # 在 SRAM 中计算
+        S_block = Q_block @ K_block.T / sqrt(d)
+        m_new = max(m, rowmax(S_block))
+        P_block = exp(S_block - m_new)
+        
+        # 更新统计量
+        d = d * exp(m - m_new) + rowsum(P_block)
+        
+        # 更新输出（修正之前的计算）
+        O = O * exp(m - m_new) + P_block @ V_block
+        m = m_new
+    
+    # 归一化
+    O = O / d
+    
+    # 写回 HBM
+
+返回 O</code></pre>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s5">性能对比</h2>
+            <div class="key-concept">
+                <p>FlashAttention vs 标准 Attention：</p>
+            </div>
+
+            <div class="content-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>指标</th>
+                            <th>标准 Attention</th>
+                            <th>FlashAttention</th>
+                            <th>提升</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>显存复杂度</td>
+                            <td>O(N²)</td>
+                            <td>O(N)</td>
+                            <td>~80%↓ (长序列)</td>
+                        </tr>
+                        <tr>
+                            <td>速度</td>
+                            <td>基准</td>
+                            <td>2-4x 更快</td>
+                            <td>IO 减少</td>
+                        </tr>
+                        <tr>
+                            <td>最大序列长度</td>
+                            <td>~4K-8K</td>
+                            <td>~32K-128K</td>
+                            <td>10-30x</td>
+                        </tr>
+                        <tr>
+                            <td>数值精度</td>
+                            <td>精确</td>
+                            <td>精确（非近似）</td>
+                            <td>相同</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s6">GPU 内存层次</h2>
+            <div class="content-card">
+                <div class="highlight-box">
+                    <p><strong>理解 GPU 内存层次是理解 FlashAttention 的关键：</strong></p>
+                    <pre><code>┌─────────────────────────────────────┐
+│  HBM (High Bandwidth Memory)        │  ← 大 (80GB)，慢
+│  - 存储模型参数、完整激活           │
+│  - 带宽: ~2TB/s                      │
+├─────────────────────────────────────┤
+│  SRAM (Static RAM / Shared Memory)  │  ← 小 (20MB)，快
+│  - FlashAttention 的主要工作区       │
+│  - 带宽: ~19TB/s (10x faster)       │
+├─────────────────────────────────────┤
+│  Registers                          │  ← 极小，极快
+│  - 单个线程的临时变量               │
+└─────────────────────────────────────┘</code></pre>
+                    <p><strong>FlashAttention 的精髓：</strong>把计算从 HBM 搬到 SRAM，减少 IO 次数。</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s7">FlashAttention 演进</h2>
+            <div class="content-card">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>版本</th>
+                            <th>主要改进</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>FlashAttention-1 (2022)</td>
+                            <td>提出 Tiling + Online Softmax 的基础算法</td>
+                        </tr>
+                        <tr>
+                            <td>FlashAttention-2 (2023)</td>
+                            <td>优化循环顺序、并行策略，速度再提升 2x</td>
+                        </tr>
+                        <tr>
+                            <td>FlashAttention-3 (2024)</td>
+                            <td>针对 Hopper GPU (H100) 优化，支持 FP8</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s8">高频考点</h2>
+            <div class="interview-points">
+                <h3>这道题考察什么？</h3>
+                <ol>
+                    <li><strong>底层理解</strong> - GPU 内存层次、IO 瓶颈</li>
+                    <li><strong>算法设计</strong> - Tiling、Online Softmax 的思想</li>
+                    <li><strong>工程优化</strong> - 理解"重算比存储更快"的反直觉结论</li>
+                    <li><strong>技术深度</strong> - 是否真正理解 Attention 的计算细节</li>
+                </ol>
+            </div>
+
+            <h3>标准回答思路</h3>
+            <div class="highlight-box">
+                <p><strong>第一步：</strong>说明问题 - 标准 Attention 的 O(N²) 显存瓶颈</p>
+                <p><strong>第二步：</strong>核心思想 - Tiling 分块计算 + Online Softmax 增量计算</p>
+                <p><strong>第三步：</strong>GPU 内存层次 - HBM vs SRAM，减少 IO 是关键</p>
+                <p><strong>第四步：</strong>Recomputation - 重算中间激活，用计算换显存</p>
+                <p><strong>第五步：</strong>性能提升 - 显存 O(N)，速度 2-4x，精确非近似</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s9">延伸思考</h2>
+            <div class="content-card">
+                <p>相关优化技术：</p>
+                <ul>
+                    <li><strong>Sparse Attention</strong> - 只计算部分注意力位置</li>
+                    <li><strong>Linear Attention</strong> - 用核函数近似，O(N) 复杂度</li>
+                    <li><strong>Ring Attention</strong> - 分布式长序列训练</li>
+                    <li><strong>PagedAttention (vLLM)</strong> - KV Cache 的分页管理</li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="tags">
+            <span class="tag">FlashAttention</span>
+            <span class="tag">显存优化</span>
+            <span class="tag">Tiling</span>
+            <span class="tag">Online Softmax</span>
+            <span class="tag">GPU</span>
+        </div>
+    </div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

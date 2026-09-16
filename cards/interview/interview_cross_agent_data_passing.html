@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IA-07 · 跨 Agent 结构化数据传递</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--accent:#4338ca;--accent-light:#0f766e;--text:#1c1917;--text-dim:#78716c;--green:#15803d;--orange:#a16207;--red:#b91c1c}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px}.container{max-width:900px;margin:0 auto}.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}h1{font-size:2.2rem;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--accent-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent}.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:2rem}h2{font-size:1.5rem;color:var(--accent-light);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border)}h3{font-size:1.2rem;color:var(--text);margin:1.5rem 0 .8rem}p{margin-bottom:1rem}ul,ol{margin-bottom:1rem;padding-left:1.5rem}li{margin-bottom:.5rem}strong{color:var(--accent-light)}.highlight{background:linear-gradient(135deg,rgba(67,56,202,.1),rgba(15,118,110,.1));border-left:3px solid var(--accent);padding:1rem;border-radius:0 8px 8px 0;margin:1.5rem 0}table{width:100%;border-collapse:collapse;margin:1.5rem 0;font-size:.95rem}th,td{padding:.75rem;border:1px solid var(--border);text-align:left}th{background:var(--surface);color:var(--accent-light);font-weight:600}.qa-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;overflow:hidden}.qa-question{padding:1rem 1.5rem;background:rgba(67,56,202,.1);border-bottom:1px solid var(--border);font-weight:600;color:var(--accent-light)}.qa-answer{padding:1.5rem}.layer{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem;margin:1rem 0}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心观点</a>
+<a href="#s2">三层防御架构</a>
+<a href="#s3">四大心法</a>
+<a href="#s4">高频问答</a>
+</aside>
+<div class="container">
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<h1>IA-07 · 跨 Agent 结构化数据传递</h1>
+<p class="subtitle">提问：在多 Agent 协同场景下，你怎么保证跨 Agent 结构化数据传递的稳定性？</p>
+
+<h2 id="s1">核心观点</h2>
+<div class="highlight">
+<strong>核心矛盾：</strong>大模型输出的不确定性 vs 系统协同要求的确定性。模型多吐一个空格、把 JSON 写在 Markdown 代码块里，下游 Agent 就解析报错。解法是三层架构：架构层（黑板模式 + 标准协议）→ 工程层（强类型校验 + 自愈机制 + 熔断降级）→ 模型层（Tool Use + 受限解码）。
+</div>
+
+<h2 id="s2">三层防御架构</h2>
+
+<div class="layer">
+<h3>Layer 1: 架构层</h3>
+<ul>
+<li><strong>黑板模式 / 共享状态机</strong>：Agent A 把结果填到 state 对应格子，Agent B 只读需要的格子。避免点对点杂乱通信</li>
+<li><strong>标准化通信协议</strong>：消息带 header（来源、背景、时间戳）+ body（结构化 payload），下游不仅知道"是什么"还知道"为什么"</li>
+</ul>
+</div>
+
+<div class="layer">
+<h3>Layer 2: 工程层</h3>
+<ul>
+<li><strong>强类型反序列化校验</strong>：用 Pydantic 等库过 schema，校验失败不直接报错</li>
+<li><strong>自行反思机制</strong>：把报错堆栈塞回发出数据的 Agent，让它自己改</li>
+<li><strong>熔断机制</strong>：重试 3 次还搞不定 → 止损（返回默认值 / 切更强模型 / 人工介入）</li>
+</ul>
+</div>
+
+<div class="layer">
+<h3>Layer 3: 模型层</h3>
+<ul>
+<li><strong>原生工具调用（Tool Use）</strong>：模型对工具调用做过专门微调，JSON 稳定性比 prompt 里求它高一个量级</li>
+<li><strong>受限解码（Constrained Decoding）</strong>：生成 token 时修改 logits 概率分布，强制只吐出合法字符。物理级 100% 格式正确</li>
+</ul>
+</div>
+
+<h2 id="s3">四大心法</h2>
+<table>
+<tr><th>心法</th><th>要点</th></tr>
+<tr><td>认知维度</td><td>从"求模型输出正确"转向"靠系统保证正确"</td></tr>
+<tr><td>防御前置</td><td>受限解码的收益 > 事后反思修复</td></tr>
+<tr><td>工程陷阱</td><td>主动抛出幻觉字段、Markdown 污染、死循环重试等痛点</td></tr>
+<tr><td>数据解耦</td><td>通过数据契约协作，降低节点间耦合</td></tr>
+</table>
+
+<h2 id="s4">高频问答</h2>
+<div class="qa-item">
+<div class="qa-question">Q1: 为什么跨 Agent 数据传递不能直接传长字符串？</div>
+<div class="qa-answer"><p>两个问题：(1) <strong>上下文太乱</strong>，信息密度稀；(2) <strong>格式不确定</strong>，模型可能多吐空格、把 JSON 包在 Markdown 代码块里。解法：引入黑板模式（共享状态机），Agent 之间不直接通信，而是通过公共 state 读写，数据流转路径清晰。加上标准化协议（header + body），解决隐性上下文丢失。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q2: 受限解码（Constrained Decoding）的原理是什么？</div>
+<div class="qa-answer"><p>在模型生成 token 时，修改 logits 概率分布。例如 JSON 下一个字符必须是双引号，就把词表中除双引号以外的所有字符概率设为负无穷。基于有限状态机或正则约束实现。这是物理级保证，哪怕 7B 小模型也能输出完美格式。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q3: 模型一直改不对 JSON 怎么办？</div>
+<div class="qa-answer"><p>三层兜底：(1) <strong>自行反思</strong>：把报错堆栈塞回模型让它自己改；(2) <strong>熔断机制</strong>：重试 3 次还不对就止损；(3) <strong>降级逻辑</strong>：返回默认值 / 切更强模型 / 人工介入。这是工业级项目的底线。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q4: 回答的核心公式是什么？</div>
+<div class="qa-answer"><p>稳定性 = 受限生成（模型层）+ 严格安检（工程层）+ 全局状态管理（架构层）。展示从底座模型到业务架构的全局防御思维，而非简单的"优化 prompt"。</p></div>
+</div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

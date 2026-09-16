@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IE-01 · 多模型支持架构怎么设计？</title>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心问题</a>
+<a href="#s2">解决方案：模型网关层（三层架构）</a>
+<a href="#s3">架构优势总结</a>
+<a href="#s4">高频考点</a>
+<a href="#s5">延伸思考</a>
+</aside>
+<div class="container">
+        <a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+
+        <h1>IE-01 · 多模型支持架构怎么设计？</h1>
+
+        <section>
+            <h2 id="s1">核心问题</h2>
+            <div class="highlight-box">
+                <p>在实际开发中，经常遇到这样的问题：</p>
+                <ul>
+                    <li>一开始用 GPT，后来业务要求换 Claude 或 DeepSeek</li>
+                    <li>一个系统里不只用一家模型（简单场景省钱用便宜的，复杂推理用能力强的）</li>
+                    <li>不同租户的要求不一样</li>
+                </ul>
+                <p>如果代码里写死了某个模型的 SDK，每次换模型都要"伤筋动骨"改代码。</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s2">解决方案：模型网关层（三层架构）</h2>
+            <div class="key-concept">
+                <p>核心思路：做一层<strong>模型网关层</strong>，像一个"万能插线板"，分为上中下三层。</p>
+            </div>
+
+            <h3>上层：业务层</h3>
+            <div class="content-card">
+                <p>这一层特别"懒"，只认两个通用能力：</p>
+                <ul>
+                    <li><strong>对话（chat）</strong></li>
+                    <li><strong>向量化（embedding）</strong></li>
+                </ul>
+                <div class="highlight-box">
+                    <p>业务代码永远只调 <code>chat</code> 和 <code>embedding</code> 这两个接口，至于后面是 GPT 还是 Claude，完全不关心。</p>
+                    <p><strong>好处：</strong>未来就算把底下的模型全部换一遍，上面的代码一行都不用动。这就是"业务和模型解耦"。</p>
+                </div>
+            </div>
+
+            <h3>中层：路由层（智能路由）</h3>
+            <div class="content-card">
+                <p>路由层的工作是把上层的请求"聪明地"分配给合适的模型。路由策略主要基于四个维度：</p>
+                <ol>
+                    <li><strong>租户</strong> - VIP 租户分配专属低延迟模型，普通用户走共享资源</li>
+                    <li><strong>场景</strong> - 简单意图（如"今天天气怎么样"）走 DeepSeek（省钱快速），复杂任务（如"分析合同风险"）走 Claude 或 GPT</li>
+                    <li><strong>成本</strong> - 根据预算动态选择模型</li>
+                    <li><strong>延迟</strong> - 实时监控模型延迟和错误率</li>
+                </ol>
+                <div class="highlight-box">
+                    <p><strong>自动切换：</strong>如果某个模型变慢或挂了，路由层立刻把流量切换到备用模型，用户完全无感知。</p>
+                    <p><strong>动态配置：</strong>路由策略可以做成动态配置，运营同学点点鼠标就能调，不用重启服务。</p>
+                </div>
+            </div>
+
+            <h3>底层：适配器层</h3>
+            <div class="content-card">
+                <p>这一层是一个一个独立的适配器，每个适配器只负责跟一个模型打交道：</p>
+                <ul>
+                    <li>GPT 适配器</li>
+                    <li>Claude 适配器</li>
+                    <li>Gemini 适配器</li>
+                    <li>DeepSeek 适配器</li>
+                </ul>
+                <div class="highlight-box">
+                    <p><strong>适配器的核心工作：翻译</strong></p>
+                    <p>不同模型有不同的 API 格式、认证方法、参数名称。适配器把这些"千奇百怪"的东西全部翻译成网关内部统一的标准格式。</p>
+                    <p><strong>插拔式扩展：</strong>市面上出了新模型？只需要写一个新的适配器，往里面一插就完事了，上层和中层完全不受影响。</p>
+                </div>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s3">架构优势总结</h2>
+            <div class="key-concept">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>层级</th>
+                            <th>职责</th>
+                            <th>特点</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>上层（业务层）</td>
+                            <td>统一接口（chat/embedding）</td>
+                            <td>业务和模型解耦，代码不用改</td>
+                        </tr>
+                        <tr>
+                            <td>中层（路由层）</td>
+                            <td>智能路由分配</td>
+                            <td>精细控制成本，自动切换备用模型</td>
+                        </tr>
+                        <tr>
+                            <td>底层（适配器层）</td>
+                            <td>模型适配和翻译</td>
+                            <td>新模型即插即用，扩展性强</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s4">高频考点</h2>
+            <div class="interview-points">
+                <h3>这道题考察什么？</h3>
+                <ol>
+                    <li><strong>系统设计能力</strong> - 能否设计出可扩展、可维护的架构</li>
+                    <li><strong>解耦思维</strong> - 理解"业务和模型解耦"的重要性</li>
+                    <li><strong>实际经验</strong> - 是否真的在多模型项目中踩过坑</li>
+                    <li><strong>工程化思维</strong> - 考虑成本、延迟、可靠性等多个维度</li>
+                </ol>
+            </div>
+
+            <h3>标准回答思路</h3>
+            <div class="highlight-box">
+                <p><strong>第一步：</strong>说明问题背景 - 多模型场景下的痛点（写死 SDK、换模型要改代码、不同场景用不同模型）</p>
+                <p><strong>第二步：</strong>提出解决方案 - 模型网关层，三层架构（业务层、路由层、适配器层）</p>
+                <p><strong>第三步：</strong>详细说明每层职责 - 上层统一接口、中层智能路由、底层灵活适配</p>
+                <p><strong>第四步：</strong>总结优势 - 业务解耦、成本可控、即插即用、自动切换</p>
+            </div>
+        </section>
+
+        <section>
+            <h2 id="s5">延伸思考</h2>
+            <div class="content-card">
+                <p>在实际落地时，还可以进一步思考：</p>
+                <ul>
+                    <li><strong>路由策略怎么动态调优？</strong> - 可以根据历史数据自动调整路由权重</li>
+                    <li><strong>模型效果怎么在线对比？</strong> - A/B 测试，同时调用多个模型对比结果</li>
+                    <li><strong>如何做 fallback 机制？</strong> - 主模型失败时自动切换到备用模型</li>
+                    <li><strong>如何监控和告警？</strong> - 实时监控各模型的延迟、错误率、成本</li>
+                </ul>
+            </div>
+        </section>
+
+        <div class="tags">
+            <span class="tag">多模型架构</span>
+            <span class="tag">模型网关</span>
+            <span class="tag">智能路由</span>
+            <span class="tag">适配器模式</span>
+            <span class="tag">系统设计</span>
+        </div>
+    </div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IA-19 · 长期记忆入库边界</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--accent:#4338ca;--accent-light:#0f766e;--text:#1c1917;--text-dim:#78716c}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px}.container{max-width:900px;margin:0 auto}.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}h1{font-size:2.2rem;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--accent-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent}.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:2rem}h2{font-size:1.5rem;color:var(--accent-light);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border)}p{margin-bottom:1rem}ul,ol{margin-bottom:1rem;padding-left:1.5rem}li{margin-bottom:.5rem}strong{color:var(--accent-light)}table{width:100%;border-collapse:collapse;margin:1.5rem 0;font-size:.95rem}th,td{padding:.75rem;border:1px solid var(--border);text-align:left;vertical-align:top}th{background:var(--surface);color:var(--accent-light)}.highlight{background:linear-gradient(135deg,rgba(67,56,202,.1),rgba(15,118,110,.1));border-left:3px solid var(--accent);padding:1rem;border-radius:0 8px 8px 0;margin:1.5rem 0}.qa-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;overflow:hidden}.qa-question{padding:1rem 1.5rem;background:rgba(67,56,202,.1);border-bottom:1px solid var(--border);font-weight:600;color:var(--accent-light)}.qa-answer{padding:1.5rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心观点</a>
+<a href="#s2">哪些信息适合长期入库</a>
+<a href="#s3">哪些信息不该直接入库</a>
+<a href="#s4">写入触发与存储分层</a>
+<a href="#s5">高频问答</a>
+</aside>
+<div class="container">
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<h1>IA-19 · 长期记忆入库边界</h1>
+<p class="subtitle">提问：Agent 长期记忆哪些信息值得写入数据库？</p>
+
+<h2 id="s1">核心观点</h2>
+<div class="highlight">
+<strong>核心结论：</strong>长期记忆绝不能存“所有聊天记录”，只应该存未来高复用、低歧义、能持续影响决策的信息。
+</div>
+
+<h2 id="s2">哪些信息适合长期入库</h2>
+<table>
+<tr><th>类型</th><th>示例</th><th>为什么值得存</th></tr>
+<tr><td><strong>用户明确偏好</strong></td><td>输出风格、语言偏好、禁忌项</td><td>跨会话高频复用，且能直接影响生成策略</td></tr>
+<tr><td><strong>确认的硬事实</strong></td><td>职业、权限、系统配置、固定约束</td><td>需要精准命中，不能靠模糊检索</td></tr>
+<tr><td><strong>高复用经验</strong></td><td>反复有效的操作策略、踩坑经验</td><td>后续可持续指导决策或执行</td></tr>
+</table>
+
+<h2 id="s3">哪些信息不该直接入库</h2>
+<ul>
+<li>一次性情绪表达或临时抱怨</li>
+<li>未经确认的猜测与模型推断</li>
+<li>只在当前会话有效的短期上下文</li>
+<li>还没有完成闭环验证的经验片段</li>
+</ul>
+
+<h2 id="s4">写入触发与存储分层</h2>
+<p>字幕补了两层非常工程化的设计。第一层是写入触发条件，不是每轮对话都写，而是通常在用户强反馈、工作流闭环、异步自评高分时写入。第二层是存储分层：</p>
+<ul>
+<li><strong>热记忆</strong>：直接进当前上下文，服务即时对话</li>
+<li><strong>近期记忆</strong>：进向量库，便于语义检索</li>
+<li><strong>长期冷记忆</strong>：进关系库或结构化存储，保证精确更新和查询</li>
+</ul>
+
+<h2 id="s5">高频问答</h2>
+<div class="qa-item">
+<div class="qa-question">Q1: 为什么不能把所有聊天记录都写进长期记忆？</div>
+<div class="qa-answer"><p>因为长期记忆的目标不是归档，而是服务未来决策。把所有对话都写进去只会带来噪声、冲突和维护成本，还可能让模型在旧信息和新信息之间反复摇摆。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q2: 长期记忆最重要的筛选标准是什么？</div>
+<div class="qa-answer"><p>可以概括成三点：高复用、低歧义、持续影响决策。只要不满足这三点，就更适合停留在短期上下文或近期摘要里，而不是进入长期数据库。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q3: 长期记忆应该存在向量库还是关系库？</div>
+<div class="qa-answer"><p>要分层。近期经验和模糊语义内容适合向量库；用户画像、权限、固定约束等硬事实更适合关系库或 KV/JSON 存储，因为它们需要可更新、可覆盖、可精确读取。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q4: 怎么判断一条经验已经值得长期沉淀？</div>
+<div class="qa-answer"><p>通常要经过闭环验证，比如用户明确正反馈、任务执行成功、或者在异步评估里被判定为高价值。没有验证的经验不应直接进入长期记忆。</p></div>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

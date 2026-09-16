@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IR-11 · RAG 热更新方案</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--accent:#4338ca;--accent-light:#0f766e;--text:#1c1917;--text-dim:#78716c}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px}.container{max-width:900px;margin:0 auto}.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}h1{font-size:2.2rem;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--accent-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent}.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:2rem}h2{font-size:1.5rem;color:var(--accent-light);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border)}p{margin-bottom:1rem}ul,ol{margin-bottom:1rem;padding-left:1.5rem}li{margin-bottom:.5rem}strong{color:var(--accent-light)}table{width:100%;border-collapse:collapse;margin:1.5rem 0;font-size:.95rem}th,td{padding:.75rem;border:1px solid var(--border);text-align:left;vertical-align:top}th{background:var(--surface);color:var(--accent-light)}.highlight{background:linear-gradient(135deg,rgba(67,56,202,.1),rgba(15,118,110,.1));border-left:3px solid var(--accent);padding:1rem;border-radius:0 8px 8px 0;margin:1.5rem 0}.qa-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;overflow:hidden}.qa-question{padding:1rem 1.5rem;background:rgba(67,56,202,.1);border-bottom:1px solid var(--border);font-weight:600;color:var(--accent-light)}.qa-answer{padding:1.5rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心观点</a>
+<a href="#s2">基础能力</a>
+<a href="#s3">三类工程痛点</a>
+<a href="#s4">高频问答</a>
+</aside>
+<div class="container">
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<h1>IR-11 · RAG 热更新方案</h1>
+<p class="subtitle">提问：RAG 怎么做热更新？</p>
+
+<h2 id="s1">核心观点</h2>
+<div class="highlight">
+<strong>核心结论：</strong>RAG 热更新不是简单“把新文档塞进去”，而是知识、索引、缓存和版本的一致性问题。真正的目标是在不停机的前提下完成可回滚的增量更新。
+</div>
+
+<h2 id="s2">基础能力</h2>
+<table>
+<tr><th>能力</th><th>解决什么问题</th><th>典型做法</th></tr>
+<tr><td><strong>增量索引</strong></td><td>只更新变化内容，避免全量重建</td><td>指纹校验、ETag、MD5、版本标签</td></tr>
+<tr><td><strong>原子切换</strong></td><td>防止新旧索引混杂</td><td>Upsert、影子索引、蓝绿切换</td></tr>
+<tr><td><strong>生命周期管理</strong></td><td>处理删除、过期和回滚</td><td>逻辑删除、冷热分层、历史版本保留</td></tr>
+</table>
+
+<h2 id="s3">三类工程痛点</h2>
+<ul>
+<li><strong>新旧知识冲突</strong>：新文档已进库，但旧向量和旧摘要还在命中</li>
+<li><strong>GraphRAG 重算成本高</strong>：图结构更新时不只是向量变了，关系图也可能需要整体调整</li>
+<li><strong>缓存残留</strong>：会话缓存、检索缓存、长期记忆缓存如果不失效，会继续把旧知识带回上下文</li>
+</ul>
+
+<h2 id="s4">高频问答</h2>
+<div class="qa-item">
+<div class="qa-question">Q1: 为什么不能每次更新都全量重建索引？</div>
+<div class="qa-answer"><p>全量重建成本高、停机风险大，也不利于频繁更新。企业场景下知识库变化常常是增量的，所以更合理的方案是指纹识别变化、按块重算 Embedding，再做原子切换。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q2: 热更新最容易漏掉的点是什么？</div>
+<div class="qa-answer"><p>缓存失效。很多回答只讲索引更新，不讲会话缓存、检索缓存、长期记忆一致性，结果是索引已经更新了，系统却还在把旧内容送给模型。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q3: 如果更新失败了怎么办？</div>
+<div class="qa-answer"><p>要有可回滚版本。常见做法是影子索引或蓝绿切换，先在新版本上完成构建和验证，通过后再切流；如果异常，立刻回退到旧版本。</p></div>
+</div>
+
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>

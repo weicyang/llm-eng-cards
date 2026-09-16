@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IA-04 · Agent 上下文维护机制</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--accent:#4338ca;--accent-light:#0f766e;--text:#1c1917;--text-dim:#78716c;--green:#15803d;--orange:#a16207;--red:#b91c1c}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px}.container{max-width:900px;margin:0 auto}.home-btn{position:fixed;top:1.5rem;right:1.5rem;background:var(--surface);border:1px solid var(--border);color:var(--accent);padding:.5rem 1rem;border-radius:8px;font-size:.9rem;text-decoration:none;transition:all .3s;z-index:999;box-shadow:0 4px 12px rgba(28,25,23,.4)}
+.home-btn:hover{background:var(--accent);color:var(--bg);text-decoration:none;transform:translateY(-2px)}h1{font-size:2.2rem;margin-bottom:.5rem;background:linear-gradient(135deg,var(--accent),var(--accent-light));-webkit-background-clip:text;-webkit-text-fill-color:transparent}.subtitle{color:var(--text-dim);font-size:1rem;margin-bottom:2rem}h2{font-size:1.5rem;color:var(--accent-light);margin:2.5rem 0 1rem;padding-bottom:.5rem;border-bottom:2px solid var(--border)}h3{font-size:1.2rem;color:var(--text);margin:1.5rem 0 .8rem}p{margin-bottom:1rem}ul,ol{margin-bottom:1rem;padding-left:1.5rem}li{margin-bottom:.5rem}strong{color:var(--accent-light)}.highlight{background:linear-gradient(135deg,rgba(67,56,202,.1),rgba(15,118,110,.1));border-left:3px solid var(--accent);padding:1rem;border-radius:0 8px 8px 0;margin:1.5rem 0}table{width:100%;border-collapse:collapse;margin:1.5rem 0;font-size:.95rem}th,td{padding:.75rem;border:1px solid var(--border);text-align:left}th{background:var(--surface);color:var(--accent-light);font-weight:600}.qa-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:1.5rem;overflow:hidden}.qa-question{padding:1rem 1.5rem;background:rgba(67,56,202,.1);border-bottom:1px solid var(--border);font-weight:600;color:var(--accent-light)}.qa-answer{padding:1.5rem}
+.sidebar{position:fixed;top:0;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+@media(max-width:980px){body{padding:2rem 14px}.sidebar{display:none}}
+</style>
+</head>
+<body>
+<aside class="sidebar"><h2>Contents</h2>
+<a href="#s1">核心观点</a>
+<a href="#s2">三大技术流派</a>
+<a href="#s3">三层架构方案</a>
+<a href="#s4">工程落地要点</a>
+<a href="#s5">高频问答</a>
+</aside>
+<div class="container">
+<a href="../../index.html" class="home-btn" title="返回首页">⌂ 首页</a>
+<h1>IA-04 · Agent 上下文维护机制</h1>
+<p class="subtitle">提问：项目里怎么设计 Agent 上下文维护机制？</p>
+
+<h2 id="s1">核心观点</h2>
+<div class="highlight">
+<strong>核心矛盾：</strong>不能把历史对话全塞给模型——(1) token 成本高；(2) Lost in the Middle（U型注意力衰减，中间信息召回率断崖式下跌）。解决方案是三层架构：短期记忆 → 工作记忆 → 长期记忆。
+</div>
+
+<h2 id="s2">三大技术流派</h2>
+<table>
+<tr><th>流派</th><th>核心思想</th><th>优势</th></tr>
+<tr><td><strong>动态窗口派</strong></td><td>极致过滤，剔除废话</td><td>省钱，模型不被干扰</td></tr>
+<tr><td><strong>压缩抽象派</strong></td><td>长文本 → 逻辑摘要</td><td>逻辑完整，保留精髓</td></tr>
+<tr><td><strong>外挂检索派</strong></td><td>记忆存在外部，按需精准捞取</td><td>精准，不污染上下文</td></tr>
+</table>
+
+<h2 id="s3">三层架构方案</h2>
+
+<h3>第一层：短期记忆（当下连贯性）</h3>
+<ul>
+<li><strong>语义剪裁</strong>：按相关性删除（剔除"Hello"、"谢谢"等冗余），而非死板按时间删</li>
+<li><strong>保留决策点</strong>：system prompt 核心规则 + 关键工具调用结果始终在场</li>
+</ul>
+
+<h3>第二层：工作记忆（几十到上百轮对话）</h3>
+<ul>
+<li><strong>递归摘要</strong>：设触发阈值，超长对话压缩成 current_state</li>
+<li><strong>流转替代堆叠</strong>：用结构化状态变量代替纯文本拼接（如"任务A已办，任务B正在办"）</li>
+</ul>
+
+<h3>第三层：长期记忆（跨天/跨月）</h3>
+<ul>
+<li><strong>结构化抽取</strong>：异步抽取用户偏好、习惯、关键信息</li>
+<li><strong>存入图数据库/向量库</strong>：按需 RAG 召回，动态注入上下文</li>
+</ul>
+
+<h2 id="s4">工程落地要点</h2>
+<table>
+<tr><th>要点</th><th>说明</th></tr>
+<tr><td>图状态机制</td><td>上下文定义为 state，在图节点间传递和覆盖</td></tr>
+<tr><td>记忆更新异步化</td><td>响应归响应，提炼记忆丢进后台队列</td></tr>
+<tr><td>上下文蒸馏</td><td>离线压缩系统规则，千字 → 核心词汇</td></tr>
+<tr><td>监控指标</td><td>token命中率，检查召回的记忆是否被模型使用</td></tr>
+</table>
+
+<h2 id="s5">高频问答</h2>
+<div class="qa-item">
+<div class="qa-question">Q1: 为什么不能直接把所有历史对话塞给模型？</div>
+<div class="qa-answer"><p>两个致命问题：(1) <strong>成本</strong>：几百轮对话单次回复可能花好几块钱；(2) <strong>Lost in the Middle</strong>：斯坦福研究证明模型对长文本中间部分召回率断崖式下跌，简单堆叠会导致 Agent 在中段开始胡言乱语，忘记关键约束。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q2: 短期记忆和滑动窗口有什么区别？</div>
+<div class="qa-answer"><p>滑动窗口是死板按时间删除最早的对话；短期记忆采用<strong>语义剪裁</strong>——按相关性删除（剔除闲聊废话），保留决策点（system prompt 规则 + 工具调用结果）。这样即使对话很长，重要信息也不会被误删。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q3: 工作记忆的"递归摘要"怎么实现？</div>
+<div class="qa-answer"><p>设触发阈值（如每N轮或达到一定token数），让模型把之前的细节压缩成 current_state。用结构化状态变量代替纯文本拼接，如记录"任务A已完成、任务B进行中"。这样 token 消耗恒定化，Agent 无论聊多久都有强任务目标感。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q4: 长期记忆更新为什么要异步化？</div>
+<div class="qa-answer"><p>如果 Agent 每次回答前都先跑总结、写向量库，用户等待时间太长。正确做法：响应归响应（同步返回结果），提炼记忆的操作丢进后台队列异步跑。这样用户体验不受影响，记忆系统也能持续更新。</p></div>
+</div>
+<div class="qa-item">
+<div class="qa-question">Q5: 怎么拔高回答？</div>
+<div class="qa-answer"><p>核心心法：优秀的 Agent 架构师追求的不是"让模型记住更多"，而是"让模型学会主动遗忘"——主动丢弃噪音，把逻辑抽象成状态机，把海量知识做异步分离存取。在 token 成本、推理延迟和信息完备性三者之间找到平衡点。</p></div>
+</div>
+</div>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')],
+      sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+window.addEventListener('scroll',()=>{
+  let current;
+  sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+});
+</script>
+</body>
+</html>
