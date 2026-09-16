@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>LangGraph Compile 到 Pregel：编译管线详细设计</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--surface2:#e8e1d4;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth;scroll-padding-top:68px}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.75;padding:64px 22px 48px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .35rem;border-radius:4px;font-size:.9em;overflow-wrap:anywhere}h1{font-size:2.35rem;line-height:1.2;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:.5rem 0 .65rem}h2{color:var(--blue);font-size:1.5rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem}h3{color:var(--blue2);font-size:1.16rem;margin:1.45rem 0 .55rem}.topbar{position:fixed;top:0;left:0;right:0;height:48px;background:#fffdf8;border-bottom:1px solid var(--border);display:flex;align-items:center;z-index:300;padding:0 18px;gap:12px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:.28rem .72rem;font-size:.84rem}.topbar .crumb{color:var(--muted);font-size:.84rem}.sidebar{position:fixed;left:0;top:48px;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.15rem 1rem 2rem;overflow-y:auto;z-index:200;backdrop-filter:blur(12px)}.sidebar h2{font-size:.92rem;border:0;margin:0 0 .55rem;padding:0}.sidebar a{display:block;color:var(--muted);font-size:.79rem;padding:.24rem .45rem;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}.container{max-width:1160px;margin:auto}.subtitle{color:var(--muted);font-size:1.02rem;margin-bottom:1.2rem}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin:1rem 0 1.5rem}.meta>div,.card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:.8rem}.meta dt{color:var(--muted);font-size:.74rem;text-transform:uppercase}.meta dd{font-size:.88rem;margin-top:.15rem}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem 2rem;margin:0 0 1.4rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section p{margin:.58rem 0}.section ul,.section ol{margin:.55rem 0 .55rem 1.35rem}.section li{margin:.28rem 0}.table-wrap{overflow-x:auto;margin:1rem 0}table{width:100%;border-collapse:collapse;font-size:.87rem;min-width:760px}th,td{border:1px solid var(--border);padding:.58rem .7rem;text-align:left;vertical-align:top}th{background:#e8e1d4;color:var(--blue)}tr:nth-child(even){background:rgba(244,241,234,.25)}.lead,.insight,.warning,.boundary{border-radius:8px;padding:.92rem 1.08rem;margin:.9rem 0}.section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;color:var(--muted);font-size:.82rem;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.lead{background:rgba(21,128,61,.06);border:1px solid var(--green)}.lead strong{color:var(--green)}.insight{background:rgba(67,56,202,.06);border-left:4px solid var(--blue)}.warning{background:rgba(185,28,28,.06);border-left:4px solid var(--red)}.boundary{background:rgba(109,40,217,.06);border-left:4px solid var(--purple)}.badge{display:inline-block;border:1px solid;border-radius:99px;padding:.04rem .45rem;margin-right:.32rem;font-size:.72rem;font-weight:700}.fact{color:var(--green)}.optional{color:var(--yellow)}.migration{color:var(--red)}.owner{color:var(--purple)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:.9rem 0}.card strong{display:block;color:var(--blue2);margin-bottom:.25rem}.flow{font-family:"Cascadia Code",Consolas,monospace;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem;white-space:pre-wrap;color:var(--blue2);font-size:.82rem;line-height:1.58;margin:.8rem 0;overflow:auto}.steps{counter-reset:step;list-style:none!important;margin-left:0!important}.steps>li{counter-increment:step;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:.72rem .85rem .72rem 3.25rem;position:relative;margin:.55rem 0}.steps>li:before{content:counter(step);position:absolute;left:.9rem;top:.72rem;width:1.55rem;height:1.55rem;border-radius:50%;background:var(--blue);color:#f4f1ea;font-weight:800;text-align:center;line-height:1.55rem}.source-list{columns:2;column-gap:2rem}.source-list li{break-inside:avoid}.status-good{color:var(--green)}.footer{text-align:center;color:var(--muted);font-size:.8rem;margin:2rem 0}.back-top{position:fixed;right:18px;bottom:18px;border:1px solid var(--border);background:var(--surface);border-radius:50%;width:38px;height:38px;text-align:center;line-height:36px;z-index:250}@media(max-width:980px){body{padding:62px 13px 32px}.sidebar{display:none}.meta,.grid{grid-template-columns:1fr}.section{padding:1.25rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.source-list{columns:1}h1{font-size:1.82rem}.topbar .crumb{display:none}}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../langgraph_architecture.html#s5">← 返回 LangGraph 架构总览</a><span class="crumb">第 5 章 · Compile 到 Pregel · 开发级详细设计</span></div>
+<aside class="sidebar" aria-label="页面目录">
+<h2>Compile 到 Pregel</h2>
+<a href="#position">1. 模块定位</a><a href="#context">2. 系统位置与依赖</a><a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a><a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态模型</a><a href="#interfaces">7. 接口、协议与事件</a><a href="#config">8. 配置与默认行为</a><a href="#resources">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a><a href="#failure">11. 失败、恢复与兼容</a><a href="#operations">12. 可观测性与排障</a><a href="#tests">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a><a href="#tradeoffs">15. 设计权衡与限制</a><a href="#sources">16. 源码索引</a><a href="#glossary">17. 术语表</a>
+</aside>
+<main class="container">
+<header id="top">
+<h1>Compile 到 Pregel：从 StateGraph 声明到可执行运行图</h1>
+<p class="subtitle">解释一次 <code>StateGraph.compile()</code> 如何校验 DSL、选择 Channel、合并节点策略，并组装 <code>CompiledStateGraph(Pregel)</code>。</p>
+<div class="meta">
+<div><dl><dt>源码基线</dt><dd><code>langgraph 1.2.11</code> 工作区快照；本机 Git 命令不可用，SHA 未取得</dd></dl></div>
+<div><dl><dt>证据状态</dt><dd><span class="status-good">已验证</span>：实现、公共类型、依赖声明和聚焦测试已审计；未执行全库测试</dd></dl></div>
+<div><dl><dt>主要 Owner</dt><dd><code>libs/langgraph/langgraph/graph/state.py</code>、<code>libs/langgraph/langgraph/pregel/_read.py</code>、<code>libs/langgraph/langgraph/pregel/_write.py</code></dd></dl></div>
+<div><dl><dt>目标读者</dt><dd>图框架维护者、业务图开发者、子图与持久化集成人员</dd></dl></div>
+<div><dl><dt>最近验证</dt><dd>2026-08-14</dd></dl></div>
+<div><dl><dt>事实标签</dt><dd><span class="badge fact">当前事实</span><span class="badge optional">可选能力</span><span class="badge migration">迁移契约</span><span class="badge owner">Owner 边界</span></dd></dl></div>
+</div>
+<div class="lead"><strong>一句话目标：</strong><code>compile()</code> 把“节点、边、Schema 与策略”的可变 Builder 快照化为一组 <code>PregelNode</code>、Channel 与读写/触发契约；它不执行节点，也不预先决定运行时动态路由。<span class="evidence">证据：<code>libs/langgraph/langgraph/graph/state.py:1177-1401</code>、<code>libs/langgraph/langgraph/graph/state.py:1404-1422</code></span></div>
+</header>
+
+<section class="section" id="position"><h2>1. 模块定位</h2>
+<p><code>StateGraph</code> 是声明式 Builder。公共文档直接规定它不能执行，必须先调用 <code>compile()</code>，结果才支持 <code>invoke</code>、<code>stream</code>、<code>batch</code> 及异步兄弟方法。<code>CompiledStateGraph</code> 继承 <code>Pregel</code>，而不是另造执行引擎。<span class="evidence">证据：<code>libs/langgraph/langgraph/graph/state.py:131-145</code>、<code>libs/langgraph/langgraph/graph/state.py:1189-1192</code>、<code>libs/langgraph/langgraph/graph/state.py:1404-1407</code></span></p>
+<div class="table-wrap"><table><thead><tr><th>边界</th><th>本模块负责</th><th>委托或明确不负责</th></tr></thead><tbody>
+<tr><td>DSL 准入</td><td>检查入口、边源/目标、分支目标和静态 interrupt 节点。</td><td>节点返回值是否合法在生成的 writer 与运行时执行时检查。</td></tr>
+<tr><td>Schema 降级</td><td>把 State/Input/Output Schema 映射到 Channel 集合，选择输入、输出和 stream Channel。</td><td>Channel 的屏障合并、版本推进属于 Channel/Pregel 算法。</td></tr>
+<tr><td>执行图组装</td><td>生成 <code>PregelNode</code>、<code>ChannelRead</code>、<code>ChannelWrite</code>、边触发和 barrier。</td><td>Runner、Loop、重试调度、checkpoint 写入属于 Pregel Runtime。</td></tr>
+<tr><td>策略固化</td><td>在编译时合并 Builder 默认策略与节点显式策略。</td><td>策略何时触发以及副作用幂等由 Runtime 和业务节点负责。</td></tr>
+<tr><td>持久化接线</td><td>校验并保存 checkpointer/cache/store 引用，准备严格 serde allowlist。</td><td>不创建数据库表、不保存 checkpoint、不保证外部副作用 exactly-once。</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>相邻模块：</strong>第 4 章拥有 StateGraph DSL；第 6 章拥有 Channel 合并；第 7 章拥有 Pregel 超级步；第 8、9 章分别展开子图 namespace 与持久化。本章只追踪“声明如何成为运行图”及其准入和配置语义。</div>
+</section>
+
+<section class="section" id="context"><h2>2. 系统位置与依赖</h2>
+<div class="flow">应用 / Prebuilt / 业务工厂
+  → StateGraph：Schema + NodeSpec + Edge + Branch
+  → StateGraph.compile()
+     ├─ ensure_valid_checkpointer / strict serde allowlist
+     ├─ Builder validate
+     ├─ Channel 与策略选择
+     ├─ CompiledStateGraph(Pregel)
+     ├─ attach_node / attach_edge / attach_branch
+     └─ Pregel validate（二次校验）
+  → invoke / stream / ainvoke / astream
+  → Pregel Loop、Runner、Channel、Checkpointer</div>
+<div class="table-wrap"><table><thead><tr><th>方向</th><th>公共或内部表面</th><th>所有权与证据</th></tr></thead><tbody>
+<tr><td>上游 → Builder</td><td><code>StateGraph</code>、<code>add_node</code>、<code>add_edge</code>、<code>add_conditional_edges</code></td><td>Builder 保存 nodes/edges/branches/channels/managed。<code>libs/langgraph/langgraph/graph/state.py:202-214</code></td></tr>
+<tr><td>Builder → 编译器</td><td><code>compile(checkpointer, cache, store, interrupt_*, ...)</code></td><td>唯一 Graph API 编译入口。<code>libs/langgraph/langgraph/graph/state.py:1177-1188</code></td></tr>
+<tr><td>编译器 → Pregel</td><td><code>CompiledStateGraph</code></td><td>构造时传入 nodes/channels/input/output/checkpointer 等。<code>libs/langgraph/langgraph/graph/state.py:1346-1370</code></td></tr>
+<tr><td>编译器 → 读写层</td><td><code>PregelNode</code>、<code>ChannelRead</code>、<code>ChannelWrite</code></td><td>读写配置与触发容器。<code>libs/langgraph/langgraph/pregel/_read.py:25-91</code>、<code>libs/langgraph/langgraph/pregel/_write.py:46-68</code></td></tr>
+<tr><td>编译图 → Runtime</td><td><code>Pregel.validate</code>、<code>stream</code></td><td>运行前静态结构与执行时配置由 Pregel 接管。<code>libs/langgraph/langgraph/pregel/main.py:933-948</code>、<code>libs/langgraph/langgraph/pregel/main.py:2655-2672</code></td></tr>
+</tbody></table></div>
+<p>核心包声明 Python ≥3.10，并依赖 <code>langchain-core</code>、checkpoint、SDK、prebuilt、xxhash 与 Pydantic；本章直接依赖的是 Runnable、Pydantic Schema、checkpoint/cache/store 类型与核心 Runtime。包版本和依赖范围以当前声明为准。<span class="evidence">证据：<code>libs/langgraph/pyproject.toml:5-33</code></span></p>
+</section>
+
+<section class="section" id="concepts"><h2>3. 核心概念</h2>
+<div class="grid">
+<div class="card"><strong>Builder 与 Executable</strong><code>StateGraph</code> 是可变声明容器；<code>CompiledStateGraph</code> 是 Pregel 可执行对象。Builder 后续改动不会进入已生成对象，并会打印警告。</div>
+<div class="card"><strong>Channel map</strong>运行态 State 不是共享 Python dict，而是 Schema key 对应的 Channel 集合；<code>START</code> 另建临时输入 Channel。</div>
+<div class="card"><strong>PregelNode</strong>节点的运行描述：读哪些 Channel、由哪些 Channel 触发、如何映射输入、执行哪个 Runnable、写出什么，以及 retry/cache/timeout/error-handler 元数据。</div>
+<div class="card"><strong>Trigger Channel</strong>普通边写入 <code>branch:to:&lt;target&gt;</code>，目标节点订阅它；多源边改用命名 barrier Channel。</div>
+<div class="card"><strong>Partial update</strong>节点输出经 writer 过滤成已声明 state key；非法非 dict/Command 输出在运行时抛 <code>InvalidUpdateError</code>。</div>
+<div class="card"><strong>双层 validate</strong>Builder 校验图声明引用；Pregel 校验编译产物的 Channel 订阅、输入输出、interrupt 与 timeout 支持。</div>
+</div>
+<p>普通节点的 <code>PregelNode.node</code> 是 <code>bound → writers</code> 的 Runnable 序列；写操作发生在节点函数返回之后，先成为 task writes，再由 Runtime 在屏障后应用。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_read.py:209-248</code>、<code>libs/langgraph/langgraph/pregel/_write.py:75-126</code></span></p>
+</section>
+
+<section class="section" id="components"><h2>4. 架构组成</h2>
+<div class="table-wrap"><table><thead><tr><th>组件</th><th>输入 → 输出</th><th>状态/失败隔离</th><th>扩展点</th></tr></thead><tbody>
+<tr><td><code>StateGraph.validate</code></td><td>nodes/edges/branches/interrupt → 合法 Builder</td><td>缺入口、未知源/目标或 interrupt 立即抛 <code>ValueError</code>。<code>libs/langgraph/langgraph/graph/state.py:1129-1175</code></td><td>新增 DSL 构件必须同步更新引用收集。</td></tr>
+<tr><td>Channel 选择器</td><td>Input/Output/State Schema → input/output/stream keys</td><td>root schema 特判为 <code>__root__</code>；ManagedValue 不进入输出。<code>libs/langgraph/langgraph/graph/state.py:1269-1286</code></td><td>Schema/Channel 映射。</td></tr>
+<tr><td>策略合并器</td><td>Builder defaults + NodeSpec → 固化 NodeSpec</td><td>节点显式非 <code>None</code> 值优先；handler/cache 有安全例外。<code>libs/langgraph/langgraph/graph/state.py:1287-1338</code></td><td><code>set_node_defaults</code>、<code>add_node</code>。</td></tr>
+<tr><td><code>attach_node</code></td><td>StateNodeSpec → PregelNode + branch trigger + writers</td><td>只接受 state key/Command；Pydantic/dataclass 可映射回 Schema。<code>libs/langgraph/langgraph/graph/state.py:1444-1549</code></td><td>输入 mapper、writer、NodeSpec policy。</td></tr>
+<tr><td><code>attach_edge</code></td><td>单源或多源 edge → trigger write/barrier</td><td>END 不生成实际目标节点；多源等待全部前驱。<code>libs/langgraph/langgraph/graph/state.py:1551-1575</code></td><td>Channel 类型与 barrier 语义。</td></tr>
+<tr><td><code>attach_branch</code></td><td>BranchSpec → fresh reader + 动态 writes/Send</td><td>END 被过滤为终止；Send 直接成为任务写。<code>libs/langgraph/langgraph/graph/state.py:1577-1624</code></td><td>BranchSpec 路由函数。</td></tr>
+<tr><td><code>Pregel.validate</code></td><td>编译产物 → 可执行 Pregel</td><td>检查保留名、读/订阅/输出 Channel、interrupt 与 timeout。<code>libs/langgraph/langgraph/pregel/_validate.py:13-107</code></td><td>Pregel 级静态不变量。</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="flows"><h2>5. 完整运行流程</h2>
+<h3>5.1 成功：声明图编译为可执行 Pregel</h3>
+<ol class="steps">
+<li><code>compile()</code> 先以公共联合类型校验 checkpointer；只接受 <code>None/True/False/BaseCheckpointSaver</code>。<span class="evidence"><code>libs/langgraph/langgraph/types.py:100-119</code>、<code>libs/langgraph/langgraph/graph/state.py:1231-1231</code></span></li>
+<li>严格 msgpack 开启时，收集 State/Input/Output/Context、节点/分支输入 Schema 和 Channel 值/更新类型，构建 allowlist，并尽可能包装 saver。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1233-1254</code>、<code>libs/langgraph/langgraph/_internal/_serde.py:87-123</code></span></li>
+<li>把空 interrupt 参数规范化为列表，执行 Builder validate；入口、边、分支与 interrupt 引用必须存在。此阶段只检查声明，不运行节点。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1256-1267</code>、<code>libs/langgraph/langgraph/graph/state.py:1129-1175</code></span></li>
+<li>根据 Output Schema 选择最终输出 Channel，根据完整 State Channel 选择默认 stream Channel；单一 root schema 保持标量形状。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1269-1286</code></span></li>
+<li>生成默认 error-handler 节点并合并 retry/cache/timeout/error-handler。节点级值优先；handler 节点不接 error-handler 和 cache，但可接 retry/timeout。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1290-1338</code></span></li>
+<li>创建 <code>CompiledStateGraph</code>：State Channel 加上 ManagedValue 和 <code>START: EphemeralValue(input_schema)</code>；默认 stream mode 为 <code>updates</code>，输入 Channel 为 START。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1346-1370</code></span></li>
+<li>依次 attach START、业务节点、普通边、waiting edge 和 branch。节点输出成为 state writes 与控制 writes；边成为目标 trigger。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1373-1399</code></span></li>
+<li>最后执行 Pregel 级 validate，建立 <code>trigger_to_nodes</code> 索引并返回可执行对象。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1401-1401</code>、<code>libs/langgraph/langgraph/pregel/main.py:933-948</code></span></li>
+</ol>
+
+<h3>5.2 校验拒绝：在副作用执行前失败</h3>
+<div class="flow">compile()
+  ├─ checkpointer 类型非法 → TypeError
+  ├─ 无 START 入口 → ValueError
+  ├─ edge/branch/interrupt 引用未知节点 → ValueError
+  ├─ 默认 handler 名冲突 → ValueError
+  ├─ 编译产物读/订阅/输出未知 Channel → ValueError
+  └─ 节点 timeout 与 Runnable 能力不兼容 → validate 拒绝
+
+结果：不进入 Pregel Loop，不执行模型、工具、数据库或节点副作用。</div>
+<p>真实测试覆盖未知 edge source、非法 checkpointer 和运行时 LastValue 多写冲突；前两者在编译期拒绝，后者只能等节点产生并发 writes 后拒绝，不能被 compile 静态推断。<span class="evidence">证据：<code>libs/langgraph/tests/test_pregel.py:104-137</code>、<code>libs/langgraph/tests/test_pregel.py:162-175</code></span></p>
+
+<h3>5.3 失败恢复：编译期重建与运行期 handler 恢复</h3>
+<ul>
+<li><strong>编译失败：</strong>没有自动重试或事务回滚协议。Builder validate 会设置 <code>compiled=True</code>，策略合并还会改写 NodeSpec 并可能插入默认 handler；若失败发生在后续阶段，最稳妥的恢复方式是修正声明后重建 Builder 再编译，而不是假定原对象完全未变。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1170-1175</code>、<code>libs/langgraph/langgraph/graph/state.py:1290-1338</code></span></li>
+<li><strong>节点瞬时失败：</strong>compile 固化的 retry policy 在 Runtime 执行；真实测试证明默认 retry 可运行三次，且节点级 policy 覆盖默认 policy。<span class="evidence"><code>libs/langgraph/tests/test_retry.py:2500-2529</code>、<code>libs/langgraph/tests/test_retry.py:2532-2570</code></span></li>
+<li><strong>handler 自身崩溃：</strong>启用 checkpointer 后，恢复会重新调度 handler，而不重新执行原失败节点；这是 pending writes/错误路由的 Runtime 行为，不是 compile 自己回滚。<span class="evidence"><code>libs/langgraph/tests/test_retry.py:2689-2744</code></span></li>
+</ul>
+</section>
+
+<section class="section" id="state"><h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table><thead><tr><th>状态</th><th>Owner</th><th>生命周期</th><th>持久化/清理</th></tr></thead><tbody>
+<tr><td>Builder nodes/edges/branches</td><td><code>StateGraph</code></td><td>构图到编译；可变，不是并发事务对象。</td><td>仅内存；<code>compiled</code> 标志用于告警。<code>libs/langgraph/langgraph/graph/state.py:202-214</code>、<code>libs/langgraph/langgraph/graph/state.py:788-792</code></td></tr>
+<tr><td>Schema → Channel/Managed map</td><td><code>StateGraph.schemas/channels/managed</code></td><td>构图时解析，编译时复制引用到运行图。</td><td>Channel 值由 Runtime/checkpoint 持久化；Schema 对象本身不是 checkpoint state。</td></tr>
+<tr><td>PregelNode 配置</td><td><code>CompiledStateGraph.nodes</code></td><td>编译结果生命周期；含 channels/triggers/writers/policies。</td><td>运行定义驻留进程内，不写入 checkpoint。<code>libs/langgraph/langgraph/pregel/_read.py:97-151</code></td></tr>
+<tr><td>START 与 branch trigger</td><td><code>CompiledStateGraph.channels</code></td><td>START 输入和每次边触发的短生命周期 Channel。</td><td><code>EphemeralValue</code> 不等于长期业务状态。<code>libs/langgraph/langgraph/graph/state.py:1351-1355</code>、<code>libs/langgraph/langgraph/graph/state.py:1525-1534</code></td></tr>
+<tr><td>serde allowlist</td><td>Compiled graph / saver wrapper</td><td>编译时建立；运行时对实际 saver 应用。</td><td>不是 secret，也不替代数据加密；只约束可反序列化类型。</td></tr>
+<tr><td>Checkpoint namespace</td><td>Pregel Runtime + saver</td><td>运行时按 root/subgraph config 决定。</td><td>compile 只保存 <code>None/False/True/saver</code> 意图，不产生 checkpoint。</td></tr>
+</tbody></table></div>
+<p>节点输出为 dict 时只保留 <code>output_keys</code> 内的键；<code>Command</code> 的 update 同样过滤。非 dict、非可识别 Command/Schema 输出会构造 <code>INVALID_GRAPH_NODE_RETURN_VALUE</code> 并抛 <code>InvalidUpdateError</code>。<span class="evidence">证据：<code>libs/langgraph/langgraph/graph/state.py:1456-1492</code></span></p>
+<div class="insight"><strong>状态本体：</strong>编译结果的 <code>channels</code> 才是运行态 State 所有权边界。节点拿到的是按其 input schema 从 Channel map 读取并可选映射后的视图；返回的是 partial update，不是对一个共享 dict 的原地提交。</div>
+</section>
+
+<section class="section" id="interfaces"><h2>7. 接口、协议与事件</h2>
+<h3>7.1 公共编译接口</h3>
+<div class="table-wrap"><table><thead><tr><th>接口</th><th>输入</th><th>输出/错误</th><th>稳定性</th></tr></thead><tbody>
+<tr><td><code>StateGraph.compile</code></td><td>checkpointer、cache、store、静态 interrupt、debug、name、transformers</td><td><code>CompiledStateGraph</code>；类型/结构不合法时抛错。</td><td>公共 API。<code>libs/langgraph/langgraph/graph/state.py:1177-1230</code></td></tr>
+<tr><td><code>set_node_defaults</code></td><td>retry/cache/error-handler/timeout</td><td>返回同一 Builder 以链式调用。</td><td>公共策略入口。<code>libs/langgraph/langgraph/graph/state.py:272-335</code></td></tr>
+<tr><td><code>CompiledStateGraph</code></td><td>继承的 Pregel 调用参数</td><td>Runnable、stream、state API。</td><td>公共可执行类型。</td></tr>
+<tr><td><code>Checkpointer</code></td><td><code>None | bool | BaseCheckpointSaver</code></td><td>子图继承/禁用/独立 namespace 或具体 saver。</td><td>公共类型。<code>libs/langgraph/langgraph/types.py:100-119</code></td></tr>
+</tbody></table></div>
+<h3>7.2 内部读写协议</h3>
+<p><code>ChannelRead.do_read</code> 从 RunnableConfig 内注入的 read function 取值；离开 Pregel process 调用会报“未配置 read function”。sync/async 路径共用同一同步 read primitive。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_read.py:63-91</code></span></p>
+<p><code>ChannelWrite.do_write</code> 先拒绝直接写保留的 TASKS Channel 和未替换的 PASSTHROUGH，再调用配置中的 send function；普通 Channel entry、tuple mapper 和 <code>Send</code> 最终统一成 <code>(channel, value)</code> writes。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_write.py:105-126</code>、<code>libs/langgraph/langgraph/pregel/_write.py:172-192</code></span></p>
+<p>compile 本身不发 stream event。它只把默认 <code>stream_mode="updates"</code>、stream Channel 和 transformer 工厂保存到 Pregel；事件顺序由后续 <code>stream/astream</code> 执行拥有。<span class="evidence">证据：<code>libs/langgraph/langgraph/graph/state.py:1356-1369</code></span></p>
+</section>
+
+<section class="section" id="config"><h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table><thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为 / 来源</th></tr></thead><tbody>
+<tr><td><code>checkpointer</code></td><td><code>None/False/True/BaseCheckpointSaver</code></td><td><code>None</code></td><td><code>False</code> 强制禁用；子图 config 注入 saver；具体 saver 为根图所有者</td><td>compile 保存意图，stream 解析实际 saver</td><td>非法类型 <code>TypeError</code>；root 使用 True 抛 <code>RuntimeError</code>。<code>libs/langgraph/langgraph/types.py:100-119</code>、<code>libs/langgraph/langgraph/pregel/main.py:2579-2588</code></td></tr>
+<tr><td><code>cache</code></td><td><code>BaseCache | None</code></td><td><code>None</code></td><td>运行 config 注入 cache 高于 graph cache</td><td>节点结果缓存基础设施</td><td>无 cache 时 policy 不产生持久命中。<code>libs/langgraph/langgraph/pregel/main.py:2598-2601</code></td></tr>
+<tr><td><code>store</code></td><td><code>BaseStore | None</code></td><td><code>None</code></td><td>Runtime 注入 store 高于 graph store</td><td>运行上下文，不是 checkpoint</td><td>缺失时节点不可依赖 Store。<code>libs/langgraph/langgraph/pregel/main.py:2594-2597</code></td></tr>
+<tr><td><code>interrupt_before/after</code></td><td>节点列表、<code>"*"</code> 或 <code>None</code></td><td>空列表</td><td>运行调用参数覆盖编译值</td><td>静态中断</td><td>未知节点在两层 validate 拒绝。<code>libs/langgraph/langgraph/graph/state.py:1256-1267</code>、<code>libs/langgraph/langgraph/pregel/main.py:2569-2570</code></td></tr>
+<tr><td><code>debug</code></td><td><code>bool</code></td><td><code>False</code></td><td>运行参数或 graph debug</td><td>打印 updates/values</td><td>不改变结果。<code>libs/langgraph/langgraph/pregel/main.py:2745-2746</code></td></tr>
+<tr><td><code>name</code></td><td><code>str | None</code></td><td><code>"LangGraph"</code></td><td>显式 name 优先</td><td>Runnable/trace 名称</td><td>无运行语义。<code>libs/langgraph/langgraph/graph/state.py:1368-1368</code></td></tr>
+<tr><td><code>transformers</code></td><td>工厂序列或 <code>None</code></td><td>空</td><td>追加在内建 transformer 后</td><td>v3 stream events，每次 run 实例化</td><td>工厂错误在运行期暴露。<code>libs/langgraph/langgraph/graph/state.py:1220-1226</code></td></tr>
+<tr><td>retry policy</td><td>单个/序列/<code>None</code></td><td><code>None</code></td><td>节点显式值 &gt; Builder default</td><td>所有节点，包括 handler</td><td>Runtime 按首个匹配策略重试。<code>libs/langgraph/langgraph/graph/state.py:1322-1325</code></td></tr>
+<tr><td>cache policy</td><td><code>CachePolicy | None</code></td><td><code>None</code></td><td>节点显式值 &gt; Builder default</td><td>仅普通节点</td><td>handler 不继承默认 cache。<code>libs/langgraph/langgraph/graph/state.py:1326-1334</code></td></tr>
+<tr><td>timeout</td><td>秒、timedelta、TimeoutPolicy、None</td><td><code>None</code></td><td>节点显式值 &gt; Builder default</td><td>普通与 handler 节点</td><td>不支持的 sync timeout 在二次 validate 拒绝。<code>libs/langgraph/langgraph/graph/state.py:272-334</code>、<code>libs/langgraph/langgraph/pregel/main.py:933-946</code></td></tr>
+<tr><td>error handler</td><td>StateNode 或 <code>None</code></td><td><code>None</code></td><td>节点 handler &gt; Builder default</td><td>仅普通节点</td><td>handler 不捕获自己或其他 handler。<code>libs/langgraph/langgraph/graph/state.py:1312-1321</code></td></tr>
+</tbody></table></div>
+<h3>8.1 子图 checkpointer 的三个值</h3>
+<ul>
+<li><code>None</code>：允许继承父图 saver，以支持 interrupt/resume；真实测试同时证明独立父调用之间子图业务 state 重置，因此不能简单描述为“永久继承全部历史”。<span class="evidence"><code>libs/langgraph/tests/test_subgraph_persistence.py:30-82</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:85-143</code></span></li>
+<li><code>False</code>：显式阻断父图 saver，完全不使用 checkpoint；即使父图有 saver，每次调用仍从新输入开始。<span class="evidence"><code>libs/langgraph/tests/test_subgraph_persistence.py:227-288</code></span></li>
+<li><code>True</code>：只适合嵌套图，使用独立、稳定的子图 checkpoint namespace，使同一 thread 的多次调用可累积 state；作为 root graph 调用会被拒绝。<span class="evidence"><code>libs/langgraph/tests/test_subgraph_persistence.py:291-364</code>、<code>libs/langgraph/langgraph/pregel/main.py:2579-2585</code></span></li>
+</ul>
+</section>
+
+<section class="section" id="resources"><h2>9. 并发、性能与资源</h2>
+<p><code>compile()</code> 是同步、进程内的对象组装过程，没有 Executor、Queue、Lock 或背压协议。它会修改 Builder 的 <code>compiled</code> 标志和 NodeSpec 默认值，因此不应在多个线程上并发编译或一边编译一边继续修改同一个 Builder。源码只对“编译后再 add”发 warning，不提供锁。<span class="evidence">证据：<code>libs/langgraph/langgraph/graph/state.py:788-792</code>、<code>libs/langgraph/langgraph/graph/state.py:945-949</code></span></p>
+<div class="table-wrap"><table><thead><tr><th>成本点</th><th>当前行为</th><th>开发含义</th></tr></thead><tbody>
+<tr><td>Schema 扫描</td><td>严格 serde 开启时递归收集容器、Union、TypedDict、Pydantic、dataclass、Enum 和 Channel 类型。</td><td>复杂递归 Schema 增加编译成本，但不是每超级步重复工作。<code>libs/langgraph/langgraph/_internal/_serde.py:126-199</code></td></tr>
+<tr><td>节点/边组装</td><td>按节点、边、waiting edge、branch 线性遍历；没有网络或磁盘 I/O。</td><td>编译对象可复用，不要为每个请求重建无变化的图。</td></tr>
+<tr><td>writer 扁平化</td><td><code>PregelNode.flat_writers</code> 合并连续 ChannelWrite。</td><td>减少 Runnable 层级，不改变 write 顺序。<code>libs/langgraph/langgraph/pregel/_read.py:209-224</code></td></tr>
+<tr><td>运行并发</td><td>compile 只编码 triggers/writers/policies。</td><td>超级步并发、取消、重试预算和背压必须到 Runtime 章节分析，不能从 attach 顺序推断执行顺序。</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="security"><h2>10. 安全与信任边界</h2>
+<ol>
+<li><strong>Builder 输入不是权限边界：</strong>compile 校验结构，不审核节点 callable 是否可信。节点仍可访问进程权限、网络、文件、Store 或 secret；副作用必须由应用层最小权限与幂等策略约束。</li>
+<li><strong>严格 serde allowlist：</strong>开启 strict msgpack 时，allowlist 来自核心消息类、Schema 字段及 Channel Value/UpdateType；这缩小反序列化类型面，但不是任意代码安全沙箱。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_serde.py:60-98</code>、<code>libs/langgraph/langgraph/_internal/_serde.py:101-123</code></span></li>
+<li><strong>能力降级：</strong>若 checkpoint 基类不支持 <code>with_allowlist</code>，代码只记录一次 warning 并继续使用原 saver，属于显式 fail-open 兼容路径；生产上必须观测该 warning。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_serde.py:36-57</code></span></li>
+<li><strong>输出过滤：</strong>普通 dict/Command update 只写已声明 output key，降低意外状态扩散；但这不是数据脱敏，合法 key 中的敏感值仍会进入 stream/checkpoint。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1456-1486</code></span></li>
+<li><strong>本地与远程边界：</strong>本章是本地 OSS 编译器。Auth、多租户、部署队列和服务端加密不属于 <code>StateGraph.compile()</code> 默认能力。</li>
+</ol>
+<div class="warning"><strong>安全决策：</strong>不得把“通过 compile”解释为节点代码安全、输入业务合法、工具获准或 checkpoint 已加密。它只证明静态图与当前 Pregel 结构契约相容。</div>
+</section>
+
+<section class="section" id="failure"><h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table><thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead><tbody>
+<tr><td>无入口或未知 edge/branch/interrupt</td><td>Builder validate</td><td>抛 <code>ValueError</code></td><td>无节点副作用；Builder 已可能标记 compiled</td><td>修 DSL，优先重建 Builder</td><td>打印 nodes/edges 与静态目标。</td></tr>
+<tr><td>非法 checkpointer 对象</td><td><code>ensure_valid_checkpointer</code></td><td>抛 <code>TypeError</code></td><td>在其他编译变更前结束</td><td>传 saver 实例或三个标志值</td><td>检查依赖版本和导入类型。</td></tr>
+<tr><td>默认 handler 名碰撞</td><td>策略合并阶段</td><td>抛 <code>ValueError</code></td><td>不生成可执行图</td><td>重命名用户节点或移除默认 handler</td><td>保留 <code>__default_error_handler__</code>。测试：<code>libs/langgraph/tests/test_retry.py:2482-2497</code></td></tr>
+<tr><td>二次 validate 失败</td><td>Pregel validate</td><td>拒绝返回 compiled graph</td><td>临时 compiled 对象不可用；Builder 可能已被编译期合并修改</td><td>修 Channel/timeout 能力后重建</td><td>依据具体“reads/subscribed/output/not in nodes”错误定位。</td></tr>
+<tr><td>节点返回非 dict</td><td>编译生成的 update mapper</td><td>运行期 <code>InvalidUpdateError</code></td><td>该 task writes 不成为合法 state update</td><td>修返回契约；有副作用时谨慎重试</td><td>看节点名和 INVALID_GRAPH_NODE_RETURN_VALUE。</td></tr>
+<tr><td>节点瞬时失败</td><td>Runner + retry policy</td><td>按匹配 policy 重试，耗尽后路由 handler 或失败</td><td>取决于 pending writes/checkpointer</td><td>仅对可重试、幂等操作启用</td><td>检查 attempt、ERROR 和 handler。</td></tr>
+<tr><td>handler 崩溃后恢复</td><td>checkpoint pending error 路由</td><td>run 失败</td><td>原失败节点已记录，handler 未完成</td><td>修复后同 thread 以空输入恢复；原节点不重跑</td><td>确认 saver 与 thread_id。<code>libs/langgraph/tests/test_retry.py:2721-2744</code></td></tr>
+<tr><td>旧参数</td><td>deprecation warning</td><td>兼容映射后继续</td><td>当前行为不变</td><td>迁移到新名称</td><td><code>retry→retry_policy</code>、<code>input/output→*_schema</code>、<code>config_schema→context_schema</code>。<code>libs/langgraph/tests/test_deprecation.py:28-83</code>、<code>libs/langgraph/tests/test_deprecation.py:108-130</code></td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="operations"><h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>先检查</th><th>可能原因</th><th>修复</th></tr></thead><tbody>
+<tr><td>Builder 无法 invoke</td><td>对象类型</td><td>仍持有 <code>StateGraph</code>，未保存 compile 返回值</td><td>调用 <code>compiled = builder.compile()</code>，对 compiled 调用。</td></tr>
+<tr><td>compile 报未知节点</td><td>edges、branch path_map、Command return hint、interrupt 列表</td><td>名称漂移或先加边后漏加节点</td><td>统一常量并在构图测试中断言。</td></tr>
+<tr><td>节点没有触发</td><td><code>compiled.nodes[name].triggers</code> 与前驱 writers</td><td>缺 edge、错误 branch target 或 waiting barrier 未收齐</td><td>用 <code>get_graph()</code> 和 tasks stream 对照。</td></tr>
+<tr><td>输出缺字段</td><td>Output Schema 与 node output_keys</td><td>字段未声明，compile 生成的 mapper 已过滤</td><td>把字段加入正确 State/Output Schema，而不是绕过 writer。</td></tr>
+<tr><td>策略似乎未生效</td><td>编译后 <code>PregelNode.retry_policy/cache_policy/timeout/error_handler_node</code></td><td>节点显式策略覆盖默认，或在 compile 后才改 Builder</td><td>在 compile 前设置，并重新构建可执行对象。</td></tr>
+<tr><td>子图历史异常</td><td>checkpointer 三值、thread_id、checkpoint_ns</td><td>把 None 当 True，或把 True 用作 root</td><td>按“interrupt 继承/完全禁用/跨调用累积”选择值。</td></tr>
+<tr><td>strict serde 未限制 saver</td><td>warning 与 saver <code>with_allowlist</code> 能力</td><td>checkpoint 依赖版本不支持</td><td>升级兼容 checkpoint 包并增加启动告警门禁。</td></tr>
+</tbody></table></div>
+<p>compile 阶段没有专用日志事件；可观测入口主要是异常文本、Builder 的“编译后修改不生效”warning、compiled graph 的 <code>get_graph()</code>，以及运行期 <code>updates/tasks/debug</code> stream。不要用 stream 缺事件来证明 compile 没有 attach 节点，应先检查静态 nodes/triggers/writers。</p>
+</section>
+
+<section class="section" id="tests"><h2>13. 测试与验证</h2>
+<div class="table-wrap"><table><thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead><tbody>
+<tr><td>Schema、Channel 与 compiled stream</td><td><code>libs/langgraph/tests/test_state.py:64-135</code></td><td>单元/执行</td><td>多输入 Schema 编译并按 updates stream 运行。</td><td>不覆盖全部拒绝分支。</td></tr>
+<tr><td>compile 拒绝未知 edge 与非法 saver</td><td><code>libs/langgraph/tests/test_pregel.py:104-137</code>、<code>libs/langgraph/tests/test_pregel.py:162-175</code></td><td>单元</td><td>Builder validate 和 checkpointer 类型门禁。</td><td>未逐项覆盖所有 interrupt/Channel 错误文本。</td></tr>
+<tr><td>strict serde 类型收集</td><td><code>libs/langgraph/tests/test_serde_allowlist.py:80-159</code></td><td>单元</td><td>消息、嵌套容器、TypedDict、forward ref、Channel 类型进入 allowlist。</td><td>未在本次执行真实恶意 payload。</td></tr>
+<tr><td>弃用参数仍有兼容窗口</td><td><code>libs/langgraph/tests/test_deprecation.py:28-83</code>、<code>libs/langgraph/tests/test_deprecation.py:108-130</code></td><td>兼容</td><td>旧参数告警并映射到新表面。</td><td>移除版本仍需 release policy。</td></tr>
+<tr><td>默认策略与节点覆盖</td><td><code>libs/langgraph/tests/test_retry.py:2309-2394</code>、<code>libs/langgraph/tests/test_retry.py:2500-2615</code></td><td>执行/异步</td><td>handler、retry、timeout 默认值及 per-node 优先级。</td><td>未发现聚焦的 Builder default cache 测试。</td></tr>
+<tr><td>handler 恢复不重跑原节点</td><td><code>libs/langgraph/tests/test_retry.py:2689-2744</code></td><td>持久化恢复</td><td>失败恢复路由与原节点幂等边界。</td><td>数据库 saver 兄弟实现不在本章执行。</td></tr>
+<tr><td>checkpointer 三值</td><td><code>libs/langgraph/tests/test_subgraph_persistence.py:27-143</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:227-364</code></td><td>持久化/子图</td><td>None、False、True 的 interrupt 与跨调用 state 差异。</td><td>异步镜像由其他大测试覆盖，本次未运行。</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>本次验证范围：</strong>已逐行审计决定性源码、公共类型、<code>pyproject.toml</code>、README 与真实测试；文档完成后执行模块默认 validator。Git SHA 和全库 <code>make format/lint/test</code> 不属于本次唯一 HTML 改动的必要验证，且本机无 Git 命令。</div>
+</section>
+
+<section class="section" id="development"><h2>14. 开发与扩展指南</h2>
+<div class="table-wrap"><table><thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>新增 compile 参数</td><td><code>StateGraph.compile</code> + <code>Pregel.__init__</code></td><td>公共类型、copy/with_config、文档和 async 消费路径</td><td>默认值、优先级、root/subgraph 行为。</td></tr>
+<tr><td>新增节点策略</td><td><code>StateNodeSpec</code>、<code>_NodeDefaults</code>、<code>PregelNode</code></td><td><code>add_node</code>、默认合并、Runner 消费、handler 安全例外</td><td>节点覆盖默认；sync/async；失败恢复。</td></tr>
+<tr><td>改变边编码</td><td><code>attach_edge</code>/<code>attach_branch</code></td><td>checkpoint migration、drawing、调度与历史测试</td><td>普通/等待/条件/Send/END 全部行为。</td></tr>
+<tr><td>新增 Schema 形态</td><td><code>_get_channels</code>、mapper、serde collector</td><td>输入输出 JSON Schema、Channel 类型、strict allowlist</td><td>root、TypedDict、Pydantic、dataclass 和 ManagedValue。</td></tr>
+<tr><td>改变 checkpointer 标志</td><td><code>Checkpointer</code> 类型 + Pregel defaults/namespace</td><td>sync/async state API、子图持久化测试、文档</td><td>None/False/True/具体 saver 四类矩阵。</td></tr>
+<tr><td>改变 validate</td><td>Builder validate + <code>pregel/_validate.py</code></td><td>错误类型/文本、可视化、动态 Command 边界</td><td>编译期可证明与只能运行期证明的清晰分界。</td></tr>
+</tbody></table></div>
+<ul>
+<li>不要直接构造依赖私有 Channel 名的业务逻辑；<code>branch:to:</code> 是编译布局并存在 checkpoint migration。</li>
+<li>不要在 compile 后继续修改 Builder 并期望旧 compiled graph 自动更新。</li>
+<li>不要通过跳过二次 validate“修复”不兼容 timeout 或未知 Channel。</li>
+<li>新增默认策略时必须明确 handler 是否继承；cache 与 error-handler 当前是安全敏感例外。</li>
+<li>改变持久化语义时同时补 sync/async 和 root/subgraph 证明，不能只测 InMemorySaver 的快乐路径。</li>
+</ul>
+</section>
+
+<section class="section" id="tradeoffs"><h2>15. 设计权衡与已知限制</h2>
+<div class="table-wrap"><table><thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead><tbody>
+<tr><td>Builder 与 Runtime 分离</td><td>显式 compile，返回 Pregel 子类</td><td>静态准入、运行对象可复用、DSL 不污染 Loop</td><td>两份对象；compile 后修改易被误解</td><td>需要不可变 Builder 或增量编译时。</td></tr>
+<tr><td>边编码为 Channel</td><td>统一成 trigger writes/barrier</td><td>边、版本、checkpoint 和调度共享模型</td><td>内部 Channel 名进入迁移成本</td><td>布局迁移成本超过统一模型收益时。</td></tr>
+<tr><td>双层 validate</td><td>先 DSL 引用，再 Pregel 产物</td><td>错误靠近所有权层，保护内部扩展</td><td>Builder 可能在第二层失败前已被修改</td><td>引入事务式 compile 或不可变中间表示时。</td></tr>
+<tr><td>编译时策略合并</td><td>把默认值固化到每个 NodeSpec</td><td>运行时读取简单、节点覆盖清晰</td><td>默认值后改不生效；handler 插入改变 Builder</td><td>需要运行期动态策略或多租户覆盖时。</td></tr>
+<tr><td>strict allowlist 从 Schema 推导</td><td>自动收集已声明类型</td><td>减少手工名单漂移</td><td>动态类型可能缺失；旧 saver 会 fail-open warning</td><td>需要强制 fail-closed 安全模式时。</td></tr>
+<tr><td>checkpointer 三态</td><td>None/False/True 区分继承、禁用、独立持久化</td><td>覆盖 stateless interrupt 与 stateful subgraph</td><td>布尔值语义不直观，True 不能作 root</td><td>公共配置改为具名枚举且可兼容迁移时。</td></tr>
+</tbody></table></div>
+<p><strong>当前限制：</strong>compile 不证明业务终止、reducer 结合性、外部副作用幂等、动态 Command/Send 目标合法性或生产 saver 可用性；这些只有运行测试、持久化 conformance 与应用级策略才能证明。</p>
+</section>
+
+<section class="section" id="sources"><h2>16. 源码索引与进一步阅读</h2>
+<ul class="source-list">
+<li><code>libs/langgraph/langgraph/graph/state.py:131-270</code> — Builder 定位、Schema 与内部状态。</li>
+<li><code>libs/langgraph/langgraph/graph/state.py:272-335</code> — Builder 默认节点策略。</li>
+<li><code>libs/langgraph/langgraph/graph/state.py:1129-1175</code> — 第一层 validate。</li>
+<li><code>libs/langgraph/langgraph/graph/state.py:1177-1401</code> — compile 主管线。</li>
+<li><code>libs/langgraph/langgraph/graph/state.py:1404-1624</code> — CompiledStateGraph 与 attach 系列。</li>
+<li><code>libs/langgraph/langgraph/pregel/_read.py:25-91</code> — ChannelRead。</li>
+<li><code>libs/langgraph/langgraph/pregel/_read.py:97-248</code> — PregelNode。</li>
+<li><code>libs/langgraph/langgraph/pregel/_write.py:26-126</code> — write entries 与 ChannelWrite。</li>
+<li><code>libs/langgraph/langgraph/pregel/_write.py:172-192</code> — writes 组装。</li>
+<li><code>libs/langgraph/langgraph/pregel/main.py:758-843</code> — Pregel 构造与 allowlist。</li>
+<li><code>libs/langgraph/langgraph/pregel/main.py:933-948</code> — 第二层 validate。</li>
+<li><code>libs/langgraph/langgraph/pregel/main.py:2550-2613</code> — 运行配置与 checkpointer 优先级。</li>
+<li><code>libs/langgraph/langgraph/pregel/_validate.py:13-107</code> — 编译产物结构校验。</li>
+<li><code>libs/langgraph/langgraph/types.py:89-119</code> — Durability 与 Checkpointer 公共类型。</li>
+<li><code>libs/langgraph/langgraph/_internal/_serde.py:36-123</code> — strict serde allowlist。</li>
+<li><code>libs/langgraph/pyproject.toml:5-33</code> — 包版本、Python 与依赖范围。</li>
+<li><code>libs/langgraph/README.md:20-26</code> — 框架定位与能力边界。</li>
+<li><code>libs/langgraph/tests/test_state.py:64-135</code> — Schema 编译与 updates stream。</li>
+<li><code>libs/langgraph/tests/test_pregel.py:104-175</code> — 编译拒绝与 checkpointer 类型。</li>
+<li><code>libs/langgraph/tests/test_serde_allowlist.py:80-159</code> — allowlist 测试。</li>
+<li><code>libs/langgraph/tests/test_retry.py:2309-2744</code> — 默认策略、优先级与恢复。</li>
+<li><code>libs/langgraph/tests/test_subgraph_persistence.py:27-364</code> — 子图 checkpointer 三态。</li>
+</ul>
+<h3>进一步阅读</h3>
+<ul><li><a href="../../langgraph_architecture.html#s5">架构总览第 5 章：Compile 编译过程</a></li><li><a href="https://reference.langchain.com/python/langgraph/">LangGraph Python API Reference</a></li><li><a href="https://docs.langchain.com/oss/python/langgraph/overview">LangGraph 官方概念文档</a></li></ul>
+</section>
+
+<section class="section" id="glossary"><h2>17. 术语表</h2>
+<div class="table-wrap"><table><thead><tr><th>术语</th><th>本章含义</th><th>易混边界</th></tr></thead><tbody>
+<tr><td>Builder</td><td>收集 Schema、节点、边和策略的可变 <code>StateGraph</code>。</td><td>不是可执行 Runnable。</td></tr>
+<tr><td>Compile</td><td>静态校验并组装 Pregel 运行图的同步过程。</td><td>不是执行、打包 Python 字节码或生成远程部署。</td></tr>
+<tr><td><code>CompiledStateGraph</code></td><td>保留 Builder 元数据并继承 <code>Pregel</code> 的 Graph API 可执行对象。</td><td>不是独立于 Pregel 的第二套 Runtime。</td></tr>
+<tr><td>Pregel</td><td>LangGraph 本地 Channel/超级步执行内核。</td><td>本章只讨论编译接线，不展开 Loop/Runner。</td></tr>
+<tr><td>PregelNode</td><td>节点的 channels、triggers、mapper、bound、writers 与策略容器。</td><td>它本身不是用户节点函数。</td></tr>
+<tr><td>Channel</td><td>State key 的值、更新合并、版本和持久化契约。</td><td>不是普通共享 dict 字段。</td></tr>
+<tr><td>Trigger</td><td>其版本变化可使节点在下一超级步获得 PULL 调度资格的 Channel。</td><td>不代表节点在当前函数返回前立即执行。</td></tr>
+<tr><td>Partial update</td><td>节点只返回要更新的 state key/value。</td><td>不是完整 State 替换。</td></tr>
+<tr><td>ManagedValue</td><td>运行时计算、可读但不作为普通 State Channel 输出的值。</td><td>不会被当成普通 output/stream Channel。</td></tr>
+<tr><td>Serde allowlist</td><td>strict msgpack 可反序列化类型的允许列表。</td><td>不是认证、加密或 Python 沙箱。</td></tr>
+<tr><td>Checkpointer</td><td>保存和恢复 Pregel 执行 state 的 saver 或子图三态标志。</td><td>与 Store、Cache 不同。</td></tr>
+<tr><td>Stateless subgraph</td><td>本章测试中指 <code>checkpointer=None</code>：可借父 saver 完成 interrupt/resume，但独立父调用间不累积子图 state。</td><td>不等于完全禁用 checkpoint；完全禁用是 False。</td></tr>
+<tr><td>Stateful subgraph</td><td><code>checkpointer=True</code> 的嵌套图，以稳定子 namespace 跨调用累积 state。</td><td>True 不能作为 root graph saver。</td></tr>
+<tr><td>二次 validate</td><td>Builder 声明校验之后，对已组装 Pregel nodes/channels 再校验。</td><td>两层校验关注不同所有权。</td></tr>
+</tbody></table></div>
+</section>
+<div class="footer">LangGraph Architecture Module 05 · Compile to Pregel<br>开发级子文档 · 基于当前源码、公共类型、依赖声明与真实测试交叉核验</div>
+</main>
+<a class="back-top" href="#top" aria-label="返回顶部">↑</a>
+<script>(function(){const links=[...document.querySelectorAll('.sidebar a')];const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);const activate=()=>{let current=sections[0];for(const section of sections){if(section.getBoundingClientRect().top<=92)current=section}if(!current)return;links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current.id))};document.addEventListener('scroll',activate,{passive:true});activate()})();</script>
+</body>
+</html>

@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 17 章：RemoteGraph、SDK、CLI 与服务端边界</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --text: #1c1917;
+      --muted: #78716c;
+      --border: rgba(28,25,23,.12);
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --red: #b91c1c;
+      --purple: #6d28d9;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      font: 15px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre { font-family: "Cascadia Code", Consolas, monospace; }
+    code {
+      padding: .1em .35em;
+      border-radius: 5px;
+      background: rgba(120,113,108,.18);
+      font-size: .92em;
+    }
+    pre {
+      overflow: auto;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      white-space: pre;
+    }
+    .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); min-height: 100vh; }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 20px 16px;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+    }
+    aside strong { display: block; margin-bottom: 10px; }
+    aside a {
+      display: block;
+      margin: 2px 0;
+      padding: 5px 8px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    aside a.active { border-color: var(--blue); color: var(--text); background: var(--panel-2); }
+    main { min-width: 0; max-width: 1180px; padding: 34px clamp(22px, 5vw, 70px) 80px; }
+    h1 { margin: 12px 0 8px; font-size: clamp(28px, 4vw, 44px); line-height: 1.2; }
+    h2 { margin-top: 52px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 28px; }
+    .lede { max-width: 900px; color: #44403c; font-size: 17px; }
+    .meta, .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; margin: 22px 0; }
+    .card, .note, .boundary, .warn, .path {
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .card b { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    .boundary { border-left: 4px solid var(--red); }
+    .warn { border-left: 4px solid var(--yellow); }
+    .note { border-left: 4px solid var(--blue); }
+    .path { margin: 12px 0; border-left: 4px solid var(--green); }
+    .badges { display: flex; flex-wrap: wrap; gap: 7px; margin: 14px 0; }
+    .badge { padding: 2px 8px; border: 1px solid var(--border); border-radius: 999px; font-size: 12px; }
+    .fact { color: var(--green); }
+    .remote { color: var(--red); }
+    .experimental { color: var(--purple); }
+    .migration { color: var(--yellow); }
+    .table-wrap { overflow-x: auto; margin: 14px 0 20px; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    th, td { padding: 10px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--panel-2); }
+    .section span.evidence {
+      display: inline;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .flow { color: #44403c; }
+    .back { display: inline-block; margin-bottom: 10px; }
+    .footer-back { display: inline-block; margin-top: 36px; }
+    @media (max-width: 860px) {
+      .layout { display: block; }
+      aside { position: relative; width: auto; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+      aside nav { columns: 2; }
+      main { padding: 24px 18px 60px; }
+    }
+    @media (max-width: 520px) { aside nav { columns: 1; } }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <strong>第 17 章目录</strong>
+    <nav id="toc">
+      <a href="#position">1. 模块定位</a>
+      <a href="#system">2. 系统位置与依赖</a>
+      <a href="#concepts">3. 核心概念</a>
+      <a href="#architecture">4. 架构组成</a>
+      <a href="#flows">5. 完整运行流程</a>
+      <a href="#state">6. 数据与状态模型</a>
+      <a href="#protocol">7. 接口、协议与事件</a>
+      <a href="#config">8. 配置与默认行为</a>
+      <a href="#resources">9. 并发、性能与资源</a>
+      <a href="#security">10. 安全与信任边界</a>
+      <a href="#failure">11. 失败、恢复与兼容</a>
+      <a href="#observability">12. 可观测性与排障</a>
+      <a href="#tests">13. 测试与验证</a>
+      <a href="#development">14. 开发与扩展指南</a>
+      <a href="#tradeoffs">15. 权衡与限制</a>
+      <a href="#sources">16. 源码索引</a>
+      <a href="#glossary">17. 术语表</a>
+    </nav>
+  </aside>
+  <main>
+    <a class="back" href="../../langgraph_architecture.html#s17">← 返回 LangGraph 架构总览第 17 章</a>
+    <header>
+      <h1>RemoteGraph、SDK、CLI 与服务端边界</h1>
+      <p class="lede">从本地 <code>PregelProtocol</code> 适配到远程 HTTP/SSE/WS，从资源客户端到 <code>langgraph.json</code> 和部署命令；重点说明客户端能表达什么，以及哪些能力只存在于仓库外 LangGraph API Server。</p>
+      <div class="badges">
+        <span class="badge fact">当前事实</span>
+        <span class="badge remote">远程服务边界</span>
+        <span class="badge experimental">v3 / deploy Beta</span>
+        <span class="badge migration">sdk-js 已迁仓</span>
+      </div>
+      <div class="meta">
+        <div class="card"><b>版本基线</b><code>langgraph 1.2.11</code><br><code>langgraph-sdk 0.4.2</code><br><code>langgraph-cli 0.4.31</code></div>
+        <div class="card"><b>证据状态</b>当前仓源码、Schema 与测试已审计；外部 Server 内部实现不在本仓，标为远程契约。</div>
+        <div class="card"><b>主要 Owner</b><code>libs/langgraph/langgraph/pregel/remote.py</code><br><code>libs/sdk-py/langgraph_sdk/</code><br><code>libs/cli/langgraph_cli/</code></div>
+        <div class="card"><b>目标读者 / 日期</b>远程图集成、平台接入、CLI/部署维护者<br>最近验证：2026-08-14</div>
+      </div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p><code>RemoteGraph</code> 是把 LangGraph Server API 映射成图式调用体验的客户端适配器；Python SDK 是资源和传输客户端；CLI 是配置校验、开发服务器入口、镜像/Compose 生成器及托管部署编排器。三者都不等于远程执行器本身。<span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:118-127</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/client.py:1-7</code></span> <span class="evidence"><code>libs/cli/README.md:17-23</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>表面</th><th>负责</th><th>委托</th><th>明确不负责</th></tr></thead>
+        <tbody>
+          <tr><td><code>RemoteGraph</code></td><td>配置清洗、请求转换、流事件/namespace/interrupt 适配、远程异常映射</td><td>SDK 客户端和 Server API</td><td>节点执行、调度队列、checkpoint 存储</td></tr>
+          <tr><td>Python SDK</td><td>Assistants、Threads、Runs、Crons、Store；HTTP/SSE 与 v3 WS 客户端</td><td><code>httpx</code>、<code>websockets</code>、Server</td><td>资源的服务端授权、事务与持久化实现</td></tr>
+          <tr><td>CLI</td><td>配置归一化/校验、dev/build/up/dockerfile/deploy 编排</td><td>外部 <code>langgraph-api</code>、Docker、Host Backend</td><td>API Server 的运行时、数据库和安全执行面</td></tr>
+          <tr><td><code>sdk-js</code></td><td>本仓只保留迁移指引</td><td><code>langchain-ai/langgraphjs</code> 的 SDK</td><td>本仓不存在可审计的 JS/TS SDK 实现</td></tr>
+        </tbody>
+      </table></div>
+      <div class="boundary"><strong>硬边界：</strong><code>Auth</code>/<code>Encryption</code> 在 SDK 中提供声明与处理器注册 DSL，CLI 能校验路径并把配置交给镜像或 dev Server；真正鉴权、加解密、远程节点执行、队列和 checkpoint 读写由仓库外 Server 执行。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:1-9</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/cli.py:790-862</code></span></div>
+    </section>
+
+    <section class="section" id="system">
+      <h2>2. 系统位置与依赖</h2>
+      <pre class="flow">应用 / 本地图
+  ├─ RemoteGraph(PregelProtocol)
+  │    └─ LangGraphClient / SyncLangGraphClient
+  ├─ Python SDK ── HTTP JSON / SSE / WS ──► LangGraph API Server（仓库外）
+  │                                              ├─ 图执行与调度（仓库外）
+  │                                              ├─ checkpoint / thread 状态（仓库外）
+  │                                              └─ Auth / Encryption handler 调用（仓库外）
+  └─ CLI ── config / Docker / Host Backend ─────► dev、容器或托管部署</pre>
+      <p><code>langgraph</code> 生产依赖 <code>langgraph-sdk</code>，而 SDK 依赖 <code>httpx</code>、<code>orjson</code>、<code>langchain-protocol</code>、<code>langchain-core</code> 和 <code>websockets</code>。CLI 在 Python 3.11+ 才条件依赖 SDK，并以可选 <code>inmem</code> extra 拉入仓库外 <code>langgraph-api</code> 与 <code>langgraph-runtime-inmem</code>。<span class="evidence"><code>libs/sdk-py/pyproject.toml:14-20</code></span> <span class="evidence"><code>libs/cli/pyproject.toml:14-28</code></span></p>
+      <p>异步 SDK 在 <code>url=None</code> 时尝试 Server 进程内 ASGI transport；同步 SDK 的 <code>url=None</code> 则默认 <code>http://localhost:8123</code>。这两个默认不能混写。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/client.py:109-140</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_sync/client.py:72-86</code></span></p>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="cards">
+        <div class="card"><b>Assistant</b>图的版本化配置：关联 <code>graph_id</code>、config、context、metadata、name；不是执行中的 run。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/assistants.py:30-34</code></span></div>
+        <div class="card"><b>Thread</b>跨多次 run 的远程状态容器；可读写 state/history。其持久化归 Server，而不是客户端内存。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/threads.py:30-35</code></span></div>
+        <div class="card"><b>Run</b>一次 assistant 调用；可有 thread（stateful）或无 thread（stateless），状态由 Server 返回。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/runs.py:56-67</code></span></div>
+        <div class="card"><b>Store</b>跨 graph execution/thread 的远程 namespace KV/搜索表面；不是 thread checkpoint。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/store.py:18-29</code></span></div>
+      </div>
+      <p><strong>SSE</strong>（Server-Sent Events）是服务器到客户端的单向事件流；<strong>WS</strong>（WebSocket）在 v3 中承载事件帧，但命令仍走 HTTP POST。<strong>RemoteGraph</strong> 的“像本地图”只表示它实现相近的协议表面，不表示本地与远程的延迟、失败、取消和 v3 语义完全相同。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/stream/transport/ws.py:25-27</code></span></p>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <h3>4.1 PregelProtocol 与 RemoteGraph</h3>
+      <p><code>PregelProtocol</code> 规定 <code>with_config</code>、图可视化、state/history、update/bulk update、<code>invoke/ainvoke</code> 和 <code>stream/astream</code> 的同步/异步表面；v1 返回传统值，v2 返回 typed <code>StreamPart</code>/<code>GraphOutput</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/protocol.py:25-105</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/protocol.py:107-269</code></span></p>
+      <p><code>RemoteGraph</code> 实现该协议，但当前 <code>bulk_update_state</code>/<code>abulk_update_state</code> 明确抛出 <code>NotImplementedError</code>，因此“实现协议”不等于每项能力都可用。构造时至少要能形成一个 sync 或 async client；缺失对应 client 时在调用点拒绝。<span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:132-193</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:588-600</code></span></p>
+      <p>配置发送前仅保留可序列化的 recursion limit、字符串 tags、metadata/configurable 原始值，并移除 checkpoint map/id/ns 和 task id；thread id 从 config 中取出作为 URL/请求维度。<span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:407-434</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:791-820</code></span></p>
+
+      <h3>4.2 SDK 资源聚合</h3>
+      <p><code>LangGraphClient</code> 与 <code>SyncLangGraphClient</code> 都聚合 <code>assistants</code>、<code>threads</code>、<code>runs</code>、<code>crons</code>、<code>store</code>，并拥有底层 HTTP client 的关闭生命周期。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/client.py:143-178</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_sync/client.py:89-127</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>资源</th><th>主要公共操作</th><th>关键状态/拒绝</th></tr></thead>
+        <tbody>
+          <tr><td>Assistants</td><td>get/create/update/delete/search；graph/schemas/subgraphs introspection</td><td><code>if_exists</code> 冲突策略；删除可要求连带 threads</td></tr>
+          <tr><td>Threads</td><td>get/create/update/delete/search/count/copy/prune；state/update/history；stream/join_stream</td><td>状态 idle/busy/interrupted/error；TTL 和 prune 由 Server 实施</td></tr>
+          <tr><td>Runs</td><td>create/create_batch/stream/wait/list/get/cancel/cancel_many/join/join_stream/delete</td><td>stateful/stateless；multitask、disconnect、durability 等为远程请求契约</td></tr>
+          <tr><td>Store</td><td>put/get/delete/search items；list namespaces</td><td>客户端拒绝含点号的 namespace label；实际存储与索引由 Server</td></tr>
+        </tbody>
+      </table></div>
+
+      <h3>4.3 CLI 四条主线</h3>
+      <ul>
+        <li><code>dev</code>：校验配置后导入仓库外 <code>langgraph_api.cli.run_server</code>，支持热重载、调试、TLS、tunnel；缺少 <code>inmem</code> extra 会明确拒绝。<span class="evidence"><code>libs/cli/langgraph_cli/cli.py:658-862</code></span></li>
+        <li><code>build</code>/<code>dockerfile</code>：校验配置并生成/构建 Server 镜像；Docker 缺失或自定义命令含禁用字符时提前失败。<span class="evidence"><code>libs/cli/langgraph_cli/cli.py:375-464</code></span></li>
+        <li><code>up</code>：生成 Compose 输入并调用 Docker Compose；<code>--wait</code> 与前台退出策略不同。<span class="evidence"><code>libs/cli/langgraph_cli/cli.py:276-371</code></span></li>
+        <li><code>deploy</code>：Beta；对接 Host Backend，选择本地镜像 push 或上传源码远程 build，再轮询 revision。<span class="evidence"><code>libs/cli/langgraph_cli/deploy.py:1542-1566</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/deploy.py:1678-1767</code></span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="flows">
+      <h2>5. 完整运行流程</h2>
+      <div class="path"><strong>正常路径：RemoteGraph 流式调用。</strong>
+        <ol>
+          <li>调用方传入 input、<code>RunnableConfig</code>、stream modes 和中断选项；实例合并默认 config 并清洗为 wire-safe 值。</li>
+          <li><code>thread_id</code> 存在时请求 <code>/threads/{thread_id}/runs/stream</code>，否则请求 <code>/runs/stream</code>；<code>if_not_exists="create"</code> 由 RemoteGraph 显式传入。</li>
+          <li>客户端以 SSE 接收 event/data；RemoteGraph 拆分 mode 与 namespace，将 <code>messages</code> 规范化、把父图 namespace 前缀补回，并将 v2 形状映射为 <code>{type, ns, data, interrupts}</code>。</li>
+          <li>请求的 mode 才向调用方产出；<code>invoke</code> 本质上消费 <code>values</code> 流直到结束并返回最后一项。</li>
+        </ol>
+        <span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:757-876</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:1162-1212</code></span>
+      </div>
+      <div class="path" style="border-left-color: var(--red)"><strong>拒绝/提前结束路径：配置或能力不成立。</strong>
+        <ol>
+          <li>同步调用但未配置 <code>sync_client</code>，或异步调用未配置 <code>client</code>，立即抛 <code>ValueError</code>，不会发网络请求。</li>
+          <li>v3 传入 <code>control</code>、transformers、interrupt before/after 或未知参数时抛 <code>NotImplementedError</code>；v3 <code>Command(goto/update)</code> 同样被拒绝。</li>
+          <li>SDK 对 400/401/403/404/409/422/429/5xx 映射类型化异常；Store 在本地先拒绝含 <code>.</code> 的 namespace label。</li>
+          <li>CLI 在 graphs 为空、Python 版本过低、auth/encryption import path 无冒号、Docker 缺失或 TLS cert/key 不成对时提前失败。</li>
+        </ol>
+        <span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:181-221</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_remote_run_stream.py:21-41</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/errors.py:190-210</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/config.py:431-468</code></span>
+      </div>
+      <div class="path" style="border-left-color: var(--yellow)"><strong>恢复/降级路径：断线、恢复与部署中断。</strong>
+        <ol>
+          <li>经典 SSE 首次响应若给出受校验的 <code>Location</code>，断线后最多重连 5 次，以 GET + <code>Last-Event-ID</code> 恢复；无 reconnect location 时传输错误直接上抛。</li>
+          <li>v3 thread stream 使用 <code>since</code> cursor 与去重/缓冲；<code>Command(resume=...)</code> 只发送原始 resume 值，由 Server 根据 thread 状态判断恢复。恢复执行和 checkpoint 读取都在 Server。</li>
+          <li><code>abort()</code> 尝试 <code>runs.cancel(..., wait=False)</code> 并关闭流；取消请求失败会记录 debug 并继续关闭，故“本地流已关”不能证明远程 run 已取消。</li>
+          <li>远程 deploy 被 Ctrl+C 中断时远程 build 继续，CLI 输出 deployment/revision ID；轮询超时也只停止等待，不等于 Server 停止部署。</li>
+        </ol>
+        <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/http.py:211-287</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_remote_run_stream.py:221-233</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/deploy.py:1209-1223</code></span>
+      </div>
+    </section>
+
+    <section class="section" id="state">
+      <h2>6. 数据与状态模型</h2>
+      <p><code>RemoteGraph</code> 不维护 Channel map，也不持久化 checkpoint；它把 Server 返回的 <code>ThreadState</code> 转为本地 <code>StateSnapshot</code>，包含 values、next、checkpoint config、metadata、parent config、tasks 和 interrupts。该对象是远程状态的客户端视图。<span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:322-405</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>标识/状态</th><th>所有者</th><th>生命周期</th><th>注意</th></tr></thead>
+        <tbody>
+          <tr><td><code>assistant_id</code>/<code>graph_id</code></td><td>Server 资源；客户端引用</td><td>Assistant CRUD</td><td>graph name 可作为 assistant 选择符，解析规则由 Server</td></tr>
+          <tr><td><code>thread_id</code></td><td>Server thread；v3 可由客户端先生成 UUID</td><td>跨 run</td><td>v3 首次 <code>run.start</code> 时 Server 懒创建 thread</td></tr>
+          <tr><td><code>run_id</code></td><td>Server</td><td>单次调用</td><td>用于 join、cancel、delete 与 lifecycle</td></tr>
+          <tr><td><code>checkpoint_id/ns/map</code></td><td>Server checkpoint</td><td>thread 历史</td><td>RemoteGraph 从 local configurable 中拆出/清洗，不能据此推断存储后端</td></tr>
+          <tr><td>Store namespace/key/value</td><td>Server Store</td><td>跨 thread</td><td>与 thread checkpoint 分离；TTL/index 均是远程配置</td></tr>
+          <tr><td>流 cursor / event id</td><td>transport/session</td><td>连接或可恢复流</td><td>用于重连与去重，不是 checkpoint id</td></tr>
+        </tbody>
+      </table></div>
+      <p>Thread 创建支持初始 supersteps、graph_id 和 TTL；state/history/update 都是远程端点。Store 的 TTL、向量索引及 namespace 列表同样只通过请求表达，事务、锁、清扫器和物理表不在本仓客户端证据范围。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/threads.py:101-176</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/threads.py:485-737</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/store.py:35-313</code></span></p>
+    </section>
+
+    <section class="section" id="protocol">
+      <h2>7. 接口、协议与事件</h2>
+      <h3>7.1 HTTP 资源 API</h3>
+      <p>SDK 方法以 JSON 请求映射资源路径：Assistant CRUD 位于 <code>/assistants</code>；Thread 及 state/history 位于 <code>/threads</code>；Run 有 stateful 和 stateless 两套路径；Store 位于 <code>/store/items</code> 与 <code>/store/namespaces</code>。客户端路径参数先 quote，HTTP 状态错误再映射为类型化异常。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/assistants.py:314-450</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/runs.py:599-622</code></span></p>
+      <h3>7.2 SSE v1/v2</h3>
+      <p>Runs <code>stream</code> 默认 v1，产出 raw <code>StreamPart</code>；v2 是客户端转换后的 typed dict。RemoteGraph 又把远程事件适配为本地 v1/v2 形状。SSE 响应必须是 <code>text/event-stream</code>，否则按 transport error 失败。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/runs.py:195-270</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/http.py:187-245</code></span></p>
+      <h3>7.3 v3 thread-centric stream</h3>
+      <p><code>threads.stream()</code> 返回 context manager：命令发往 <code>POST /threads/{id}/commands</code>，事件通过过滤后的 SSE <code>POST /threads/{id}/stream/events</code> 或异步 WS 获取。WS 首帧是 <code>subscription.subscribe</code> envelope；同步 SDK 只支持 SSE，异步 SDK 才可选择 WS。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/threads.py:739-783</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/stream/transport/http.py:33-106</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/stream/transport/ws.py:85-123</code></span> <span class="evidence"><code>libs/sdk-py/README.md:52-57</code></span></p>
+      <p>RemoteGraph v3 提供 values/messages/tool_calls/subgraphs typed projection，以及 updates/checkpoints/tasks/custom 解码 projection；lifecycle 和 debug 故意不伪装成本地 projection。sync 与 async 的 interrupted/interrupts 也是非阻塞快照，与本地 v3 驱动到终态的语义存在明确差异。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_remote_run_stream.py:80-123</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_remote_run_stream.py:172-219</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_remote_run_stream.py:290-347</code></span></p>
+    </section>
+
+    <section class="section" id="config">
+      <h2>8. 配置与默认行为</h2>
+      <h3>8.1 最小 <code>langgraph.json</code></h3>
+      <pre>{
+  "python_version": "3.11",
+  "dependencies": ["."],
+  "graphs": {
+    "agent": "./agent.py:graph"
+  },
+  "env": ".env"
+}</pre>
+      <p><code>graphs</code> 可指向字符串或带 <code>path</code> 的对象；CLI 验证 Python/Node graph 混合、导入路径、依赖覆盖范围及版本。至少要有一个 graph；依赖模式的 Python 配置不能缺少 dependencies。<span class="evidence"><code>libs/cli/schemas/schema.json:127-140</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/config.py:323-389</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/config.py:455-468</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>配置/选项</th><th>类型/默认</th><th>优先级与边界</th><th>失败行为</th><th>来源</th></tr></thead>
+        <tbody>
+          <tr><td>SDK <code>url</code></td><td>async: <code>None</code> 尝试 in-process；sync: <code>None</code> → 8123</td><td>显式 URL 优先</td><td>网络/导入失败按客户端路径处理</td><td><code>libs/sdk-py/langgraph_sdk/_async/client.py:29-46</code></td></tr>
+          <tr><td>SDK API key</td><td>省略时按 <code>LANGGRAPH_API_KEY</code>、<code>LANGSMITH_API_KEY</code>、<code>LANGCHAIN_API_KEY</code></td><td>显式字符串优先；显式 <code>None</code> 禁止环境加载</td><td>401/403 由 Server 返回</td><td><code>libs/sdk-py/langgraph_sdk/_async/client.py:47-56</code></td></tr>
+          <tr><td>HTTP timeout</td><td>connect 5、read 300、write 300、pool 5 秒</td><td>显式 <code>httpx.Timeout</code>/float/tuple 覆盖</td><td><code>APITimeoutError</code>/transport error</td><td><code>libs/sdk-py/langgraph_sdk/_async/client.py:57-62</code></td></tr>
+          <tr><td>transport</td><td><code>sse</code> 默认；async 可 <code>websocket</code></td><td>仅 v3 thread stream</td><td>其他值本地 <code>ValueError</code></td><td><code>libs/sdk-py/langgraph_sdk/_async/threads.py:739-783</code></td></tr>
+          <tr><td><code>python_version</code></td><td>Python graph 默认 3.11；最低 3.11</td><td>配置显式值</td><td>格式或版本不符拒绝</td><td><code>libs/cli/langgraph_cli/config.py:81-84</code>、<code>431-448</code></td></tr>
+          <tr><td><code>node_version</code></td><td>Node graph 默认/最低 20</td><td>配置与 package engines 校验</td><td>低版本或非 major-only 拒绝</td><td><code>libs/cli/langgraph_cli/config.py:17-18</code>、<code>395-408</code></td></tr>
+          <tr><td><code>image_distro</code></td><td><code>debian</code>；可选 wolfi/bookworm</td><td>显式配置覆盖</td><td>bullseye/未知值拒绝</td><td><code>libs/cli/langgraph_cli/config.py:84</code>、<code>470-482</code></td></tr>
+          <tr><td><code>api_version</code></td><td>未设时镜像默认版本；可固定或兼容范围</td><td>命令参数可覆盖配置</td><td>非法范围、无匹配 release、带 tag base image 冲突</td><td><code>libs/cli/langgraph_cli/config.py:250-294</code></td></tr>
+          <tr><td><code>auth/encryption/checkpointer</code></td><td>可选 import path/config</td><td>CLI 校验和改写路径，Server 消费</td><td>无 <code>:</code> 或文件未被 dependency 覆盖则拒绝</td><td><code>libs/cli/langgraph_cli/config.py:521-536</code>、<code>927-1053</code></td></tr>
+          <tr><td><code>dev</code></td><td>host 127.0.0.1、port 2024、reload 开</td><td>命令行覆盖</td><td>缺 inmem extra、JS graph、TLS 参数冲突拒绝</td><td><code>libs/cli/langgraph_cli/cli.py:663-826</code></td></tr>
+          <tr><td><code>up</code></td><td>port 8123、pull true、combined runtime</td><td>命令行覆盖</td><td>Docker/Compose 或镜像失败</td><td><code>libs/cli/langgraph_cli/cli.py:102-176</code></td></tr>
+          <tr><td><code>deploy</code></td><td>Beta；无 Docker 时自动 remote build</td><td><code>--remote/--no-remote</code> 强制</td><td>缺 key、403 tenant、build/deploy terminal failure</td><td><code>libs/cli/langgraph_cli/deploy.py:562-590</code>、<code>1232-1314</code></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="resources">
+      <h2>9. 并发、性能与资源</h2>
+      <ul>
+        <li>SDK factory 为普通 HTTP transport 配置 5 次连接级 retry；经典 SSE 另有最多 5 次、仅在 Server 提供 reconnect location 后启用的流重连。两者不是业务 run 重试。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/client.py:128-139</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/http.py:211-285</code></span></li>
+        <li>v3 SSE/WS transport 的事件队列默认上限 1024；队列满时 pump 等待，形成客户端侧背压。共享 SSE fan-out、subscription cursor 和去重集合有独立生命周期。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/stream/transport/http.py:41-62</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/stream/transport/http.py:110-187</code></span></li>
+        <li>WebSocket 默认 ping interval/timeout 均 20 秒；只有异步 thread stream 暴露 WS。同步长连接使用后台线程运行 lifecycle watcher，context manager 退出前会占用该线程。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/stream/transport/ws.py:28-53</code></span> <span class="evidence"><code>libs/sdk-py/README.md:54-57</code></span></li>
+        <li>必须显式关闭 client 或使用 context manager；仅停止消费一个 iterator 不应被当作远程 run 已取消。取消远程 run 应调用 <code>runs.cancel</code> 或 v3 adapter <code>abort</code>。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/client.py:162-178</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/runs.py:943-999</code></span></li>
+      </ul>
+      <div class="warn">客户端延迟、队列大小、HTTP timeout 和重连预算不能推出 Server 的执行并发、队列容量、事务隔离、checkpoint 性能或 SLA；后者缺少本仓实现证据。</div>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <p>SDK 把 API key 合并到请求头，也允许调用方传自定义 headers；这只是凭据传输。401/403 的身份验证与授权决定来自 Server。<code>Auth</code> DSL 能注册接受、拒绝或返回过滤器的 async handler，但 handler 由 Server 调用。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/client.py:47-56</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:129-149</code></span></p>
+      <p><code>Encryption</code> 是 Beta 的 server-side handler 注册 API，要求 async 且恰好两个位置参数，支持 blob/JSON encrypt/decrypt。它不是 TLS，也不是本地 checkpointer 的 <code>EncryptedSerializer</code>；CLI 只把 <code>LANGGRAPH_ENCRYPTION</code> 配置注入 Server 镜像。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:22-64</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:201-215</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/config.py:1132-1162</code></span></p>
+      <ul>
+        <li><code>dev</code> 默认绑定 127.0.0.1，并明确警告只在可信网络使用 0.0.0.0；TLS cert/key 必须成对，tunnel 与自带 TLS 互斥。<span class="evidence"><code>libs/cli/langgraph_cli/cli.py:663-667</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/cli.py:780-788</code></span></li>
+        <li>Dockerfile helper 默认忽略 <code>.env</code>；deploy 从 env 提取 secrets 时过滤保留变量，但内联 <code>env</code> 仍属于配置管理者的泄露风险。<span class="evidence"><code>libs/cli/langgraph_cli/cli.py:471-524</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/deploy.py:504-554</code></span></li>
+        <li>WS cookie 转发按 URL 域名和 path 过滤，不把整个 cookie jar 平铺到新 origin。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/stream/transport/ws.py:209-223</code></span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>恢复/运维</th></tr></thead>
+        <tbody>
+          <tr><td>401/403</td><td>类型化 <code>AuthenticationError</code>/<code>PermissionDeniedError</code></td><td>请求失败</td><td>客户端不应假设资源未变</td><td>核对 key、tenant、Server policy；不要盲重试权限错误</td></tr>
+          <tr><td>429/5xx/timeout</td><td>typed error 或 transport error</td><td>当前操作失败；底层连接 retry 有限</td><td>写请求可能已到 Server</td><td>先查 run/resource ID；只有具备幂等键/冲突策略时重试</td></tr>
+          <tr><td>SSE 中断</td><td>HTTPError / EOF</td><td>有 Location 时带 event id 重连，否则上抛</td><td>可能已收到部分事件</td><td>使用 resumable stream/cursor；去重消费副作用</td></tr>
+          <tr><td>WS 异常关闭/坏帧</td><td>close code 或 JSON 解码错误</td><td>结束 handle 并记录错误</td><td>远程 run 未必停止</td><td>重新 attach thread，读取 state/run，再决定 cancel/resume</td></tr>
+          <tr><td>RemoteGraph 远程 error event</td><td><code>RemoteException</code></td><td>迭代器抛错</td><td>Server 可能保留失败/interrupt checkpoint</td><td>查询 thread state/history；按 Server 返回状态恢复</td></tr>
+          <tr><td>v3 不支持参数</td><td>本地 <code>NotImplementedError</code></td><td>不发请求</td><td>无远程变化</td><td>改用 v1/v2 <code>stream/astream</code> 或移除参数</td></tr>
+          <tr><td>取消连接失败</td><td>abort debug 日志</td><td>本地流仍关闭</td><td>远程 run 可能继续</td><td>用 run id 查询，再显式 cancel</td></tr>
+          <tr><td>deploy build 失败</td><td>revision terminal status</td><td>CLI exit 1，可打印尾部日志</td><td>旧 revision 不等于已删除</td><td><code>deploy logs --type build</code>，修配置/依赖后新 revision</td></tr>
+        </tbody>
+      </table></div>
+      <h3>版本矩阵</h3>
+      <div class="table-wrap"><table>
+        <thead><tr><th>层</th><th>本仓版本/状态</th><th>兼容重点</th><th>证据缺口</th></tr></thead>
+        <tbody>
+          <tr><td>langgraph / RemoteGraph</td><td>1.2.11</td><td>v1/v2 PregelProtocol；v3 adapter 有受限参数与语义差异</td><td>目标 Server 的具体兼容版本需部署环境确认</td></tr>
+          <tr><td>Python SDK</td><td>0.4.2；Python ≥3.10</td><td><code>websockets &gt;=14,&lt;17</code>；SDK 文档个别方法标注 Server 最低版本</td><td>当前 monorepo 不含 Server release matrix</td></tr>
+          <tr><td>CLI</td><td>0.4.31；Python ≥3.10，dev/inmem ≥3.11</td><td>配置 Python ≥3.11、Node ≥20；<code>api_version</code> 可 pin/range</td><td>镜像 tag 对应的 Server 内部实现不在本仓</td></tr>
+          <tr><td>JS/TS SDK</td><td>已迁至 langgraphjs</td><td>本仓 Python transport 注释表明从 JS 协议移植，不能据此替代 JS 公共 API 审计</td><td>需在 langgraphjs 仓按目标版本另行审计</td></tr>
+        </tbody>
+      </table></div>
+      <p><span class="evidence"><code>libs/sdk-py/langgraph_sdk/__init__.py:1-8</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/__init__.py:1</code></span> <span class="evidence"><code>libs/sdk-js/README.md:1-11</code></span></p>
+    </section>
+
+    <section class="section" id="observability">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>现象</th><th>先检查</th><th>常见原因</th><th>处理</th></tr></thead>
+        <tbody>
+          <tr><td>RemoteGraph 没有输出</td><td>请求的 mode、Server run/state、warning</td><td>流无事件；mode 被过滤；run 提前结束</td><td>改用 <code>runs.get/join</code> 与 thread state；开启合适 mode</td></tr>
+          <tr><td>消息重复</td><td>SSE event id、consumer 去重键</td><td>重连 replay；应用重复启动 run</td><td>按 event/run/message id 幂等消费，区分 replay 与新 run</td></tr>
+          <tr><td>本地取消后仍运行</td><td>run id/status</td><td>只关闭连接或 cancel 请求失败</td><td>显式 <code>runs.cancel</code>，再查询终态</td></tr>
+          <tr><td>v3 projection 卡住</td><td>context manager、并发 consumer、lifecycle</td><td>未进入 stream；顺序消费导致共享投影等待；网络分区</td><td>先进入 context，并发消费 projections；检查 reconnect error</td></tr>
+          <tr><td><code>dev</code> 起不来</td><td>inmem extra、Python、graph language、config validate</td><td>缺外部 Server 包；JS graph 用错 Python CLI dev</td><td>安装 <code>langgraph-cli[inmem]</code> 或使用 JS CLI</td></tr>
+          <tr><td>镜像构建找不到模块</td><td>dependencies/source root、graph import path</td><td>文件不在声明依赖覆盖范围</td><td>修 dependency/source，不用绝对宿主路径</td></tr>
+          <tr><td>deploy 长时间等待</td><td>deployment/revision ID、build/deploy logs</td><td>远程 build 持续、轮询超时或平台故障</td><td>用 <code>deploy revisions list</code>、<code>deploy logs</code>；超时不代表取消</td></tr>
+        </tbody>
+      </table></div>
+      <p>HTTP typed errors保留 <code>x-request-id</code>；RemoteGraph 可选 distributed tracing，把当前 LangSmith run tree headers 合并到请求。CLI deploy 提供结构化 JSON-lines、revision 状态、build/deploy logs；这些是客户端观察面，不等于 Server 全量 trace。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/errors.py:82-94</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/remote.py:1297-1308</code></span> <span class="evidence"><code>libs/cli/langgraph_cli/deploy.py:127-277</code></span></p>
+    </section>
+
+    <section class="section" id="tests">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>缺口</th></tr></thead>
+        <tbody>
+          <tr><td>RemoteGraph sync/async state、stream、invoke、配置清洗</td><td><code>libs/langgraph/tests/test_remote_graph.py:47-1415</code></td><td>单元 + 可选集成</td><td>适配请求和返回形状、context/header</td><td>不证明 Server 内部执行</td></tr>
+          <tr><td>v3 参数拒绝、resume 转换、projection、abort</td><td><code>libs/langgraph/tests/test_remote_graph_v3.py:421-658</code></td><td>单元</td><td>明确能力边界和请求前拒绝</td><td>真实 WS/Server 组合需外部集成</td></tr>
+          <tr><td>SSE 解码与 Last-Event-ID 恢复</td><td><code>libs/sdk-py/tests/test_client_stream.py:94-273</code></td><td>传输单元</td><td>尾事件 flush、断线后 GET 恢复</td><td>代理/负载均衡环境未覆盖</td></tr>
+          <tr><td>共享流背压、重连与去重</td><td><code>libs/sdk-py/tests/streaming/test_controller.py:28-305</code></td><td>单元</td><td>有界队列、cursor、backoff</td><td>长时压力与 SLA 未证明</td></tr>
+          <tr><td>Assistants/Threads/Runs/Store sync/async 对齐</td><td><code>libs/sdk-py/tests/test_api_parity.py:67</code></td><td>API parity</td><td>兄弟客户端表面一致性</td><td>语义仍取决于 Server</td></tr>
+          <tr><td>真实资源 CRUD、并发、取消、重连</td><td><code>libs/sdk-py/tests/integration/</code></td><td>Server 集成</td><td>可达 Server 上的端到端契约</td><td>默认 <code>make test</code> 排除 integration</td></tr>
+          <tr><td>CLI config、镜像/Compose、版本范围</td><td><code>libs/cli/tests/unit_tests/test_config.py:136-3357</code></td><td>单元</td><td>默认、拒绝、生成结果</td><td>不实际启动生产 Server</td></tr>
+          <tr><td>CLI dev TLS 与 deploy 子命令</td><td><code>libs/cli/tests/unit_tests/cli/test_cli.py:278-1326</code></td><td>CLI 单元</td><td>命令发现、拒绝、Host Backend 调用</td><td>托管平台真实权限/构建需外部验证</td></tr>
+        </tbody>
+      </table></div>
+      <p>SDK integration marker 明确要求可达 <code>http://localhost:2024</code> 的 API stack，且默认测试排除；因此文档把 Server 行为标为远程契约，而不是把 mock 单测升级为本地实现事实。<span class="evidence"><code>libs/sdk-py/pyproject.toml:54-59</code></span></p>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+        <tbody>
+          <tr><td>新增 RemoteGraph Pregel 方法</td><td><code>remote.py</code> + protocol</td><td>sync/async、config 清洗、SDK endpoint、v1/v2/v3</td><td>请求前拒绝、错误/interrupt/namespace、mock 与 Server integration</td></tr>
+          <tr><td>新增 SDK 资源方法</td><td><code>_async/*</code>、<code>_sync/*</code>、schema/exports</td><td>类型、path quoting、headers/params、错误映射</td><td><code>test_api_parity</code> 与端点契约测试</td></tr>
+          <tr><td>修改 v3 transport</td><td><code>stream/transport</code>、controller/decoder</td><td>SSE 与 async WS、cursor、ready/done/close、bounded queue</td><td>断线、重放去重、坏帧、取消、背压测试</td></tr>
+          <tr><td>新增 <code>langgraph.json</code> 字段</td><td>CLI schemas + config normalization</td><td>JSON Schema、TypedDict、Docker/dev 消费、unknown-key 检测</td><td>默认、非法输入、路径改写、Python/Node 分支</td></tr>
+          <tr><td>修改 deploy</td><td><code>deploy.py</code>、host backend</td><td>本地/远程 build、secret 过滤、终态/日志、JSON output</td><td>权限拒绝、Ctrl+C、超时、旧 deployment 兼容</td></tr>
+          <tr><td>扩展 Auth/Encryption</td><td>SDK DSL + CLI config</td><td>Server 版本能力与部署配置</td><td>不能只跑 SDK handler 单测；必须有目标 Server 集成和安全 review</td></tr>
+        </tbody>
+      </table></div>
+      <p>禁止捷径：不要把本地 <code>Pregel</code> 的 checkpoint 语义直接投射到 Server；不要在 RemoteGraph 静默丢弃不支持参数；不要让 sync/async 表面漂移；不要把 <code>sdk-js</code> 的迁仓状态写成本仓仍有实现。修改任一库后应在该库目录执行 <code>make format</code>、<code>make lint</code>、<code>make test</code>；涉及 Server 的结论还需显式运行被默认排除的 integration tests。</p>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <ul>
+        <li><strong>Runnable/Pregel 兼容 vs 远程真实语义：</strong>RemoteGraph 让远程图可嵌入本地图，但网络分区、序列化、权限和远程取消带来本地调用不存在的失败面；v3 adapter 已显式记录 interrupted 行为差异。</li>
+        <li><strong>SSE 默认 vs WS 可选：</strong>SSE 更易穿透基础设施且 sync/async 都可用；WS 只在 async v3 暴露，并仍用 HTTP 发送命令，避免把“WS transport”误解成全双工业务协议。</li>
+        <li><strong>客户端重连 vs exactly-once：</strong>cursor 与 event id 提高连续性，但 replay 要求消费者幂等；客户端代码没有提供 exactly-once 保证。</li>
+        <li><strong>统一 CLI vs 外部运行面：</strong>CLI 能生成镜像并启动/部署，但实际 Server 包、Docker、数据库和 Host Backend 都是外部依赖；CLI 测试不能替代部署环境验证。</li>
+        <li><strong>灵活配置 vs安全风险：</strong>自定义 graph/auth/encryption/checkpointer import path 便于扩展，也扩大代码执行与 secret 管理边界；配置校验只验证形状和路径覆盖，不证明 handler 安全。</li>
+        <li><strong>当前证据缺口：</strong>本仓没有 JS/TS SDK 当前实现，也没有 LangGraph API Server 主体；多租户隔离、队列调度、数据库事务、at-rest encryption 覆盖面和服务端取消终态必须在对应仓库/部署版本验证。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>角色</th><th>入口与行号</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>协议</td><td><code>libs/langgraph/langgraph/pregel/protocol.py:25-269</code></td><td>PregelProtocol sync/async、state、invoke、stream v1/v2</td></tr>
+          <tr><td>RemoteGraph</td><td><code>libs/langgraph/langgraph/pregel/remote.py:118-1308</code></td><td>客户端选择、配置清洗、state 与流适配</td></tr>
+          <tr><td>Remote v3 adapter</td><td><code>libs/langgraph/langgraph/pregel/_remote_run_stream.py:21-374</code></td><td>resume、projection、abort 与本地语义差异</td></tr>
+          <tr><td>SDK factories</td><td><code>libs/sdk-py/langgraph_sdk/_async/client.py:29-178</code><br><code>libs/sdk-py/langgraph_sdk/_sync/client.py:20-127</code></td><td>URL、key、timeout、retry、资源聚合</td></tr>
+          <tr><td>资源客户端</td><td><code>libs/sdk-py/langgraph_sdk/_async/assistants.py:30-568</code><br><code>libs/sdk-py/langgraph_sdk/_async/threads.py:30-830</code><br><code>libs/sdk-py/langgraph_sdk/_async/runs.py:56-1190</code><br><code>libs/sdk-py/langgraph_sdk/_async/store.py:18-313</code></td><td>Assistants/Threads/Runs/Store 公共操作</td></tr>
+          <tr><td>传输</td><td><code>libs/sdk-py/langgraph_sdk/_async/http.py:187-287</code><br><code>libs/sdk-py/langgraph_sdk/stream/transport/http.py:33-199</code><br><code>libs/sdk-py/langgraph_sdk/stream/transport/ws.py:25-223</code></td><td>经典 SSE、v3 SSE/WS、重连与关闭</td></tr>
+          <tr><td>错误</td><td><code>libs/sdk-py/langgraph_sdk/errors.py:13-230</code></td><td>连接、超时和 HTTP status 类型映射</td></tr>
+          <tr><td>安全 DSL</td><td><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:129-209</code><br><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:1-215</code></td><td>供 Server 调用的 Auth/Encryption 声明</td></tr>
+          <tr><td>CLI 命令</td><td><code>libs/cli/langgraph_cli/cli.py:230-1043</code></td><td>up/build/dockerfile/dev/validate/new</td></tr>
+          <tr><td>CLI 配置</td><td><code>libs/cli/langgraph_cli/config.py:323-648</code><br><code>libs/cli/schemas/schema.json:1-240</code></td><td>归一化、默认、拒绝、Schema</td></tr>
+          <tr><td>Deploy Beta</td><td><code>libs/cli/langgraph_cli/deploy.py:1542-2076</code></td><td>部署、revision、删除和日志</td></tr>
+          <tr><td>相邻阅读</td><td><a href="16-prebuilt-react-toolnode.html">第 16 章 Prebuilt ReAct / ToolNode</a><br><a href="18-extension-development.html">第 18 章扩展与二次开发</a><br><a href="../../langgraph_architecture.html#s17">LangGraph 架构总览 #s17</a></td><td>连接本地上层图、远程客户端与扩展边界，并返回全局学习路径</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>术语</th><th>本章含义</th></tr></thead>
+        <tbody>
+          <tr><td>PregelProtocol</td><td>图式执行对象的抽象公共表面；RemoteGraph 适配其中大部分能力，但 bulk update 当前不实现。</td></tr>
+          <tr><td>RemoteGraph</td><td>把 Pregel 风格调用映射到远程 LangGraph Server API 的客户端适配器。</td></tr>
+          <tr><td>Assistant</td><td>远程图的版本化配置资源，不是单次执行。</td></tr>
+          <tr><td>Thread</td><td>跨多个 run 的远程状态与 checkpoint 身份容器。</td></tr>
+          <tr><td>Run</td><td>一次 assistant 调用；可绑定 thread 或无状态执行。</td></tr>
+          <tr><td>Store</td><td>跨 thread 的远程 namespace KV/搜索资源，与 checkpoint 分离。</td></tr>
+          <tr><td>SSE</td><td>Server-Sent Events，HTTP 上的服务器单向事件流；本章经典/v3 流的默认 transport。</td></tr>
+          <tr><td>WS</td><td>WebSocket；本章仅指 async v3 的事件 transport，命令仍通过 HTTP。</td></tr>
+          <tr><td>Cursor / Last-Event-ID</td><td>传输恢复位置，用于 replay/去重；不是 LangGraph checkpoint id。</td></tr>
+          <tr><td>Projection</td><td>v3 从共享 thread event stream 派生的 values、messages、tools、subgraphs 等类型化视图。</td></tr>
+          <tr><td>Abort / Cancel</td><td>Abort 是 adapter 尝试取消并关闭本地流；Cancel 是显式远程 run 操作，两者成功语义不能等同。</td></tr>
+          <tr><td>Auth DSL</td><td>SDK 提供、由 Server 调用的身份/资源授权 handler 注册表面。</td></tr>
+          <tr><td>Encryption DSL</td><td>Beta 的 Server-side at-rest 自定义加解密 handler；不是 TLS 或本地 saver serializer。</td></tr>
+          <tr><td>inmem extra</td><td>CLI dev 所需的可选依赖组，会安装仓库外 API Server/runtime 包。</td></tr>
+          <tr><td>Host Backend</td><td><code>langgraph deploy</code> 对接的托管部署控制面，不是 LangGraph 本地 Pregel runtime。</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <a class="footer-back" href="../../langgraph_architecture.html#s17">← 返回 LangGraph 架构总览第 17 章</a>
+  </main>
+</div>
+<script>
+  (() => {
+    const links = [...document.querySelectorAll("#toc a")];
+    const sections = links.map((a) => document.querySelector(a.getAttribute("href"))).filter(Boolean);
+    const activate = () => {
+      let current = sections[0];
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top <= 120) current = section;
+      }
+      links.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === `#${current.id}`));
+    };
+    addEventListener("scroll", activate, { passive: true });
+    activate();
+  })();
+</script>
+</body>
+</html>

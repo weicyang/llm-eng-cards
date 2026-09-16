@@ -1,0 +1,839 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Software Agent SDK MCP 模块源码审计：配置边界、OAuth、工具发现、动态刷新、执行与失败语义。">
+  <title>12 MCP 集成边界｜Software Agent SDK 架构</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --surface: #fffdf8;
+      --surface-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --orange: #c2410c;
+      --purple: #6d28d9;
+      --red: #b91c1c;
+      --sidebar: 270px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      font: 15px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre { font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace; }
+    code {
+      padding: .12em .38em;
+      border-radius: 5px;
+      background: rgba(120,113,108, .18);
+      font-size: .9em;
+    }
+    pre {
+      overflow: auto;
+      margin: 14px 0;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      color: #44403c;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 58px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(244,241,234, .96);
+      backdrop-filter: blur(12px);
+    }
+    .brand { font-weight: 700; }
+    .header-meta { color: var(--muted); font-size: 13px; }
+    .layout { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
+    aside {
+      position: sticky;
+      top: 58px;
+      height: calc(100vh - 58px);
+      overflow: auto;
+      padding: 22px 14px 28px 18px;
+      border-right: 1px solid var(--border);
+    }
+    aside .toc-title {
+      margin: 0 8px 12px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    nav a {
+      display: block;
+      margin: 2px 0;
+      padding: 5px 9px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    nav a:hover, nav a.active {
+      color: var(--text);
+      background: var(--surface);
+      text-decoration: none;
+    }
+    nav a.active { box-shadow: inset 2px 0 var(--blue); }
+    main { min-width: 0; max-width: 1250px; padding: 48px 58px 100px; }
+    .hero { padding: 8px 0 40px; border-bottom: 1px solid var(--border); }
+    .back { display: inline-block; margin-bottom: 18px; }
+    .eyebrow {
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    h1 { margin: 9px 0 12px; font-size: clamp(32px, 5vw, 52px); line-height: 1.12; }
+    .lead { max-width: 920px; color: #57534e; font-size: 18px; }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 24px;
+      margin-top: 22px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+    }
+    .meta-grid strong { color: #44403c; }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .badge {
+      display: inline-flex;
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--surface);
+      font-size: 12px;
+    }
+    .badge.fact { color: #15803d; border-color: rgba(21,128,61, .45); }
+    .badge.optional { color: #a16207; border-color: rgba(194,65,12, .45); }
+    .badge.deploy { color: #6d28d9; border-color: rgba(109,40,217, .45); }
+    .badge.legacy { color: #c2410c; border-color: rgba(194,65,12, .45); }
+    section { scroll-margin-top: 76px; padding: 42px 0 14px; }
+    section + section { border-top: 1px solid var(--border); }
+    h2 { margin: 0 0 16px; font-size: 28px; line-height: 1.3; }
+    h3 { margin: 27px 0 10px; font-size: 20px; }
+    h4 { margin: 21px 0 8px; color: #44403c; font-size: 16px; }
+    p { margin: 9px 0 14px; }
+    ul, ol { padding-left: 24px; }
+    li { margin: 5px 0; }
+    .muted { color: var(--muted); }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .callout {
+      margin: 18px 0;
+      padding: 15px 17px;
+      border-left: 3px solid var(--blue);
+      border-radius: 0 7px 7px 0;
+      background: rgba(67,56,202, .08);
+    }
+    .callout strong:first-child { color: var(--blue); }
+    .callout.warning { border-left-color: var(--yellow); background: rgba(194,65,12, .08); }
+    .callout.warning strong:first-child { color: #a16207; }
+    .callout.danger { border-left-color: var(--red); background: rgba(185,28,28, .08); }
+    .callout.danger strong:first-child { color: var(--red); }
+    .callout.design { border-left-color: var(--purple); background: rgba(109,40,217, .08); }
+    .callout.design strong:first-child { color: #6d28d9; }
+    .table-wrap { overflow-x: auto; margin: 16px 0 22px; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 14px; }
+    th, td {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--surface-2); color: #44403c; }
+    td { background: rgba(255,253,248, .55); }
+    .flow {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      overflow-x: auto;
+      margin: 18px 0;
+      padding: 12px 0;
+    }
+    .flow .step {
+      flex: 1 0 145px;
+      min-width: 145px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      text-align: center;
+    }
+    .flow .arrow { align-self: center; color: var(--muted); font-size: 20px; }
+    footer {
+      margin-top: 50px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+    }
+    @media (max-width: 980px) {
+      :root { --sidebar: 230px; }
+      main { padding: 40px 32px 80px; }
+    }
+    @media (max-width: 760px) {
+      header { padding: 0 15px; }
+      .header-meta { display: none; }
+      .layout { display: block; }
+      aside { display: none; }
+      main { padding: 28px 18px 70px; }
+      .meta-grid { grid-template-columns: 1fr; }
+      h1 { font-size: 36px; }
+    }
+    @media print {
+      header, aside { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      body { color: #111; background: white; }
+      section + section { border-top-color: #ddd; }
+      td, th, pre { color: #111; background: white; border-color: #ccc; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">OpenHands · Software Agent SDK</div>
+    <div class="header-meta">CHAPTER 12 · MCP 集成边界 · 2026-08-14</div>
+  </header>
+  <div class="layout">
+    <aside>
+      <div class="toc-title">本页目录</div>
+      <nav id="toc">
+        <a href="#position">01 模块定位</a>
+        <a href="#system">02 系统位置与依赖</a>
+        <a href="#concepts">03 核心概念</a>
+        <a href="#components">04 架构组成</a>
+        <a href="#flows">05 完整运行流程</a>
+        <a href="#state">06 数据与状态模型</a>
+        <a href="#interfaces">07 接口、协议与事件</a>
+        <a href="#configuration">08 配置与默认行为</a>
+        <a href="#concurrency">09 并发、性能与资源</a>
+        <a href="#security">10 安全与信任边界</a>
+        <a href="#failure">11 失败、恢复与兼容</a>
+        <a href="#operations">12 可观测性与排障</a>
+        <a href="#testing">13 测试与验证</a>
+        <a href="#development">14 开发与扩展指南</a>
+        <a href="#tradeoffs">15 设计权衡与已知限制</a>
+        <a href="#sources">16 源码索引与进一步阅读</a>
+        <a href="#glossary">17 术语表</a>
+      </nav>
+    </aside>
+    <main>
+      <div class="hero">
+        <a class="back" href="../../software_agent_architecture.html#mcp">← 返回架构总览：MCP</a>
+        <div class="eyebrow">CHAPTER 12 · SOURCE-AUDITED MODULE</div>
+        <h1>MCP：从配置契约到动态工具</h1>
+        <p class="lead">
+          本章解释 Model Context Protocol（模型上下文协议）如何跨越外部配置、
+          SDK Settings、FastMCP 连接边界和通用 Tool 执行链，并重点说明 OAuth、
+          动态工具刷新、超时、重连与错误 Observation 的真实语义。
+        </p>
+        <div class="meta-grid">
+          <div><strong>源码版本：</strong>总览标注 1.42.1；当前环境无法取得 Git SHA</div>
+          <div><strong>证据状态：</strong>源码与聚焦测试已审计；未执行外部真实服务实测</div>
+          <div><strong>主要所有者：</strong><code>openhands-sdk/openhands/sdk/mcp/</code></div>
+          <div><strong>部署扩展：</strong><code>openhands-agent-server/openhands/agent_server/mcp_*.py</code></div>
+          <div><strong>目标读者：</strong>SDK、插件、Agent Server、MCP 集成开发者与运维人员</div>
+          <div><strong>最近验证：</strong>2026-08-14</div>
+        </div>
+        <div class="badge-row">
+          <span class="badge fact">当前事实</span>
+          <span class="badge optional">可选能力：OAuth / 动态刷新</span>
+          <span class="badge deploy">部署能力：Server 探测与持久 OAuth</span>
+          <span class="badge legacy">遗留迁移：Settings v4→v5</span>
+        </div>
+      </div>
+
+      <section id="position" class="section">
+        <h2>1. 模块定位</h2>
+        <p>
+          MCP 模块把远端或子进程 MCP server 广告的工具，适配为 SDK 的
+          <code>ToolDefinition</code>/<code>ToolExecutor</code>。其核心边界不是“保存一份
+          FastMCP 配置”，而是先保持稳定的 SDK 数据模型，再在连接前一次性转换为第三方
+          typed config。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:496-585,588-645,739-753</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>职责</th><th>本模块负责</th><th>委托/明确不负责</th><th>证据</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>配置</td>
+                <td>规范化为 <code>dict[str, MCPServer]</code>，校验 transport、地址、认证互斥并安全序列化</td>
+                <td>外部文件仍可使用 <code>mcpServers</code> wrapper；UI 排序和展示不属于 SDK</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:496-555,617-645</code></span></td>
+              </tr>
+              <tr>
+                <td>运行时</td>
+                <td>连接、发现工具、生成 ToolDefinition、保持 session、处理 list_changed</td>
+                <td>通用 Action 持久化、确认、Hook、并行调度由 Agent/Conversation/Tool 模块拥有</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:191-260,263-394</code></span></td>
+              </tr>
+              <tr>
+                <td>执行结果</td>
+                <td>把 MCP content/isError、超时和调用异常转为 <code>MCPToolObservation</code></td>
+                <td>不解释业务文本中的“逻辑失败”；server 未设置 <code>isError</code> 时保持成功标志</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/definition.py:50-83</code></span>；<span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:224-231</code></span></td>
+              </tr>
+              <tr>
+                <td>部署</td>
+                <td>Agent Server 增加连接探测、浏览器协调 OAuth 与 Settings-backed token store</td>
+                <td>这些 REST/持久化能力不是纯 SDK 本地运行的必需条件</td>
+                <td><span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:1-17,632-660</code></span>；<span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_oauth_store.py:1-7,331-363</code></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="system" class="section">
+        <h2>2. 系统位置与依赖</h2>
+        <pre>外部 .mcp.json / Plugin / Skill / Settings
+        │  coerce_mcp_config（只在外部边界接受 wrapper）
+        ▼
+dict[str, MCPServer]  ── enabled_mcp_servers ── secret 展开
+        │
+        ▼
+to_fastmcp_mcp_config → FastMCPConfig.model_validate → FastMCP Client
+        │                                      │
+        │ list_tools / call_tool_mcp            │ tools/list_changed
+        ▼                                      ▼
+MCPToolDefinition → MCPToolExecutor → MCPToolObservation
+        │
+        ▼
+Agent tools_map（通用 Tool / Security / Event 执行链）</pre>
+        <p>
+          依赖方向为 SDK MCP → FastMCP/MCP types；<code>LocalConversation</code> 是把插件配置、
+          conversation secret 与运行时工具装配到 Agent 的调用方。Agent Server 通过
+          <code>MCPToolProvider</code> 注入 Settings-backed OAuth，而不是反向污染 SDK 配置类型。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1126-1158,1284-1325</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_oauth_store.py:331-363</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>层</th><th>所有者</th><th>关键对象</th><th>进程/线程边界</th></tr></thead>
+            <tbody>
+              <tr><td>公共配置</td><td>SDK settings/mcp</td><td><code>MCPServer</code>、认证 union、server map</td><td>纯 DataModel</td></tr>
+              <tr><td>连接适配</td><td>SDK mcp</td><td><code>FastMCPConfig</code>、<code>MCPClient</code></td><td>AnyIO BlockingPortal 的后台事件循环线程</td></tr>
+              <tr><td>Agent 装配</td><td>SDK conversation/agent</td><td>runtime tools、tools map、reconcile callback</td><td>回调可来自 MCP 后台线程</td></tr>
+              <tr><td>部署控制面</td><td>Agent Server</td><td><code>/api/mcp/*</code>、OAuth jobs/token store</td><td>FastAPI event loop → executor/daemon thread</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="concepts" class="section">
+        <h2>3. 核心概念</h2>
+        <h3>三种配置形状</h3>
+        <ul>
+          <li><strong>外部 wrapper：</strong><code>{"mcpServers": {"name": {...}}}</code>，用于 .mcp.json 和 FastMCP 风格输入。</li>
+          <li><strong>SDK 规范形状：</strong><code>dict[str, MCPServer]</code>，用于 Settings、Agent、Plugin 内存模型和持久化。</li>
+          <li><strong>FastMCP typed config：</strong><code>FastMCPConfig</code>，只由 <code>_prepare_mcp_config()</code> 在连接边界构造。</li>
+        </ul>
+        <p>
+          <code>coerce_mcp_config()</code> 可接受前两种形状及已有 FastMCPConfig，但
+          <code>create_mcp_tools()</code> 明确只接受 SDK 原生 map，迫使外部兼容集中在入口处。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:617-645</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:154-173,315-354</code></span>
+        </p>
+        <h3>发现、定义与执行器</h3>
+        <p>
+          MCP server 返回的 <code>mcp.types.Tool</code> 是协议广告；<code>MCPToolDefinition</code>
+          保存原始 schema，并创建 <code>MCPToolExecutor</code>。LLM 可见 schema 直接从原始
+          <code>inputSchema</code> 深拷贝，运行时则动态创建 Pydantic model 做参数校验。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:209-239,242-359,376-430</code></span>
+        </p>
+        <h3>list_changed 与 reconcile</h3>
+        <p>
+          additions-only 的 <code>on_tools_changed</code> 是兼容回调；完整
+          <code>on_tools_reconciled</code> 接收当前快照，才能表达新增、定义更新和删除。两者不可混为
+          “事件历史”：它们是运行时回调，不写入 Conversation EventLog。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:37-51,197-260</code></span>
+        </p>
+      </section>
+
+      <section id="components" class="section">
+        <h2>4. 架构组成</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>组件</th><th>输入 / 输出</th><th>状态与故障隔离</th><th>扩展点</th><th>证据</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>MCPServer</code></td>
+                <td>URL/command、transport、Secret、auth、enabled → 已验证 DataModel</td>
+                <td><code>extra="forbid"</code>；stdio 必须有 command，remote 必须有 URL</td>
+                <td>新增认证策略或字段需同步迁移与 FastMCP 转换</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:483-555</code></span></td>
+              </tr>
+              <tr>
+                <td><code>MCPClient</code></td>
+                <td>FastMCPConfig → 长连接与工具快照</td>
+                <td>拥有 AsyncExecutor、<code>_closed</code>、<code>_tools</code>；close 幂等</td>
+                <td>继承 FastMCP Client</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/client.py:24-56,92-135</code></span></td>
+              </tr>
+              <tr>
+                <td><code>DefaultMCPToolProvider</code></td>
+                <td>原生 map → 已连接 MCPClient</td>
+                <td>把创建策略与 Conversation 解耦</td>
+                <td>Agent Server 使用 Settings-backed 实现；旧 provider 仍兼容</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:41-87</code></span></td>
+              </tr>
+              <tr>
+                <td><code>_ToolListChangedHandler</code></td>
+                <td>协议 notification → 异步 re-list</td>
+                <td>每 client 一个 lock 串行刷新；任务集合持有运行任务</td>
+                <td>两种 callback</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:263-312</code></span></td>
+              </tr>
+              <tr>
+                <td><code>MCPToolDefinition</code></td>
+                <td>协议 Tool → LLM schema、Action、Executor</td>
+                <td>动态 action type 使用 512 项有锁 LRU cache</td>
+                <td>通用 ToolDefinition 转换接口</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:201-239,242-359</code></span></td>
+              </tr>
+              <tr>
+                <td><code>MCPToolExecutor</code></td>
+                <td>MCPToolAction → MCPToolObservation</td>
+                <td>默认 300 秒；断线前置检测、单次重连、错误数据化</td>
+                <td>通用 ToolExecutor lifecycle</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:42-124,126-198</code></span></td>
+              </tr>
+              <tr>
+                <td>Server OAuth store/router</td>
+                <td>FastMCP KV key ↔ Settings auth.state；REST probe ↔ 结构化响应</td>
+                <td>持久 store 用线程卸载同步 I/O；probe 使用内存 store</td>
+                <td>OAuth factory、浏览器协调流程</td>
+                <td><span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_oauth_store.py:37-215,250-363</code></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="flows" class="section">
+        <h2>5. 完整运行流程</h2>
+        <h3>5.1 正常成功：配置到 Observation</h3>
+        <ol>
+          <li>Settings/Plugin/Skill 在外部边界通过 <code>coerce_mcp_config</code> 进入原生 server map；插件按 key 合并。<span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/format/claude_code.py:125-139</code></span></li>
+          <li>首次 <code>send_message()</code> 或 <code>run()</code> 触发懒初始化；LocalConversation 合并配置，并用 conversation SecretRegistry 展开变量引用。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1126-1158,1455-1504</code></span></li>
+          <li>disabled server 被过滤；SDK map 转为 FastMCPConfig，OAuth metadata 在 typed object 上注入。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:117-151,341-354</code></span></li>
+          <li>MCPClient 在 BlockingPortal 事件循环连接并 <code>list_tools()</code>；每项广告生成 MCPToolDefinition，加入 Agent tools map。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:191-223,355-394</code></span></li>
+          <li>LLM 参数先经动态 schema 校验和净化，再进入通用工具执行链；Executor 发送 <code>call_tool_mcp</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:288-325,107-124</code></span></li>
+          <li>协议 content 转为 Text/ImageContent，<code>isError</code> 原样映射，随后 text 中已登记 secret 被遮罩。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/definition.py:55-83</code></span>；<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:155-195</code></span></li>
+        </ol>
+        <h3>5.2 拒绝/提前结束</h3>
+        <ul>
+          <li>配置校验阶段：stdio 无 command、remote 无 URL、<code>auth</code> 与显式 Authorization header 冲突，Pydantic 直接拒绝。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:539-555</code></span></li>
+          <li>全部 server disabled：LocalConversation 把它视为无工具的正常 no-op；直接调用 <code>create_mcp_tools</code> 则抛出带 server 名称的 ValueError。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1284-1308</code></span>；<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:341-349</code></span></li>
+          <li>工具参数不满足 server schema：早期 <code>action_from_arguments</code> 抛 ValidationError，或执行时二次校验返回 error Observation；不会盲目调用 server。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:268-286,288-325</code></span></li>
+          <li>确认、SecurityAnalyzer 与 Hook 拒绝属于通用 Tool 执行链；MCP 模块没有专属旁路。MCP annotation 只影响是否向 LLM schema 注入风险预测字段。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:399-410</code></span></li>
+        </ul>
+        <h3>5.3 恢复、重连与动态刷新</h3>
+        <ol>
+          <li>若执行前 <code>is_connected()</code> 为 false 且 client 未关闭，Executor 尝试一次 <code>connect()</code>；失败返回 error Observation。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:73-106</code></span></li>
+          <li>调用本身抛出的任何 Exception 被转换为 error Observation；该分支不再次重连或重放调用。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:107-124</code></span></li>
+          <li><code>tools/list_changed</code> 创建后台刷新任务，refresh lock 串行 re-list；相同定义复用，更新定义替换，消失工具删除。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:197-260,263-312</code></span></li>
+          <li>Agent 按 MCPClient 身份只替换该 client 拥有的工具；冲突名称拒绝，避免删除其他 client 或本地工具。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:974-1012</code></span></li>
+        </ol>
+      </section>
+
+      <section id="state" class="section">
+        <h2>6. 数据与状态模型</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>状态</th><th>权威位置</th><th>生命周期/同步</th><th>Secret 与持久化</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>MCP 配置</td>
+                <td>AgentSettings/Agent 的 <code>dict[str, MCPServer]</code></td>
+                <td>disabled 项仍保留，仅连接前过滤</td>
+                <td>SecretStr serializer 依据 context 做遮罩、加密或明文边界输出；紧凑 dump 排除 None/default</td>
+              </tr>
+              <tr>
+                <td>连接/session</td>
+                <td>MCPClient / FastMCP Client</td>
+                <td>连接一次、跨多次工具调用保持；conversation/tool close 时回收</td>
+                <td>非持久运行态</td>
+              </tr>
+              <tr>
+                <td>当前工具快照</td>
+                <td><code>MCPClient._tools</code> 与 Agent <code>_tools</code></td>
+                <td>refresh 原子替换 client list；Agent 用 RLock 替换 map</td>
+                <td>运行时派生，不是 EventLog</td>
+              </tr>
+              <tr>
+                <td>OAuth token/client/expiry</td>
+                <td><code>MCPServer.auth.state</code></td>
+                <td>FastMCP AsyncKeyValue key 按 server URL 匹配到配置项</td>
+                <td>Agent Server settings store 可加密；无 secret_key 时日志告警但仍保存</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          OAuth state 只在存在 access token 时持久化 tokens；client_info 与 expiry 独立保存。
+          <code>to_plain_dict(cipher=...)</code> 负责把存储/API 密文重新验证为 FastMCP 可用明文。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:362-466</code></span>
+        </p>
+        <p>
+          Settings v4→v5 把 wrapper 解包为 server map，并迁移 legacy <code>type/shttp</code>、
+          bearer/api_key/Authorization/OAuth credentials；还处理旧 Linear SSE URL。迁移链由
+          schema version 4 注册到 5。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:628-636,647-917,928-934</code></span>
+        </p>
+      </section>
+
+      <section id="interfaces" class="section">
+        <h2>7. 接口、协议与事件</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>接口</th><th>契约</th><th>错误/幂等语义</th><th>证据</th></tr></thead>
+            <tbody>
+              <tr><td><code>coerce_mcp_config</code></td><td>外部形状 → 原生 map；兼容 wrapper、FastMCPConfig、<code>shttp</code></td><td>最终交给 TypeAdapter/Pydantic；未知 server 字段在外部 coercion 被丢弃</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:588-645</code></span></td></tr>
+              <tr><td><code>create_mcp_tools</code></td><td>原生 map + timeout/callback/OAuth store → 已连接 client</td><td>初始化失败清理 client 后抛出；成功者由调用方 close</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:315-394</code></span></td></tr>
+              <tr><td>MCP protocol</td><td><code>tools/list</code>、<code>tools/call</code>、<code>notifications/tools/list_changed</code></td><td>list_changed refresh 失败只告警；不终止 Agent loop</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:197-312</code></span></td></tr>
+              <tr><td><code>POST /api/mcp/test</code></td><td>测试一个 server，可选调用一个由调用者选择的只读工具</td><td>连接/timeout/未知失败均 HTTP 200 + <code>ok=false</code>；不持久化</td><td><span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:155-285,632-660</code></span></td></tr>
+              <tr><td>OAuth REST</td><td>start → status → callback；job id 关联内存 job</td><td>job TTL 15 分钟；callback 只接受 localhost、匹配 port/path</td><td><span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:288-403,699-810</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>业务失败不等于协议失败</strong>
+          <div>
+            某些 server 把 <code>{"ok": false}</code> 作为普通文本并保持
+            <code>isError=false</code>；SDK 和测试端点不会猜测 provider 业务语义。
+            <span class="evidence"><code>tests/agent_server/test_mcp_router.py:70-93,180-205</code></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="configuration" class="section">
+        <h2>8. 配置与默认行为</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+            <tbody>
+              <tr><td><code>mcp_config</code></td><td><code>dict[str, MCPServer]</code></td><td>空 map</td><td>Agent 初始配置后按插件 key 合并，后加载同名项覆盖</td><td>首次交互懒装配；运行中可加载插件</td><td>空配置不连接</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1264-1274</code></span>；<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:900-1008</code></span></td></tr>
+              <tr><td><code>enabled</code></td><td>bool</td><td>true</td><td>OpenHands 连接前过滤</td><td>新建/重新装配连接时生效</td><td>disabled 配置和 secret 保留但不连接</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:514-522,726-736</code></span></td></tr>
+              <tr><td><code>transport</code></td><td>stdio/http/streamable-http/sse 或 None</td><td>None</td><td>显式值；外部 legacy <code>type</code> 可规范化</td><td>连接创建时</td><td>stdio 缺 command、remote 缺 URL 拒绝</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:493-510,539-545</code></span></td></tr>
+              <tr><td>server <code>timeout</code>/<code>sse_read_timeout</code></td><td>float 或 None</td><td>None（由 FastMCP 解释）</td><td>per-server transport 配置</td><td>连接创建时</td><td>由 FastMCP transport 执行</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:509-513,739-753</code></span></td></tr>
+              <tr><td>工具发现 timeout</td><td>float</td><td><code>create_mcp_tools</code> 30 秒；LocalConversation 固定传 30 秒</td><td>调用参数覆盖函数默认</td><td>每次 client 创建</td><td>关闭 client，抛 MCPTimeoutError</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:315-323,363-383</code></span>；<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:123-124,1306-1308</code></span></td></tr>
+              <tr><td>工具执行 timeout</td><td>float</td><td>300 秒</td><td>Executor 构造参数</td><td>每工具定义创建时</td><td>返回 error Observation</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:42-43,56-71,155-172</code></span></td></tr>
+              <tr><td>REST probe timeout</td><td>(0, 120] 秒</td><td>15 秒</td><td>请求字段</td><td>每次 probe</td><td>HTTP 200 + timeout failure</td><td><span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:155-183,604-629</code></span></td></tr>
+              <tr><td>OAuth job TTL</td><td>常量</td><td>15 分钟</td><td>无覆盖入口</td><td>进程内</td><td>过期后 404</td><td><span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:71-72,391-403,690-696</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="concurrency" class="section">
+        <h2>9. 并发、性能与资源</h2>
+        <ul>
+          <li><strong>同步桥：</strong>每个 MCPClient 懒创建一个 AnyIO BlockingPortal；同步调用由 portal 执行 coroutine，<code>fail_after</code> 实施 deadline。<span class="evidence"><code>openhands-sdk/openhands/sdk/utils/async_executor.py:17-102</code></span></li>
+          <li><strong>刷新串行化：</strong>notification handler 不在 receive loop 内直接等待 <code>list_tools</code>，而是建 task；<code>asyncio.Lock</code> 防止同一 client 并发 refresh。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:273-307</code></span></li>
+          <li><strong>快照一致性：</strong>client 工具列表一次赋值替换；Agent tools map 在 RLock 内按 client ownership 替换，reader 返回 copy。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:210-241</code></span>；<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:992-1024</code></span></li>
+          <li><strong>schema cache：</strong>动态 action type cache 按工具名和规范化 schema 键控，最多 512 项，threading.Lock 同时保护命中、移动和淘汰。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:201-239</code></span></li>
+          <li><strong>资源清理：</strong>MCPToolExecutor.close → client.sync_close；后者先 best-effort async close，再关闭 portal，并允许重复调用。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:197-198</code></span>；<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/client.py:92-125</code></span></li>
+          <li><strong>Server event loop：</strong>probe 先从 FastAPI loop 跳到 executor，因为 create_mcp_tools 自身拥有后台 loop/可能拥有子进程。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:549-560,652-660</code></span></li>
+        </ul>
+        <div class="callout design">
+          <strong>长连接是状态语义的一部分</strong>
+          <div>
+            同一 MCPClient 跨工具调用保持 session，才能保留 server 的 per-session auth/counter；
+            不能把每次调用改写为短暂 <code>async with client</code>。
+            <span class="evidence"><code>tests/sdk/mcp/test_stateful_mcp.py:1-16,118-201</code></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="security" class="section">
+        <h2>10. 安全与信任边界</h2>
+        <h3>认证与 Secret</h3>
+        <p>
+          SDK auth 是 discriminator union：none、api_key、bearer、basic、header、oauth2。
+          Secret 字段统一使用 <code>SecretStr</code> 与公共 Pydantic secret helper；默认序列化不应产生
+          明文，连接边界才显式请求 plaintext。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/config.py:127-231,469-491,706-753</code></span>
+        </p>
+        <p>
+          LocalConversation 展开 MCP config 与工具参数时只查询 conversation SecretRegistry；
+          工具参数明确 <code>check_env=False</code>，不读取任意 host 环境变量。返回 Observation
+          仅遮罩 text block，image 原样保留。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:126-195</code></span>
+        </p>
+        <h3>OAuth 与部署信任</h3>
+        <p>
+          Agent Server token store 把 FastMCP token/client-info/expiry key 映射回匹配 URL 的
+          OAuth MCPServer；同步 settings I/O 经 <code>asyncio.to_thread</code>。配置了
+          <code>OH_SECRET_KEY</code> 时 secret 走加密存储；未配置时实现只告警，不拒绝启动。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_oauth_store.py:43-116,118-215,352-363</code></span>
+        </p>
+        <p>
+          浏览器协调 callback 对提交 URL 做 scheme、loopback hostname、port 与 path 校验，
+          限制后端代请求目标。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/mcp_router.py:765-810</code></span>
+        </p>
+        <div class="callout danger">
+          <strong>当前存在两个 fail-open 边界</strong>
+          <div>
+            Secret 展开失败时执行器继续发送原始变量引用；Observation 遮罩失败时返回未遮罩原结果。
+            这保证工具链不中断，却可能造成凭据误传或回显泄漏。部署方应把相关 warning 视为安全告警，
+            并避免让 MCP server 回显凭据。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:140-153,174-195</code></span>
+          </div>
+        </div>
+        <p>
+          MCP 工具作为普通 ToolDefinition 进入 Agent 的通用安全/确认/Hook 链；MCP 自身并不
+          赋予额外权限。server 的 <code>readOnlyHint</code> 会影响风险字段注入，但它是 server
+          声明的 annotation，不是独立授权机制。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:327-350,399-410</code></span>
+        </p>
+      </section>
+
+      <section id="failure" class="section">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+            <tbody>
+              <tr><td>初始连接 RuntimeError</td><td><code>MCPClient.connect</code></td><td>包装为 MCPError</td><td>Agent 初始化失败；client 清理</td><td>无 SDK 自动重试</td><td>检查 command、URL、网络和权限</td></tr>
+              <tr><td>发现超时</td><td>BlockingPortal deadline</td><td>关闭 client，抛 MCPTimeoutError</td><td>没有 runtime tools</td><td>调用方可增大 timeout 后重建</td><td>检查 server 响应或网络</td></tr>
+              <tr><td>调用前 session 已断</td><td><code>is_connected=false</code></td><td>尝试一次 connect</td><td>成功则继续同次调用</td><td>一次；失败变 error Observation</td><td>检查 server 可用性</td></tr>
+              <tr><td>调用中异常</td><td>catch Exception</td><td>error Observation</td><td>Agent loop 可继续</td><td>不自动重放，避免重复副作用</td><td>让 Agent/用户决定是否重试</td></tr>
+              <tr><td>工具执行超时</td><td>300 秒 deadline</td><td>error Observation</td><td>client 未自动关闭</td><td>无自动重试</td><td>检查长任务，选择替代方案</td></tr>
+              <tr><td>server 返回 isError</td><td>CallToolResult.isError</td><td>原样映射 Observation</td><td>Action–Observation 配对保持</td><td>由 Agent 决策</td><td>读取 MCP content</td></tr>
+              <tr><td>list_changed refresh 失败</td><td>handler catch Exception</td><td>warning，保留旧快照</td><td>工具列表可能暂时陈旧</td><td>后续 notification 可再触发</td><td>检查 warning 与 server notification</td></tr>
+              <tr><td>Settings v4 payload</td><td>schema_version migration</td><td>wrapper/auth/OAuth/transport 迁移到 v5</td><td>得到规范 server map</td><td>一次性 load migration</td><td>保留 golden fixture，勿下游重复迁移</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          初始化和执行失败的边界不同：初始化 timeout/connection error 会抛出并阻止装配；
+          工具业务失败、执行 timeout、断线重连失败通常成为 <code>MCPToolObservation(is_error=True)</code>，
+          不穿透整个 Agent loop。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:363-391</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:73-172</code></span>
+        </p>
+        <p>
+          动态刷新保留旧 provider 兼容：若自定义 <code>MCPToolProvider</code> 不接受
+          <code>on_tools_reconciled</code>，调用方省略新参数；新增回调仍可工作，但更新和删除不会同步到
+          Agent。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:73-87</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1297-1308</code></span>
+        </p>
+      </section>
+
+      <section id="operations" class="section">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+            <tbody>
+              <tr><td>会话启动时没有 MCP 工具</td><td>检查 config 是否为空/disabled；查看 “Created N MCP tools” 日志</td><td>全部禁用、filter regex、插件未加载、连接失败</td><td>启用 server，核对懒初始化与过滤规则</td></tr>
+              <tr><td>连接探测超时</td><td><code>/api/mcp/test</code> 的 <code>error_kind</code> 与 server 名称</td><td>server 未启动、网络不可达、发现慢</td><td>先独立探测，再按证据提高 timeout</td></tr>
+              <tr><td>工具调用后列表未更新</td><td>找 “tools/list_changed received” 与 refresh warning</td><td>server 未发 notification、SSE 通道断开、legacy provider 无 reconcile</td><td>验证 server 通知；升级 provider callback 签名</td></tr>
+              <tr><td>工具已从 server 删除但 Agent 仍可见</td><td>对比 MCPClient.tools 与 Agent.tools_map</td><td>只接 additions callback，未接 full reconcile</td><td>接入 <code>on_tools_reconciled</code></td></tr>
+              <tr><td>OAuth 每次都要求授权</td><td>检查 settings 中 auth.state、URL 匹配和 token-store collection</td><td>server URL 不一致、store 未注入、settings 未写回</td><td>使用 SettingsBackedMCPToolProvider，保持规范 URL</td></tr>
+              <tr><td>Observation 含 secret</td><td>搜索 “Failed to mask secrets” warning</td><td>registry 遮罩异常、secret 未登记、非 text 内容</td><td>修复 registry；禁止 server 回显凭据；轮换已泄漏 secret</td></tr>
+              <tr><td>业务文本显示失败但 is_error=false</td><td>检查原始 content 与 MCP isError</td><td>provider 把上游错误作为普通文本</td><td>调用者解释 provider payload；不要修改通用协议语义</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          MCP server 的协议日志经 <code>log_handler</code> 映射到 Python logging；工具调用有
+          Laminar span <code>MCPToolExecutor.call_tool</code>。目前源码未定义 MCP 专属 Metric
+          或 Audit store，这是证据缺口，而非“默认已采集”。<span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/utils.py:176-188</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/mcp/tool.py:73-74</code></span>
+        </p>
+      </section>
+
+      <section id="testing" class="section">
+        <h2>13. 测试与验证</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr><td>外部 wrapper → 原生 map → typed config</td><td><code>tests/sdk/mcp/test_create_mcp_tool.py</code></td><td>单元 + 真 FastMCP HTTP</td><td>过滤 disabled、OAuth 注入、连接与 schema 发现</td><td>未覆盖所有第三方 server</td></tr>
+              <tr><td>Secret 加密/遮罩/恢复</td><td><code>tests/sdk/mcp/test_mcp_config_secrets.py:7-143</code></td><td>单元</td><td>全部 auth secret 字段加密 round-trip，空/红acted 值丢弃</td><td>不替代部署密钥管理审计</td></tr>
+              <tr><td>Conversation 持久化/API 不泄漏</td><td><code>tests/sdk/conversation/test_mcp_secrets_serialization_leak.py:49-316</code></td><td>状态/序列化</td><td>base_state、WS event、model_dump 不含明文；有 cipher 可恢复</td><td>不覆盖所有日志文本</td></tr>
+              <tr><td>工具参数展开与回显遮罩</td><td><code>tests/sdk/mcp/test_mcp_secret_expansion.py:77-288</code></td><td>单元</td><td>仅 registry，不读 host env；失败 fallback 语义</td><td>真实恶意二进制 content 未覆盖</td></tr>
+              <tr><td>session 跨调用保持</td><td><code>tests/sdk/mcp/test_stateful_mcp.py:118-251</code></td><td>真 FastMCP server</td><td>counter/auth 在同 session 跨工具调用保留</td><td>断线恢复后的 server state 依赖服务端</td></tr>
+              <tr><td>超时/断线/重连/Observation</td><td><code>tests/sdk/mcp/test_mcp_tool.py:136-353</code></td><td>单元</td><td>timeout 数据化、close、一次重连及失败消息</td><td>调用中断线的端到端网络测试有限</td></tr>
+              <tr><td>动态新增/更新/删除</td><td><code>tests/sdk/mcp/test_mcp_tool_list_changed.py:115-658</code></td><td>单元 + 真 HTTP notification</td><td>原子 reconcile、Agent ownership、race 与 callback 兼容</td><td>测试说明真实中途 notification 受 transport timing 影响</td></tr>
+              <tr><td>OAuth 状态持久化与复用</td><td><code>tests/agent_server/test_mcp_oauth_store.py:124-387</code></td><td>Server 集成</td><td>密文落盘、真实 OAuth 交换、二次连接复用 token</td><td>没有外部 IdP 兼容矩阵</td></tr>
+              <tr><td>REST probe/OAuth jobs</td><td><code>tests/agent_server/test_mcp_router.py:101-878</code></td><td>REST + 真 HTTP server</td><td>stdio/http、tool probe、失败分类、callback 校验与过期</td><td>未证明生产代理/防火墙环境</td></tr>
+              <tr><td>v5 持久 payload</td><td><code>tests/sdk/persisted_settings_baselines/v5/agent_settings_mcp_oauth.json:1-32</code></td><td>Golden baseline</td><td>OAuth token/client_info dotted path 在迁移后保留</td><td>需配合兼容脚本覆盖历史 PyPI</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="development" class="section">
+        <h2>14. 开发与扩展指南</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+            <tbody>
+              <tr><td>新增 MCPServer 字段</td><td><code>mcp/config.py</code></td><td>紧凑 serializer、FastMCP normalization、Settings schema/迁移、public exports</td><td>原生 map round-trip、外部 wrapper coercion、FastMCP typed validation</td></tr>
+              <tr><td>新增认证策略</td><td>认证 discriminator union 与 <code>_normalize_server_for_fastmcp</code></td><td>Secret helper、REST schema、v4→v5 或新版本 migration、OAuth store（若适用）</td><td>明文不落盘、加密恢复、header/auth 冲突测试</td></tr>
+              <tr><td>改变工具发现</td><td><code>mcp/utils.py</code></td><td>client snapshot、两种 callback、Agent ownership reconcile</td><td>新增/更新/删除、并发 notification、旧 provider 兼容</td></tr>
+              <tr><td>改变调用失败语义</td><td><code>mcp/tool.py</code>/<code>definition.py</code></td><td>Action–Observation 配对、通用 Tool 安全链、server probe 语义</td><td>timeout、协议 isError、exception、无副作用重复调用</td></tr>
+              <tr><td>改变 OAuth 持久化</td><td>Agent Server <code>mcp_oauth_store.py</code></td><td>PersistedSettings/cipher、router response、golden fixture</td><td>token/client/expiry 增删、并发更新、密文落盘和复用</td></tr>
+              <tr><td>支持新外部格式</td><td>Plugin/Skill loader + <code>coerce_mcp_config</code></td><td>只在入口适配，内部立即回到 server map</td><td>未知字段策略、路径/变量展开、错误定位</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li>不要把 FastMCPConfig 放进 AgentSettings；第三方类型只存在于 <code>_prepare_mcp_config</code> 边界。</li>
+          <li>不要让 runtime helper 隐式接受 wrapper；外部入口先显式 <code>coerce_mcp_config</code>。</li>
+          <li>不要为每次工具调用新建 client；这会破坏 session state，并增加子进程/连接开销。</li>
+          <li>不要用字符串替换手写 secret 遮罩；沿用 SecretStr/Pydantic helper 与 SecretRegistry。</li>
+          <li>Settings 持久 shape 不兼容时必须 bump schema、补 migration 和历史 fixture。<span class="evidence"><code>openhands-sdk/openhands/sdk/AGENTS.md:26-33</code></span></li>
+        </ul>
+      </section>
+
+      <section id="tradeoffs" class="section">
+        <h2>15. 设计权衡与已知限制</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>问题</th><th>当前选择与收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+            <tbody>
+              <tr><td>稳定公共配置 vs 复用 FastMCP schema</td><td>SDK 自有 MCPServer，边界才 typed conversion；隔离第三方漂移</td><td>需要维护显式 normalization 与迁移</td><td>协议稳定且第三方模型可承诺 SDK 兼容周期时</td></tr>
+              <tr><td>长连接 vs 每次调用重连</td><td>保持 server session 和较低开销</td><td>必须可靠清理；断线状态更复杂</td><td>server 全部无状态且连接成本可忽略时</td></tr>
+              <tr><td>错误 Observation vs 抛异常</td><td>保持 Agent loop 和 Action–Observation 配对</td><td>调用者可能忽略 is_error；业务文本失败无法统一识别</td><td>协议提供统一结构化业务错误时</td></tr>
+              <tr><td>调用中异常不自动重放</td><td>避免副作用工具被重复执行</td><td>瞬时网络错误需 Agent/用户显式重试</td><td>协议引入幂等 key 或工具声明可安全重试时</td></tr>
+              <tr><td>动态工具 callback</td><td>兼容 additions-only，同时以 full snapshot 支持更新/删除</td><td>旧 provider 只能获得部分语义；后台线程要求 callback thread-safe</td><td>旧 provider 兼容窗口结束时</td></tr>
+              <tr><td>Secret helper 失败 fail-open</td><td>不中断工具执行</td><td>可能发送未展开变量引用或返回未遮罩文本，是安全风险</td><td>安全策略要求 fail-closed，或可提供不破坏兼容的策略开关时</td></tr>
+              <tr><td>URL 匹配 OAuth store</td><td>无需新增外部 token 数据库</td><td>同 URL 多 server 或 URL 规范差异可能产生歧义；当前返回第一个匹配项</td><td>需要多租户/同 URL 多身份时</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          当前没有 MCP 专属 retry budget、连接池上限、熔断器、Metric 或跨 server 名称命名空间。
+          这些是现状限制，不代表已有路线图。工具名称冲突当前直接拒绝，而非自动加 server 前缀。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:867-902,926-951</code></span>
+        </p>
+      </section>
+
+      <section id="sources" class="section">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类别</th><th>路径与范围</th><th>用途</th></tr></thead>
+            <tbody>
+              <tr><td>公共配置 owner</td><td><code>openhands-sdk/openhands/sdk/mcp/config.py:127-753</code></td><td>认证、OAuth state、MCPServer、外部 coercion、紧凑 dump、FastMCP 转换</td></tr>
+              <tr><td>连接与发现 owner</td><td><code>openhands-sdk/openhands/sdk/mcp/utils.py:41-394</code></td><td>provider、typed boundary、connect/list、动态 reconcile</td></tr>
+              <tr><td>client lifecycle</td><td><code>openhands-sdk/openhands/sdk/mcp/client.py:24-135</code></td><td>同步桥、长连接、工具快照和关闭</td></tr>
+              <tr><td>Tool 适配</td><td><code>openhands-sdk/openhands/sdk/mcp/tool.py:42-198,201-486</code></td><td>执行、重连、secret、动态 schema、LLM schema</td></tr>
+              <tr><td>Observation</td><td><code>openhands-sdk/openhands/sdk/mcp/definition.py:26-106</code></td><td>Action wrapper、协议 content/isError 映射与展示</td></tr>
+              <tr><td>Agent 调用方</td><td><code>openhands-sdk/openhands/sdk/agent/base.py:823-1024</code></td><td>runtime tool 注册、冲突与 client-owned reconcile</td></tr>
+              <tr><td>Conversation 调用方</td><td><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1126-1158,1284-1325,1455-1504</code></td><td>Secret 展开、provider 调用、懒初始化</td></tr>
+              <tr><td>Settings schema/migration</td><td><code>openhands-sdk/openhands/sdk/settings/model.py:628-934,1264-1274,1572-1589</code></td><td>v4→v5、OpenHands/ACP mcp_config</td></tr>
+              <tr><td>Server OAuth</td><td><code>openhands-agent-server/openhands/agent_server/mcp_oauth_store.py:37-363</code></td><td>Settings-backed 与 in-memory token store</td></tr>
+              <tr><td>Server REST</td><td><code>openhands-agent-server/openhands/agent_server/mcp_router.py:71-810</code></td><td>探测、结构化失败、OAuth job 和 callback</td></tr>
+              <tr><td>决定性测试</td><td><code>tests/sdk/mcp/</code>；<code>tests/sdk/conversation/test_local_conversation_mcp.py:1-165</code></td><td>SDK 配置、执行、刷新、secret、session 与装配</td></tr>
+              <tr><td>部署测试</td><td><code>tests/agent_server/test_mcp_router.py:1-878</code>；<code>tests/agent_server/test_mcp_oauth_store.py:1-387</code></td><td>REST 与持久 OAuth</td></tr>
+              <tr><td>架构总览</td><td><code>software_agent_architecture.html:811-837</code></td><td>Chapter 12 摘要；本章对重连和 fail-open 边界作了更精确限定</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted">相邻章节：<a href="11-workspace.html">11 Workspace 与 Git</a> · <a href="13-extensions.html">13 扩展生态</a>。</p>
+      </section>
+
+      <section id="glossary" class="section">
+        <h2>17. 术语表</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>术语</th><th>本章含义</th></tr></thead>
+            <tbody>
+              <tr><td>MCP</td><td>Model Context Protocol，模型上下文协议；client 连接 server，发现并调用工具。</td></tr>
+              <tr><td>MCP server map</td><td>SDK 规范配置 <code>dict[str, MCPServer]</code>；key 是 OpenHands 内的 server 名称。</td></tr>
+              <tr><td>外部 wrapper</td><td>以 <code>mcpServers</code> 包裹 server map 的 .mcp.json/FastMCP 风格输入，只应停留在外部适配边界。</td></tr>
+              <tr><td>typed config</td><td>FastMCP 的 <code>MCPConfig</code> Pydantic 模型，连接前由 SDK map 转换并验证。</td></tr>
+              <tr><td>stdio</td><td>通过标准输入/输出与本地子进程通信的 MCP transport。</td></tr>
+              <tr><td>SSE</td><td>Server-Sent Events，服务器发送事件；本章涉及远端 transport 与 server notification 通道。</td></tr>
+              <tr><td>OAuth</td><td>开放授权协议；FastMCP 负责授权交换，SDK/Agent Server 提供认证 metadata 与 token storage。</td></tr>
+              <tr><td>DCR</td><td>Dynamic Client Registration，动态客户端注册；FastMCP OAuth 流程可能使用。</td></tr>
+              <tr><td>PKCE</td><td>Proof Key for Code Exchange，授权码交换保护机制；由 OAuth client 实现处理。</td></tr>
+              <tr><td>ToolDefinition</td><td>SDK 对工具名称、schema、annotation 与 executor 的统一描述；MCP 工具最终适配到该协议。</td></tr>
+              <tr><td>ToolExecutor</td><td>真正执行工具副作用并返回 Observation 的对象；MCP 实现持有 MCPClient。</td></tr>
+              <tr><td>Observation</td><td>与 Action 配对的执行结果事件内容；<code>is_error</code> 表达工具层失败而非抛出整个 loop。</td></tr>
+              <tr><td>tools/list_changed</td><td>MCP server 通知 client 工具列表变化；client 随后重新 list，而不是从通知本身读取增量。</td></tr>
+              <tr><td>reconcile</td><td>协调：用 server 当前完整工具快照计算新增、更新和删除，并按 client ownership 更新 Agent map。</td></tr>
+              <tr><td>progressive disclosure</td><td>渐进披露：server 初始只暴露少量入口工具，调用后再通过 list_changed 发布更多工具。</td></tr>
+              <tr><td>BlockingPortal</td><td>AnyIO 提供的同步到异步桥；MCPClient 用其后台事件循环从同步 ToolExecutor 调用 async FastMCP。</td></tr>
+              <tr><td>fail-open</td><td>保护步骤失败后仍继续主操作；本章特指 secret 展开或遮罩异常后继续发送/返回原值。</td></tr>
+              <tr><td>fail-closed</td><td>保护步骤失败即停止操作；当前 MCP secret helper 失败路径并非此语义。</td></tr>
+              <tr><td>幂等</td><td>重复执行不会增加副作用；MCP 工具未统一声明幂等，因此调用异常后默认不自动重放。</td></tr>
+              <tr><td>Settings v4→v5</td><td>把历史 wrapper/认证/OAuth/transport 数据迁移到 SDK 原生 server map 的持久化版本升级。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        本页依据当前仓库源码、Schema 与聚焦测试审计；返回
+        <a href="../../software_agent_architecture.html#mcp">Software Agent SDK 架构总览 · MCP</a>。
+      </footer>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll("#toc a")];
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const activate = () => {
+        let current = sections[0];
+        for (const section of sections) {
+          if (section.getBoundingClientRect().top <= 110) current = section;
+        }
+        links.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === `#${current.id}`);
+        });
+      };
+      document.addEventListener("scroll", activate, { passive: true });
+      activate();
+    })();
+  </script>
+</body>
+</html>

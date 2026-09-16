@@ -1,0 +1,1846 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae Agent 架构深度解析 - AI Agent Sharing</title>
+<style>
+:root{
+  --bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;
+  --accent:#4338ca;--accent2:#0f766e;--green:#15803d;--orange:#c2410c;
+  --purple:#6d28d9;--red:#b91c1c;--cyan:#15803d;--yellow:#c2410c;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;
+  background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.7;padding:2rem 1rem 2rem 300px;overflow-x:hidden}
+.container{max-width:980px;margin:0 auto}
+h1{background:linear-gradient(135deg,var(--accent),var(--purple),var(--orange));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  font-size:2.2rem;text-align:center;margin-bottom:.5rem}
+.subtitle{text-align:center;color:#78716c;margin-bottom:2rem;font-size:1.05rem}
+h2{color:var(--accent);font-size:1.4rem;margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}
+h3{color:var(--accent2);font-size:1.15rem;margin:1.2rem 0 .6rem}
+h4{color:var(--purple);font-size:1rem;margin:1rem 0 .4rem}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem;margin-bottom:1.5rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.intuition-box{background:var(--surface);border:1px solid var(--green);border-radius:10px;padding:1.2rem 1.5rem;margin-bottom:1.5rem;position:relative}
+.intuition-box::before{content:'核心洞察';display:block;color:var(--green);font-weight:700;margin-bottom:.5rem;font-size:.9rem}
+.analogy-card{background:linear-gradient(135deg,rgba(109,40,217,.1),rgba(67,56,202,.1));
+  border:1px solid var(--purple);border-radius:10px;padding:1.2rem 1.5rem;margin:1rem 0;position:relative}
+.analogy-card::before{content:'设计哲学';display:block;color:var(--purple);font-weight:700;margin-bottom:.5rem;font-size:.9rem}
+.term{color:var(--orange);background:rgba(194,65,12,.1);padding:.1rem .4rem;border-radius:4px;border-bottom:2px solid var(--orange);font-weight:600}
+.highlight{border-left:3px solid var(--accent);padding-left:1rem;margin:1rem 0;color:var(--accent2)}
+.warning-box{background:rgba(185,28,28,.05);border:1px solid var(--red);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0;position:relative}
+.warning-box::before{content:'局限性 / 权衡';display:block;color:var(--red);font-weight:700;margin-bottom:.4rem;font-size:.85rem}
+.key-point{background:rgba(21,128,61,.05);border:1px solid var(--green);border-radius:8px;padding:1rem 1.2rem;margin:1rem 0;position:relative}
+.key-point::before{content:'关键要点';display:block;color:var(--green);font-weight:700;margin-bottom:.4rem;font-size:.85rem}
+.arch-diagram{font-family:'Cascadia Code','Fira Code',Consolas,monospace;font-size:.82rem;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;overflow-x:auto;white-space:pre;line-height:1.5;color:var(--accent2);margin:1rem 0}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.05);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:'Trae Agent';display:block;color:var(--green);font-weight:700;margin-bottom:.4rem;font-size:.85rem}
+.practice-grid .dont{background:rgba(185,28,28,.05);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:'传统 Agent';display:block;color:var(--red);font-weight:700;margin-bottom:.4rem;font-size:.85rem}
+table{width:100%;border-collapse:collapse;margin:1rem 0;font-size:.9rem}
+th{background:#e8e1d4;color:var(--accent);padding:.6rem .8rem;text-align:left;border:1px solid var(--border)}
+td{padding:.5rem .8rem;border:1px solid var(--border)}
+tr:nth-child(even){background:rgba(255,253,248,.5)}
+.formula{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:.8rem 1.2rem;margin:1rem 0;font-family:monospace;font-size:.9rem;text-align:center;color:var(--orange)}
+.sidebar{position:fixed;top:48px;left:0;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;overflow-y:auto;z-index:100;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:.95rem;color:var(--accent);margin:0 0 .65rem;padding:0;border-bottom:none}
+.sidebar a{display:block;color:#78716c;font-size:.81rem;padding:.24rem .45rem;border-left:2px solid transparent;text-decoration:none;transition:all .2s}
+.sidebar a:hover,.sidebar a.active{color:var(--accent);background:rgba(67,56,202,.07);border-left-color:var(--accent);text-decoration:none}
+.ref-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem 1.8rem;margin-bottom:1.5rem}
+.ref-section h2{color:var(--accent);font-size:1.2rem;margin-bottom:1rem;border-bottom:1px solid var(--border);padding-bottom:.5rem}
+.ref-list{list-style:none;counter-reset:refc}
+.ref-list li{counter-increment:refc;margin-bottom:.5rem;padding-left:2rem;position:relative;font-size:.9rem}
+.ref-num{position:absolute;left:0;top:0;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--accent);color:#f4f1ea;font-size:.75rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+.ref sup a{color:var(--accent);font-size:.75em;cursor:pointer;vertical-align:super;font-weight:600}
+.qa-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.5rem 1.8rem;margin-bottom:1.5rem}
+.qa-section h2{color:var(--accent);font-size:1.2rem;margin-bottom:1rem}
+.qa-section details{margin-bottom:.8rem;border-bottom:1px solid var(--border);padding-bottom:.8rem}
+.qa-section summary{cursor:pointer;font-weight:600;padding:.5rem 0;position:relative;padding-left:2rem;list-style:none}
+.qa-section summary::before{content:'Q';position:absolute;left:0;top:.4rem;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--accent);color:#f4f1ea;font-size:.8rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+.qa-section summary::-webkit-details-marker{display:none}
+.qa-section .answer{padding:.8rem 0 .3rem 2rem;position:relative;color:#78716c}
+.qa-section .answer::before{content:'A:';position:absolute;left:0;color:var(--green);font-weight:700}
+.doc-footer{text-align:center;padding:2rem 0 1rem;color:#78716c;font-size:.85rem;border-top:1px solid var(--border);margin-top:2rem}
+.doc-footer .sub{font-size:.75rem;margin-top:.3rem;color:rgba(28,25,23,.12)}
+code{background:rgba(194,65,12,.1);color:var(--orange);padding:.1rem .3rem;border-radius:3px;font-size:.88rem}
+ul,ol{margin:.6rem 0 .6rem 1.5rem}
+li{margin-bottom:.3rem}
+.flow-step{display:flex;align-items:flex-start;margin:.8rem 0;gap:.8rem}
+.flow-num{min-width:2rem;height:2rem;border-radius:50%;background:var(--accent);color:#f4f1ea;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:.85rem;flex-shrink:0}
+.flow-content{flex:1}
+.flow-content strong{color:var(--accent2)}
+.module-card{background:rgba(67,56,202,.05);border:1px solid var(--accent);border-radius:8px;padding:1rem 1.2rem;margin:.8rem 0}
+.module-card h4{margin-top:0;color:var(--accent)}
+.agent-relation{background:linear-gradient(135deg,rgba(67,56,202,.05),rgba(21,128,61,.05));border:1px solid var(--green);border-radius:10px;padding:1.2rem;margin:1rem 0}
+.fact-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:1rem 0}
+.fact-card{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem}
+.fact-card strong{display:block;color:var(--accent2);margin-bottom:.3rem}
+.badge{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:.08rem .5rem;margin-right:.35rem;font-size:.75rem;font-weight:700}
+.badge.fact{color:var(--green);border-color:var(--green)}
+.badge.optional{color:var(--yellow);border-color:var(--yellow)}
+.badge.eval{color:var(--purple);border-color:var(--purple)}
+.badge.roadmap{color:#78716c}
+.source-note{font-size:.82rem;color:#78716c;border-left:3px solid var(--border);padding-left:.8rem;margin:.7rem 0}
+.flow-figure{background:#fff;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1rem 0}
+.flow-figure object{display:block;width:100%;height:auto;min-height:610px;aspect-ratio:24/15}
+.flow-figure img.flow-thumb{display:block;max-height:380px;width:auto;max-width:100%;object-fit:contain;margin:.5rem auto;cursor:zoom-in;border-radius:6px;transition:transform .2s,box-shadow .2s}
+.flow-figure img.flow-thumb:hover{transform:scale(1.015);box-shadow:0 8px 24px rgba(28,25,23,.35)}
+.flow-lb{position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(28,25,23,.97);backdrop-filter:blur(3px);cursor:zoom-out;padding:2vh 2vw}
+.flow-lb.open{display:flex}
+.flow-lb img{max-width:96vw;max-height:88vh;object-fit:contain;background:#fff;border-radius:8px;box-shadow:0 12px 48px rgba(28,25,23,.28);cursor:grab;user-select:none}
+.flow-lb-close{position:absolute;top:16px;right:18px;width:38px;height:38px;border-radius:50%;border:1px solid rgba(28,25,23,.12);background:#fff;color:#78716c;font-size:17px;line-height:1;cursor:pointer;z-index:1}
+.flow-lb-hint{margin-top:1rem;color:#78716c;font-size:.82rem}
+.flow-caption{background:#f4f1ea;color:#78716c;padding:.65rem .9rem;font-size:.82rem}
+.flow-links{display:flex;flex-wrap:wrap;gap:.8rem;margin:.7rem 0}
+.learning-path{counter-reset:learn;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;margin:1rem 0}
+.learning-path>div{counter-increment:learn;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem}
+.learning-path>div::before{content:'模块 ' counter(learn);display:block;color:var(--accent);font-size:.78rem;font-weight:700;margin-bottom:.25rem}
+.doc-link{display:inline-flex;align-items:center;margin-left:.55rem;padding:.08rem .5rem;border:1px solid var(--accent);border-radius:999px;font-size:.72rem;font-weight:700;vertical-align:middle}
+.doc-link:hover{background:var(--accent);color:var(--bg);text-decoration:none}
+.subdoc-tag{display:inline-block;margin-left:.3rem;padding:.02rem .35rem;border:1px solid var(--green);border-radius:999px;color:var(--green);font-size:.65rem;font-weight:700}
+.detail-docs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:1rem 0}
+.detail-doc-card{display:block;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem;color:var(--text)}
+.detail-doc-card:hover{border-color:var(--accent);text-decoration:none}
+.detail-doc-card strong{display:block;color:var(--accent2);margin-bottom:.25rem}
+.detail-doc-card span{display:block;color:#78716c;font-size:.82rem}
+@media(max-width:980px){
+  .sidebar{display:none}
+  body,body.tab-diagrams{padding-left:1rem}
+  .practice-grid{grid-template-columns:1fr}
+  .learning-path{grid-template-columns:1fr 1fr}
+}
+@media(max-width:640px){
+  h1{font-size:1.6rem}
+  .section{padding:1.2rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+  .fact-grid,.learning-path{grid-template-columns:1fr}
+  .flow-figure object{min-height:420px}
+}
+/* ===== 顶部 Tab 栏 ===== */
+body{padding-top:calc(2rem + 48px)}
+body.tab-diagrams{padding-left:1rem}
+.project-tabs{position:fixed;top:0;left:0;right:0;z-index:200;height:48px;display:flex;align-items:center;padding:0 1.25rem;background:#fffdf8;border-bottom:1px solid var(--border);box-shadow:0 1px 8px rgba(28,25,23,.5)}
+.project-tabs .tab-home{color:var(--accent);font-size:.88rem;font-weight:600;text-decoration:none;margin-right:2rem;white-space:nowrap;padding:.32rem .85rem;border:1px solid var(--border);border-radius:8px;transition:all .25s}
+.project-tabs .tab-home:hover{background:var(--accent);color:var(--bg);border-color:var(--accent);text-decoration:none;transform:translateY(-1px)}
+.project-tabs .tab-btn{background:none;border:none;cursor:pointer;font-family:inherit;font-size:.95rem;font-weight:600;color:#78716c;padding:.95rem 1.25rem;position:relative;transition:color .2s}
+.project-tabs .tab-btn:hover{color:var(--text)}
+.project-tabs .tab-btn.active{color:var(--accent)}
+.project-tabs .tab-btn.active::after{content:'';position:absolute;bottom:-1px;left:1.25rem;right:1.25rem;height:3px;background:var(--accent);border-radius:2px 2px 0 0}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+/* iframe 嵌入面板（源码拆解/入门指南）：占满视口，去掉正文留白 */
+body.tab-embed{padding:48px 0 0}
+.tab-panel iframe{width:100%;height:calc(100vh - 48px);border:0;display:block;background:#f4f1ea}
+/* ===== 系统流程图面板 ===== */
+.diagram-viewer{max-width:1100px;margin:0 auto}
+.diagram-viewer h2{font-size:1.7rem;margin-bottom:.4rem}
+.diagram-viewer .diagram-desc{color:#78716c;font-size:.95rem;line-height:1.7;margin-bottom:1.5rem}
+.diagram-viewer .diagram-desc b{color:var(--accent)}
+.diagram-zoom-hint{margin-top:.9rem;font-size:.85rem;color:#78716c}
+.diagram-zoom-hint code{font-size:.8rem}
+@media(max-width:640px){
+  .project-tabs{padding:0 .35rem;overflow-x:auto;overflow-y:hidden}
+  .project-tabs .tab-home{margin-right:.15rem;padding:.3rem .5rem;font-size:.8rem}
+  .project-tabs .tab-btn{padding:.95rem .5rem;font-size:.8rem;white-space:nowrap}
+  .project-tabs .tab-btn.active::after{left:.5rem;right:.5rem}
+  .container,.section,.fact-card,.detail-doc-card{min-width:0;overflow-wrap:anywhere}
+  table{display:block;max-width:100%;overflow-x:auto}
+  code{overflow-wrap:anywhere;word-break:break-word}
+}
+</style>
+</head>
+<body>
+<div class="project-tabs">
+  <a class="tab-home" href="../../index.html">⌂ 首页</a>
+  <button class="tab-btn" onclick="switchProjectTab('guide')">📖 入门指南</button>
+  <button class="tab-btn active" onclick="switchProjectTab('docs')">📋 架构文档</button>
+</div>
+
+<div id="panel-guide" class="tab-panel"><iframe src="trae_agent_architecture_guide.html" loading="lazy" title="Trae Agent 架构入门指南"></iframe></div>
+
+<div id="panel-docs" class="tab-panel active">
+
+<aside class="sidebar"><h2>目录</h2>
+<a href="#s0">阅读约定与分模块学习路线</a>
+<a href="#s1">一、项目定位与设计哲学</a>
+<a href="#s2">二、整体架构概览</a>
+<a href="#s3">三、Agent Runtime 核心 <span class="subdoc-tag">子文档</span></a>
+<a href="#s4">四、Tool Framework 工具框架 <span class="subdoc-tag">子文档</span></a>
+<a href="#s5">五、Context Engineering 上下文工程 <span class="subdoc-tag">子文档</span></a>
+<a href="#s6">六、Lakeview 可观测性旁路 <span class="subdoc-tag">子文档</span></a>
+<a href="#s7">七、Agent Loop 工程 <span class="subdoc-tag">子文档</span></a>
+<a href="#s8">八、Memory 机制 <span class="subdoc-tag">子文档</span></a>
+<a href="#s9">九、评估侧 Patch Selection（Test-time Scaling） <span class="subdoc-tag">子文档</span></a>
+<a href="#s10">十、Prompt Engineering 提示词工程 <span class="subdoc-tag">子文档</span></a>
+<a href="#s11">十一、Sandbox 与 Docker 沙箱 <span class="subdoc-tag">子文档</span></a>
+<a href="#s12">十二、Trajectory 全链路记录 <span class="subdoc-tag">子文档</span></a>
+<a href="#s13">十三、LLM Provider 抽象层 <span class="subdoc-tag">子文档</span></a>
+<a href="#s14">十四、MCP 协议集成 <span class="subdoc-tag">子文档</span></a>
+<a href="#s15">十五、CKG 代码知识图谱 <span class="subdoc-tag">子文档</span></a>
+<a href="#s16">十六、外部系统对比（非源码结论）</a>
+<a href="#s17">十七、设计模式总览</a>
+<a href="#s18">十八、二次开发指南</a>
+<a href="#ref">参考资料</a>
+<a href="#qa">Q&amp;A</a>
+<a href="#glossary">附录 A · 术语对照表</a>
+</aside>
+
+<div class="container">
+
+<h1>Trae Agent 架构深度解析</h1>
+<p class="subtitle">从 Agent Runtime 到 Test-time Scaling：一个面向软件工程的 Agent 操作系统全景解析<br>
+基于 <a href="https://github.com/bytedance/trae-agent">GitHub 源码</a> + <a href="https://arxiv.org/abs/2507.23370">arXiv:2507.23370 技术报告</a></p>
+
+<div class="intuition-box">
+  <strong>Trae Agent 不是一个简单的 CLI 工具，而是一套完整的软件工程 Agent 运行时。</strong>
+  当前开源仓库的核心价值是透明的 Agent 循环、可替换 LLM Provider、统一工具接口、Docker/MCP 扩展和全链路 Trajectory。技术报告在其评测设置下报告 SWE-bench Verified Pass@1 = 75.20%；这属于论文时点结果，不代表持续的公开榜单排名。<sup class="ref"><a href="#ref-1">[1]</a></sup>
+</div>
+
+<!-- ============ S0: 阅读约定与学习路线 ============ -->
+<div class="section" id="s0">
+<h2>阅读约定与分模块学习路线</h2>
+<p>本文以当前工作区源码为事实基线。为避免把论文能力、默认运行链路和未来规划混在一起，后文统一使用四种标记：</p>
+<div class="fact-grid">
+  <div class="fact-card"><strong><span class="badge fact">代码事实</span>当前实现</strong>可由当前源码直接核验，属于 <code>trae-cli</code> 主运行链路。</div>
+  <div class="fact-card"><strong><span class="badge optional">可选能力</span>配置后启用</strong>例如 Docker、MCP、CKG、JSON Edit；存在实现不等于默认启用。</div>
+  <div class="fact-card"><strong><span class="badge eval">评估外环</span>独立流水线</strong><code>evaluation/</code> 和 Patch Selector 不属于 <code>BaseAgent</code> 的在线循环。</div>
+  <div class="fact-card"><strong><span class="badge roadmap">Roadmap</span>尚未完成</strong>HTTP Server、SDK、通用多 Agent 编排等只能按规划理解。</div>
+</div>
+
+<h3>建议的组内学习顺序</h3>
+<div class="learning-path">
+  <div><strong>入口与配置</strong><br><code>cli.py</code>、<code>utils/config.py</code></div>
+  <div><strong>Agent 装配</strong><br><code>agent/agent.py</code>、<code>trae_agent.py</code></div>
+  <div><strong>核心循环</strong><br><code>base_agent.py</code>、<code>agent_basics.py</code></div>
+  <div><strong>模型与历史</strong><br><code>utils/llm_clients/</code></div>
+  <div><strong>工具与环境</strong><br><code>tools/base.py</code>、Docker、MCP、CKG</div>
+  <div><strong>可观测与评估</strong><br>Trajectory、Lakeview、<code>evaluation/</code></div>
+</div>
+<h3>已完成的模块详细文档</h3>
+<div class="detail-docs">
+  <a class="detail-doc-card" href="docs/trae-agent/03-agent-runtime.html">
+    <strong>03 · Agent Runtime 核心</strong>
+    <span>范围：CLI 装配、Agent 门面、BaseAgent Loop、完成协议与资源清理</span>
+    <span>任务：理解主链、扩展 Runtime、定位终态和清理问题</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/04-tool-framework.html">
+    <strong>04 · Tool Framework 工具框架</strong>
+    <span>范围：Tool Schema、Registry、Executor、本地与 Docker 路由、MCP 动态工具</span>
+    <span>任务：扩展工具、审计副作用、定位调用与结果归一化问题</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/05-context-engineering.html">
+    <strong>05 · Context Engineering</strong>
+    <span>范围：初始消息、Provider 历史、Tool Schema/Result、局部截断与上下文缺口</span>
+    <span>任务：理解多轮连续性、控制上下文增长、避免把旁路当作压缩机制</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/06-lakeview-observability.html">
+    <strong>06 · Lakeview 可观测性旁路</strong>
+    <span>范围：Step 摘要、标签、Simple Console 接线、成本与失败退化</span>
+    <span>任务：排查展示旁路，区分人类可读摘要与主模型上下文</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/07-agent-loop.html">
+    <strong>07 · Agent Loop 工程</strong>
+    <span>范围：Step 状态机、LLM/Tool 循环、完成短路、异常与资源清理</span>
+    <span>任务：排查终态、空补丁、未知工具、最大步数和恢复边界</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/08-memory.html">
+    <strong>08 · Memory 机制</strong>
+    <span>范围：Provider 进程内历史、会话生命周期及持久 Memory 能力缺口</span>
+    <span>任务：识别历史串接、区分 Trajectory/Lakeview 与真正记忆系统</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/09-patch-selection.html">
+    <strong>09 · Patch Selection 评估外环</strong>
+    <span>范围：候选生成、过滤、独立 Selector、分组产物与恢复契约</span>
+    <span>任务：运行 Test-time Scaling 评估，避免误解为在线多 Agent Runtime</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/10-prompt-engineering.html">
+    <strong>10 · Prompt Engineering</strong>
+    <span>范围：System Prompt、API Tool Schema、完成协议与 Provider 适配</span>
+    <span>任务：调整行为约束、审计提示注入，区分提示约定与运行时强制</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/11-docker-sandbox.html">
+    <strong>11 · Sandbox 与 Docker</strong>
+    <span>范围：容器装配、工作区挂载、工具代理、串行执行与清理</span>
+    <span>任务：部署可选执行后端，审计镜像、挂载、网络和资源边界</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/12-trajectory.html">
+    <strong>12 · Trajectory 全链路记录</strong>
+    <span>范围：LLM Interaction、Agent Step、增量写盘、隐私与部分记录</span>
+    <span>任务：调试执行链、分析 Usage，避免把日志当作 Replay/Checkpoint</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/13-llm-provider-abstraction.html">
+    <strong>13 · LLM Provider 抽象层</strong>
+    <span>范围：统一门面、七类 Provider 特化、消息历史、Usage 与重试</span>
+    <span>任务：接入模型、核对参数差异、诊断限流与协议错误</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/14-mcp-integration.html">
+    <strong>14 · MCP 协议集成</strong>
+    <span>范围：stdio Client、双重准入、动态 Tool Adapter 与外部进程生命周期</span>
+    <span>任务：接入 MCP Server、排查发现与清理、审计 Secret 和供应链边界</span>
+  </a>
+  <a class="detail-doc-card" href="docs/trae-agent/15-ckg-code-knowledge-graph.html">
+    <strong>15 · CKG 代码知识图谱</strong>
+    <span>范围：tree-sitter 解析、符号索引、SQLite 生命周期与查询契约</span>
+    <span>任务：显式启用代码结构检索，理解语言覆盖和非目标能力</span>
+  </a>
+</div>
+<p class="source-note">核心阅读原则：先沿一次 <code>trae-cli run</code> 的真实调用链学习，再阅读可选能力和评估外环。不要从论文中的 GPS 反推主 Runtime。</p>
+</div>
+
+<!-- ============ S1: 项目定位与设计哲学 ============ -->
+<div class="section" id="s1">
+<h2>一、项目定位与设计哲学</h2>
+
+<h3>1.1 Trae Agent 是什么？</h3>
+<p>Trae Agent 是由字节跳动（ByteDance）开源的、基于 LLM 的通用软件工程智能体。它接收自然语言指令，自主完成从代码理解、Bug 定位、复现测试、修复编码到验证通过的完整软件工程工作流。</p>
+
+<div class="analogy-card">
+  传统 CLI Agent 像一把瑞士军刀——给个指令执行个命令。Trae Agent 更像一个经验丰富的工程师——接到 Issue 后自主分析仓库、制定计划、写测试复现、定位根因、编写修复、验证通过，全程自主决策。
+</div>
+
+<h3>1.2 核心定位</h3>
+<p>官方论文将其定义为：</p>
+<div class="formula">
+  Trae Agent = 基于 Agent 的集成推理，用于仓库级 Issue 求解
+</div>
+
+<p>它不是聊天机器人，不是 IDE 插件，而是一个 <span class="term">通用软件工程智能体</span>，能完成：</p>
+<ul>
+  <li><strong>代码编写与重构</strong>——理解需求并修改多个文件</li>
+  <li><strong>Bug 修复</strong>——从 Issue 描述到复现到修复到验证</li>
+  <li><strong>测试生成</strong>——编写回归测试和单元测试</li>
+  <li><strong>代码审查</strong>——分析代码质量并提出改进建议</li>
+  <li><strong>仓库分析</strong>——理解项目结构、依赖关系和模块边界</li>
+  <li><strong>文档生成</strong>——基于代码生成技术文档</li>
+</ul>
+
+<h3>1.3 与其他 CLI Agent 的本质区别</h3>
+<p>官方 README 明确强调其 <strong>研究友好设计</strong> 定位<sup class="ref"><a href="#ref-2">[2]</a></sup>：</p>
+<table>
+<tr><th>维度</th><th>普通 CLI Agent</th><th>Trae Agent</th></tr>
+<tr><td>架构透明度</td><td>黑盒，难以修改</td><td>模块化分层，每层可独立替换</td></tr>
+<tr><td>推理方式</td><td>单次生成</td><td>主 Runtime 为单 Agent 循环；评估侧可对外部候选做 Patch Selection</td></tr>
+<tr><td>可观测性</td><td>日志有限</td><td>全链路 Trajectory 记录 + Lakeview 摘要</td></tr>
+<tr><td>可扩展性</td><td>工具固定</td><td>统一 Tool 接口 + MCP 协议动态扩展</td></tr>
+<tr><td>研究友好度</td><td>低</td><td>支持重放、消融实验、基准测试</td></tr>
+</table>
+
+<div class="key-point">
+  设计哲学总结：Trae Agent 的核心不是"更好的 Prompt"，而是更好的 <strong>Agent Runtime</strong>。LLM 是可替换的零件，Runtime 才是引擎。
+</div>
+</div>
+
+<!-- ============ S2: 整体架构概览 ============ -->
+<div class="section" id="s2">
+<h2>二、整体架构概览</h2>
+
+<h3>2.1 分层架构</h3>
+<p>整个系统可以拆解为六个层次，从用户接口到执行引擎层层递进：</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────────────────┐
+│                    CLI 层                                │
+│       (cli.py - click, run / interactive / helpers)      │
+├──────────────────────────────────────────────────────────┤
+│                 Agent 编排器                             │
+│     Agent (Facade) → TraeAgent → BaseAgent (Loop)       │
+├────────────────┬────────────────┬────────────────────────┤
+│ 提示词引导     │ 会话           │   工具管理器           │
+│ 规划           │ 与可观测性     │  ToolExecutor /        │
+│ (System Prompt │ Provider hist. │  DockerToolExecutor    │
+│ + SeqThinking) │ Trajectory     │                        │
+├────────────────┴────────────────┴────────────────────────┤
+│                LLM Provider 层                           │
+│  OpenAI / Anthropic / Gemini / Doubao / Ollama / ...    │
+├──────────────────────────────────────────────────────────┤
+│                  执行层                                  │
+│  Bash / FileEdit / CKG / MCP / Docker Sandbox           │
+└──────────────────────────────────────────────────────────┘
+</div>
+
+<h3>2.2 核心数据流</h3>
+<p><span class="badge fact">代码事实</span>主 Runtime、可选旁路和评估外环相互隔离。主链路是单任务 ReAct Job，不是通用多 Agent 工作流引擎。</p>
+
+<h3>2.3 一次 <code>trae-cli run</code> 的线性调用链</h3>
+<div class="arch-diagram">
+cli.main → cli.run
+  → Config.create(...).resolve_config_values(...)
+  → ConsoleFactory.create_console(...)
+  → Agent(...) → TraeAgent(...) → BaseAgent.__init__(...)
+  → Agent.run(...)
+      → TraeAgent.new_task(...)                 # system + user，启动 trajectory
+      → TraeAgent.initialise_mcp()              # 可选，仅允许列表中的 stdio server
+      → TraeAgent.execute_task()
+          → BaseAgent.execute_task()            # max_steps 循环
+              → _run_llm_step()
+                  → LLMClient.chat()            # Provider Client 内维护完整 history
+                  → task_done 判定 或 _tool_call_handler()
+              → _finalize_step()                # step trajectory + console
+          → finalize_recording() + optional patch
+      → cleanup_mcp_clients()
+</div>
+<p class="source-note">一个容易误读的实现细节：<code>BaseAgent</code> 每轮传入的 <code>messages</code> 主要是本轮新增消息；完整多轮历史由各 Provider Client 的 <code>message_history</code> 在 <code>reuse_history=True</code> 时累积。</p>
+
+<h3>2.4 项目目录结构</h3>
+<div class="arch-diagram">
+trae_agent/
+├── agent/                  # Agent 核心编排
+│   ├── agent.py            #   门面入口 (Facade)
+│   ├── base_agent.py       #   抽象基类 + Agent 主循环
+│   ├── trae_agent.py       #   TraeAgent 具体实现
+│   ├── agent_basics.py     #   数据模型 (AgentStep, AgentState)
+│   └── docker_manager.py   #   Docker 容器生命周期管理
+├── tools/                  # 工具框架
+│   ├── base.py             #   Tool 抽象接口 + ToolExecutor
+│   ├── bash_tool.py        #   Bash 持久会话工具
+│   ├── edit_tool.py        #   str_replace 编辑工具
+│   ├── json_edit_tool.py   #   JSON 结构编辑工具
+│   ├── sequential_thinking_tool.py  # 链式思维工具
+│   ├── task_done_tool.py   #   任务完成信号工具
+│   ├── mcp_tool.py         #   MCP 协议适配器
+│   ├── docker_tool_executor.py  # Docker 工具执行代理
+│   └── ckg/                #   代码知识图谱 (CKG)
+│       ├── base.py
+│       └── ckg_database.py
+├── prompt/                 # 提示词工程
+│   └── agent_prompt.py     #   System Prompt 定义
+├── utils/                  # 基础设施
+│   ├── config.py           #   YAML/JSON 配置系统
+│   ├── lake_view.py        #   Lakeview 步骤摘要
+│   ├── trajectory_recorder.py  # 轨迹记录器
+│   ├── mcp_client.py       #   MCP 客户端
+│   ├── constants.py        #   常量定义
+│   ├── cli/                #   CLI 控制台 (simple/rich)
+│   └── llm_clients/        #   LLM 客户端 (7种 Provider)
+│       ├── base_client.py
+│       ├── llm_client.py
+│       ├── openai_client.py
+│       ├── anthropic_client.py
+│       ├── google_client.py
+│       └── ...
+└── cli.py                  # CLI 入口 (click 框架)
+
+evaluation/                 # 评估系统
+└── patch_selection/        #   候选过滤 + Selector（Generator 输入来自外部）
+    ├── selector.py
+    ├── analysis.py
+    └── trae_selector/
+        ├── selector_agent.py    # Selector Agent
+        ├── selector_evaluation.py # 评估编排
+        └── sandbox.py           # SWE-bench Docker 沙箱
+</div>
+</div>
+
+<!-- ============ S3: Agent Runtime 核心 ============ -->
+<div class="section" id="s3">
+<h2>三、Agent Runtime 核心 <a class="doc-link" href="docs/trae-agent/03-agent-runtime.html" title="打开 Agent Runtime 核心开发文档">子文档</a></h2>
+
+<div class="highlight">Agent Runtime 是整个系统的心脏。LLM 是可替换的零件，Runtime 才是引擎——它负责编排思考、工具调用、状态管理和生命周期控制。</div>
+
+<h3>3.1 三层 Agent 类体系</h3>
+
+<div class="module-card">
+<h4>Agent（门面层）</h4>
+<p>扮演 <span class="term">Facade</span> 角色，对调用者屏蔽内部复杂性。</p>
+<ul>
+  <li>根据 <code>agent_type</code> 参数实例化具体 Agent（工厂模式）</li>
+  <li>持有 <code>TrajectoryRecorder</code> 和 <code>CLIConsole</code> 的引用</li>
+  <li><code>run()</code> 方法编排完整生命周期：初始化任务 → MCP 工具注册 → 执行任务 → 清理资源</li>
+</ul>
+</div>
+
+<div class="module-card">
+<h4>BaseAgent（抽象基类 - Agent Loop 核心）</h4>
+<p>这是整个系统<strong>最重要的文件</strong>，定义了 <span class="term">思考 → 工具 → 观察</span> 循环，并提供可选 Reflection Hook；<code>TraeAgent</code> 默认禁用该 Hook。</p>
+
+<p><strong>主循环 <code>execute_task()</code>：</strong></p>
+<div class="arch-diagram">
+while step_number <= max_steps:
+    1. 创建 AgentStep (状态 = THINKING)
+    2. _run_llm_step() → 调用 LLM 获取响应
+    3. 检查是否完成 (task_done) 或出错
+    4. _finalize_step() → 记录轨迹 + 更新 UI
+    5. step_number++
+</div>
+
+<p><strong>单步执行 <code>_run_llm_step()</code>：</strong></p>
+<ol>
+  <li>设置状态为 <code>THINKING</code>，调用 <code>LLMClient.chat()</code></li>
+  <li>检查 LLM 是否调用 <code>task_done</code> 工具（完成信号）</li>
+  <li>若完成 → 进一步验证（如检查 git diff 是否产生有效 patch）</li>
+  <li>若未完成 → 提取 <code>tool_calls</code> 交给 <code>_tool_call_handler</code></li>
+</ol>
+
+<p><strong>工具调用 <code>_tool_call_handler()</code>：</strong></p>
+<ul>
+  <li>由 <code>model.parallel_tool_calls</code> 选择 <strong>并行</strong>（本地模式使用 <code>asyncio.gather</code>）或 <strong>串行</strong>；Docker 模式统一退化为串行</li>
+  <li>工具结果转化为 <code>LLMMessage</code>，下一轮由 Provider Client 追加到内部历史</li>
+  <li><code>BaseAgent</code> 支持失败反思；但 <code>TraeAgent.reflect_on_result()</code> 固定返回 <code>None</code>，默认 Trae 路径不会产生反思消息</li>
+</ul>
+</div>
+
+<div class="module-card">
+<h4>TraeAgent（具体实现）</h4>
+<p>面向软件工程任务的具体 Agent，覆写了关键模板方法：</p>
+<table>
+<tr><th>覆写方法</th><th>职责</th></tr>
+<tr><td><code>new_task()</code></td><td>构建初始消息：System Prompt + User Message（含项目路径和 Issue 描述）</td></tr>
+<tr><td><code>llm_indicates_task_completed()</code></td><td>检测 LLM 是否调用了 <code>task_done</code> 工具（而非文本关键词匹配）</td></tr>
+<tr><td><code>_is_task_completed()</code></td><td>若配置 <code>must_patch=true</code>，验证 git diff 是否产生有效 patch</td></tr>
+<tr><td><code>reflect_on_result()</code></td><td>返回 <code>None</code>（禁用 BaseAgent 默认失败反思；Sequential Thinking 是独立可调用工具）</td></tr>
+<tr><td><code>execute_task()</code></td><td>在父类执行完成后，finalize 轨迹记录并可选写出 patch 文件</td></tr>
+</table>
+<p class="source-note"><code>task_done</code> 在 TraeAgent 中首先被当作完成协议检测；判定通过后直接结束，因此这个工具调用通常不会进入 <code>ToolExecutor.execute_tool_call()</code>。</p>
+</div>
+
+<h3>3.2 状态机模型</h3>
+<p>Agent 的执行过程可以用清晰的状态机描述：</p>
+
+<div class="arch-diagram">
+AgentState:   IDLE → RUNNING → COMPLETED / ERROR
+
+AgentStepState (每个步骤内部):
+
+  THINKING ──► CALLING_TOOL ──► [REFLECTING，可选] ──► 下一步 THINKING
+      │
+      └────────► COMPLETED / ERROR
+</div>
+<p class="source-note">注意：<code>_finalize_step()</code> 会把已完成记录的 Step 状态统一写为 <code>COMPLETED</code>；异常 Step 仍可能通过 <code>error</code> 字段携带错误。详细状态边界见本章子文档。</p>
+
+<h3>3.3 数据模型</h3>
+<table>
+<tr><th>数据类</th><th>职责</th><th>关键字段</th></tr>
+<tr><td><code>AgentStep</code></td><td>单步执行数据</td><td>step_number, state, thought, tool_calls, tool_results, llm_response, reflection, error, llm_usage；当前主循环未给 <code>thought</code>/<code>llm_usage</code> 赋值</td></tr>
+<tr><td><code>AgentExecution</code></td><td>整体执行数据</td><td>task, steps[], final_result, success, total_tokens, execution_time, agent_state</td></tr>
+<tr><td><code>LLMMessage</code></td><td>统一消息格式</td><td>role, content, tool_call, tool_result</td></tr>
+<tr><td><code>LLMResponse</code></td><td>统一响应格式</td><td>content, usage, model, finish_reason, tool_calls</td></tr>
+<tr><td><code>LLMUsage</code></td><td>Token 统计</td><td>input_tokens, output_tokens, cache_creation_input_tokens, cache_read_input_tokens, reasoning_tokens（支持 <code>__add__</code> 累加）</td></tr>
+</table>
+</div>
+
+<!-- ============ S4: Tool Framework 工具框架 ============ -->
+<div class="section" id="s4">
+<h2>四、Tool Framework 工具框架 <a class="doc-link" href="docs/trae-agent/04-tool-framework.html" title="打开 Tool Framework 开发文档">子文档</a></h2>
+
+<div class="highlight">工具系统是 Trae Agent 最大的亮点之一。所有工具实现统一接口，Agent 不知道工具如何实现，只知道工具名称、JSON 参数和返回结果。</div>
+
+<h3>4.1 工具抽象接口</h3>
+<p>所有工具继承自 <code>Tool</code> 抽象基类，实现四个核心方法：</p>
+
+<div class="arch-diagram">
+Tool (ABC)
+├── get_name() → str              # 工具名称
+├── get_description() → str       # 工具描述 (注入到 System Prompt)
+├── get_parameters() → list       # 参数定义列表 (生成 JSON Schema)
+└── execute(arguments) → async    # 异步执行，返回 ToolExecResult
+</div>
+
+<p><strong>JSON Schema 生成的特殊处理：</strong>为兼容 OpenAI 的 strict mode，所有参数标记为 <code>required</code>，可选参数通过 type union <code>[type, "null"]</code> 实现；嵌套对象需要 <code>additionalProperties: false</code>。</p>
+
+<h3>4.2 ToolExecutor 工具执行管理器</h3>
+<div class="module-card">
+<h4>核心职责</h4>
+<ul>
+  <li><strong>工具注册：</strong>从全局 <code>tools_registry</code> 加载工具实例</li>
+  <li><strong>名称模糊匹配：</strong><code>_normalize_name()</code> 将工具名转小写并移除下划线，实现容错匹配</li>
+  <li><strong>并行执行：</strong><code>parallel_tool_call()</code> 使用 <code>asyncio.gather</code> 并行执行多个工具</li>
+  <li><strong>串行执行：</strong><code>sequential_tool_call()</code> 按顺序逐一执行</li>
+  <li><strong>资源清理：</strong><code>close_tools()</code> 确保所有工具资源正确释放</li>
+</ul>
+</div>
+
+<h3>4.3 内置工具详解</h3>
+
+<table>
+<tr><th>工具</th><th>功能</th><th>设计要点</th></tr>
+<tr>
+  <td><strong>BashTool</strong></td>
+  <td>执行任意 Shell 命令</td>
+  <td>
+    <ul style="margin:0">
+      <li>持久化 Shell 会话（<code>_BashSession</code>），命令间状态保持</li>
+      <li>哨兵机制（Sentinel）：追加特殊标记判断命令完成和退出码</li>
+      <li>120 秒超时，支持会话重启</li>
+      <li>延迟启动：首次执行时才创建子进程</li>
+    </ul>
+  </td>
+</tr>
+<tr>
+  <td><strong>TextEditorTool</strong><br>(str_replace_based_edit_tool)</td>
+  <td>精确文件编辑</td>
+  <td>
+    <ul style="margin:0">
+      <li>四个子命令：<code>view</code> / <code>create</code> / <code>str_replace</code> / <code>insert</code></li>
+      <li>基于替换的编辑：查找/替换而非重写整文件</li>
+      <li>要求 <code>old_str</code> 唯一匹配，多匹配时报错并指出行号</li>
+      <li>操作后返回上下文 snippet（前后 4 行）帮助 LLM 确认</li>
+    </ul>
+  </td>
+</tr>
+<tr>
+  <td><strong>JSONEditTool</strong></td>
+  <td>JSON 结构化编辑</td>
+  <td>面向 JSON 文件的结构化编辑，保证格式正确性</td>
+</tr>
+<tr>
+  <td><strong>SequentialThinkingTool</strong></td>
+  <td>结构化分步思考</td>
+  <td>
+    <ul style="margin:0">
+      <li>维护 <code>thought_history</code> 列表和 <code>branches</code> 字典</li>
+      <li>支持修订（<code>is_revision</code>）和分支（<code>branch_from_thought</code>）</li>
+      <li>动态调整 <code>total_thoughts</code>，允许超出初始估计</li>
+      <li>无外部副作用，纯"思维白板"</li>
+    </ul>
+  </td>
+</tr>
+<tr>
+  <td><strong>TaskDoneTool</strong></td>
+  <td>任务完成信号</td>
+  <td>无参数，执行后返回 "Task done."，作为 Agent 循环终止信号</td>
+</tr>
+<tr>
+  <td><strong>CKGTool</strong></td>
+  <td>代码结构查询</td>
+  <td>基于 tree-sitter AST 解析的代码知识图谱（详见第 15 节）</td>
+</tr>
+</table>
+
+<h3>4.4 基于替换的编辑设计哲学</h3>
+
+<div class="analogy-card">
+  传统方式像"重写整篇文章"，而 基于替换的编辑 像"使用查找替换"——只改动需要修改的部分，保留其余一切不变。这与 Cursor、Claude Code 的选择完全一致。
+</div>
+
+<div class="practice-grid">
+<div class="do">
+  <strong>基于替换的编辑：</strong><br>
+  <ul style="margin:.5rem 0 0 1rem">
+    <li>Token 消耗少（只传 diff）</li>
+    <li>生成 diff 清晰</li>
+    <li>合并冲突少</li>
+    <li>Patch 稳定性高</li>
+  </ul>
+</div>
+<div class="dont">
+  <strong>整文件重写：</strong><br>
+  <ul style="margin:.5rem 0 0 1rem">
+    <li>Token 消耗大（整文件）</li>
+    <li>容易产生无关 diff</li>
+    <li>合并冲突多</li>
+    <li>长文件容易截断或遗漏</li>
+  </ul>
+</div>
+</div>
+
+<h3>4.5 全局工具注册表</h3>
+<div class="arch-diagram">
+tools_registry = {
+    "bash":                        BashTool,
+    "str_replace_based_edit_tool": TextEditorTool,
+    "json_edit_tool":              JSONEditTool,
+    "sequentialthinking":          SequentialThinkingTool,
+    "task_done":                   TaskDoneTool,
+    "ckg":                         CKGTool,
+}
+</div>
+<p>新增工具只需：继承 <code>Tool</code> → 实现四个方法 → 注册到此字典。</p>
+</div>
+
+<!-- ============ S5: Context Engineering ============ -->
+<div class="section" id="s5">
+<h2>五、Context Engineering 上下文工程 <a class="doc-link" href="docs/trae-agent/05-context-engineering.html" title="打开 Context Engineering 开发文档">子文档</a></h2>
+
+<div class="highlight">上下文工程是 Agent 系统的核心挑战之一。当前 Trae Agent 通过各 Provider Client 的内部 <code>message_history</code> 保持多轮连续性；仓库没有通用的历史压缩或基于相关性的上下文裁剪。</div>
+
+<h3>5.1 上下文组成</h3>
+<div class="arch-diagram">
+每一步 LLM 调用时的 Context =
+
+  System Prompt (固定)
+    │ 角色定义 + 工作流指导 + 工具使用说明
+    │
+  + 项目上下文 (任务初始化时注入)
+    │ 项目根路径 + Issue 描述
+    │
+  + 会话历史 (持续累积)
+    │ 由 Provider Client.message_history 保存
+    │ assistant content + tool_calls + tool_results
+    │
+  + 可选工具结果
+    │ CKG / MCP / Bash / Edit 等结果只在被调用后进入历史
+    │
+  + 当前步骤输入
+    └ 本轮工具返回 / 未完成提示
+
+注意：Lakeview 摘要不进入上述上下文。
+</div>
+
+<h3>5.2 上下文的动态演化</h3>
+<p>与传统 Chat 不同，Trae Agent 的上下文在每一步都会重新组织：</p>
+
+<table>
+<tr><th>阶段</th><th>上下文变化</th></tr>
+<tr><td>任务初始化</td><td>System Prompt + User Message（Issue 描述 + 项目路径）</td></tr>
+<tr><td>LLM 思考</td><td>追加 LLM 的 thought（推理过程）</td></tr>
+<tr><td>工具调用</td><td>追加 tool_call 请求 + tool_result 观察</td></tr>
+<tr><td>反思</td><td>BaseAgent 具备接口；TraeAgent 默认关闭，不追加反思消息</td></tr>
+<tr><td>Lakeview 摘要</td><td>旁路生成，用于 CLI 展示；不回灌主模型上下文</td></tr>
+<tr><td>下一步</td><td>Provider Client 内部完整历史 + Agent 传入的新消息 → 送入 LLM</td></tr>
+</table>
+
+<h3>5.3 上下文压缩策略</h3>
+<p>Agent 执行过程中上下文会持续膨胀。当前代码能确认的是工具侧局部输出控制，而不是完整历史压缩：</p>
+
+<div class="module-card">
+<h4>已有：工具输出局部截断</h4>
+<p>部分工具通过 <code>maybe_truncate</code> 等机制限制单次返回，降低某一条 Observation 占满窗口的风险；这不会压缩已经进入 Provider history 的其它消息。</p>
+</div>
+
+<div class="module-card">
+<h4>旁路：Lakeview 摘要</h4>
+<p>Lakeview 对步骤生成 task/details/tags，服务于人类观察。当前实现没有把摘要替换回主 Agent history，因此不能称为上下文压缩。</p>
+</div>
+
+<div class="module-card">
+<h4>规划工具：Sequential Thinking</h4>
+<p>它把思考记录为有状态工具数据，支持修订和分支；但工具结果仍会进入对话，因此不能替代历史压缩。</p>
+</div>
+
+<div class="warning-box">
+  当前短板：Trae Agent 尚未实现通用 <code>Compaction</code>（自动压缩历史对话）或 <code>上下文裁剪</code>（智能裁剪无关上下文）。长任务会持续增加 Provider Client 的 message history，这是二次开发时应优先测量和治理的风险。
+</div>
+</div>
+
+<!-- ============ S6: Lakeview 摘要机制 ============ -->
+<div class="section" id="s6">
+<h2>六、Lakeview 可观测性旁路 <a class="doc-link" href="docs/trae-agent/06-lakeview-observability.html" title="打开 Lakeview 开发文档">子文档</a></h2>
+
+<div class="highlight"><span class="badge optional">可选能力</span>Lakeview 使用独立模型为 AgentStep 生成摘要和标签，主要供 CLI 人类阅读。它不参与主 Agent 决策，也不解决主模型 history 的膨胀。</div>
+
+<h3>6.1 设计思想</h3>
+
+<div class="analogy-card">
+  Lakeview 更像执行录像的“章节标题”：它帮助观察者快速浏览 Agent 做过什么，但 Agent 本人继续依据 Provider Client 中的原始会话历史工作。
+</div>
+
+<h3>6.2 两阶段分析</h3>
+
+<div class="module-card">
+<h4>阶段 1：任务提取</h4>
+<p>使用独立的 LLM（可配置不同模型）对当前步骤进行语义理解：</p>
+<ul>
+  <li><code>&lt;task&gt;</code> 标签：通用任务描述（不含 Bug 细节，10 词以内）</li>
+  <li><code>&lt;details&gt;</code> 标签：具体细节补充（30 词以内）</li>
+</ul>
+<p>示例：</p>
+<div class="arch-diagram">
+Step 1: Read auth.py
+  → task: "Analyzed authentication implementation"
+  → details: "Examined login flow and token validation in auth.py"
+
+Step 2: Run pytest
+  → task: "Executed test suite"
+  → details: "Three tests failed: test_login, test_token, test_session"
+</div>
+</div>
+
+<div class="module-card">
+<h4>阶段 2：标签分类</h4>
+<p>将步骤分类到预定义标签，每个标签对应一个 emoji：</p>
+<table>
+<tr><th>标签</th><th>Emoji</th><th>含义</th></tr>
+<tr><td>WRITE_TEST</td><td>🧪</td><td>编写复现测试</td></tr>
+<tr><td>VERIFY_TEST</td><td>🔍</td><td>运行/验证测试</td></tr>
+<tr><td>EXAMINE_CODE</td><td>📖</td><td>检查代码</td></tr>
+<tr><td>WRITE_FIX</td><td>🔧</td><td>编写修复</td></tr>
+<tr><td>VERIFY_FIX</td><td>✅</td><td>验证修复</td></tr>
+<tr><td>REPORT</td><td>📝</td><td>生成报告</td></tr>
+<tr><td>THINK</td><td>💭</td><td>思考分析</td></tr>
+<tr><td>OUTLIER</td><td>⚠️</td><td>异常/偏离计划</td></tr>
+</table>
+</div>
+
+<h3>6.3 容错机制</h3>
+<p>两个分析阶段都有最多 <strong>10 次重试</strong>逻辑，应对 LLM 输出格式不符合预期的情况。这保证了 Lakeview 在长时间运行中的鲁棒性。</p>
+
+<h3>6.4 Lakeview 的架构价值</h3>
+<div class="key-point">
+  Lakeview 本质上是一种 <strong>可观测性摘要</strong> 机制。它的价值是：
+  <ul style="margin-top:.5rem">
+    <li>人类开发者可以快速浏览 Agent 执行过程</li>
+    <li>用统一标签观察探索、修改、验证等行为阶段</li>
+    <li>为未来的轨迹分析或真正的压缩提供结构化素材</li>
+  </ul>
+</div>
+<p class="source-note">当前调用位置在 CLI Console：<code>SimpleCLIConsole._create_lakeview_step_display()</code> → <code>LakeView.create_lakeview_step()</code>。不要把它画进主 LLM 上下文回路。</p>
+</div>
+
+<!-- ============ S7: Agent Loop 工程 ============ -->
+<div class="section" id="s7">
+<h2>七、Agent Loop 工程 <a class="doc-link" href="docs/trae-agent/07-agent-loop.html" title="打开 Agent Loop 开发文档">子文档</a></h2>
+
+<div class="highlight">Agent Loop 是所有 Agent 系统的核心。Trae Agent 采用 思考 → 工具 → 观察 的 <span class="term">ReAct</span> 风格循环，并用 System Prompt 与 Sequential Thinking 工具引导规划；默认具体类没有独立 Reflect 阶段。</div>
+
+<div class="intuition-box">
+  循环之所以比"一次生成"强，不在于它调用了更多次模型，而在于每一轮都有一次来自真实环境的反馈——测试跑挂了、grep 没找到、补丁打不上。这些观察结果是模型自己想不出来的信息，它们才是纠错的来源。反过来说，如果一个 Agent 的循环里没有任何能证伪它的工具，那再多轮也只是把同一个猜测重复了 N 遍。
+</div>
+
+<h3>7.1 ReAct 循环</h3>
+<div class="arch-diagram">
+┌──────────────────────────────────────────┐
+│            Agent 循环（ReAct）           │
+│                                          │
+│  ┌─────────┐    ┌──────────┐    ┌──────┐ │
+│  │ 思考    │───►│   行动   │───►│ 观察  │ │
+│  │ (LLM)   │    │ (Tool)   │    │(Result)│ │
+│  └─────────┘    └──────────┘    └───────┘│
+│       ▲                            │     │
+│       └────────────────────────────┘     │
+│                                          │
+│  终止条件: task_done 工具被调用           │
+│  或: step_number > max_steps             │
+└──────────────────────────────────────────┘
+</div>
+
+<h3>7.2 增强的规划循环</h3>
+<p>Trae Agent 不是简单的 "Prompt → LLM → Tool"，而是：</p>
+
+<div class="arch-diagram">
+Task (Issue 描述)
+    │
+    ▼
+System Prompt 中的 7 步工作流指导
+    │
+    ├── 1. 理解问题
+    ├── 2. 探索定位
+    ├── 3. 复现 Bug (关键步骤)
+    ├── 4. 调试诊断
+    ├── 5. 开发修复
+    ├── 6. 验证测试
+    └── 7. 总结工作
+    │
+    ▼
+Sequential Thinking Tool (显式规划)
+    │
+    ├── Thought 1: 分析 Issue
+    ├── Thought 2: 制定搜索策略
+    ├── Thought 3: 修改计划
+    ├── Thought 4: 修订 (is_revision=true)
+    └── Thought 5: 分支探索 (branch_from_thought=2)
+    │
+    ▼
+工具执行（Bash / Edit / CKG）
+    │
+    ▼
+观察 → Provider 历史 → 下一轮规划
+</div>
+
+<h3>7.3 任务完成判定机制</h3>
+<p>Trae Agent 的任务完成判定不依赖文本关键词分析，而是采用<strong>工具信号</strong>：</p>
+
+<table>
+<tr><th>判定层级</th><th>机制</th><th>说明</th></tr>
+<tr><td>第一层</td><td><code>task_done</code> 工具调用</td><td>LLM 主动调用 task_done 表示自认为完成</td></tr>
+<tr><td>第二层</td><td><code>must_patch</code> 验证</td><td>若配置了 must_patch，检查 git diff 是否产生有效 patch</td></tr>
+<tr><td>第三层</td><td><code>max_steps</code> 兜底</td><td>超过最大步数自动终止，防止无限循环</td></tr>
+</table>
+<p class="source-note">完成判定发生在工具执行之前：若 <code>task_done</code> 且 patch 校验通过，循环直接标记 COMPLETED；因此 task_done 更多是结构化协议，而非依赖其执行副作用。</p>
+
+<h3>7.4 并行 vs 串行工具执行</h3>
+<table>
+<tr><th>模式</th><th>实现</th><th>适用场景</th><th>限制</th></tr>
+<tr><td>并行</td><td><code>asyncio.gather()</code></td><td>独立工具调用（如同时读多个文件）</td><td>Docker 模式下退化为串行</td></tr>
+<tr><td>串行</td><td>逐一 await</td><td>有依赖关系的工具调用</td><td>执行时间更长</td></tr>
+</table>
+</div>
+
+<!-- ============ S8: Memory 机制 ============ -->
+<div class="section" id="s8">
+<h2>八、Memory 机制 <a class="doc-link" href="docs/trae-agent/08-memory.html" title="打开 Memory 机制开发文档">子文档</a></h2>
+
+<div class="highlight">当前 Trae Agent 没有独立 Memory Store、RAG 或跨会话持久记忆；所谓“会话记忆”是各 Provider Client 进程内的 <code>message_history</code>。Trajectory 是观测记录，Lakeview 是展示旁路，两者都不是 Memory、Replay 或 Checkpoint。</div>
+
+<h3>8.1 会话内记忆</h3>
+<p>整个 Agent Loop 过程中的上下文是连续的：</p>
+
+<div class="arch-diagram">
+用户消息（Issue）
+    ↓
+Agent 思考 1 → 工具调用 (bash: grep "auth") → 观察
+    ↓
+Agent 思考 2 → 工具调用 (view: auth.py) → 观察
+    ↓
+Agent 思考 3 → 工具调用 (str_replace: auth.py) → 观察
+    ↓
+Agent 思考 4 → 工具调用 (bash: pytest) → 观察
+    ↓
+... 所有历史保留在同一会话中
+</div>
+
+<p>这意味着：</p>
+<ul>
+  <li>修完 Bug → 运行 pytest → 失败 → 根据 pytest 结果修改 → 这些上下文都是连续的</li>
+  <li>Agent 可以引用之前的 Observation、Tool Output</li>
+  <li>Sequential Thinking 的历史（thought_history + branches）跨调用保持</li>
+</ul>
+
+<h3>8.2 跨会话长期记忆</h3>
+
+<div class="warning-box">
+  <strong>当前短板：</strong>Trae Agent 目前<strong>没有</strong>完整的长期记忆体系。没有 Memory DB、Vector DB、Knowledge Base 或 Project Memory。今天修 auth，明天继续 auth，Agent 不一定记得昨天发生了什么。
+</div>
+
+<p>官方博客提到的 "更多记忆" 实际上指的是：<strong>扩大 Context 管理和更好的代码检索</strong>，而不是用户级永久记忆。</p>
+
+<h3>8.3 替代方案：外部 Project Memory 层</h3>
+<p>对于二次开发，推荐在 Trae Agent 之上增加一层独立的 Project Memory：</p>
+
+<div class="arch-diagram">
+Review Agent / RCA Agent / 其他上层应用
+        │
+        ▼
+  Project Memory (自行维护)
+    │ 存储：项目编码规范、历史 Review 结论、
+    │       RCA 分析结果、常见修复模式、
+    │       模块架构知识、Issue 与 PR 关联
+    │
+    ▼
+  Trae Agent Runtime
+    │ 每次调用时，将相关记忆通过
+    │ Prompt 或检索注入上下文
+    │
+    ▼
+  Tool Runtime
+</div>
+
+<div class="key-point">
+  将记忆层独立于 Agent 之外的好处：切换底层 Agent（如从 Trae 切换到 Claude Code、Codex CLI）时，记忆层可复用，不被某个 Agent 的私有实现绑定。
+</div>
+
+<h3>8.4 Trajectory 作为"离线记忆"</h3>
+<p>Trajectory 文件（JSON 格式）完整记录了每次执行的全部过程，可以视为一种"离线记忆"：</p>
+<ul>
+  <li>可用于 调试 Agent 行为</li>
+  <li>可用于 Replay（重放执行过程）</li>
+  <li>可用于 Ablation Study（消融实验）</li>
+  <li>可用于构建训练数据</li>
+</ul>
+</div>
+
+<!-- ============ S9: 多 Agent 搜索推理 ============ -->
+<div class="section" id="s9">
+<h2>九、评估侧 Patch Selection（Test-time Scaling） <a class="doc-link" href="docs/trae-agent/09-patch-selection.html" title="打开 Patch Selection 开发文档">子文档</a></h2>
+
+<div class="highlight"><span class="badge eval">评估外环</span>技术报告讨论 Generator–Pruner–Selector 搜索范式；当前仓库主 CLI 只运行单个 TraeAgent。<code>evaluation/patch_selection/</code> 实现候选过滤与 Selector，候选 Patch 由外部输入提供。</div>
+
+<div class="intuition-box">
+  <span class="term">Test-time Scaling</span> 赌的是一件事：对同一个 Issue，模型"生成出正确补丁"的概率，远高于"一次就选中正确补丁"的概率。既然如此，就先多生成几份，再用回归测试和一个独立的 Selector 把它们筛一遍——把难题从"写对"转成"认出哪个是对的"，而后者恰好可以借助能真实执行的测试来判断。代价是算力成倍上升，所以它属于评估外环，而不是每次 <code>trae-cli run</code> 都跑的默认链路。
+</div>
+
+<h3>9.1 核心思想</h3>
+<p>传统 Agent 的推理路径是单线的：</p>
+<div class="arch-diagram">
+传统 Agent:  Task → Prompt → LLM → 一次生成 → 结束</div>
+
+<p>论文/评估流水线把多次独立生成结果作为候选集：</p>
+<div class="arch-diagram">
+评估：任务 → 外部生成多个候选 → 回归过滤/去重 → Selector → 最佳补丁</div>
+
+<div class="analogy-card">
+  传统 Agent 像一个只走一条路的探险者——遇到死胡同就只能回头。Trae Agent 的搜索推理像一支探险队——同时派出多个小队探索不同路线，淘汰走不通的，最终选出最佳路线。
+</div>
+
+<h3>9.2 三 Agent 协作架构</h3>
+
+<div class="agent-relation">
+<h4>Generator（生成器 Agent）</h4>
+<p>负责为同一个 Issue 生成多个 Patch 候选。<strong>当前开源 Selector 以 JSONL/候选日志为输入，Generator 不是主 Runtime 内已编排的类。</strong></p>
+
+<h4>Pruner（评估代码中的过滤步骤）</h4>
+<p>通过回归测试和去重过滤掉低质量候选：</p>
+<ul>
+  <li><strong>回归测试过滤：</strong>排除引入新 Bug 的 Patch</li>
+  <li><strong>补丁去重：</strong>基于清理后的 Patch 文本去重</li>
+  <li><strong>分组处理：</strong>将候选按 group_size 分组，跳过全成功/全失败的组</li>
+</ul>
+
+<h4>Selector（选择器 Agent）</h4>
+<p>使用 LLM 驱动的 Agent 分析候选 Patch 并选择最优：</p>
+<ul>
+  <li>在 Docker 沙箱中运行，拥有 bash 和 edit_tool</li>
+  <li>可以编写单元测试来验证候选 Patch</li>
+  <li>支持 <strong>多数投票</strong>：多次运行取多数票</li>
+  <li>输出格式：<code>### Status: succeed / ### Result: Patch-x</code></li>
+</ul>
+</div>
+
+<h3>9.3 完整流水线</h3>
+<div class="arch-diagram">
+Issue 描述
+    │
+    ▼
+外部生成器运行（仓库外部/上游生成候选 Patch）
+    │  Patch-1, Patch-2, ..., Patch-N
+    ▼
+Pruner
+    ├── 回归测试：排除引入回归的 Patch
+    ├── 去重：基于 Patch 文本去重
+    └── 分组：按 group_size 分组
+    │
+    ▼
+Selector Agent (在 Docker 沙箱中运行)
+    ├── 分析每个候选 Patch 的代码变更
+    ├── 可选：编写单元测试验证
+    ├── 可选：多数投票（多次运行）
+    └── 输出最优 Patch
+    │
+    ▼
+最佳补丁
+</div>
+
+<h3>9.4 效果</h3>
+<p>技术报告在其数据、候选生成和评测设置下报告：相比所比较的四种 Ensemble Reasoning 技术，Pass@1 平均提升 <strong>10.22%</strong>，SWE-bench Verified Pass@1 为 <strong>75.20%</strong><sup class="ref"><a href="#ref-1">[1]</a></sup>。这些数字应按论文实验结果引用，不能视为当前仓库单次 <code>trae-cli run</code> 的成功率。</p>
+</div>
+
+<!-- ============ S10: Prompt Engineering ============ -->
+<div class="section" id="s10">
+<h2>十、Prompt Engineering 提示词工程 <a class="doc-link" href="docs/trae-agent/10-prompt-engineering.html" title="打开 Prompt Engineering 开发文档">子文档</a></h2>
+
+<h3>10.1 System Prompt 结构</h3>
+<p>Trae Agent 的 System Prompt（<code>TRAE_AGENT_SYSTEM_PROMPT</code>）经过精心设计，包含以下层次：</p>
+
+<div class="arch-diagram">
+系统提示词 =
+  │
+  ├── 1. 角色定义
+  │   "You are a senior software engineer..."
+  │
+  ├── 2. 文件路径规则
+  │   所有路径必须为绝对路径，需结合项目根路径构建
+  │
+  ├── 3. 七步工作流指导
+  │   理解问题 → 探索定位 → 复现 Bug → 调试诊断
+  │   → 开发修复 → 验证测试 → 总结工作
+  │
+  ├── 4. Sequential Thinking 使用指南
+  │   total_thoughts 设为 5-25
+  │   可在思考之间穿插 bash 命令
+  │
+  ├── 5. 工具使用说明
+  │   各工具的参数和最佳实践
+  │
+  └── 6. 完成信号
+      明确指示使用 task_done 工具标记完成
+</div>
+
+<h3>10.2 提示词设计原则</h3>
+<table>
+<tr><th>原则</th><th>具体实践</th></tr>
+<tr><td><strong>角色沉浸</strong></td><td>扮演"资深软件工程师"，强调正确性、安全性和测试驱动开发</td></tr>
+<tr><td><strong>工作流驱动</strong></td><td>七步工作流提供明确的任务分解框架，防止 Agent 迷失方向</td></tr>
+<tr><td><strong>工具优先</strong></td><td>鼓励通过工具行动而非空想，"先复现 Bug 再修复"</td></tr>
+<tr><td><strong>路径安全</strong></td><td>强制绝对路径，防止相对路径导致文件操作错误</td></tr>
+<tr><td><strong>显式终止</strong></td><td>通过 task_done 工具而非文本关键词判断完成</td></tr>
+</table>
+
+<h3>10.3 User Message 构建</h3>
+<p><code>TraeAgent.new_task()</code> 构建的初始 User Message 包含：</p>
+<ul>
+  <li><strong>项目根路径：</strong>让 Agent 知道在哪里工作</li>
+  <li><strong>Issue 描述：</strong>完整的 Bug 报告或任务说明</li>
+  <li>System Prompt 和 User Message 通过 <code>LLMMessage</code> 统一封装</li>
+</ul>
+</div>
+
+<!-- ============ S11: Sandbox 与 Docker ============ -->
+<div class="section" id="s11">
+<h2>十一、Sandbox 与 Docker 沙箱 <a class="doc-link" href="docs/trae-agent/11-docker-sandbox.html" title="打开 Docker Sandbox 开发文档">子文档</a></h2>
+
+<div class="highlight"><span class="badge optional">可选能力</span>Docker 为部分高副作用工具提供容器执行后端，并带来环境复现与一定隔离；它默认不等于完整安全沙箱，工作区挂载、镜像、网络、环境变量和资源限制仍需部署方审计。</div>
+
+<h3>11.1 DockerManager 容器生命周期</h3>
+
+<div class="module-card">
+<h4>四种镜像来源</h4>
+<table>
+<tr><th>方式</th><th>命令参数</th><th>说明</th></tr>
+<tr><td>Docker 镜像名</td><td><code>--docker-image python:3.11</code></td><td>直接拉取镜像创建新容器</td></tr>
+<tr><td>已有容器 ID</td><td><code>--docker-container-id xxx</code></td><td>接入已运行的容器</td></tr>
+<tr><td>Dockerfile 构建</td><td><code>--dockerfile-path ./Dockerfile</code></td><td>从 Dockerfile 构建自定义镜像</td></tr>
+<tr><td>镜像文件加载</td><td><code>--docker-image-file ./image.tar</code></td><td>加载本地 tar 归档镜像</td></tr>
+</table>
+</div>
+
+<h3>11.2 容器内工具执行</h3>
+<div class="arch-diagram">
+宿主机                              Docker 容器
+┌────────────────┐                 ┌──────────────────┐
+│                │                 │                  │
+│ Agent Runtime  │                 │ /workspace/      │
+│     │          │   卷挂载  │  (项目代码)       │
+│ DockerTool     │────────────────►│                  │
+│ Executor       │                 │ /agent_tools/    │
+│     │          │   二进制复制     │  edit_tool       │
+│ PyInstaller    │────────────────►│  json_edit_tool  │
+│ 打包的二进制    │                 │  bash            │
+│                │                 │                  │
+└────────────────┘                 └──────────────────┘
+</div>
+
+<h3>11.3 DockerToolExecutor 代理模式</h3>
+<p><code>DockerToolExecutor</code> 是一个<strong>透明代理</strong>：</p>
+<ul>
+  <li>对于 bash、str_replace_based_edit_tool、json_edit_tool → 路由到容器内执行</li>
+  <li>对于其他工具（如 sequentialthinking、task_done）→ 仍由本地 ToolExecutor 执行</li>
+  <li><strong>路径翻译：</strong><code>_translate_path()</code> 将宿主机路径映射为容器内 <code>/workspace</code> 路径</li>
+  <li>并行调用在 Docker 模式下退化为串行（避免容器内并发冲突）</li>
+</ul>
+
+<h3>11.4 命令执行机制</h3>
+<ul>
+  <li>使用 <code>pexpect</code> 创建持久化交互式 Shell</li>
+  <li>通过 marker 字符串（<code>---CMD_DONE---</code>）检测命令完成和退出码</li>
+  <li>过滤命令回显，只返回有效输出</li>
+  <li>支持超时（默认 300 秒）</li>
+</ul>
+</div>
+
+<!-- ============ S12: Trajectory 全链路记录 ============ -->
+<div class="section" id="s12">
+<h2>十二、Trajectory 全链路记录 <a class="doc-link" href="docs/trae-agent/12-trajectory.html" title="打开 Trajectory 开发文档">子文档</a></h2>
+
+<div class="highlight"><span class="term">Trajectory</span> 是 Trae Agent 的重要差异化特性——完整记录 Agent 执行过程中的每一个决策，使其成为研究和调试的理想平台。</div>
+
+<div class="intuition-box">
+  Agent 出问题时最难受的不是"它错了"，而是"不知道它在第几步、因为看到了什么才拐错弯"。Trajectory 把每一步的输入消息、模型响应、工具参数和返回结果都按顺序落盘，等于把一次不可复现的执行变成了可以逐帧回看的录像。没有这份记录，所有改进都只能靠重跑几次碰运气。
+</div>
+
+<h3>12.1 三层记录粒度</h3>
+
+<div class="module-card">
+<h4>层级 1：任务级别</h4>
+<p><code>start_recording()</code> / <code>finalize_recording()</code> —— 任务元数据、时间戳、成功状态</p>
+</div>
+
+<div class="module-card">
+<h4>层级 2：LLM 交互级别</h4>
+<p><code>record_llm_interaction()</code> —— 输入消息、响应内容、Token 用量、工具调用请求</p>
+</div>
+
+<div class="module-card">
+<h4>层级 3：Agent 步骤级别</h4>
+<p><code>record_agent_step()</code> —— 步骤号、状态、LLM 消息、工具调用/结果、反思、错误</p>
+</div>
+
+<h3>12.2 持久化机制</h3>
+<ul>
+  <li>每次记录后<strong>立即</strong> <code>save_trajectory()</code> 写入 JSON 文件（增量保存，防中断丢数据）</li>
+  <li>默认路径 <code>trajectories/trajectory_{timestamp}.json</code></li>
+  <li>支持自定义路径：<code>--trajectory-file xxx.json</code></li>
+  <li><code>update_lakeview()</code> 提供追加摘要的能力；当前主 CLI 展示链路未确认调用该方法，不能假设每个轨迹都会包含 Lakeview 字段</li>
+</ul>
+
+<h3>12.3 Trajectory 文件结构</h3>
+<div class="arch-diagram">
+trajectory.json
+├── task: "Fix auth bug"
+├── start_time / end_time
+├── success: true
+├── total_tokens: 45230
+├── steps[]
+│   ├── step_number: 1
+│   ├── state: "COMPLETED"
+│   ├── llm_interaction
+│   │   ├── input_messages[]
+│   │   ├── response (thought + tool_calls)
+│   │   └── usage (input_tokens, output_tokens)
+│   ├── tool_calls[]
+│   │   ├── tool_name: "bash"
+│   │   ├── arguments: {"command": "grep -r 'auth' src/"}
+│   │   └── result: "trae_agent/cli.py:42: ..."
+│   ├── lakeview_summary: "..."   # 仅显式调用 update_lakeview 后可能出现
+│   └── reflection: null           # TraeAgent 默认无反思
+└── ...
+</div>
+
+<h3>12.4 应用场景</h3>
+<table>
+<tr><th>场景</th><th>说明</th></tr>
+<tr><td><strong>调试 Agent</strong></td><td>回放执行过程，定位 Agent 决策失误点</td></tr>
+<tr><td><strong>重放</strong></td><td>重放完整执行，复现特定行为</td></tr>
+<tr><td><strong>基准测试</strong></td><td>统计 Token 消耗、步骤数、成功率</td></tr>
+<tr><td><strong>消融实验</strong></td><td>对比不同配置/Prompt 的效果差异</td></tr>
+<tr><td><strong>训练数据</strong></td><td>将成功轨迹用作 SFT 训练数据</td></tr>
+</table>
+<p class="source-note">当前仓库统计 input/output/cache/reasoning token，但没有按模型单价换算货币成本的账单模块。</p>
+</div>
+
+<!-- ============ S13: LLM Provider 抽象 ============ -->
+<div class="section" id="s13">
+<h2>十三、LLM Provider 抽象层 <a class="doc-link" href="docs/trae-agent/13-llm-provider-abstraction.html" title="打开 LLM Provider 抽象层开发文档">子文档</a></h2>
+
+<div class="highlight">Trae Agent 以统一 <code>LLMClient</code> 门面装配 7 种 Provider 特化 Client。Agent Runtime 复用统一消息与工具调用模型，但参数、历史转换、Usage 和错误处理仍由各 Provider 适配；当前没有通用故障转移或流式传输编排。</div>
+
+<h3>13.1 架构分层</h3>
+<div class="arch-diagram">
+Agent Runtime
+    │
+    ▼
+LLMClient (统一门面)
+    │ 根据 LLMProvider 枚举延迟导入对应客户端
+    ▼
+BaseLLMClient (抽象基类)
+    │
+    ├── OpenAI_Client
+    ├── Anthropic_Client
+    ├── Azure_Client
+    ├── Google_Client
+    ├── Doubao_Client
+    ├── OpenRouter_Client
+    └── Ollama_Client
+    │
+    ▼
+LLM API (HTTP)
+</div>
+
+<h3>13.2 统一接口</h3>
+<p><code>BaseLLMClient</code> 定义两个核心抽象方法：</p>
+<table>
+<tr><th>方法</th><th>职责</th></tr>
+<tr><td><code>chat(messages, tools)</code></td><td>发送对话请求，返回 <code>LLMResponse</code></td></tr>
+<tr><td><code>set_chat_history(history)</code></td><td>设置对话历史</td></tr>
+</table>
+
+<h3>13.3 配置体系</h3>
+<div class="arch-diagram">
+Config (YAML)
+├── model_providers:        # 多个提供商
+│   ├── anthropic:
+│   │   ├── api_key: "sk-..."
+│   │   ├── provider: "anthropic"
+│   │   └── base_url: (可选)
+│   └── openai:
+│       ├── api_key: "sk-..."
+│       └── provider: "openai"
+│
+├── models:                  # 多个模型配置
+│   └── trae_agent_model:
+│       ├── model_provider: "anthropic"
+│       ├── model: "claude-sonnet-4-20250514"
+│       ├── max_tokens: 4096
+│       └── temperature: 0.5
+│
+└── agents:
+    └── trae_agent:
+        ├── model: "trae_agent_model"  # 引用模型配置
+        ├── tools: [bash, str_replace_based_edit_tool, ...]
+        └── max_steps: 200
+</div>
+
+<h3>13.4 配置优先级</h3>
+<div class="formula">
+  CLI 参数 &gt; 环境变量 &gt; 配置文件 &gt; 默认值
+</div>
+
+<h3>13.5 扩展新 Provider</h3>
+<p>添加新 LLM 提供商只需三步：</p>
+<ol>
+  <li>继承 <code>BaseLLMClient</code>，实现 <code>chat()</code> 和 <code>set_chat_history()</code></li>
+  <li>在 <code>LLMProvider</code> 枚举中添加新项</li>
+  <li>在 <code>LLMClient</code> 的延迟导入分支中添加对应映射</li>
+</ol>
+</div>
+
+<!-- ============ S14: MCP 协议集成 ============ -->
+<div class="section" id="s14">
+<h2>十四、MCP 协议集成 <a class="doc-link" href="docs/trae-agent/14-mcp-integration.html" title="打开 MCP 集成开发文档">子文档</a></h2>
+
+<div class="highlight"><span class="badge optional">可选能力</span>Trae Agent 可通过 <span class="term">MCP</span>（Model Context Protocol）动态发现外部工具；当前只实现 <code>stdio</code> transport，Server 需要完成配置并进入 Agent Allowlist，工具才会加入本次运行的 Tool 列表。</div>
+
+<div class="intuition-box">
+  MCP 的价值不在协议本身多精巧，而在于它把"扩展工具"从改源码变成了改配置。没有 MCP 时，每接一个 GitHub 或 Jira 都要写一个 Tool 子类、注册进 registry、重新发版；有了 MCP，工具的生命周期从 Agent 进程里搬到了外部进程。代价是准入边界要自己守住——白名单、Secret 传递和供应链风险，都从"我的代码"挪到了"别人的进程"。
+</div>
+
+<h3>14.1 架构</h3>
+<div class="arch-diagram">
+Agent Runtime
+    │
+    ▼
+MCPClient (MCP 客户端)
+    │
+    ├── 当前已实现传输：stdio
+    └── 配置预留 HTTP / URL / TCP，但连接会抛 NotImplementedError
+    │
+    ▼
+ClientSession (MCP 会话)
+    │
+    ├── list_tools() → 发现远程工具
+    │
+    ▼
+MCPTool (适配器) ← 实现本地 Tool 接口
+    │
+    ├── get_name() → 从 MCP inputSchema 动态生成
+    ├── get_parameters() → 动态转换为 ToolParameter
+    └── execute() → 委托给 MCPClient.call_tool()
+    │
+    ▼
+MCP Server (外部服务)
+    ├── GitHub MCP Server
+    ├── Jira MCP Server
+    ├── Playwright MCP Server
+    └── 自定义 MCP Server
+</div>
+
+<h3>14.2 MCPTool 适配器模式</h3>
+<p><code>MCPTool</code> 是适配器模式的典型应用：</p>
+<ul>
+  <li>持有 <code>MCPClient</code> 引用和 <code>mcp.types.Tool</code> 描述</li>
+  <li><code>get_parameters()</code> 从 MCP 的 <code>inputSchema</code> 动态生成 <code>ToolParameter</code></li>
+  <li><code>execute()</code> 委托给 <code>MCPClient.call_tool()</code> 进行实际调用</li>
+  <li>Agent 对 MCPTool 和本地工具一视同仁——不感知底层协议差异</li>
+</ul>
+
+<h3>14.3 连接与发现流程</h3>
+<div class="arch-diagram">
+MCPClient.connect_and_discover()
+    │
+    ├── 1. 校验 allow_mcp_servers 白名单
+    ├── 2. 用 command/args/env/cwd 建立 stdio transport
+    ├── 3. 使用 AsyncExitStack 管理异步上下文
+    ├── 4. 建立 ClientSession 并初始化
+    ├── 5. 调用 list_tools() 发现远程工具
+    └── 6. 为每个远程工具创建 MCPTool 适配器
+</div>
+
+<h3>14.4 MCP 配置示例</h3>
+<div class="arch-diagram">
+# trae_config.yaml
+mcp_servers:
+  playwright:
+    command: npx
+    args:
+      - "@playwright/mcp@0.0.27"
+  github:
+    url: "https://github-mcp.example.com/sse"
+    # 或 stdio / streamable_http / websocket
+</div>
+
+<h3>14.5 MCP 工具白名单</h3>
+<p><code>TraeAgentConfig</code> 支持 <code>allow_mcp_servers</code> 字段，按白名单过滤可用的 MCP 服务器，防止 Agent 使用未授权的外部工具。</p>
+
+<h3>14.6 支持的传输协议</h3>
+<table>
+<tr><th>协议</th><th>配置方式</th><th>状态</th></tr>
+<tr><td>stdio</td><td><code>command</code> + <code>args</code></td><td>已实现</td></tr>
+<tr><td>URL / WebSocket 字段</td><td><code>url</code></td><td>未实现，显式抛出 <code>NotImplementedError</code></td></tr>
+<tr><td>Streamable HTTP 字段</td><td><code>http_url</code></td><td>未实现，显式抛出 <code>NotImplementedError</code></td></tr>
+<tr><td>TCP 字段</td><td><code>tcp</code></td><td>配置模型预留，连接分支未实现</td></tr>
+</table>
+</div>
+
+<!-- ============ S15: CKG 代码知识图谱 ============ -->
+<div class="section" id="s15">
+<h2>十五、CKG 代码知识图谱 <a class="doc-link" href="docs/trae-agent/15-ckg-code-knowledge-graph.html" title="打开 CKG 开发文档">子文档</a></h2>
+
+<div class="highlight"><span class="badge optional">可选能力</span><span class="term">CKG</span>（Code Knowledge Graph，代码知识图谱）已注册在 <code>tools_registry</code>，通过 AST 解析构建代码结构索引；但默认 <code>TraeAgentConfig.tools</code> 与示例 YAML 未启用 <code>ckg</code>，需要显式配置。</div>
+
+<h3>15.1 架构</h3>
+<div class="arch-diagram">
+CKGTool (Agent 工具接口)
+    │
+    ├── search_function(name)    → 搜索独立函数
+    ├── search_class(name)       → 搜索类定义 (含字段和方法签名)
+    └── search_class_method(name) → 搜索类方法
+    │
+    ▼
+CKGDatabase (SQLite 存储)
+    │
+    ├── FunctionEntry (函数名, 源码, 行号, 父函数)
+    └── ClassEntry (类名, 字段, 方法, 行号, 父类)
+    │
+    ▼
+tree-sitter AST 解析
+    │
+    ├── Python / Java / C++ / C / TypeScript / JavaScript
+    └── 每种语言独立的 _recursive_visit_* 遍历方法
+</div>
+
+<h3>15.2 构建机制</h3>
+<p><code>CKGDatabase._construct_ckg()</code> 使用 <strong>tree-sitter</strong> 进行 AST 解析：</p>
+<ul>
+  <li>支持 6 种编程语言：Python、Java、C++、C、TypeScript、JavaScript</li>
+  <li>提取函数/类名、源代码体、行号范围、父函数/父类关系</li>
+  <li>数据存入 SQLite 数据库，支持高效查询</li>
+</ul>
+
+<h3>15.3 缓存与过期</h3>
+<table>
+<tr><th>机制</th><th>说明</th></tr>
+<tr><td><strong>Git 仓库</strong></td><td>用 commit hash + dirty 标记作为数据库名称</td></tr>
+<tr><td><strong>非 Git 仓库</strong></td><td>用文件元数据哈希作为数据库名称</td></tr>
+<tr><td><strong>缓存复用</strong></td><td>通过 <code>storage_info.json</code> 映射代码路径到哈希，相同哈希复用已有数据库</td></tr>
+<tr><td><strong>过期清理</strong></td><td><code>clear_older_ckg()</code> 自动清理超过 7 天的旧数据库</td></tr>
+</table>
+
+<h3>15.4 仓库优先理念</h3>
+
+<div class="key-point">
+  CKG 体现了 Trae Agent 的 <strong>仓库优先</strong>设计理念——不是"读一个文件"，而是围绕整个代码仓库进行理解和决策。这使得 Agent 能够：
+  <ul style="margin-top:.5rem">
+    <li>修改 A 文件时，知道 B 文件会受影响</li>
+    <li>搜索函数定义而不需要 <code>grep</code> 全仓库</li>
+    <li>理解类继承关系和模块依赖</li>
+  </ul>
+</div>
+<p class="source-note">CKG 当前主要索引函数、类、方法及其源码/位置关系。文档不应把它等同于完整的跨文件调用图或语义依赖图。</p>
+</div>
+
+<!-- ============ S16: 市场 Agent 架构对比 ============ -->
+<div class="section" id="s16">
+<h2>十六、外部系统对比（非源码结论）</h2>
+
+<div class="warning-box">本节是帮助理解设计取舍的定性材料，不是由当前仓库源码证明的事实。外部产品能力和榜单会持续变化；星级、排名与闭源系统内部实现不应用作技术决策的唯一依据。</div>
+
+<h3>16.1 与 Claude Code / Codex CLI / OpenHands 对比</h3>
+<table>
+<tr><th>能力</th><th>Trae Agent</th><th>Claude Code</th><th>Codex CLI</th><th>OpenHands</th></tr>
+<tr><td>CLI 接口</td><td>✅</td><td>✅</td><td>✅</td><td>✅ (Web UI)</td></tr>
+<tr><td>多 LLM 支持</td><td>✅ 7 种</td><td>Claude 为主</td><td>OpenAI 为主</td><td>✅ 多种</td></tr>
+<tr><td>工具系统</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐⭐⭐</td><td>⭐⭐⭐⭐</td></tr>
+<tr><td>规划能力</td><td>明确内置 + SequentialThinking</td><td>有但隐式</td><td>有但较轻</td><td>有</td></tr>
+<tr><td>Trajectory 记录</td><td>⭐⭐⭐⭐⭐ 非常完整</td><td>⭐⭐ 较少暴露</td><td>⭐⭐ 较少暴露</td><td>⭐⭐⭐</td></tr>
+<tr><td>Lakeview 摘要</td><td>✅ CLI 可观测旁路</td><td>未在本文核验</td><td>未在本文核验</td><td>未在本文核验</td></tr>
+<tr><td>集成搜索</td><td>评估侧 Selector；Generator 外部输入</td><td>未在本文核验</td><td>未在本文核验</td><td>未在本文核验</td></tr>
+<tr><td>研究友好度</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐</td><td>⭐⭐</td><td>⭐⭐⭐⭐</td></tr>
+<tr><td>长期记忆</td><td>⭐⭐ 较弱</td><td>⭐⭐⭐</td><td>⭐⭐</td><td>⭐⭐⭐</td></tr>
+<tr><td>Docker 沙箱</td><td>⭐⭐⭐⭐⭐ 四种模式</td><td>✅</td><td>✅</td><td>⭐⭐⭐⭐</td></tr>
+<tr><td>MCP 支持</td><td>✅ 原生</td><td>✅</td><td>✅</td><td>部分</td></tr>
+</table>
+
+<h3>16.2 与 OpenClaw (通用 Agent Runtime) 对比</h3>
+
+<div class="analogy-card">
+  Trae Agent 和 OpenClaw 属于同一代 Agent 运行时架构，只是面向不同场景：Trae 偏软件工程，OpenClaw 偏长期运行的个人 Agent。
+</div>
+
+<table>
+<tr><th>架构模块</th><th>Trae Agent</th><th>OpenClaw</th></tr>
+<tr><td>Agent Loop</td><td>✅ ReAct + Planning</td><td>✅ ReAct + Session</td></tr>
+<tr><td>运行时核心</td><td>✅ BaseAgent</td><td>✅ agent-core</td></tr>
+<tr><td>工具注册表</td><td>✅ tools_registry</td><td>✅ agent-tools</td></tr>
+<tr><td>Provider 抽象</td><td>✅ 策略模式，7 种</td><td>✅ Provider Registry</td></tr>
+<tr><td>Context 压缩</td><td>未实现通用压缩；Lakeview 仅供观察</td><td>Compaction (对话压缩)</td></tr>
+<tr><td>Session 管理</td><td>⭐⭐ 较弱（Job 模式）</td><td>⭐⭐⭐⭐⭐ 持久化 Session</td></tr>
+<tr><td>Workspace</td><td>Repo (Git 仓库)</td><td>持久化工作区</td></tr>
+<tr><td>Plugin 系统</td><td>⭐⭐ 内置为主</td><td>⭐⭐⭐⭐⭐ Plugin SDK</td></tr>
+<tr><td>Repository 理解</td><td>⭐⭐⭐⭐⭐ CKG + tree-sitter</td><td>⭐⭐ 一般</td></tr>
+<tr><td>基于搜索的推理</td><td>评估侧 Patch Selection</td><td>未在本文核验</td></tr>
+<tr><td>长期运行 (常驻运行)</td><td>❌ Job 模式</td><td>⭐⭐⭐⭐⭐</td></tr>
+<tr><td>多渠道接入</td><td>❌</td><td>✅ Telegram/Discord/Slack/Email</td></tr>
+</table>
+
+<h3>16.3 与 Cursor / Windsurf 对比</h3>
+<table>
+<tr><th>维度</th><th>Trae Agent</th><th>Cursor</th><th>Windsurf</th></tr>
+<tr><td>定位</td><td>Agent Runtime + CLI</td><td>IDE + Agent + 代码库索引</td><td>IDE + Agent</td></tr>
+<tr><td>交互方式</td><td>CLI / API</td><td>IDE 内嵌</td><td>IDE 内嵌</td></tr>
+<tr><td>代码索引</td><td>CKG (tree-sitter)</td><td>全量 代码库索引</td><td>全量 Index</td></tr>
+<tr><td>长期记忆</td><td>⭐⭐ 弱</td><td>⭐⭐⭐⭐ Project Memory</td><td>⭐⭐⭐</td></tr>
+<tr><td>用户体验</td><td>开发者 / 研究者</td><td>普通开发者</td><td>普通开发者</td></tr>
+<tr><td>开源</td><td>✅ MIT</td><td>❌</td><td>❌</td></tr>
+<tr><td>可扩展性</td><td>⭐⭐⭐⭐⭐</td><td>⭐⭐</td><td>⭐⭐</td></tr>
+</table>
+
+<h3>16.4 与 SWE-Agent / Devin 对比</h3>
+<table>
+<tr><th>维度</th><th>Trae Agent</th><th>SWE-Agent</th><th>Devin</th></tr>
+<tr><td>定位</td><td>通用 SE Agent + 研究平台</td><td>学术基准 Agent</td><td>商业化 AI 工程师</td></tr>
+<tr><td>推理方式</td><td>主 CLI 单 Agent；评估侧选择候选</td><td>单路径 ReAct</td><td>多 Agent + 工具链（公开细节有限）</td></tr>
+<tr><td>Test-time Scaling</td><td>⭐⭐⭐⭐⭐</td><td>❌</td><td>部分（不透明）</td></tr>
+<tr><td>开源透明</td><td>✅ 完全开源</td><td>✅ 开源</td><td>❌ 闭源商业产品</td></tr>
+<tr><td>SWE-bench 表现</td><td>75.20% (第一)</td><td>~40%</td><td>未公开完整数据</td></tr>
+</table>
+
+<h3>16.5 各 Agent 架构模式总结</h3>
+<table>
+<tr><th>系统</th><th>核心架构</th><th>最大优势</th><th>最大短板</th></tr>
+<tr><td><strong>Trae Agent</strong></td><td>透明 Agent Runtime + 独立 Patch Selector</td><td>源码可研究 + 轨迹完整</td><td>长期记忆与压缩缺失</td></tr>
+<tr><td><strong>Claude Code</strong></td><td>单 Agent + 强工具链</td><td>LLM 原生能力强</td><td>封闭、单一模型</td></tr>
+<tr><td><strong>Cursor</strong></td><td>IDE + Agent + Index</td><td>用户体验 + 记忆</td><td>封闭、不可扩展</td></tr>
+<tr><td><strong>OpenClaw</strong></td><td>General Agent Runtime</td><td>长期运行 + 插件生态</td><td>缺乏代码智能</td></tr>
+<tr><td><strong>SWE-Agent</strong></td><td>单 Agent ReAct</td><td>学术基准、简洁</td><td>推理能力有限</td></tr>
+<tr><td><strong>Devin</strong></td><td>多 Agent 商业系统</td><td>端到端商业化</td><td>闭源不透明</td></tr>
+</table>
+</div>
+
+<!-- ============ S17: 设计模式总览 ============ -->
+<div class="section" id="s17">
+<h2>十七、设计模式总览</h2>
+
+<div class="highlight">Trae Agent 的代码架构体现了多种经典设计模式，理解这些模式对于二次开发至关重要。</div>
+
+<table>
+<tr><th>模式</th><th>应用位置</th><th>说明</th></tr>
+<tr>
+  <td><strong>门面 (Facade)</strong></td>
+  <td><code>Agent</code> 类</td>
+  <td>统一入口，屏蔽内部 Agent + Tool + LLM 的复杂性</td>
+</tr>
+<tr>
+  <td><strong>策略 (Strategy)</strong></td>
+  <td><code>LLMClient</code> / <code>BaseLLMClient</code></td>
+  <td>7 种 LLM 提供商可运行时互换</td>
+</tr>
+<tr>
+  <td><strong>模板方法 (Template Method)</strong></td>
+  <td><code>BaseAgent.execute_task()</code></td>
+  <td>定义算法骨架（循环），子类覆写特定步骤（完成判定、反思等）</td>
+</tr>
+<tr>
+  <td><strong>工厂 (Factory)</strong></td>
+  <td><code>Agent.__init__</code></td>
+  <td>根据 AgentType 枚举创建具体 Agent 实例</td>
+</tr>
+<tr>
+  <td><strong>适配器 (Adapter)</strong></td>
+  <td><code>MCPTool</code></td>
+  <td>将 MCP 协议的工具适配到本地 Tool 接口</td>
+</tr>
+<tr>
+  <td><strong>代理 (Proxy)</strong></td>
+  <td><code>DockerToolExecutor</code></td>
+  <td>透明地将工具调用路由到 Docker 容器内执行</td>
+</tr>
+<tr>
+  <td><strong>注册表 (Registry)</strong></td>
+  <td><code>tools_registry</code></td>
+  <td>全局工具名称到类的映射，支持动态注册</td>
+</tr>
+<tr>
+  <td><strong>观察者 (Observer)</strong></td>
+  <td><code>CLIConsole.update_status()</code></td>
+  <td>Agent 状态变化驱动 UI 更新</td>
+</tr>
+<tr>
+  <td><strong>数据类 (Dataclass)</strong></td>
+  <td><code>AgentStep</code>, <code>LLMMessage</code></td>
+  <td>纯数据交换对象，无业务逻辑</td>
+</tr>
+</table>
+</div>
+
+<!-- ============ S18: 二次开发指南 ============ -->
+<div class="section" id="s18">
+<h2>十八、二次开发指南</h2>
+
+<div class="highlight">基于对架构的深度分析，本节为组内开发代码 Agent 提供实践参考。</div>
+
+<h3>18.1 可扩展性设计</h3>
+
+<div class="module-card">
+<h4>添加新工具</h4>
+<ol>
+  <li>继承 <code>Tool</code> 抽象基类</li>
+  <li>实现 <code>get_name()</code> / <code>get_description()</code> / <code>get_parameters()</code> / <code>execute()</code></li>
+  <li>在 <code>tools_registry</code> 中注册</li>
+  <li>在 YAML 配置的 <code>tools</code> 列表中启用</li>
+</ol>
+</div>
+
+<div class="module-card">
+<h4>添加新 LLM Provider</h4>
+<ol>
+  <li>继承 <code>BaseLLMClient</code>，实现 <code>chat()</code> 和 <code>set_chat_history()</code></li>
+  <li>在 <code>LLMProvider</code> 枚举中添加新项</li>
+  <li>在 <code>LLMClient</code> 的延迟导入分支中添加映射</li>
+</ol>
+</div>
+
+<div class="module-card">
+<h4>添加新 Agent 类型</h4>
+<ol>
+  <li>继承 <code>BaseAgent</code>，覆写需要的模板方法</li>
+  <li>在 <code>AgentType</code> 枚举中添加新项</li>
+  <li>在 <code>Agent.__init__</code> 的工厂分支中添加创建逻辑</li>
+</ol>
+</div>
+
+<h3>18.2 二次开发改进方向</h3>
+
+<table>
+<tr><th>改进方向</th><th>当前现状</th><th>建议方案</th><th>优先级</th></tr>
+<tr>
+  <td><strong>长期记忆</strong></td>
+  <td>无 Memory DB / Vector DB</td>
+  <td>外部增加 Project Memory 层，通过 Prompt 注入</td>
+  <td>🔴 高</td>
+</tr>
+<tr>
+  <td><strong>上下文压缩</strong></td>
+  <td>无主 history 压缩；Lakeview 仅供观察</td>
+  <td>借鉴 OpenClaw 的压缩，自动压缩历史对话</td>
+  <td>🔴 高</td>
+</tr>
+<tr>
+  <td><strong>Session 持久化</strong></td>
+  <td>Job 模式，任务结束即终止</td>
+  <td>增加 Session Store，支持跨任务上下文延续</td>
+  <td>🟡 中</td>
+</tr>
+<tr>
+  <td><strong>Plugin 生态</strong></td>
+  <td>内置工具 + MCP</td>
+  <td>设计 Plugin SDK，支持第三方工具热加载</td>
+  <td>🟡 中</td>
+</tr>
+<tr>
+  <td><strong>多 Agent 协作</strong></td>
+  <td>单 Agent 主循环 + 独立 Patch Selector 评估</td>
+  <td>支持 Review Agent / RCA Agent 等多 Agent 编排</td>
+  <td>🟡 中</td>
+</tr>
+<tr>
+  <td><strong>上下文裁剪</strong></td>
+  <td>无智能裁剪</td>
+  <td>基于相关性评分裁剪无关上下文</td>
+  <td>🟢 低</td>
+</tr>
+<tr>
+  <td><strong>可视化仪表盘</strong></td>
+  <td>仅 CLI</td>
+  <td>基于 Trajectory 数据构建 Web 仪表盘</td>
+  <td>🟢 低</td>
+</tr>
+</table>
+
+<h3>18.3 融合二者的理想架构</h3>
+<p>如果要构建一个更强的编码 Agent 平台，建议融合 Trae Agent 和 OpenClaw 的优点：</p>
+
+<div class="arch-diagram">
+┌────────────────────────────────────────────────────────────┐
+│                    API / 网关层                            │
+├────────────────────────────────────────────────────────────┤
+│               多 Agent 编排器                              │
+│    (Review Agent / RCA Agent / Code Agent / Test Agent)    │
+├────────────────┬────────────────┬───────────────────────────┤
+│  规划          │  记忆          │  工具管理器               │
+│  (来自 Trae)   │  (来自 OpenClaw)│  (两者融合)               │
+│  SeqThinking   │  Project Memory│  Local + MCP + Plugin     │
+│  GPS Search    │  Session Store │  Docker Sandbox           │
+│                │  上下文        │                           │
+│                │  压缩          │                           │
+├────────────────┴────────────────┴───────────────────────────┤
+│              Agent 运行时核心                               │
+│  (来自两者共有的 Agent Loop / Template Method / Strategy)    │
+├────────────────────────────────────────────────────────────┤
+│              LLM Provider 层                                │
+│  OpenAI / Anthropic / Gemini / Doubao / Ollama / Custom    │
+├────────────────────────────────────────────────────────────┤
+│              执行层                                         │
+│  Bash / FileEdit / CKG / MCP / Docker / Custom Plugin      │
+├────────────────────────────────────────────────────────────┤
+│              可观测性                                       │
+│  Trajectory (来自 Trae) + Metrics + 仪表盘               │
+└────────────────────────────────────────────────────────────┘
+</div>
+
+<div class="key-point">
+  借鉴 Trae 的 Repository Intelligence、Planning、Search、Trajectory，提升复杂代码任务能力。借鉴 OpenClaw 的 Agent Core、Session、Plugin SDK、Workspace、上下文压缩，提升可扩展性、长期运行能力和工程化程度。这样得到的会更接近一个既能持续运行、又能完成复杂软件工程任务的通用 Agent 平台。
+</div>
+
+<h3>18.4 架构设计核心原则</h3>
+<p>从 Trae Agent 中提炼出的、适用于自研 Code Agent 的核心原则：</p>
+
+<div class="flow-step">
+  <div class="flow-num">1</div>
+  <div class="flow-content">
+    <strong>Agent Runtime 与 Tool 解耦</strong> —— Agent Loop、ToolExecutor、Tool、LLM Client 之间边界清晰，方便替换模型或新增工具。规划主要由 Prompt 和 Sequential Thinking 引导，并不存在独立 Planner 服务。
+  </div>
+</div>
+
+<div class="flow-step">
+  <div class="flow-num">2</div>
+  <div class="flow-content">
+    <strong>仓库优先</strong> —— 不是"读一个文件"，而是围绕整个代码仓库进行理解和决策。投资代码索引（CKG / tree-sitter / 依赖分析）比投资更好的 Prompt 更有回报。
+  </div>
+</div>
+
+<div class="flow-step">
+  <div class="flow-num">3</div>
+  <div class="flow-content">
+    <strong>基于替换的编辑</strong> —— 基于查找/替换生成 Patch，而不是重写整文件。减少 Token 消耗并提升 Patch 稳定性。
+  </div>
+</div>
+
+<div class="flow-step">
+  <div class="flow-num">4</div>
+  <div class="flow-content">
+    <strong>上下文压缩是长任务的生命线</strong> —— 当前 Provider history 会持续增长，Lakeview 不能缓解主上下文压力。二次开发需要真正的 压缩、裁剪与窗口监控。
+  </div>
+</div>
+
+<div class="flow-step">
+  <div class="flow-num">5</div>
+  <div class="flow-content">
+    <strong>Trajectory 全链路记录</strong> —— Prompt、工具调用、观察结果、决策全部可回放。没有 Trajectory，就没有 调试 Agent 的能力，也没有改进的依据。
+  </div>
+</div>
+
+<div class="flow-step">
+  <div class="flow-num">6</div>
+  <div class="flow-content">
+    <strong>测试时扩展 / 搜索</strong> —— 复杂任务不应依赖单次推理。Generator-Pruner-Selector 的搜索范式是提升质量的有效方法，值得在关键任务中使用。
+  </div>
+</div>
+
+<div class="flow-step">
+  <div class="flow-num">7</div>
+  <div class="flow-content">
+    <strong>记忆层独立于 Agent</strong> —— 不要把记忆耦合到 Agent 内部。外部维护 Project Memory，每次调用时注入上下文，这样切换底层 Agent 时记忆层可复用。
+  </div>
+</div>
+</div>
+
+<!-- ============ 参考资料 ============ -->
+<div class="ref-section" id="ref">
+<h2>参考资料</h2>
+<ol class="ref-list">
+  <li id="ref-1"><span class="ref-num">1</span> Trae Research Team. "Trae Agent: An LLM-based Agent for Software Engineering with Test-time Scaling." arXiv:2507.23370, July 2025. <a href="https://arxiv.org/abs/2507.23370">arxiv.org/abs/2507.23370</a></li>
+  <li id="ref-2"><span class="ref-num">2</span> ByteDance. "Trae Agent - GitHub Repository." <a href="https://github.com/bytedance/trae-agent">github.com/bytedance/trae-agent</a></li>
+  <li><span class="ref-num">3</span> Anthropic. "Building effective agents." Anthropic Research Blog, December 2024.</li>
+  <li><span class="ref-num">4</span> Anthropic. "Anthropic Quickstarts - Computer Use Demo." <a href="https://github.com/anthropics/anthropic-quickstarts">github.com/anthropics/anthropic-quickstarts</a></li>
+  <li><span class="ref-num">5</span> Princeton NLP. "SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering." 2024.</li>
+  <li><span class="ref-num">6</span> OpenAI. "Codex CLI - Open Source Coding Agent." <a href="https://github.com/openai/codex">github.com/openai/codex</a></li>
+  <li><span class="ref-num">7</span> All Hands AI. "OpenHands - An Open Platform for AI Software Developers." <a href="https://github.com/All-Hands-AI/OpenHands">github.com/All-Hands-AI/OpenHands</a></li>
+  <li><span class="ref-num">8</span> Yao et al. "ReAct: Synergizing Reasoning and Acting in Language Models." ICLR 2023.</li>
+  <li><span class="ref-num">9</span> Model Context Protocol Specification. <a href="https://modelcontextprotocol.io">modelcontextprotocol.io</a></li>
+  <li><span class="ref-num">10</span> SWE-bench. "SWE-bench: Can Language Models Resolve Real-World GitHub Issues?" <a href="https://www.swebench.com">swebench.com</a></li>
+</ol>
+</div>
+
+<!-- ============ Q&A ============ -->
+<div class="qa-section" id="qa">
+<h2>Q&A</h2>
+
+<details>
+  <summary>Trae Agent 和 Claude Code 哪个更适合做二次开发底座？</summary>
+  <div class="answer">Trae Agent 更适合。它完全开源（MIT），架构透明，模块化程度高，且专为研究场景设计。Claude Code 虽然工程能力强，但闭源且绑定单一模型，不适合深度定制。Trae Agent 的 Tool Framework、Agent Loop、Trajectory 记录等都可以直接复用。</div>
+</details>
+
+<details>
+  <summary>Lakeview 摘要会不会丢失关键信息？</summary>
+  <div class="answer">会，因为它只生成 task（约 10 词）+ details（约 30 词）+ tag。但 Lakeview 面向 CLI 人类阅读，不会替换或裁剪主模型历史；它的损失不会直接影响 Agent 决策。原始 LLM 交互与步骤仍由 Trajectory 记录。</div>
+</details>
+
+<details>
+  <summary>如何在不修改源码的情况下扩展工具？</summary>
+  <div class="answer">通过 MCP 协议。在 <code>trae_config.yaml</code> 中配置 <code>mcp_servers</code>，即可动态接入 GitHub、Jira、Playwright 等外部工具，无需修改 Agent 代码。MCP 工具会被自动发现并注册到 ToolExecutor 中。</div>
+</details>
+
+<details>
+  <summary>GPS（Generator-Pruner-Selector）在开源版本中可用吗？</summary>
+  <div class="answer">部分可用。开源版本的 <code>evaluation/patch_selection/</code> 目录包含了 Selector Agent 和评估框架的完整实现，但 Generator 需要外部系统生成候选 Patch（输入为 JSONL 格式）。Pruner 的回归测试和去重逻辑已集成在 SelectorEvaluation 中。</div>
+</details>
+
+<details>
+  <summary>Trae Agent 的最大短板是什么？如何弥补？</summary>
+  <div class="answer">最大短板是<strong>长期记忆</strong>。当前无 Memory DB / Vector DB，跨会话无法延续上下文。建议：(1) 外部增加 Project Memory 层，存储编码规范、历史 Review、RCA 结果等；(2) 每次调用 Trae Agent 时通过 Prompt 注入相关记忆；(3) 利用 Trajectory 文件作为"离线记忆"进行分析。这样记忆层与 Agent 解耦，切换底层 Agent 时可复用。</div>
+</details>
+
+<details>
+  <summary>Sequential Thinking 工具和 LLM 原生 CoT 有什么区别？</summary>
+  <div class="answer">Sequential Thinking 是一个<strong>显式工具</strong>，维护结构化的 thought_history 和 branches 数据，支持修订（is_revision）和分支（branch_from_thought）。而 LLM 原生 CoT 是隐式的思维链，无法跨调用保持状态。Sequential Thinking 让推理过程更可控、可追溯，并且可以在思考之间穿插 Bash 命令获取外部信息。</div>
+</details>
+
+<details>
+  <summary>Agent Loop 中的 max_steps 设置多大合适？</summary>
+  <div class="answer">示例配置默认 200 步，但应按模型窗口、工具输出和任务风险通过实验确定。Lakeview 不压缩主 history，不能作为调高 max_steps 的依据；长任务更应拆分并监控 token 增长。</div>
+</details>
+</div>
+
+<!-- ============ 附录 A: 术语对照表 ============ -->
+<div class="section" id="glossary">
+<h2>附录 A · 术语对照表</h2>
+<p>以下术语在本文中频繁出现，统一列出以便查阅。</p>
+<table>
+<thead><tr><th>英文术语</th><th>中文</th><th>一句话解释</th></tr></thead>
+<tbody>
+<tr><td>Agent Runtime</td><td>代理运行时</td><td>Agent 的核心执行引擎，管理生命周期与状态</td></tr>
+<tr><td>Agent Loop</td><td>代理循环</td><td>Agent 的核心工作循环：思考→行动→观察→重复</td></tr>
+<tr><td>ReAct</td><td>推理-行动范式</td><td>Reasoning + Acting 的缩写，LLM 交替推理与执行的模式</td></tr>
+<tr><td>Tool Framework</td><td>工具框架</td><td>管理工具注册、发现、调用的基础设施</td></tr>
+<tr><td>Replace-based Editing</td><td>基于替换的编辑</td><td>通过查找/替换修改文件，而非重写整个文件</td></tr>
+<tr><td>Context Engineering</td><td>上下文工程</td><td>精心组装发给 LLM 的"工作材料"</td></tr>
+<tr><td>Context Compression / Compaction</td><td>上下文压缩</td><td>对话过长时自动压缩旧消息以节省 Token</td></tr>
+<tr><td>Context Pruning</td><td>上下文裁剪</td><td>智能移除与当前任务无关的上下文内容</td></tr>
+<tr><td>Lakeview</td><td>可观测性旁路</td><td>异步旁路系统，生成任务摘要与标签，不阻塞主流程</td></tr>
+<tr><td>Observability</td><td>可观测性</td><td>系统运行状态的外部可感知程度</td></tr>
+<tr><td>Memory</td><td>记忆</td><td>Agent 在多轮/多会话间保持信息的机制</td></tr>
+<tr><td>Trajectory</td><td>轨迹</td><td>Agent 执行全过程的结构化记录</td></tr>
+<tr><td>Patch Selection</td><td>补丁选择</td><td>评估侧从多个候选补丁中选出最优解的流程</td></tr>
+<tr><td>Test-time Scaling</td><td>测试时扩展</td><td>在推理阶段投入更多计算资源以提升结果质量</td></tr>
+<tr><td>Majority Voting</td><td>多数投票</td><td>多个候选结果中取出现最多的作为最终答案</td></tr>
+<tr><td>Prompt Engineering</td><td>提示词工程</td><td>设计和优化发给 LLM 的指令文本</td></tr>
+<tr><td>System Prompt</td><td>系统提示词</td><td>定义 LLM 角色、行为约束的顶层指令</td></tr>
+<tr><td>Sandbox</td><td>沙箱</td><td>隔离环境，限制 Agent 的操作范围以保障安全</td></tr>
+<tr><td>Docker</td><td>容器化平台</td><td>提供 OS 级隔离的容器运行环境</td></tr>
+<tr><td>LLM Provider</td><td>LLM 提供者</td><td>提供大语言模型 API 服务的厂商（OpenAI、Anthropic 等）</td></tr>
+<tr><td>Failover</td><td>故障转移</td><td>主模型失败时自动切换到备用模型</td></tr>
+<tr><td>Streaming</td><td>流式传输</td><td>LLM 逐 Token 返回结果而非一次性返回</td></tr>
+<tr><td>MCP</td><td>模型上下文协议</td><td>连接 AI 与外部工具/数据的开放协议</td></tr>
+<tr><td>CKG</td><td>代码知识图谱</td><td>基于 Tree-sitter 的代码结构索引与检索系统</td></tr>
+<tr><td>Repository-first</td><td>仓库优先</td><td>以代码仓库为中心组织所有上下文信息</td></tr>
+<tr><td>Ensemble Search</td><td>集成搜索</td><td>组合多个搜索/推理策略以提升准确率</td></tr>
+<tr><td>Ablation Study</td><td>消融实验</td><td>逐一移除组件以评估各部分贡献的实验方法</td></tr>
+<tr><td>Benchmark</td><td>基准测试</td><td>用标准化测试集评估系统性能</td></tr>
+<tr><td>Replay</td><td>重放</td><td>重新执行已记录的 Agent 轨迹以复现问题</td></tr>
+<tr><td>Allowlist</td><td>允许列表</td><td>白名单机制，仅允许列表中的项目通过</td></tr>
+<tr><td>Checkpoint</td><td>检查点</td><td>保存执行状态快照以便恢复</td></tr>
+<tr><td>Cancel Token</td><td>取消令牌</td><td>用于协作式取消正在执行的操作的信号</td></tr>
+<tr><td>Tool Registry</td><td>工具注册表</td><td>存储所有可用工具元数据的中心化管理结构</td></tr>
+<tr><td>Codebase Index</td><td>代码库索引</td><td>对代码仓库建立的结构化检索索引</td></tr>
+<tr><td>Dashboard</td><td>仪表盘</td><td>可视化展示系统运行状态的界面</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="doc-footer">
+  Trae Agent 架构深度解析 &mdash; 团队分享版
+  <div class="sub">基于当前工作区源码快照核验；论文数据引用 arXiv:2507.23370。更新时间：2026-07-24</div>
+</div>
+
+</div>
+</div><!-- /panel-docs -->
+
+<script>
+// Tab 切换
+function switchProjectTab(name) {
+  localStorage.setItem('traeArchTab', name);
+  document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+  document.querySelectorAll('.project-tabs .tab-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById('panel-' + name).classList.add('active');
+  document.body.classList.toggle('tab-embed', name === 'guide');
+  event.target.classList.add('active');
+}
+// 页面加载时恢复上次 tab
+(function() {
+  var tab = localStorage.getItem('traeArchTab');
+  if (tab && tab !== 'docs' && document.getElementById('panel-' + tab)) {
+    document.querySelectorAll('.tab-panel').forEach(function(p) { p.classList.remove('active'); });
+    document.querySelectorAll('.project-tabs .tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.getElementById('panel-' + tab).classList.add('active');
+    document.body.classList.toggle('tab-embed', tab === 'guide');
+    document.querySelectorAll('.project-tabs .tab-btn').forEach(function(b) {
+      if (b.getAttribute('onclick') === "switchProjectTab('" + tab + "')") b.classList.add('active');
+    });
+  }
+})();
+</script>
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);window.addEventListener('scroll',()=>{let current;sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current))});})();
+</script>
+</body>
+</html>

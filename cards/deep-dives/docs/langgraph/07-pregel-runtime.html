@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>07 Pregel Runtime：同步与异步超级步执行内核</title>
+  <style>
+    :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--panel2:#e8e1d4;--text:#1c1917;--muted:#78716c;--line:rgba(28,25,23,.12);--blue:#4338ca;--green:#15803d;--yellow:#c2410c;--red:#b91c1c;--purple:#6d28d9;--code:#e8e1d4}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:16px/1.72 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:Consolas,"SFMono-Regular",monospace;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:.08em .35em;color:#4338ca}
+    .layout{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1500px;margin:auto}.sidebar{position:sticky;top:0;height:100vh;padding:22px 18px;border-right:1px solid var(--line);background:color-mix(in srgb, var(--bg) 88%, transparent);overflow:auto;backdrop-filter:blur(12px)}
+    .sidebar strong{display:block;margin-bottom:10px}.sidebar a{display:block;padding:5px 9px;border-left:2px solid transparent;color:var(--muted);font-size:14px}.sidebar a.active{color:var(--text);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+    main{min-width:0;max-width:1080px;padding:34px 48px 80px}.back{display:inline-block;margin-bottom:18px}.hero,.section{border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+    .hero{padding:28px;margin-bottom:22px;background:linear-gradient(135deg,#fffdf8,#e8e1d4)}h1{font-size:clamp(28px,4vw,46px);line-height:1.18;margin:0 0 12px}.lead{font-size:18px;color:#44403c;max-width:850px}
+    .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 24px;margin-top:20px;color:var(--muted)}.tags{margin-top:16px}.tag{display:inline-block;margin:3px 5px 3px 0;padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:13px}.current{color:#15803d}.default{color:#0f766e}.optional{color:#6d28d9}.migration{color:#a16207}
+    .section{padding:24px 28px;margin:18px 0;scroll-margin-top:16px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}h2{margin:0 0 15px;font-size:25px}h3{margin:22px 0 8px;font-size:19px;color:#4338ca}p,ul,ol{margin:8px 0 13px}.flow{white-space:pre-wrap;background:#e8e1d4;border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto;color:#44403c;font-family:Consolas,monospace}
+    .note,.warn,.danger{border-left:4px solid var(--blue);padding:11px 14px;margin:14px 0;background:rgba(67,56,202,.07)}.warn{border-color:var(--yellow);background:rgba(194,65,12,.08)}.danger{border-color:var(--red);background:rgba(185,28,28,.08)}
+    .table-wrap{overflow-x:auto;margin:12px 0}table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:10px 12px;border:1px solid var(--line);vertical-align:top}th{background:var(--panel2);text-align:left}tbody tr:nth-child(even){background:rgba(255,255,255,.018)}
+    .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;color:#4338ca}
+    .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{border:1px solid var(--line);border-radius:8px;padding:14px;background:#fffdf8}.card h3{margin-top:0}.footer{color:var(--muted);text-align:center;margin-top:34px}
+    @media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);columns:2}.sidebar strong{column-span:all}.sidebar a{break-inside:avoid}main{padding:24px 18px 60px}.meta,.cards{grid-template-columns:1fr}}
+    @media(max-width:520px){.sidebar{columns:1}.hero,.section{padding:19px 16px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}body{font-size:15px}h2{font-size:21px}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="本页目录">
+    <strong>07 · Pregel Runtime</strong>
+    <a href="#position">1. 模块定位</a><a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a><a href="#architecture">4. 架构组成</a>
+    <a href="#flow">5. 完整运行流程</a><a href="#state">6. 数据与状态模型</a>
+    <a href="#interfaces">7. 接口、协议与事件</a><a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a><a href="#observability">12. 可观测性与排障</a>
+    <a href="#testing">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与限制</a><a href="#sources">16. 源码索引</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+  <main>
+    <a class="back" href="../../langgraph_architecture.html#s7">← 返回 LangGraph 架构总览第 07 章</a>
+    <header class="hero">
+      <h1>Pregel Runtime：同步与异步超级步执行内核</h1>
+      <p class="lead">追踪本地 Python Runtime 从 <code>invoke/stream/astream</code> 进入 Loop、Runner 与 Channel 屏障，直到正常结束、拒绝/终止或从 pending writes 恢复的完整开发契约。</p>
+      <div class="meta">
+        <div><strong>包基线：</strong>langgraph 1.2.11</div><div><strong>证据状态：</strong>已按当前工作树源码与测试验证</div>
+        <div><strong>Owner：</strong><code>libs/langgraph/langgraph/pregel/main.py</code>、<code>_loop.py</code>、<code>_runner.py</code></div><div><strong>Git SHA：</strong>本地 Git 命令不可用，未记录</div>
+        <div><strong>目标读者：</strong>Runtime、持久化、节点调度与故障恢复开发者</div><div><strong>最近验证：</strong>2026-08-14</div>
+      </div>
+      <div class="tags"><span class="tag current">当前事实</span><span class="tag default">默认行为</span><span class="tag optional">可选持久化</span><span class="tag migration">迁移兼容</span></div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>Pregel Runtime 是编译后图的本地执行所有者：它借用 Google Pregel/Bulk Synchronous Parallel（BSP，批量同步并行）的离散超级步与屏障思想，把 actor 与 Channel 组织成 Plan、Execution、Update 三阶段；执行期产生的 Channel 更新直到下一步才可见，终止条件是没有可执行 actor 或超过步数预算。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:454-477</code></span></p>
+      <div class="table-wrap"><table><thead><tr><th>边界</th><th>本模块负责</th><th>委托或明确不负责</th></tr></thead><tbody>
+        <tr><td>入口</td><td>规范化 config、建立 sync/async Loop、驱动 Runner、生成本地输出</td><td>StateGraph 构图与 compile 由第 04/05 章负责</td></tr>
+        <tr><td>状态</td><td>在内存 Channel map 上推进版本和超级步</td><td>Channel reducer 语义由 Channel 实现；不是共享 dict 即时修改</td></tr>
+        <tr><td>持久化</td><td>决定何时调用 saver 的 <code>put_writes/put</code></td><td>数据库事务、序列化与历史保留由 saver 实现</td></tr>
+        <tr><td>执行</td><td>并发运行当前任务集，屏障后合并 writes</td><td>节点函数、Tool、网络和业务副作用不由 Runtime 回滚</td></tr>
+        <tr><td>进程边界</td><td>当前 Python 进程内的本地 Pregel</td><td>API Server / Platform task queue、SDK transport、Auth 不在本章</td></tr>
+      </tbody></table></div>
+      <p>普通用户通常经 Graph API 或 Functional API 间接使用 Pregel；直接构造 Pregel 是高级接口。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:516-523</code></span></p>
+      <div class="warn">名称相同不代表系统边界相同：本章所述当前 Python Runtime 是进程内图执行器，不承诺 Google 2010 Pregel 的集群图分区、master/worker 协调、跨 worker 消息路由、worker 故障检测/重分配或其性能与扩展性结果。</div>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <div class="flow">StateGraph.compile / @entrypoint
+          ↓ 生成 Pregel nodes + channels + trigger_to_nodes
+invoke ──→ stream ──→ SyncPregelLoop ──→ PregelRunner.tick
+ainvoke ─→ astream ─→ AsyncPregelLoop ─→ PregelRunner.atick
+                         │                    │
+                         ├─ Checkpointer      ├─ Runnable/Tool/子图
+                         ├─ Store / Cache     └─ task writes / error / interrupt
+                         └─ Channel map ← after_tick / apply_writes 屏障</div>
+      <p><code>stream</code> 在完成默认值、callback、Runtime 注入后创建 <code>SyncPregelLoop</code> 与 Runner；异步入口做同样工作，但换成 <code>AsyncQueue</code>、<code>AsyncPregelLoop</code> 与 <code>atick</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2748-2771</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2899-2931</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3156-3184</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3353-3386</code></span></p>
+      <p>生产依赖边界包括 <code>langchain-core&gt;=1.4.7,&lt;2</code> 和 <code>langgraph-checkpoint&gt;=4.1.0,&lt;5</code>；包要求 Python 3.10+。<span class="evidence"><code>libs/langgraph/pyproject.toml:5-33</code></span></p>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="cards">
+        <div class="card"><h3>Superstep / 超级步</h3><p>一次“选任务—并发执行—屏障合并”的原子可见性单位；不是 Python 调用栈深度。</p></div>
+        <div class="card"><h3>BSP</h3><p>Bulk Synchronous Parallel（批量同步并行）：兄弟任务读同一稳定快照，写在屏障后统一生效。</p></div>
+        <div class="card"><h3>Loop</h3><p>拥有 checkpoint、Channel、step/status、pending writes 和中断/终止决策。</p></div>
+        <div class="card"><h3>Runner</h3><p>并发执行 Loop 选出的 task，提交 task 级 writes，聚合异常、interrupt 与 timeout。</p></div>
+      </div>
+      <p><code>apply_writes</code> 先按 task path 排序，再更新 <code>versions_seen</code>、消费触发 Channel、按 Channel 分组并调用 <code>update</code>；因此确定性来自稳定顺序和 reducer 契约，不来自线程完成顺序。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:253-269</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:284-323</code></span></p>
+      <h3>3.1 经典 Pregel 与 LangGraph Runtime 映射</h3>
+      <p>Google 2010 Pregel 是面向大规模图处理的 vertex-centric 集群系统；LangGraph 采用其 BSP 组织原则来执行有环 agent/workflow。下表是概念类比，不是实现等价。</p>
+      <div class="table-wrap"><table><thead><tr><th>经典 Pregel</th><th>当前 LangGraph Runtime 中最接近的概念</th><th>必须保留的差异</th></tr></thead><tbody>
+        <tr><td><strong>Vertex</strong>：带 value、出边和 active 状态，由统一 <code>Compute</code> 处理</td><td><code>PregelNode</code>/actor：订阅 Channel、以 Runnable 执行并产生 writes。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:479-485</code></span></td><td>节点是工作流执行单元，不是被分区图数据中的一条 vertex；不同节点也不必共享同一个计算函数。</td></tr>
+        <tr><td><strong>Message</strong>：超级步 S 发出，在 S+1 交给目标 vertex</td><td>Channel update 与 task write：task 先缓冲写，屏障后按 Channel reducer 合并。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:487-493</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:294-323</code></span></td><td>Channel 是带值、版本与更新函数的状态/通信抽象；task write 还含控制记录，不等于跨机器消息包。</td></tr>
+        <tr><td><strong>Superstep / global barrier</strong>：活跃 vertex 并行计算，消息到下一步可见</td><td>Plan → Execution → Update；兄弟 task 读稳定快照，<code>after_tick</code> 才统一应用 writes。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:464-474</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-718</code></span></td><td>二者共享 BSP 可见性边界；LangGraph 的 barrier 是本次 Loop 的逻辑屏障，不证明存在集群级全局同步协议。</td></tr>
+        <tr><td><strong>Termination</strong>：所有 vertex 均 inactive 且没有在途消息</td><td><code>prepare_next_tasks</code> 选不出 task 时 <code>status="done"</code>；也可因步数预算耗尽结束。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:606-655</code></span></td><td>LangGraph 以 Channel 版本、订阅/触发与 PULL/PUSH task 决定活跃性，没有公开的 vertex <code>voteToHalt</code> 协议。</td></tr>
+        <tr><td><strong>Checkpoint / recovery</strong>：worker 保存 partition 的 vertex、edge、incoming message 状态；故障后由 master 重分配并从边界恢复</td><td>Checkpointer 保存 Channel 值/版本、<code>versions_seen</code>，并以 task 级 pending writes 支持恢复时跳过已成功任务。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:661-664</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:736-749</code></span></td><td>恢复依赖调用方用同一 thread/namespace 再次调用和 saver 数据；本地 Runtime 不实现 worker 心跳、partition 重分配或透明 worker recovery。</td></tr>
+        <tr><td><strong>Worker / partition / distributed model</strong>：master 划分图并把 partitions 分配给集群 workers</td><td>同步路径提交到进程内 <code>BackgroundExecutor</code>，异步路径提交协程/async task 到 <code>AsyncBackgroundExecutor</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1685-1698</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1943-1958</code></span></td><td>当前 Python library Runtime 主要是单进程 executor/async task 调度；API Server 或平台能力不能反推为该本地类的分布式语义。</td></tr>
+      </tbody></table></div>
+      <h3>3.2 为什么选择 structured discrete steps</h3>
+      <p>LangChain 官方设计长文把“结构化为离散步骤”视为其余能力的前提：一个不可分割的大 <code>while</code> 循环难以生成可移植 checkpoint，也难以在不同机器、不同时间恢复或插入 human-in-the-loop。选择算法后，BSP/Pregel 同时允许 cycles，并通过隔离同一步的节点状态、屏障和确定顺序合并来避免由节点启动/完成时序造成的数据竞争；这也是早期无明确算法的并发节点曾出现非确定行为后采用该模型的动机。</p>
+      <div class="note">这里的“确定性并发”只约束 Runtime 的任务选择、步骤可见性与 writes 合并顺序。LLM 输出、节点内部随机性、非结合/非交换 reducer、时间与网络输入以及外部副作用仍可能让业务结果非确定。</div>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <div class="table-wrap"><table><thead><tr><th>组件</th><th>输入 → 输出</th><th>状态/失败隔离</th><th>扩展点</th></tr></thead><tbody>
+        <tr><td><code>Pregel.stream/astream</code></td><td>input + config → 输出迭代器</td><td>负责 run callback 与最终异常传播</td><td>stream mode、interrupt、durability、RunControl</td></tr>
+        <tr><td><code>Sync/AsyncPregelLoop</code></td><td>checkpoint + input → tasks/status/output</td><td>持有本次运行的可变状态；sync/async 不共享实例</td><td>checkpointer、cache、store、Channel specs</td></tr>
+        <tr><td><code>tick</code></td><td>Channel versions + pending writes → 下一 task 集</td><td>先做步数、done、drain、interrupt_before 准入</td><td><code>prepare_next_tasks</code></td></tr>
+        <tr><td><code>PregelRunner</code></td><td>未完成 tasks → task writes / exception</td><td>单 task commit；失败时取消其余 inflight</td><td>retry、timeout、PUSH 调度、error handler</td></tr>
+        <tr><td><code>after_tick</code></td><td>全 task writes → 新 Channel 快照/checkpoint</td><td>只有 Runner 正常跨过屏障后执行</td><td><code>apply_writes</code>、interrupt_after</td></tr>
+      </tbody></table></div>
+      <p>Runner 的同步与异步实现共享 <code>commit</code>：成功任务补 <code>NO_WRITES</code> 后保存；普通异常保存 <code>ERROR</code>；动态中断保存 <code>INTERRUPT</code> 与已有 <code>RESUME</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:574-613</code></span></p>
+    </section>
+
+    <section class="section" id="flow">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 正常成功路径</h3>
+      <ol>
+        <li><code>invoke</code> 本身不另建执行引擎，而是消费 <code>stream</code>；<code>values</code> 返回最后状态，其他 mode 收集 chunks。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3883-3957</code></span></li>
+        <li><code>stream/astream</code> 合并 config、校验 key、解析 checkpointer/store/cache/durability，建立 Runtime 与 Loop。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2538-2613</code></span></li>
+        <li>Loop 进入时读取指定或最新 checkpoint；无记录则使用 step=-2 的空 checkpoint，重建 Channel map，再调用 <code>_first</code>。sync 与 async 分别调用 <code>get_tuple</code>/<code>aget_tuple</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1629-1708</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1887-1968</code></span></li>
+        <li><code>_first</code> 把新 input 映射成 Channel writes，应用后保存 source=input checkpoint；恢复输入则标记中断版本并输出已有值。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:945-1035</code></span></li>
+        <li><code>tick</code> 通过 <code>prepare_next_tasks</code> 选任务；无任务设为 done。Runner 仅执行 <code>not t.writes</code> 的 task。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:599-681</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2959-2984</code></span></li>
+        <li>所有 task 完成后，<code>after_tick</code> 合并 writes、发 values、清空 pending writes、保存 source=loop checkpoint，再检查 <code>interrupt_after</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-726</code></span></li>
+        <li>下一次 <code>tick</code> 无 task 时正常结束，Loop 输出最终 Channel 值并触发 chain end。</li>
+      </ol>
+      <h3>5.2 拒绝、提前结束与终止路径</h3>
+      <ul>
+        <li><code>recursion_limit &lt; 1</code> 在创建 Loop 前直接 <code>ValueError</code>；checkpointer 存在却无 configurable coordinate 也被拒绝。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2563-2593</code></span></li>
+        <li>没有新 input 且未被判定为恢复时，<code>_first</code> 抛 <code>EmptyInputError</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1031-1035</code></span></li>
+        <li>步数越界把 status 设为 <code>out_of_steps</code>，入口随后抛 <code>GraphRecursionError</code>；它限制超级步，不是函数递归。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:606-609</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3001-3011</code></span></li>
+        <li><code>interrupt_before</code> 在任务执行前抛 <code>GraphInterrupt</code>；顶层 Loop 退出钩子抑制它并形成可恢复暂停，而不是普通失败。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:666-671</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1335-1359</code></span></li>
+        <li>drain 请求在完成当前超级步后、准备出下一批 task 时生效，status 变为 <code>draining</code>，入口抛 <code>GraphDrained</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:652-659</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3012-3015</code></span></li>
+      </ul>
+      <h3>5.3 Partial failure 与恢复路径</h3>
+      <ol>
+        <li>兄弟任务中一个成功、一个失败时，Runner 分别提交成功 Channel write 与失败 <code>ERROR</code>，然后重新抛失败；尚未跨过 <code>after_tick</code> 屏障，所以整体 checkpoint 仍位于该步之前。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:342-358</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:584-613</code></span></li>
+        <li>相同 thread 以 <code>None</code> 或 <code>Command</code> 恢复时，<code>_first</code> 识别 continuation。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:851-872</code></span></li>
+        <li><code>tick</code> 把 pending writes 重新挂到同 task；跳过 ERROR/INTERRUPT/RESUME，使成功 task 因已有 writes 不再执行，失败 task 保持空 writes 后重跑。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:661-664</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:736-749</code></span></li>
+        <li>失败 task 最终成功后，屏障一次性合并旧成功 write 与新 write，形成新 checkpoint。同步和异步测试都证明成功兄弟只调用一次。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:927-987</code></span> <span class="evidence"><code>libs/langgraph/tests/test_pregel_async.py:1843-1908</code></span></li>
+      </ol>
+    </section>
+
+    <section class="section" id="state">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap"><table><thead><tr><th>状态</th><th>Owner / 生命周期</th><th>变化点</th></tr></thead><tbody>
+        <tr><td><code>channels</code></td><td>每个 Loop 从 checkpoint 重建的内存 map</td><td><code>_first</code> 与 <code>after_tick/apply_writes</code></td></tr>
+        <tr><td><code>channel_versions</code></td><td>Checkpoint；每个 Channel 的版本</td><td>consume/update/finish 返回变化时推进</td></tr>
+        <tr><td><code>versions_seen</code></td><td>Checkpoint；节点已消费版本</td><td>屏障应用 task triggers 时更新</td></tr>
+        <tr><td><code>checkpoint_pending_writes</code></td><td>加载自 saver，并在 task commit 时追加</td><td>恢复重放；成功屏障后清空</td></tr>
+        <tr><td><code>tasks</code></td><td>当前 tick 的 PULL/PUSH 可执行任务</td><td>每次 <code>prepare_next_tasks</code> 重建</td></tr>
+        <tr><td><code>step/stop/status</code></td><td>Loop 运行态</td><td>进入、tick、after_tick 和终止决策</td></tr>
+      </tbody></table></div>
+      <p>同一超级步的 writes 在 <code>apply_writes</code> 中按 Channel 分组；控制写 <code>ERROR/INTERRUPT/RESUME</code> 不作为业务 Channel 更新。未写入的可用 Channel 也可能收到空更新以推进生命周期；若没有可触发节点，则调用 Channel <code>finish</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:294-342</code></span></p>
+      <div class="warn">Checkpointer 分别保存 Checkpoint（Channel 状态与版本）和 task 级 pending writes；两者都不包含 Python 栈帧。Runtime 不能自动回滚已经发生的 HTTP、数据库或文件副作用；恢复时业务节点可能重跑。</div>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap"><table><thead><tr><th>接口</th><th>返回契约</th><th>错误/暂停语义</th></tr></thead><tbody>
+        <tr><td><code>invoke(..., stream_mode="values")</code></td><td>v1 最后值；v2 <code>GraphOutput(value, interrupts)</code></td><td>顶层 interrupt 被包装到返回；其他异常传播</td></tr>
+        <tr><td><code>invoke(..., stream_mode≠values)</code></td><td>收集后的 chunk list</td><td>不是逐块消费接口</td></tr>
+        <tr><td><code>stream</code></td><td>同步 Iterator；mode 决定 chunk 形状</td><td>消费过程中可能抛失败、递归或 drain 异常</td></tr>
+        <tr><td><code>astream</code></td><td>AsyncIterator；核心状态机与 sync 相同</td><td>取消时清理 waiter；异步退出仍等待资源释放</td></tr>
+      </tbody></table></div>
+      <p>公开 mode 包括 values、updates、custom、messages、checkpoints、tasks、debug；多个 mode 组合时 v1 产生 mode/data 元组。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2682-2697</code></span></p>
+      <p>事件顺序的关键保证是 task commit 先于关联 future 完成，以维持 stream order；之后才可能通过屏障发出 values/checkpoint。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:780-786</code></span></p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap"><table><thead><tr><th>配置项</th><th>类型/值</th><th>默认/优先级</th><th>生效边界</th><th>失败行为与证据</th></tr></thead><tbody>
+        <tr><td><code>recursion_limit</code></td><td>int ≥ 1</td><td>RunnableConfig 合并后的值</td><td>从当前 step 计算 stop</td><td>&lt;1 拒绝；耗尽抛 GraphRecursionError。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2563-2564</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1699-1702</code></span></td></tr>
+        <tr><td><code>durability</code></td><td>sync / async / exit</td><td>参数 → inherited config → <code>async</code></td><td>有 checkpointer 才有持久化效果</td><td>无 checkpointer 仅 warning。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2602-2612</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2802-2805</code></span></td></tr>
+        <tr><td><code>interrupt_before/after</code></td><td>节点序列或 All</td><td>调用参数，否则编译值</td><td>任务前 / 屏障与 checkpoint 后</td><td>以 GraphInterrupt 暂停。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2569-2570</code></span></td></tr>
+        <tr><td><code>step_timeout</code></td><td>float | None</td><td>Pregel 实例设置</td><td>每个 Runner tick</td><td>取消 inflight 并抛 timeout。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2967-2971</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:650-696</code></span></td></tr>
+        <tr><td><code>control</code></td><td>RunControl | None</td><td>参数 → parent Runtime → 新实例</td><td>单次运行</td><td>请求后在下一超级步边界 GraphDrained。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2872-2882</code></span></td></tr>
+      </tbody></table></div>
+      <p>遗留参数 <code>checkpoint_during</code> 会发弃用警告并映射为 async/exit；若同时传 durability 则拒绝，避免冲突配置。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2725-2735</code></span></p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <p>Runner 可并发运行当前超级步的任务，但 Channel 在步骤内保持不可变，步骤 N 的写只在 N+1 可见。同步和异步主循环都明确执行 <code>tick → runner → after_tick</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2959-2988</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3431-3462</code></span></p>
+      <ul>
+        <li><strong>执行器：</strong>sync Loop 使用 <code>BackgroundExecutor</code>，async Loop 使用 <code>AsyncBackgroundExecutor</code>；资源随 context stack 退出。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1685-1698</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1943-1958</code></span></li>
+        <li><strong>队列：</strong>sync 使用 <code>SyncQueue</code>，async 使用 <code>AsyncQueue</code>；messages/custom/subgraph 时用单个 waiter 促使输出并发排出。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2748-2749</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2935-2957</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3392-3429</code></span></li>
+        <li><strong>取消：</strong>普通 task 失败时 Runner 取消剩余 inflight；GraphInterrupt 被聚合后统一上抛。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:650-690</code></span></li>
+        <li><strong>背压边界：</strong>代码提供队列/信号量唤醒，但不声明固定容量或端到端背压 SLA；慢消费者的内存影响需按应用实测。</li>
+      </ul>
+      <p>并行测试证明兄弟节点重叠执行，但结果顺序由稳定 task path 合并而不是完成先后决定。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:5258-5288</code></span></p>
+      <div class="warn">不要把“并发 task”解释为“分布式 worker”。当前代码展示的是单个 Python Runtime 实例通过 executor 或 asyncio 调度任务；本章没有发现图 partition、master/worker 协议、跨节点消息传输或故障 worker 重分配实现，也不据 Google Pregel 论文推导 LangGraph 的吞吐、延迟或横向扩展指标。</div>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <ul>
+        <li>Runtime 校验 output key、recursion_limit 和 checkpointer coordinate，但不会把节点输入变成可信数据；业务 Schema、Tool policy 与外部系统授权仍由上层负责。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2563-2593</code></span></li>
+        <li>Checkpoint 是可执行状态输入；反序列化 allowlist、加密与数据库访问控制属于 saver/serde 边界，本地 Pregel 不提供 Auth。</li>
+        <li>未知 Channel write 会被 warning 后忽略，而非法 reducer/Channel 更新可抛异常；扩展 Channel 时不可把忽略警告当作权限控制。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:294-313</code></span></li>
+        <li>RunControl 的 drain signal 是单属性写，文档限定单 run 使用；复用已经 drained 的实例会让后续运行保持 drained。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:79-104</code></span></li>
+      </ul>
+      <div class="danger">副作用节点必须使用幂等键、事务或补偿机制。pending writes 能防止已成功 task 在特定恢复路径重复执行，但无法证明远端副作用与 task write 原子提交。</div>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table><thead><tr><th>故障/现象</th><th>检测与即时行为</th><th>状态影响</th><th>恢复/运维</th></tr></thead><tbody>
+        <tr><td>节点普通异常</td><td>commit 写 ERROR；Runner 取消其他 inflight 并重抛</td><td>成功兄弟的 writes 可成为 pending writes；不跨屏障</td><td>修复瞬时原因后同 thread 以 None 恢复；确保副作用幂等</td></tr>
+        <tr><td>GraphInterrupt</td><td>写 INTERRUPT；顶层抑制并输出暂停</td><td>checkpoint 与 pending interrupt 保留</td><td>以 Command(resume=...) 恢复；节点可能从头执行</td></tr>
+        <tr><td>步数耗尽</td><td>status=out_of_steps，抛 GraphRecursionError</td><td>此前已完成边界可按 durability 保存</td><td>先修终止条件，再审慎提高 recursion_limit</td></tr>
+        <tr><td>cooperative drain</td><td>下一个 tick 边界 status=draining，抛 GraphDrained</td><td>当前超级步先完成并 checkpoint</td><td>新进程以相同 thread 恢复；记录 drain reason</td></tr>
+        <tr><td>checkpoint put 失败</td><td>future 在 sync 等待或退出时暴露</td><td>内存执行可能领先 durable 状态</td><td>按 saver 错误处理；不要声称节点副作用已回滚</td></tr>
+        <tr><td>Python 进程/主机退出</td><td>由进程管理器或调用方检测；本地 Loop 本身不执行 worker heartbeat</td><td>仅已写入 saver 的 checkpoint/pending writes 可供后续调用恢复</td><td>重启后以相同 thread/namespace 调用；不要假设存在经典 Pregel 的 partition 重分配或 worker recovery</td></tr>
+        <tr><td>遗留 checkpoint_during</td><td>warning；映射 async/exit</td><td>仍走 durability 主路径</td><td>迁移到显式 durability；禁止两者并传</td></tr>
+      </tbody></table></div>
+      <h3>Durability 对主路径的真实影响</h3>
+      <ul>
+        <li><code>sync</code>：每个 <code>after_tick</code> 后等待 checkpoint future，再进入下一步。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2984-2988</code></span></li>
+        <li><code>async</code>：checkpoint put 按顺序后台化，下一超级步可先执行；前一个 future 会在后续 put 前等待。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1199-1216</code></span></li>
+        <li><code>exit</code>：中间 <code>_put_checkpoint</code> 不持久化整体 checkpoint；退出钩子统一保存 checkpoint 与 pending writes。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1132-1153</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1323-1334</code></span></li>
+      </ul>
+      <div class="warn"><code>exit</code> 不是“和 sync 一样安全但更快”。测试显示 partial-failure 历史数量及某些恢复期 writes 与非 exit 模式不同。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:984-992</code></span></div>
+    </section>
+
+    <section class="section" id="observability">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap"><table><thead><tr><th>现象</th><th>先检查</th><th>常见原因</th><th>修复</th></tr></thead><tbody>
+        <tr><td>图似乎“死循环”</td><td>tasks/debug stream、step、路由 Channel 版本</td><td>终止条件不收敛或不断写触发 Channel</td><td>修路由/状态；不要仅无限提高 limit</td></tr>
+        <tr><td>成功节点恢复时又执行</td><td>saver 的 pending_writes 与 task id</td><td>无 checkpointer、exit 模式差异、task 身份变化或副作用发生在 write 前</td><td>固定 thread/namespace，验证 saver，设计幂等</td></tr>
+        <tr><td>stream 有 task 更新却无最终 values</td><td>是否在 Runner 后异常、interrupt 或 reducer 失败</td><td>未跨 after_tick 屏障</td><td>检查 ERROR/INTERRUPT 与 reducer</td></tr>
+        <tr><td>shutdown 后仍执行一段时间</td><td>RunControl 是否传入，当前 task 是否仍在本超级步</td><td>drain 是协作式边界停止，不是强杀</td><td>等待当前步；另设节点超时与进程终止策略</td></tr>
+        <tr><td>async 退出后 DB 连接仍占用</td><td>是否正确 await 取消异常携带的 exit task</td><td>调用方提前取消 context 清理</td><td>等待退出任务完成后复用连接</td></tr>
+      </tbody></table></div>
+      <p><code>checkpoints</code> stream 在 task 准备后携带 checkpoint metadata、pending writes 与任务视图；<code>tasks</code> stream 在执行前发开始信息，可用于定位卡在哪个边界。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:611-650</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:673-679</code></span></p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table><thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead><tbody>
+        <tr><td>sync partial failure 恢复</td><td><code>libs/langgraph/tests/test_pregel.py:891-992</code></td><td>集成</td><td>成功兄弟跳过，失败兄弟重跑，三种 durability 参数化</td><td>不证明数据库 saver 的事务实现</td></tr>
+        <tr><td>async partial failure 恢复</td><td><code>libs/langgraph/tests/test_pregel_async.py:1807-1913</code></td><td>异步集成</td><td>与 sync 对称的 pending writes 行为</td><td>不覆盖进程崩溃时刻矩阵</td></tr>
+        <tr><td>recursion_limit</td><td><code>libs/langgraph/tests/test_pregel.py:586-589</code>；<code>test_pregel_async.py:1582-1585</code></td><td>sync/async</td><td>限制耗尽均抛 GraphRecursionError</td><td>不替代复杂图收敛测试</td></tr>
+        <tr><td>并行执行</td><td><code>libs/langgraph/tests/test_pregel.py:5258-5288</code></td><td>时间行为</td><td>兄弟节点重叠执行并最终聚合</td><td>时间断言不等同性能 SLA</td></tr>
+        <tr><td>drain 内部调用</td><td><code>libs/langgraph/tests/test_pregel.py:140-159</code>；<code>test_pregel_async.py:236-255</code></td><td>sync/async</td><td>本步中 request_drain 后仍可完成 inflight Call</td><td>未在本章执行 OS signal 集成测试</td></tr>
+        <tr><td>task path 稳定排序</td><td><code>libs/langgraph/tests/test_algo.py:59-67</code></td><td>单元</td><td>PULL/PUSH path 字符串可稳定排序</td><td>完整 reducer 确定性依赖 Channel 测试</td></tr>
+      </tbody></table></div>
+      <p>本页变更只涉及文档，不修改 library code，因此未运行库级 <code>make format/lint/test</code>；默认文档 validator 是本次交付门禁。</p>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table><thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead><tbody>
+        <tr><td>新增终止状态</td><td><code>_loop.py</code> status/tick</td><td>main.py sync/async exit 分支、callback、错误类型</td><td>完成、异常、嵌套图、恢复测试</td></tr>
+        <tr><td>修改 task commit</td><td><code>_runner.py:commit</code></td><td>pending-write 过滤、saver conformance、sync/async runner</td><td>partial failure 不重复成功 task；stream order</td></tr>
+        <tr><td>修改屏障合并</td><td><code>_algo.py:apply_writes</code></td><td>Channel 版本、versions_seen、finish、缓存输出</td><td>稳定排序、并发冲突、空更新测试</td></tr>
+        <tr><td>新增 durability</td><td><code>main.py:_defaults</code>、<code>_loop.py:_put_checkpoint</code></td><td>公共类型、所有 saver、子图继承、迁移参数</td><td>崩溃窗口、顺序、退出/取消、partial failure 矩阵</td></tr>
+        <tr><td>修改 drain</td><td><code>runtime.py:RunControl</code>、<code>_loop.py:tick</code></td><td>sync/async 入口与 GraphDrained</td><td>不打断当前超级步；恢复点可用</td></tr>
+      </tbody></table></div>
+      <p>禁止捷径：不要在 Runner 内直接修改共享 State；不要把 task <code>put_writes</code> 与超级步 <code>put</code> 合并成一次模糊保存；不要只修 sync 而遗漏 async；不要依据 future 完成顺序合并兄弟 writes。</p>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <ul>
+        <li><strong>BSP 换确定边界：</strong>稳定快照和屏障让并发推理清晰，代价是慢 task 拖住整个超级步，且兄弟写不能立即互见。</li>
+        <li><strong>离散步骤换可恢复结构：</strong>把 agent 拆成节点/超级步，才能在边界流式观察、checkpoint、interrupt 和恢复；代价是不能把任意 Python 栈帧或一个大循环中的任意指令位置透明序列化。</li>
+        <li><strong>确定性合并换调度自由：</strong>task path 稳定排序使 reducer 输入不依赖完成先后，但不会消除 LLM、节点代码、外部输入或副作用本身的非确定性。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:253-256</code></span></li>
+        <li><strong>pending writes 换细粒度恢复：</strong>成功 task 可跳过，代价是 saver 必须正确保存 task_id/channel/value，业务副作用仍需自行保证幂等。</li>
+        <li><strong>async durability 换吞吐：</strong>checkpoint 与下一步重叠，但进程灾难窗口里 durable head 可能落后内存进度；代码只保证 put 的顺序，不承诺外部副作用原子性。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1199-1209</code></span></li>
+        <li><strong>exit durability 换更少中间 checkpoint：</strong>退出集中保存，运行中历史与恢复粒度更弱；DeltaChannel 还需累积 writes 与锚点处理。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1217-1315</code></span></li>
+        <li><strong>cooperative drain 换一致边界：</strong>不破坏当前步，但无法保证立刻停机；长节点必须另配 timeout/cancellation 与幂等策略。</li>
+        <li><strong>复用 Pregel 语义而非复刻集群系统：</strong>本地 Runtime 获得 cycles、稳定快照和逻辑 barrier，但当前 Python 实现没有经典 Pregel 的图 partition、master/worker、跨 worker message transport 与透明 worker recovery；需要分布式执行时必须单独审计实际 Server/Platform 部署面，不能由类名推断。</li>
+      </ul>
+      <p>当前证据没有给出固定队列容量、最大并发数、吞吐、延迟或恢复时间 SLA；这些必须在目标 executor、saver、节点负载和部署环境中测量。</p>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap"><table><thead><tr><th>角色</th><th>符号与当前行号</th><th>用途</th></tr></thead><tbody>
+        <tr><td>公共 Runtime</td><td><code>libs/langgraph/langgraph/pregel/main.py:450-477</code></td><td>Pregel/BSP 三阶段契约</td></tr>
+        <tr><td>sync 入口</td><td><code>libs/langgraph/langgraph/pregel/main.py:2655-3017</code></td><td>stream 默认值、Loop/Runner、终态</td></tr>
+        <tr><td>async 入口</td><td><code>libs/langgraph/langgraph/pregel/main.py:3063-3502</code></td><td>astream 对称路径与取消清理</td></tr>
+        <tr><td>invoke 包装</td><td><code>libs/langgraph/langgraph/pregel/main.py:3836-3957</code></td><td>消费 stream、整理值/中断/chunks</td></tr>
+        <tr><td>Loop 状态机</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:599-726</code></td><td>tick、after_tick、状态终结</td></tr>
+        <tr><td>输入/恢复</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:848-1057</code></td><td>_first、Command、resume/fork/input</td></tr>
+        <tr><td>sync/async Loop</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:1469-1988</code></td><td>saver、executor、Channel 重建</td></tr>
+        <tr><td>Runner</td><td><code>libs/langgraph/langgraph/pregel/_runner.py:135-613</code></td><td>并发 tick/atick 与 commit</td></tr>
+        <tr><td>算法</td><td><code>libs/langgraph/langgraph/pregel/_algo.py:232-512</code></td><td>稳定写合并与下一任务准备</td></tr>
+        <tr><td>错误/控制</td><td><code>libs/langgraph/langgraph/errors.py:54-87</code>；<code>libs/langgraph/langgraph/runtime.py:79-104</code></td><td>GraphDrained、GraphRecursionError、RunControl</td></tr>
+        <tr><td>核心测试</td><td><code>libs/langgraph/tests/test_pregel.py:891-992</code>；<code>libs/langgraph/tests/test_pregel_async.py:1807-1913</code></td><td>partial failure/pending writes/durability</td></tr>
+      </tbody></table></div>
+      <h3>外部设计基线</h3>
+      <ul>
+        <li><a href="https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/">Malewicz 等，Pregel: a system for large-scale graph processing（Google Research / SIGMOD 2010）</a>：用于核对 vertex/message/superstep、终止、checkpoint、master/worker 与 partition 模型。本文只把这些作为经典系统基线，不把其集群实现与性能结论移植到 LangGraph。</li>
+        <li><a href="https://www.langchain.com/blog/building-langgraph">LangChain，Building LangGraph: Designing an Agent Runtime from first principles</a>：用于核对 structured discrete steps、支持 cycles 的 BSP/Pregel 选择，以及通过隔离状态和确定顺序合并避免并发 data race 的官方设计动机。</li>
+      </ul>
+      <p>未使用第三方 arXiv 或二手论文解读作为外部基线；当前行为仍以本仓源码和测试为最高优先级。</p>
+      <p>相邻阅读：<a href="06-channel-state-merge.html">第 06 章 Channel 与状态合并</a>、<a href="08-scheduling-send-subgraph.html">第 08 章调度、Send 与子图</a>、<a href="09-checkpoint-durable-execution.html">第 09 章 Checkpoint 与 Durable Execution</a>。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <div class="table-wrap"><table><thead><tr><th>术语</th><th>本章含义</th></tr></thead><tbody>
+        <tr><td>Actor / PregelNode</td><td>订阅 Channel、执行 Runnable 并产生 writes 的运行单元。</td></tr>
+        <tr><td>BSP</td><td>Bulk Synchronous Parallel，任务并发执行、屏障统一提交的批量同步并行模型。</td></tr>
+        <tr><td>Superstep</td><td>Plan、Execution、Update 组成的一轮；<code>recursion_limit</code> 约束的核心单位。</td></tr>
+        <tr><td>Loop</td><td>拥有一次运行的 checkpoint、Channel、tasks、step 与 status 的状态机。</td></tr>
+        <tr><td>Runner</td><td>执行当前 task 集、处理重试/异常/取消并提交 task writes 的并发组件。</td></tr>
+        <tr><td>tick</td><td>检查步数和终止条件、准备任务、恢复 pending writes、执行前中断的阶段。</td></tr>
+        <tr><td>after_tick</td><td>跨过超级步屏障后合并 writes、输出 values、保存 checkpoint 的阶段。</td></tr>
+        <tr><td>Pending write</td><td>挂在某 checkpoint 与 task id 下、尚未统一进入下个整体 checkpoint 的 task 级写。</td></tr>
+        <tr><td>Partial failure</td><td>同一超级步中部分 task 已成功写出、另一些失败，整体尚未跨屏障。</td></tr>
+        <tr><td>Durability</td><td>checkpoint 持久化与执行同步关系：sync、async 或 exit。</td></tr>
+        <tr><td>Drain</td><td>在超级步边界停止启动下一批任务的协作式终止；不是立即取消当前 task。</td></tr>
+        <tr><td>PULL / PUSH</td><td>PULL 由 Channel/边触发；PUSH 由 Send 或 Functional API task 调用产生。</td></tr>
+        <tr><td>Stable snapshot</td><td>同一超级步内所有兄弟 task 读取的稳定 Channel 视图。</td></tr>
+        <tr><td>Vertex-centric</td><td>经典 Pregel 以 vertex 及其本地状态/消息为计算中心；LangGraph 的 <code>PregelNode</code> 只是可类比的执行 actor，并非图数据 partition 中的 vertex。</td></tr>
+        <tr><td>Worker / Partition</td><td>经典 Pregel 的集群执行与图划分单位；当前本地 Python Runtime 没有与之等价的公开运行时组件。</td></tr>
+        <tr><td>Checkpoint</td><td>Channel 值、版本、versions_seen、metadata 等超级步边界状态；不含 Python 栈帧。</td></tr>
+        <tr><td>Replay / Resume</td><td>Replay 从历史点形成执行分支；Resume 在当前 thread 上继续 pending task/interrupt，二者不可混同。</td></tr>
+      </tbody></table></div>
+    </section>
+    <p class="footer">LangGraph 1.2.11 · Pregel Runtime 源码审计开发文档</p>
+  </main>
+</div>
+<script>
+  const links=[...document.querySelectorAll('.sidebar a')];
+  const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const observer=new IntersectionObserver(entries=>{
+    const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];
+    if(!visible)return;
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+visible.target.id));
+  },{rootMargin:'-12% 0px -72% 0px'});
+  sections.forEach(s=>observer.observe(s));
+</script>
+</body>
+</html>

@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hermes Agent 架构深度解析</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--surface2:#e8e1d4;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--cyan:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.75;padding:80px 24px 48px 320px}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+code{font-family:"Cascadia Code",Consolas,monospace;color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .32rem;border-radius:4px;font-size:.88em}
+h1{font-size:2.25rem;text-align:center;color:var(--cyan);margin-bottom:.45rem}
+h2{font-size:1.45rem;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:.45rem;margin-bottom:1rem}
+h3{font-size:1.16rem;color:var(--cyan);margin:1.25rem 0 .55rem}
+h4{font-size:1rem;color:var(--purple);margin:.9rem 0 .35rem}
+p{margin:.55rem 0}ul,ol{margin:.55rem 0 .55rem 1.45rem}li{margin:.25rem 0}
+.container{max-width:1120px;margin:auto}.subtitle{text-align:center;color:var(--muted);margin-bottom:1.7rem}
+.section,.ref-section,.qa-section{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.65rem 1.8rem;margin-bottom:1.35rem}
+.sidebar{position:fixed;left:0;top:48px;bottom:0;width:296px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1rem .8rem;overflow-y:auto;z-index:10;backdrop-filter:blur(12px)}
+.sidebar h2{font-size:1rem;border:0;margin:0 0 .55rem;padding:.2rem .5rem}
+.sidebar a{display:block;color:var(--muted);font-size:.79rem;line-height:1.35;padding:.28rem .48rem;border-left:2px solid transparent}
+.sidebar a:hover,.sidebar a.active{color:var(--cyan);background:rgba(67,56,202,.08);border-left-color:var(--blue);text-decoration:none}.subdoc-tag{display:inline-block;margin-left:.35rem;padding:.01rem .32rem;border:1px solid var(--green);border-radius:99px;color:var(--green);font-size:.62rem}.doc-link{display:inline-block;margin-left:.5rem;padding:.08rem .48rem;border:1px solid var(--green);border-radius:99px;color:var(--green);font-size:.7rem;vertical-align:middle}.module-index{margin-top:1.1rem}.module-index a{display:inline-block;margin:.2rem .35rem .2rem 0;padding:.28rem .55rem;border:1px solid var(--border);border-radius:7px;background:var(--surface2)}
+.hero{border:1px solid var(--blue);background:rgba(67,56,202,.06);border-radius:10px;padding:1.2rem 1.45rem;margin-bottom:1.35rem}
+.hero strong{color:var(--cyan)}.insight,.tradeoff,.invariant{border-radius:8px;padding:1rem 1.15rem;margin:1rem 0}
+.insight{border:1px solid var(--green);background:rgba(21,128,61,.05)}.tradeoff{border:1px solid var(--red);background:rgba(185,28,28,.05)}.invariant{border:1px solid var(--purple);background:rgba(109,40,217,.05)}
+.insight:before,.tradeoff:before,.invariant:before{display:block;font-size:.78rem;font-weight:700;margin-bottom:.35rem}
+.insight:before{content:"核心洞察";color:var(--green)}.tradeoff:before{content:"边界与权衡";color:var(--red)}.invariant:before{content:"架构不变量";color:var(--purple)}
+.badge{display:inline-block;border:1px solid;border-radius:999px;padding:.04rem .45rem;margin-right:.3rem;font-size:.72rem;font-weight:700;vertical-align:middle}
+.fact{color:var(--green)}.optional{color:var(--yellow)}.side{color:var(--purple)}.external{color:var(--muted)}.critical{color:var(--red)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:.9rem 0}
+.grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.9rem 1rem}.card strong{display:block;color:var(--cyan);margin-bottom:.25rem}
+table{width:100%;border-collapse:collapse;margin:.9rem 0;font-size:.88rem}th{background:#e8e1d4;color:var(--blue);text-align:left;padding:.55rem .65rem;border:1px solid var(--border)}td{padding:.5rem .65rem;border:1px solid var(--border);vertical-align:top}tr:nth-child(even){background:rgba(244,241,234,.35)}
+.diagram{font-family:"Cascadia Code",Consolas,monospace;font-size:.8rem;line-height:1.5;white-space:pre;overflow-x:auto;background:#e8e1d4;color:var(--cyan);border:1px solid var(--border);border-radius:8px;padding:1rem;margin:.8rem 0}
+.flow{counter-reset:flow}.flow>div{counter-increment:flow;position:relative;padding:.72rem .8rem .72rem 3rem;margin:.45rem 0;background:var(--surface2);border:1px solid var(--border);border-radius:8px}.flow>div:before{content:counter(flow);position:absolute;left:.75rem;top:.72rem;width:1.55rem;height:1.55rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue);color:#f4f1ea;font-weight:800;font-size:.78rem}
+.flow strong{color:var(--cyan)}.formula{text-align:center;font-family:"Cascadia Code",Consolas,monospace;color:var(--orange);background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.8rem 0}
+.flow-figure{background:white;border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:1rem 0}.flow-figure img{display:block;width:100%;height:auto;cursor:zoom-in}.caption{background:#f0ebe0;color:var(--muted);font-size:.8rem;padding:.65rem .85rem}
+.links{display:flex;gap:1rem;flex-wrap:wrap;margin:.65rem 0}.learning{counter-reset:learn;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.75rem}.learning>div{counter-increment:learn;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.85rem}.learning>div:before{content:"模块 " counter(learn);display:block;color:var(--blue);font-size:.72rem;font-weight:700}
+.qa-section details{border-bottom:1px solid var(--border);padding:.65rem 0}.qa-section summary{cursor:pointer;color:var(--cyan);font-weight:650}.answer{color:var(--muted);padding:.55rem 0 0 1rem}
+.refs{list-style:none;counter-reset:ref}.refs li{counter-increment:ref;position:relative;padding-left:2rem;margin:.55rem 0}.refs li:before{content:counter(ref);position:absolute;left:0;top:.08rem;width:1.35rem;height:1.35rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue);color:#f4f1ea;font-size:.72rem;font-weight:800}
+.footer{text-align:center;color:var(--muted);font-size:.82rem;padding:1.5rem}.lightbox{position:fixed;inset:0;z-index:400;background:rgba(28,25,23,.97);display:none;align-items:center;justify-content:center;padding:1.5vw}.lightbox.open{display:flex}.lightbox img{max-width:98vw;max-height:95vh;object-fit:contain;background:white;cursor:grab;user-select:none}.lb-close{position:absolute;top:60px;right:18px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(28,25,23,.12);background:#fff;color:#78716c;font-size:16px;line-height:1;cursor:pointer;z-index:1}
+@media(max-width:1050px){body{padding-left:20px}.sidebar{display:none}.grid.three,.learning{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){body{padding:66px 10px 18px}.section{padding:1.15rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.grid,.grid.three,.learning{grid-template-columns:1fr}h1{font-size:1.65rem}table{display:block;overflow-x:auto}}
+/* ===== 站点标准知识组件：与全站卡片保持同一套语义与视觉 ===== */
+.arch-diagram{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:1.1rem 1.2rem;margin:.9rem 0;font-family:"Cascadia Code",Consolas,'Courier New',monospace;font-size:.8rem;line-height:1.55;color:var(--cyan);white-space:pre;overflow-x:auto}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:.85rem 1.15rem;margin:.9rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.3rem;font-size:.78rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.04rem .38rem;border-radius:4px;font-size:.9em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--blue);padding-left:.95rem;margin:.9rem 0;color:#44403c}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:.85rem;margin:1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:.9rem 1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.35rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:.9rem 1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.35rem}
+.practice-grid ul{margin:.25rem 0 0 1.1rem}.practice-grid li{margin:.28rem 0}
+@media (max-width: 980px){.practice-grid{grid-template-columns:1fr}.arch-diagram{font-size:.68rem;padding:.75rem}}
+/* ===== 顶部 Tab 栏（与 trae/software_agent/swe_agent 对齐） ===== */
+.project-tabs{position:fixed;top:0;left:0;right:0;z-index:300;height:48px;display:flex;align-items:center;padding:0 1.25rem;background:#fffdf8;border-bottom:1px solid var(--border);box-shadow:0 1px 8px rgba(28,25,23,.5)}
+.project-tabs .tab-home{color:var(--blue);font-size:.88rem;font-weight:600;text-decoration:none;margin-right:2rem;white-space:nowrap;padding:.32rem .85rem;border:1px solid var(--border);border-radius:8px;transition:all .25s}
+.project-tabs .tab-home:hover{background:var(--blue);color:var(--bg);border-color:var(--blue);text-decoration:none;transform:translateY(-1px)}
+.project-tabs .tab-btn{background:none;border:none;cursor:pointer;font-family:inherit;font-size:.95rem;font-weight:600;color:var(--muted);padding:.95rem 1.25rem;position:relative;transition:color .2s}
+.project-tabs .tab-btn:hover{color:var(--text)}
+.project-tabs .tab-btn.active{color:var(--blue)}
+.project-tabs .tab-btn.active::after{content:'';position:absolute;bottom:-1px;left:1.25rem;right:1.25rem;height:3px;background:var(--blue);border-radius:2px 2px 0 0}
+.spanel{display:none}.spanel.active{display:block}
+body.tab-embed{padding:48px 0 0;overflow:hidden}
+body.tab-embed .sidebar,body.tab-flow .sidebar{display:none}
+body.tab-flow{padding-left:24px}
+.spanel>iframe{width:100%;height:calc(100vh - 48px);border:0;display:block;background:var(--bg)}
+#panel-flow{max-width:1400px;margin:0 auto;padding:10px 16px 60px}
+.flow-figure img.zoom{cursor:zoom-in}
+@media(max-width:640px){.project-tabs{padding:0 .35rem;overflow-x:auto;overflow-y:hidden}.project-tabs .tab-home{margin-right:.15rem;padding:.3rem .5rem;font-size:.8rem}.project-tabs .tab-btn{padding:.95rem .5rem;font-size:.8rem;white-space:nowrap}.project-tabs .tab-btn.active::after{left:.5rem;right:.5rem}}
+</style>
+</head>
+<body>
+<div class="project-tabs">
+  <a class="tab-home" href="../../index.html">⌂ 首页</a>
+  <button class="tab-btn" data-tab="guide">📖 入门指南</button>
+  <button class="tab-btn active" data-tab="docs">📋 架构文档</button>
+</div>
+
+<div id="panel-guide" class="spanel"><iframe src="hermes_agent_architecture_guide.html" loading="lazy" title="Hermes Agent 架构入门指南"></iframe></div>
+
+<div id="panel-docs" class="spanel active">
+<aside class="sidebar">
+  <h2>Hermes Agent 架构目录</h2>
+  <a href="#s0">阅读约定与学习路线</a><a href="#s1">一、定位与设计哲学</a>
+  <a href="#s2">二、系统全景与进程拓扑</a><a href="#s3">三、入口与会话路由</a>
+  <a href="#s4">四、AIAgent 装配 <span class="subdoc-tag">子文档</span></a><a href="#s5">五、Agent Loop <span class="subdoc-tag">子文档</span></a>
+  <a href="#s6">六、Prompt 与缓存 <span class="subdoc-tag">子文档</span></a><a href="#s7">七、上下文压缩 <span class="subdoc-tag">子文档</span></a>
+  <a href="#s8">八、Provider 与 Transport <span class="subdoc-tag">子文档</span></a><a href="#s9">九、工具运行时 <span class="subdoc-tag">子文档</span></a>
+  <a href="#s10">十、执行环境与安全 <span class="subdoc-tag">子文档</span></a><a href="#s11">十一、Skills / Plugins / MCP <span class="subdoc-tag">子文档</span></a>
+  <a href="#s12">十二、SessionDB 与检索 <span class="subdoc-tag">子文档</span></a><a href="#s13">十三、Memory 与学习闭环 <span class="subdoc-tag">子文档</span></a>
+  <a href="#s14">十四、Delegation 与后台任务 <span class="subdoc-tag">子文档</span></a><a href="#s15">十五、Cron 与 Kanban <span class="subdoc-tag">子文档</span></a>
+  <a href="#s16">十六、多端 UI 与协议 <span class="subdoc-tag">子文档</span></a><a href="#s17">十七、并发、恢复与可观测 <span class="subdoc-tag">子文档</span></a>
+  <a href="#s18">十八、设计模式与权衡 <span class="subdoc-tag">子文档</span></a><a href="#s19">十九、二次开发指南</a>
+  <a href="#s20">二十、Trae 侧向对比与论文核验</a><a href="#qa">Q&amp;A</a>
+  <a href="#glossary">术语表</a><a href="#refs">参考资料</a>
+</aside>
+<main class="container">
+<h1>Hermes Agent 架构深度解析</h1>
+<p class="subtitle">从稳定前缀到自治任务：一个“窄腰、长会话、多表面”的自进化 Agent Runtime<br>基于 Hermes Agent 0.20.1 工作区源码快照与官方开发文档核验</p>
+
+<div class="hero"><strong>一句话定义：</strong>Hermes Agent 不是单纯的代码助手，也不是某个模型的 UI 外壳；它是一套跨 CLI、消息平台、桌面、IDE 与 API 复用的个人 Agent Runtime。它把模型调用、工具执行、持久会话、记忆、技能、自主任务和多 Agent 委托收敛到同一个窄核心，同时把平台、Provider 和长尾能力推到可插拔边缘。</div>
+
+<section class="section" id="s0">
+<h2>阅读约定与分模块学习路线</h2>
+<p>本文以当前工作区源码行为为事实基线。官方文档用于交叉验证，但当文档与代码演进不同步时，以代码和最新专项文档为准。特别是压缩默认已采用 <code>in_place=true</code>，不应继续把“每次压缩必然轮换 Session ID”当作当前默认行为。</p>
+<div class="grid">
+  <div class="card"><strong><span class="badge fact">代码事实</span>默认主链</strong>正常对话必经的入口、会话恢复、Turn 构建、模型/工具循环与持久化。</div>
+  <div class="card"><strong><span class="badge optional">可选能力</span>配置后启用</strong>MCP、外部 Memory Provider、远程执行环境、Context Engine、观测插件等。</div>
+  <div class="card"><strong><span class="badge side">自治旁路</span>独立生命周期</strong>Cron、Kanban、Curator、后台委托和后台进程，不等价于主 Loop 的普通一步。</div>
+  <div class="card"><strong><span class="badge external">外部资料</span>侧向材料</strong>官方站点、模型技术报告与 Trae Agent 对比，不用于反推源码事实。</div>
+</div>
+<h3>建议组内学习顺序</h3>
+<div class="learning">
+  <div><strong>入口与配置</strong><br><code>hermes_cli/main.py</code>、profiles、runtime provider</div>
+  <div><strong>会话与消息</strong><br><code>hermes_state.py</code>、gateway session key、resume</div>
+  <div><strong>Agent 装配</strong><br><code>agent/agent_init.py</code>、回调、toolsets、memory</div>
+  <div><strong>核心循环</strong><br><code>conversation_loop.py</code>、<code>turn_context.py</code>、<code>turn_finalizer.py</code></div>
+  <div><strong>上下文工程</strong><br>system prompt、cache、compression、角色交替</div>
+  <div><strong>Provider 层</strong><br>runtime resolution、api_mode、transport、fallback</div>
+  <div><strong>工具运行时</strong><br>registry、toolset、approval、environment、MCP</div>
+  <div><strong>记忆与扩展</strong><br>skills、plugins、memory/context providers</div>
+  <div><strong>自治系统</strong><br>delegation、cron、kanban、curator、background process</div>
+  <div><strong>多端接入</strong><br>Gateway、TUI、Dashboard、Desktop、ACP、API</div>
+  <div><strong>稳定性工程</strong><br>并发、锁、恢复、日志、trajectory、测试</div>
+  <div><strong>二次开发</strong><br>沿 Footprint Ladder 选择最小永久表面</div>
+</div>
+<div class="module-index" id="module-doc-index"><h3>架构模块详细文档</h3><p>总览保留系统关系与核心结论；以下源码审计子文档用于实现、排障和二次开发。</p><a href="docs/hermes-agent/04-agent-initialization.html">04 · AIAgent 初始化与运行时装配</a><a href="docs/hermes-agent/05-agent-loop.html">05 · Agent Loop 与 Turn 生命周期</a><a href="docs/hermes-agent/06-prompt-cache.html">06 · Prompt Assembly 与缓存边界</a><a href="docs/hermes-agent/07-context-compression.html">07 · Context Compression 与会话续航</a><a href="docs/hermes-agent/08-provider-transport.html">08 · Provider Runtime 与 Transport</a><a href="docs/hermes-agent/09-tools-runtime.html">09 · Tools Runtime 与 Toolset</a><a href="docs/hermes-agent/10-environments-security.html">10 · 执行环境、Approval 与安全边界</a><a href="docs/hermes-agent/11-capability-extensions.html">11 · Skills、Plugins、MCP 与扩展生态</a><a href="docs/hermes-agent/12-session-storage.html">12 · SessionDB、FTS 与 Profile 隔离</a><a href="docs/hermes-agent/13-memory-learning.html">13 · Memory、Skill Usage 与 Curator</a><a href="docs/hermes-agent/14-delegation-background.html">14 · Delegation 与 Background Processes</a><a href="docs/hermes-agent/15-cron-kanban.html">15 · Cron 与 Kanban 自治执行</a><a href="docs/hermes-agent/16-surfaces-protocols.html">16 · 多端 Surface 与协议</a><a href="docs/hermes-agent/17-concurrency-observability.html">17 · 并发、恢复与可观测性</a><a href="docs/hermes-agent/18-patterns-development.html">18 · 设计模式、权衡与二次开发</a></div></section>
+
+<section class="section" id="s1">
+<h2>一、项目定位与设计哲学</h2>
+<h3>1.1 产品定位</h3>
+<p>Hermes 的核心用户场景不是“一次性解决一个仓库 Issue”，而是让同一个 Agent 长期生活在用户的终端、服务器和消息平台中。它需要同时解决三类问题：一是把模型转化为可执行行动；二是把一次对话变成可恢复的长期关系；三是把学到的流程沉淀成 Skills 和 Memory，再进入后续会话。</p>
+<div class="formula">Hermes = Multi-surface Shell + Persistent Agent Runtime + Capability Edge + Autonomous Work</div>
+<div class="intuition-box"><p>Hermes 的所有设计取舍，几乎都能倒推回一句话：这个 Agent 要活很久。活得久，就必须让前缀字节稳定（否则每轮都冷缓存）、让历史可归档而不是可删除、让能力长在边缘而不是核心。</p></div>
+<p>“活很久”带来的第一个硬约束是 <span class="term">Prompt Cache</span>（Provider 对请求前缀的复用机制，命中要求模型、账户、Endpoint 与前缀字节完全一致）。一次性任务型 Agent 可以每轮重建 system prompt，代价只是一次冷请求；长会话 Agent 如果这么做，用户每说一句话都在为整段历史重新付全价。于是「配置改动默认下一 Session 生效」这种看起来不够灵活的产品行为，其实是成本模型逼出来的。</p>
+<h3>1.2 两条支配性原则</h3>
+<div class="grid">
+  <div class="card"><strong>Prompt Cache 是成本与延迟边界</strong>长会话必须复用字节稳定的前缀。中途重建 system prompt、切换 toolset 或回写旧历史都会让缓存失效；因此只有压缩等显式路径允许重组过去上下文。</div>
+  <div class="card"><strong>Core 是窄腰，能力长在边缘</strong>每个模型工具 Schema 都要随每次 API 请求发送。能用已有工具、CLI+Skill、服务门控、Plugin 或 MCP 解决的能力，不进入核心工具面。</div>
+</div>
+<h3>1.3 Footprint Ladder</h3>
+<table><tr><th>优先级</th><th>能力落点</th><th>永久成本</th><th>典型场景</th></tr>
+<tr><td>1</td><td>扩展已有代码</td><td>最低</td><td>给 Terminal 增加一个后端、给现有工具增加参数</td></tr>
+<tr><td>2</td><td>CLI 命令 + Skill</td><td>零新增工具 Schema</td><td>配置、订阅、服务管理、可由命令表达的流程</td></tr>
+<tr><td>3</td><td><code>check_fn</code> 门控工具</td><td>仅服务可用时出现</td><td>Home Assistant、可选 Memory、特定平台能力</td></tr>
+<tr><td>4</td><td>Plugin</td><td>按配置和 Toolset 付费</td><td>用户/领域/第三方扩展</td></tr>
+<tr><td>5</td><td>MCP Server</td><td>动态发现，可分层披露</td><td>结构化外部系统工具</td></tr>
+<tr><td>6</td><td>核心工具</td><td>所有会话持续付费</td><td>Terminal、File、Web 等普适基础能力</td></tr></table>
+<div class="invariant">“产品可以快速扩张”与“Core 必须保守”并不矛盾。平台、Provider、桌面能力和插件可以积极增加；需要严格控制的是每次模型调用都携带的核心 Schema 与会话期可变状态。</div>
+</section>
+
+<section class="section" id="s2">
+<h2>二、系统全景与进程拓扑</h2>
+<p><span class="badge fact">代码事实</span>Hermes 复用的是 Agent Core，而不是强迫所有表面使用同一 UI。Classic CLI、TUI、Desktop、Gateway、ACP 和 API 拥有不同进程边界，但最终都将一轮工作交给 <code>AIAgent.run_conversation()</code>。</p>
+<div class="links"><a href="#s2" onclick="switchHermesTab('flow');return false">🗺️ 前往「系统流程图」标签页查看大图（支持滚轮缩放）</a></div>
+<div class="intuition-box"><p>把 Hermes 想成一个「一核多壳」的操作系统：外壳（CLI / TUI / Gateway / Desktop / ACP / API）差异极大，但它们最终都在调同一个 <code>AIAgent.run_conversation()</code>；凡是跨表面必须一致的东西，都被压进这个窄腰里。</p></div>
+<div class="arch-diagram">   外壳（进程边界与协议各不相同）
+   Classic CLI    Ink TUI       Dashboard      Desktop       Gateway        ACP / API
+   进程内直驱     ND-JSON-RPC   WebSocket+PTY  Electron      Telegram/      stdio JSON-RPC
+        │             │         （内嵌真实TUI） +JSON-RPC     Discord/Slack  / OpenAI 兼容
+        │             │              │            │              │              │
+        └─────────────┴──────────────┴────────────┴──────────────┴──────────────┘
+                                      │
+                       ┌──────────────▼──────────────┐
+                       │   窄腰：AIAgent.run_conversation()   │
+                       │   build_turn_context → conversation_loop → finalize_turn │
+                       └──────┬───────────────┬───────┘
+             ┌────────────────┘               └──────────────────┐
+             ▼                                                   ▼
+   ┌─ 上下文与模型 ─────────────┐               ┌─ 能力边缘（可插拔）───────────┐
+   │ 三层 system prompt（冻结） │               │ Toolset ← Registry ← check_fn │
+   │ Prompt Cache 断点 ×4       │               │ Skills · Plugins · MCP        │
+   │ ContextCompressor          │               │ Environment: Local/Docker/SSH │
+   │ Provider Runtime → api_mode│               │        /Modal/Daytona/…       │
+   └─────────────┬──────────────┘               └───────────────┬───────────────┘
+                 └───────────────┬───────────────────────────────┘
+                                 ▼
+                 ┌─ 持久面：SessionDB（SQLite + WAL + FTS5）──────┐
+                 │ 消息三视图：展示 / api_content 重放 / active   │
+                 │ Usage · System Prompt 去重 · Compression Lock │
+                 └───────────────┬───────────────────────────────┘
+                                 ▼
+                 自治旁路（独立生命周期，不是主 Loop 的一步）
+                 Cron（时间驱动）· Kanban（依赖驱动）· Delegation · Curator</div>
+<h3>2.1 三种主要进程形态</h3>
+<table><tr><th>形态</th><th>代表入口</th><th>边界</th><th>并发模型</th></tr>
+<tr><td>进程内直驱</td><td>Classic CLI、Batch、部分 Cron</td><td>UI 与 AIAgent 同一 Python 进程</td><td>主输入线程 + Agent/HTTP 工作线程</td></tr>
+<tr><td>长期 Gateway</td><td>Telegram、Discord、Slack、API Server</td><td>Adapter 与 Runner 同一 asyncio 进程，Agent 在执行器线程</td><td>跨 session key 并行、单 session 串行</td></tr>
+<tr><td>前后端分离</td><td>Ink TUI、Dashboard、Desktop、ACP</td><td>ND-JSON-RPC、WebSocket JSON-RPC、PTY 或 ACP stdio</td><td>前端事件循环 + Python 后端会话槽</td></tr></table>
+<h3>2.2 共享与不共享</h3>
+<ul>
+  <li><strong>共享：</strong>SessionDB、Provider 解析、AIAgent、工具注册表、Slash 命令定义、审批语义、压缩与 Memory 生命周期。</li>
+  <li><strong>不共享：</strong>UI 组件、运行时连接协议、平台会话键、桌面原生能力、消息发送/编辑细节。</li>
+  <li><strong>特别区分：</strong>Dashboard 的主聊天是浏览器中的真实 TUI PTY；Desktop 是独立 React Chat Surface，通过 Headless <code>hermes serve</code> 连接后端。</li>
+</ul>
+</section>
+
+<section class="section" id="s3">
+<h2>三、入口、路由与会话身份</h2>
+<h3>3.1 统一命令入口</h3>
+<p><code>hermes_cli/main.py</code> 是命令级入口，负责尽早应用 Profile、加载配置并选择 Classic CLI、Ink TUI、Gateway、Dashboard/Serve、ACP 或其他子命令。Profile 必须在核心模块导入前写入 <code>HERMES_HOME</code>，这样模块级路径缓存天然落在正确实例中。</p>
+<h3>3.2 Gateway 消息链</h3>
+<div class="flow">
+  <div><strong>Adapter 归一化事件</strong>：平台 Webhook、轮询或 WebSocket 统一为 <code>MessageEvent</code> 与 <code>SessionSource</code>。</div>
+  <div><strong>构造 session key</strong>：组合 profile、platform、DM/group、chat、user、thread，形成平台侧并发与隔离键。</div>
+  <div><strong>双护栏分流</strong>：Adapter 先检查活跃 Session，Runner 再处理控制命令；审批、停止和新会话命令必须绕过两层排队。</div>
+  <div><strong>SessionStore 映射</strong>：把平台 session key 映射到可恢复的 SessionDB durable ID。</div>
+  <div><strong>线程执行 Agent</strong>：asyncio 进程不直接阻塞在同步模型循环，Runner 将 <code>run_conversation</code> 放入执行器。</div>
+  <div><strong>Adapter 回传</strong>：流式增量、工具进度、审批请求和最终文本重新映射为平台能力。</div>
+</div>
+<h3>3.3 三种 Session 身份</h3>
+<table><tr><th>身份</th><th>用途</th><th>常见错误</th></tr>
+<tr><td>Durable Session ID</td><td>历史、导航、持久化、恢复</td><td>拿运行时临时 ID 查询数据库</td></tr>
+<tr><td>Runtime Session ID</td><td>当前进程流式订阅、事件路由</td><td>窗口重连后继续当作永久身份</td></tr>
+<tr><td>Lineage Root / Compression Identity</td><td>跨旧式旋转压缩追踪会话家族</td><td>把父子链当成当前默认每次都发生</td></tr></table>
+<div class="tradeoff">当前默认压缩是 in-place：旧消息软归档，durable ID 不变。<code>parent_session_id</code> 仍为兼容旧式 <code>in_place=false</code>、分支和历史恢复服务，但不是“每次压缩都会产生新会话”的证明。</div>
+</section>
+
+<section class="section" id="s4">
+<h2>四、AIAgent 装配：从配置到冻结运行时 <a class="doc-link" href="docs/hermes-agent/04-agent-initialization.html" title="打开AIAgent 初始化与运行时装配详细设计">子文档</a></h2>
+<p><code>run_agent.py</code> 中的 <code>AIAgent</code> 是公共门面；大部分新实现已经拆到 <code>agent/</code>。构造阶段通过 <code>agent_init.init_agent()</code> 把一次会话的能力边界固化下来。</p>
+<h3>4.1 装配内容</h3>
+<div class="grid three">
+  <div class="card"><strong>Model Runtime</strong>provider、model、base URL、api_mode、client、credential pool、fallback chain。</div>
+  <div class="card"><strong>Tool Surface</strong>enabled/disabled toolsets、可用性检查、模型可见 Schema、agent-level tools。</div>
+  <div class="card"><strong>Conversation State</strong>session ID、SessionDB、history、system prompt cache、usage/accounting。</div>
+  <div class="card"><strong>Context System</strong>ContextEngine、ContextCompressor、token metadata、prompt cache plan。</div>
+  <div class="card"><strong>Safety & Control</strong>IterationBudget、interrupt events、approval callbacks、CheckpointManager。</div>
+  <div class="card"><strong>Side Systems</strong>MemoryManager、hooks、trajectory、tool/thinking/stream callbacks。</div>
+</div>
+<h3>4.2 为什么工具集在会话中冻结</h3>
+<p>工具 Schema 是 system/prefix 语义的一部分。中途安装 Skill、切换 Toolset 或改变服务可用性，如果立刻重建模型可见工具列表，会破坏缓存并让历史中的工具能力与当前请求不一致。因此改变 Prompt/Toolset 的 Slash 命令默认延迟到下一 Session；只有显式 <code>--now</code> 才承担立即失效成本。</p>
+<div class="insight">Hermes 的“运行时对象可重建”与“会话前缀必须稳定”并不冲突。Gateway 可以每个 Turn 构建新的 AIAgent 实例，只要它从 SessionDB 恢复完全相同的 system prompt 和会话状态，Provider 仍可命中前缀缓存。</div>
+</section>
+
+<section class="section" id="s5">
+<h2>五、Agent Loop：可中断的模型—工具状态机 <a class="doc-link" href="docs/hermes-agent/05-agent-loop.html" title="打开Agent Loop 与 Turn 生命周期详细设计">子文档</a></h2>
+<div class="intuition-box"><p>这个循环真正难的不是「调模型、调工具、再调模型」，而是三件事同时发生时怎么收场：用户在打断、预算在耗尽、Provider 在报错。Hermes 的做法是把它们全部建模成显式终态，而不是散落的 <code>try/except</code>。</p></div>
+<h3>5.1 一次 Turn 的真实调用链</h3>
+<div class="diagram">AIAgent.run_conversation
+  → SessionCoordinator 获取本会话执行权
+  → build_turn_context
+      → 恢复/构建 system prompt
+      → 持久化用户消息
+      → Memory prefetch / plugin user-side context
+      → preflight compression
+  → conversation_loop
+      → 准备请求 / 角色修复 / cache markers
+      → interruptible streaming API call
+      → 文本终态 或 tool_calls
+      → 工具执行与 Observation 回填
+      → 继续下一次模型调用
+  → finalize_turn
+      → 处理预算、未闭合工具序列、持久化、trajectory 与清理</div>
+<h3>5.2 循环终止与继续条件</h3>
+<table><tr><th>事件</th><th>行为</th><th>会话结果</th></tr>
+<tr><td>模型返回最终文本</td><td>记录 assistant，结束循环</td><td>成功终态</td></tr>
+<tr><td>模型返回 tool_calls</td><td>执行工具、按原顺序写入 tool results</td><td>回到模型</td></tr>
+<tr><td>上下文溢出/413</td><td>分类错误，尝试压缩后重试</td><td>冷前缀后继续</td></tr>
+<tr><td>限流/鉴权/服务错误</td><td>刷新凭据、轮换账户或激活 fallback</td><td>可能切 Provider</td></tr>
+<tr><td>Soft interrupt / redirect</td><td>丢弃过时模型结果，将用户纠偏纳入合法下一轮</td><td>继续当前会话</td></tr>
+<tr><td>Hard cancel / stop</td><td>设置硬中断、关闭未完成工具序列</td><td>interrupted</td></tr>
+<tr><td>预算耗尽</td><td>使用 grace call 或无工具总结路径收口</td><td>部分完成</td></tr></table>
+<div class="arch-diagram">                       ┌──────────────┐
+       用户消息 ──────►│ build_turn_  │  取执行权 → 恢复 prompt → 落库 → Memory prefetch
+                       │   context    │  → preflight compression（先于任何 API 调用）
+                       └──────┬───────┘
+                              ▼
+        ┌──────────── conversation_loop（可中断）────────────────┐
+        │  角色修复 + cache markers ──► streaming API call        │
+        │        │                                                │
+        │        ├─ 最终文本 ─────────────────────────► 成功终态   │
+        │        │                                                │
+        │        ├─ tool_calls ─► 并行组／串行点执行               │
+        │        │        └─ 按模型原始顺序回填 tool result ─► 回到模型 │
+        │        │                                                │
+        │        ├─ 413 / 上下文溢出 ─► 压缩 ─► 冷前缀重试         │
+        │        ├─ 限流 / 鉴权 ─► 刷新凭据 → 轮换账户 → fallback  │
+        │        │                （切 Provider = 换 api_mode = 冷缓存）│
+        │        ├─ soft interrupt ─► 丢弃过时结果，用户纠偏入下一轮 │
+        │        └─ hard cancel ───► 关闭未闭合工具序列 ─► interrupted │
+        │                                                          │
+        │  每轮检查 IterationBudget：耗尽 ─► grace call（禁用工具）─► 收口 │
+        └──────────────────────┬───────────────────────────────────┘
+                               ▼
+                       ┌──────────────┐
+                       │finalize_turn │ 预算结算 · 补齐孤儿 tool 序列 · 持久化
+                       └──────────────┘ · trajectory · 清理
+
+  角色不变量：User → Assistant；有工具时 Assistant(tool_calls) → Tool… → Assistant
+              连续 Tool 合法；连续 User 或连续 Assistant 必须合并或修复；
+              异步完成事件绝不插进正在进行的工具序列（否则产生孤儿 tool result）</div>
+<h3>5.3 IterationBudget</h3>
+<p>产品配置通常由 <code>agent.max_turns</code> 注入较高上限；循环同时检查 API 调用计数和 Budget Remaining。Grace Call 允许在预算刚好耗尽时再做一次不继续扩散工具调用的收口。委托子 Agent 使用自己的 <code>delegation.max_iterations</code>，不是简单共享父 Agent 的同一个剩余计数器。</p>
+<h3>5.4 并行工具</h3>
+<p>多个独立 Tool Call 可通过线程池并行，但结果必须按模型原始调用顺序回填。Interactive、审批、状态相关或有依赖的工具会强制串行；执行器还支持分段策略，在可并行组和必须串行点之间切分。</p>
+<div class="invariant">内部消息采用 OpenAI 风格作为中间表示。正常序列是 User → Assistant；有工具时是 Assistant(tool_calls) → Tool… → Assistant。连续 Tool 结果允许，连续 User/Assistant 必须合并或修复。异步完成事件不得插入正在进行的工具序列。</div>
+</section>
+
+<section class="section" id="s6">
+<h2>六、Prompt Assembly 与缓存边界 <a class="doc-link" href="docs/hermes-agent/06-prompt-cache.html" title="打开Prompt Assembly 与缓存边界详细设计">子文档</a></h2>
+<h3>6.1 三层 system prompt</h3>
+<table><tr><th>层</th><th>内容</th><th>生命周期</th></tr>
+<tr><td>Stable</td><td>SOUL/默认身份、工具行为、Skills 索引、环境和平台提示</td><td>会话期冻结</td></tr>
+<tr><td>Context</td><td>调用方 system message、项目上下文文件</td><td>会话开始解析</td></tr>
+<tr><td>Volatile</td><td>MEMORY/USER 快照、外部 Memory 静态块、时间/Session/Provider 信息</td><td>名字“volatile”不代表每 Turn 改写；仍冻结在该会话前缀</td></tr></table>
+<h3>6.2 项目上下文优先级</h3>
+<p>项目规则不是全部叠加，而是按优先级选择首个匹配：<code>.hermes.md/HERMES.md</code>（可向上到 Git Root）→ 当前目录 <code>AGENTS.md</code> → <code>CLAUDE.md</code> → Cursor Rules。<code>SOUL.md</code> 独立占据身份槽，避免重复注入。内容会做安全扫描、Frontmatter 处理和按模型窗口缩放的截断。</p>
+<h3>6.3 API-call-time 注入</h3>
+<p>Memory Recall、Gateway Session Overlay、<code>pre_llm_call</code> 插件上下文和 Prefill 等动态材料不回写冻结的 system prompt，而是进入当前用户消息的 <code>api_content</code> sidecar 或请求期消息。展示内容可以保持干净，同时数据库保留实际发给 Provider 的字节以支持稳定 Replay。</p>
+<h3>6.4 Anthropic Prompt Caching</h3>
+<p>Hermes 使用最多四个断点：system prompt 一个稳定断点，加最近三条非 system 消息的滚动断点。缓存命中依赖模型、账户、Endpoint 和前缀字节完全一致；切模型、Fallback、Credential Pool 轮换或重组中段历史都会造成冷请求。</p>
+<div class="intuition-box"><p>断点像书签：书签之前的内容按缓存价结算，书签之后按全价。所以架构目标不是「让 prompt 更短」，而是「让书签尽量往后挪、且中间那段永远不要被改写」。</p></div>
+<div class="arch-diagram">  ┌─ 断点 1（会话期冻结，命中率最高）────────────────────────────┐
+  │ system prompt                                                 │
+  │   Stable   ：SOUL/身份 · 工具行为 · Skills 索引 · 环境提示     │
+  │   Context  ：调用方 system message · 项目上下文文件            │
+  │   Volatile ：MEMORY/USER 快照 · Provider 信息                  │
+  │              （名字叫 volatile，但同样冻结在本会话前缀里）      │
+  │ + tool schemas（Toolset 决定；会话中途变更即整段失效）          │
+  └───────────────────────────────────────────────────────────────┘
+  ├─ 历史消息（不打断点，靠前缀连续性搭便车）
+  │    user / assistant / tool …
+  ├─ 断点 2 ┐
+  ├─ 断点 3 ├─ 最近三条非 system 消息上的滚动断点
+  └─ 断点 4 ┘
+       ▲
+       │  动态材料不回写冻结区，而是挂到当前用户消息的 api_content sidecar：
+       │  Memory Recall · Gateway Session Overlay · pre_llm_call 插件上下文 · Prefill
+
+  会让整条前缀作废的动作（每一条都对应一个产品决策）：
+    切模型 / fallback ──► Provider cache key 变了
+    Credential Pool 轮换 ──► 账户维度的 cache key 变了
+    会话中途改 Toolset ──► 断点 1 内容变了（所以 Slash 命令默认下一会话生效）
+    重组中段历史 ──► 只有压缩这一条被允许的路径，且它自己就要付一次重建成本</div>
+<div class="highlight"><strong>示例场景：</strong>一个每天上百轮的 Telegram 长会话，system prompt 约 9k token、历史 30k token。团队最初把「当前时间」写进 stable 层，结果每轮 system prompt 字节都不同，缓存命中率长期在 0%——单轮输入按全价 39k token 结算。把时间戳挪进当前用户消息的 <code>api_content</code> sidecar 后，断点 1 变回字节稳定，命中率升到 90% 以上，长会话的输入侧账单降到原来的三分之一左右。这类问题的排查信号很明确：Usage 里 <code>cache_read</code> 恒为 0，而 <code>input</code> 随历史线性增长。</div>
+<div class="insight">Prompt Cache 不只是“省 Token”的优化，它反向塑造了命令语义、Memory 注入位置、异步事件回流方式、Toolset 生命周期和压缩事务。它是 Hermes 架构中最重要的非功能约束。</div>
+</section>
+
+<section class="section" id="s7">
+<h2>七、上下文压缩：唯一被允许重组历史的主路径 <a class="doc-link" href="docs/hermes-agent/07-context-compression.html" title="打开Context Compression 与会话续航详细设计">子文档</a></h2>
+<div class="intuition-box"><p>压缩是整套架构里唯一被授权「改写过去」的路径。正因为只有它有这个权力，其他所有需要往历史里塞东西的功能（Memory 召回、异步完成、插件上下文）才必须另找位置，而不是顺手改一改旧消息。</p></div>
+<p>这里要区分两个容易混的词：<span class="term">In-place 压缩</span>（同一 Durable Session ID 下把旧消息标为 <code>active=0, compacted=1</code>，内容不删、仍可 FTS 搜索）是当前默认；<span class="term">Session Lineage</span>（旧式旋转压缩产生新 Session ID 并用 <code>parent_session_id</code> 串成父子链）只在关闭 in-place 或做分支时才出现。把后者当成「每次压缩都会发生的事」，会让会话统计和历史导航全部算错。</p>
+<h3>7.1 双层触发</h3>
+<table><tr><th>层</th><th>默认角色</th><th>Token 依据</th></tr>
+<tr><td>Agent Context Engine</td><td>正常的 Loop 内压缩，阈值可配置并可按模型覆盖</td><td>优先使用 API 实际 Usage</td></tr>
+<tr><td>Gateway Session Hygiene</td><td>进入 Agent 前的高水位安全网，避免隔夜累计直接打爆窗口</td><td>上轮实际值，缺失时粗估</td></tr></table>
+<h3>7.2 默认 Compressor 的四阶段</h3>
+<div class="flow">
+  <div><strong>廉价清理旧 Tool Output</strong>：受保护尾部之外的长结果先替换为占位，减少摘要输入。</div>
+  <div><strong>计算 Head/Middle/Tail</strong>：保留开头、按 Token Budget 和最少消息数保护最近尾部，并保证至少保留真实用户锚点。</div>
+  <div><strong>结构化摘要 Middle</strong>：辅助模型产出 Goal、Constraints、Progress、Decisions、Files、Next Steps、Critical Context。</div>
+  <div><strong>重装合法消息序列</strong>：摘要角色根据邻接关系选择，清理孤儿 tool call/result，提交压缩事务。</div>
+</div>
+<h3>7.3 In-place 与 Legacy Rotation</h3>
+<p>默认 <code>compression.in_place=true</code>：同一 Session ID 下把旧消息标为 <code>active=0, compacted=1</code>，新消息列表包含 Head、Summary、Tail。旧内容不删除，仍可搜索。关闭该选项时，才使用新 Session ID 与 <code>parent_session_id</code> 链。</p>
+<h3>7.4 特殊 Provider 路径</h3>
+<ul>
+  <li><strong>Codex app-server：</strong>真实上下文归 Codex Thread 所有，本地改 transcript 无法缩短服务端线程，因此通过 app-server 原生 compaction 事件处理。</li>
+  <li><strong>Responses Native Compaction：</strong>符合模型与路由条件时可让服务端生成 opaque compaction item；Hermes 保留 replay sidecar，并以本地 Compressor 作后备。</li>
+  <li><strong>失败风险：</strong>若摘要模型窗口小于主模型，完整 Middle 可能放不进去；这会显著降低压缩质量，必须作为部署校验项。</li>
+</ul>
+<div class="highlight"><strong>示例场景：</strong>某团队把摘要模型配成一个 32k 窗口的便宜模型，主模型窗口 200k。平时没问题，直到一次长任务里 Middle 段本身就有 60k token——摘要调用直接 413，压缩事务回滚，主循环随后又因为上下文溢出再触发一次压缩，形成每分钟数次的失败循环，单会话白烧掉约 40 次无效调用。修复有两步：把摘要模型换成与主模型同窗口档位，并在阶段一「廉价清理旧 Tool Output」上把保护尾部之外的长结果先替换为占位，使进入摘要的 Middle 稳定在 15k 以内。部署校验里应当直接断言「摘要模型窗口 ≥ 主模型压缩阈值」，这是最容易被漏掉的一项。</div>
+<div class="tradeoff">压缩降低后续 Token，但需要一次摘要调用、事务提交和缓存重建。过早压缩会损失细节，过晚压缩会增加成本与溢出风险。阈值必须结合模型窗口、Provider 路由和任务 Tool Output 分布评估。</div>
+</section>
+
+<section class="section" id="s8">
+<h2>八、Provider Runtime 与 Transport 抽象 <a class="doc-link" href="docs/hermes-agent/08-provider-transport.html" title="打开Provider Runtime 与 Transport详细设计">子文档</a></h2>
+<h3>8.1 两个维度不要混淆</h3>
+<p><strong>Provider</strong> 决定凭据、默认 Base URL、模型目录和商业路由；<strong>api_mode</strong> 决定请求协议、消息格式、工具格式、流式事件与响应归一化。同一个产品 Provider 可能随认证路径落到不同模式。</p>
+<table><tr><th>api_mode</th><th>职责</th><th>主要适配</th></tr>
+<tr><td><code>chat_completions</code></td><td>OpenAI-compatible Chat Completions</td><td>OpenRouter、自定义 Endpoint、多数 Provider</td></tr>
+<tr><td><code>anthropic_messages</code></td><td>Native Anthropic Messages</td><td>System/Content Block、cache_control、tool use 转换</td></tr>
+<tr><td><code>codex_responses</code></td><td>OpenAI Responses/Codex</td><td>input items、reasoning/replay sidecars、原生 compaction</td></tr>
+<tr><td><code>bedrock_converse</code></td><td>AWS Bedrock Converse</td><td>Bedrock 请求/响应归一化</td></tr>
+<tr><td><code>codex_app_server</code></td><td>外部 Codex Agent Thread</td><td>整 Turn 旁路 Hermes 主 Loop 的部分语义</td></tr></table>
+<h3>8.2 Resolution Ladder</h3>
+<p>显式运行时请求优先，其次是保存的 <code>config.yaml</code> Provider/Model，再到对应密钥环境变量和 Provider 默认值。保存配置高于随手 Shell Export，避免旧环境变量静默劫持用户刚选择的 Endpoint。API Key 必须与 Base URL 绑定，防止 OpenRouter、AI Gateway 或 OpenAI Key 泄漏到错误主机。</p>
+<h3>8.3 Transport 的窄职责</h3>
+<p><code>agent/transports/</code> 负责 messages/tools 转换、API kwargs 和 response normalization；Client 构建、Streaming 取消、凭据刷新、重试、缓存和 Fallback 仍由 Runtime 编排。这样避免把业务状态机复制到每个 Provider Adapter。</p>
+<h3>8.4 Fallback 的代价</h3>
+<p>错误分类器区分限流、鉴权、Billing、上下文溢出、内容策略和服务错误。可恢复路径会先刷新凭据或轮换账户，再按配置链激活 Fallback。切换 Provider 可能同时改变 model、client、api_mode 和缓存策略，因此下一请求通常是冷缓存；这不是实现缺陷，而是 Provider Cache Key 的固有限制。</p>
+</section>
+
+<section class="section" id="s9">
+<h2>九、工具运行时：注册、暴露、调用 <a class="doc-link" href="docs/hermes-agent/09-tools-runtime.html" title="打开Tools Runtime 与 Toolset详细设计">子文档</a></h2>
+<h3>9.1 四阶段管线</h3>
+<div class="diagram">tools/*.py 顶层 registry.register()
+  → discover_builtin_tools() 用 AST 找出真正注册工具的模块
+  → toolsets.resolve_toolset() 决定本 Session 的能力范围
+  → registry.get_definitions() 执行 check_fn 并生成模型 Schema
+  → model tool_call
+  → agent-level intercept 或 handle_function_call()
+  → middleware / pre-hook / approval / registry.dispatch / post-hook
+  → JSON Tool Result 回填历史</div>
+<div class="intuition-box"><p><span class="term">Registry</span>（进程里注册了什么）和 <span class="term">Toolset</span>（这个会话允许模型看见什么）必须分开，因为前者是进程级、后者是会话级——合成一个，就等于让每个会话为所有插件的 Schema 付 token。</p></div>
+<h3>9.2 为什么既要 Registry 又要 Toolset</h3>
+<p>Registry 回答“进程里注册了什么以及如何调用”；Toolset 回答“这个 Session 的模型允许看到什么”。自动发现只完成注册，不代表暴露。新增内置工具如果没有进入某个 Toolset，模型永远看不到；反过来，注册很多插件/MCP 工具也不意味着每个会话都支付 Schema 成本。</p>
+<h3>9.3 <code>check_fn</code> 的正确含义</h3>
+<p><code>check_fn</code> 用于服务可达、依赖存在或用户 Opt-in；结果有进程级 TTL 缓存。它不适合表达“当前请求来自 Desktop”这类 Session 身份，因为同一 Gateway 进程可同时服务 CLI、Desktop 和远程客户端。表面能力应由 Session Source 选择 Toolset。</p>
+<h3>9.4 Agent-level Tools</h3>
+<p><code>todo</code>、<code>memory</code>、<code>session_search</code>、<code>delegate_task</code> 等虽然注册 Schema，但调用会在 Agent Loop 中短路，因为它们需要 AIAgent 本地状态、SessionDB、父子运行时或专门生命周期。直接走通用 Registry Handler 会得到保护性错误。</p>
+<h3>9.5 Tool Search 分层披露</h3>
+<p>当 Plugin/MCP 工具过多时，Hermes 可只向模型暴露 <code>tool_search/tool_describe/tool_call</code> 桥接面，按需发现具体 Schema。底层调用仍校验工具是否属于本 Session 已授权的可延迟集合，不能借 Tool Search 绕过 Toolset。</p>
+<div class="practice-grid">
+  <div class="do">
+    <ul>
+      <li>按 Footprint Ladder 从下往上选：先想能不能用现有工具加参数，再想 CLI+Skill，最后才考虑核心工具。</li>
+      <li>用 <code>check_fn</code> 表达「服务是否可达 / 依赖是否安装」，让不可用的能力自动从 Schema 里消失。</li>
+      <li>表面差异（Desktop 独有能力、Webhook 受限能力）用 Session Source 选 Toolset 表达。</li>
+      <li>MCP 工具多的时候开 Tool Search 分层披露，让常驻 Schema 保持在可控体积。</li>
+    </ul>
+  </div>
+  <div class="dont">
+    <ul>
+      <li>不要用 <code>check_fn</code> 判断「请求来自哪个客户端」——同一个 Gateway 进程会同时服务 CLI、Desktop 和远程客户端，进程级缓存的结果对谁都不对。</li>
+      <li>不要在会话中途悄悄改模型可见工具列表，那会直接击穿 system prompt 断点，代价远大于省下的一次重启。</li>
+      <li>不要给 agent-level tool（<code>todo</code>、<code>memory</code>、<code>delegate_task</code> 等）走通用 Registry Handler，它们需要 AIAgent 本地状态，只会拿到保护性错误。</li>
+      <li>不要把「远端文件读不到」当成缺工具，去加一个新的文件工具——那是 Environment 抽象没对齐，加工具只会让两套语义永久分叉。</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<section class="section" id="s10">
+<h2>十、执行环境、审批与副作用边界 <a class="doc-link" href="docs/hermes-agent/10-environments-security.html" title="打开执行环境、Approval 与安全边界详细设计">子文档</a></h2>
+<h3>10.1 七类 Terminal Backend</h3>
+<table><tr><th>后端</th><th>隔离/位置</th><th>适用场景</th></tr>
+<tr><td>Local</td><td>宿主机</td><td>低延迟开发，依赖命令审批</td></tr>
+<tr><td>Docker</td><td>本机容器</td><td>可复现依赖与文件系统隔离</td></tr>
+<tr><td>SSH</td><td>远端主机</td><td>Agent 与工作负载分离</td></tr>
+<tr><td>Singularity</td><td>HPC 容器</td><td>集群/科研环境</td></tr>
+<tr><td>Modal</td><td>Serverless Sandbox</td><td>按需算力、可休眠环境</td></tr>
+<tr><td>Daytona</td><td>持久云开发环境</td><td>远程 Workspace</td></tr>
+<tr><td>Vercel Sandbox</td><td>短生命周期沙箱</td><td>托管执行</td></tr></table>
+<p>File Tools 与 Terminal 共享环境选择，使“读远端文件”和“在远端执行命令”落在同一个 Workspace 语义中。修复远程文件不可见问题应优先修挂载/环境抽象，而不是向核心添加重复文件工具。</p>
+<h3>10.2 审批管线</h3>
+<p>危险命令先经过硬拒绝规则、用户拒绝规则、危险模式和永久 Allowlist，再由 CLI/Gateway/Desktop 的审批回调与可选 Smart Approval 决策。Gateway 审批等待属于 Human-in-the-loop 状态；<code>/approve</code>、<code>/deny</code> 以及明确的 yes/no 必须绕过活跃会话排队，否则 Agent 会永久等不到回答。</p>
+<h3>10.3 Checkpoint 不是模型工具</h3>
+<p>写文件前的 <code>CheckpointManager</code> 使用影子 Git 等机制保存恢复点，对模型透明。它不等于 Session Checkpoint，也不进入工具 Schema；它是文件副作用层的安全网。</p>
+<h3>10.4 威胁边界</h3>
+<ul>
+  <li>Webhook 等不可信入口默认使用收窄的 Safe Toolset，避免第三方内容直接获得 Terminal/File。</li>
+  <li>Plugin 覆盖内置工具必须显式开启 <code>allow_tool_override</code>。</li>
+  <li>MCP 需要 Server Trust、路径、工具 include/exclude 与运行方式审计。</li>
+  <li>容器不是自动安全：挂载、网络、Secrets、资源限制和镜像供应链仍由部署方负责。</li>
+  <li><code>.env</code> 只放 Secrets；超时、阈值、功能开关和显示设置进入 <code>config.yaml</code>。</li>
+</ul>
+</section>
+
+<section class="section" id="s11">
+<h2>十一、Skills、Plugins 与 MCP：能力如何长在边缘 <a class="doc-link" href="docs/hermes-agent/11-capability-extensions.html" title="打开Skills、Plugins、MCP 与扩展生态详细设计">子文档</a></h2>
+<h3>11.1 Skills 是按需加载的程序性记忆</h3>
+<p>Skills 用紧凑索引进入稳定 Prompt，完整 <code>SKILL.md</code> 只有在匹配任务时通过 <code>skill_view</code> 加载。Skill Slash Command 解析后作为普通 User Message 提交，不修改 System Prompt；这既保留 Prompt Cache，也让执行轨迹与用户指令遵守相同角色规则。</p>
+<h3>11.2 通用 Plugin</h3>
+<p>PluginManager 从用户目录、项目目录（显式 Opt-in）、仓库 Bundled 和 Python Entry Point 发现插件。<code>PluginContext</code> 可注册 Tool、Hook、CLI Command、Gateway Platform 以及多种 Provider。Hooks 覆盖 LLM/Tool/Session/API 生命周期，但兼容策略要求新增字段以可选 Keyword 方式扩展，不能破坏旧插件签名。</p>
+<h3>11.3 Specialized Providers</h3>
+<table><tr><th>类型</th><th>发现/优先级</th><th>选择语义</th></tr>
+<tr><td>Model Provider</td><td>独立懒发现；用户同名可覆盖 Bundled</td><td>按 provider ID 解析 Profile</td></tr>
+<tr><td>Memory Provider</td><td>Bundled-first，防掉落目录影子覆盖</td><td>单选 External Provider</td></tr>
+<tr><td>Context Engine</td><td>显式配置，不自动激活</td><td>单选，默认 Compressor</td></tr>
+<tr><td>Browser/Web/Image/TTS 等</td><td>各自 Registry/ABC</td><td>配置选择，按需懒依赖</td></tr></table>
+<h3>11.4 MCP 生命周期</h3>
+<p>MCP 不在 <code>model_tools</code> Import 时同步发现，避免 Gateway Event Loop 被外部 Server 启动阻塞。各入口在合适的启动阶段显式发现；每个 Server 形成 <code>mcp-&lt;name&gt;</code> Toolset。大量工具可以延迟披露，Session 结束/进程退出时由 Client Lifecycle 清理。</p>
+<div class="insight">Skill 解决“模型需要知道如何做”；Plugin/MCP 解决“运行时需要新的结构化能力”；Provider ABC 解决“同一类别有多个实现”。先判断问题属于知识、能力还是策略，再选扩展面。</div>
+</section>
+
+<section class="section" id="s12">
+<h2>十二、SessionDB、FTS 与持久状态 <a class="doc-link" href="docs/hermes-agent/12-session-storage.html" title="打开SessionDB、FTS 与 Profile 隔离详细设计">子文档</a></h2>
+<h3>12.1 SQLite 是会话真相源</h3>
+<p><code>state.db</code> 存储 Session 元数据、完整消息、模型/计费 Usage、System Prompt 去重、Gateway Routing、Compression Locks 和 Async Delegation。WAL 允许多读单写；应用层使用短 SQLite Timeout、带随机抖动的重试和 <code>BEGIN IMMEDIATE</code>，降低多个 Hermes 进程同时写入的锁车队效应。</p>
+<h3>12.2 消息的双重视图</h3>
+<ul>
+  <li><strong>展示视图：</strong><code>content/display_kind/display_metadata</code> 面向 UI，可隐藏 Memory Fence 等内部上下文。</li>
+  <li><strong>API Replay 视图：</strong><code>api_content</code> 保存实际发送字节，另有 reasoning、Codex item 等 Sidecar。</li>
+  <li><strong>压缩视图：</strong><code>active/compacted</code> 区分当前 Prompt 与仍可搜索的历史。</li>
+</ul>
+<h3>12.3 FTS5</h3>
+<p>消息内容、工具名和工具调用进入 FTS5；标准 Unicode61、Trigram 和 CJK 索引覆盖单词、子串与中文检索。重建期间用 High-water/Progress 元数据门控 Trigger，防止后台重建与实时写入双重索引或漏删。</p>
+<h3>12.4 恢复语义</h3>
+<p>数据库层提供 Schema Reconcile、迁移、损坏隔离、FTS 重建、孤儿压缩会话修复和 Gateway Session 收养。Resume 受最大消息数保护，防止异常大历史一次性拖垮进程。Batch/RL Trajectory 不写入 SessionDB，以免训练数据和用户会话互相污染。</p>
+<div class="invariant">所有持久路径必须从 <code>get_hermes_home()</code> 派生。Profile 的配置、密钥、Session、Memory、Skills、Cron、Kanban 与 Logs 相互隔离；只有 Profile 管理根目录有意锚定用户 HOME，便于从任一 Profile 枚举全部实例。</div>
+</section>
+
+<section class="section" id="s13">
+<h2>十三、Memory 与自进化学习闭环 <a class="doc-link" href="docs/hermes-agent/13-memory-learning.html" title="打开Memory、Skill Usage 与 Curator详细设计">子文档</a></h2>
+<h3>13.1 两类 Memory</h3>
+<table><tr><th>类型</th><th>内容</th><th>注入时机</th></tr>
+<tr><td>Local Snapshot</td><td><code>MEMORY.md</code> 与 <code>USER.md</code> 中稳定事实</td><td>新 Session 的 System Prompt Volatile Tier</td></tr>
+<tr><td>External Recall</td><td>Honcho、Mem0、Supermemory 等 Provider 查询结果</td><td>当前 Turn 的 User-side <code>api_content</code></td></tr></table>
+<h3>13.2 MemoryManager 生命周期</h3>
+<div class="flow">
+  <div><strong>Session 初始化</strong>：选择最多一个 External Provider，加载静态 System Prompt Block。</div>
+  <div><strong>Turn Start</strong>：对非琐碎 Prompt 执行 Prefetch，将召回结果包在 Memory Fence 中。</div>
+  <div><strong>Tool Loop</strong>：Provider 可贡献自己的 Tool Schema，由 Manager 专门分发。</div>
+  <div><strong>Turn End</strong>：同步当前对话并排队下一次 Prefetch；Shutdown 有界等待。</div>
+  <div><strong>Pre-compress</strong>：在上下文丢失前给 Provider 刷新/保存机会。</div>
+</div>
+<p><code>agent_context</code> 区分 primary、subagent、cron、flush；Cron 默认 <code>skip_memory=true</code>，子 Agent 通常不把临时探索写进用户画像，避免自治任务污染长期身份。</p>
+<h3>13.3 Skills 学习闭环与 Curator</h3>
+<p>Hermes 可在复杂任务后创建 Skill，将可重复步骤从会话经验转为程序性知识。Usage Sidecar 跟踪 View/Use/Patch 与最后活动时间；Curator 在 Gateway 空闲窗口运行，对 Agent-created Skills 做 Active → Stale → Archived 转换。Pinned Skill 永远豁免自动归档；Archive 可恢复，系统不以自动删除作为治理手段。</p>
+<div class="insight">Memory 回答“关于用户和世界，哪些事实以后仍有用”；Skill 回答“遇到这类任务，应该遵循什么流程”。前者是事实性长期上下文，后者是按需披露的程序性能力，两者的成本模型和更新机制不同。</div>
+</section>
+
+<section class="section" id="s14">
+<h2>十四、Delegation、execute_code 与后台任务 <a class="doc-link" href="docs/hermes-agent/14-delegation-background.html" title="打开Delegation 与 Background Processes详细设计">子文档</a></h2>
+<h3>14.1 子 Agent 角色</h3>
+<table><tr><th>角色</th><th>能力</th><th>限制目的</th></tr>
+<tr><td>Leaf</td><td>聚焦任务、Terminal/File/execute_code 等</td><td>移除再次委托、Memory、Clarify、Send Message、Cron，防无限扩散与交互死锁</td></tr>
+<tr><td>Orchestrator</td><td>可继续委托并汇总子任务</td><td>受最大 Spawn Depth 与并发上限控制</td></tr></table>
+<h3>14.2 同步与后台</h3>
+<p>同步委托阻塞父 Tool Call，子 AIAgent 在线程池完成后把摘要作为 Tool Result 返回。后台委托立即返回 Handle；Daemon Executor 运行子任务，将结果写入 Async Delegation 状态和 Completion Queue。父会话空闲时，以一个新的 Turn 接收完成事件。</p>
+<div class="intuition-box"><p>后台任务的难点不在「怎么跑」，而在「跑完之后结果从哪个门进来」。Hermes 选择让它敲正门——开一个新 Turn，而不是从后窗翻进一个早就关闭的 tool call。</p></div>
+<h3>14.3 为什么完成事件必须开新 Turn</h3>
+<p>若把异步结果强行追加为 Tool Message，原始 Tool Call 早已完成或当前会话可能正在另一轮，会产生孤儿 Tool Result、连续角色或过去上下文突变。新 User-side Turn 同时满足角色合法、Prompt Cache 可预测和用户可见的时间顺序。</p>
+<h3>14.4 execute_code</h3>
+<p><code>execute_code</code> 允许在沙箱 Python 中以 RPC 方式批量调用已授权工具，把多个机械步骤折叠为一次模型回合。它降低上下文往返成本，但不扩大授权面：可调用工具仍来自当前 Session 的解析结果，并受审批与环境边界约束。</p>
+<h3>14.5 耐久性边界</h3>
+<p>后台委托与 Background Terminal 本质上仍依赖当前进程执行。数据库可恢复“已完成但未交付”的结果，却不会在进程死亡后自动重跑任意子 Agent。真正需要跨重启保证的任务应使用 Cron 或具有自身租约/认领模型的 Kanban——它们都建立在 <span class="term">Lease / Claim</span>（带过期时间的跨进程任务所有权，超时后可被其他 Worker 回收）之上，这是「进程可以死、任务不能丢」的最小机制。</p>
+</section>
+
+<section class="section" id="s15">
+<h2>十五、Cron 与 Kanban：两种自治工作模型 <a class="doc-link" href="docs/hermes-agent/15-cron-kanban.html" title="打开Cron 与 Kanban 自治执行详细设计">子文档</a></h2>
+<h3>15.1 Cron：时间驱动的独立 Agent Session</h3>
+<p>Cron Job 存储在 Profile 内的 <code>jobs.json</code>，支持周期、Cron 表达式、自然语言 Every 和一次性时间。Ticker 先在锁内认领并推进 <code>next_run_at</code>，再执行任务；Catch-up、Grace Window 和 Claim TTL 处理错过与多进程竞争。每次 Fire 创建独立 <code>source=cron</code> Session，不把投递内容硬插进目标聊天历史。</p>
+<ul>
+  <li>可附加 Skills、工作目录、Model/Provider、Fallback、前置脚本和 <code>context_from</code>。</li>
+  <li><code>no_agent=true</code> 时脚本输出就是整个任务结果。</li>
+  <li>硬中断约束防止失控 Loop 长期占用 Scheduler。</li>
+  <li>Delivery 是出站副作用，不等于目标 Session 的上下文延续。</li>
+</ul>
+<h3>15.2 Kanban：依赖驱动的耐久多 Agent Board</h3>
+<p>Kanban 使用每 Board 独立 SQLite，任务、依赖、Run、Comment、Event、Attachment 与 Notification 都持久化。Dispatcher 回收失效 Claim、把父任务已完成的节点提升为 Ready、原子认领并启动指定 Profile Worker。连续失败达到阈值会自动 Block，避免无休止重试。</p>
+<table><tr><th>维度</th><th>Cron</th><th>Kanban</th></tr>
+<tr><td>触发</td><td>时间/人工 Run</td><td>依赖就绪 + Dispatcher</td></tr>
+<tr><td>单位</td><td>Job Fire</td><td>Board Task / Run</td></tr>
+<tr><td>隔离</td><td>独立 Cron Session</td><td>Board 硬边界，Tenant 为软命名空间</td></tr>
+<tr><td>Worker</td><td>同 Scheduler 进程内 Agent</td><td>可为独立 Profile 进程</td></tr>
+<tr><td>恢复</td><td>Claim、Catch-up、Execution Ledger</td><td>Heartbeat、PID/TTL Reclaim、Failure Block</td></tr></table>
+</section>
+
+<section class="section" id="s16">
+<h2>十六、多端 UI、协议与状态权威 <a class="doc-link" href="docs/hermes-agent/16-surfaces-protocols.html" title="打开多端 Surface 与协议详细设计">子文档</a></h2>
+<h3>16.1 TUI</h3>
+<p>Ink/React 负责终端渲染，Python <code>tui_gateway</code> 负责 Session、AIAgent 与 Slash。二者通过 Stdio ND-JSON-RPC 通信：请求包括 Session Create/Resume、Prompt Submit、Slash、Approval、Interrupt；事件包括 Message Delta/Complete、Tool Progress、Clarify、Secret 和 Session Info。Slash Worker 子进程复用 Classic CLI 命令实现，避免在 TypeScript 复制完整命令控制器。</p>
+<h3>16.2 Dashboard</h3>
+<p>Dashboard 的 <code>/chat</code> 用 xterm.js 通过 WebSocket 连接 PTY Bridge，后端实际 Spawn <code>hermes --tui</code>。浏览器发送原始 PTY 字节与 Resize 控制帧。因此主 Transcript、Composer 和 Slash 语义应在 Ink 扩展，而不是在 Dashboard React 再实现一套聊天。</p>
+<h3>16.3 Desktop</h3>
+<p>Desktop 是独立 Electron + React Chat Surface。Electron 管机器能力和后端生命周期；Renderer 管体验与短期 UI 状态；Headless Backend 管 Session、Tool 与模型。Renderer 通过共享 <code>JsonRpcGatewayClient</code> 连接 <code>hermes serve</code>，没有 Dashboard 前端运行时依赖。Desktop Slash Palette 策展 Built-in 噪音，但必须放行 Skills 与 Quick Commands。</p>
+<h3>16.4 ACP 与 API</h3>
+<p>ACP 通过 Stdio JSON-RPC 把 Hermes 暴露给 VS Code、Zed、JetBrains，处理 Editor Permission、Edit Approval、Streaming 与 Cancel。API Server 提供 OpenAI-compatible Chat/Responses/Run 与 SSE，同时支持 Hermes Session Header 延续。两者复用 Core，但表面权限和事件格式独立。</p>
+<h3>16.5 状态权威原则</h3>
+<div class="grid">
+  <div class="card"><strong>Backend 权威</strong>跨表面可变的 Session、模型、历史、工具结果。</div>
+  <div class="card"><strong>Electron 权威</strong>本机进程、文件系统、窗口、安装更新与原生能力。</div>
+  <div class="card"><strong>Renderer 权威</strong>当前窗口展示、临时交互、未提交 Draft。</div>
+  <div class="card"><strong>Session Source 权威</strong>“谁在连接”决定 Desktop/Project 工具；不能用后端进程环境变量替代。</div>
+</div>
+</section>
+
+<section class="section" id="s17">
+<h2>十七、并发、恢复与可观测性 <a class="doc-link" href="docs/hermes-agent/17-concurrency-observability.html" title="打开并发、恢复与可观测性详细设计">子文档</a></h2>
+<h3>17.1 并发边界</h3>
+<ul>
+  <li><strong>SessionCoordinator / Active Session：</strong>同一会话单写，跨会话可并行。</li>
+  <li><strong>SQLite：</strong>WAL + 应用抖动重试；Compression 使用跨进程 Lease。</li>
+  <li><strong>Tool Execution：</strong>线程池并行，但 Interactive/Dependent Tools 串行，Result 顺序稳定。</li>
+  <li><strong>Async Bridge：</strong>根据当前线程是否已有 Event Loop，选择持久 Loop、一次性线程或 Thread-local Loop。</li>
+  <li><strong>Compression Commit Fence：</strong>Hard Interrupt 与压缩提交互斥，防止半提交上下文。</li>
+</ul>
+<h3>17.2 错误与恢复层次</h3>
+<table><tr><th>层</th><th>恢复策略</th></tr>
+<tr><td>API/Provider</td><td>Retry、Credential Refresh、Account Rotation、Fallback、Disable Streaming、Compress</td></tr>
+<tr><td>Tool</td><td>统一 JSON Error、输出截断、Approval Denial、环境清理</td></tr>
+<tr><td>SessionDB</td><td>Retry、Migration/Reconcile、Quarantine、FTS Rebuild、Orphan Recovery</td></tr>
+<tr><td>Autonomy</td><td>Claim TTL、Heartbeat、Stale Reclaim、Delivery Replay、Failure Block</td></tr>
+<tr><td>UI Connection</td><td>Runtime/Durable ID 重新映射、有限重连、旧 Runtime Compatibility Ladder</td></tr></table>
+<h3>17.3 可观测性</h3>
+<p><code>hermes_logging</code> 写 Agent/Error/Gateway 日志并带 Session Context；SessionDB 累加 input/output/cache/reasoning Token 与估算/实际成本；可选 Trajectory 输出 ShareGPT 风格样本，用于调试、训练和压缩分析。Plugin Hooks 可接观测后端，但任何外发 Telemetry 必须显式 Opt-in。</p>
+<div class="tradeoff">Hermes 的可观测事实分散在日志、SessionDB、Trajectory、Delegation Live Log、Cron Ledger 和 Kanban Events 中。这符合各子系统的耐久性边界，但统一诊断需要关联 Profile、Session、Task、Delegation/Run ID；不能只看单个文本日志。</div>
+</section>
+
+<section class="section" id="s18">
+<h2>十八、设计模式与关键权衡 <a class="doc-link" href="docs/hermes-agent/18-patterns-development.html" title="打开设计模式、权衡与二次开发详细设计">子文档</a></h2>
+<table><tr><th>模式</th><th>落点</th><th>架构价值</th></tr>
+<tr><td>Facade</td><td><code>AIAgent</code></td><td>多表面统一调用，不暴露内部拆分</td></tr>
+<tr><td>State Machine</td><td>Conversation Loop、Approval、Cron/Kanban Run</td><td>显式终态、失败和恢复路径</td></tr>
+<tr><td>Registry</td><td>Tools、Providers、Plugins、Platforms</td><td>边缘扩展与运行时发现</td></tr>
+<tr><td>Strategy / ABC</td><td>Transport、Environment、Memory/Context Provider</td><td>替换实现而不复制编排</td></tr>
+<tr><td>Adapter</td><td>Provider Messages、Platform Event、MCP Tool</td><td>外部协议归一到内部模型</td></tr>
+<tr><td>Lease / Claim</td><td>Compression、Cron、Kanban、Async Delivery</td><td>跨进程 At-most-once 与失效回收</td></tr>
+<tr><td>Sidecar</td><td><code>api_content</code>、reasoning/Codex items、display metadata</td><td>同时保留 UI、Replay 与 Provider Fidelity</td></tr>
+<tr><td>Progressive Disclosure</td><td>Skills、Tool Search、Optional Deps</td><td>降低常驻 Token 和供应链面</td></tr></table>
+<h3>18.1 最值得学习的取舍</h3>
+<ul>
+  <li><strong>缓存优先于即时动态性：</strong>配置变更默认下一 Session 生效。</li>
+  <li><strong>独立 Session 优先于历史注入：</strong>Cron 和异步完成通过新 Turn/独立 Session 保持消息不变量。</li>
+  <li><strong>结构化 Registry 优先于条件分支：</strong>Provider/Tool/Plugin 用注册表减少核心耦合。</li>
+  <li><strong>边缘扩展优先于核心工具：</strong>Schema 成本成为架构决策的量化指标。</li>
+  <li><strong>可恢复归档优先于自动删除：</strong>压缩软归档、Curator Archive、Kanban Event Ledger。</li>
+</ul>
+</section>
+
+<section class="section" id="s19">
+<h2>十九、二次开发与排障指南</h2>
+<h3>19.1 新能力落点决策</h3>
+<table><tr><th>需求</th><th>首选扩展面</th><th>不要先做</th></tr>
+<tr><td>模型学习一套操作流程</td><td>Skill 或 Optional Skill</td><td>新增 Core Tool</td></tr>
+<tr><td>管理配置/服务/订阅</td><td>CLI Command + Skill</td><td>把非 Secret 做成环境变量</td></tr>
+<tr><td>接结构化外部系统</td><td>MCP 或独立 Plugin</td><td>把第三方产品写入 Core Tree</td></tr>
+<tr><td>新增推理 Provider</td><td>Model Provider Plugin</td><td>在每个入口写 Provider 分支</td></tr>
+<tr><td>新增长期记忆实现</td><td>Standalone Memory Provider</td><td>在 <code>run_agent.py</code> 硬编码</td></tr>
+<tr><td>新增执行位置</td><td><code>BaseEnvironment</code> 后端</td><td>复制 Terminal/File 工具</td></tr>
+<tr><td>Desktop 面板能力</td><td>Session Toolset + Typed Bridge</td><td>用 <code>HERMES_DESKTOP</code> 判断客户端身份</td></tr></table>
+<h3>19.2 排障从哪一层开始</h3>
+<ol>
+  <li>确认入口、Profile、HERMES_HOME 与 Session Source。</li>
+  <li>确认 durable/runtime/session key 是否混用，SessionDB 是否恢复了正确 System Prompt。</li>
+  <li>检查本 Session 的 Toolset 与 <code>check_fn</code>，不要只看 Registry 是否注册。</li>
+  <li>按 <code>api_mode</code> 而不是 Provider 名追踪消息转换与 Streaming。</li>
+  <li>区分 Context Overflow、Provider Error、Tool Error、Approval Wait 与 Interrupt。</li>
+  <li>遇到异步问题同时关联 Completion Queue、Delegation/Process ID 和父 Session。</li>
+  <li>遇到压缩问题检查 in-place 模式、Summary Model 窗口、Tool Pair 对齐和 Commit Lock。</li>
+</ol>
+<h3>19.3 测试策略</h3>
+<p>关键边界需要真实路径测试：临时 <code>HERMES_HOME</code> 下导入真实模块、走真实 Provider Resolver/Tool Discovery/SessionDB，而不是只 Mock 内部函数。行为契约应验证“数据之间的关系”——例如所有可见 Tool 必须属于授权 Toolset、压缩后消息角色合法——而不是冻结当前工具数量、Provider 列表或 Schema Version。</p>
+</section>
+
+<section class="section" id="s20">
+<h2>二十、与 Trae Agent 的侧向对比及论文核验</h2>
+<h3>20.1 两种 Agent Runtime 的中心不同</h3>
+<table><tr><th>维度</th><th>Hermes Agent</th><th>Trae Agent</th></tr>
+<tr><td>核心定位</td><td>长期个人 Agent、跨平台、多自治能力</td><td>仓库级软件工程 Agent 与研究/评估平台</td></tr>
+<tr><td>主运行形态</td><td>长会话 + 多表面 + Gateway 常驻</td><td>单任务 Job 式 ReAct</td></tr>
+<tr><td>上下文</td><td>稳定前缀、Prompt Cache、可插拔压缩</td><td>Provider History 为主，通用压缩较弱</td></tr>
+<tr><td>长期状态</td><td>SessionDB/FTS、Memory Providers、Skills/Curator</td><td>Trajectory 强，跨会话 Memory 较弱</td></tr>
+<tr><td>扩展</td><td>Toolset、Skill、Plugin、MCP、Provider ABC</td><td>统一 Tool + MCP + 可选 Docker/CKG</td></tr>
+<tr><td>多 Agent</td><td>同步/后台 Delegation、Orchestrator、Kanban</td><td>主 Runtime 单 Agent；评估侧 Patch Selection</td></tr>
+<tr><td>软件工程专长</td><td>通用 Terminal/File/环境能力</td><td>更聚焦 Repo Issue、Patch、CKG、SWE-bench</td></tr></table>
+<h3>20.2 论文检索结论</h3>
+<p><span class="badge external">外部资料</span>截至本文检索时间，未发现专门描述 <strong>Hermes Agent 软件架构</strong>的 Nous Research 官方论文或 arXiv 技术报告。官方可信来源是 GitHub 仓库与 Hermes Agent Documentation。</p>
+<p>可检索到的 Hermes 3 / Hermes 4 Technical Report 描述的是 Nous Research 的语言模型训练、推理与评估，而不是本项目的 SessionDB、Tool Runtime、Gateway、Skills 或 Delegation 架构。它们可作为“底层模型家族”背景，但不能用于证明 Agent Runtime 的实现结论。相比之下，Trae Agent 有明确的软件工程 Agent 技术报告 arXiv:2507.23370，可引用其 Test-time Scaling 实验，但这些结果同样不能迁移为 Hermes 的性能声明。</p>
+<div class="invariant">所有跨项目比较都应区分“源码可证事实、官方公开定位、论文实验结果、闭源产品推测”。本文不以榜单、星级或营销描述替代架构证据。</div>
+</section>
+
+<section class="qa-section" id="qa">
+<h2>Q&amp;A</h2>
+<details><summary>Hermes 的 Agent Loop 是异步的吗？</summary><div class="answer">核心 <code>run_conversation</code> 是同步状态机。Gateway/TUI 用 asyncio 接入多会话，再把同步 Agent 放到执行器线程；异步 Tool Handler 由桥接层适配。这种设计使核心在 CLI、Gateway、ACP 和 Batch 中保持一致。</div></details>
+<details><summary>为什么 Memory 更新后不会立即出现在 System Prompt？</summary><div class="answer">System Prompt 在会话期冻结以保护 Provider Prefix Cache。稳定事实写盘后在新 Session 或显式重建时成为新快照；当前 Turn 的动态 Recall 通过 User-side <code>api_content</code> 注入。</div></details>
+<details><summary>压缩是否一定生成新的 Session ID？</summary><div class="answer">不是。当前默认 <code>compression.in_place=true</code>，同一 Durable ID 下软归档旧消息。只有关闭该选项或走旧式旋转路径时才通过 <code>parent_session_id</code> 形成链。</div></details>
+<details><summary>为什么后台委托完成后不能直接追加 Tool Result？</summary><div class="answer">原 Tool Call 可能早已闭合，当前会话也可能处于另一轮。直接追加会产生孤儿 Tool、角色错序和缓存前缀突变；Completion Queue 在会话空闲时开启新 Turn 更安全。</div></details>
+<details><summary>新增一个第三方系统集成应该放进 tools/ 吗？</summary><div class="answer">通常不应该。先评估 CLI+Skill、Standalone Plugin 或 MCP。只有对几乎所有用户都基础、无法由现有工具表达且值得永久 Schema 成本的能力，才考虑 Core Tool。</div></details>
+<details><summary>Dashboard 和 Desktop 是否共享同一聊天前端？</summary><div class="answer">不共享。Dashboard 嵌入真实 Ink TUI 的 PTY；Desktop 是独立 React Chat Surface。它们共享 Python Backend 和 JSON-RPC 能力，但 UI、状态权威和进程模型不同。</div></details>
+<details><summary>Hermes 的长期任务能否在进程重启后继续执行？</summary><div class="answer">普通后台委托/进程不能保证重跑。它们可以耐久交付已完成结果，但执行本身依赖进程。跨重启任务应使用 Cron，依赖驱动的多 Worker 工作应使用 Kanban。</div></details>
+<details><summary>Hermes Agent 有官方论文吗？</summary><div class="answer">当前未发现软件本身的官方论文。Hermes 4 Technical Report 是模型报告；架构应引用官方仓库、开发文档和源码，而不是把模型论文当成 Agent Runtime 论文。</div></details>
+</section>
+
+<section class="section" id="glossary">
+<h2>附录 A：术语表</h2>
+<table><tr><th>术语</th><th>含义</th></tr>
+<tr><td>Prompt Cache</td><td>Provider 对请求前缀的复用机制；命中依赖模型、账户和字节级前缀一致。</td></tr>
+<tr><td>Narrow Waist</td><td>所有表面复用的最小核心接口；Hermes 中主要是 AIAgent、消息中间表示和 Tool Dispatch。</td></tr>
+<tr><td>Toolset</td><td>面向 Session 的工具能力集合，决定模型可见 Schema。</td></tr>
+<tr><td>check_fn</td><td>服务/依赖可用性门控，不用于表达每请求的客户端身份。</td></tr>
+<tr><td>api_mode</td><td>Provider 请求协议与消息转换模式，不等价于 Provider 品牌。</td></tr>
+<tr><td>Sidecar</td><td>不改变主要展示字段、但为 API Replay/Provider Fidelity 保存的附加数据。</td></tr>
+<tr><td>Compaction</td><td>通过清理与摘要重组历史，以降低后续上下文 Token。</td></tr>
+<tr><td>Session Lineage</td><td>旧式旋转压缩/分支形成的父子会话关系；默认 in-place 不新增链节点。</td></tr>
+<tr><td>Durable ID</td><td>持久数据库身份；区别于当前进程的 Runtime ID。</td></tr>
+<tr><td>Completion Queue</td><td>后台进程/委托完成事件进入主会话的新 Turn 交付轨道。</td></tr>
+<tr><td>Footprint Ladder</td><td>按永久核心成本从低到高选择扩展方式的设计准则。</td></tr>
+<tr><td>Context Engine</td><td>决定何时、如何压缩上下文的可插拔策略，默认是 ContextCompressor。</td></tr>
+<tr><td>Memory Provider</td><td>长期事实召回与同步后端；一次运行选择一个 External Provider。</td></tr>
+<tr><td>Skill</td><td>按需加载的程序性知识与工作流，不等同于模型工具。</td></tr>
+<tr><td>Lease / Claim</td><td>带过期和回收语义的跨进程任务所有权。</td></tr>
+</table>
+</section>
+
+<section class="ref-section" id="refs">
+<h2>参考资料与事实来源</h2>
+<ol class="refs">
+  <li>Nous Research, Hermes Agent repository：<a href="https://github.com/NousResearch/hermes-agent">github.com/NousResearch/hermes-agent</a>，本文源码工作区版本 0.20.1。</li>
+  <li>Hermes Agent Official Documentation：<a href="https://hermes-agent.nousresearch.com/docs/">hermes-agent.nousresearch.com/docs</a>。</li>
+  <li>本地官方开发文档：Architecture、Agent Loop、Prompt Assembly、Context Compression &amp; Caching、Tools Runtime、Session Storage、Provider Runtime。</li>
+  <li>根开发约束 <code>AGENTS.md</code>：Prompt Cache、Footprint Ladder、Session-scoped Capability、Profiles、Plugins、Cron、Kanban 与测试政策。</li>
+  <li>Nous Research, “Hermes 4 Technical Report”, arXiv:2508.18255。仅用于模型背景，不作为 Hermes Agent 软件架构证据。</li>
+  <li>Trae Research Team, “Trae Agent: An LLM-based Agent for Software Engineering with Test-time Scaling”, arXiv:2507.23370。仅用于侧向对比。</li>
+</ol>
+</section>
+
+<div class="footer">Hermes Agent 架构深度解析 · 团队分享与开发文档版<br>源码事实核验日期：2026-08-14</div>
+</main>
+</div><!-- /panel-docs -->
+
+<script>
+// Tab 切换（入门指南 / 架构文档）
+function switchHermesTab(name){
+  localStorage.setItem('hermesArchTab',name);
+  document.querySelectorAll('.spanel').forEach(function(p){p.classList.remove('active')});
+  document.querySelectorAll('.project-tabs .tab-btn').forEach(function(b){b.classList.toggle('active',b.dataset.tab===name)});
+  document.getElementById('panel-'+name).classList.add('active');
+  document.body.classList.toggle('tab-embed',name==='guide');
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.project-tabs .tab-btn').forEach(function(btn){btn.addEventListener('click',function(){switchHermesTab(btn.dataset.tab)})});
+(function(){var t=localStorage.getItem('hermesArchTab');if(t&&t!=='docs'&&document.getElementById('panel-'+t))switchHermesTab(t)})();
+(function(){
+  // 侧边栏 scrollspy
+  const links=[...document.querySelectorAll('.sidebar a')];
+  const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  addEventListener('scroll',()=>{let id='';sections.forEach(s=>{if(s.getBoundingClientRect().top<130)id=s.id});links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+id))},{passive:true});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae Agent Lakeview 可观测性旁路开发文档</title>
+<style>
+:root{
+  --bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);
+  --text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;
+  --green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.7;padding:64px 24px 48px 292px;overflow-x:hidden}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+code{background:rgba(194,65,12,.11);color:var(--orange);padding:.08rem .3rem;border-radius:4px;font-size:.88em;overflow-wrap:anywhere;word-break:break-word}
+.topbar{position:fixed;inset:0 0 auto 0;height:48px;z-index:20;display:flex;align-items:center;gap:1rem;min-width:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.2rem}
+.topbar a{font-size:.88rem;font-weight:650;white-space:nowrap}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.86rem}
+.sidebar{position:fixed;top:48px;bottom:0;left:0;width:268px;overflow:auto;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;backdrop-filter:blur(12px)}
+.sidebar strong{display:block;color:var(--blue);margin-bottom:.7rem}
+.sidebar a{display:block;color:var(--text);opacity:.72;font-size:.79rem;padding:.2rem .35rem;border-left:2px solid transparent}
+.sidebar a:hover,.sidebar a.active{opacity:1;border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1080px;margin:0 auto}
+h1{font-size:2rem;margin:.2rem 0 .35rem;overflow-wrap:anywhere;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{color:var(--blue);font-size:1.35rem;margin:0 0 1rem;border-bottom:1px solid var(--border);padding-bottom:.45rem}
+h3{color:var(--blue2);font-size:1.08rem;margin:1.25rem 0 .55rem}
+p{margin:.55rem 0}
+ul,ol{margin:.55rem 0 .65rem 1.35rem;padding:0}
+li{margin:.25rem 0}
+.subtitle{color:var(--muted);margin:0 0 1.2rem}
+.section{min-width:0;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.55rem;margin:0 0 1.25rem;scroll-margin-top:62px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.meta-grid,.card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.meta,.card{min-width:0;overflow-wrap:anywhere;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.85rem}
+.meta b,.card b{display:block;color:var(--blue2);font-size:.82rem;margin-bottom:.2rem}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:.05rem .45rem;margin:.1rem .3rem .1rem 0;font-size:.72rem;font-weight:700}
+.fact{color:var(--green)}.optional{color:var(--yellow)}.roadmap{color:var(--muted)}.risk{color:var(--red)}
+.callout{border-left:3px solid var(--blue);background:rgba(67,56,202,.06);padding:.8rem 1rem;margin:.8rem 0}
+.warning{border-left-color:var(--red);background:rgba(185,28,28,.06)}
+.good{border-left-color:var(--green);background:rgba(21,128,61,.06)}
+.diagram{display:flex;align-items:stretch;gap:.45rem;overflow-x:auto;padding:.85rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+.node{min-width:132px;flex:1;border:1px solid var(--blue);border-radius:8px;padding:.7rem;text-align:center;background:rgba(67,56,202,.05)}
+.node.side{border-style:dashed;border-color:var(--yellow)}
+.node.stop{border-color:var(--red)}
+.node strong{display:block;color:var(--blue2)}
+.node small{display:block;color:var(--muted);margin-top:.2rem}
+.arrow{align-self:center;color:var(--purple);font-size:1.25rem;font-weight:700}
+.sequence{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem 1rem;overflow:auto}
+.sequence .step{display:grid;grid-template-columns:2.1rem minmax(130px,.8fr) minmax(240px,2fr);gap:.6rem;border-bottom:1px dashed var(--border);padding:.45rem 0}
+.sequence .step:last-child{border-bottom:0}
+.n{width:1.7rem;height:1.7rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue);color:var(--bg);font-size:.75rem;font-weight:800}
+table{width:100%;max-width:100%;border-collapse:collapse;margin:.7rem 0;font-size:.84rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--border);padding:.5rem .62rem;vertical-align:top;min-width:110px}
+th{background:#e8e1d4;color:var(--blue);text-align:left}
+tr:nth-child(even){background:rgba(244,241,234,.45)}
+.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}
+.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;box-decoration-break:clone}
+.source-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.55rem 0}
+.source-card b{color:var(--purple)}
+.source-note{font-size:.82rem;color:var(--muted);border-left:3px solid var(--border);padding-left:.8rem;margin:.7rem 0}
+.footer{text-align:center;color:var(--muted);font-size:.78rem;padding:1rem}
+@media(max-width:900px){body{padding:64px 14px 36px}.sidebar{display:none}.meta-grid,.card-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.topbar .title{display:none}.topbar{padding:0 .8rem}h1{font-size:1.45rem}.section{padding:1rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.diagram{flex-direction:column}.arrow{transform:rotate(90deg);text-align:center}.sequence .step{grid-template-columns:2rem 1fr}.sequence .step div:last-child{grid-column:2}}
+.chapter-nav{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;margin:1.5rem 0 .5rem}
+.chapter-nav a{flex:1 1 16rem;min-width:0;max-width:100%;border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;background:var(--surface2);overflow-wrap:anywhere}
+.chapter-nav .prev{margin-right:auto}.chapter-nav .next{margin-left:auto;text-align:right}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="../../trae_agent_architecture.html">← 返回 Trae Agent 架构总览</a>
+  <span class="title">模块 06 / Lakeview 可观测性旁路</span>
+</header>
+
+<nav class="sidebar" aria-label="页面目录">
+  <strong>Lakeview Observability</strong>
+  <a href="#position">1. 模块定位</a>
+  <a href="#context">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念与术语</a>
+  <a href="#components">4. 架构组成</a>
+  <a href="#flow">5. 完整运行流程</a>
+  <a href="#state">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口、协议与事件</a>
+  <a href="#config">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发、性能与资源</a>
+  <a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败、恢复与兼容</a>
+  <a href="#observability">12. 可观测性与排障</a>
+  <a href="#tests">13. 测试与验证</a>
+  <a href="#extension">14. 开发与扩展指南</a>
+  <a href="#tradeoffs">15. 设计权衡与限制</a>
+  <a href="#sources">16. 源码索引</a>
+  <a href="#glossary">附录 · 术语对照表</a>
+</nav>
+
+<main class="container">
+  <h1>Trae Agent Lakeview 可观测性旁路</h1>
+  <p class="subtitle">审计 AgentStep 如何被独立模型概括为 task/details/tags、真正接入了哪一种 Console，以及调用成本、失败退化与数据外发边界。</p>
+
+  <section class="section" aria-label="文档元数据">
+    <div class="meta-grid">
+      <div class="meta"><b>一句话目标</b>把 Lakeview 准确定位为面向人的可选 CLI 摘要旁路，而不是 Agent Memory、Reflection 或 Context Compaction。</div>
+      <div class="meta"><b>源码快照</b>工作区源码快照；<code>pyproject.toml</code> 版本 <code>0.1.0</code>；本机 Git CLI 不可用，未取得 SHA。</div>
+      <div class="meta"><b>证据状态</b><span class="badge fact">已验证（静态审计）</span>决定性源码、配置、Provider 接口、测试与 docs 已核对；未调用真实 Provider。</div>
+      <div class="meta"><b>所有者路径</b><code>trae_agent/utils/lake_view.py</code>、<code>trae_agent/utils/cli/</code></div>
+      <div class="meta"><b>目标读者</b>CLI/Provider 开发者、成本与隐私评审者、Agent 运行排障人员。</div>
+      <div class="meta"><b>最近验证</b>2026-07-27</div>
+    </div>
+    <p>
+      <span class="badge fact">源码事实：Simple Console 调用</span>
+      <span class="badge optional">可选能力：可配置关闭</span>
+      <span class="badge risk">Rich Console 未接入生成/展示</span>
+      <span class="badge roadmap">未实现：主 Context 回灌/Compaction</span>
+    </p>
+  </section>
+
+  <section class="section" id="position">
+    <h2>1. 模块定位</h2>
+    <div class="callout good"><strong>核心结论：</strong>Lakeview 读取已经产生的 <code>AgentStep.llm_response</code>，使用另一个 <code>LLMClient</code> 生成短摘要与行为标签，再由 Simple CLI 在任务末尾展示。没有任何结果写回主 Agent 的增量消息或 Provider History。</div>
+    <table>
+      <tr><th>边界</th><th>负责</th><th>明确不负责</th></tr>
+      <tr><td><code>LakeView</code></td><td>把单步模型文本和 Tool Call 参数转成 task/details/tags。</td><td>不执行 Tool、不判定任务完成、不保存主会话历史。<span class="evidence"><code>trae_agent/utils/lake_view.py:78-209</code></span></td></tr>
+      <tr><td><code>SimpleCLIConsole</code></td><td>在完成/错误 Step 上启动生成任务，并在最终摘要阶段等待、展示 Panel。</td><td>不把 Panel 内容回传 Agent。<span class="evidence"><code>trae_agent/utils/cli/simple_console.py:40-87,110-120,222-240</code></span></td></tr>
+      <tr><td><code>RichCLIConsole</code></td><td>展示 Agent Step 与 Token Usage。</td><td>虽继承并可构造 <code>lake_view</code>，当前没有调用 <code>create_lakeview_step</code>，也没有 Lakeview Widget/Panel。<span class="evidence"><code>trae_agent/utils/cli/rich_console.py:263-367</code></span></td></tr>
+      <tr><td>主 Agent / Context</td><td>继续以原始 Provider History、Tool Result 驱动下一轮。</td><td>不读取 Lakeview 输出，不用它做 Memory、Reflection、Pruning 或 Compaction。<span class="evidence"><code>trae_agent/agent/base_agent.py:147-244,314-352</code></span></td></tr>
+      <tr><td>Trajectory</td><td>提供一个可写 <code>lakeview_summary</code> 的方法。</td><td>当前 <code>trae_agent/</code> 没有该方法的调用点，不能声称 Lakeview 会落盘。<span class="evidence"><code>trae_agent/utils/trajectory_recorder.py:191-196</code></span></td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="context">
+    <h2>2. 系统位置与依赖</h2>
+    <div class="diagram" role="img" aria-label="Lakeview 旁路与主上下文边界">
+      <div class="node"><strong>主 Provider</strong><small>产生 AgentStep</small></div><div class="arrow">→</div>
+      <div class="node"><strong>BaseAgent</strong><small>完成 Step / 更新 Console</small></div><div class="arrow">⇢</div>
+      <div class="node side"><strong>Simple Console</strong><small>创建后台 Task</small></div><div class="arrow">→</div>
+      <div class="node side"><strong>Lakeview Provider</strong><small>摘要 + 标签</small></div><div class="arrow">→</div>
+      <div class="node side"><strong>Rich Panel</strong><small>仅人类可见</small></div>
+    </div>
+    <div class="diagram" role="img" aria-label="Lakeview 不进入的主链">
+      <div class="node side"><strong>LakeViewStep</strong><small>desc_task/details/tags</small></div><div class="arrow">✕</div>
+      <div class="node stop"><strong>主 LLM Context</strong><small>无写入调用</small></div><div class="arrow">✕</div>
+      <div class="node stop"><strong>Compaction / Memory</strong><small>当前未实现</small></div>
+    </div>
+    <div class="card-grid">
+      <div class="card"><b>上游触发</b><code>BaseAgent._finalize_step()</code> 把 Step 置为 completed 后调用 Console；异常 Step 也经 finalize 后触发。<code>trae_agent/agent/base_agent.py:163-178,238-244</code></div>
+      <div class="card"><b>下游依赖</b><code>LLMClient</code> 根据 Lakeview 的 <code>ModelConfig</code> 选择七种 Provider Adapter 之一。<code>trae_agent/utils/llm_clients/llm_client.py:15-80</code></div>
+      <div class="card"><b>兄弟实现</b>Simple 与 Rich 都实现 <code>CLIConsole</code>；只有 Simple 拥有 Lakeview 生成/汇总代码。</div>
+      <div class="card"><b>进程边界</b>Provider Adapter 在当前 CLI Python 进程内；实际模型请求越过网络边界（Ollama 可指向本地服务）。</div>
+    </div>
+    <p class="source-note">项目依赖版本范围由 <code>pyproject.toml:7-26</code> 定义；Lakeview 没有专属 SDK，复用主 Provider 抽象。</p>
+  </section>
+
+  <section class="section" id="concepts">
+    <h2>3. 核心概念与术语</h2>
+    <table>
+      <tr><th>术语</th><th>当前准确含义</th><th>不要混淆为</th></tr>
+      <tr><td>Observability Sidecar</td><td>从已完成 Step 派生人类可读信息，不驱动主循环。</td><td>Think → Tool → Observation 状态机中的阶段。</td></tr>
+      <tr><td>摘要</td><td><code>desc_task</code>（Prompt 要求至多 10 个英文词）与 <code>desc_details</code>（至多 30 个英文词）。</td><td>可恢复语义的 Context 压缩快照。</td></tr>
+      <tr><td>标签</td><td>从八个固定标签中选择：WRITE_TEST、VERIFY_TEST、EXAMINE_CODE、WRITE_FIX、VERIFY_FIX、REPORT、THINK、OUTLIER。</td><td>AgentState 或权限分类。<span class="evidence"><code>trae_agent/utils/lake_view.py:32-68</code></span></td></tr>
+      <tr><td><code>reuse_history=False</code></td><td>每次 Lakeview 请求不复用 Lakeview Provider Client 历史。</td><td>清空主 Agent Provider History。<span class="evidence"><code>trae_agent/utils/lake_view.py:108-126,158-164</code></span></td></tr>
+      <tr><td>格式重试</td><td>模型返回未满足 XML-like 标签格式时，在 Lakeview 方法内再次调用。</td><td>跨 Provider Failover 或错误隔离。</td></tr>
+      <tr><td>Trajectory</td><td>主执行审计 JSON；存在手工更新 Lakeview 字段的方法。</td><td>Lakeview 当前的规范存储。</td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="components">
+    <h2>4. 架构组成</h2>
+    <h3>4.1 输入提取</h3>
+    <p><code>_agent_step_str()</code> 只读取 <code>llm_response.content</code>，并把 Tool Call 的名称和 <code>arguments</code> 追加到文本；它不直接包含 <code>tool_results</code>、Reflection、Step.error 或 Usage。没有 LLM Response 或内容最终为空时返回 <code>None</code>。<span class="evidence"><code>trae_agent/utils/lake_view.py:177-192</code></span></p>
+    <h3>4.2 摘要生成器</h3>
+    <p><code>extract_task_in_step()</code> 发送 previous/current step、Extractor Prompt 与 assistant 前缀，引导模型续写 <code>&lt;task&gt;</code>/<code>&lt;details&gt;</code>。首次调用格式不合法时最多再调用 10 次；最终仍不合法则返回两个空字符串。<span class="evidence"><code>trae_agent/utils/lake_view.py:94-136</code></span></p>
+    <h3>4.3 标签生成器</h3>
+    <p><code>extract_tag_in_step()</code> 请求固定标签集合，以正则提取 <code>&lt;tags&gt;</code>，并要求所有标签都在 <code>KNOWN_TAGS</code> 中；格式持续无效时最多进行 10 个逻辑调用并返回空列表。<span class="evidence"><code>trae_agent/utils/lake_view.py:138-175</code></span></p>
+    <h3>4.4 Console 装配</h3>
+    <p><code>CLIConsole.set_lakeview()</code> 根据配置创建独立 <code>LakeView/LLMClient</code>。<code>Agent.__init__</code> 再依据 <code>enable_lakeview</code> 对 Console 设置或清除 Lakeview。Run 命令先创建无配置 Console，后由 Agent 注入；Interactive 创建 Console 时已传配置，Agent 随后会再次设置一次。<span class="evidence"><code>trae_agent/utils/cli/cli_console.py:51-65,118-123</code></span>；<span class="evidence"><code>trae_agent/agent/agent.py:45-57</code></span>；<span class="evidence"><code>trae_agent/cli.py:308-359,475-495</code></span></p>
+    <h3>4.5 当前实现缺口</h3>
+    <div class="callout warning"><code>LakeView.steps</code> 被初始化并读取，但整个实现没有 <code>append</code> 写入点。因此 previous step 实际一直是 <code>(none)</code>，Tag Prompt 中的 trajectory 一直为空；300,000 字符保护在当前接线下也不会由历史累积触发。<span class="evidence"><code>trae_agent/utils/lake_view.py:86,138-150,194-207</code></span></div>
+  </section>
+
+  <section class="section" id="flow">
+    <h2>5. 完整运行流程</h2>
+    <h3>5.1 Simple Console 成功路径</h3>
+    <div class="sequence">
+      <div class="step"><span class="n">1</span><strong>配置装配</strong><div>Config 解析 Lakeview Model；Agent 仅在 <code>enable_lakeview=true</code> 时把它注入 Console。<code>trae_agent/utils/config.py:256-267,274-300</code></div></div>
+      <div class="step"><span class="n">2</span><strong>Step 完成</strong><div>BaseAgent finalize Step 并同步调用 <code>update_status</code>。<code>trae_agent/agent/base_agent.py:238-244,285-289</code></div></div>
+      <div class="step"><span class="n">3</span><strong>后台排队</strong><div>Simple Console 立即打印原始 Step，然后以 <code>asyncio.create_task</code> 保存 Lakeview Panel 生成器。<code>trae_agent/utils/cli/simple_console.py:45-68</code></div></div>
+      <div class="step"><span class="n">4</span><strong>构造输入</strong><div>提取模型正文与 Tool Call 名称/参数；当前 previous step 固定为 <code>(none)</code>。</div></div>
+      <div class="step"><span class="n">5</span><strong>生成摘要</strong><div>独立 Provider 产生 task/details；每次请求均 <code>reuse_history=False</code>。</div></div>
+      <div class="step"><span class="n">6</span><strong>生成标签</strong><div>再次调用独立 Provider，校验固定标签并映射 emoji。</div></div>
+      <div class="step"><span class="n">7</span><strong>等待展示</strong><div>主 Execution 达到 COMPLETED/ERROR 后，Simple Console 顺序 await 每个生成器并打印 Panel，随后打印主执行摘要。<code>trae_agent/utils/cli/simple_console.py:73-87,110-165</code></div></div>
+      <div class="step"><span class="n">8</span><strong>终态边界</strong><div>LakeViewStep 只存在于 Console 内存/渲染对象；不写主 History，也没有当前 Trajectory 写入。</div></div>
+    </div>
+    <h3>5.2 未启用、无内容与 Rich 提前结束</h3>
+    <table>
+      <tr><th>触发</th><th>决策</th><th>输出/最终状态</th></tr>
+      <tr><td><code>enable_lakeview=false</code></td><td>Agent 调用 <code>set_lakeview(None)</code>。</td><td>不创建请求；主任务与普通 Console 正常运行。</td></tr>
+      <tr><td>Step 无 LLM Response 或可用文本</td><td><code>_agent_step_str</code> 返回 <code>None</code>。</td><td>该 Step 无 Panel，不影响主 Execution。</td></tr>
+      <tr><td><code>--console-type rich</code></td><td>Rich Console 只记录和展示 Agent Step。</td><td>即便持有 <code>lake_view</code>，也不调用 Lakeview Provider。</td></tr>
+      <tr><td>YAML 开启但缺 <code>lakeview</code></td><td>Config 在 Console/Agent 创建前拒绝。</td><td><code>ConfigError</code>，主任务不启动。<code>trae_agent/utils/config.py:293-295</code></td></tr>
+    </table>
+    <h3>5.3 格式退化与异常路径</h3>
+    <ul>
+      <li>摘要持续格式错误：返回空 task/details；仍可能生成只有标签的 Panel。</li>
+      <li>标签持续返回未知标签：最终返回空列表，Panel 没有标签 emoji。</li>
+      <li>标签响应完全没有匹配 <code>&lt;tags&gt;</code> 时，代码在读取 <code>matched_tags[0]</code> 处可能抛 <code>IndexError</code>，并非空标签退化。<span class="evidence"><code>trae_agent/utils/lake_view.py:166-175</code></span></li>
+      <li>Provider 异常、上述解析异常或 Panel 构建异常没有在 Lakeview/Simple Console 内捕获；最终 summary await 时会向上传播。主 Agent 执行可能已经完成，但 <code>Agent.run</code> 无法正常返回，CLI 会走异常输出。<span class="evidence"><code>trae_agent/agent/agent.py:86-100</code></span>；<span class="evidence"><code>trae_agent/utils/cli/simple_console.py:110-120</code></span></li>
+    </ul>
+  </section>
+
+  <section class="section" id="state">
+    <h2>6. 数据与状态模型</h2>
+    <table>
+      <tr><th>状态</th><th>字段/内容</th><th>所有者与生命周期</th><th>持久化/清理</th></tr>
+      <tr><td><code>LakeViewStep</code></td><td>desc_task、desc_details、tags_emoji</td><td>一次 Step 派生结果；由 Console Task 返回。</td><td>仅 Panel 使用，无规范存储。<code>trae_agent/utils/lake_view.py:71-75</code></td></tr>
+      <tr><td><code>LakeView.steps</code></td><td><code>list[str]</code></td><td>设计上似乎用于历史；当前从未写入。</td><td>对象生命周期内为空，无清理接口。</td></tr>
+      <tr><td><code>ConsoleStep</code></td><td>AgentStep、printed 标记、Lakeview Task</td><td>以 <code>step_number</code> 为 Key 存在 Console。</td><td>Console 生命周期内保留；没有任务边界 reset。<code>trae_agent/utils/cli/cli_console.py:42-48,63-66</code></td></tr>
+      <tr><td>Lakeview Provider History</td><td>Provider 原生消息</td><td>独立 <code>LLMClient</code>；每次调用用 <code>reuse_history=False</code> 替换。</td><td>进程内；无显式 close/zeroize。</td></tr>
+      <tr><td>Trajectory 字段</td><td>可选 <code>lakeview_summary</code></td><td>仅调用 <code>update_lakeview</code> 才写入。</td><td>当前 Console 不调用，通常不存在。</td></tr>
+    </table>
+    <div class="callout warning"><strong>Interactive 状态污染：</strong>Simple Interactive 复用同一个 Console，而 <code>console_step_history</code> 不清空且以从 1 重新开始的 Step Number 为 Key。第二个任务的相同步号不会替换旧 <code>ConsoleStep</code>，也不会再次创建 Lakeview 任务，最终可能重复展示前一任务摘要。<span class="evidence"><code>trae_agent/cli.py:516-584</code></span>；<span class="evidence"><code>trae_agent/utils/cli/simple_console.py:45-68,110-120</code></span></div>
+    <p>该模块没有事务、锁、缓存版本、TTL、归档或迁移协议。Panel 可重建的前提是仍保有原始 AgentStep 并可再次调用 Provider。</p>
+  </section>
+
+  <section class="section" id="interfaces">
+    <h2>7. 接口、协议与事件</h2>
+    <table>
+      <tr><th>接口</th><th>输入</th><th>输出/约束</th><th>错误语义</th></tr>
+      <tr><td><code>LakeView.create_lakeview_step</code></td><td><code>AgentStep</code></td><td><code>LakeViewStep | None</code>；串行执行摘要后标签。</td><td>未声明/捕获 Provider 与解析异常。</td></tr>
+      <tr><td><code>extract_task_in_step</code></td><td>previous/current 字符串</td><td><code>(task, details)</code>；期望 XML-like closing tags。</td><td>格式耗尽返回空字符串。</td></tr>
+      <tr><td><code>extract_tag_in_step</code></td><td>当前 Step 字符串</td><td>固定标签列表；未知标签重试。</td><td>格式耗尽返回空列表；无匹配可抛 IndexError。</td></tr>
+      <tr><td><code>CLIConsole.set_lakeview</code></td><td><code>LakeviewConfig | None</code></td><td>创建/清除 LakeView。</td><td>Provider 名无效或 Client 构造失败向上抛。</td></tr>
+      <tr><td><code>TrajectoryRecorder.update_lakeview</code></td><td>step_number、summary 字符串</td><td>首个匹配 Step 写字段并保存。</td><td>无匹配时仍保存文件；当前无调用方。</td></tr>
+    </table>
+    <p>Lakeview 没有独立事件总线、文件格式版本、幂等 Key 或确认协议。可见“事件”是 Simple Console 保存一个 <code>asyncio.Task</code>，并在终态逐个等待。</p>
+    <p>Prompt 协议由 <code>EXTRACTOR_PROMPT</code>、<code>TAGGER_PROMPT</code> 与 <code>tags_re</code> 共同定义；它是脆弱文本协议，不是 Schema 约束的结构化输出。<span class="evidence"><code>trae_agent/utils/lake_view.py:16-68</code></span></p>
+  </section>
+
+  <section class="section" id="config">
+    <h2>8. 配置与默认行为</h2>
+    <table>
+      <tr><th>配置项</th><th>类型/可选值</th><th>默认/示例</th><th>优先级/消费</th><th>失败行为</th><th>来源</th></tr>
+      <tr><td><code>agents.trae_agent.enable_lakeview</code></td><td>bool</td><td>Dataclass 默认 true；示例 true</td><td>YAML Agent 字段；无 CLI 开关或 ENV 专属覆盖</td><td>true 且无 Lakeview Config → ConfigError</td><td><code>trae_agent/utils/config.py:158-172,287-295</code></td></tr>
+      <tr><td><code>lakeview.model</code></td><td>models 中的名称</td><td>示例 <code>lakeview_model</code></td><td>直接索引已解析 Model Map</td><td>缺字段 → ConfigError；未知名称当前可抛 KeyError</td><td><code>trae_agent/utils/config.py:256-265</code></td></tr>
+      <tr><td>Provider/API Key/Base URL</td><td>复用 ModelConfig</td><td>示例为独立 Anthropic Model</td><td>来自所引用 Model/Provider；主 CLI override 只解析主 Agent Model</td><td>请求时由 Adapter/SDK 暴露认证或网络错误</td><td><code>trae_agent/utils/config.py:66-116,302-322</code></td></tr>
+      <tr><td><code>max_retries</code></td><td>int</td><td>示例 10</td><td>每一个 Provider <code>chat</code> 逻辑调用</td><td>任意异常随机等待 3–30 秒后重试</td><td><code>trae_agent/utils/llm_clients/retry_utils.py:13-55</code></td></tr>
+      <tr><td><code>temperature</code></td><td>float</td><td>运行时强制改为 0.1</td><td>每次摘要/标签前原地修改 ModelConfig</td><td>共享同一 ModelConfig 时也改变主 Agent 配置对象</td><td><code>trae_agent/utils/lake_view.py:108,156</code></td></tr>
+      <tr><td>Legacy <code>enable_lakeview</code></td><td>bool</td><td>默认 true</td><td>Legacy JSON；启用时复用主 ModelConfig</td><td>关闭则 Lakeview Config=None</td><td><code>trae_agent/utils/legacy_config.py:70-80,98-164</code>；<code>trae_agent/utils/config.py:367-391</code></td></tr>
+    </table>
+    <div class="callout warning"><strong>“可选”不等于“默认关闭”：</strong>当前 Dataclass、Legacy Config 与示例都以 true 为默认/示例；YAML 没有 <code>lakeview</code> 节时必须显式设 <code>enable_lakeview:false</code>，否则创建配置失败。</div>
+    <div class="callout warning"><strong>共享配置副作用：</strong>YAML 若让主 Agent 与 Lakeview 引用同一个 Model 名，两者拿到同一 <code>ModelConfig</code> 对象；Legacy 转换也明确复用同一对象。Lakeview 原地写 <code>temperature=0.1</code> 后，后续主模型调用会观察到该值。示例 YAML 使用两个 Model 名，可避开此别名问题。<span class="evidence"><code>trae_agent/utils/config.py:241-265,287-293,346-378</code></span></div>
+    <p>配置启动时解析，无热加载。README 只展示 <code>enable_lakeview:true</code>，未在其短示例中同时展示必需的 <code>lakeview.model</code>，完整组合应参考 <code>trae_config.yaml.example:1-44</code>。<span class="evidence"><code>README.md:42-81</code></span></p>
+  </section>
+
+  <section class="section" id="concurrency">
+    <h2>9. 并发、性能与资源</h2>
+    <ul>
+      <li><strong>调度：</strong>Simple Console 为每个完成 Step 创建一个 asyncio Task；多个 Step 的 Lakeview Task 可同时处于待执行状态。</li>
+      <li><strong>实际阻塞：</strong>Lakeview 的 async 方法内部调用同步 <code>LLMClient.chat()</code>，会阻塞事件循环；它不是非阻塞 HTTP。<span class="evidence"><code>trae_agent/utils/lake_view.py:94-126,138-175</code></span></li>
+      <li><strong>基础调用成本：</strong>每个有内容的 Step 至少两次独立模型调用（一次摘要、一次标签），不复用 History，也不使用 Tool Schema。</li>
+      <li><strong>格式重试放大：</strong>摘要最多 11 个逻辑 <code>chat</code> 调用（首次 + 10 次格式重试），标签最多 10 个；上界合计 21 个/Step。每个逻辑调用又受 Provider 的 <code>max_retries</code> 包装，网络尝试与随机等待可能进一步放大。</li>
+      <li><strong>隐藏计量：</strong>Lakeview Client 没有注入 TrajectoryRecorder，响应 Usage 也不累加进 <code>AgentExecution.total_tokens</code>；主 Console 的 Total Tokens 不包含 Lakeview 成本。<span class="evidence"><code>trae_agent/agent/agent.py:28-57</code></span>；<span class="evidence"><code>trae_agent/agent/base_agent.py:291-299</code></span></li>
+      <li><strong>资源清理：</strong><code>LakeView</code>/<code>LLMClient</code> 没有 close 接口；Console.stop 也不清理 Provider Client。<span class="evidence"><code>trae_agent/utils/cli/simple_console.py:216-220</code></span></li>
+    </ul>
+    <p class="source-note">源码没有 Lakeview 专属并发上限、Semaphore、Timeout、取消策略、速率限制或预算。不要虚构吞吐、延迟或成本金额；费用取决于实际 Provider、模型、输入长度和重试。</p>
+  </section>
+
+  <section class="section" id="security">
+    <h2>10. 安全与信任边界</h2>
+    <table>
+      <tr><th>数据/边界</th><th>实际发送内容</th><th>当前控制</th><th>风险/缺口</th></tr>
+      <tr><td>主模型响应</td><td><code>llm_response.content</code> 原文</td><td>无字段级过滤；只由 Prompt 要求短输出</td><td>可能包含源码片段、路径、日志、Issue 内容或模型复述的 Secret。</td></tr>
+      <tr><td>Tool Call</td><td>工具名与完整 <code>arguments</code> 字符串</td><td>无脱敏/Allowlist</td><td>命令、文件路径、写入内容、URL 或参数中的凭证会发送给 Lakeview Provider。</td></tr>
+      <tr><td>Tool Result</td><td>不直接加入 Lakeview 输入</td><td>由 <code>_agent_step_str</code> 的字段选择排除</td><td>若主模型在 content 中复述结果，仍会间接外发。</td></tr>
+      <tr><td>Provider Secret</td><td>Lakeview ModelProvider 的 API Key/Base URL</td><td>沿用现有 Adapter</td><td>无 Lakeview 专属身份、最小权限或 Secret 生命周期管理。</td></tr>
+      <tr><td>第二 Provider</td><td>可配置为与主模型不同的服务</td><td>显式 Model 引用</td><td>形成额外的数据处理方、地域、日志保留与合规边界；主 Provider 审批不能自动覆盖。</td></tr>
+      <tr><td>Console 输出</td><td>摘要、标签及可能的缺陷专属细节</td><td>终端可见</td><td>终端日志、录屏、CI 输出可能扩大敏感数据传播面。</td></tr>
+    </table>
+    <div class="callout warning"><strong>隐私结论：</strong>Lakeview 不回灌主 Context 降低了“摘要损失影响 Agent 决策”的风险，但没有减少数据外发；相反，它增加一次独立模型处理面。启用前应单独审查模型、Base URL、日志政策和 Tool 参数中的 Secret。</div>
+    <p>当前没有数据分类、脱敏器、DLP（数据防泄漏）、租户隔离、Prompt Injection 过滤或审计同意机制。Lakeview 输出也不能作为安全判定、权限控制或真实执行事实。</p>
+  </section>
+
+  <section class="section" id="failure">
+    <h2>11. 失败、恢复与兼容</h2>
+    <table>
+      <tr><th>故障/现象</th><th>检测方式</th><th>即时行为</th><th>主状态影响</th><th>恢复/运维</th></tr>
+      <tr><td>未配置 Lakeview 且显式关闭</td><td>无 Lakeview Summary</td><td>跳过旁路</td><td>无；属于预期降级</td><td>无需操作。</td></tr>
+      <tr><td>开启但 YAML 缺配置</td><td>启动期 ConfigError</td><td>拒绝整个 CLI 任务</td><td>主任务未开始</td><td>增加 <code>lakeview.model</code> 或关闭开关。</td></tr>
+      <tr><td>摘要格式持续错误</td><td>空 task/details Panel</td><td>最多 11 次逻辑调用后返回空值</td><td>主推理不变</td><td>检查模型遵循格式能力；减少格式重试预算。</td></tr>
+      <tr><td>标签为未知值</td><td>无 emoji/tag</td><td>最多 10 次后空标签</td><td>主推理不变</td><td>修正 Prompt/解析器或改结构化输出。</td></tr>
+      <tr><td>标签无匹配块</td><td>后台 Task 的 IndexError</td><td>异常保留到最终 await</td><td>Execution 可能已完成，但 Agent.run/CLI 收尾报错</td><td>增加空匹配检查和隔离测试。</td></tr>
+      <tr><td>认证/限流/网络错误</td><td>Provider retry 日志</td><td>同步随机等待并重试，耗尽后抛出</td><td>不改变主 History；可破坏 CLI 正常返回</td><td>修复 Key/配额/网络；临时关闭 Lakeview。</td></tr>
+      <tr><td>Rich Console 无摘要</td><td>选择 rich 后始终无 Lakeview Panel</td><td>没有调用发生</td><td>主任务正常</td><td>这是当前接线缺口，不是 Provider 故障。</td></tr>
+      <tr><td>Interactive 第二任务摘要陈旧</td><td>Step 标题/内容来自前一任务</td><td>旧 Key 阻止新生成器创建</td><td>主任务仍执行</td><td>每任务重建/清空 Console 状态。</td></tr>
+    </table>
+    <div class="callout warning"><strong>准确的 Fail-open/Fail-closed 边界：</strong>禁用、空 Step、无效格式的部分分支可旁路退化；配置缺失会在启动期 fail-closed；未捕获的 Provider/解析异常可在主执行后破坏 CLI 收尾。因此当前实现不能笼统描述为“Lakeview 失败不影响主任务”。</div>
+    <p>Legacy JSON 是迁移兼容路径：默认使用主 Provider/Model，并与主 Agent 共享 ModelConfig；当前没有 Lakeview 数据迁移，因为结果通常不持久化。<span class="evidence"><code>tests/utils/test_config.py:142-217</code></span></p>
+  </section>
+
+  <section class="section" id="observability">
+    <h2>12. 可观测性与排障</h2>
+    <h3>12.1 当前能看到什么</h3>
+    <ul>
+      <li>Simple Console 在终态打印 “Lakeview Summary” 与每个已生成 Panel。<span class="evidence"><code>trae_agent/utils/cli/simple_console.py:110-120</code></span></li>
+      <li>Provider 重试把异常、等待秒数和 Traceback 直接打印到标准输出。<span class="evidence"><code>trae_agent/utils/llm_clients/retry_utils.py:34-50</code></span></li>
+      <li>主 Execution Token、Trajectory LLM Interactions 都不包含 Lakeview 请求/Usage；不能用它们核算旁路成本。</li>
+      <li><code>update_lakeview</code> 存在不等于字段已写入；应直接检查调用图或 JSON 中字段。</li>
+    </ul>
+    <h3>12.2 现象驱动排障</h3>
+    <table>
+      <tr><th>现象</th><th>先检查</th><th>可能原因</th><th>处理</th></tr>
+      <tr><td>Simple 模式没有 Lakeview Summary</td><td><code>enable_lakeview</code>、Step 是否有 LLM Response、执行是否到明确终态</td><td>已关闭、空 Step、Console 一直等待 RUNNING</td><td>核对配置与 AgentState；不要先查主 Context。</td></tr>
+      <tr><td>Rich 模式没有摘要</td><td><code>--console-type</code></td><td>Rich 未接入生成/展示</td><td>改用 Simple，或实现 Rich 的独立接线。</td></tr>
+      <tr><td>主结果已产生但命令报错</td><td>最后的 Provider/IndexError Traceback</td><td>Lakeview Task 在 summary await 时抛出</td><td>关闭 Lakeview；修复异常隔离。</td></tr>
+      <tr><td>结束等待很久</td><td>Provider retry 日志与 <code>max_retries</code></td><td>格式重试叠加 Provider 重试和同步 sleep</td><td>降低重试、修正模型/Prompt；增加 timeout/cancel。</td></tr>
+      <tr><td>Total Tokens 与账单不一致</td><td>是否开启 Lakeview、Provider 账单</td><td>Lakeview Usage 未累加</td><td>为旁路增加独立计量，不要修改主 Usage 含义。</td></tr>
+      <tr><td>摘要没有前序轨迹语境</td><td><code>LakeView.steps</code></td><td>列表从未 append</td><td>明确设计历史策略并补状态测试。</td></tr>
+      <tr><td>Trajectory 没有 lakeview_summary</td><td><code>update_lakeview</code> 调用点</td><td>当前 Console 从未调用</td><td>这是预期源码行为；若需落盘应定义 Schema/隐私后接入。</td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="tests">
+    <h2>13. 测试与验证</h2>
+    <table>
+      <tr><th>契约/不变量</th><th>测试路径</th><th>测试类型</th><th>能证明什么</th><th>证据缺口</th></tr>
+      <tr><td>Legacy Lakeview 默认/关闭</td><td><code>tests/utils/test_config.py:142-217</code></td><td>单元</td><td>Legacy 默认主 Provider、null fallback、关闭返回 None。</td><td>不覆盖 YAML <code>lakeview.model</code>、共享对象温度副作用。</td></tr>
+      <tr><td>CLI Console 创建</td><td><code>tests/test_cli.py:13-177</code></td><td>Mock CLI</td><td>Run 命令调用 ConsoleFactory/Agent。</td><td>Console 被 MagicMock；不证明 Simple/Rich Lakeview 接线。</td></tr>
+      <tr><td>摘要格式解析</td><td>无</td><td>证据缺口</td><td>—</td><td>缺成功、空内容、11 次格式重试、空字符串退化测试。</td></tr>
+      <tr><td>标签解析</td><td>无</td><td>证据缺口</td><td>—</td><td>缺已知/未知/无匹配/多标签/300k 边界测试。</td></tr>
+      <tr><td>Simple 后台任务与收尾</td><td>无</td><td>证据缺口</td><td>—</td><td>缺 Provider 失败隔离、取消、终态 await、Panel 展示测试。</td></tr>
+      <tr><td>Rich 不调用 Lakeview</td><td>无</td><td>否定契约缺口</td><td>调用图静态证明当前无调用。</td><td>缺防回归测试，未来可能静默改变。</td></tr>
+      <tr><td>不回灌主 Context</td><td>无</td><td>否定契约缺口</td><td>主链静态调用图没有 LakeViewStep → LLMMessage 路径。</td><td>缺 Mock 断言主 Provider 请求完全不含摘要。</td></tr>
+      <tr><td>成本与 Usage</td><td>无</td><td>证据缺口</td><td>—</td><td>缺调用次数、Provider retry 放大、独立 Token 计量测试。</td></tr>
+    </table>
+    <div class="callout warning"><strong>核心测试结论：</strong>仓库没有直接针对 <code>lake_view.py</code>、Simple/Rich Console Lakeview 行为或 <code>TrajectoryRecorder.update_lakeview</code> 的聚焦测试。现有测试主要证明 Legacy 配置转换，不能证明运行时鲁棒性。</div>
+  </section>
+
+  <section class="section" id="extension">
+    <h2>14. 开发与扩展指南</h2>
+    <table>
+      <tr><th>变更目标</th><th>所有者表面</th><th>必要证明</th></tr>
+      <tr><td>接入 Rich Console</td><td><code>rich_console.py</code> 的 update/status Widget 生命周期</td><td>不阻塞 Textual Event Loop；任务取消；每任务状态隔离；与 Simple 输出语义一致。</td></tr>
+      <tr><td>真正隔离失败</td><td><code>SimpleCLIConsole._print_lakeview_summary</code> 与生成 Task</td><td>Provider/解析/取消分别降级；主 Execution 返回值与退出码不变；错误仍可观察。</td></tr>
+      <tr><td>修复历史语境</td><td><code>LakeView.steps/create_lakeview_step</code></td><td>append 时机、长度预算、当前/前一步定义、任务边界 clear、隐私与大输入测试。</td></tr>
+      <tr><td>降低调用成本</td><td>Lakeview Prompt/协议</td><td>合并摘要与标签的一次结构化输出；格式校验；调用次数与质量回归。</td></tr>
+      <tr><td>增加独立计量</td><td>Lakeview 结果/Console 观测模型</td><td>不污染主 <code>AgentExecution.total_tokens</code> 语义；记录模型、Usage、重试与延迟，且脱敏。</td></tr>
+      <tr><td>写入 Trajectory</td><td><code>TrajectoryRecorder</code> Schema 与调用方</td><td>字段版本、失败不覆盖主 Step、敏感摘要政策、重放兼容。</td></tr>
+      <tr><td>支持关闭/覆盖</td><td>Config Schema 与 CLI Help</td><td>YAML/Legacy/CLI 优先级、缺配置行为、Rich/Simple 一致、Secret 不回显。</td></tr>
+      <tr><td>实现 Context Compaction</td><td>新增 Provider 之上的统一 Context Policy 层</td><td>不要直接复用 Console Panel；需证明信息保真、Tool Call/Result 配对、Token 预算、失败恢复和全 Provider 一致。</td></tr>
+    </table>
+    <div class="callout"><strong>禁止捷径：</strong>不要把 Lakeview Panel 直接塞回主 Provider History；不要把格式重试当故障隔离；不要用主 Execution Token 冒充总成本；不要在 Rich UI 线程中继续执行同步网络调用；不要用 Prompt 代替 Secret 脱敏。</div>
+    <p>新增 Provider 能力应继续通过 <code>LLMClient</code> 公共接口，而不是在 Lakeview 内直接调用某家 SDK；但若需要结构化输出，应先确认所有目标 Adapter 的统一契约与降级语义。</p>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <h2>15. 设计权衡与已知限制</h2>
+    <table>
+      <tr><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重新评估条件</th></tr>
+      <tr><td>独立 Provider Client 旁路</td><td>不改变主推理历史，可单独选模型。</td><td>额外成本、延迟、认证与数据外发面。</td><td>成本/隐私要求提高或需要统一观测服务时。</td></tr>
+      <tr><td>摘要与标签分两次调用</td><td>Prompt 职责简单。</td><td>每 Step 至少两次请求，重试乘数大，结果可能不一致。</td><td>需要低延迟、低成本或原子结果时。</td></tr>
+      <tr><td>XML-like 文本解析</td><td>跨 Provider 容易实现。</td><td>无 Schema 保证；存在空匹配崩溃与高格式重试。</td><td>Provider 普遍支持结构化输出时。</td></tr>
+      <tr><td>Console 持有 Lakeview</td><td>明确面向人类 UI，不污染 Agent Loop。</td><td>Simple/Rich 能力漂移；生命周期、异常和计量散落在 UI。</td><td>增加 Web/API/多 Console 观测消费者时。</td></tr>
+      <tr><td>不写 Trajectory</td><td>避免默认扩大文件与摘要持久化。</td><td>无法离线查看/核算 Lakeview，已有更新方法成为悬空接口。</td><td>需要可重放观测且完成隐私/Schema 设计时。</td></tr>
+      <tr><td>不回灌主 Context</td><td>摘要错误不会直接改变 Agent 决策。</td><td>无法降低主历史膨胀；不能充当 Memory。</td><td>只有建立独立 Context Policy 与质量验证后。</td></tr>
+    </table>
+    <h3>当前限制（源码事实）</h3>
+    <ul>
+      <li>只有 SimpleCLIConsole 实际生成和展示 Lakeview；RichCLIConsole 未接入。</li>
+      <li>不进入主 LLM Context，不参与 Compaction、Pruning、Memory、Reflection 或任务完成判定。</li>
+      <li><code>steps</code> 历史未写入；previous/trajectory Prompt 与长度保护未按设计生效。</li>
+      <li>失败隔离不完整，后台异常可在主执行后破坏 CLI 收尾。</li>
+      <li>调用 Usage 不记录、不计入主 Token 汇总；没有独立预算、Timeout 或取消。</li>
+      <li>Interactive Console History 不清空，可能复用旧 Lakeview Panel。</li>
+      <li>共享 ModelConfig 时原地修改 temperature 会影响主模型后续调用。</li>
+    </ul>
+    <h3>可考虑但尚未实现</h3>
+    <p>单次结构化摘要+标签、专用轻量模型与预算、异步非阻塞 Provider、严格失败隔离、独立用量/延迟指标、任务级状态重置、可选脱敏器、Rich UI 接线、版本化 Trajectory 字段，以及真正独立于 Console 的可观测性汇聚点。以上均是二次开发方向，不是当前能力。</p>
+  </section>
+
+  <section class="section" id="sources">
+    <h2>16. 源码索引与进一步阅读</h2>
+    <div class="source-card"><b>核心实现</b><code>trae_agent/utils/lake_view.py:1-209</code></div>
+    <div class="source-card"><b>Console 抽象与状态</b><code>trae_agent/utils/cli/cli_console.py:19-171</code>；<code>trae_agent/utils/cli/console_factory.py:13-56</code></div>
+    <div class="source-card"><b>唯一实际调用方</b><code>trae_agent/utils/cli/simple_console.py:25-240</code></div>
+    <div class="source-card"><b>Rich 兄弟实现</b><code>trae_agent/utils/cli/rich_console.py:30-367</code></div>
+    <div class="source-card"><b>Agent/CLI 装配</b><code>trae_agent/agent/agent.py:14-100</code>；<code>trae_agent/cli.py:126-382</code>；<code>trae_agent/cli.py:414-611</code></div>
+    <div class="source-card"><b>主 Loop 边界</b><code>trae_agent/agent/base_agent.py:147-244</code>；<code>trae_agent/agent/base_agent.py:285-352</code></div>
+    <div class="source-card"><b>配置与 Legacy</b><code>trae_agent/utils/config.py:16-190,194-410</code>；<code>trae_agent/utils/legacy_config.py:17-170</code>；<code>trae_config.yaml.example:1-44</code>；<code>trae_config.json.example:1-87</code></div>
+    <div class="source-card"><b>Provider 公共契约与重试</b><code>trae_agent/utils/llm_clients/llm_client.py:15-86</code>；<code>trae_agent/utils/llm_clients/base_client.py:13-44</code>；<code>trae_agent/utils/llm_clients/retry_utils.py:13-55</code></div>
+    <div class="source-card"><b>Trajectory 悬空写接口</b><code>trae_agent/utils/trajectory_recorder.py:130-230</code></div>
+    <div class="source-card"><b>测试</b><code>tests/utils/test_config.py:142-232</code>；<code>tests/test_cli.py:9-181</code></div>
+    <div class="source-card"><b>当前文档</b><code>README.md:17-81</code>；<code>docs/legacy_config.md:1-84</code>；<code>docs/trae_agent_flow.drawio.xml:90</code></div>
+    <div class="source-card"><b>依赖范围</b><code>pyproject.toml:7-26</code>（OpenAI、Anthropic、Google、Ollama、Rich、Textual 等）；本文只以仓库 Adapter 的实际调用为契约，不推断外部服务 SLA、保留期或价格。</div>
+    <div class="source-card"><b>已存在的相邻子文档</b><a href="03-agent-runtime.html">03 Agent Runtime 核心</a>；<a href="05-context-engineering.html">05 Context Engineering 上下文工程</a></div>
+    <p class="source-note">次级文档把 Lakeview 描述为“步骤简短摘要”，与当前旁路定位一致；但总览“两个阶段最多 10 次重试保证鲁棒性”的表述过强：摘要实际是首次加最多 10 次格式重试，且未捕获异常仍可破坏 CLI 收尾。本文以源码行为为准。</p>
+  </section>
+
+  <section class="section" id="glossary">
+    <h2>附录 · 术语对照表</h2>
+    <table>
+      <tr><th>英文术语</th><th>中文</th><th>一句话解释</th></tr>
+      <tr><td>Observability</td><td>可观测性</td><td>系统运行状态的外部可感知程度</td></tr>
+      <tr><td>Sidecar</td><td>旁路</td><td>异步运行的辅助服务，不阻塞主流程</td></tr>
+      <tr><td>Lakeview</td><td>可观测性旁路</td><td>Trae Agent 的异步摘要与标签生成系统</td></tr>
+      <tr><td>DLP</td><td>数据防泄漏</td><td>Data Loss Prevention，防止敏感数据外泄</td></tr>
+      <tr><td>Prompt Injection</td><td>提示词注入</td><td>通过恶意输入操纵 LLM 行为的攻击方式</td></tr>
+      <tr><td>Observability Sink</td><td>可观测性汇聚点</td><td>收集并存储可观测性数据的终端</td></tr>
+      <tr><td>Usage/Latency</td><td>用量/延迟</td><td>衡量服务消耗和响应速度的指标</td></tr>
+    </table>
+  </section>
+
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a class="prev" href="05-context-engineering.html">← 05 上下文工程</a>
+    <a class="next" href="07-agent-loop.html">07 Agent Loop →</a>
+  </nav>
+  <footer class="footer">Trae Agent 架构模块文档 · 06 Lakeview Observability · 基于工作区源码快照</footer>
+</main>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')];
+const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const observer=new IntersectionObserver(entries=>{
+  const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+  if(!visible)return;
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+visible.target.id));
+},{rootMargin:'-15% 0px -70% 0px',threshold:[0,.1,.5]});
+sections.forEach(section=>observer.observe(section));
+</script>
+</body>
+</html>

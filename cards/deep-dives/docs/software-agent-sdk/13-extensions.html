@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Software Agent SDK 扩展生态源码审计：Skill、Plugin、Marketplace、Subagent registry、TaskManager 与 Hook。">
+  <title>13 扩展生态：Skill、Plugin、Marketplace 与 Subagent</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --surface: #fffdf8;
+      --surface-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --red: #b91c1c;
+      --purple: #6d28d9;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    }
+    code {
+      padding: .1em .32em;
+      border-radius: 4px;
+      background: rgba(120,113,108, .18);
+      font-size: .92em;
+    }
+    pre {
+      overflow: auto;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      line-height: 1.5;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 270px) minmax(0, 1fr);
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 22px 16px;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+    }
+    aside strong { display: block; margin: 12px 10px; }
+    nav a {
+      display: block;
+      padding: 5px 10px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    nav a.active {
+      border-color: var(--blue);
+      color: var(--text);
+      background: rgba(67,56,202, .08);
+    }
+    main {
+      min-width: 0;
+      max-width: 1120px;
+      padding: 36px 52px 80px;
+    }
+    .back { display: inline-block; margin-bottom: 18px; }
+    h1 { margin: 0 0 8px; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.15; }
+    h2 {
+      margin-top: 52px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      font-size: 1.65rem;
+    }
+    h3 { margin-top: 30px; color: #1c1917; }
+    h4 { margin-bottom: 4px; }
+    p, li { max-width: 92ch; }
+    .lead { color: var(--muted); font-size: 1.12rem; }
+    .meta, .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+      margin: 22px 0;
+    }
+    .card, .callout {
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+    .card b { display: block; margin-bottom: 4px; color: var(--muted); font-size: 13px; }
+    .callout { border-left: 4px solid var(--blue); }
+    .callout.warning { border-left-color: var(--yellow); }
+    .callout.danger { border-left-color: var(--red); }
+    .tag {
+      display: inline-block;
+      margin: 2px 4px 2px 0;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .tag.current { color: var(--green); }
+    .tag.optional { color: var(--purple); }
+    .tag.gap { color: var(--yellow); }
+    .table-wrap { overflow-x: auto; margin: 18px 0; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+    th, td {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--surface-2); }
+    tbody tr:nth-child(even) { background: rgba(120,113,108, .05); }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    dt { margin-top: 14px; font-weight: 700; color: var(--blue); }
+    dd { margin-left: 0; color: var(--muted); }
+    @media (max-width: 860px) {
+      .layout { display: block; }
+      aside {
+        position: static;
+        width: auto;
+        height: auto;
+        max-height: 44vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      main { padding: 28px 20px 60px; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <strong>13 扩展生态</strong>
+      <nav aria-label="当前页面目录">
+        <a href="#position">1. 模块定位</a>
+        <a href="#dependencies">2. 系统位置与依赖</a>
+        <a href="#concepts">3. 核心概念</a>
+        <a href="#components">4. 架构组成</a>
+        <a href="#flows">5. 完整运行流程</a>
+        <a href="#state">6. 数据与状态模型</a>
+        <a href="#interfaces">7. 接口、协议与事件</a>
+        <a href="#configuration">8. 配置与默认行为</a>
+        <a href="#concurrency">9. 并发、性能与资源</a>
+        <a href="#security">10. 安全与信任边界</a>
+        <a href="#failure">11. 失败、恢复与兼容</a>
+        <a href="#observability">12. 可观测性与排障</a>
+        <a href="#testing">13. 测试与验证</a>
+        <a href="#development">14. 开发与扩展指南</a>
+        <a href="#tradeoffs">15. 设计权衡与限制</a>
+        <a href="#sources">16. 源码索引</a>
+        <a href="#glossary">17. 术语表</a>
+      </nav>
+    </aside>
+    <main>
+      <a class="back" href="../../software_agent_architecture.html#extensions">← 返回架构总览：扩展生态</a>
+      <header>
+        <span class="tag current">当前事实</span>
+        <span class="tag optional">可选能力</span>
+        <span class="tag gap">版本标识受限</span>
+        <h1>扩展生态：Skill、Plugin、Marketplace 与 Subagent</h1>
+        <p class="lead">
+          本章解释扩展内容如何被发现、规范化、合并、注册和执行，并明确
+          “内容扩展”“能力打包”“来源目录”“委派运行时”“外部 Agent 协议适配”
+          之间不能混写的边界；现有委派能力不等于完整异步、多 Agent 容错调度系统。
+        </p>
+        <div class="meta">
+          <div class="card"><b>证据状态</b>已按当前工作树源码与测试审计；Git CLI 在本环境不可用，无法记录 SHA</div>
+          <div class="card"><b>主要所有者</b><code>openhands-sdk/openhands/sdk/{skills,plugin,marketplace,subagent}</code> 与 <code>openhands-tools/openhands/tools/task</code></div>
+          <div class="card"><b>目标读者</b>扩展作者、SDK 集成者、运行时维护者与故障排查人员</div>
+          <div class="card"><b>最近验证</b>2026-08-14</div>
+        </div>
+      </header>
+
+      <section class="section" id="position">
+        <h2>1. 模块定位</h2>
+        <p>
+          扩展生态不是一个单一加载器，而是四种不同抽象的协作：Skill 提供可披露知识，
+          Plugin 把多类扩展规范化为内存对象，Marketplace 解析名字到来源，Subagent
+          registry 把定义解析为 Agent factory；真正运行委派任务的 TaskManager 属于
+          Tools 包。Plugin 还可携带 Hook，但 Hook 的执行策略由 Hooks 子系统拥有。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/plugin.py:36-71</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:95-110</code></span>
+        </p>
+        <p>
+          <strong>论文基线：</strong>官方论文
+          <a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690</a> §4.5
+          用“blocking sub-agent delegation（阻塞式子 Agent 委派）”展示 Tool
+          扩展性：父 Agent 等待子任务完成，论文还把异步委派、动态调度和容错恢复列为
+          可由自定义 Tool 继续扩展的方向，而不是已经交付的核心协调器。论文 §7 更明确说明
+          基线实现聚焦 single-agent conversations（单 Agent 会话），完整多 Agent
+          协调机制仍需进一步设计。当前源码中的 Task/Subagent 与 ACP 是后续或并行扩展；
+          不能用它们反向改写论文当时的完成度。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>表面</th><th>负责</th><th>委托</th><th>明确不负责</th></tr></thead>
+            <tbody>
+              <tr><td>Skill</td><td>元数据、触发器、正文、资源与渐进披露</td><td>Prompt 组装、<code>invoke_skill</code>、MCP</td><td>不创建独立 Conversation</td></tr>
+              <tr><td>Plugin</td><td>把 skills/hooks/MCP/agents/commands 归一到 <code>Plugin</code></td><td>格式策略、fetch、各子系统</td><td>不充当远端目录</td></tr>
+              <tr><td>Marketplace</td><td>列出插件/独立 Skill，并把名字解析为来源</td><td>fetch 与 Plugin/Skill loader</td><td>不执行插件代码，不决定 agent registry 胜者</td></tr>
+              <tr><td>Subagent registry</td><td>按名字保存 factory 与定义，实施 first-wins</td><td>Agent/LLM/Skill/Tool 构造</td><td>不保存任务运行状态</td></tr>
+              <tr><td>TaskManager</td><td>创建、运行、恢复和回收独立子会话</td><td><code>LocalConversation</code></td><td>不是 Conversation 子类，也不是注册表</td></tr>
+              <tr><td>ACPAgent</td><td>把一个 OpenHands Agent 适配为 ACP 客户端，启动兼容 server 子进程并转发完整 assistant turn</td><td>ACP server 自己拥有 LLM、工具和执行</td><td>不是 TaskManager，也不提供多个 Agent 间的协调协议</td></tr>
+              <tr><td>Hook</td><td>在会话生命周期和工具边界执行治理</td><td>命令、单次 LLM 或 Agent hook executor</td><td>不等同于 Plugin；可独立配置</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>边界修正：</strong>Subagent 的事件、预算、LLM metrics 和 Conversation
+          状态独立，但默认使用父会话的 <code>workspace.working_dir</code>。这不是文件系统隔离；
+          如需工作树或沙箱隔离，必须由更外层 Workspace/部署能力提供。
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:295-330</code></span>
+        </div>
+      </section>
+
+      <section class="section" id="dependencies">
+        <h2>2. 系统位置与依赖</h2>
+        <pre>PluginSource / MarketplaceRegistration / 本地目录
+             │
+             ▼
+MarketplaceRegistry ── 名字解析 ──► PluginSource
+             │
+             ▼
+fetch + PluginFormat ──► Plugin（统一内存模型）
+             │              ├─ Skill ──► AgentContext
+             │              ├─ MCP ────► Agent.mcp_config
+             │              ├─ Hook ───► HookEventProcessor
+             │              └─ AgentDefinition ─► global registry
+             ▼
+LocalConversation._ensure_agent_ready()
+             │
+父 Agent 调用 Task Tool
+             ▼
+TaskExecutor ─► TaskManager ─► 独立 LocalConversation ─► TaskObservation
+
+另一条独立扩展路径：
+Conversation ─► ACPAgent ── JSON-RPC/stdio ─► ACP server subprocess
+                                      └─ server 自己管理 LLM / tools / execution</pre>
+        <p>
+          SDK 拥有 Schema、发现、格式适配和 registry；Tools 包拥有内置 agent 及 Task
+          的执行。LocalConversation 是汇合点：构造时只保存插件规格，首次
+          <code>send_message()</code> 或 <code>run()</code> 才完成 I/O、注册和 Agent 初始化。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:192-196</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:302-310</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1455-1521</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>所有者</th><th>公共/关键表面</th><th>依赖方向</th></tr></thead>
+            <tbody>
+              <tr><td>SDK skills</td><td><code>Skill</code>、<code>load_available_skills</code>、<code>to_prompt</code></td><td>读取文件；向 Context/MCP 提供数据</td></tr>
+              <tr><td>SDK plugin</td><td><code>Plugin</code>、<code>PluginSource</code>、<code>PluginFormat</code></td><td>依赖 Skill、Hook、MCP、AgentDefinition</td></tr>
+              <tr><td>SDK marketplace</td><td><code>MarketplaceRegistration</code>、<code>MarketplaceRegistry</code></td><td>依赖 fetch 与 Marketplace Schema</td></tr>
+              <tr><td>SDK subagent</td><td><code>register_agent*</code>、<code>AgentDefinition</code></td><td>构造 SDK Agent，不依赖 Tools 内置实现</td></tr>
+              <tr><td>Tools task/preset</td><td><code>TaskManager</code>、<code>TaskToolSet</code>、内置 agents</td><td>消费 SDK registry 与 LocalConversation</td></tr>
+              <tr><td>SDK ACP</td><td><code>ACPAgent</code>、ACP event/credential/session bridge</td><td>通过 ACP 客户端连接兼容 server 子进程；不依赖 TaskManager</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="concepts">
+        <h2>3. 核心概念</h2>
+        <h3>Skill：提示上下文，不是 Agent</h3>
+        <p>
+          AgentSkills 格式的 Skill 总是以名称和描述出现在
+          <code>&lt;available_skills&gt;</code>，完整正文按需通过 <code>invoke_skill</code>
+          取得；有 trigger 时也可自动注入。旧 OpenHands Skill 无 trigger 时直接成为
+          常驻仓库上下文。描述上限为 1024 字符，提示目录刻意不暴露 location，避免模型绕过
+          <code>invoke_skill</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:178-235</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:1431-1511</code></span>
+        </p>
+        <h3>Plugin：能力包与格式中立模型</h3>
+        <p>
+          <code>Plugin</code> 统一承载 manifest、skills、hooks、MCP server map、agents
+          与 commands；磁盘布局由 <code>PluginFormat</code> 策略解释。当前格式 registry
+          只注册 Claude Code 兼容格式；Agent Plugins v1 适配器已经存在，但因
+          <code>mcp.json</code> 与客户端扩展加载尚未完成而未启用。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/plugin.py:1-27</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/format/__init__.py:19-26</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/format/__init__.py:62-81</code></span>
+        </p>
+        <h3>Marketplace：目录与解析器，不是安装隔离层</h3>
+        <p>
+          Marketplace manifest 列出 Plugin 和独立 Skill；注册项给出 source/ref/repo_path
+          以及是否自动加载。Registry 延迟 fetch、进程对象内缓存 manifest，并将
+          <code>plugin</code> 或 <code>plugin@marketplace</code> 解析为 PluginSource。
+          未限定名称命中多个市场时必须报歧义，不能按迭代顺序静默选择。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/types.py:168-215</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/registry.py:120-149</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/registry.py:185-231</code></span>
+        </p>
+        <h3>Subagent：专用 Agent + 独立 LocalConversation</h3>
+        <p>
+          Registry 中保存的是 <code>AgentFactory(factory_func, definition)</code>。TaskManager
+          用父 LLM 的副本调用 factory，再新建一个 LocalConversation；因此 Subagent
+          不是 Conversation 子类，而是一次委派中使用的 Agent 配置。Task 是运行记录，
+          只保留 id、conversation_id、结果/错误和可被回收的 Conversation 引用。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:49-58</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:64-92</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:361-378</code></span>
+        </p>
+        <h3>ACP：外部 Agent 后端，不是多 Agent 协调器</h3>
+        <p>
+          <code>ACPAgent</code> 是 <code>AgentBase</code> 子类。它通过 Agent Client Protocol
+          启动并连接 Claude Code、Gemini CLI 等兼容 server；server 管理自己的 LLM、
+          工具和执行，而 OpenHands 转发用户消息、收集更新并把一个完整 assistant turn
+          映射为一次 step。它扩展的是“Agent 实现来自哪里”，不是“多个 Agent 如何协作”。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/acp_agent.py:1-14</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/acp_agent.py:1535-1562</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/acp_agent.py:2588-2750</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="components">
+        <h2>4. 架构组成</h2>
+        <div class="grid">
+          <div class="card"><h3>发现层</h3><p>Skills、Plugins、file agents 各有目录规则和同名合并规则。单个坏文件通常记录 warning 后跳过。</p></div>
+          <div class="card"><h3>格式层</h3><p><code>PluginFormat</code> 将不同磁盘协议变成统一 Plugin；检测顺序是格式优先级。</p></div>
+          <div class="card"><h3>合并层</h3><p>Plugin Skill/MCP 是同名后写覆盖，Hook 是连接；Agent registry 则是 first registration wins。</p></div>
+          <div class="card"><h3>执行层</h3><p>Task Tool 把 Action 转为 TaskManager 的阻塞调用，并将成功或错误封装为 Observation。</p></div>
+          <div class="card"><h3>治理层</h3><p>权限策略和 Hook 配置进入子 LocalConversation；二者不是 Tool 白名单的替代品。</p></div>
+          <div class="card"><h3>恢复层</h3><p>显式插件保存 resolved ref；环境插件重新发现；Task resume 用原 conversation UUID 重建会话。</p></div>
+        </div>
+        <div class="callout warning">
+          <strong>三层事实不要合并：</strong>论文 §4.5 的基线是父调用阻塞等待子 Agent；
+          当前 <code>TaskExecutor</code> 仍明确是 blocking only，<code>TaskManager.start_task()</code>
+          同步运行并返回最终 Task；Subagent registry 只解析 Agent factory；ACPAgent
+          只适配一个外部 Agent server。三者组合后仍没有统一的异步任务队列、持久调度器、
+          跨 Agent 事件仲裁或 exactly-once 副作用协议。
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/impl.py:1-38</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:164-201</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:49-58</code></span>
+        </div>
+        <h3>来源优先级不能用一张表混为一谈</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>对象</th><th>同名决策</th><th>优先级/合并语义</th><th>证据</th></tr></thead>
+            <tbody>
+              <tr><td>可用 Skill catalog</td><td>高层覆盖低层</td><td>public &lt; user &lt; project；各目录内部早者优先</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:1357-1410</code></span></td></tr>
+              <tr><td>Plugin 内 Skill/MCP</td><td>后加载覆盖</td><td>marketplace auto-load 后显式插件；Plugin skills/MCP last-wins</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/plugin.py:123-202</code></span></td></tr>
+              <tr><td>环境 Plugin 名称</td><td>project 覆盖 user</td><td>工作目录优于 repo root；显式同名 Plugin 整体胜出</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/discovery.py:127-203</code></span></td></tr>
+              <tr><td>Subagent registry</td><td>首次注册保留</td><td>已有编程注册 → plugin agent → project file → user file</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1436-1453</code></span></td></tr>
+              <tr><td>同级 file agent</td><td>首次发现保留</td><td><code>.agents/agents</code> → <code>.openhands/agents</code>；project → user</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/load.py:48-55</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:288-333</code></span></td></tr>
+              <tr><td>内置 agent</td><td>缺席才注册</td><td>实际优先级取决于调用时机；不是 registry 内置固定末位</td><td><span class="evidence"><code>openhands-tools/openhands/tools/preset/default.py:122-152</code></span></td></tr>
+              <tr><td>Hook</td><td>不去重</td><td>显式 Hook 先执行；Plugin Hook 按合并顺序连接</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1172-1209</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="flows">
+        <h2>5. 完整运行流程</h2>
+        <h3>5.1 正常路径：插件懒加载后委派任务</h3>
+        <ol>
+          <li>调用方创建 LocalConversation；构造器保存 <code>PluginSource</code>，不执行插件 I/O。</li>
+          <li>首次 <code>send_message()</code>（普通 Agent）或 <code>run()</code> 进入双重检查锁保护的 <code>_ensure_agent_ready()</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1455-1521</code></span></li>
+          <li>Marketplace 自动加载项先解析，显式 PluginSource 后追加；fetch 得到 resolved ref，PluginFormat 产出 Plugin。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:907-995</code></span></li>
+          <li>Skill/MCP 合并进 Agent 副本，Plugin agents 先注册；随后 file agents 注册，因此 registry 保持 first-wins。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1005-1016</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1161-1170</code></span></li>
+          <li>Agent 初始化完成后，父 Agent 产生 Task Action；TaskExecutor 调用 TaskManager。</li>
+          <li>TaskManager 选 factory、复制父 LLM、关闭 stream、重置 metrics，新建独立 LocalConversation 并发送 prompt。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:243-330</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:361-392</code></span></li>
+          <li>仅当子会话终态为 FINISHED 才提取最终回答并标记 COMPLETED；结果由 TaskExecutor 包装成父会话的 TaskObservation。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:393-411</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/impl.py:20-66</code></span></li>
+        </ol>
+        <h3>5.2 拒绝/提前结束路径：子会话等待确认</h3>
+        <ol>
+          <li><code>permission_mode</code> 未设置时复制父会话的 ConfirmationPolicy；显式模式转换为 AlwaysConfirm、NeverConfirm 或 ConfirmRisky。<span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/schema.py:284-310</code></span></li>
+          <li>子会话进入 WAITING_FOR_CONFIRMATION 后，TaskManager 取得未匹配 Action。</li>
+          <li>有 confirmation handler 且返回 false 时，调用 <code>reject_pending_actions()</code>，再运行一次使拒绝形成 Observation；没有 handler 时当前实现自动继续。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:433-452</code></span></li>
+          <li>STUCK、PAUSED、运行上限等任何非 FINISHED 终态都成为 Task ERROR，并尽量附带最后错误与部分输出。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:413-431</code></span></li>
+        </ol>
+        <div class="callout danger">
+          <strong>权限语义：</strong>“继承”只发生在 <code>permission_mode=None</code>。
+          文件 agent 可以显式声明 <code>never_confirm</code>，它并不会与父策略取更严格者；
+          接受第三方 agent 定义前必须把 frontmatter 当作受信配置审计。
+        </div>
+        <h3>5.3 恢复/降级路径</h3>
+        <ol>
+          <li>显式与 Marketplace 自动加载的插件记录原始（秘密变量标记保留/凭据遮罩）source 和 resolved commit；恢复时可以固定 ref。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:982-995</code></span></li>
+          <li>环境 Plugin 不进入 <code>resolved_plugins</code>，恢复时按磁盘与 enabled 状态重新发现；这是有意的低确定性路径。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1020-1046</code></span></li>
+          <li>Task 完成/失败后子会话被 pause、close 并从内存 Task 中逐出；<code>resume=task_id</code> 使用原 conversation UUID 和持久目录重建 LocalConversation。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:157-162</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:203-241</code></span></li>
+          <li>单个 Marketplace 自动加载失败会 warning 后继续其他市场；但显式 Plugin fetch/load 失败会从懒初始化抛出，阻止 Agent ready。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:922-933</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:970-998</code></span></li>
+        </ol>
+      </section>
+
+      <section class="section" id="state">
+        <h2>6. 数据与状态模型</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>状态</th><th>所有者/身份</th><th>生命周期与持久性</th></tr></thead>
+            <tbody>
+              <tr><td><code>Skill</code></td><td>名称、正文、trigger、source、资源</td><td>从文件/安装目录加载后进入 AgentContext；不是运行事件</td></tr>
+              <tr><td><code>Plugin</code></td><td>manifest name + 本地 path</td><td>加载期内存对象；内容被复制进冻结 Agent 的新实例</td></tr>
+              <tr><td><code>ResolvedPluginSource</code></td><td>原 source/ref/repo_path + resolved ref</td><td>显式来源进入 Conversation 状态；秘密值不应固化</td></tr>
+              <tr><td><code>MarketplaceRegistry._cache</code></td><td>registration name</td><td>单 Registry 实例内缓存；没有持久化或失效协议</td></tr>
+              <tr><td><code>_agent_factories</code></td><td>agent name</td><td>进程级全局 dict，RLock 保护；测试显式清空</td></tr>
+              <tr><td><code>Task</code></td><td><code>task_XXXXXXXX</code> + UUID</td><td>TaskManager 内存 dict；Conversation 可逐出后按 UUID 恢复</td></tr>
+              <tr><td>子 Conversation</td><td>独立 UUID/EventLog/base state</td><td>父持久化时位于父目录的 <code>subagents/</code>；否则用临时目录</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Task id 由当前任务数量生成，但生成与插入位于同一 <code>_tasks_lock</code>
+          临界区；Conversation id 使用 UUID。父会话有持久目录时，Manager close 保留
+          <code>subagents/</code>；无父持久化时 close 删除临时目录。
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:129-155</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:268-293</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:480-496</code></span>
+        </p>
+        <p>
+          子会话使用独立 metrics，但任务结束时把累计指标以 <code>task:&lt;id&gt;</code>
+          写回父 ConversationStats；这里是 replace 而非逐次 merge，适配同一任务 resume
+          后累计值。子会话还把 prompt cache key 指向父会话 id，这只共享模型前缀缓存分片，
+          不等于共享事件上下文。
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:314-330</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:470-478</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="interfaces">
+        <h2>7. 接口、协议与事件</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>接口</th><th>输入</th><th>输出/错误语义</th></tr></thead>
+            <tbody>
+              <tr><td><code>Skill.load(path)</code></td><td>SKILL.md 或 legacy Markdown</td><td>规范化 Skill；格式/字段错误抛 SkillValidationError/ValidationError</td></tr>
+              <tr><td><code>Plugin.load(path)</code></td><td>插件目录</td><td>格式检测后返回 Plugin；目录/manifest 错误抛出</td></tr>
+              <tr><td><code>MarketplaceRegistry.resolve_plugin(ref)</code></td><td><code>name</code> 或 <code>name@marketplace</code></td><td>PluginSource；not found/ambiguous/marketplace missing 为类型化错误</td></tr>
+              <tr><td><code>register_agent()</code></td><td>name、factory、description/definition</td><td>重复名抛 ValueError</td></tr>
+              <tr><td><code>register_agent_if_absent()</code></td><td>同上</td><td>新注册 true，已存在 false；不覆盖</td></tr>
+              <tr><td><code>LocalConversation.load_plugin()</code></td><td>已注册 Marketplace 中的 plugin ref</td><td>运行时合并 Skill/MCP/agents/hooks；可抛解析、fetch、初始化错误</td></tr>
+              <tr><td><code>TaskManager.start_task()</code></td><td>prompt、subagent_type、resume、description、父 Conversation</td><td>阻塞返回 Task，普通运行异常被转为 Task ERROR；未知 resume/type 在执行前抛 ValueError</td></tr>
+              <tr><td>Task Tool</td><td>TaskAction</td><td>TaskObservation；Manager 异常被封装为 <code>is_error=True</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Hook 支持 pre/post tool、user prompt、session start/end 和 stop 六类事件，
+          配置可来自显式 HookConfig 或 Plugin。合并只连接 matcher，不去重；因此插件顺序
+          会影响执行顺序和副作用。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:25-36</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:358-395</code></span>
+        </p>
+        <p>
+          Marketplace <code>repo_path</code> 必须是使用 <code>/</code> 的相对路径，拒绝空值、
+          Windows drive、绝对路径、反斜杠和 <code>..</code> traversal。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/registration.py:47-61</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="configuration">
+        <h2>8. 配置与默认行为</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>类型/值</th><th>默认值</th><th>优先级</th><th>加载时机</th><th>失败行为</th><th>来源</th></tr></thead>
+            <tbody>
+              <tr><td><code>plugins</code></td><td><code>list[PluginSource] | None</code></td><td><code>None</code></td><td>显式同名胜环境 Plugin；列表内后者可覆盖 Skill/MCP</td><td>首次交互</td><td>fetch/load 抛出</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:200-246</code></span></td></tr>
+              <tr><td><code>auto_load</code></td><td>bool 或名称列表</td><td><code>false</code></td><td>仅筛选该 Marketplace 项</td><td>首次交互</td><td>单市场失败被隔离</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/registration.py:28-45</code></span></td></tr>
+              <tr><td><code>permission_mode</code></td><td>always_confirm / never_confirm / confirm_risky / null</td><td><code>null</code></td><td>显式定义覆盖；null 继承父策略</td><td>子会话创建/恢复</td><td>非法值在解析时 ValueError</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/schema.py:126-137</code></span></td></tr>
+              <tr><td><code>model</code></td><td><code>inherit</code> 或 profile 名</td><td><code>inherit</code></td><td>显式 profile 替代父 LLM</td><td>factory 实例化</td><td>profile 不存在则 ValueError</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:216-228</code></span></td></tr>
+              <tr><td><code>max_iteration_per_run</code></td><td>正整数或 null</td><td>null</td><td>agent definition &gt; parent</td><td>新 Task</td><td>Schema 拒绝非正数</td><td><span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:243-261</code></span></td></tr>
+              <tr><td><code>max_budget_per_run</code></td><td>正数或 null</td><td>null</td><td>definition 的真值 &gt; parent</td><td>新 Task</td><td>Schema 拒绝非正数</td><td><span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:262-280</code></span></td></tr>
+              <tr><td><code>condenser</code></td><td>Condenser 或 null</td><td>null 表示默认 summarizing condenser</td><td>显式配置优先</td><td>factory 实例化</td><td>NoOpCondenser 才显式关闭</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:253-283</code></span></td></tr>
+              <tr><td>Skill 来源</td><td>public/user/project flags</td><td>由 AgentContext 调用方拥有</td><td>public &lt; user &lt; project</td><td>Context 构造/会话首次交互</td><td>各来源 warning 后降级</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:1357-1410</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <code>LocalConversation.load_plugin()</code> 是显式运行时热加载入口：Agent 已 ready
+          时会创建新增 MCP/Skill runtime tools，并重建 Hook processor；普通目录扫描本身
+          没有 watcher，环境 Plugin 或 file agent 的磁盘变化不会自动热刷新。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1249-1282</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1353-1434</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="concurrency">
+        <h2>9. 并发、性能与资源</h2>
+        <ul>
+          <li>Agent 懒初始化使用 ConversationState 锁和 double-check；ready 后快路径不取锁，避免并发 send_message 在 agent.step 持锁期间无谓阻塞。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1469-1486</code></span></li>
+          <li>Subagent registry 用进程级 <code>RLock</code> 保护注册和读取；注册顺序仍是跨会话共享的进程状态。<span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:56-58</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:115-152</code></span></li>
+          <li>TaskManager 的 <code>_tasks_lock</code> 保护 id 生成、插入、恢复与逐出；Task Tool 本身是阻塞接口，并行能力由上层 ParallelToolExecutor/Workflow 调度提供。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:102-110</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:268-293</code></span></li>
+          <li>子 LLM 强制 <code>stream=False</code> 且 reset metrics，避免与父调用流和计量对象交叉；独立 condenser 也处理 usage_id 冲突。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:361-378</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:253-275</code></span></li>
+          <li>Public Skill 对可变 ref 使用进程缓存与 60 秒 TTL，对 pinned ref 使用进程生命周期缓存；这是源码定义的缓存，不是跨进程一致性保证。<span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:1120-1151</code></span></li>
+        </ul>
+        <div class="callout">
+          TaskManager 没有自身并发上限、队列或超时字段；实际并发/背压由工具执行器或
+          Workflow semaphore 决定，单个子会话的停止则由迭代、预算、Hook、确认和
+          Conversation 状态机决定。这与论文 §7 的限制一致：独立子会话和并行 Tool
+          调度并没有把核心 Conversation 变成完整的多 Agent 协调状态机。
+        </div>
+      </section>
+
+      <section class="section" id="security">
+        <h2>10. 安全与信任边界</h2>
+        <ul>
+          <li><strong>来源代码与配置：</strong>Plugin fetch 可访问 Git/本地来源，Plugin 可带命令 Hook、MCP server 和 Agent 工具清单；Marketplace 只是目录，不提供签名、沙箱或信任背书。</li>
+          <li><strong>Secret：</strong>插件 source/ref 只从会话 SecretRegistry 展开，不读取 host env；保存 resolved source 时保留变量标记并遮罩 URL 凭据。MCP 默认值只在会话合并点展开。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1126-1142</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1213-1220</code></span></li>
+          <li><strong>Skill 工具声明：</strong><code>allowed_tools</code> 是 Skill 元数据，不应误解为完整运行时授权器；真正可调用工具仍由 Agent tools、确认策略、Hook 与 Workspace 能力共同限制。<span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:271-284</code></span></li>
+          <li><strong>子 Agent 工具：</strong>定义中的工具名必须已经注册，否则 factory 构造失败；这防止静默获得未知能力，但已注册工具仍可能产生真实副作用。<span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:242-251</code></span></li>
+          <li><strong>权限：</strong>继承的是父 ConfirmationPolicy；显式 <code>permission_mode</code> 可更宽松。Hook 配置由子 AgentDefinition 单独传入，不自动继承父 HookConfig。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:271-285</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:454-468</code></span></li>
+          <li><strong>Workspace：</strong>父子默认共享 working_dir；并发子任务可能读写同一文件，冲突控制依赖工具资源声明或外部工作树，而非 TaskManager。</li>
+        </ul>
+      </section>
+
+      <section class="section" id="failure">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+            <tbody>
+              <tr><td>单个 Skill/file agent 解析失败</td><td>warning</td><td>跳过并继续扫描</td><td>目录部分可用</td><td>修复文件后新会话重扫</td><td>检查 warning 中路径</td></tr>
+              <tr><td>显式 Plugin fetch/load 失败</td><td>异常</td><td>懒初始化中止</td><td>Agent 未 ready</td><td>修复 source/ref/凭据后重试首次交互</td><td>验证 fetch 和 manifest</td></tr>
+              <tr><td>环境 Plugin 加载失败</td><td>warning</td><td>best-effort 跳过</td><td>会话继续，能力减少</td><td>新会话/恢复时重发现</td><td>检查 enabled 状态和本地目录</td></tr>
+              <tr><td>Marketplace 名称歧义</td><td>AmbiguousPluginError</td><td>不选择任何来源</td><td>运行时 load_plugin 失败</td><td>改用 <code>name@marketplace</code></td><td>列出注册市场和重复名</td></tr>
+              <tr><td>重复 agent 名</td><td>programmatic 抛错；if_absent 返回 false</td><td>保留首次注册</td><td>registry 不变</td><td>改名或调整注册时序</td><td>检查实际启动导入顺序</td></tr>
+              <tr><td>未知 tool/skill/profile</td><td>factory ValueError</td><td>不创建子 Agent</td><td>Task 创建失败或 Observation error</td><td>注册/安装依赖后重试</td><td>核对 AgentDefinition</td></tr>
+              <tr><td>子会话异常</td><td>TaskManager catch</td><td>Task ERROR，finally 更新 metrics 并逐出</td><td>父会话继续收到 error Observation</td><td>新任务或按 task id resume</td><td>查子会话事件和 partial result</td></tr>
+              <tr><td>子会话非 FINISHED</td><td>终态检查</td><td>Task ERROR，不伪装成功</td><td>保留原因/部分输出</td><td>针对 STUCK/PAUSED/预算处理</td><td>检查 ConversationErrorEvent</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Plugin 格式兼容当前有明确限制：Agent Plugins v1 loader 会校验 vendored schema，
+          但尚未加入格式 registry，且其 MCP、hooks、agents、commands loader 当前返回空；
+          不能把“实现类存在”写成“运行时已支持该格式”。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/format/agent_plugins.py:49-73</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/format/agent_plugins.py:148-162</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="observability">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+            <tbody>
+              <tr><td>构造后看不到 Plugin Skill</td><td><code>_plugins_loaded</code>、是否已首次交互</td><td>懒加载尚未触发</td><td>通过公共交互路径触发，不依赖构造期副作用</td></tr>
+              <tr><td>同名 agent 不是预期版本</td><td>registry factory definition/source、注册日志</td><td>更早的 programmatic/builtin/import 已占名</td><td>调整注册顺序或使用唯一名</td></tr>
+              <tr><td>Marketplace 插件不自动出现</td><td><code>auto_load</code> 是 false、空列表还是名称列表</td><td>仅注册用于解析，没有启用 auto-load</td><td>显式 load_plugin 或配置 auto_load</td></tr>
+              <tr><td>恢复后环境 Plugin 内容变化</td><td><code>resolved_plugins</code> 是否包含该插件</td><td>环境 Plugin 不 pinned，恢复时重发现</td><td>要求确定性时显式附加固定 ref</td></tr>
+              <tr><td>Task 返回 error 但有可用输出</td><td>Task.error、子 ConversationErrorEvent</td><td>STUCK/PAUSED/运行上限等非 FINISHED</td><td>使用 Partial result 并决定新任务或 resume</td></tr>
+              <tr><td>子任务费用未出现在主 LLM metrics</td><td>ConversationStats 的 <code>task:&lt;id&gt;</code></td><td>指标按任务独立保存，不并入主 usage_id</td><td>按 task key 聚合展示</td></tr>
+              <tr><td>插件日志疑似泄漏凭据</td><td>fetch 日志与 persisted ResolvedPluginSource</td><td>自定义日志直接打印原 URL</td><td>使用 redaction helper，禁止记录展开后的 source</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          子会话 trace 带 <code>is_delegate</code>、task_id、subagent_type、
+          parent_session_id，并在可用时带 parent trace/span 与 tool_call_id 链接；
+          observability tag 为 <code>delegate</code>。这使独立 root span 仍可回溯父调用。
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:332-350</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="testing">
+        <h2>13. 测试与验证</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr><td>插件懒加载与合并</td><td><span class="evidence"><code>tests/sdk/conversation/test_local_conversation_plugins.py:1072-1143</code></span></td><td>单元/组件</td><td>构造期不加载；首次 ready 合并 MCP</td><td>不证明真实远端 Git 可用性</td></tr>
+              <tr><td>显式、Marketplace、环境 Plugin 优先级</td><td><span class="evidence"><code>tests/sdk/conversation/test_local_conversation_plugins.py:577-625</code></span> <span class="evidence"><code>tests/sdk/conversation/test_local_conversation_plugins.py:1594-1654</code></span></td><td>组件</td><td>显式后加载且同名环境 Plugin 被跳过</td><td>不覆盖跨进程注册时序</td></tr>
+              <tr><td>Marketplace 歧义与缓存</td><td><span class="evidence"><code>tests/sdk/marketplace/test_marketplace_registry.py:138-196</code></span> <span class="evidence"><code>tests/sdk/marketplace/test_marketplace_registry.py:295-329</code></span></td><td>单元</td><td>实例缓存、歧义错误和 fetch 错误报告</td><td>不证明供应链可信</td></tr>
+              <tr><td>file agent 扫描与同级 first-wins</td><td><span class="evidence"><code>tests/sdk/subagent/test_subagent_loader.py:56-139</code></span></td><td>单元</td><td>不递归、README 跳过、.agents 胜 .openhands</td><td>不证明 server 导入顺序</td></tr>
+              <tr><td>programmatic/plugin/project 优先级</td><td><span class="evidence"><code>tests/sdk/subagent/test_subagent_registry.py:51-174</code></span></td><td>单元</td><td>project 胜 user；programmatic 不被覆盖；first-wins</td><td>全局 registry 的多会话污染需集成关注</td></tr>
+              <tr><td>独立 LocalConversation 与恢复</td><td><span class="evidence"><code>tests/tools/task/test_task_manager.py:248-275</code></span> <span class="evidence"><code>tests/tools/task/test_task_manager.py:326-361</code></span></td><td>组件</td><td>子对象类型、UUID 保持、持久目录</td><td>未模拟进程崩溃后的端到端重启</td></tr>
+              <tr><td>故障隔离</td><td><span class="evidence"><code>tests/tools/task/test_task_manager.py:608-657</code></span></td><td>单元</td><td>异常/非 FINISHED 转 ERROR，finally 逐出</td><td>真实工具副作用不可自动回滚</td></tr>
+              <tr><td>并发 Task id 安全</td><td><span class="evidence"><code>tests/tools/task/test_task_manager_thread_safety.py:1-157</code></span></td><td>并发组件</td><td>ParallelToolExecutor 下 id 唯一且无 dict 丢写</td><td>不构成容量或延迟基准</td></tr>
+              <tr><td>Skill 标准字段</td><td><span class="evidence"><code>tests/sdk/skills/test_agentskills_fields.py:9-91</code></span></td><td>单元</td><td>字段解析、类型拒绝和旧格式兼容</td><td>不证明第三方 Skill 安全</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="development">
+        <h2>14. 开发与扩展指南</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+            <tbody>
+              <tr><td>新增 Plugin 磁盘格式</td><td><code>plugin/format/</code></td><td>格式 registry、检测优先级、各组件 loader</td><td>specific detector 在 fallback 前；单组件失败隔离；选择测试</td></tr>
+              <tr><td>新增 Skill 来源</td><td><code>skills/skill.py</code></td><td>统一 catalog 合并、AgentContext、测试</td><td>来源优先级、坏项隔离、description/调用路径</td></tr>
+              <tr><td>新增 Marketplace 字段</td><td><code>marketplace/types.py</code></td><td>registration/resolve/install/REST consumer</td><td>路径校验、旧 manifest 可加载、歧义不静默</td></tr>
+              <tr><td>新增 file agent 字段</td><td><code>subagent/schema.py</code></td><td>factory、remote metadata、文档与 schema 测试</td><td>默认值、继承语义、未知字段 metadata 保留</td></tr>
+              <tr><td>改变 agent 来源优先级</td><td><code>subagent/load.py</code>、<code>registry.py</code>、LocalConversation</td><td>包级 AGENTS 与所有优先级测试</td><td>first-wins 调用顺序在实际启动路径成立</td></tr>
+              <tr><td>改变委派生命周期</td><td><code>tools/task/manager.py</code></td><td>Task executor、Workflow、metrics/trace/persistence 测试</td><td>成功、确认拒绝、非 FINISHED、异常、resume、并发</td></tr>
+              <tr><td>扩大子 Agent 权限</td><td>AgentDefinition + security policy + Hook</td><td>安全文档与确认测试</td><td>明确 fail-open/closed，不把 allowed_tools 当授权</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>禁止捷径：</strong>不要在 TaskManager 复制一套 agent discovery；不要让
+          Plugin 格式细节泄漏进合并路径；不要用 dict 无序覆盖替代有文档的优先级；不要让
+          单个环境扩展损坏阻止所有其余环境扩展；不要把进程级 registry 当会话私有状态。
+        </div>
+      </section>
+
+      <section class="section" id="tradeoffs">
+        <h2>15. 设计权衡与已知限制</h2>
+        <h3>懒加载降低构造副作用，但把失败推迟到首次交互</h3>
+        <p>
+          好处是构造器不做网络/磁盘 I/O，Agent 能在 Plugin 完整合并后一次初始化；
+          成本是配置错误可能直到第一条消息才暴露。需要启动期预检的部署应显式做
+          discovery/fetch 验证，而不是假设构造成功等于可运行。
+        </p>
+        <h3>Registry first-wins 简单可解释，但全局状态受导入时序影响</h3>
+        <p>
+          RLock 保证原子性，不能让“程序注册必然优于内置”脱离调用顺序成立。所有
+          非 programmatic 来源用 if-absent，谁先注册谁保留；agent-server 若在每会话发现前
+          已注册 builtins，builtins 也会占据名称。需要严格租户隔离时，应重新评估进程级
+          registry，而不是继续叠加来源条件。
+        </p>
+        <h3>Plugin 合并与 agent 注册采用相反冲突策略</h3>
+        <p>
+          Skill/MCP 后写覆盖便于显式插件定制，Hook 连接保留所有治理，agent first-wins
+          防止低优先级来源替换 factory。统一成单一“最后写”规则会更短，却会破坏安全和
+          来源可解释性。
+        </p>
+        <h3>恢复确定性分层</h3>
+        <p>
+          显式 Plugin 固定 resolved ref，环境 Plugin 和 project Skill 反映当前磁盘；
+          Task resume 固定 Conversation UUID，但仍会经过当前运行时的扩展发现。若需要完全
+          可复现，必须固定所有远端 ref，并把环境扩展版本纳入部署快照。目前没有统一扩展
+          lockfile、签名验证或跨进程 Marketplace cache。
+        </p>
+        <h3>故障隔离不等于副作用回滚</h3>
+        <p>
+          Task 异常被包装为 ERROR，父循环可继续；但父子共享 Workspace，子工具在失败前
+          已产生的文件或外部系统副作用不会由 TaskManager 事务回滚。可重试性必须按工具
+          幂等性和实际 Observation 判断。
+        </p>
+        <h3>委派扩展不等于完整多 Agent 系统</h3>
+        <p>
+          论文 §4.5 的 blocking delegation 证明“可通过 Tool 扩展委派”，论文 §7
+          则保留了完整协调设计问题。当前 TaskManager 增加独立 EventLog、错误 Observation、
+          resume 和 metrics/trace 关联，ACPAgent 增加外部 Agent 协议适配；这些是有价值的
+          演进，但 Task 调用仍阻塞，TaskManager 没有持久任务队列或自身调度上限，父子默认
+          共享 Workspace，失败前副作用不能事务回滚。本文因此不把当前能力描述为异步、
+          动态、容错的通用多 Agent orchestration。
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:164-201</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:380-478</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:295-330</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="sources">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <ul>
+          <li>Skill 模型、发现、优先级与 prompt：<span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:178-235</code></span>、<span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:848-918</code></span>、<span class="evidence"><code>openhands-sdk/openhands/sdk/skills/skill.py:1357-1511</code></span></li>
+          <li>Plugin 统一模型与合并：<span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/plugin.py:36-202</code></span></li>
+          <li>Plugin 格式 registry：<span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/format/__init__.py:1-81</code></span></li>
+          <li>环境 Plugin 发现：<span class="evidence"><code>openhands-sdk/openhands/sdk/plugin/discovery.py:29-203</code></span></li>
+          <li>Marketplace Schema 与来源解析：<span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/types.py:168-309</code></span></li>
+          <li>Marketplace 注册与 lazy registry：<span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/registration.py:10-61</code></span>、<span class="evidence"><code>openhands-sdk/openhands/sdk/marketplace/registry.py:79-231</code></span></li>
+          <li>Subagent file discovery：<span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/load.py:48-204</code></span></li>
+          <li>Subagent registry 与 factory：<span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:49-415</code></span></li>
+          <li>AgentDefinition Schema：<span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/schema.py:200-382</code></span></li>
+          <li>LocalConversation 懒加载汇合点：<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:875-1211</code></span>、<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1353-1521</code></span></li>
+          <li>TaskManager 独立会话、恢复、权限与回收：<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:95-496</code></span></li>
+          <li>ACP 外部 Agent 适配：<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/acp_agent.py:1-14</code></span>、<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/acp_agent.py:1535-1725</code></span>、<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/acp_agent.py:2588-2750</code></span></li>
+          <li>内置 agents 注册：<span class="evidence"><code>openhands-tools/openhands/tools/preset/default.py:92-152</code></span></li>
+          <li>Hooks 类型与连接语义：<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:25-64</code></span>、<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:358-395</code></span></li>
+          <li>论文设计基线与限制：<a href="https://arxiv.org/abs/2511.03690">官方论文 arXiv:2511.03690 §4.5、§7</a></li>
+        </ul>
+        <p>
+          相邻模块进一步阅读：<a href="12-mcp.html">12 MCP 集成边界</a>。
+          第 14 章子文档在本次审阅时尚不存在，因此未创建未来链接。
+        </p>
+      </section>
+
+      <section class="section" id="glossary">
+        <h2>17. 术语表</h2>
+        <dl>
+          <dt>AgentSkills</dt><dd>一种 Skill 目录/元数据规范；本仓库以 SKILL.md、description 和可选资源目录表达，并支持渐进披露。</dd>
+          <dt>Ambient Plugin（环境插件）</dt><dd>从用户、项目或 enabled 安装目录自动发现的 Plugin；不记录 resolved ref，恢复时重新发现。</dd>
+          <dt>Explicit Plugin（显式插件）</dt><dd>通过 Conversation 的 <code>plugins</code> 参数或运行时 <code>load_plugin</code> 明确附加的 Plugin。</dd>
+          <dt>First registration wins</dt><dd>首次注册胜出；Subagent registry 中已有名称不会被后续非强制来源覆盖。</dd>
+          <dt>Last-wins</dt><dd>后写胜出；Plugin Skill 与 MCP server 同名时使用后加载值，与 agent registry 规则不同。</dd>
+          <dt>Factory</dt><dd>接收 LLM 并返回完整 Agent 的函数；registry 同时保存 factory 和 AgentDefinition。</dd>
+          <dt>Marketplace</dt><dd>扩展目录，保存 Plugin/Skill 名称与来源；不等于包管理器、沙箱或信任认证。</dd>
+          <dt>PluginFormat</dt><dd>插件磁盘格式适配策略；负责检测、读取各组件并产出格式中立 Plugin。</dd>
+          <dt>Progressive disclosure（渐进披露）</dt><dd>先向模型提供 Skill 名称和摘要，真正需要时再装入全文，以减少固定 prompt 体积。</dd>
+          <dt>Resolved ref</dt><dd>远端 branch/tag 解析后的确定提交标识，用于显式插件恢复时固定内容。</dd>
+          <dt>Subagent</dt><dd>由专用 Agent 配置驱动、在独立 LocalConversation 中运行的委派执行者；不是 Conversation 子类。</dd>
+          <dt>Task</dt><dd>TaskManager 对一次委派的运行记录，包含 task id、conversation UUID、状态、结果或错误。</dd>
+          <dt>Blocking delegation</dt><dd>阻塞式委派；父工具调用等待子会话结束并取得结果。上层可以并行调度多个调用，但单个 TaskExecutor 不是异步任务提交 API。</dd>
+          <dt>ACP</dt><dd>Agent Client Protocol，Agent 客户端协议；ACPAgent 用它连接管理自身 LLM、工具与执行的外部 Agent server，不定义多 Agent 协调。</dd>
+          <dt>Multi-agent orchestration</dt><dd>多 Agent 编排；通常还需要任务调度、事件仲裁、取消、权限、持久队列和故障恢复等协调机制，不能仅由“存在子会话”推断已经具备。</dd>
+          <dt>Hook</dt><dd>挂接消息、工具、会话和停止边界的治理处理器；Plugin 可携带 Hook，但 Hook 也可独立配置。</dd>
+          <dt>MCP</dt><dd>Model Context Protocol，模型上下文协议；Plugin/Skill 可贡献 server 配置，真正连接与工具执行由 MCP 子系统负责。</dd>
+          <dt>LLM</dt><dd>Large Language Model，大语言模型；子 Agent 默认复制父 LLM 配置并独立计量，显式 profile 可替代它。</dd>
+          <dt>Fail-open / fail-closed</dt><dd>依赖失败时继续还是拒绝运行。本模块按来源区分：环境发现多为继续，显式插件初始化多为抛错停止。</dd>
+        </dl>
+      </section>
+    </main>
+  </div>
+  <script>
+    const links = [...document.querySelectorAll("nav a")];
+    const sections = links
+      .map((link) => document.querySelector(link.getAttribute("href")))
+      .filter(Boolean);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+      if (!visible) return;
+      links.forEach((link) => {
+        link.classList.toggle(
+          "active",
+          link.getAttribute("href") === `#${visible.target.id}`,
+        );
+      });
+    }, { rootMargin: "-15% 0px -75% 0px" });
+    sections.forEach((section) => observer.observe(section));
+  </script>
+</body>
+</html>

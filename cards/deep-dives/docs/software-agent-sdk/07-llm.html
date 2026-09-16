@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>07 LLM 调用管道｜Software Agent SDK 架构</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --accent: #4338ca;
+      --good: #15803d;
+      --warn: #c2410c;
+      --bad: #b91c1c;
+      --code: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 1rem; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 15px/1.72 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      color: #a16207;
+      background: rgba(120,113,108, .16);
+      border-radius: 5px;
+      padding: .08rem .3rem;
+      font: .9em/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 1.25rem 1rem;
+      border-right: 1px solid var(--border);
+      background: #f0ebe0;
+    }
+    aside .back { display: block; margin-bottom: 1rem; font-weight: 650; }
+    aside strong { display: block; margin: .4rem .5rem .7rem; }
+    nav a {
+      display: block;
+      padding: .34rem .55rem;
+      border-left: 2px solid transparent;
+      border-radius: 4px;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    nav a.active {
+      color: var(--text);
+      border-left-color: var(--accent);
+      background: rgba(67,56,202, .1);
+    }
+    main { min-width: 0; max-width: 1180px; padding: 2.2rem 3.4rem 5rem; }
+    h1 { margin: .35rem 0 .7rem; font-size: clamp(2rem, 5vw, 3.2rem); line-height: 1.15; }
+    h2 { margin: 2.8rem 0 1rem; padding-bottom: .45rem; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 1.7rem; }
+    p, li { max-width: 90ch; }
+    .eyebrow { color: var(--accent); font-weight: 700; letter-spacing: .08em; }
+    .lead { color: #44403c; font-size: 1.08rem; max-width: 82ch; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: .65rem;
+      margin: 1.4rem 0;
+    }
+    .meta div, .card, .callout {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: .9rem 1rem;
+    }
+    .meta span { display: block; color: var(--muted); font-size: .78rem; }
+    .tag {
+      display: inline-block;
+      margin: .12rem .25rem .12rem 0;
+      padding: .08rem .46rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: #44403c;
+      font-size: .78rem;
+    }
+    .tag.current { border-color: var(--good); color: #15803d; }
+    .tag.optional { border-color: var(--warn); color: #a16207; }
+    .callout { margin: 1rem 0; border-left: 4px solid var(--accent); }
+    .callout.warn { border-left-color: var(--warn); }
+    .callout.bad { border-left-color: var(--bad); }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .8rem; }
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; background: var(--panel); }
+    th, td { padding: .65rem .72rem; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--panel-2); color: #44403c; }
+    pre {
+      overflow-x: auto;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      color: #44403c;
+      font: .88rem/1.65 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .muted { color: var(--muted); }
+    @media (max-width: 860px) {
+      .layout { display: block; }
+      aside { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+      nav { columns: 2; }
+      nav a { break-inside: avoid; }
+      main { padding: 1.5rem 1.1rem 4rem; }
+    }
+    @media (max-width: 520px) { nav { columns: 1; } }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <a class="back" href="../../software_agent_architecture.html#llm">← 返回架构总览 · LLM</a>
+    <strong>07 LLM 调用管道</strong>
+    <nav aria-label="本页目录">
+      <a href="#position">1. 模块定位</a>
+      <a href="#dependencies">2. 系统位置与依赖</a>
+      <a href="#concepts">3. 核心概念</a>
+      <a href="#components">4. 架构组成</a>
+      <a href="#flow">5. 完整运行流程</a>
+      <a href="#state">6. 数据与状态模型</a>
+      <a href="#interfaces">7. 接口、协议与事件</a>
+      <a href="#configuration">8. 配置与默认行为</a>
+      <a href="#concurrency">9. 并发、性能与资源</a>
+      <a href="#security">10. 安全与信任边界</a>
+      <a href="#failure">11. 失败、恢复与兼容</a>
+      <a href="#observability">12. 可观测性与排障</a>
+      <a href="#testing">13. 测试与验证</a>
+      <a href="#extension">14. 开发与扩展指南</a>
+      <a href="#tradeoffs">15. 设计权衡与已知限制</a>
+      <a href="#sources">16. 源码索引</a>
+      <a href="#glossary">17. 术语表</a>
+    </nav>
+  </aside>
+
+  <main>
+    <header>
+      <div class="eyebrow">CHAPTER 07 · CORE MODULE</div>
+      <h1>LLM 抽象与调用管道</h1>
+      <p class="lead">解释同一份 OpenHands 消息和工具定义如何经能力判断、参数规范化与 LiteLLM provider 边界，安全地进入 Chat Completions 或 Responses API，并以统一的 <code>LLMResponse</code>、重试语义和指标返回。</p>
+      <div class="meta">
+        <div><span>源码版本</span>工作区快照；当前执行环境无可用 Git CLI，未取得 SHA</div>
+        <div><span>证据状态</span>决定性运行时、Schema 与聚焦测试已核对；未做真实 provider 联网调用</div>
+        <div><span>主要所有者</span><code>openhands-sdk/openhands/sdk/llm/</code></div>
+        <div><span>目标读者</span>LLM provider、Agent、遥测与恢复链开发者</div>
+        <div><span>最近验证</span>2026-08-14</div>
+        <div><span>事实标签</span><i class="tag current">当前</i><i class="tag optional">可选</i><i class="tag">遗留迁移</i><i class="tag">证据缺口</i></div>
+      </div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p><code>LLM</code> 是 SDK 内面向模型调用的统一门面：接收 SDK <code>Message</code> 和 <code>ToolDefinition</code>，选择 API 形态，生成 provider 参数，调用 LiteLLM，转换输出，并更新本实例的 Telemetry 与 Metrics。Agent 负责何时调用、工具系统负责执行 tool call、Condenser 负责缩短上下文；这些都不是 LLM 模块的职责。Agent 的同步与异步桥接分别在 <code>make_llm_completion</code> 和 <code>amake_llm_completion</code> 中按 <code>uses_responses_api()</code> 路由。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/utils.py:640-688</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/utils.py:726-751</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>边界</th><th>本模块负责</th><th>委托对象</th><th>明确不负责</th></tr></thead>
+        <tbody>
+          <tr><td>上游</td><td>四个调用入口及统一返回类型</td><td>Agent、Condenser、标题/评判等调用方</td><td>Conversation 状态机与事件树</td></tr>
+          <tr><td>协议</td><td>Chat/Responses 消息与工具序列化</td><td>LiteLLM 的 provider 适配</td><td>provider 服务端实现与 SLA</td></tr>
+          <tr><td>能力</td><td>解析 reasoning、vision、cache、Responses 等 feature</td><td>LiteLLM metadata 与 SDK registry fallback</td><td>根据名称猜测未知 provider 保证</td></tr>
+          <tr><td>恢复</td><td>请求级 retry、特定降级、可选 fallback、异常映射</td><td>Agent/Condenser 处理 context/history 级恢复</td><td>工具副作用回滚</td></tr>
+          <tr><td>观测</td><td>请求 latency、token、cost、completion log</td><td>ConversationStats/远程 callback 消费</td><td>全系统审计日志与服务告警</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout warn"><strong>状态所有权：</strong><code>LLM</code> 不持有 Conversation 的权威运行状态。它包含运行期私有缓存、Telemetry 和 Metrics；配置路由变化应构造或复制新实例，而不是在并发调用期间原地切换 provider。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:633-665</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:783-798</code></span></div>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <pre>View.events → Message[]
+     │
+     ├─ make_llm_completion ── uses_responses_api ─┬─ completion / acompletion
+     │                                             └─ responses / aresponses
+     │
+     ├─ model_features ← explicit override → LiteLLM metadata → SDK fallback
+     ├─ ToolDefinition → Chat tool schema / Responses tool schema
+     ├─ OpenHands public model → LiteLLM provider + parsed model + api_base
+     └─ LiteLLM transport → provider HTTP API
+                              │
+                              ├─ stream chunk callback
+                              ├─ Telemetry → Metrics / completion log
+                              └─ Message + MetricsSnapshot → LLMResponse</pre>
+      <p>依赖方向始终从 SDK 门面指向 LiteLLM；provider 解析由 <code>LLMProvider.from_model()</code> 完成，保留用户传入的 <code>api_base</code>，而不是把 LiteLLM 推断出的 base 固化回 SDK 配置。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/litellm_provider.py:17-60</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>组件</th><th>所有者</th><th>输入/输出</th><th>进程边界</th></tr></thead>
+        <tbody>
+          <tr><td>Agent 调用桥</td><td><code>agent/utils.py</code></td><td><code>Message[]</code> → <code>LLMResponse</code></td><td>同进程</td></tr>
+          <tr><td>LLM 门面</td><td><code>llm/llm.py</code></td><td>规范化、调用、校验、恢复</td><td>同进程</td></tr>
+          <tr><td>LiteLLM provider</td><td><code>utils/litellm_provider.py</code></td><td>完整 model string → provider + parsed model</td><td>同进程适配边界</td></tr>
+          <tr><td>模型供应商</td><td>外部依赖</td><td>HTTP/stream 请求响应</td><td>网络边界</td></tr>
+          <tr><td>Telemetry/Metrics</td><td><code>utils/telemetry.py</code>、<code>utils/metrics.py</code></td><td>响应 usage/cost/latency → 累积统计</td><td>同进程；日志可经 callback 外送</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="grid">
+        <div class="card"><strong>Transport（传输）</strong><p>实际发给 LiteLLM 的 provider、model、api_base、凭据与 kwargs。OpenHands 前缀只在此边界转换。</p></div>
+        <div class="card"><strong>Capability（能力）</strong><p>模型是否支持 Responses、reasoning、采样参数、显式缓存、vision 等。查询使用 canonical model，不等同于 transport model。</p></div>
+        <div class="card"><strong>Chat Completions</strong><p>以 <code>messages</code> 和 OpenAI chat tool schema 调用，流式 chunk 最后由 LiteLLM 重建成 <code>ModelResponse</code>。</p></div>
+        <div class="card"><strong>Responses API</strong><p>将 system 内容映射到 <code>instructions</code>，其余映射到 <code>input[]</code>，输出 item 再恢复为 SDK Message。</p></div>
+        <div class="card"><strong>Native function calling</strong><p>provider 原生接收 tools/tool_choice，并返回结构化 tool call。</p></div>
+        <div class="card"><strong>Non-native function calling</strong><p>把工具契约嵌入 prompt，用 stop words 限制文本，再将模型文本解析回结构化 tool call。</p></div>
+      </div>
+      <p>能力解析的优先级是：显式 <code>capability_overrides</code> → LiteLLM/model metadata → SDK 内置 fallback；布尔解析保留显式 <code>False</code>，Responses 的 metadata endpoint 列表一旦存在，其“缺少 Responses”也具有权威性。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/model_features.py:255-277</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/model_features.py:331-346</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/model_features.py:349-405</code></span></p>
+    </section>
+
+    <section class="section" id="components">
+      <h2>4. 架构组成</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>组件</th><th>职责</th><th>状态/故障隔离</th><th>扩展点</th></tr></thead>
+        <tbody>
+          <tr><td><code>LLM</code></td><td>配置、规范化、四入口、transport、异常边界</td><td>私有 provider metadata/cache 与 Metrics；每次调用返回 snapshot</td><td>新增聚焦 helper，避免散落 provider 条件</td></tr>
+          <tr><td><code>ModelFeatures</code></td><td>合并 overrides、metadata、内置规则</td><td>冻结 dataclass；纯能力结果</td><td>优先在 registry 增加 provider/model tweak</td></tr>
+          <tr><td><code>LLMProvider</code></td><td>LiteLLM provider 推断和 Bedrock key 过滤</td><td>冻结 dataclass；解析失败降为 provider 未知</td><td>transport 级 provider 行为</td></tr>
+          <tr><td><code>NonNativeToolCallingMixin</code></td><td>prompt mock 前后转换</td><td>转换错误留在请求重试边界</td><td>converter 与 example 模板</td></tr>
+          <tr><td><code>RetryMixin</code></td><td>Tenacity 指数等待、listener、无响应温度调整</td><td>装饰 sync 或 coroutine；不另建 async retry 实现</td><td>重试异常集合和预算配置</td></tr>
+          <tr><td><code>FallbackStrategy</code></td><td>主模型重试耗尽后顺序尝试 profile</td><td>懒加载 fallback LLM；禁止嵌套 fallback</td><td>profile 顺序</td></tr>
+          <tr><td><code>RouterLLM</code></td><td>在同步 <code>completion()</code> 前调用 <code>select_llm(messages)</code>，按 key 选择并委托给候选 LLM</td><td><code>active_llm</code> 是每次选择时改写的 public field；候选 map 非空</td><td>子类实现消息级选择策略</td></tr>
+          <tr><td><code>MultimodalRouter</code></td><td>消息含图片，或 secondary 的 token count 超过其有效输入上限时选 primary；否则选 secondary</td><td>构造时强制存在 <code>primary</code>/<code>secondary</code> 两个 key</td><td>内置内容/容量路由策略</td></tr>
+          <tr><td><code>Telemetry</code></td><td>每次成功响应的 latency、cost、usage 与可选日志</td><td>日志和 callback 均 best effort</td><td>completion log/stats callback</td></tr>
+          <tr><td><code>Metrics</code></td><td>累积 cost、token usage、latency，支持 snapshot/diff/merge</td><td>实例内可变；Registry 必须避免副本共享</td><td>统计消费，不是 provider 调用控制</td></tr>
+        </tbody>
+      </table></div>
+      <p><code>LLMResponse</code> 是四个入口的公共归一结果：包含 SDK <code>Message</code>、轻量 <code>MetricsSnapshot</code> 与原始 LiteLLM response；调用方无需以 transport 类型表达业务消息。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm_response.py:28-59</code></span></p>
+      <h3>4.1 RouterLLM 与论文 §4.3 的映射</h3>
+      <p>
+        官方论文 <a href="https://arxiv.org/abs/2511.03690">§4.3、图 3</a> 把
+        <code>RouterLLM</code> 描述为保持统一 LLM 接口、由
+        <code>select_llm()</code> 根据输入选择候选模型的扩展点，并以图片请求选择多模态模型为例。
+        当前源码保留了这一核心形状：Router 继承 <code>LLM</code>，要求非空
+        <code>llms_for_routing</code>，同步 <code>completion()</code> 选择 key、写入
+        <code>active_llm</code>，再把 messages、tools、token callback 与 call context 委托给该实例。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/router/base.py:28-55,57-111</code></span>
+      </p>
+      <p>
+        当前 <code>MultimodalRouter</code> 比论文伪代码多一条容量规则：任一消息含图片，或
+        secondary 的 token count 超过 <code>effective_max_input_tokens</code>，均路由到
+        primary；否则路由到 secondary，且两个固定 key 缺一即在构造时失败。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/router/impl/multimodal.py:13-77</code></span>
+      </p>
+      <div class="callout warn">
+        <strong>当前接口覆盖范围：</strong><code>RouterLLM</code> 只覆盖同步
+        <code>completion()</code>；没有覆盖 <code>acompletion()</code>、
+        <code>responses()</code> 或 <code>aresponses()</code>。这些入口会继承
+        <code>LLM</code> 本身的实现，不能仅凭论文的统一接口概括推断它们也执行
+        <code>select_llm()</code>。缺失属性的 <code>__getattr__</code> 当前固定委托候选 map
+        的第一个 LLM，并不读取 <code>active_llm</code>。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/router/base.py:57-117</code></span>
+      </div>
+    </section>
+
+    <section class="section" id="flow">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 正常成功路径</h3>
+      <ol>
+        <li>Agent 把活跃 View 转成 <code>Message[]</code>；桥接函数调用 <code>uses_responses_api()</code>。显式 <code>api_mode</code> 优先，<code>auto</code> 才读取 model feature。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2523-2528</code></span></li>
+        <li>Chat 路径复制消息，应用可用的 prompt cache、图片 inline/resize，再转换成 chat dict；Responses 路径产生 <code>instructions + input[]</code>。异步格式化把阻塞图片处理移出 event loop。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2708-2786</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2788-2863</code></span></li>
+        <li>工具在 Chat 路径转换为 <code>ChatCompletionToolParam</code>；若 <code>native_tool_calling=False</code>，工具改写进 prompt，transport 不再收到 tools。Responses 路径始终转换为 Responses function tool。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1247-1281</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1405-1424</code></span></li>
+        <li>options 层按“调用方 kwargs 优先、字段默认补缺、能力再剔除不支持项”的方式生成最终参数；Responses 默认 <code>store=False</code> 与 <code>tool_choice=auto</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/options/chat_options.py:17-93</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/options/responses_options.py:17-87</code></span></li>
+        <li>每次 Tenacity attempt 先调用 <code>Telemetry.on_request()</code>，再进入 LiteLLM transport。成功响应经过 non-native 后处理（如适用）、Telemetry、Message 转换并返回 snapshot。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1560-1582</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1035-1053</code></span></li>
+      </ol>
+
+      <h3>5.2 拒绝或提前结束路径</h3>
+      <p>模型配置缺少 <code>model</code> 会在 Pydantic 校验阶段拒绝；过小且可识别的 context window 会抛出 <code>LLMContextWindowTooSmallError</code>。运行时若请求 streaming 却没有 callback，普通 Chat/Responses 调用会明确降为非流式而不是让执行崩溃；subscription Responses 因内部流式例外。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:687-721</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2489-2507</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1532-1544</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1756-1769</code></span></p>
+      <p>内容策略、鉴权、generic bad request 等确定性错误不因本模块的 fallback 白名单而自动换模型；最终在 provider exception mapping 后交给 Agent 决定软恢复、压缩或错误终态。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:30-71</code></span></p>
+
+      <h3>5.3 重试、降级与恢复路径</h3>
+      <ol>
+        <li>Tenacity 只重试 <code>LLM_RETRY_EXCEPTIONS</code>，总 attempt 数由 <code>stop_after_attempt(num_retries)</code> 定义；<code>LLMNoResponseError</code> 且 temperature 为 0 时，下一 attempt 改为 1.0。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:25-102</code></span></li>
+        <li>prompt cache 过小的 provider 错误会复制一个 <code>caching_prompt=False</code> 的 LLM，重新执行同一 API 路径。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1580-1598</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2023-2043</code></span></li>
+        <li>重试耗尽后，瞬时连接、限流、服务不可用、timeout、internal server 或无响应错误才进入可选 fallback。fallback profile 按序懒加载，临时关闭其嵌套 fallback；首个成功结果的 Metrics diff 合并回主模型。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:28-36</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:63-118</code></span></li>
+        <li>异步入口的 fallback 当前调用 fallback LLM 的同步入口，并通过 executor 移出 event loop。若全部失败，保留主错误，再做 SDK 类型映射。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:987-1016</code></span></li>
+      </ol>
+    </section>
+
+    <section class="section" id="state">
+      <h2>6. 数据与状态模型</h2>
+      <p>LLM 管道没有独立持久化事件日志，也不拥有 Conversation 状态。公共配置字段可由 <code>to_persisted()</code> 序列化；<code>fallback_strategy</code>、listener、Telemetry、Metrics、provider metadata、tokenizer 与 runtime metadata cache 是运行期状态，其中 fallback 明确排除持久化，加载后必须重新配置。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:614-665</code></span></p>
+      <div class="callout warn">
+        <strong>论文“immutable”的事实边界：</strong>
+        官方论文 <a href="https://arxiv.org/abs/2511.03690">§3.2</a> 将 Agent、Tool、LLM
+        等“所有组件 immutable”作为 V1 设计原则概括；当前源码不能据此推导整个对象图被冻结。
+        <code>LLM.model_config</code> 没有 <code>frozen=True</code>，并持有可变
+        Metrics、tokenizer/provider/runtime metadata cache 和可重新配置的
+        <code>fallback_strategy</code>；Router 还会在每次同步路由时原地更新
+        <code>active_llm</code>。源码事实优先于论文概括。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:614-668</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/router/base.py:40-46,81-95</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/metrics.py:112-176,222-327</code></span>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>数据</th><th>规范形状</th><th>生命周期</th><th>隐私/清理</th></tr></thead>
+        <tbody>
+          <tr><td>模型配置</td><td>Pydantic <code>LLM</code> fields</td><td>构造至实例弃用；路由变化用新实例/复制</td><td>secret serializer 负责 API/AWS key</td></tr>
+          <tr><td>provider info</td><td><code>LLMProvider</code></td><td>构造或 route-changing <code>model_copy</code> 后刷新</td><td>不持久化</td></tr>
+          <tr><td>runtime metadata</td><td><code>ModelRuntimeMetadata</code> 私有缓存</td><td>成功 TTL、失败 negative cache；generation 防旧请求覆盖</td><td>route key 变化时清空</td></tr>
+          <tr><td>Telemetry</td><td>当前 attempt 开始时间、request context、callbacks</td><td>实例内</td><td>completion log 可包含消息与响应，需受目录权限和数据政策约束</td></tr>
+          <tr><td>Metrics</td><td>cost、latency、token usage 列表与累积值</td><td>实例内，可 snapshot/diff/merge/reset/restore</td><td>不是凭据存储</td></tr>
+          <tr><td>LLMResponse</td><td><code>Message + MetricsSnapshot + raw_response</code></td><td>单次调用结果</td><td>raw response 可能含 provider metadata</td></tr>
+        </tbody>
+      </table></div>
+      <p>runtime metadata 的同步 cache read/store 由共享的短临界区 lock 保护，网络探测在锁外；generation 仅允许最新开始的探测发布结果。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2568-2602</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2635-2667</code></span></p>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>接口</th><th>输入</th><th>输出</th><th>callback/错误语义</th></tr></thead>
+        <tbody>
+          <tr><td><code>completion()</code></td><td><code>Message[]</code>、tools、sync callback</td><td><code>LLMResponse</code></td><td>同步消费 chunk；最终类型化或原始异常</td></tr>
+          <tr><td><code>acompletion()</code></td><td>同上；sync 或 async callback</td><td>await <code>LLMResponse</code></td><td><code>_invoke_token_callback</code> 透明 await coroutine</td></tr>
+          <tr><td><code>responses()</code></td><td>Message、tools、include/store</td><td><code>LLMResponse</code></td><td>收集 output-item-done 与 delta；缺 completed event 视为无响应</td></tr>
+          <tr><td><code>aresponses()</code></td><td>同上；sync 或 async callback</td><td>await <code>LLMResponse</code></td><td>兼容 async iterable 与包装器返回的 sync iterable</td></tr>
+        </tbody>
+      </table></div>
+      <p>同步 callback 类型为 <code>Callable[[ModelResponseStream], None]</code>；异步入口接受同步 callback 或返回 coroutine 的 callback，包括 async <code>__call__</code> 对象。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/streaming.py:8-29</code></span></p>
+      <p>Chat streaming 会逐 chunk 回调并收集全部 chunk，再由 <code>litellm.stream_chunk_builder</code> 生成最终 <code>ModelResponse</code>。Responses streaming 只把 text/refusal/reasoning-summary delta 适配成通用 chunk，同时收集完成的 output item；最终 <code>response.completed</code> 为空时用收集项修补。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1094-1163</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2195-2261</code></span></p>
+      <div class="callout"><strong>事件边界：</strong>token callback 不是 Conversation EventLog 的权威事件；它是请求中的增量通知。最终业务结果仍是完整 <code>LLMResponse</code>，由上游 Agent 转换为 Action/Message 事件。</div>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+        <tbody>
+          <tr><td><code>api_mode</code></td><td>auto/chat/responses</td><td>auto</td><td>显式模式高于 feature</td><td>新实例</td><td>强制不兼容 endpoint 由 provider 报错</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:409-429</code></span></td></tr>
+          <tr><td><code>native_tool_calling</code></td><td>bool</td><td>true</td><td>直接决定 native/mock</td><td>新实例</td><td>关闭时走 prompt converter</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:507-511</code></span></td></tr>
+          <tr><td><code>stream</code></td><td>bool</td><td>false</td><td>per-call <code>stream=True</code> 也可开启</td><td>每次调用</td><td>缺 callback 通常降为非流式</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:452-460</code></span></td></tr>
+          <tr><td><code>num_retries</code></td><td>int ≥ 0</td><td>5</td><td>实例配置</td><td>新实例</td><td>是总 attempt 数，不是额外次数</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:337-340</code></span></td></tr>
+          <tr><td>retry waits</td><td>multiplier/min/max</td><td>8.0 / 8 / 64</td><td>实例配置</td><td>新实例</td><td>Tenacity 指数等待并封顶</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:337-340</code></span></td></tr>
+          <tr><td><code>timeout</code></td><td>int ≥ 0 或 None</td><td>300 秒</td><td>实例配置</td><td>每次 transport</td><td>None 禁用 timeout，不建议生产使用</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:342-348</code></span></td></tr>
+          <tr><td><code>drop_params</code></td><td>bool</td><td>true</td><td>转发 LiteLLM</td><td>每次 transport</td><td>不支持参数可由 LiteLLM 丢弃</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:461-474</code></span></td></tr>
+          <tr><td><code>capability_overrides</code></td><td>dict[str, bool|string]</td><td>空字典</td><td>高于 metadata 与 fallback</td><td>新实例</td><td>错误声明可把调用路由到不兼容能力</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:418-429</code></span></td></tr>
+          <tr><td><code>caching_prompt</code></td><td>bool</td><td>true</td><td>还需 feature 支持</td><td>每次格式化</td><td>cache-too-small 时无 cache 重试</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:486-500</code></span></td></tr>
+          <tr><td><code>reasoning_effort</code></td><td>provider-neutral string/None</td><td>high</td><td>仅能力支持时发送</td><td>每次 options</td><td>未知未来值交给 LiteLLM/provider</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:538-548</code></span></td></tr>
+          <tr><td><code>enable_encrypted_reasoning</code></td><td>bool</td><td>true</td><td>Responses、store=false、reasoning capable</td><td>每次 options</td><td>条件不满足时不发送 include</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:549-560</code></span></td></tr>
+          <tr><td><code>log_completions</code></td><td>bool</td><td>false</td><td>实例配置</td><td>Telemetry 构造时</td><td>日志失败 warning，不使调用失败</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:491-500</code></span></td></tr>
+          <tr><td><code>fallback_strategy</code></td><td>可空策略</td><td>None</td><td>retry 耗尽且错误在白名单后</td><td>运行期重新配置</td><td>全部失败抛主错误</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:614-622</code></span></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <ul>
+        <li><strong>同步/异步对称：</strong>四入口共享准备、校验、options、Telemetry 和 Tenacity decorator；异步 transport 直接 await <code>litellm.acompletion/aresponses</code>，并非把主请求放进线程。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1614-1716</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1885-2055</code></span></li>
+        <li><strong>第三方包装器兼容：</strong>异步 Chat/Responses 若收到同步 iterable，会在 executor 中一次性转换成 list，避免直接阻塞 event loop；代价是失去逐 chunk 的实时回调和增加内存峰值。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2241-2256</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1980-2012</code></span></li>
+        <li><strong>背压：</strong>callback 在读取下一 chunk 前同步执行或 await，因此慢 callback 会自然拖慢消费；源码没有独立 token queue 或丢弃策略。</li>
+        <li><strong>流式内存：</strong>Chat 为重建最终响应会保留所有 chunks；Responses 保留完成的 output items。长输出的峰值由 provider chunk 数与内容决定，源码没有独立上限。</li>
+        <li><strong>锁：</strong>runtime metadata cache 使用 class-level thread lock，只保护 cache 字段；网络 I/O 不在锁内。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:646-665</code></span></li>
+        <li><strong>重试预算：</strong>等待为指数退避；同步与异步 coroutine 都由 Tenacity 原生包装。fallback 在主重试耗尽后再启动，整体最坏耗时还包括每个 fallback 自身重试。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <h3>10.1 LiteLLM 与 OpenHands proxy</h3>
+      <p>公共配置保留 <code>openhands/&lt;model&gt;</code>；仅在 LiteLLM 调用边界变成 <code>litellm_proxy/&lt;model&gt;</code> 并补默认 proxy URL。旧的、已验证模型的 persisted <code>litellm_proxy + OpenHands URL</code> 可在加载边界迁回规范前缀，未知模型不会被擅自迁移。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/openhands_provider.py:9-58</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/openhands_provider.py:61-87</code></span></p>
+      <h3>10.2 Bedrock 鉴权</h3>
+      <p>LiteLLM 把 Bedrock 的 <code>api_key</code> 解释为 AWS bearer token，因此 SDK 对被 LiteLLM 识别为 Bedrock 的 transport 丢弃 <code>LLM.api_key</code>；IAM/SigV4 的 access key、secret、session token、region、profile、role、session name 和 endpoint 以每次调用 kwargs 传递，不写进共享进程环境。Bearer token 应通过 LiteLLM/AWS 约定的环境能力配置，而不是复用通用 <code>LLM.api_key</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/litellm_provider.py:62-82</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:723-731</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:815-837</code></span></p>
+      <h3>10.3 Secrets、日志与工具能力</h3>
+      <ul>
+        <li>API key 与 AWS secret 字段在校验时变为 <code>SecretStr</code>，序列化使用统一 secret helper。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:680-685</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:850-855</code></span></li>
+        <li>completion log 在启用时可记录 messages、tools、kwargs、response、raw response 和异常 traceback；它是敏感数据出口，应限制目录权限或审查远程 callback。日志写入失败是 fail-open：模型调用继续。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/telemetry.py:294-389</code></span></li>
+        <li>LLM 仅向模型暴露工具 schema，不执行工具，也不完成用户确认或 policy 判定。non-native prompt mock 不是安全沙箱，解析后的 tool call 仍必须经过 Agent/工具层安全链。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+        <tbody>
+          <tr><td>连接、限流、服务端、timeout</td><td>LiteLLM exception</td><td>Tenacity retry</td><td>只记录 retry log；成功前无 usage metric</td><td>耗尽后可选 fallback</td><td>核对 endpoint、quota、retry budget</td></tr>
+          <tr><td>空 choices/无 completed response</td><td><code>LLMNoResponseError</code></td><td>进入 retry 边界</td><td>无完整 LLMResponse</td><td>temperature=0 时下一次为 1；可 fallback</td><td>查看 completion error log</td></tr>
+          <tr><td>stream 无 callback</td><td>入口参数判断</td><td>降为非流式</td><td>仍可成功，无增量</td><td>无需重试</td><td>接入 callback 或关闭 stream</td></tr>
+          <tr><td>prompt cache 太短</td><td>provider 错误分类</td><td>关闭 cache 重放一次调用</td><td>原实例不改</td><td>随后仍可正常 retry/fallback</td><td>无需手工清 cache；检查 provider 阈值</td></tr>
+          <tr><td>鉴权失败</td><td>文本/classifier 映射</td><td>抛 <code>LLMAuthenticationError</code></td><td>调用失败</td><td>不属于 fallback 白名单</td><td>修复 key/profile/region</td></tr>
+          <tr><td>context overflow</td><td>exception classifier</td><td>抛 <code>LLMContextWindowExceedError</code></td><td>交给 Agent 恢复</td><td>本层不盲目换模型；上游可 condensation</td><td>检查 token budget 与 condenser</td></tr>
+          <tr><td>malformed history</td><td>独立 classifier</td><td>抛 <code>LLMMalformedConversationHistoryError</code></td><td>保留与 overflow 的诊断区别</td><td>上游仍可 condensation</td><td>审计 tool_use/tool_result 配对</td></tr>
+          <tr><td>全部 fallback 失败</td><td>策略遍历结束</td><td>重新映射并抛主错误</td><td>fallback 错误只写 warning/error log</td><td>下一次新请求仍从主模型开始</td><td>检查 profile 文件和各 provider</td></tr>
+        </tbody>
+      </table></div>
+      <p>错误映射严格区分 malformed history、context overflow、auth、rate limit、timeout、service unavailable、content policy 与 generic bad request；未知异常保持原类型。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:30-71</code></span> 对 persisted 事件的永久兼容属于 Message/Event 模型边界；本模块的旧 OpenHands proxy payload 迁移则发生在配置/profile 加载边界，二者不能混称。</p>
+    </section>
+
+    <section class="section" id="observability">
+      <h2>12. 可观测性与排障</h2>
+      <p><code>Telemetry.on_response()</code> 以当前 attempt 的开始时间记录 latency，从 provider header 或 LiteLLM cost calculator 计算 cost，并兼容 Chat 的 prompt/completion usage 与 Responses 的 input/output usage；cache read/write、reasoning token 和 context window 进入 Metrics。成功后可触发 stats callback。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/telemetry.py:79-125</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/telemetry.py:171-249</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+        <tbody>
+          <tr><td>配置 stream 但 UI 无 token</td><td>debug log、调用是否传 <code>on_token</code></td><td>入口降为非流式；provider 返回了非流式响应</td><td>连接 callback；检查 provider streaming 支持</td></tr>
+          <tr><td>Bedrock 报 Invalid API Key format</td><td>transport provider 是否被识别为 bedrock</td><td>模型字符串/代理使 provider 推断错误，或外部层传 bearer token 方式错误</td><td>使用完整模型字符串，IAM 凭据走 AWS 字段</td></tr>
+          <tr><td>Responses 返回空 output</td><td>completion error log 和 stream completed event</td><td>缺 <code>response.completed</code>、subscription 不支持的参数、包装器异常</td><td>核对 subscription options 与 stream 事件</td></tr>
+          <tr><td>重复调用但 metric 只有一次 latency</td><td>retry 日志与 <code>response_latencies</code></td><td>这是预期：只为成功 attempt 调用 <code>on_response</code></td><td>用 retry listener/log 观察失败 attempt</td></tr>
+          <tr><td>cost 为 0 或缺失</td><td>provider cost header、自定义单价、LiteLLM model catalog</td><td>没有 cost header 且 calculator 不识别模型</td><td>配置 input/output cost；升级或修正 model id</td></tr>
+          <tr><td>fallback 成功但主模型统计增加</td><td>新 token usage 的 <code>model</code></td><td>策略有意 merge fallback Metrics diff</td><td>按每条 usage 的 model 拆分归因</td></tr>
+          <tr><td>启用日志却没有文件</td><td><code>log_dir</code>、写权限、callback</td><td>目录不可写或 callback 接管</td><td>修复权限；检查 Telemetry warning</td></tr>
+        </tbody>
+      </table></div>
+      <p>Metrics 维护明细与累积值，支持 <code>get_snapshot</code>、<code>merge</code>、<code>diff</code> 和 deep copy；fallback 与 delegate 可只合并操作期间的增量。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/metrics.py:112-176</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/metrics.py:222-327</code></span></p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+        <tbody>
+          <tr><td>OpenHands 前缀只在 transport 转换</td><td><span class="evidence"><code>tests/sdk/llm/test_llm.py:47-106</code></span></td><td>单元</td><td>公共 model/persisted shape 不泄漏 proxy 实现</td><td>未真实调用生产 proxy</td></tr>
+          <tr><td>Bedrock 不转发通用 api_key</td><td><span class="evidence"><code>tests/sdk/llm/test_api_key_validation.py:67-105</code></span></td><td>单元</td><td>IAM 路径避免 bearer-token 误解释</td><td>未执行 AWS SigV4 联网</td></tr>
+          <tr><td>能力优先级与 Responses metadata</td><td><span class="evidence"><code>tests/sdk/llm/test_model_features.py:323-369</code></span></td><td>单元</td><td>metadata false、override、endpoint discovery</td><td>LiteLLM catalog 会随依赖版本演进</td></tr>
+          <tr><td>Responses 默认 options 与统一解析</td><td><span class="evidence"><code>tests/sdk/llm/test_responses_parsing_and_kwargs.py:70-203</code></span></td><td>单元</td><td>store、tool_choice、reasoning、Telemetry usage</td><td>无 provider 端协议认证</td></tr>
+          <tr><td>缺 callback 时 stream 降级</td><td><span class="evidence"><code>tests/sdk/llm/test_llm_completion.py:153-167</code></span></td><td>回归</td><td>不会错误消费非 iterable response</td><td>只覆盖 Chat 聚焦场景</td></tr>
+          <tr><td>Chat stream callback 与重建</td><td><span class="evidence"><code>tests/sdk/llm/test_llm_completion.py:170-258</code></span></td><td>单元</td><td>逐 chunk callback、最终完整 response</td><td>mock stream 无真实网络背压</td></tr>
+          <tr><td>sync/async 无响应 retry 对称</td><td><span class="evidence"><code>tests/sdk/llm/test_llm_no_response_retry.py:96-188</code></span> <span class="evidence"><code>tests/sdk/llm/test_llm_no_response_retry.py:218-326</code></span></td><td>异步回归</td><td>Chat/Responses 均重试并调整温度</td><td>等待时间大多被缩短配置</td></tr>
+          <tr><td>fallback 白名单、顺序与 metric merge</td><td><span class="evidence"><code>tests/sdk/llm/test_llm_fallback.py:64-189</code></span></td><td>单元</td><td>瞬时错误 fallback；确定性错误跳过</td><td>profile 文件 I/O 另有聚焦测试</td></tr>
+          <tr><td>Telemetry 只记录成功 attempt</td><td><span class="evidence"><code>tests/sdk/llm/test_llm_retry_telemetry.py:47-129</code></span> <span class="evidence"><code>tests/sdk/llm/test_llm_retry_telemetry.py:198-254</code></span></td><td>回归</td><td>latency/token/cost 不重复累计失败 attempt</td><td>mock 时间并非性能基准</td></tr>
+          <tr><td>MultimodalRouter 图片选择</td><td><span class="evidence"><code>tests/sdk/agent/test_non_multimodal_image_input.py:140-162</code></span></td><td>同步 Agent 回归</td><td>图片消息由 primary 处理且不会被非视觉 guard 抢先</td><td>未覆盖 async/Responses 路由</td></tr>
+          <tr><td>Router 候选 LLM 可发现</td><td><span class="evidence"><code>tests/sdk/agent/test_agent_llms_are_discoverable.py:76-100</code></span></td><td>单元</td><td>Agent 枚举候选 raw LLM，并排除 Router 自身</td><td>不证明路由并发安全或选择质量</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="extension">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+        <tbody>
+          <tr><td>支持新模型能力</td><td><code>utils/model_features.py</code></td><td>聚焦 feature tests；必要时 verified model metadata</td><td>override &gt; metadata &gt; fallback，显式 false 不丢失</td></tr>
+          <tr><td>新增 provider transport 特例</td><td><code>utils/litellm_provider.py</code> 或聚焦 helper</td><td>Chat 与 Responses 两条 call kwargs</td><td>不污染 canonical capability model，不把动态 base 固化</td></tr>
+          <tr><td>修改 Chat 参数</td><td><code>options/chat_options.py</code></td><td>native/non-native、reasoning、Azure/provider tests</td><td>调用方 kwargs 优先与 unsupported stripping</td></tr>
+          <tr><td>修改 Responses 参数</td><td><code>options/responses_options.py</code></td><td>subscription、store/include/reasoning tests</td><td>有状态/无状态语义和 encrypted reasoning 条件</td></tr>
+          <tr><td>新增 stream event</td><td><code>LLM._process_stream_event</code></td><td>sync/async、sync iterable wrapper、final patch tests</td><td>callback 顺序、最终 response、usage 不丢失</td></tr>
+          <tr><td>修改 function calling</td><td><code>mixins/non_native_fc.py</code> 与 converter</td><td>消息 round-trip、reasoning 保留、stop-word feature</td><td>native 和 mock 输出对 Agent 等价</td></tr>
+          <tr><td>修改 retry/fallback</td><td><code>retry_mixin.py</code>、<code>fallback_strategy.py</code></td><td>四入口、异常 mapping、Telemetry tests</td><td>确定性错误不放大；异步 event loop 不阻塞</td></tr>
+          <tr><td>修改统计</td><td><code>telemetry.py</code>、<code>metrics.py</code></td><td>Chat/Responses usage shape、restore/reset/fallback merge</td><td>失败 attempt 不重复记账，callback 失败不打断调用</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout bad"><strong>禁止捷径：</strong>不要在 <code>llm.py</code> 到处增加 provider 名称判断，不要手工 split model string 替代 <code>LLMProvider</code>，不要为 async 复制一套重试策略，不要把 OpenHands proxy transport 名称写回公共配置，也不要用全局环境变量传递每个 Conversation 的 AWS 凭据。</div>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>问题</th><th>当前选择与收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+        <tbody>
+          <tr><td>一个门面支持两套 API</td><td>调用方获得统一 Message/Tool/Response</td><td>两套序列化、stream 与 provider 差异都集中在大类中</td><td>Responses 与 Chat 契约分歧使共享层持续产生条件分支</td></tr>
+          <tr><td>能力与 transport 分离</td><td>proxy alias 可用 canonical model 查能力</td><td>配置错误会造成错误能力声明</td><td>provider 提供稳定、可认证的 runtime capability discovery</td></tr>
+          <tr><td>non-native tool prompt mock</td><td>无原生 function calling 的模型仍能用于 Agent</td><td>解析脆弱，stop words 依 provider，不能当安全边界</td><td>目标模型普遍可靠支持 native tools</td></tr>
+          <tr><td>收集 stream 后返回完整响应</td><td>保持非流式与流式统一返回契约及 usage</td><td>长输出占内存；callback 是串行背压点</td><td>出现超长流或需要零拷贝下游</td></tr>
+          <tr><td>异步 fallback 运行同步 fallback</td><td>复用成熟策略并避免 event loop 阻塞</td><td>executor 线程、async callback 被 cast 为 sync callback，复杂回调可能不适用</td><td>fallback 需要原生异步凭据刷新或高并发 streaming</td></tr>
+          <tr><td>Telemetry best effort</td><td>观测故障不阻断模型主路径</td><td>日志/统计 callback 失败可能造成观测缺口</td><td>计费或审计要求强一致写入</td></tr>
+          <tr><td>fallback per call</td><td>下一请求自动回到主模型，避免永久漂移</td><td>主 provider 长故障时每次都先付出主重试延迟</td><td>需要 circuit breaker、健康评分或全局路由器</td></tr>
+          <tr><td>Router 统一外观</td><td>同步 Chat completion 可按消息选择候选模型，调用方仍使用 LLM 类型</td><td><code>active_llm</code> 可变且并发调用会互相覆盖；async/Responses 入口当前未接入选择逻辑</td><td>需要跨四入口一致路由、并发安全的 per-call selection 或 route-aware capabilities</td></tr>
+        </tbody>
+      </table></div>
+      <p class="muted">当前证据没有定义 provider SLA、全局并发上限、stream queue 容量或成本准确性保证；本文不为这些指标推断数值。真实 provider 的协议兼容、代理路由和速率限制仍需部署环境集成验证。</p>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>类别</th><th>决定性表面</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>公共门面/配置</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:220-665</code></span></td><td>字段、默认值、运行期私有状态</td></tr>
+          <tr><td>调用方</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/agent/utils.py:640-751</code></span></td><td>Agent 的 API 选择与 sync/async 调用</td></tr>
+          <tr><td>Chat/Responses 主链</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:1165-2055</code></span></td><td>准备、调用、stream、retry、fallback</td></tr>
+          <tr><td>transport/provider</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:2063-2261</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/litellm_provider.py:17-82</code></span></td><td>鉴权与 LiteLLM 边界</td></tr>
+          <tr><td>OpenHands proxy</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/openhands_provider.py:9-87</code></span></td><td>边界转换与遗留 payload 规范化</td></tr>
+          <tr><td>能力 registry</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/model_features.py:49-405</code></span></td><td>能力字段、优先级和 fallback</td></tr>
+          <tr><td>参数策略</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/options/chat_options.py:17-93</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/options/responses_options.py:17-87</code></span></td><td>Chat/Responses kwargs</td></tr>
+          <tr><td>function calling</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/mixins/non_native_fc.py:26-107</code></span></td><td>prompt mock 前后转换</td></tr>
+          <tr><td>stream callback</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/streaming.py:8-29</code></span></td><td>同步/异步 callback 类型与派发</td></tr>
+          <tr><td>retry/fallback</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:22-102</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:28-149</code></span></td><td>attempt、退避、profile 降级</td></tr>
+          <tr><td>Telemetry/Metrics</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/telemetry.py:24-408</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/metrics.py:8-330</code></span></td><td>latency、token、cost、日志、统计合并</td></tr>
+          <tr><td>异常契约</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:30-71</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/types.py:46-145</code></span></td><td>provider → SDK 类型化错误</td></tr>
+          <tr><td>公共返回</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm_response.py:28-59</code></span></td><td>统一结果形状</td></tr>
+          <tr><td>多模型路由</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/router/base.py:28-135</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/router/impl/multimodal.py:13-77</code></span></td><td>Router 基类、同步委托、图片/容量策略与构造校验；论文 <a href="https://arxiv.org/abs/2511.03690">§4.3、图 3</a></td></tr>
+        </tbody>
+      </table></div>
+      <p>架构总览回链：<a href="../../software_agent_architecture.html#llm">07 LLM 抽象与调用管道</a>。相邻章节：<a href="06-context.html">06 上下文工程</a> · <a href="08-recovery.html">08 Condenser 与分层恢复</a>。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>术语</th><th>本文含义</th></tr></thead>
+        <tbody>
+          <tr><td>LLM</td><td>Large Language Model，大语言模型；本文也指 SDK 的 <code>LLM</code> 调用门面。</td></tr>
+          <tr><td>Chat Completions</td><td>以 messages/choices 为核心的 OpenAI 兼容调用协议。</td></tr>
+          <tr><td>Responses API</td><td>以 instructions/input/output items 为核心、可表达 reasoning item 的调用协议。</td></tr>
+          <tr><td>LiteLLM</td><td>SDK 下游的多 provider 适配库，负责 provider 推断、HTTP 调用、stream 与 cost catalog 等。</td></tr>
+          <tr><td>Provider</td><td>模型服务提供方或 LiteLLM 路由类型；不同于模型本身的 capability。</td></tr>
+          <tr><td>Transport</td><td>真正发给 LiteLLM 的 model/provider/api_base/credentials/kwargs 组合。</td></tr>
+          <tr><td>Capability / Model Feature</td><td>模型是否支持 Responses、reasoning、vision、采样参数、缓存等的规范判断。</td></tr>
+          <tr><td>Canonical model</td><td>用于能力查找的规范模型名；可与 proxy transport model 不同。</td></tr>
+          <tr><td>Native function calling</td><td>供应商原生接收工具 schema 并返回结构化 tool call。</td></tr>
+          <tr><td>Non-native function calling</td><td>用 prompt 和解析器模拟工具调用协议，也称 prompt-mocked tool calling。</td></tr>
+          <tr><td>Streaming</td><td>在完整响应完成前逐 chunk/delta 消费输出；最终仍重建完整 response。</td></tr>
+          <tr><td>Token callback</td><td>请求内接收 stream chunk 的同步或异步回调，不是持久化 Conversation Event。</td></tr>
+          <tr><td>Telemetry</td><td>采集单次成功响应 latency、usage、cost，并选择性记录 completion 的运行组件。</td></tr>
+          <tr><td>Metrics</td><td>实例内累积 cost、token usage、latency 的结构化统计及 snapshot/diff/merge 能力。</td></tr>
+          <tr><td>Retry</td><td>同一 LLM 请求因白名单瞬时错误在 Tenacity 边界内重新 attempt。</td></tr>
+          <tr><td>Fallback</td><td>主模型 retry 耗尽后，按 profile 顺序尝试其他 LLM；每个新请求仍从主模型开始。</td></tr>
+          <tr><td>SigV4</td><td>AWS Signature Version 4；Bedrock IAM 凭据签名方式，不等同于 LiteLLM 的 Bedrock bearer token。</td></tr>
+          <tr><td>Prompt cache</td><td>provider 对输入前缀的缓存能力；SDK 仅在 feature 支持且配置启用时放置显式标记。</td></tr>
+          <tr><td>Negative cache</td><td>运行时 metadata 探测失败后的短期失败缓存，避免持续请求不可用上游。</td></tr>
+          <tr><td>RouterLLM</td><td>继承 LLM 并在当前同步 <code>completion()</code> 入口按 messages 选择候选 LLM 的路由基类。</td></tr>
+          <tr><td>MultimodalRouter</td><td>图片或 secondary 输入容量不足时选 primary，否则选 secondary 的内置 RouterLLM。</td></tr>
+          <tr><td>Backpressure</td><td>下游 callback/消费者速度反过来限制 stream 读取速度；本实现通过串行调用自然产生。</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </main>
+</div>
+<script>
+  const links = [...document.querySelectorAll("nav a")];
+  const sections = links.map((link) => document.querySelector(link.hash)).filter(Boolean);
+  const observer = new IntersectionObserver((entries) => {
+    const visible = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+    if (!visible) return;
+    links.forEach((link) => link.classList.toggle("active", link.hash === `#${visible.target.id}`));
+  }, { rootMargin: "-12% 0px -72% 0px" });
+  sections.forEach((section) => observer.observe(section));
+</script>
+</body>
+</html>

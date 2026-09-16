@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWE-agent 架构入门指南 — 给第一次接触这个项目的你</title>
+<style>
+:root{
+  --bg:#f4f1ea; --bg-soft:#fffdf8; --surface:#fffdf8; --surface-2:#fffdf8;
+  --border:rgba(28,25,23,.12); --border-soft:rgba(28,25,23,.10);
+  --text:#1c1917; --muted:#78716c; --faint:#a8a29e;
+  --green:#15803d; --blue:#4338ca; --purple:#6d28d9; --yellow:#c2410c;
+  --red:#b91c1c; --cyan:#0f766e; --orange:#c2410c;
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+  --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Segoe UI",system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:16px; line-height:1.85;
+  background-image:
+    radial-gradient(900px 500px at 8% -5%, rgba(67,56,202,.07), transparent 60%),
+    radial-gradient(800px 500px at 100% 100%, rgba(21,128,61,.06), transparent 60%),
+    radial-gradient(rgba(255,255,255,.028) 1px, transparent 1px);
+  background-size:auto,auto,26px 26px;
+  background-attachment:fixed;
+}
+::selection{background:rgba(67,56,202,.3)}
+
+/* ---------- 顶部阅读进度条 ---------- */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:200;
+  background:linear-gradient(90deg,var(--green),var(--blue),var(--purple));
+  box-shadow:0 0 10px rgba(67,56,202,.5);transition:width .1s linear}
+
+/* ---------- 侧边栏 ---------- */
+#sidebar{position:fixed;top:0;left:0;width:252px;height:100vh;overflow-y:auto;
+  background:rgba(244,241,234,.92);border-right:1px solid var(--border-soft);
+  padding:26px 0 60px;z-index:100;backdrop-filter:blur(6px)}
+#sidebar .brand{padding:0 22px 18px;border-bottom:1px solid var(--border-soft);margin-bottom:14px}
+#sidebar .brand .b1{font-weight:800;font-size:1.05rem;letter-spacing:-.01em}
+#sidebar .brand .b2{font-family:var(--mono);font-size:.68rem;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.14em;margin-top:4px}
+#sidebar a{display:block;padding:6px 22px;color:var(--muted);text-decoration:none;
+  font-size:.84rem;border-left:2px solid transparent;transition:all .18s}
+#sidebar a:hover{color:var(--text);background:rgba(67,56,202,.06)}
+#sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+#sidebar a.ch{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--faint);margin-top:14px;pointer-events:none}
+#sidebar a.sub{padding-left:38px;font-size:.78rem}
+#sidebar::-webkit-scrollbar{width:6px}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ---------- 主内容区 ---------- */
+main{margin-left:252px;max-width:880px;padding:0 48px 120px}
+
+/* ---------- 头部：左标题 + 右终端 ---------- */
+header{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;
+  padding:72px 0 56px}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--green);display:inline-flex;align-items:center;gap:10px;margin-bottom:18px}
+.kicker::before{content:"";width:34px;height:1px;background:var(--green)}
+h1{font-size:clamp(1.9rem,3.6vw,2.7rem);font-weight:800;letter-spacing:-.025em;line-height:1.25}
+h1 .hl{color:var(--blue)}
+.lede{color:var(--muted);margin-top:16px;font-size:1.02rem}
+.meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.meta-pill{font-family:var(--mono);font-size:.7rem;padding:5px 12px;border:1px solid var(--border);
+  border-radius:999px;color:var(--muted);transition:all .2s}
+.meta-pill:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-2px)}
+
+/* 终端窗口 */
+.terminal{background:#e8e1d4;border:1px solid var(--border);border-radius:10px;overflow:hidden;
+  box-shadow:0 18px 50px rgba(28,25,23,.5);font-family:var(--mono);font-size:.78rem}
+.terminal .tbar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#f0ebe0;
+  border-bottom:1px solid var(--border-soft)}
+.terminal .dot{width:11px;height:11px;border-radius:50%}
+.terminal .tbar .title{margin-left:8px;color:var(--faint);font-size:.7rem}
+.terminal .tbody{padding:16px 16px 20px;line-height:1.9}
+.tline{opacity:0;animation:tIn .4s ease forwards;white-space:pre-wrap;word-break:break-all}
+@keyframes tIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.tline .p{color:var(--green)} .tline .ok{color:var(--green)} .tline .th{color:var(--blue)}
+.tline .tool{color:var(--yellow)} .tline .dim{color:var(--faint)} .tline .err{color:var(--red)}
+.cursor{display:inline-block;width:8px;height:15px;background:var(--green);vertical-align:-2px;
+  animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- 章节 ---------- */
+section{padding:34px 0 8px}
+.ch-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
+.ch-num{font-family:var(--mono);font-weight:700;font-size:1rem;color:var(--green);
+  border:1px solid rgba(21,128,61,.4);padding:3px 10px;border-radius:6px;flex-shrink:0;
+  background:rgba(21,128,61,.07)}
+h2{font-size:1.68rem;font-weight:800;letter-spacing:-.02em}
+h3{font-size:1.22rem;font-weight:700;margin:34px 0 12px;letter-spacing:-.01em;
+  padding-left:13px;border-left:3px solid var(--blue)}
+h4{font-size:1.02rem;font-weight:700;margin:22px 0 8px;color:var(--blue)}
+p{margin:12px 0}
+strong{color:var(--text);font-weight:700}
+code{font-family:var(--mono);font-size:.86em;background:rgba(67,56,202,.1);
+  color:var(--blue);padding:2px 7px;border-radius:5px}
+a{color:var(--blue)}
+ul,ol{margin:12px 0 12px 26px}
+li{margin:7px 0}
+
+/* 卡片 */
+.card{background:var(--surface);border:1px solid var(--border-soft);border-left:3px solid var(--blue);
+  border-radius:8px;padding:18px 22px;margin:18px 0;transition:transform .2s,box-shadow .2s,border-color .2s}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(28,25,23,.35)}
+.card.blue{border-left-color:var(--blue)} .card.green{border-left-color:var(--green)}
+.card.yellow{border-left-color:var(--yellow)} .card.purple{border-left-color:var(--purple)}
+.card.red{border-left-color:var(--red)} .card.cyan{border-left-color:var(--cyan)}
+.card .card-title{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:9px}
+.card .tag{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;
+  padding:2px 8px;border-radius:4px;flex-shrink:0}
+.tag.blue{background:rgba(67,56,202,.15);color:var(--blue)}
+.tag.green{background:rgba(21,128,61,.15);color:var(--green)}
+.tag.yellow{background:rgba(194,65,12,.15);color:var(--yellow)}
+.tag.purple{background:rgba(109,40,217,.15);color:var(--purple)}
+.tag.red{background:rgba(185,28,28,.15);color:var(--red)}
+.tag.cyan{background:rgba(15,118,110,.15);color:var(--cyan)}
+
+/* 定义块（一句话定义） */
+.definition{background:linear-gradient(135deg,rgba(21,128,61,.1),rgba(67,56,202,.08));
+  border:1px solid rgba(21,128,61,.35);border-radius:10px;padding:24px 28px;margin:22px 0;
+  font-size:1.08rem;line-height:1.8}
+.definition strong{color:var(--green)}
+
+/* 类比框 */
+.analogy{border:1.5px dashed var(--yellow);background:rgba(194,65,12,.06);border-radius:8px;
+  padding:16px 20px;margin:18px 0;transition:background .2s}
+.analogy:hover{background:rgba(194,65,12,.1)}
+.analogy .al{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.14em;
+  color:var(--yellow);margin-bottom:6px;display:block}
+
+/* 源码入口提示 */
+.src{font-family:var(--mono);font-size:.74rem;color:var(--green);margin:14px 0 4px;
+  display:flex;align-items:center;gap:8px}
+.src::before{content:"▸";color:var(--green)}
+.src code{background:rgba(21,128,61,.1);color:var(--green)}
+
+/* 步骤（旅程） */
+.step{position:relative;margin:26px 0 26px 26px;padding:4px 0 4px 30px;
+  border-left:2px solid var(--border)}
+.step::before{content:attr(data-n);position:absolute;left:-19px;top:0;width:36px;height:36px;
+  border-radius:50%;background:var(--surface-2);border:2px solid var(--blue);color:var(--blue);
+  font-family:var(--mono);font-weight:700;font-size:.9rem;display:flex;align-items:center;
+  justify-content:center;transition:all .25s}
+.step:hover::before{background:var(--blue);color:#f4f1ea;box-shadow:0 0 18px rgba(67,56,202,.5);
+  transform:scale(1.12)}
+.step .step-title{font-size:1.12rem;font-weight:700;margin-bottom:4px}
+.step .step-role{font-family:var(--mono);font-size:.68rem;color:var(--faint);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
+
+/* 折叠面板 */
+details{background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;
+  margin:14px 0;overflow:hidden;transition:border-color .2s}
+details[open]{border-color:var(--border)}
+details summary{cursor:pointer;padding:14px 20px;font-weight:600;font-size:.94rem;
+  list-style:none;display:flex;align-items:center;gap:10px;user-select:none;transition:background .2s}
+details summary:hover{background:rgba(67,56,202,.05)}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"+";font-family:var(--mono);color:var(--blue);font-weight:700;
+  transition:transform .25s;flex-shrink:0}
+details[open] summary::before{transform:rotate(45deg)}
+details .dbody{padding:2px 20px 16px;color:var(--muted);font-size:.93rem}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:.9rem;background:var(--surface);
+  border-radius:8px;overflow:hidden;border:1px solid var(--border-soft)}
+th{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;
+  text-align:left;padding:12px 16px;background:var(--surface-2);color:var(--muted);
+  border-bottom:1px solid var(--border)}
+td{padding:11px 16px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:rgba(67,56,202,.05)}
+td:first-child{color:var(--blue);font-weight:600;white-space:nowrap}
+
+/* SVG 图容器 */
+.figure{background:var(--bg-soft);border:1px solid var(--border-soft);border-radius:10px;
+  padding:24px;margin:24px 0;transition:border-color .25s}
+.figure:hover{border-color:var(--border)}
+.figure svg{width:100%;height:auto;display:block}
+.figure .fig-cap{font-family:var(--mono);font-size:.72rem;color:var(--faint);text-align:center;
+  margin-top:14px;letter-spacing:.04em}
+.figure .fig-cap b{color:var(--muted)}
+
+/* 命令块 */
+.cmd{background:#e8e1d4;border:1px solid var(--border);border-left:3px solid var(--green);
+  border-radius:8px;padding:16px 20px;font-family:var(--mono);font-size:.82rem;line-height:2;
+  margin:16px 0;overflow-x:auto}
+.cmd .c{color:var(--faint)} .cmd .g{color:var(--green)} .cmd .y{color:var(--yellow)}
+
+/* 三句话总结 */
+.takeaway{background:linear-gradient(135deg,rgba(21,128,61,.12),rgba(15,118,110,.08));
+  border:1px solid rgba(21,128,61,.4);border-radius:12px;padding:28px 32px;margin:30px 0}
+.takeaway .tk{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.16em;
+  color:var(--green);margin-bottom:16px}
+.takeaway ol{margin:0 0 0 22px}
+.takeaway li{margin:12px 0;font-size:1.02rem}
+.takeaway li strong{color:var(--green)}
+
+/* 滚动显现 */
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:none}
+
+footer{margin-left:252px;border-top:1px solid var(--border-soft);padding:34px 48px 60px;
+  color:var(--faint);font-size:.8rem;font-family:var(--mono)}
+
+@media (max-width:1000px){
+  #sidebar{display:none}
+  main,footer{margin-left:0}
+  main{padding:0 22px 90px}
+  header{grid-template-columns:1fr;padding-top:52px}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav id="sidebar">
+  <div class="brand">
+    <div class="b1">SWE-agent</div>
+    <div class="b2">Architecture Guide</div>
+  </div>
+  <a href="#top" class="active">指南概览</a>
+  <a href="#ch1" class="ch">第一章</a>
+  <a href="#ch1">SWE-agent 是什么？</a>
+  <a href="#ch2" class="ch">第二章</a>
+  <a href="#ch2">一次 Issue 修复的完整旅程</a>
+  <a href="#ch3" class="ch">第三章</a>
+  <a href="#ch3">九大核心模块详解</a>
+  <a href="#m-config" class="sub">3.1 配置装配</a>
+  <a href="#m-loop" class="sub">3.2 DefaultAgent 主循环</a>
+  <a href="#m-tools" class="sub">3.3 工具与 ACI</a>
+  <a href="#m-env" class="sub">3.4 SWEEnv 与 SWE-ReX</a>
+  <a href="#m-context" class="sub">3.5 上下文与 History</a>
+  <a href="#m-model" class="sub">3.6 模型层与成本治理</a>
+  <a href="#m-traj" class="sub">3.7 轨迹与 Inspector</a>
+  <a href="#m-retry" class="sub">3.8 RetryAgent 与 Reviewer</a>
+  <a href="#m-batch" class="sub">3.9 Batch 与 Benchmark</a>
+  <a href="#ch4" class="ch">第四章</a>
+  <a href="#ch4">设计哲学与常见误解</a>
+  <a href="#ch5" class="ch">第五章</a>
+  <a href="#ch5">动手探索指南</a>
+  <a href="#appA" class="ch">附录</a>
+  <a href="#appA">A · 术语对照表</a>
+  <a href="#appB">B · 源码目录速查</a>
+  <a href="#appC">C · 进阶阅读</a>
+</nav>
+
+<main id="top">
+
+<!-- ======================= 头部 ======================= -->
+<header>
+  <div>
+    <div class="kicker">Architecture Guide · 基于 SWE-agent 1.1.0 源码</div>
+    <h1>SWE-agent <span class="hl">架构入门指南</span></h1>
+    <p class="lede">给第一次接触这个项目的你 —— 不贴大段源码、不堆学术术语，用一次 GitHub Issue 修复的旅程、九个模块、四张图，帮你在 40 分钟内真正理解这个"ACI 理念发源地"是怎么把大模型变成一名能干活的 AI 软件工程师的。</p>
+    <div class="meta-row">
+      <span class="meta-pill">阅读约 40 分钟</span>
+      <span class="meta-pill">零源码粘贴</span>
+      <span class="meta-pill">4 张图可带走</span>
+      <span class="meta-pill">中文 · 术语保留英文</span>
+    </div>
+  </div>
+  <div class="terminal" aria-hidden="true">
+    <div class="tbar">
+      <span class="dot" style="background:#b91c1c"></span>
+      <span class="dot" style="background:#c2410c"></span>
+      <span class="dot" style="background:#15803d"></span>
+      <span class="title">sweagent run — 一次真实的任务长这样</span>
+    </div>
+    <div class="tbody">
+      <div class="tline" style="animation-delay:.2s"><span class="p">$</span> sweagent run --problem_statement.github_url=https://github.com/SWE-agent/test-repo/issues/1 \</div>
+      <div class="tline" style="animation-delay:.9s"><span class="dim">&nbsp;&nbsp;--env.repo.github_url=https://github.com/SWE-agent/test-repo --agent.model.name=gpt-4o</span></div>
+      <div class="tline" style="animation-delay:1.6s"><span class="ok">✓</span> <span class="dim">配置装配完成 · model=gpt-4o · 单实例成本上限 $3.0</span></div>
+      <div class="tline" style="animation-delay:2.3s"><span class="tool">● STARTUP</span> docker python:3.11 · 仓库已克隆 · 工具已安装</div>
+      <div class="tline" style="animation-delay:3.0s"><span class="th">● THINK</span> 先复现问题……</div>
+      <div class="tline" style="animation-delay:3.7s"><span class="tool">● ACT</span> bash: python division.py</div>
+      <div class="tline" style="animation-delay:4.4s"><span class="th">● OBSERVE</span> ZeroDivisionError → str_replace 加上分母检查</div>
+      <div class="tline" style="animation-delay:5.1s"><span class="tool">● SUBMIT</span> &lt;&lt;SWE_AGENT_SUBMISSION&gt;&gt; → 读取 /root/model.patch</div>
+      <div class="tline" style="animation-delay:5.8s"><span class="ok">✓ exit_status=submitted</span> · 轨迹已存 trajectories/…/*.traj</div>
+      <div class="tline" style="animation-delay:6.5s"><span class="p">$</span> <span class="cursor"></span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= 第一章 ======================= -->
+<section id="ch1" class="reveal">
+  <div class="ch-head"><span class="ch-num">01</span><h2>SWE-agent 是什么？</h2></div>
+
+  <div class="definition">
+    一句话说清：<strong>SWE-agent 是一个能自主修复 GitHub Issue 的"AI 软件工程师"，也是一套为研究而生的 Agent 运行时。</strong>
+    你交给它一个 Issue 和一个代码仓库，它会自己开一个 Docker 容器当"工位"，自己读代码、自己敲命令、自己写修复，最后交给你一份 <strong>patch（代码补丁）</strong>和一份完整的"工作记录"。
+  </div>
+
+  <p>它由普林斯顿 NLP 组开源，论文发表在 NeurIPS 2024，用 Python 写成。和大多数"拿来就用"的工具不同，SWE-agent 从第一天起就是一个<strong>研究项目</strong>：它想回答的核心问题是——<strong>大模型和计算机之间的那层"接口"该怎么设计，才能让 AI 真正干好软件工程这件事？</strong></p>
+  <p>这层接口有个专属名字：<strong>ACI（Agent-Computer Interface，智能体-计算机接口）</strong>。就像人机界面（HCI）设计得好，人用起来效率翻倍一样，ACI 设计得好，模型干活的成功率也会大幅上升。这是整个项目最核心的理念，我们第 3.3 节会专门讲。</p>
+
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">朴素做法</span>直接给模型一个 shell</div>
+    最直觉的做法是把 bash 开放给大模型：想干嘛就敲命令。听起来能力无限，实际灾难不断——命令敲错一个字符、输出刷屏撑爆上下文、遇到交互式程序直接卡死、干完了还不知道怎么"交卷"。模型的大部分精力都浪费在"和计算机搏斗"上。
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">SWE-agent 的答案</span>精心设计每一层</div>
+    给模型一套<strong>量身定制的工具</strong>（ACI 工具箱）、一个<strong>隔离的容器工位</strong>（Docker）、一套<strong>预算护栏</strong>（钱和时间都有上限）、一套<strong>交卷协议</strong>（sentinel 握手），外加<strong>全程留痕</strong>（轨迹文件）。每一步都可控、可复盘、可重放。
+  </div>
+
+  <details>
+    <summary>背景补充：什么是 SWE-bench？</summary>
+    <div class="dbody">
+      SWE-bench 是同一团队更早发布的<strong>评测基准</strong>：收集了 12 个热门 Python 开源仓库的 <strong>2294 个真实 GitHub Issue</strong>。每个任务给 Agent 一个 Issue 和对应版本的代码库，Agent 产出 patch，由仓库<strong>自带的真实测试用例</strong>判定是否"解决"（resolved）。它是这个领域最主流的考卷，SWE-agent 就是在它上面被反复检验的。后文出现的"resolved 率"都指这个考试的成绩。
+    </div>
+  </details>
+
+  <h3>30 秒架构总览</h3>
+  <p>整个系统拆开看，就是这么一条流水线：</p>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 265" role="img" aria-label="极简架构图">
+      <defs>
+        <marker id="ar1" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+        <marker id="ar5" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#6d28d9"/>
+        </marker>
+      </defs>
+      <g>
+        <rect x="16" y="78" width="150" height="92" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.6"/>
+        <text x="91" y="112" text-anchor="middle" fill="#4338ca" font-size="16" font-weight="700">你的任务</text>
+        <text x="91" y="136" text-anchor="middle" fill="#78716c" font-size="11.5">GitHub Issue</text>
+        <text x="91" y="154" text-anchor="middle" fill="#78716c" font-size="11.5">+ 代码仓库</text>
+
+        <rect x="196" y="78" width="150" height="92" rx="8" fill="#fffdf8" stroke="#c2410c" stroke-width="1.6"/>
+        <text x="271" y="112" text-anchor="middle" fill="#c2410c" font-size="16" font-weight="700">配置装配</text>
+        <text x="271" y="136" text-anchor="middle" fill="#78716c" font-size="11.5">YAML + 命令行</text>
+        <text x="271" y="154" text-anchor="middle" fill="#78716c" font-size="11.5">→ 对象图</text>
+
+        <rect x="376" y="60" width="168" height="128" rx="8" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2.2"/>
+        <text x="460" y="94" text-anchor="middle" fill="#15803d" font-size="16" font-weight="800">DefaultAgent 循环</text>
+        <text x="460" y="118" text-anchor="middle" fill="#78716c" font-size="11.5">思考 → 行动 → 观察</text>
+        <text x="460" y="138" text-anchor="middle" fill="#a8a29e" font-size="11">不断循环 ×N</text>
+        <text x="460" y="164" text-anchor="middle" fill="#15803d" font-size="10.5" font-family="monospace">step() · forward()</text>
+
+        <rect x="574" y="78" width="150" height="92" rx="8" fill="#fffdf8" stroke="#0f766e" stroke-width="1.6"/>
+        <text x="649" y="112" text-anchor="middle" fill="#0f766e" font-size="16" font-weight="700">ACI 工具箱</text>
+        <text x="649" y="136" text-anchor="middle" fill="#78716c" font-size="11.5">bash · 编辑器 · submit</text>
+        <text x="649" y="154" text-anchor="middle" fill="#78716c" font-size="11.5">工具 Bundle</text>
+
+        <rect x="754" y="78" width="150" height="92" rx="8" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.6"/>
+        <text x="829" y="112" text-anchor="middle" fill="#6d28d9" font-size="16" font-weight="700">容器 · 产物</text>
+        <text x="829" y="136" text-anchor="middle" fill="#78716c" font-size="11.5">python:3.11 沙箱</text>
+        <text x="829" y="154" text-anchor="middle" fill="#78716c" font-size="11.5">patch + 轨迹</text>
+      </g>
+      <line x1="168" y1="124" x2="192" y2="124" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <line x1="348" y1="124" x2="372" y2="124" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <line x1="546" y1="124" x2="570" y2="124" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <line x1="726" y1="124" x2="750" y2="124" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <path d="M829,172 Q829,238 460,238 Q455,238 455,192" fill="none" stroke="#6d28d9" stroke-width="1.5" stroke-dasharray="5,4" marker-end="url(#ar5)"/>
+      <text x="648" y="228" text-anchor="middle" fill="#6d28d9" font-size="11.5">观察结果回流进 History，供下一轮思考</text>
+      <text x="460" y="20" text-anchor="middle" fill="#a8a29e" font-size="12">模型只"说"（发出意图），工具只"做"（在容器里执行）—— 中间隔着 Agent 循环</text>
+    </svg>
+    <div class="fig-cap">图 1 · <b>就这么简单。</b>后面整篇指南，就是把这五个方块逐个打开。</div>
+  </div>
+
+  <details>
+    <summary>先澄清：它"不是"什么</summary>
+    <div class="dbody">
+      <ul>
+        <li><strong>不是聊天机器人</strong>：它不为"对话"设计，而为"完成任务"设计。交互是手段，patch 是目的。</li>
+        <li><strong>不是多智能体系统</strong>：默认主链路上只有一个 Agent 从头循环到尾，没有一群 Agent 分工协作（多尝试选优的 RetryAgent 是可选外环，见 3.8）。</li>
+        <li><strong>不是还在密集迭代的产品</strong>：官方 README 明确说明，团队当前的主力开发已转向更精简的 <a href="https://github.com/SWE-agent/mini-swe-agent" target="_blank">mini-swe-agent</a>。SWE-agent 今天的价值在于：它是 ACI 理念的完整参照实现，也是大量研究复现的基准。</li>
+        <li><strong>不是安全沙箱</strong>：它内置的命令黑名单（blocklist）只是防止模型误用容器不支持的命令，真正的安全边界要靠容器、网络与凭据配置自己搭建（第 4 章细说）。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<!-- ======================= 第二章 ======================= -->
+<section id="ch2" class="reveal">
+  <div class="ch-head"><span class="ch-num">02</span><h2>一次 Issue 修复的完整旅程</h2></div>
+
+  <p>抽象的架构很难记住，故事好记。我们跟着官方教程里那个真实的小任务走完全程：</p>
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">场景</span>test-repo 仓库有一个除零崩溃的 Issue</div>
+    <code>SWE-agent/test-repo</code> 是官方准备的玩具仓库，它的 Issue #1 报告了一个 <code>ZeroDivisionError</code>。你敲下这样一条命令，然后泡了杯咖啡：
+    <div class="cmd" style="margin:10px 0 0"><span class="g">sweagent</span> run --problem_statement.github_url=https://github.com/SWE-agent/test-repo/issues/1 \<br>&nbsp;&nbsp;--env.repo.github_url=https://github.com/SWE-agent/test-repo --agent.model.name=gpt-4o</div>
+  </div>
+
+  <div class="step" data-n="1">
+    <div class="step-title">一条命令进门，分发到"单任务模式"</div>
+    <div class="step-role">sweagent/run/run.py → main()</div>
+    <p>命令行的入口是 <code>sweagent</code>，它背后其实是一个子命令家族：<code>run</code>（单个任务，本次的主角）、<code>run-batch</code>（批量跑基准）、<code>inspector</code>（网页回放）、<code>run-replay</code>（重放轨迹）等十几个。入口函数用 argparse 解析出子命令，把参数交给对应的运行类。</p>
+    <p>命令里那三个 <code>--xxx.yyy</code> 参数分别指定了<strong>任务说明</strong>（GitHub Issue 地址）、<strong>代码仓库</strong>和<strong>模型</strong>——这三样正是"AI 工程师开工"所需的全部材料。</p>
+  </div>
+
+  <div class="step" data-n="2">
+    <div class="step-title">蓝图变大楼：配置装配</div>
+    <div class="step-role">run/common.py → run/run_single.py · RunSingle.from_config()</div>
+    <p>SWE-agent 的所有行为都由配置驱动。这一步把 YAML 配置文件（如 <code>config/default.yaml</code>）和命令行上的点号参数<strong>深合并</strong>成一棵配置树，再由 Pydantic 强类型校验（拼错的字段名会被当场拒绝），最后由 <code>from_config</code> 这条"总装线"产出三大件：一个 <code>DefaultAgent</code>（干活的人）、一个 <code>SWEEnv</code>（工位管理员）、一组 Hook（挂在流程各处的观察哨）。</p>
+    <div class="analogy"><span class="al">类比理解</span>像装修：YAML 是设计蓝图，命令行参数是"这面墙临时改个颜色"的现场变更，<code>from_config</code> 是施工总队——最后交付的是一套可以直接开工的班子，而不是一堆散件。</div>
+  </div>
+
+  <div class="step" data-n="3">
+    <div class="step-title">准备工位：拉起容器、克隆仓库</div>
+    <div class="step-role">environment/swe_env.py → SWEEnv.start()</div>
+    <p>Agent 绝不会在你的主机上乱来。<code>SWEEnv</code> 会通过外部库 <strong>SWE-ReX</strong> 启动一个全新的容器（默认镜像 <code>python:3.11</code>），在里面开一个持久的 bash 会话，把目标仓库克隆进去并重置到干净状态。之后模型发出的每一条命令，都只发生在这间"隔离工位"里。</p>
+    <div class="analogy"><span class="al">类比理解</span>新员工入职第一天，公司先给他一间独立办公室和一台干净的电脑——他怎么折腾都影响不到别人。</div>
+  </div>
+
+  <div class="step" data-n="4">
+    <div class="step-title">开工布置：安装工具、注入任务</div>
+    <div class="step-role">agent/agents.py → DefaultAgent.setup()</div>
+    <p><code>setup()</code> 做三件事：把配置里选定的<strong>工具 Bundle</strong>（bash、文件编辑器、submit 等）上传进容器并装好；把 Issue 正文作为 <code>PROBLEM_STATEMENT</code> 写入环境变量；把"岗位说明书"（system prompt）和任务说明放进对话历史。布置完毕，Agent 正式上岗。</p>
+  </div>
+
+  <div class="step" data-n="5">
+    <div class="step-title">心跳循环启动：思考 → 行动 → 观察</div>
+    <div class="step-role">agents.py → run() / step() / forward()</div>
+    <p>这是整个系统的心脏，每一圈走四步：<strong>问模型</strong>（带上全部对话历史，模型以 function calling 方式回答"我想做什么"）→ <strong>解析</strong>（ToolHandler 把模型的回答解析成一条命令）→ <strong>执行</strong>（命令进容器跑，结果作为 observation 拿到）→ <strong>记账</strong>（写回 History 和轨迹文件）。然后进入下一圈。</p>
+    <p>注意关键分工：<strong>模型只负责"说"，工具才负责"做"。</strong>模型输出的是"我想查看 division.py 的第 1 到 30 行"这样的意图，真正动手的是容器里的工具脚本。它的幻觉被挡在执行的边界之外。</p>
+    <div class="src">源码入口：<code>sweagent/agent/agents.py</code> → <code>DefaultAgent.run()</code> / <code>step()</code> / <code>forward()</code></div>
+  </div>
+
+  <div class="step" data-n="6">
+    <div class="step-title">交卷握手：sentinel 协议</div>
+    <div class="step-role">tools/tools.py → check_for_submission_cmd()</div>
+    <p>SWE-agent 判断"任务完成"靠的不是模型说一句"我做完了"，而是一次<strong>协议握手</strong>：模型执行 <code>submit</code> 命令（默认配置下还会被要求二次确认），工具脚本在输出中打印一个特殊暗号 <code>&lt;&lt;SWE_AGENT_SUBMISSION&gt;&gt;</code>，Agent 看到暗号，才去容器里读取 <code>/root/model.patch</code> 作为最终答案。没对上暗号，一律视为还没做完。</p>
+    <div class="analogy"><span class="al">类比理解</span>像机场安检的对暗号：不是你说"我没带危险品"就放行，而是仪器扫出特定信号才算数。自然语言可以撒谎，协议不会。</div>
+  </div>
+
+  <div class="step" data-n="7">
+    <div class="step-title">归档：patch、轨迹、回放</div>
+    <div class="step-role">run/common.py → save_predictions() · inspector/server.py</div>
+    <p>任务结束，三份产物落盘：<code>&lt;id&gt;.traj</code> 是全程"飞行记录仪"（每一步的思考、动作、观察、环境状态），<code>&lt;id&gt;.pred</code> 是预测记录，<code>&lt;id&gt;.patch</code> 是真正的代码补丁。想看它到底干了什么？一条 <code>sweagent inspector --data_path …</code> 打开网页回放，每一步都可点开细看。</p>
+    <div class="analogy"><span class="al">类比理解</span>医生写完出院小结，同时把完整病历归档——你随时能回看它每一步是怎么想的。</div>
+  </div>
+
+  <h3>旅程回顾：一张图看完</h3>
+  <div class="figure">
+    <svg viewBox="0 0 920 470" role="img" aria-label="主链路、旁路与可选外环全景图">
+      <defs>
+        <marker id="ar2" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+        <marker id="ar3" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#6d28d9"/>
+        </marker>
+      </defs>
+      <text x="20" y="30" fill="#15803d" font-size="12.5" font-weight="700" font-family="monospace">主运行链路（每次任务必走）</text>
+      <g>
+        <rect x="14" y="48" width="112" height="62" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.5"/>
+        <text x="70" y="74" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">CLI 入口</text>
+        <text x="70" y="94" text-anchor="middle" fill="#78716c" font-size="10">sweagent run</text>
+
+        <rect x="144" y="48" width="112" height="62" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.5"/>
+        <text x="200" y="74" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">配置装配</text>
+        <text x="200" y="94" text-anchor="middle" fill="#78716c" font-size="10">YAML+CLI→对象</text>
+
+        <rect x="274" y="48" width="112" height="62" rx="7" fill="#fffdf8" stroke="#4338ca" stroke-width="1.5"/>
+        <text x="330" y="74" text-anchor="middle" fill="#4338ca" font-size="13" font-weight="700">启动容器</text>
+        <text x="330" y="94" text-anchor="middle" fill="#78716c" font-size="10">克隆仓库·重置</text>
+
+        <rect x="404" y="48" width="112" height="62" rx="7" fill="#fffdf8" stroke="#4338ca" stroke-width="1.5"/>
+        <text x="460" y="74" text-anchor="middle" fill="#4338ca" font-size="13" font-weight="700">安装工具</text>
+        <text x="460" y="94" text-anchor="middle" fill="#78716c" font-size="10">setup()·注入任务</text>
+
+        <rect x="534" y="40" width="130" height="78" rx="7" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2.2"/>
+        <text x="599" y="66" text-anchor="middle" fill="#15803d" font-size="14" font-weight="800">主循环 ×N</text>
+        <text x="599" y="86" text-anchor="middle" fill="#78716c" font-size="10">思考→行动→观察</text>
+        <text x="599" y="104" text-anchor="middle" fill="#15803d" font-size="9.5" font-family="monospace">step()</text>
+
+        <rect x="682" y="48" width="112" height="62" rx="7" fill="#fffdf8" stroke="#0f766e" stroke-width="1.5"/>
+        <text x="738" y="74" text-anchor="middle" fill="#0f766e" font-size="13" font-weight="700">交卷握手</text>
+        <text x="738" y="94" text-anchor="middle" fill="#78716c" font-size="10">submit·sentinel</text>
+
+        <rect x="812" y="48" width="94" height="62" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.5"/>
+        <text x="859" y="74" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">产物归档</text>
+        <text x="859" y="94" text-anchor="middle" fill="#78716c" font-size="10">patch·pred</text>
+      </g>
+      <line x1="126" y1="79" x2="140" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="256" y1="79" x2="270" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="386" y1="79" x2="400" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="516" y1="79" x2="530" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="664" y1="79" x2="678" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="794" y1="79" x2="808" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+
+      <text x="20" y="190" fill="#6d28d9" font-size="12.5" font-weight="700" font-family="monospace">旁路 · 只记录不决策（看得见过程，不改变过程）</text>
+      <g>
+        <rect x="230" y="205" width="160" height="58" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="310" y="230" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">.traj 飞行记录仪</text>
+        <text x="310" y="250" text-anchor="middle" fill="#78716c" font-size="10.5">每步覆写·全程留痕</text>
+        <rect x="410" y="205" width="160" height="58" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="490" y="230" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">.pred / .patch</text>
+        <text x="490" y="250" text-anchor="middle" fill="#78716c" font-size="10.5">答卷回执·最终补丁</text>
+        <rect x="590" y="205" width="160" height="58" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="670" y="230" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">Inspector 回放</text>
+        <text x="670" y="250" text-anchor="middle" fill="#78716c" font-size="10.5">浏览器逐步骤查看</text>
+      </g>
+      <line x1="599" y1="118" x2="315" y2="201" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#ar3)"/>
+      <line x1="599" y1="118" x2="490" y2="201" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#ar3)"/>
+      <line x1="599" y1="118" x2="665" y2="201" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#ar3)"/>
+
+      <text x="20" y="330" fill="#c2410c" font-size="12.5" font-weight="700" font-family="monospace">可选外环 · 按需启用（代码里有 ≠ 默认开启）</text>
+      <g>
+        <rect x="230" y="345" width="160" height="58" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="310" y="370" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">RetryAgent</text>
+        <text x="310" y="390" text-anchor="middle" fill="#78716c" font-size="10.5">多尝试选优 Best-of-N</text>
+        <rect x="410" y="345" width="160" height="58" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="490" y="370" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">run-batch 考场</text>
+        <text x="490" y="390" text-anchor="middle" fill="#78716c" font-size="10.5">SWE-bench 批量评测</text>
+        <rect x="590" y="345" width="160" height="58" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="670" y="370" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">Hooks 观察点</text>
+        <text x="670" y="390" text-anchor="middle" fill="#78716c" font-size="10.5">Run/Agent/Env 三层</text>
+      </g>
+      <line x1="599" y1="118" x2="315" y2="341" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4,4"/>
+      <line x1="599" y1="118" x2="490" y2="341" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4,4"/>
+      <line x1="599" y1="118" x2="665" y2="341" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4,4"/>
+    </svg>
+    <div class="fig-cap">图 2 · <b>实线是必经主路，紫色虚线是只记录的旁路，黄色虚线是可选外环。</b>这是图 1 的展开版，也是整个系统的"地图"。</div>
+  </div>
+</section>
+
+<!-- ======================= 第三章 ======================= -->
+<section id="ch3" class="reveal">
+  <div class="ch-head"><span class="ch-num">03</span><h2>九大核心模块详解</h2></div>
+  <p>下面把系统拆成九个模块逐个看。<strong>不需要全部读完——挑你感兴趣的部分即可。</strong>每个模块都配了生活类比和源码入口；想看行号级的实现细节，循着附录 C 的链接去读源码审计级的模块文档。</p>
+
+  <!-- 3.1 配置装配 -->
+  <h3 id="m-config">3.1 配置装配 —— 蓝图变大楼</h3>
+  <div class="analogy"><span class="al">类比理解</span>配置系统像<strong>装修工程</strong>：YAML 文件是设计蓝图，可以叠好几份（后面的覆盖前面的）；命令行参数是"这面墙临时改个颜色"的现场变更，优先级最高；最后施工总队（<code>from_config</code>）把它们变成一支能立刻开工的队伍——Agent、环境、Hook 一次配齐。</div>
+
+  <p>合并规则只有两条，记住就够用：</p>
+  <div class="card yellow">
+    <div class="card-title"><span class="tag yellow">优先级</span>从高到低</div>
+    命令行点号参数（<code>--agent.model.name=gpt-4o</code>）&nbsp;＞&nbsp;多个 <code>--config</code> YAML 文件（按顺序深合并，后者覆盖前者）&nbsp;＞&nbsp;代码内置默认值
+  </div>
+  <p>配置树由 Pydantic 做强类型校验：字段名拼错、类型不对，<strong>启动时就报错</strong>，而不是跑到一半才炸。选择"用哪个 Agent、哪个模型、哪种任务源"靠的是配置对象里的 <code>type</code> 字段——写 <code>agent.type: retry</code> 就装配 RetryAgent，写 <code>instances.type: swe_bench</code> 就从 SWE-bench 装载考题，代码里的对应实现会被自动选中。</p>
+  <p>还要提醒一句：<strong>默认配置并不是"裸 Agent"。</strong><code>config/default.yaml</code> 已经带上了完整装备——bash、Anthropic 风格文件编辑器、带二次确认的 submit、function calling 解析器、prompt cache 优化，一应俱全。想要极简版可以用 <code>config/bash_only.yaml</code>；想复刻论文时代的老配置则是 <code>config/sweagent_0_7/07.yaml</code>——三者不可互换。</p>
+  <div class="src">源码入口：<code>sweagent/run/common.py</code> → <code>BasicCLI.get_config()</code> · <code>sweagent/run/run_single.py</code> → <code>RunSingle.from_config()</code> · 默认配置见 <code>config/default.yaml</code></div>
+
+  <!-- 3.2 DefaultAgent 主循环 -->
+  <h3 id="m-loop">3.2 DefaultAgent 主循环 —— 系统的心跳</h3>
+  <div class="analogy"><span class="al">类比理解</span>一位经验丰富的医生看诊，靠的不是一次性给出答案，而是一个循环：<strong>问诊（思考）→ 开检查单（行动）→ 看报告（观察）→ 再问诊……</strong>直到确诊开方。DefaultAgent 的主循环就是这个循环。</div>
+
+  <div class="figure">
+    <svg viewBox="0 0 560 430" role="img" aria-label="DefaultAgent 主循环图">
+      <defs>
+        <marker id="ar4" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#15803d"/>
+        </marker>
+      </defs>
+      <circle cx="280" cy="210" r="54" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2"/>
+      <text x="280" y="202" text-anchor="middle" fill="#15803d" font-size="14" font-weight="800">DefaultAgent</text>
+      <text x="280" y="222" text-anchor="middle" fill="#15803d" font-size="13" font-family="monospace">step()</text>
+
+      <rect x="180" y="24" width="200" height="66" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="280" y="50" text-anchor="middle" fill="#4338ca" font-size="14.5" font-weight="700">THINK · 问模型</text>
+      <text x="280" y="72" text-anchor="middle" fill="#78716c" font-size="11">function calling 返回结构化动作</text>
+
+      <rect x="356" y="306" width="190" height="66" rx="8" fill="#fffdf8" stroke="#0f766e" stroke-width="1.8"/>
+      <text x="451" y="332" text-anchor="middle" fill="#0f766e" font-size="14.5" font-weight="700">ACT · 容器执行</text>
+      <text x="451" y="354" text-anchor="middle" fill="#78716c" font-size="11">ToolHandler 解析 → SWEEnv 执行</text>
+
+      <rect x="14" y="306" width="190" height="66" rx="8" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.8"/>
+      <text x="109" y="332" text-anchor="middle" fill="#6d28d9" font-size="14.5" font-weight="700">OBSERVE · 回流</text>
+      <text x="109" y="354" text-anchor="middle" fill="#78716c" font-size="11">观察写回 History（≤10 万字符）</text>
+
+      <path d="M382,76 Q510,145 476,302" fill="none" stroke="#15803d" stroke-width="2" marker-end="url(#ar4)"/>
+      <path d="M352,344 Q280,402 208,344" fill="none" stroke="#15803d" stroke-width="2" marker-end="url(#ar4)"/>
+      <path d="M84,302 Q50,145 176,68" fill="none" stroke="#15803d" stroke-width="2" marker-end="url(#ar4)"/>
+      <text x="280" y="418" text-anchor="middle" fill="#a8a29e" font-size="11.5">退出方式：submit 握手 · forfeit 认输 · 预算/超时 → autosubmit 保底</text>
+    </svg>
+    <div class="fig-cap">图 3 · 心跳循环。<b>模型只"说"，工具才"做"</b>——意图与现实之间永远隔着一层 ToolHandler。</div>
+  </div>
+
+  <p>循环内部有几个方法，各管一段（读源码时按这条线走）：<code>setup()</code> 负责开工布置；<code>forward()</code> 走一圈"问模型→解析→执行"；<code>forward_with_handling()</code> 给这一圈套上错误处理——模型输出格式不对就<strong>重新提问</strong>（默认最多 3 次，配置项 <code>max_requeries</code>），并把失败信息塞回去让它自我纠正；<code>step()</code> 在外面再包一层"记账"（更新历史、写轨迹、通知 Hook）；<code>run()</code> 则是 <code>setup</code> + 不停 <code>step</code> 直到任务结束。</p>
+  <p>值得注意：SWE-agent <strong>没有</strong> "最多走 N 步"这样的步数上限。它的预算护栏是<strong>时间和钱</strong>：单实例总执行时长默认 1800 秒、单实例成本默认 3 美元（见 3.6）。理由很实在——同样一步，跑测试和改一行代码的开销天差地别，按资源设限比按步数设限更合理。</p>
+
+  <h4>任务怎么结束？不是"聊完为止"</h4>
+  <p>一个 Agent 循环的收尾方式，比想象中讲究。SWE-agent 里一条任务有以下结局：</p>
+  <table>
+    <thead><tr><th>结局</th><th>触发方式</th><th>exit_status</th></tr></thead>
+    <tbody>
+      <tr><td>正常交卷</td><td>执行 <code>submit</code>，暗号握手成功，读到 patch</td><td>submitted</td></tr>
+      <tr><td>认输放弃</td><td>执行 <code>exit_forfeit</code>（白旗），"这题我不会"</td><td>exit_forfeit</td></tr>
+      <tr><td>直接离场</td><td>模型输出 <code>exit</code>，不带答案走人</td><td>exit_command</td></tr>
+      <tr><td>被动保底</td><td>钱花光 / 时间耗尽 / 上下文撑爆 / 环境崩溃 → <strong>autosubmit</strong>：自动 <code>git diff</code> 把手头改动存成 patch 再退出</td><td>exit_cost / exit_total_execution_time / exit_context / …</td></tr>
+    </tbody>
+  </table>
+  <p>其中 autosubmit（自动保底交卷）是很体现性格的设计：<strong>哪怕任务失败了，也尽量不浪费已经做对的部分。</strong>它会在退出前把当前工作区的改动打包成 patch——做了一半，也算一半的成果。</p>
+  <details>
+    <summary>小澄清：为什么"循环"比"更聪明的模型"更重要？</summary>
+    <div class="dbody">单次调用再聪明，也会猜错。循环的意义在于：每一步的真实反馈都能纠正上一步的猜测。命令报错了？把报错喂回去再想。文件找错了？换个方向再搜。<strong>智能来自闭环反馈，而不是某一次天才的灵光一现。</strong>这也是为什么 SWE-agent 把那么多精力花在"观察结果怎么回流、格式错了怎么重问"这些循环细节上。</div>
+  </details>
+  <div class="src">源码入口：<code>sweagent/agent/agents.py</code> → <code>DefaultAgent.run()</code> / <code>step()</code> / <code>forward()</code> / <code>forward_with_handling()</code> / <code>handle_action()</code></div>
+
+  <!-- 3.3 工具与 ACI -->
+  <h3 id="m-tools">3.3 工具与 ACI —— 整个项目的灵魂</h3>
+  <div class="analogy"><span class="al">类比理解</span>招来一位新同事，你是丢给他一把什么都能干、但什么都不顺手的"瑞士军刀"，还是给他一套<strong>按他的工作专门设计的称手工具</strong>？SWE-agent 选择了后者——这套为 AI 量身定制的工具界面，就叫 <strong>ACI（Agent-Computer Interface，智能体-计算机接口）</strong>。</div>
+
+  <p>ACI 是 SWE-agent 论文（NeurIPS 2024）提出的核心概念。它的出发点很朴素：大模型并不是在"裸电脑"上干活，它看到的每一个命令、每一份输出，都是有人设计过的。<strong>这层界面设计的好坏，直接决定成功率。</strong>论文的消融实验给出了直观证据：同样的模型，用精心设计的 ACI 工具箱能解决 SWE-bench Lite 上 18.0% 的 Issue，换成裸 shell 只剩 11.0%——<strong>光换界面，就差出 7 个百分点</strong>（论文时期的历史数字）。</p>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 330" role="img" aria-label="裸 bash 与 ACI 工具箱对比图">
+      <g>
+        <rect x="20" y="40" width="420" height="240" rx="10" fill="#fffdf8" stroke="#b91c1c" stroke-width="1.6" stroke-dasharray="6,4"/>
+        <text x="230" y="76" text-anchor="middle" fill="#b91c1c" font-size="16" font-weight="800">裸 Bash：一把瑞士军刀</text>
+        <text x="44" y="116" fill="#78716c" font-size="12.5">✗ 输出不设限，一个 cat 就能刷爆上下文</text>
+        <text x="44" y="148" fill="#78716c" font-size="12.5">✗ 命令拼错一个字符，一整圈白费</text>
+        <text x="44" y="180" fill="#78716c" font-size="12.5">✗ 遇到交互式程序（vim）直接卡死</text>
+        <text x="44" y="212" fill="#78716c" font-size="12.5">✗ 没有"交卷"概念，不知道何时算完</text>
+        <text x="44" y="244" fill="#78716c" font-size="12.5">✗ 整文件重写，又费 token 又易出错</text>
+
+        <text x="460" y="170" text-anchor="middle" fill="#a8a29e" font-size="20" font-weight="700">vs</text>
+
+        <rect x="480" y="40" width="420" height="240" rx="10" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="1.8"/>
+        <text x="690" y="76" text-anchor="middle" fill="#15803d" font-size="16" font-weight="800">ACI 工具箱：量身定制</text>
+        <text x="504" y="116" fill="#78716c" font-size="12.5">✓ view 按行开窗，只给模型看需要的片段</text>
+        <text x="504" y="148" fill="#78716c" font-size="12.5">✓ str_replace 精确替换，只动病灶</text>
+        <text x="504" y="180" fill="#78716c" font-size="12.5">✓ 单条观察超 10 万字符自动裁剪并提示</text>
+        <text x="504" y="212" fill="#78716c" font-size="12.5">✓ submit + sentinel 暗号，交卷有协议</text>
+        <text x="504" y="244" fill="#78716c" font-size="12.5">✓ 交互式命令进黑名单，提前拦下</text>
+      </g>
+    </svg>
+    <div class="fig-cap">图 4 · <b>界面即生产力。</b>同样的模型，换一套为它设计的接口，成功率显著上升。</div>
+  </div>
+
+  <p>ACI 的设计原则翻译成大白话就是四条：<strong>把常见操作变简单</strong>（改代码不该靠整文件重写）、<strong>用合适的抽象给信息</strong>（给行号窗口，不给原始字节流）、<strong>把搜索和导航连起来</strong>（搜到就能直接跳过去看）、<strong>为模型的犯错方式兜底</strong>（输出裁剪、格式纠错、黑名单拦截）。</p>
+
+  <h4>默认工具箱里有什么</h4>
+  <table>
+    <thead><tr><th>工具</th><th>干什么</th><th>一句话</th></tr></thead>
+    <tbody>
+      <tr><td>bash</td><td>执行任意 shell 命令</td><td>万能的手，跑测试、搜代码、装依赖全靠它</td></tr>
+      <tr><td>str_replace_editor</td><td>查看 / 创建 / 精确替换文件内容</td><td>Agent 的笔，只改该改的地方（view / create / str_replace 等子命令）</td></tr>
+      <tr><td>submit</td><td>交卷（默认版本要求二次确认）</td><td>按下交卷铃，打印 sentinel 暗号</td></tr>
+      <tr><td>registry 小助手</td><td>读写环境变量式的状态便签</td><td>脚本之间传小纸条用的</td></tr>
+    </tbody>
+  </table>
+  <p>仓库里还有一整套可选 Bundle：文件搜索（search）、窗口式编辑（windowed 系列）、认输（forfeit）、浏览器操作（web_browser）、图像查看（image_tools）等等，按需在配置里加装。</p>
+
+  <h4>Bundle：工具是"部署单元"，不是 Python 插件</h4>
+  <p>这是新手最容易读错的一点。SWE-agent 的一个工具（Bundle）就是<strong>一个目录</strong>：一份 <code>config.yaml</code>（声明有哪些命令、参数、文档）、一个 <code>bin/</code> 文件夹（真正干活的 shell/Python 脚本）、可选一个 <code>install.sh</code>。启动时，这些文件被<strong>上传进容器</strong>（放到 <code>/root/tools/</code>、加进 PATH、跑一遍安装脚本）。之后模型"调用工具"的方式，就是在容器里<strong>执行一条 shell 命令</strong>。</p>
+  <div class="analogy"><span class="al">类比理解</span>Bundle 不是往主机上 <code>pip install</code> 一个插件，而是<strong>把一整个工具箱搬进办公室</strong>。工具箱里装的是扳手还是螺丝刀（bash 脚本还是 Python 脚本）都行，只要外面贴着统一的标签（config.yaml 里的命令声明）。</div>
+  <p>这么设计的好处：工具与 Agent 本体<strong>彻底解耦</strong>，加一个工具不用改一行 Agent 代码；工具的文档（docstring）会被自动整理给模型看——<strong>工具描述本身就是提示词的一部分</strong>，这正是 ACI 的精髓。</p>
+
+  <h4>模型怎么"说话"，系统怎么"听懂"</h4>
+  <p>默认配置用 <strong>function calling</strong>（函数调用）模式：模型不是输出自由文本，而是通过各家 API 提供的结构化机制"勾选"一个工具并填好参数——就像填表格而不是写信，格式天然可靠。负责"听懂"的是 <code>ToolHandler</code>：校验命令是否被黑名单拦截、拆解多行命令、送进容器执行、盯着输出里的 sentinel 暗号。想换成老式的纯文本解析（如 <code>thought_action</code>），改一行配置即可——解析器也是可插拔的。</p>
+
+  <div class="card red">
+    <div class="card-title"><span class="tag red">铁律</span>黑名单 ≠ 安全沙箱</div>
+    工具黑名单（blocklist）的用途写在源码注释里：拦截<strong>容器环境不支持的命令</strong>（比如交互式的 vim），防止模型卡死——它是"误操作保护"，<strong>不是</strong>防御恶意模型的机制。真正决定安全边界的是：容器本身、目录挂载、网络出口和凭据配置。
+  </div>
+  <div class="src">源码入口：<code>sweagent/tools/bundle.py</code>（Bundle）· <code>sweagent/tools/tools.py</code> → <code>ToolHandler</code> · <code>sweagent/tools/parsing.py</code>（解析器）· 仓库顶层 <code>tools/</code> 目录（各 Bundle 实物）</div>
+
+  <!-- 3.4 SWEEnv 与 SWE-ReX -->
+  <h3 id="m-env">3.4 SWEEnv 与 SWE-ReX —— 隔离病房与施工队</h3>
+  <div class="analogy"><span class="al">类比理解</span>让一个会执行任意命令的 AI 直接在你的主机上跑 <code>bash</code>，就像让实习生直接操作生产数据库——刺激但危险。<strong>SWEEnv 就是那间隔离病房</strong>：所有命令都在一间可随时丢弃的容器病房里进行，主机毫发无伤。而真正盖病房、管设备的"施工队"，是另一个独立的开源库 <strong>SWE-ReX</strong>。</div>
+
+  <p>读源码前必须知道一个分工：<strong>SWE-agent 自己并不实现容器操作</strong>。启动 Docker、在容器里开 shell、传文件这些脏活累活，全部委托给 SWE-ReX（一个专门做"远程代码执行"的库）。SWEEnv 只是挡在前面的一层<strong>同步门面</strong>：SWE-ReX 的接口是异步的（async），而 SWE-agent 的主流程是同步的，SWEEnv 就在中间做翻译——每次调用时用 <code>asyncio.run</code> 把异步调用"包"成同步结果。</p>
+  <div class="analogy"><span class="al">类比理解</span>SWEEnv 是工地上的<strong>对讲机</strong>：你（Agent）对着它喊一句"把砖搬过去"，它负责翻译成施工队（SWE-ReX）听得懂的调度指令，再把结果大声报回来。你不需要知道施工队内部怎么排班。</div>
+
+  <p>一次 <code>start()</code> 启动会按顺序走完这几步：</p>
+  <table>
+    <thead><tr><th>步骤</th><th>做什么</th><th>关键参数</th></tr></thead>
+    <tbody>
+      <tr><td>① 拉起 deployment</td><td>启动容器（默认镜像 <code>python:3.11</code>）</td><td>由 SWE-ReX 的部署配置决定</td></tr>
+      <tr><td>② 开 bash 会话</td><td>在容器里建一个持久 shell，加载 <code>/root/.bashrc</code></td><td>会话启动超时 10 秒</td></tr>
+      <tr><td>③ 克隆仓库</td><td>把目标代码库复制进容器</td><td>—</td></tr>
+      <tr><td>④ 重置仓库</td><td>还原到干净状态，保证起点一致</td><td>超时 120 秒</td></tr>
+      <tr><td>⑤ 收尾命令</td><td>执行用户自定义的 post-startup 命令</td><td>每条超时 500 秒</td></tr>
+    </tbody>
+  </table>
+  <p>日常执行命令时，默认的单条命令超时是 <strong>25 秒</strong>——模型跑一条命令最多等这么久，防止卡死整个循环。</p>
+  <p>还有个重要方法 <code>hard_reset()</code>：它做的事简单粗暴——<strong>把容器整个关掉，再重新 start 一遍</strong>。什么时候用？RetryAgent 的多次尝试之间（见 3.8），保证第 N 次尝试面对的是一间全新病房，而不是上次搞得一团糟的现场。</p>
+  <p>工位可以开在哪？默认是本地 Docker；因为走的是 SWE-ReX 的部署抽象，同一套代码也能把工位开到 Modal 等云端平台上跑；跑测试时还可以用不启动任何容器的 Dummy 模式。</p>
+  <details>
+    <summary>小澄清：SWEEnv 是 Docker 的封装吗？</summary>
+    <div class="dbody">不完全是。SWEEnv 封装的是 <strong>SWE-ReX 的 deployment/runtime 抽象</strong>，Docker 只是这个抽象的一种落地方式。所以你在 <code>swe_env.py</code> 里找不到任何 docker SDK 调用——它们都藏在 SWE-ReX 库里。理解这一点，就不会奇怪"为什么环境层代码这么薄"。</div>
+  </details>
+  <div class="src">源码入口：<code>sweagent/environment/swe_env.py</code> → <code>SWEEnv.start()</code> / <code>reset()</code> / <code>hard_reset()</code> / <code>communicate()</code></div>
+
+  <!-- 3.5 上下文与 History -->
+  <h3 id="m-context">3.5 上下文与 History —— 记忆管理与两本账</h3>
+  <div class="analogy"><span class="al">类比理解</span>想象一位员工的两份记录：<strong>手里的记事本</strong>（History）——他每次开口说话前看一眼，决定接下来做什么；<strong>公司的归档档案</strong>（Trajectory）——事无巨细全部存档，供日后审计。SWE-agent 特意维护两本账，绝不混用。</div>
+
+  <p><strong>History（对话历史）是模型每次提问的"全部材料"</strong>：一个消息列表，每条消息带角色（role）和类型标记（思考 thought / 动作 action / 观察 observation）。每次问模型前，Agent 都会把这本记事本递过去。</p>
+  <p>但记事本不能越写越厚不管。于是有了一群"校对员"——<strong>HistoryProcessor（历史处理器）</strong>，它们在记事本递给模型之前做最后一轮加工。默认配置只启用了一位：<code>cache_control</code>。</p>
+  <table>
+    <thead><tr><th>处理器</th><th>做什么</th><th>一句话</th></tr></thead>
+    <tbody>
+      <tr><td>cache_control</td><td>给最近 2 条消息打上"缓存标记"（默认配置）</td><td>不缩小内容，只是告诉 API"这段可以复用缓存"，省钱</td></tr>
+      <tr><td>LastNObservations</td><td>只保留最近 N 条观察，更早的换成一句摘要</td><td>"旧报告不用细看了，知道结论就行"</td></tr>
+      <tr><td>ClosedWindow</td><td>非当前窗口打开过的文件内容替换成一行摘要</td><td>配合窗口式编辑，防止旧文件内容堆积</td></tr>
+      <tr><td>RemoveRegex</td><td>按正则删内容（默认删掉历史里的 diff 块）</td><td>补丁已经落盘了，聊天记录里不必留全文</td></tr>
+      <tr><td>Tag / ImageParsing</td><td>给条目打标签 / 把 base64 图片转成多模态格式</td><td>特殊场景的辅助工序</td></tr>
+    </tbody>
+  </table>
+  <details>
+    <summary>常见误解：cache_control 是在"压缩上下文"吗？</summary>
+    <div class="dbody">不是。它一个字都没删，只是给消息打上一个供 API 侧识别的<strong>缓存标记</strong>（Anthropic 的 prompt caching 机制）：被标记的前缀内容在计费时按缓存价走，从而<strong>省钱、降延迟</strong>。真正在"控制体积"的是单条观察的硬性裁剪——任何工具输出超过约 <strong>10 万字符</strong>就会被剪掉并附一句"内容已截断"的提示。另外注意：代码层面的默认值其实是"不做任何加工"，是随仓库的 <code>config/default.yaml</code> 启用了 cache_control——"代码默认"和"配置默认"是两回事，读源码时要分清。</div>
+  </details>
+
+  <h4>为什么要两本账？</h4>
+  <p>因为它们服务的目标相反：<strong>模型需要"精简的现在"</strong>——上下文越干净，决策越准、花钱越少；<strong>审计需要"完整的现场"</strong>——出了错要能逐步回看它当时看到了什么、想到了什么。如果只用一份数据，要么模型被垃圾淹没，要么审计缺东少西。于是 SWE-agent 让 History 决定"下一步问什么"，让 Trajectory 负责"事后查什么"，各走各的（Trajectory 的细节见 3.7）。</p>
+  <div class="src">源码入口：<code>sweagent/agent/history_processors.py</code>（全部处理器）· <code>sweagent/types.py</code>（HistoryItem / StepOutput 等数据契约）</div>
+
+  <!-- 3.6 模型层与成本治理 -->
+  <h3 id="m-model">3.6 模型层与成本治理 —— 翻译公司、占线客服与总账房</h3>
+  <div class="analogy"><span class="al">类比理解</span>模型层像一家<strong>翻译公司</strong>：SWE-agent 只说一种"内部普通话"，而 LiteLLM 这家外包公司会一百多种"方言"（各家模型 API）。你想换 GPT 还是 Claude，只是换一位译员，业务流程一个字不用改。</div>
+
+  <p>实现上，SWE-agent 把模型调用完全托付给 <strong>LiteLLM</strong>：统一了各家 API 的调用格式、错误类型和计费信息。所以切换模型真的只要改一个配置项 <code>--agent.model.name=…</code>，业务代码零改动。</p>
+  <p>围绕这位"译员"，还有三个配套角色：</p>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">占线客服</span>自动重试</div>
+    API 调用遇到网络抖动、限流这类<strong>临时性错误</strong>会自动重试：默认最多 <strong>20 次</strong>，每次随机等待 10–120 秒（越等越久）。但认证失败、配置错误这类"重试也没用"的错误会被立刻识别，绝不空耗。上下文超长也不重试——重试救不了"话太多"，只会交给上层走保底交卷（见 3.2）。
+  </div>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">总账房</span>全局统计</div>
+    一份全局账本（加锁保护）累计着<strong>所有实例</strong>的总花费和最近一次调用时间。它支撑两种预算：<code>per_instance_cost_limit</code>（单个任务最多花 3 美元，默认值）和 <code>total_cost_limit</code>（所有任务加起来的上限，默认 0 = 不启用）。批量运行时，总预算一破，整批立刻停下。
+  </div>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">铁面会计</span>算不清钱就不许跑</div>
+    有个很"轴"的设计：如果你设置了成本上限，但当前模型<strong>无法计算成本</strong>（比如 LiteLLM 没有该模型的价格表），系统不会"先跑跑看"，而是<strong>直接报错退出</strong>，并提示你把限额设为 0 来自担风险。宁可拒绝启动，不做无预算约束的燃烧。
+  </div>
+  <p>把 3.2 的护栏汇总一下，你就得到完整的"预算安全网"：<strong>单命令超时 25 秒 → 单实例总时长 1800 秒 → 单实例 3 美元 → （可选）全局总预算</strong>，层层收紧。任何一层被突破，任务都会体面退出并尽量保住已有成果（autosubmit）。</p>
+  <div class="src">源码入口：<code>sweagent/agent/models.py</code>（LiteLLM 调用 · 重试 · 全局账本 · 成本检查）</div>
+
+  <!-- 3.7 轨迹与 Inspector -->
+  <h3 id="m-traj">3.7 轨迹与 Inspector —— 飞行记录仪与回放剧场</h3>
+  <div class="analogy"><span class="al">类比理解</span>每架飞机都带<strong>黑匣子</strong>：不管飞行中发生什么，它只管忠实记录。SWE-agent 的 <code>.traj</code> 文件就是黑匣子——而 Inspector，是机场里那间能逐帧回放黑匣子的<strong>事故调查室</strong>。</div>
+
+  <p>Agent 每走完一步，就会把当前全部记录<strong>覆写</strong>进轨迹文件（注意：是每步整体重写，不是追加日志行）。一次任务跑完，输出目录里通常有三份产物：</p>
+  <table>
+    <thead><tr><th>产物</th><th>内容</th><th>用途</th></tr></thead>
+    <tbody>
+      <tr><td>&lt;id&gt;.traj</td><td>每一步的思考、动作、观察、环境状态、最终预测，外加本次运行的完整配置</td><td>审计、复盘、生成演示数据</td></tr>
+      <tr><td>&lt;id&gt;.pred</td><td>结构化的"答卷回执"（实例 ID + 提交的 patch）</td><td>批量运行后合并成 preds.json 供评测</td></tr>
+      <tr><td>&lt;id&gt;.patch</td><td>真正的代码补丁（git diff 格式）</td><td>拿去 review / 应用 / 打分</td></tr>
+    </tbody>
+  </table>
+  <p>目录命名本身就是一份"出生证明"：<code>trajectories/&lt;用户名&gt;/&lt;配置文件名&gt;__&lt;模型名&gt;___&lt;任务ID&gt;/</code>——看一眼路径就知道这次运行用了什么配置、什么模型、修的是哪个任务。</p>
+
+  <p><strong>Inspector 是一个只读的网页回放器</strong>：一条 <code>sweagent inspector --data_path &lt;轨迹目录&gt; --port 8000</code>，浏览器里就能逐个打开轨迹，每一步的模型输出、命令、观察结果都能展开细看，还能并排对照"标准答案补丁"（如果提供了数据集）。它只实现了读取（GET 请求），不会改动任何文件；但也正因如此，把它部署在共享网络里时请注意端口暴露范围。另有终端版查看器 <code>sweagent inspect</code>，不开浏览器也能看。</p>
+  <p>想更进一步"重演"一次运行？<code>sweagent run-replay</code> 会从轨迹里取出当时发出的每条动作，用一个"只会照本宣科"的 Replay 模型替代真实模型，在环境里把动作重新执行一遍——常用于生成带真实环境输出的演示数据，或者调试工具与环境行为。</p>
+  <div class="card red">
+    <div class="card-title"><span class="tag red">小提醒</span>回放 ≠ 可复现</div>
+    replay 能证明"这些动作在这些环境上会跑出这些结果"，但<strong>不能</strong>证明"换个模型/换个镜像版本还能得到同样的动作序列"——模型采样、镜像漂移都是不可固定的变量。别把回放当成确定性复现。
+  </div>
+  <div class="src">源码入口：<code>sweagent/agent/agents.py</code>（轨迹写入）· <code>sweagent/inspector/server.py</code>（网页回放）· <code>sweagent/run/run_replay.py</code>（重放）</div>
+
+  <!-- 3.8 RetryAgent 与 Reviewer -->
+  <h3 id="m-retry">3.8 RetryAgent 与 Reviewer —— "多跑几遍，选最好的"</h3>
+  <div class="analogy"><span class="al">类比理解</span>不放心一次成稿的质量？那就<strong>让同一位工程师把任务独立重做 N 遍，再请一位评审把最好的那份挑出来</strong>。用算力换命中率——这就是 RetryAgent 的全部思想。</div>
+
+  <p>RetryAgent 是一个<strong>可选的外环</strong>（配置 <code>agent.type: retry</code> 启用，默认主链路不用它）。它自己不写代码，只负责指挥：让一个普通的 DefaultAgent 反复尝试（attempt），每次尝试之间调用 <code>hard_reset()</code> <strong>把容器彻底重启</strong>、Agent 对象整个重建——保证第 N 次尝试完全不知道前 N-1 次发生过什么，互不污染。预算也重新算账：剩余的时间和费用额度会按次分摊下去，越到后面每次尝试能花的钱越少。</p>
+  <p>挑"最好的一份"有两种玩法：</p>
+  <table>
+    <thead><tr><th>玩法</th><th>怎么做</th><th>适用直觉</th></tr></thead>
+    <tbody>
+      <tr><td>ScoreRetryLoop（边跑边打分）</td><td>每次尝试一交卷，评审模型（Reviewer）立刻打分；分数达到门槛、或尝试次数/预算用尽就停，最后取最高分那份</td><td>"质量够好就提前收工"</td></tr>
+      <tr><td>ChooserRetryLoop（最后集中选）</td><td>只管收集所有提交，跑完后让挑选模型（Chooser）对比全部候选，选出索引</td><td>"先都做完，再货比三家"</td></tr>
+    </tbody>
+  </table>
+  <p>工程上还有一套完整的"评审失灵预案"：评审模型全部调用失败？给该次尝试记个惩罚分 −100；挑选器解析失败或给出无效索引？退回取第一份提交；连"取最优"本身都抛异常？用第 0 次尝试兜底。<strong>无论评审环节怎么坏，主流程都能带着一份真实提交走出来</strong>——这是很值得学习的降级设计。</p>
+  <details>
+    <summary>定位提醒：它是研究工具，不是默认能力</summary>
+    <div class="dbody">RetryAgent 对应的是论文里的 "test-time scaling"（推理时扩展）研究方向——探究"多花 N 倍算力能换多少成功率"。日常修单个 Issue 用不到它；它的主战场是批量评测实验。另外据源码审计，这套外环目前<strong>缺少专门的聚焦测试</strong>，属于文档明确标注的薄弱区。</div>
+  </details>
+  <div class="src">源码入口：<code>sweagent/agent/agents.py</code> → <code>RetryAgent</code> · <code>sweagent/agent/reviewer.py</code>（打分与挑选循环）</div>
+
+  <!-- 3.9 Batch 与 Benchmark -->
+  <h3 id="m-batch">3.9 Batch 与 Benchmark —— 开考与批卷</h3>
+  <div class="analogy"><span class="al">类比理解</span>单个任务是一对一服务，<code>run-batch</code> 是<strong>开考场</strong>：几百道 SWE-bench 真题排队入场，多个工位（worker）并行开考，交卷的卷子统一收上来批阅。</div>
+
+  <p>考题从哪来？任务源（InstanceSource）支持五种：<strong>SWE-bench 数据集</strong>、本地文件、HuggingFace 数据集、专家集、SWE-Smith 合成集。考题进来后先按 ID 排序，再用固定随机种子（42）打乱——<strong>顺序随机但每次运行都一样</strong>，保证实验可对照。</p>
+  <p>考场的三条运行规则：</p>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">规则一</span>每个考生一套全新桌椅</div>
+    每个实例都会<strong>新建</strong>一个 Agent 和一个环境（深拷贝配置），绝不共享。这是批处理结果可信的前提——上一题的残留不会影响下一题。并行度由 <code>num_workers</code> 控制，默认只有 1（想提速自己调大）。
+  </div>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">规则二</span>做过的题不重做（断点续跑）</div>
+    开考前会检查：这道题的轨迹文件存在、内容完好、且有明确的退出状态？那就<strong>跳过</strong>。轨迹损坏或状态不明？删掉重跑。这意味着批量实验中断后，直接重跑同一条命令就能接着来，不浪费已完成的算力。
+  </div>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">规则三</span>全局红线一碰就收摊</div>
+    单题失败不影响其他题继续考；但碰到<strong>全局预算耗尽</strong>或<strong>配置级错误</strong>这类红线，整批立即停止——继续跑只会继续烧钱或继续出错。
+  </div>
+  <p>收卷后，每道题的 <code>.pred</code> 回执被合并成一份 <code>preds.json</code>，拿去给官方评测脚本批卷；<code>.patch</code> 则由各题的保存 Hook 分别落盘。</p>
+
+  <h4>三个最容易混淆的词</h4>
+  <table>
+    <thead><tr><th>状态</th><th>含义</th><th>谁判定</th></tr></thead>
+    <tbody>
+      <tr><td>completed</td><td>任务跑完了（不管结局是交卷、认输还是超时）</td><td>SWE-agent 自己</td></tr>
+      <tr><td>submitted</td><td>产出了一份 patch（哪怕是 autosubmit 保底的半成品）</td><td>SWE-agent 自己</td></tr>
+      <tr><td>resolved</td><td>patch 真正修好了 Issue（测试用例通过）</td><td>基准的官方评测脚本</td></tr>
+    </tbody>
+  </table>
+  <p>三者是层层递进、<strong>判定者不同</strong>的概念。看任何"SWE-agent 解决了 X%"的数字，先问清楚它说的是哪一个。论文报告的标志性成绩是 SWE-bench 全集 <strong>12.47%</strong>（286/2294）、Lite 子集 <strong>18.0%</strong>——注意这是论文时期的历史实验数字，且今天的模型早已大幅刷新了这个榜单。</p>
+  <details>
+    <summary>顺带认识：Hooks（观察点）</summary>
+    <div class="dbody">批量运行里那些"保存 patch""统计耗时"的动作，是通过 <strong>Hook 机制</strong>挂在流程各处的：Run 层（任务开始/结束/跳过/完成）、Agent 层（每一步的问模型前后、动作执行前后）、环境层（启动/关闭）都有对应事件，注册的 Hook 会被<strong>同步顺序调用</strong>。注意两点：Hook 抛异常会直接影响主流程（它不是"旁路通知"）；批处理多线程下，同一批 Hook 会被多个工位同时调用，涉及每题私有状态的实现必须自己做线程隔离（内置的 patch 保存 Hook 就是这么做的）。</div>
+  </details>
+  <div class="src">源码入口：<code>sweagent/run/run_batch.py</code>（考场调度）· <code>sweagent/run/batch_instances.py</code>（考题装载）· <code>sweagent/run/hooks/apply_patch.py</code>（patch 保存）</div>
+</section>
+
+<!-- ======================= 第四章 ======================= -->
+<section id="ch4" class="reveal">
+  <div class="ch-head"><span class="ch-num">04</span><h2>设计哲学与常见误解</h2></div>
+
+  <h3>四条铁律</h3>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">铁律一</span>界面设计是一等公民</div>
+    工具的描述文档不是附录，而是<strong>提示词的一部分</strong>；命令的形态、输出的裁剪、交卷的协议，全部是为模型的认知特点量身定做的。这就是 ACI：与其等一个更强的模型，不如先把"模型与计算机对话的方式"设计好。
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">铁律二</span>模型只判断，工具才执行</div>
+    模型永远不直接接触文件系统或 shell——它输出的只是"意图"，要经过解析、校验、黑名单三道关口，才会在隔离容器里变成现实。<strong>意图与现实之间，永远隔着一层系统。</strong>
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">铁律三</span>结束靠协议，不靠自然语言</div>
+    "我做完了"这句话在 SWE-agent 里没有任何效力。任务是否完成，取决于 sentinel 暗号是否出现、patch 文件能否读到。把不可靠的自然语言承诺，换成可验证的机械协议。
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">铁律四</span>智能来自模型，可靠来自系统</div>
+    格式写错有重询、命令超时有拦截、钱烧完了有保底交卷、环境崩了有轨迹留证——模型负责"想对"，系统负责"想错了也不至于灾难"。这套兜底网络，才是研究级运行时和玩具 demo 的分水岭。
+  </div>
+
+  <h3>常见误解三连</h3>
+  <details>
+    <summary>常见误解一：SWE-agent 有 max_steps（最大步数）吧？</summary>
+    <div class="dbody">没有。翻遍源码也找不到步数上限。它的预算观是<strong>按资源而非按次数</strong>：总执行时长（默认 1800 秒）+ 单实例成本（默认 3 美元）+ 单命令超时（25 秒）。理由前面说过：一步的成本差异太大，数步数不如数钱和数时间。</div>
+  </details>
+  <details>
+    <summary>常见误解二：工具是 Python 插件，加载进 Agent 进程里执行？</summary>
+    <div class="dbody">不是。Bundle 是<strong>上传到容器里的部署单元</strong>（目录 = 声明 + 脚本 + 安装脚本），模型通过在容器里跑 shell 命令来"调用"它。Agent 进程里只有"命令的文本"在流动，真正执行发生在容器的另一个世界里。这个边界正是安全与解耦的来源。</div>
+  </details>
+  <details>
+    <summary>常见误解三：这个项目还在活跃开发，可以直接用于生产？</summary>
+    <div class="dbody">官方 README 写得很清楚：团队当前的主力开发已转向 <a href="https://github.com/SWE-agent/mini-swe-agent" target="_blank">mini-swe-agent</a>（更精简的实现），并推荐新项目使用它。SWE-agent 1.1 的定位是<strong>研究基准与完整参照实现</strong>：学习架构、复现论文、对比实验，它是绝佳材料；上生产前请仔细评估，并自建安全边界。</div>
+  </details>
+  <details>
+    <summary>常见误解四：配置文件都能混用，0.7 时代的配置拿来就用？</summary>
+    <div class="dbody">不能。<code>default.yaml</code>（当前默认，function calling + 编辑器工具）、<code>bash_only.yaml</code>（极简裸 shell）、<code>sweagent_0_7/07.yaml</code>（复刻论文时代，窗口编辑器 + 演示教学）是<strong>三套不同的实验设定</strong>，工具、解析器、提示词全不一样，跑出的结果不可互相比较。做实验时先确认自己用的是哪套。</div>
+  </details>
+</section>
+
+<!-- ======================= 第五章 ======================= -->
+<section id="ch5" class="reveal">
+  <div class="ch-head"><span class="ch-num">05</span><h2>动手探索指南</h2></div>
+
+  <h3>5.1 先跑起来 —— 建立第一手感</h3>
+  <p>读十页文档，不如跑一次真实任务。以下命令摘自官方教程：</p>
+  <div class="cmd"><span class="c"># 1. 安装（需要 Python ≥ 3.11 与 Docker）</span><br><span class="g">git clone</span> https://github.com/SWE-agent/SWE-agent<br><span class="g">cd</span> SWE-agent<br><span class="g">pip install</span> -e .   <span class="c"># 或按官方文档用 uv / conda</span><br><br><span class="c"># 2. 准备一个模型 API key（以 OpenAI 为例）</span><br><span class="g">export</span> OPENAI_API_KEY=sk-…<br><br><span class="c"># 3. 跑官方玩具任务（约一杯咖啡的时间与几美分）</span><br><span class="g">sweagent</span> run \<br>&nbsp;&nbsp;--problem_statement.github_url=https://github.com/SWE-agent/test-repo/issues/1 \<br>&nbsp;&nbsp;--env.repo.github_url=https://github.com/SWE-agent/test-repo \<br>&nbsp;&nbsp;--agent.model.name=gpt-4o<br><br><span class="c"># 4. 用网页回放看看它到底干了什么</span><br><span class="g">sweagent</span> inspector --data_path trajectories/&lt;你的用户名&gt;/ --port 8000</div>
+  <p>跑通之后，把 <code>--problem_statement.github_url</code> 换成任何真实仓库的 Issue 地址，你就完成了一次"雇佣 AI 工程师"。想批量跑 SWE-bench？</p>
+  <div class="cmd"><span class="g">sweagent</span> run-batch --instances.type swe_bench --instances.subset lite \<br>&nbsp;&nbsp;--instances.split dev --instances.slice :50 --instances.shuffle=True \<br>&nbsp;&nbsp;--config config/default.yaml --agent.model.name gpt-4o</div>
+
+  <h3>5.2 源码阅读路线 —— 七个文件，一条线</h3>
+  <table>
+    <thead><tr><th>顺序</th><th>文件</th><th>看什么</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>pyproject.toml</td><td>项目骨架与依赖版图：litellm、pydantic-settings、swe-rex 各自的角色</td></tr>
+      <tr><td>2</td><td>sweagent/run/run.py</td><td>命令行家族全貌，找到 main() 的分发表</td></tr>
+      <tr><td>3</td><td>sweagent/run/run_single.py</td><td>单次任务的总编排：from_config 装配 → run() 的完整流程</td></tr>
+      <tr><td>4</td><td>sweagent/agent/agents.py</td><td>全项目的心脏：DefaultAgent 的 setup / step / forward / handle_action</td></tr>
+      <tr><td>5</td><td>sweagent/tools/tools.py</td><td>ToolHandler：模型意图如何变成容器里的命令</td></tr>
+      <tr><td>6</td><td>sweagent/environment/swe_env.py</td><td>环境门面：同步包装异步的桥，以及 hard_reset 的粗暴美学</td></tr>
+      <tr><td>7</td><td>sweagent/inspector/server.py</td><td>轨迹如何被消费——读完它，3.7 节就闭环了</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 常见问题</h3>
+  <details>
+    <summary>Q：我想给 Agent 加一个新工具，要改代码吗？</summary>
+    <div class="dbody">通常不用。新建一个 Bundle 目录：写好 <code>bin/</code> 里的脚本，再写一份 <code>config.yaml</code> 声明命令名、参数和文档字符串，最后在运行配置里把它加进 <code>agent.tools.bundles</code> 即可。工具的 docstring 会自动成为模型看到的说明书。</div>
+  </details>
+  <details>
+    <summary>Q：怎么换模型？只能用 OpenAI 吗？</summary>
+    <div class="dbody">凡是 LiteLLM 支持的模型都能用（OpenAI、Anthropic、本地模型等），只需改 <code>--agent.model.name</code>。注意：成本限额依赖 LiteLLM 的价格表，冷门模型可能因"算不出钱"而拒绝启动——见 3.6 的铁面会计。</div>
+  </details>
+  <details>
+    <summary>Q：命令是 run 还是 run-single？</summary>
+    <div class="dbody">单任务命令是 <code>sweagent run</code>（别名 <code>r</code>），不存在 run-single 子命令。批量是 <code>run-batch</code>。完整子命令家族还包括 replay、inspect、inspector、compare-runs、quick-stats、shell 等，跑 <code>sweagent --help</code> 一眼看全。</div>
+  </details>
+  <details>
+    <summary>Q：任务失败了，patch 一定没有吗？</summary>
+    <div class="dbody">不一定。很多失败路径会走 autosubmit：把当时工作区的改动用 git diff 打包成 patch 再退出（exit_status 会记录原因，如 <code>submitted (exit_cost)</code>）。所以看到非 submitted 状态也别急着删目录，先看看有没有保住半成品。</div>
+  </details>
+  <details>
+    <summary>Q：我想复现论文里的结果，该用哪个配置？</summary>
+    <div class="dbody">用 <code>config/sweagent_0_7/07.yaml</code>——它是论文时代配置的复刻（窗口式编辑器 + thought/action 文本解析 + 演示教学）。默认配置 <code>default.yaml</code> 是后续演进出的新默认（function calling + str_replace_editor），两者结果不可直接对比。</div>
+  </details>
+  <details>
+    <summary>Q：怎么调试"环境/工具行为"而不烧 API 的钱？</summary>
+    <div class="dbody">用 <code>sweagent run-replay</code>：从已有轨迹里取出动作序列，用"照本宣科"的 Replay 模型重放，模型调用完全免费。另外 <code>sweagent shell</code> 可以直接开一个环境 shell 手动敲命令，验证工具脚本行为。</div>
+  </details>
+</section>
+
+<!-- ======================= 附录 ======================= -->
+<section id="appA" class="reveal">
+  <div class="ch-head"><span class="ch-num">A</span><h2>附录 A · 术语对照表</h2></div>
+  <table>
+    <thead><tr><th>术语</th><th>一句话解释</th></tr></thead>
+    <tbody>
+      <tr><td>ACI</td><td>Agent-Computer Interface，智能体-计算机接口——本项目提出的核心概念：为 AI 设计的命令与工具界面</td></tr>
+      <tr><td>Agent Loop</td><td>思考→行动→观察的心跳循环，DefaultAgent 的核心</td></tr>
+      <tr><td>History</td><td>对话历史，每次问模型的全部材料（"记事本"）</td></tr>
+      <tr><td>Trajectory</td><td>轨迹，逐步记录的完整执行档案（"飞行记录仪"），产物是 .traj 文件</td></tr>
+      <tr><td>HistoryItem</td><td>History 里的一条消息：角色 + 内容 + 类型（思考/动作/观察）</td></tr>
+      <tr><td>StepOutput</td><td>单步的工作区快照：思考、动作、观察、是否结束、退出状态等</td></tr>
+      <tr><td>HistoryProcessor</td><td>把 History 递给模型前的"校对员"（缓存标记、旧观察摘要等）</td></tr>
+      <tr><td>cache_control</td><td>默认启用的处理器：给最近消息打 API 缓存标记以省钱，不删内容</td></tr>
+      <tr><td>Bundle</td><td>工具部署单元：一个目录（声明 + 脚本），被上传进容器安装</td></tr>
+      <tr><td>ToolHandler</td><td>工具调度官：解析模型意图、校验拦截、送进容器执行</td></tr>
+      <tr><td>ParseFunction</td><td>解析器：把模型输出翻译成（思考，动作）；默认为 function calling 模式</td></tr>
+      <tr><td>function calling</td><td>模型通过 API 的结构化工具调用机制"勾选"工具，而非输出自由文本</td></tr>
+      <tr><td>sentinel</td><td>交卷暗号 <code>&lt;&lt;SWE_AGENT_SUBMISSION&gt;&gt;</code>，submit 工具打印，Agent 据此确认提交</td></tr>
+      <tr><td>autosubmit</td><td>保底交卷：失败退出前自动把手头改动打包成 patch</td></tr>
+      <tr><td>forfeit</td><td>认输：模型主动举白旗放弃当前任务</td></tr>
+      <tr><td>exit_status</td><td>任务结局标签：submitted / exit_forfeit / exit_cost / exit_context 等</td></tr>
+      <tr><td>SWEEnv</td><td>环境门面：SWE-agent 侧的同步包装，管理容器生命周期</td></tr>
+      <tr><td>SWE-ReX</td><td>独立开源库，真正负责容器/远程部署与代码执行的引擎</td></tr>
+      <tr><td>hard_reset</td><td>把容器关掉重开，用于多次尝试之间的彻底隔离</td></tr>
+      <tr><td>RetryAgent</td><td>可选外环：同一任务多次独立尝试 + 评审选优（Best-of-N）</td></tr>
+      <tr><td>Reviewer / Chooser</td><td>评审模型（逐次打分）/ 挑选模型（最后选优）</td></tr>
+      <tr><td>SWE-bench</td><td>评测基准：2294 个真实 GitHub Issue，用仓库自带测试判分</td></tr>
+      <tr><td>resolved</td><td>基准判定的"真修好了"（测试通过），区别于 completed/submitted</td></tr>
+      <tr><td>LiteLLM</td><td>模型 API 统一层，让换模型只需改一个配置项</td></tr>
+      <tr><td>Hook</td><td>挂在 Run/Agent/Env 各生命周期事件上的同步观察者</td></tr>
+      <tr><td>ProblemStatement</td><td>任务说明的抽象：GitHub Issue、文件、SWE-bench 题目等</td></tr>
+      <tr><td>BatchInstance</td><td>一道"考题"：仓库 + 任务说明 + 基线 commit 的组合</td></tr>
+      <tr><td>Inspector</td><td>只读网页回放器，逐步查看轨迹内容</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="appB" class="reveal">
+  <div class="ch-head"><span class="ch-num">B</span><h2>附录 B · 源码目录速查</h2></div>
+  <table>
+    <thead><tr><th>路径</th><th>职责</th></tr></thead>
+    <tbody>
+      <tr><td>sweagent/run/</td><td>编排层：CLI 入口（run.py）、单任务（run_single.py）、批量（run_batch.py）、考题装载（batch_instances.py）、轨迹重放（run_replay.py）、hooks/</td></tr>
+      <tr><td>sweagent/agent/</td><td>Agent 层：主循环与 RetryAgent（agents.py）、模型与成本（models.py）、历史处理器（history_processors.py）、评审（reviewer.py）、任务说明（problem_statement.py）、hooks/</td></tr>
+      <tr><td>sweagent/tools/</td><td>工具层：Bundle 定义（bundle.py）、命令结构（commands.py）、ToolHandler（tools.py）、解析器（parsing.py）</td></tr>
+      <tr><td>sweagent/environment/</td><td>环境层：SWEEnv 门面（swe_env.py）、仓库抽象（repo.py）、hooks/</td></tr>
+      <tr><td>sweagent/inspector/</td><td>网页回放器（server.py）与终端查看器（配合 run/inspector_cli.py）</td></tr>
+      <tr><td>sweagent/types.py</td><td>核心数据契约：HistoryItem / StepOutput / TrajectoryStep / AgentRunResult</td></tr>
+      <tr><td>tools/</td><td>仓库顶层：各工具 Bundle 实物（bash、edit、submit、forfeit、search、web_browser…）</td></tr>
+      <tr><td>config/</td><td>配置档案：default.yaml（当前默认）、bash_only.yaml（极简）、sweagent_0_7/（论文复刻）</td></tr>
+      <tr><td>tests/</td><td>pytest 测试，按 run/agent/tools/environment 分层</td></tr>
+      <tr><td>docs/</td><td>官方文档源：背景（ACI 论文笔记）、使用教程、命令行参考</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="appC" class="reveal">
+  <div class="ch-head"><span class="ch-num">C</span><h2>附录 C · 进阶阅读</h2></div>
+  <p>本指南是"建立直觉"的入门层。再往上，配套文档体系提供了逐级加深的视角：</p>
+  <table>
+    <thead><tr><th>层级</th><th>文档</th><th>适合时机</th></tr></thead>
+    <tbody>
+      <tr><td>深度总览</td><td><a href="swe_agent_architecture.html">SWE-agent 架构深度解析</a>（22 章）</td><td>想系统掌握每一层的设计结论与风险清单</td></tr>
+      <tr><td>模块审计</td><td><a href="docs/swe-agent/">docs/swe-agent/ 下的 15 篇模块文档</a>（第 04–18 章展开）</td><td>要改某个模块的代码前——每篇含行号级证据与失败路径</td></tr>
+      <tr><td>官方一手</td><td><a href="https://swe-agent.com" target="_blank">swe-agent.com 官方文档</a> · <a href="https://github.com/SWE-agent/SWE-agent" target="_blank">GitHub 仓库</a></td><td>查命令参数、安装方式与最新公告</td></tr>
+      <tr><td>论文</td><td>SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering（arXiv:2405.15793，NeurIPS 2024）；SWE-bench（arXiv:2310.06770）</td><td>想理解 ACI 原则的原始论证与消融实验</td></tr>
+      <tr><td>后继项目</td><td><a href="https://github.com/SWE-agent/mini-swe-agent" target="_blank">mini-swe-agent</a></td><td>团队当前主力方向；新项目官方推荐使用它</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<div class="takeaway reveal">
+  <div class="tk">读完如果只记三句话</div>
+  <ol>
+    <li><strong>界面设计和模型能力同等重要</strong>——ACI 告诉我们：给模型一套称手的接口，比等一个更聪明的模型更现实。这是 SWE-agent 留给整个领域最重要的思想。</li>
+    <li><strong>主链只有一个循环，可靠性全靠工程兜底</strong>——预算护栏、格式重询、保底交卷、协议终止：模型负责聪明，系统负责不出事。</li>
+    <li><strong>全程留痕、一切可回放</strong>——两本账（History 与 Trajectory）+ 黑匣子式轨迹文件，让每次运行都能被审计、被复盘、被学习。这是研究型系统的尊严。</li>
+  </ol>
+</div>
+
+<div class="card cyan reveal" style="margin-top:26px">
+  <div class="card-title"><span class="tag cyan">写在最后</span></div>
+  SWE-agent 也许不是你下一个生产项目的直接选择，但它是一份难得的<strong>完整教材</strong>：从"怎么给 AI 设计接口"到"怎么给不可靠的组件套上可靠的笼子"，它把每一课都写在了源码里。祝阅读愉快。
+</div>
+
+</main>
+
+<footer>SWE-agent 架构入门指南 · 基于 SWE-agent 1.1.0 源码与 arXiv:2405.15793 · 与 <a href="swe_agent_architecture.html">swe_agent_architecture.html</a> 深度版系列配套 · 2026-08-14</footer>
+
+<script>
+// 顶部阅读进度条
+window.addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  const p=h.scrollTop/(h.scrollHeight-h.clientHeight)*100;
+  document.getElementById('progress').style.width=p+'%';
+},{passive:true});
+
+// 侧边栏 scrollspy
+const spyLinks=[...document.querySelectorAll('#sidebar a[href^="#"]')]
+  .filter(a=>a.getAttribute('href').length>1);
+const spyTargets=spyLinks.map(a=>[a,document.querySelector(a.getAttribute('href'))])
+  .filter(([a,t])=>t);
+const spy=new IntersectionObserver(es=>{
+  es.forEach(e=>{
+    if(e.isIntersecting){
+      spyLinks.forEach(l=>l.classList.remove('active'));
+      const link=spyTargets.find(([a,t])=>t===e.target)?.[0];
+      if(link) link.classList.add('active');
+    }
+  });
+},{rootMargin:'-20% 0px -70% 0px'});
+spyTargets.forEach(([a,t])=>spy.observe(t));
+
+// 滚动显现
+const reveal=new IntersectionObserver(es=>{
+  es.forEach(e=>{ if(e.isIntersecting){ e.target.classList.add('visible'); reveal.unobserve(e.target);} });
+},{threshold:.06});
+document.querySelectorAll('.reveal').forEach(el=>reveal.observe(el));
+</script>
+</body>
+</html>

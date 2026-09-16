@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae Agent 架构入门指南 — 给第一次接触这个项目的你</title>
+<style>
+:root{
+  --bg:#f4f1ea; --bg-soft:#fffdf8; --surface:#fffdf8; --surface-2:#fffdf8;
+  --border:rgba(28,25,23,.12); --border-soft:rgba(28,25,23,.10);
+  --text:#1c1917; --muted:#78716c; --faint:#a8a29e;
+  --green:#15803d; --blue:#4338ca; --purple:#6d28d9; --yellow:#c2410c;
+  --red:#b91c1c; --cyan:#0f766e; --orange:#c2410c;
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+  --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Segoe UI",system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:16px; line-height:1.85;
+  background-image:
+    radial-gradient(900px 500px at 8% -5%, rgba(67,56,202,.07), transparent 60%),
+    radial-gradient(800px 500px at 100% 100%, rgba(21,128,61,.06), transparent 60%),
+    radial-gradient(rgba(255,255,255,.028) 1px, transparent 1px);
+  background-size:auto,auto,26px 26px;
+  background-attachment:fixed;
+}
+::selection{background:rgba(67,56,202,.3)}
+
+/* ---------- 顶部阅读进度条 ---------- */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:200;
+  background:linear-gradient(90deg,var(--green),var(--blue),var(--purple));
+  box-shadow:0 0 10px rgba(67,56,202,.5);transition:width .1s linear}
+
+/* ---------- 侧边栏 ---------- */
+#sidebar{position:fixed;top:0;left:0;width:252px;height:100vh;overflow-y:auto;
+  background:rgba(244,241,234,.92);border-right:1px solid var(--border-soft);
+  padding:26px 0 60px;z-index:100;backdrop-filter:blur(6px)}
+#sidebar .brand{padding:0 22px 18px;border-bottom:1px solid var(--border-soft);margin-bottom:14px}
+#sidebar .brand .b1{font-weight:800;font-size:1.05rem;letter-spacing:-.01em}
+#sidebar .brand .b2{font-family:var(--mono);font-size:.68rem;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.14em;margin-top:4px}
+#sidebar a{display:block;padding:6px 22px;color:var(--muted);text-decoration:none;
+  font-size:.84rem;border-left:2px solid transparent;transition:all .18s}
+#sidebar a:hover{color:var(--text);background:rgba(67,56,202,.06)}
+#sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+#sidebar a.ch{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--faint);margin-top:14px;pointer-events:none}
+#sidebar a.sub{padding-left:38px;font-size:.78rem}
+#sidebar::-webkit-scrollbar{width:6px}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ---------- 主内容区 ---------- */
+main{margin-left:252px;max-width:880px;padding:0 48px 120px}
+
+/* ---------- 头部：左标题 + 右终端 ---------- */
+header{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;
+  padding:72px 0 56px}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--green);display:inline-flex;align-items:center;gap:10px;margin-bottom:18px}
+.kicker::before{content:"";width:34px;height:1px;background:var(--green)}
+h1{font-size:clamp(1.9rem,3.6vw,2.7rem);font-weight:800;letter-spacing:-.025em;line-height:1.25}
+h1 .hl{color:var(--blue)}
+.lede{color:var(--muted);margin-top:16px;font-size:1.02rem}
+.meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.meta-pill{font-family:var(--mono);font-size:.7rem;padding:5px 12px;border:1px solid var(--border);
+  border-radius:999px;color:var(--muted);transition:all .2s}
+.meta-pill:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-2px)}
+
+/* 终端窗口 */
+.terminal{background:#e8e1d4;border:1px solid var(--border);border-radius:10px;overflow:hidden;
+  box-shadow:0 18px 50px rgba(28,25,23,.5);font-family:var(--mono);font-size:.78rem}
+.terminal .tbar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#f0ebe0;
+  border-bottom:1px solid var(--border-soft)}
+.terminal .dot{width:11px;height:11px;border-radius:50%}
+.terminal .tbar .title{margin-left:8px;color:var(--faint);font-size:.7rem}
+.terminal .tbody{padding:16px 16px 20px;line-height:1.9}
+.tline{opacity:0;animation:tIn .4s ease forwards;white-space:pre-wrap;word-break:break-all}
+@keyframes tIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.tline .p{color:var(--green)} .tline .ok{color:var(--green)} .tline .th{color:var(--blue)}
+.tline .tool{color:var(--yellow)} .tline .dim{color:var(--faint)} .tline .err{color:var(--red)}
+.cursor{display:inline-block;width:8px;height:15px;background:var(--green);vertical-align:-2px;
+  animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- 章节 ---------- */
+section{padding:34px 0 8px}
+.ch-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
+.ch-num{font-family:var(--mono);font-weight:700;font-size:1rem;color:var(--green);
+  border:1px solid rgba(21,128,61,.4);padding:3px 10px;border-radius:6px;flex-shrink:0;
+  background:rgba(21,128,61,.07)}
+h2{font-size:1.68rem;font-weight:800;letter-spacing:-.02em}
+h3{font-size:1.22rem;font-weight:700;margin:34px 0 12px;letter-spacing:-.01em;
+  padding-left:13px;border-left:3px solid var(--blue)}
+h4{font-size:1.02rem;font-weight:700;margin:22px 0 8px;color:var(--blue)}
+p{margin:12px 0}
+strong{color:var(--text);font-weight:700}
+code{font-family:var(--mono);font-size:.86em;background:rgba(67,56,202,.1);
+  color:var(--blue);padding:2px 7px;border-radius:5px}
+a{color:var(--blue)}
+ul,ol{margin:12px 0 12px 26px}
+li{margin:7px 0}
+
+/* 卡片 */
+.card{background:var(--surface);border:1px solid var(--border-soft);border-left:3px solid var(--blue);
+  border-radius:8px;padding:18px 22px;margin:18px 0;transition:transform .2s,box-shadow .2s,border-color .2s}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(28,25,23,.35)}
+.card.blue{border-left-color:var(--blue)} .card.green{border-left-color:var(--green)}
+.card.yellow{border-left-color:var(--yellow)} .card.purple{border-left-color:var(--purple)}
+.card.red{border-left-color:var(--red)} .card.cyan{border-left-color:var(--cyan)}
+.card .card-title{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:9px}
+.card .tag{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;
+  padding:2px 8px;border-radius:4px;flex-shrink:0}
+.tag.blue{background:rgba(67,56,202,.15);color:var(--blue)}
+.tag.green{background:rgba(21,128,61,.15);color:var(--green)}
+.tag.yellow{background:rgba(194,65,12,.15);color:var(--yellow)}
+.tag.purple{background:rgba(109,40,217,.15);color:var(--purple)}
+.tag.red{background:rgba(185,28,28,.15);color:var(--red)}
+.tag.cyan{background:rgba(15,118,110,.15);color:var(--cyan)}
+
+/* 定义块（一句话定义） */
+.definition{background:linear-gradient(135deg,rgba(21,128,61,.1),rgba(67,56,202,.08));
+  border:1px solid rgba(21,128,61,.35);border-radius:10px;padding:24px 28px;margin:22px 0;
+  font-size:1.08rem;line-height:1.8}
+.definition strong{color:var(--green)}
+
+/* 类比框 */
+.analogy{border:1.5px dashed var(--yellow);background:rgba(194,65,12,.06);border-radius:8px;
+  padding:16px 20px;margin:18px 0;transition:background .2s}
+.analogy:hover{background:rgba(194,65,12,.1)}
+.analogy .al{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.14em;
+  color:var(--yellow);margin-bottom:6px;display:block}
+
+/* 源码入口提示 */
+.src{font-family:var(--mono);font-size:.74rem;color:var(--green);margin:14px 0 4px;
+  display:flex;align-items:center;gap:8px}
+.src::before{content:"▸";color:var(--green)}
+.src code{background:rgba(21,128,61,.1);color:var(--green)}
+
+/* 步骤（旅程） */
+.step{position:relative;margin:26px 0 26px 26px;padding:4px 0 4px 30px;
+  border-left:2px solid var(--border)}
+.step::before{content:attr(data-n);position:absolute;left:-19px;top:0;width:36px;height:36px;
+  border-radius:50%;background:var(--surface-2);border:2px solid var(--blue);color:var(--blue);
+  font-family:var(--mono);font-weight:700;font-size:.9rem;display:flex;align-items:center;
+  justify-content:center;transition:all .25s}
+.step:hover::before{background:var(--blue);color:#f4f1ea;box-shadow:0 0 18px rgba(67,56,202,.5);
+  transform:scale(1.12)}
+.step .step-title{font-size:1.12rem;font-weight:700;margin-bottom:4px}
+.step .step-role{font-family:var(--mono);font-size:.68rem;color:var(--faint);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
+
+/* 折叠面板 */
+details{background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;
+  margin:14px 0;overflow:hidden;transition:border-color .2s}
+details[open]{border-color:var(--border)}
+details summary{cursor:pointer;padding:14px 20px;font-weight:600;font-size:.94rem;
+  list-style:none;display:flex;align-items:center;gap:10px;user-select:none;transition:background .2s}
+details summary:hover{background:rgba(67,56,202,.05)}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"+";font-family:var(--mono);color:var(--blue);font-weight:700;
+  transition:transform .25s;flex-shrink:0}
+details[open] summary::before{transform:rotate(45deg)}
+details .dbody{padding:2px 20px 16px;color:var(--muted);font-size:.93rem}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:.9rem;background:var(--surface);
+  border-radius:8px;overflow:hidden;border:1px solid var(--border-soft)}
+th{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;
+  text-align:left;padding:12px 16px;background:var(--surface-2);color:var(--muted);
+  border-bottom:1px solid var(--border)}
+td{padding:11px 16px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:rgba(67,56,202,.05)}
+td:first-child{color:var(--blue);font-weight:600;white-space:nowrap}
+
+/* SVG 图容器 */
+.figure{background:var(--bg-soft);border:1px solid var(--border-soft);border-radius:10px;
+  padding:24px;margin:24px 0;transition:border-color .25s}
+.figure:hover{border-color:var(--border)}
+.figure svg{width:100%;height:auto;display:block}
+.figure .fig-cap{font-family:var(--mono);font-size:.72rem;color:var(--faint);text-align:center;
+  margin-top:14px;letter-spacing:.04em}
+.figure .fig-cap b{color:var(--muted)}
+
+/* 命令块 */
+.cmd{background:#e8e1d4;border:1px solid var(--border);border-left:3px solid var(--green);
+  border-radius:8px;padding:16px 20px;font-family:var(--mono);font-size:.82rem;line-height:2;
+  margin:16px 0;overflow-x:auto}
+.cmd .c{color:var(--faint)} .cmd .g{color:var(--green)} .cmd .y{color:var(--yellow)}
+
+/* 三句话总结 */
+.takeaway{background:linear-gradient(135deg,rgba(21,128,61,.12),rgba(15,118,110,.08));
+  border:1px solid rgba(21,128,61,.4);border-radius:12px;padding:28px 32px;margin:30px 0}
+.takeaway .tk{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.16em;
+  color:var(--green);margin-bottom:16px}
+.takeaway ol{margin:0 0 0 22px}
+.takeaway li{margin:12px 0;font-size:1.02rem}
+.takeaway li strong{color:var(--green)}
+
+/* 滚动显现 */
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:none}
+
+footer{margin-left:252px;border-top:1px solid var(--border-soft);padding:34px 48px 60px;
+  color:var(--faint);font-size:.8rem;font-family:var(--mono)}
+
+@media (max-width:1000px){
+  #sidebar{display:none}
+  main,footer{margin-left:0}
+  main{padding:0 22px 90px}
+  header{grid-template-columns:1fr;padding-top:52px}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav id="sidebar">
+  <div class="brand">
+    <div class="b1">Trae Agent</div>
+    <div class="b2">Architecture Guide</div>
+  </div>
+  <a href="#top" class="active">指南概览</a>
+  <a href="#ch1" class="ch">第一章</a>
+  <a href="#ch1">Trae Agent 是什么？</a>
+  <a href="#ch2" class="ch">第二章</a>
+  <a href="#ch2">一个 Bug 修复的完整旅程</a>
+  <a href="#ch3" class="ch">第三章</a>
+  <a href="#ch3">六大核心模块详解</a>
+  <a href="#m-loop" class="sub">3.1 Agent Loop 心跳</a>
+  <a href="#m-tool" class="sub">3.2 工具系统</a>
+  <a href="#m-llm" class="sub">3.3 LLM Provider 层</a>
+  <a href="#m-config" class="sub">3.4 配置系统</a>
+  <a href="#m-docker" class="sub">3.5 Docker 沙箱</a>
+  <a href="#m-obs" class="sub">3.6 可观测性三件套</a>
+  <a href="#ch4" class="ch">第四章</a>
+  <a href="#ch4">设计哲学与边界</a>
+  <a href="#ch5" class="ch">第五章</a>
+  <a href="#ch5">动手探索指南</a>
+  <a href="#appA" class="ch">附录</a>
+  <a href="#appA">A · 术语对照表</a>
+  <a href="#appB">B · 源码目录速查</a>
+  <a href="#appC">C · 进阶阅读</a>
+</nav>
+
+<main id="top">
+
+<!-- ======================= 头部 ======================= -->
+<header>
+  <div>
+    <div class="kicker">Architecture Guide · 基于 trae-agent v0.1.0 源码</div>
+    <h1>Trae Agent <span class="hl">架构入门指南</span></h1>
+    <p class="lede">给第一次接触这个项目的你 —— 不贴大段源码、不堆学术术语，用一张图、一个故事、六个模块，帮你在 40 分钟内真正理解这个"会自己修 Bug 的 AI"是怎么跑起来的。</p>
+    <div class="meta-row">
+      <span class="meta-pill">阅读约 40 分钟</span>
+      <span class="meta-pill">零源码粘贴</span>
+      <span class="meta-pill">3 张图可带走</span>
+      <span class="meta-pill">中文 · 术语保留英文</span>
+    </div>
+  </div>
+  <div class="terminal" aria-hidden="true">
+    <div class="tbar">
+      <span class="dot" style="background:#b91c1c"></span>
+      <span class="dot" style="background:#c2410c"></span>
+      <span class="dot" style="background:#15803d"></span>
+      <span class="title">trae-cli — 一次真实的任务长这样</span>
+    </div>
+    <div class="tbody">
+      <div class="tline" style="animation-delay:.2s"><span class="p">$</span> trae-cli run "修复同一订单重复扣款的 bug"</div>
+      <div class="tline" style="animation-delay:.9s"><span class="ok">✓</span> <span class="dim">配置已加载 · model=claude-sonnet · max_steps=60</span></div>
+      <div class="tline" style="animation-delay:1.6s"><span class="th">● THINKING</span> 先找到支付相关代码……</div>
+      <div class="tline" style="animation-delay:2.3s"><span class="tool">● TOOL</span> bash: grep -rn "charge" src/payment/</div>
+      <div class="tline" style="animation-delay:3.0s"><span class="th">● OBSERVE</span> 结果回流：PaymentService.process() 缺少幂等校验</div>
+      <div class="tline" style="animation-delay:3.7s"><span class="tool">● TOOL</span> editor: str_replace → 加入 order_id 去重</div>
+      <div class="tline" style="animation-delay:4.4s"><span class="tool">● TOOL</span> bash: pytest tests/test_payment.py <span class="ok">✓ 12 passed</span></div>
+      <div class="tline" style="animation-delay:5.1s"><span class="ok">✓ COMPLETED</span> patch 已生成 → <span class="dim">trajectories/…/patch.diff</span></div>
+      <div class="tline" style="animation-delay:5.8s"><span class="p">$</span> <span class="cursor"></span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= 第一章 ======================= -->
+<section id="ch1" class="reveal">
+  <div class="ch-head"><span class="ch-num">01</span><h2>Trae Agent 是什么？</h2></div>
+
+  <div class="definition">
+    一句话说清：<strong>Trae Agent 是一个能独立修复 Bug 的 AI 软件工程师。</strong>
+    你交给它一个任务描述（比如一条 GitHub Issue），它会自己读代码、自己定位问题、自己写修复、自己跑测试，最后交给你一份可以直接合并的 <strong>patch（代码补丁）</strong>。
+  </div>
+
+  <p>它是字节跳动开源的通用软件工程 Agent，用 Python 写成。你可以把它理解成：一个不知疲倦的初级工程师，给它一台电脑、一个代码库、一个任务，它就能埋头干完。</p>
+
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">传统方式</span>人来修 Bug</div>
+    读 Issue → 切到 IDE → 全局搜索 → 读代码 → 猜原因 → 改代码 → 跑测试 → 失败 → 再猜……
+    整个过程里，你的大脑要在"理解问题"和"操作工具"之间反复切换，上下文切换成本极高。
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">Trae 的方式</span>Agent 自主闭环</div>
+    一条命令 <code>trae-cli run "…"</code>，Agent 自己把上面的循环跑完。
+    你只需要在最后审查它交出的 patch。
+  </div>
+
+  <h3>30 秒架构总览</h3>
+  <p>整个系统拆开看，就是这么一条流水线：</p>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 250" role="img" aria-label="极简架构图">
+      <defs>
+        <marker id="ar1" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+      </defs>
+      <!-- 五个方块 -->
+      <g font-family="inherit">
+        <rect x="16" y="70" width="150" height="88" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.6"/>
+        <text x="91" y="104" text-anchor="middle" fill="#4338ca" font-size="16" font-weight="700">你的任务</text>
+        <text x="91" y="128" text-anchor="middle" fill="#78716c" font-size="11.5">Issue / 任务描述</text>
+
+        <rect x="196" y="70" width="150" height="88" rx="8" fill="#fffdf8" stroke="#c2410c" stroke-width="1.6"/>
+        <text x="271" y="104" text-anchor="middle" fill="#c2410c" font-size="16" font-weight="700">trae-cli 入口</text>
+        <text x="271" y="128" text-anchor="middle" fill="#78716c" font-size="11.5">解析配置 · 组装队伍</text>
+
+        <rect x="376" y="52" width="168" height="124" rx="8" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2.2"/>
+        <text x="460" y="88" text-anchor="middle" fill="#15803d" font-size="17" font-weight="800">Agent Loop</text>
+        <text x="460" y="112" text-anchor="middle" fill="#78716c" font-size="11.5">思考 → 行动 → 观察</text>
+        <text x="460" y="132" text-anchor="middle" fill="#a8a29e" font-size="11">不断循环 × N</text>
+        <text x="460" y="158" text-anchor="middle" fill="#15803d" font-size="10.5" font-family="monospace">execute_task()</text>
+
+        <rect x="574" y="70" width="150" height="88" rx="8" fill="#fffdf8" stroke="#0f766e" stroke-width="1.6"/>
+        <text x="649" y="104" text-anchor="middle" fill="#0f766e" font-size="16" font-weight="700">工具箱</text>
+        <text x="649" y="128" text-anchor="middle" fill="#78716c" font-size="11.5">bash · 编辑器 · CKG …</text>
+
+        <rect x="754" y="70" width="150" height="88" rx="8" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.6"/>
+        <text x="829" y="104" text-anchor="middle" fill="#6d28d9" font-size="16" font-weight="700">交付物</text>
+        <text x="829" y="128" text-anchor="middle" fill="#78716c" font-size="11.5">patch + 执行记录</text>
+      </g>
+      <!-- 箭头 -->
+      <line x1="168" y1="114" x2="192" y2="114" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <line x1="348" y1="114" x2="372" y2="114" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <line x1="546" y1="114" x2="570" y2="114" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <line x1="726" y1="114" x2="750" y2="114" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar1)"/>
+      <!-- 底部说明 -->
+      <text x="460" y="216" text-anchor="middle" fill="#a8a29e" font-size="12">整条链路只有一个 Agent 在循环 —— 没有"产品经理 Agent""测试 Agent"之分</text>
+    </svg>
+    <div class="fig-cap">图 1 · <b>就这么简单。</b>后面整篇指南，就是把这五个方块逐个打开。</div>
+  </div>
+
+  <details>
+    <summary>先澄清：它"不是"什么</summary>
+    <div class="dbody">
+      <ul>
+        <li><strong>不是聊天机器人</strong>：它不为"对话"设计，而为"完成任务"设计。交互是手段，patch 是目的。</li>
+        <li><strong>不是多智能体系统</strong>：在线主链路上只有一个 Agent 反复循环，没有一群 Agent 分工协作。</li>
+        <li><strong>不是代码补全工具</strong>：它不预测你下一行要写什么，而是自主决定整个修复策略。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<!-- ======================= 第二章 ======================= -->
+<section id="ch2" class="reveal">
+  <div class="ch-head"><span class="ch-num">02</span><h2>一个 Bug 修复的完整旅程</h2></div>
+
+  <p>抽象的架构很难记住，故事好记。我们跟着一个真实场景走完全程：</p>
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">场景</span>电商系统把用户同一笔订单扣了两次款</div>
+    你敲下：<code>trae-cli run "修复同一订单重复扣款的 bug"</code>，然后泡了杯咖啡。接下来，Agent 替你走了六步。
+  </div>
+
+  <div class="step" data-n="1">
+    <div class="step-title">接任务，点装备</div>
+    <div class="step-role">cli.py → config.py → agent.py</div>
+    <p>命令行入口先做三件事：解析你的参数、加载配置（用哪个模型、带哪些工具、最多循环几步）、然后把这些"装备"组装成一个待命的 Agent 实例。</p>
+    <div class="analogy"><span class="al">类比理解</span>像医生出诊前先看病历夹（配置）、清点器械包（工具）。装备没带齐，手术不能开始。</div>
+    <div class="src">源码入口：<code>trae_agent/cli.py</code> · <code>trae_agent/utils/config.py</code></div>
+  </div>
+
+  <div class="step" data-n="2">
+    <div class="step-title">先读代码，不急着动手</div>
+    <div class="step-role">bash / ckg 工具</div>
+    <p>Agent 的第一个动作几乎从来不是"改代码"，而是"看代码"。它会用 <code>bash</code> 跑 <code>grep</code>、<code>find</code>，或者用 <code>ckg</code>（代码知识图谱）去理解这个代码库长什么样、钱是从哪条路径扣出去的。</p>
+    <div class="analogy"><span class="al">类比理解</span>好医生先做检查、看化验单，不会上来就开刀。</div>
+  </div>
+
+  <div class="step" data-n="3">
+    <div class="step-title">核心循环启动：猜 → 验 → 再猜</div>
+    <div class="step-role">Agent Loop · 思考 → 行动 → 观察</div>
+    <p>这是整个系统的心脏。大模型提出假设（"可能是 <code>PaymentService.process()</code> 缺少幂等校验"），然后调用工具去验证，看到真实结果后再修正判断。这个"思考—行动—观察"的圈，一圈一圈地转。</p>
+    <p>注意一个关键分工：<strong>模型只负责"想"，工具才负责"做"。</strong>模型说"我要执行这条命令"，是工具真正去执行、并把真实世界的结果端回来。</p>
+    <div class="src">源码入口：<code>trae_agent/agent/base_agent.py</code> → <code>execute_task()</code></div>
+  </div>
+
+  <div class="step" data-n="4">
+    <div class="step-title">动手写修复</div>
+    <div class="step-role">str_replace_based_edit_tool</div>
+    <p>定位到问题后，Agent 用文本编辑工具做<strong>精确的字符串替换</strong>——找到那段有问题的代码，换成正确的。它不会把整个文件重写一遍。</p>
+    <div class="analogy"><span class="al">类比理解</span>像外科手术只切病灶，不做全身换血。改得越少，引入新 bug 的风险越低，也越省 token。</div>
+  </div>
+
+  <div class="step" data-n="5">
+    <div class="step-title">跑测试，不行就回头</div>
+    <div class="step-role">bash 工具 · pytest</div>
+    <p>Agent 用 <code>bash</code> 跑测试。如果测试挂了，它不会硬交差——而是带着失败信息<strong>回到第 3 步的循环</strong>，重新思考、重新修。这就是这个系统"自我纠错"能力的全部来源：不是什么魔法，只是"把失败结果喂回去再想一遍"。</p>
+  </div>
+
+  <div class="step" data-n="6">
+    <div class="step-title">交卷：patch + 全程记录</div>
+    <div class="step-role">task_done → git diff → trajectory.json</div>
+    <p>当 Agent 判断任务完成，它会调用一个特殊的 <code>task_done</code> 工具"举手交卷"。系统随即生成 <code>git diff</code> 作为最终 patch，同时把整个思考与执行过程完整记录成一份 <code>trajectory.json</code>。</p>
+    <div class="analogy"><span class="al">类比理解</span>医生写康复出院小结，同时完整病历归档——你随时能回看它每一步是怎么想的。</div>
+    <div class="src">源码入口：<code>trae_agent/agent/trae_agent.py</code> · <code>trae_agent/utils/trajectory_recorder.py</code></div>
+  </div>
+
+  <h3>旅程回顾：一张图看完</h3>
+  <div class="figure">
+    <svg viewBox="0 0 920 420" role="img" aria-label="主链路与旁路全景图">
+      <defs>
+        <marker id="ar2" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+        <marker id="ar3" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#6d28d9"/>
+        </marker>
+      </defs>
+      <!-- 主链路 -->
+      <text x="20" y="30" fill="#15803d" font-size="12.5" font-weight="700" font-family="monospace">主运行链路（在线，每次任务必走）</text>
+      <g>
+        <rect x="20" y="48" width="128" height="62" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.5"/>
+        <text x="84" y="74" text-anchor="middle" fill="#c2410c" font-size="13.5" font-weight="700">CLI 入口</text>
+        <text x="84" y="94" text-anchor="middle" fill="#78716c" font-size="10.5">trae-cli run</text>
+
+        <rect x="172" y="48" width="128" height="62" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.5"/>
+        <text x="236" y="74" text-anchor="middle" fill="#c2410c" font-size="13.5" font-weight="700">Config</text>
+        <text x="236" y="94" text-anchor="middle" fill="#78716c" font-size="10.5">模型/工具/步数</text>
+
+        <rect x="324" y="48" width="128" height="62" rx="7" fill="#fffdf8" stroke="#4338ca" stroke-width="1.5"/>
+        <text x="388" y="74" text-anchor="middle" fill="#4338ca" font-size="13.5" font-weight="700">Agent 装配</text>
+        <text x="388" y="94" text-anchor="middle" fill="#78716c" font-size="10.5">TraeAgent 实例</text>
+
+        <rect x="476" y="40" width="150" height="78" rx="7" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2.2"/>
+        <text x="551" y="68" text-anchor="middle" fill="#15803d" font-size="14.5" font-weight="800">核心循环</text>
+        <text x="551" y="88" text-anchor="middle" fill="#78716c" font-size="10.5">思考→行动→观察 ×N</text>
+        <text x="551" y="106" text-anchor="middle" fill="#15803d" font-size="9.5" font-family="monospace">execute_task()</text>
+
+        <rect x="650" y="48" width="118" height="62" rx="7" fill="#fffdf8" stroke="#4338ca" stroke-width="1.5"/>
+        <text x="709" y="74" text-anchor="middle" fill="#4338ca" font-size="13.5" font-weight="700">资源清理</text>
+        <text x="709" y="94" text-anchor="middle" fill="#78716c" font-size="10.5">关闭会话/容器</text>
+
+        <rect x="792" y="48" width="112" height="62" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.5"/>
+        <text x="848" y="74" text-anchor="middle" fill="#6d28d9" font-size="13.5" font-weight="700">输出</text>
+        <text x="848" y="94" text-anchor="middle" fill="#78716c" font-size="10.5">patch + 记录</text>
+      </g>
+      <line x1="148" y1="79" x2="168" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="300" y1="79" x2="320" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="452" y1="79" x2="472" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="626" y1="79" x2="646" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="768" y1="79" x2="788" y2="79" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+
+      <!-- 旁路 -->
+      <text x="20" y="190" fill="#6d28d9" font-size="12.5" font-weight="700" font-family="monospace">旁路 · 只记录不决策（看得见过程，不改变过程）</text>
+      <g>
+        <rect x="250" y="205" width="150" height="58" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="325" y="230" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">Trajectory</text>
+        <text x="325" y="250" text-anchor="middle" fill="#78716c" font-size="10.5">飞行记录仪·全程留痕</text>
+        <rect x="420" y="205" width="150" height="58" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="495" y="230" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">LakeView</text>
+        <text x="495" y="250" text-anchor="middle" fill="#78716c" font-size="10.5">实况解说·翻译给人看</text>
+        <rect x="590" y="205" width="150" height="58" rx="7" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="665" y="230" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">Console</text>
+        <text x="665" y="250" text-anchor="middle" fill="#78716c" font-size="10.5">仪表盘·实时状态</text>
+      </g>
+      <line x1="551" y1="118" x2="330" y2="201" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#ar3)"/>
+      <line x1="551" y1="118" x2="495" y2="201" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#ar3)"/>
+      <line x1="551" y1="118" x2="660" y2="201" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#ar3)"/>
+
+      <!-- 可选能力 -->
+      <text x="20" y="320" fill="#c2410c" font-size="12.5" font-weight="700" font-family="monospace">可选能力 · 按需启用（代码里有 ≠ 默认开启）</text>
+      <g>
+        <rect x="250" y="335" width="150" height="58" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="325" y="360" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">Docker 沙箱</text>
+        <text x="325" y="380" text-anchor="middle" fill="#78716c" font-size="10.5">隔离执行·保护主机</text>
+        <rect x="420" y="335" width="150" height="58" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="495" y="360" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">MCP 外部工具</text>
+        <text x="495" y="380" text-anchor="middle" fill="#78716c" font-size="10.5">动态接入第三方能力</text>
+        <rect x="590" y="335" width="150" height="58" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.4" stroke-dasharray="5,4"/>
+        <text x="665" y="360" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">CKG 知识图谱</text>
+        <text x="665" y="380" text-anchor="middle" fill="#78716c" font-size="10.5">代码结构速查</text>
+      </g>
+      <line x1="551" y1="118" x2="330" y2="331" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4,4"/>
+      <line x1="551" y1="118" x2="495" y2="331" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4,4"/>
+      <line x1="551" y1="118" x2="660" y2="331" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4,4"/>
+    </svg>
+    <div class="fig-cap">图 2 · <b>实线是必经主路，虚线是旁路与可选能力。</b>这是图 1 的展开版，也是整个系统的"地图"。</div>
+  </div>
+</section>
+
+<!-- ======================= 第三章 ======================= -->
+<section id="ch3" class="reveal">
+  <div class="ch-head"><span class="ch-num">03</span><h2>六大核心模块详解</h2></div>
+  <p>下面把系统拆成六个模块逐个看。<strong>不需要全部读完——挑你感兴趣的部分即可。</strong>每个模块都配了一个生活类比和源码入口，方便你想深入时知道从哪下手。</p>
+
+  <!-- 3.1 Agent Loop -->
+  <h3 id="m-loop">3.1 Agent Loop —— 整个系统的心跳</h3>
+  <div class="analogy"><span class="al">类比理解</span>一位经验丰富的医生看诊，靠的不是一次性给出答案，而是一个循环：<strong>问诊（思考）→ 开检查单（行动）→ 看报告（观察）→ 再问诊……</strong>直到确诊开方。Agent Loop 就是这个循环。</div>
+
+  <div class="figure">
+    <svg viewBox="0 0 560 400" role="img" aria-label="Agent Loop 循环图">
+      <defs>
+        <marker id="ar4" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#15803d"/>
+        </marker>
+      </defs>
+      <circle cx="280" cy="205" r="52" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2"/>
+      <text x="280" y="200" text-anchor="middle" fill="#15803d" font-size="15" font-weight="800">Agent</text>
+      <text x="280" y="220" text-anchor="middle" fill="#15803d" font-size="15" font-weight="800">Loop</text>
+
+      <rect x="190" y="22" width="180" height="62" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="280" y="48" text-anchor="middle" fill="#4338ca" font-size="14.5" font-weight="700">THINKING · 思考</text>
+      <text x="280" y="70" text-anchor="middle" fill="#78716c" font-size="11">LLM 提出下一步该做什么</text>
+
+      <rect x="356" y="296" width="180" height="62" rx="8" fill="#fffdf8" stroke="#0f766e" stroke-width="1.8"/>
+      <text x="446" y="322" text-anchor="middle" fill="#0f766e" font-size="14.5" font-weight="700">CALLING_TOOL · 行动</text>
+      <text x="446" y="344" text-anchor="middle" fill="#78716c" font-size="11">工具真正去执行命令</text>
+
+      <rect x="24" y="296" width="180" height="62" rx="8" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.8"/>
+      <text x="114" y="322" text-anchor="middle" fill="#6d28d9" font-size="14.5" font-weight="700">OBSERVE · 观察</text>
+      <text x="114" y="344" text-anchor="middle" fill="#78716c" font-size="11">工具结果喂回上下文</text>
+
+      <path d="M372,72 Q505,140 470,292" fill="none" stroke="#15803d" stroke-width="2" marker-end="url(#ar4)"/>
+      <path d="M352,334 Q280,392 208,334" fill="none" stroke="#15803d" stroke-width="2" marker-end="url(#ar4)"/>
+      <path d="M90,292 Q55,140 186,66" fill="none" stroke="#15803d" stroke-width="2" marker-end="url(#ar4)"/>
+    </svg>
+    <div class="fig-cap">图 3 · 心跳循环（思考→行动→观察）。注意"观察"只是结果回流，<span style="color:#b91c1c">Trae 没有独立的 Reflect 阶段</span>。退出条件：调用 task_done · 达到 max_steps · 发生错误。</div>
+  </div>
+
+  <p>代码里确实定义了三个步骤状态：<code>THINKING</code>、<code>CALLING_TOOL</code>、<code>REFLECTING</code>。但要注意——真正每圈都走的只有前两个。所谓"观察"，在 Trae 里就是<strong>把工具结果追加回消息历史</strong>，让下一轮 <code>THINKING</code> 自然看到，而不是进入一个独立的反思阶段（下面细说）。整个 Agent 自身还有一个更大的状态：<code>IDLE → RUNNING → COMPLETED / ERROR</code>。</p>
+  <p>循环不是无限的——配置里的 <code>max_steps</code> 是硬性护栏。这保证了即使 Agent"想不通"，任务也会在可控的资源内停下来，而不是烧着钱空转。</p>
+  <details>
+    <summary>小澄清：为什么"循环"比"更聪明的模型"更重要？</summary>
+    <div class="dbody">单次调用再聪明，也会猜错。循环的意义在于：每一步的真实反馈都能纠正上一步的猜测。测试失败了？把报错喂回去再想。路径不对？换个方向再查。<strong>智能来自闭环反馈，而不是来自某一次天才的灵光一现。</strong>这是整个 Agent 范式最核心的洞察。</div>
+  </details>
+  <details>
+    <summary>关键澄清：Trae 其实"没有"独立的 Reflect 阶段</summary>
+    <div class="dbody">
+      如果你在分享版里看到"Trae 默认不另设 Reflect 阶段"，和本节出现的 <code>REFLECTING</code> 看似矛盾，其实不冲突——两者说的不是同一件事：
+      <ul>
+        <li><strong>框架层有这个"槽位"</strong>：<code>agent_basics.py</code> 定义了 <code>REFLECTING</code> 状态，<code>BaseAgent</code> 也有一个 <code>reflect_on_result()</code> 钩子，它是留给子类扩展的接口。</li>
+        <li><strong>但 TraeAgent 把它关掉了</strong>：<code>trae_agent.py</code> 里 <code>reflect_on_result()</code> 被重写为直接 <code>return None</code>。于是主循环里 <code>if reflection:</code> 永远不成立，<code>REFLECTING</code> 状态在真实运行中根本不会被点亮。</li>
+        <li><strong>纠错靠"观察"而非"反思"</strong>：工具结果作为一条消息追加进 Provider 维护的历史，下一轮 <code>THINKING</code> 自然读到失败信息并据此调整。没有额外的"反思 Agent"，也没有专门的反思 LLM 调用。</li>
+      </ul>
+      所以本篇用"观察（Observe）"描述这一环，而不是"反思（Reflect）"——前者真实发生，后者在 Trae 里是休眠的扩展点。
+    </div>
+  </details>
+  <div class="src">源码入口：<code>trae_agent/agent/base_agent.py</code> → <code>execute_task()</code> · 状态定义见 <code>agent_basics.py</code> · 关闭 Reflect 见 <code>trae_agent.py</code> → <code>reflect_on_result()</code></div>
+
+  <!-- 3.2 工具系统 -->
+  <h3 id="m-tool">3.2 工具系统 —— Agent 的手和脚</h3>
+  <div class="analogy"><span class="al">类比理解</span>工具系统像 <strong>USB 接口</strong>：不管你插的是键盘、鼠标还是移动硬盘，只要遵守 USB 规范就能用。Agent 的工具也一样——每个工具只要实现同一套"接口约定"，就能被 Agent 调用，无需改动 Agent 本身。</div>
+
+  <p>每个工具都遵守一份四件套契约：<strong>叫什么名字</strong>（<code>get_name</code>）、<strong>能干什么</strong>（<code>get_description</code>，这段描述会直接给大模型看）、<strong>要什么参数</strong>（<code>get_parameters</code>）、<strong>怎么执行</strong>（<code>execute</code>）。Agent 把"能干什么"告诉模型，模型决定用哪个，工具负责真正执行。</p>
+
+  <table>
+    <thead><tr><th>工具</th><th>干什么</th><th>一句话</th></tr></thead>
+    <tbody>
+      <tr><td>bash</td><td>执行 shell 命令</td><td>Agent 的"手"，跑测试、搜代码全靠它</td></tr>
+      <tr><td>str_replace_based_edit_tool</td><td>查看/创建/精确替换文件内容</td><td>Agent 的"笔"，只改该改的地方</td></tr>
+      <tr><td>json_edit_tool</td><td>按路径编辑 JSON 文件</td><td>改配置文件的专用镊子</td></tr>
+      <tr><td>sequentialthinking</td><td>结构化思维链</td><td>Agent 的"草稿纸"，复杂问题分步推演</td></tr>
+      <tr><td>task_done</td><td>标记任务完成</td><td>"交卷铃"，一按就进入收尾</td></tr>
+      <tr><td>ckg</td><td>查询代码知识图谱</td><td>代码库的"导航地图"</td></tr>
+    </tbody>
+  </table>
+
+  <p>严格说，"工具"在这里指的是<strong>任何能通过 tool_call 协议被模型调用的东西</strong>，不一定都"动手"。按作用分三类：<strong>行动类</strong>（bash / 编辑器 / json_edit / ckg）真正触碰代码库和系统，是"手和脚"；<strong>思考类</strong>（sequentialthinking）不碰外部世界，只把模型的推理一步步记进内存、逼它慢下来想清楚，更像"草稿纸"；<strong>控制类</strong>（task_done）不干活，只负责"举手交卷"这个信号。三类接口完全相同，所以模型调用起来毫无区别——标题里的"手和脚"，说的是其中最核心的行动类。</p>
+  <p>挑两个"非典型"工具，单独说说它们的工作原理（点击展开）：</p>
+
+  <details style="border-left:3px solid var(--cyan)">
+    <summary><span class="tag cyan">工作原理</span>sequentialthinking · 草稿纸是怎么用的</summary>
+    <div class="dbody">
+      <p>它不存储知识，只<strong>托管模型的思考过程</strong>。模型像画连环画一样，一次调用写一格"想法"，工具负责把这些想法按顺序收进内存：</p>
+      <div class="cmd" style="margin:10px 0">想法1 → 想法2 → <span class="y">想法3（推翻想法1）</span> → 想法4（分支：换条思路）…</div>
+      <ul>
+        <li>每次调用带上 <code>thought_number</code> / <code>total_thoughts</code> / <code>next_thought_needed</code>，工具校验后追加进内存里的 <code>thought_history</code> 列表。</li>
+        <li>支持<strong>修正</strong>（<code>is_revision</code>，标明"我推翻第几步"）和<strong>分支</strong>（<code>branch_from_thought</code>，开一条平行思路分别探索）。</li>
+        <li>只要 <code>next_thought_needed=true</code> 就接着想。它对代码库<strong>零副作用</strong>，价值在于逼模型慢下来，把推理一步步摆到台面上，而不是凭直觉一蹴而就。</li>
+      </ul>
+    </div>
+  </details>
+
+  <details style="border-left:3px solid var(--cyan)">
+    <summary><span class="tag cyan">工作原理</span>ckg · 代码地图是怎么建的</summary>
+    <div class="dbody">
+      <p>CKG（Code Knowledge Graph）是给代码库建的<strong>符号索引</strong>，让 Agent 能"按名字直接跳转"到函数/类的定义，而不必满世界 <code>grep</code>：</p>
+      <div class="cmd" style="margin:10px 0">首次查询 → tree-sitter 解析全部源码 → 抽取函数/类/方法 → 存进 SQLite（以代码库哈希命名）</div>
+      <ul>
+        <li><strong>建一次，查多次</strong>：数据库以"代码库快照哈希"命名；代码没变就直接复用缓存，不重复解析，所以越用越快。</li>
+        <li>三个命令：<code>search_function</code> / <code>search_class</code> / <code>search_class_method</code>，返回符号的<strong>文件路径、行号区间和函数体</strong>。</li>
+        <li>它是<strong>近似索引</strong>（官方明确提示可能漏掉个别符号），所以是 grep 的"加速器"，而非替代品。</li>
+      </ul>
+    </div>
+  </details>
+
+  <p>工具还可以<strong>并行执行</strong>（几个独立操作一起跑）或<strong>顺序执行</strong>。而 <code>MCP</code> 机制则像一个 USB 集线器——让 Agent 在运行时动态发现并接入外部工具服务器，能力边界可以随时扩展。</p>
+  <div class="src">源码入口：<code>trae_agent/tools/base.py</code>（工具契约）· <code>trae_agent/tools/__init__.py</code>（注册表）</div>
+
+  <!-- 3.3 LLM Provider -->
+  <h3 id="m-llm">3.3 LLM Provider 层 —— 翻译公司</h3>
+  <div class="analogy"><span class="al">类比理解</span>想象一家<strong>翻译公司</strong>：你（Agent）只说中文，但客户遍布全球。公司里养着英语、日语、法语……各位译员，对外接口只有一个——"把这段话翻译出去"。你不需要知道今天接活的是哪位译员。</div>
+
+  <p>Trae 内部定义了一套统一的消息格式（<code>LLMMessage</code>）和响应格式（<code>LLMResponse</code>）。Agent 只跟这套统一格式打交道；每个 Provider 客户端（OpenAI、Anthropic、Google、Ollama……）负责把统一格式"翻译"成自家 API 能听懂的样子，再把回答"翻译"回来。</p>
+  <p>不过这个类比只说对了一半。Provider 客户端不只是"即译即忘"的译员，它同时还<strong>用该模型的原生格式留存着整段对话</strong>（<code>message_history</code>）——更像一位<strong>边翻译边速记</strong>的译员。这么做有三个原因：各家原生格式不同，缓存已译好的原生历史，模型每轮都能直接拿到"母语版"完整对话；模型的原生输出（带 <code>call_id</code>、<code>status</code> 的工具调用等）含有统一格式装不下的细节，留在原生历史里更保真；每轮也只需翻译新增的几条再追加，不必整段重译。代码里那个 <code>reuse_history</code> 开关正是管这个的：主 Agent 用 <code>True</code>（累积上下文），而 LakeView 这种一次性旁路查询用 <code>False</code>（用完即弃，不污染主对话）——这也和"LakeView 是旁路、不回灌"的结论严丝合缝。</p>
+
+  <table>
+    <thead><tr><th>Provider</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td>OpenAI</td><td>走 Responses API</td></tr>
+      <tr><td>Anthropic</td><td>原生支持 bash / 编辑工具</td></tr>
+      <tr><td>Google</td><td>GenAI 系列模型</td></tr>
+      <tr><td>Ollama</td><td>本地部署模型</td></tr>
+      <tr><td>Azure / OpenRouter / Doubao</td><td>走 OpenAI 兼容协议</td></tr>
+    </tbody>
+  </table>
+
+  <p>这层抽象的直接好处：<strong>换模型不用改一行业务代码</strong>，改配置就行。还顺带实现了统一的重试机制和 token 用量统计。</p>
+  <div class="src">源码入口：<code>trae_agent/utils/llm_clients/llm_client.py</code>（总入口）· 各客户端在同目录下</div>
+
+  <!-- 3.4 配置系统 -->
+  <h3 id="m-config">3.4 配置系统 —— 出发前的装备清单</h3>
+  <div class="analogy"><span class="al">类比理解</span>配置系统像一次<strong>探险前的装备清单</strong>：带哪个型号的对讲机（模型）、带几件工具（工具列表）、最多走几天（max_steps）。清单可以在多个层级修改，越临时的决定优先级越高。</div>
+
+  <p>配置的核心规则只有一条——<strong>分层覆盖，就近生效</strong>：</p>
+  <div class="card yellow">
+    <div class="card-title"><span class="tag yellow">优先级</span>从高到低</div>
+    命令行参数 &nbsp;＞&nbsp; 环境变量 &nbsp;＞&nbsp; 配置文件（YAML/JSON）&nbsp;＞&nbsp; 内置默认值
+  </div>
+  <p>这意味着：配置文件里写好了常用模型，但这次任务你想临时换一个，直接在命令行加个参数就行，不用动文件。配置文件主要管四件事：<strong>模型提供商</strong>（API key、地址）、<strong>模型参数</strong>（温度、max_tokens）、<strong>Agent 行为</strong>（用哪些工具、最多几步）、<strong>MCP 服务器</strong>（接哪些外部工具）。</p>
+  <div class="src">源码入口：<code>trae_agent/utils/config.py</code> · 示例见 <code>trae_config.yaml.example</code></div>
+
+  <!-- 3.5 Docker 沙箱 -->
+  <h3 id="m-docker">3.5 Docker 沙箱 —— 隔离病房</h3>
+  <div class="analogy"><span class="al">类比理解</span>让一个会执行任意命令的 AI 直接在你的主机上跑 <code>bash</code>，就像让实习生直接操作生产数据库——刺激但危险。<strong>Docker 沙箱就是那间隔离病房</strong>：所有危险操作都在一个密封的、可随时丢弃的容器里进行，主机毫发无伤。</div>
+
+  <p>实现上用了<strong>装饰器模式</strong>：沙箱执行器把原来的工具执行器"包"了一层。Agent 照常调用 <code>bash</code>、<code>edit</code> 这些工具，完全感知不到命令其实被悄悄路由进了容器——对上层透明。容器里还维持着一个持久化的 shell 会话，所以 <code>cd</code> 进某个目录后，下一条命令还在那里，和你在本机开终端的体验一致。</p>
+  <p>那沙箱到底包住哪些工具？源码里写死了一份名单，正好是三个<strong>会在文件系统/系统上留下痕迹</strong>的工具：</p>
+  <table>
+    <thead><tr><th>工具</th><th>去向</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td>bash</td><td>进容器</td><td>执行任意命令——跑测试只是其中之一，还包括探索代码、git 操作、装依赖、编译构建</td></tr>
+      <tr><td>str_replace_based_edit_tool</td><td>进容器</td><td>直接改代码（写修复就靠它），这才是最该隔离的</td></tr>
+      <tr><td>json_edit_tool</td><td>进容器</td><td>改 JSON 配置文件</td></tr>
+      <tr><td>sequentialthinking / task_done / ckg / MCP</td><td>留本地</td><td>只读或纯信号，本就不碰文件系统</td></tr>
+    </tbody>
+  </table>
+  <p>所以它<strong>绝不只是用来跑测试</strong>——真正被隔离的核心是"写代码"和"执行任意命令"这两件最危险的事。判断标准一句话：会改动现实的进容器，只读或发信号的留本地。另外，Agent 照常用主机路径思考，执行器会悄悄把路径换算成容器路径（对上层透明）；容器里的编辑工具是预编译好的二进制，而非现场跑 Python。</p>
+  <details>
+    <summary>小澄清：沙箱是默认开启的吗？</summary>
+    <div class="dbody">不是。Docker 沙箱是<strong>可选能力</strong>，需要在配置里显式启用。"代码里实现了"不等于"默认就在跑"——这个区分在看源码时非常重要，很多模块（MCP、CKG 同理）都是按需点亮的。</div>
+  </details>
+  <div class="src">源码入口：<code>trae_agent/agent/docker_manager.py</code> · <code>docker_tool_executor.py</code></div>
+
+  <!-- 3.6 可观测性 -->
+  <h3 id="m-obs">3.6 可观测性三件套 —— 记录仪、解说员、仪表盘</h3>
+  <p>Agent 在闷头干活，你怎么知道它在干什么、干得对不对？三个角色各司其职：</p>
+
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">Trajectory</span>飞行记录仪</div>
+    把每一步的思考、工具调用、执行结果、token 消耗<strong>原样记录</strong>成一份 <code>trajectory.json</code>。它是"黑匣子"，用于事后复盘和评测，不参与任何实时决策。
+  </div>
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">LakeView</span>实况解说员</div>
+    一个<strong>辅助的小模型</strong>，站在旁边把 Agent 每一步"翻译"成人话（"正在检查支付模块""正在编写修复"），并打上分类标签，让你在终端里看到人类可读的进度。
+  </div>
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">Console</span>仪表盘</div>
+    终端里的实时状态展示，有简洁版（Rich 文本）和完整版（Textual TUI）两种形态，由工厂按配置创建。
+  </div>
+
+  <p>三者里最容易混的是 LakeView 和 Console——<strong>它们不是两个都在打印的东西，而是一条流水线</strong>：真正往终端写字的只有 Console；LakeView 自己不打印，它用辅助模型生成一段"人话"解说（在干嘛 + 细节 + 分类标签），再交给 Console 包成一个标题带 "(Lakeview)" 的面板显示出来。换句话说，LakeView 是被 Console 持有的<strong>可选内容生成器</strong>——关掉它（<code>enable_lakeview=false</code>），Console 照常打印步数、状态、工具调用，只是少了那块"人话"面板。类比：Console 是电视屏幕，LakeView 是解说员，解说员把词交给屏幕播，自己不播。</p>
+
+  <div class="card red">
+    <div class="card-title"><span class="tag red">关键边界</span>看见过程 ≠ 改变过程</div>
+    这三个角色都是<strong>旁路</strong>。尤其 LakeView——它的解说只给人看，<strong>不会喂回主模型</strong>。别把"解说员"误读成"军师"。
+  </div>
+  <div class="src">源码入口：<code>trae_agent/utils/trajectory_recorder.py</code> · <code>lake_view.py</code> · <code>utils/cli/</code></div>
+</section>
+
+<!-- ======================= 第四章 ======================= -->
+<section id="ch4" class="reveal">
+  <div class="ch-head"><span class="ch-num">04</span><h2>设计哲学与边界</h2></div>
+  <p>理解了"怎么跑"，再看"为什么这么设计"。下面四条是贯穿整个项目的铁律，也是新手最容易读偏的地方。</p>
+
+  <h3>4.1 单 Agent，不搞"智能体集群"</h3>
+  <p>在线主链路上<strong>只有一个 Agent</strong> 从头循环到尾。没有"规划 Agent""编码 Agent""评审 Agent"的分工。为什么？因为单循环意味着<strong>状态简单、行为可预测、出了问题好定位</strong>。复杂性交给循环本身去消化，而不是交给一堆互相通信的 Agent。</p>
+  <details>
+    <summary>小澄清：单 Agent 一直循环，上下文不会爆炸吗？</summary>
+    <div class="dbody">
+      会增长，但 Trae 的策略不是"事后压缩历史"，而是<strong>在源头掐住每一股流入上下文的水量</strong>：
+      <ul>
+        <li><strong>工具输出硬性截断</strong>：任何工具结果超过约 16000 字符（<code>MAX_RESPONSE_LEN</code>）就会被剪掉——bash 输出、文件内容、CKG 结果一视同仁，没有谁能一次灌进一大坨。</li>
+        <li><strong>截断提示本身就是在"教"模型</strong>：被剪处会附一句"为了省上下文只展示了部分，请先用 <code>grep -n</code> 定位行号再精确查看"，直接把模型往省上下文的方向引导。</li>
+        <li><strong>精确的工具设计</strong>：<code>str_replace</code> 只需替换片段而非整文件；<code>view</code> 支持按行号区间只看局部；CKG 让模型按符号直达定义——处处鼓励"只取所需"。</li>
+      </ul>
+      它<strong>不做</strong>的：没有通用历史压缩/摘要，没有滑动窗口，也没有独立 Memory Store。完整历史由 Provider 一路维护、单调增长，最终依赖大模型本身的大上下文窗口兜底。这是"用简单换可预测"的取舍——截断能大幅减缓增长，但历史不会停止增长，超长任务仍可能逼近上限。
+    </div>
+  </details>
+
+  <h3>4.2 模型只判断，工具才执行</h3>
+  <p>大模型输出的永远是"我<em>想要</em>执行这条命令"这样的<strong>意图</strong>，真正动手的是工具层。这条边界把"思考"和"现实" cleanly 地隔开——模型的幻觉不会直接变成对文件系统的破坏，中间永远隔着一层可控的执行器。</p>
+
+  <h3>4.3 装备按需，不默认全开</h3>
+  <p>Docker、MCP、CKG 都是<strong>可选能力</strong>。源码里存在某个模块，不代表它在这次任务里被启用。读代码时先问一句"它默认开吗"，能避免一半的误解。</p>
+
+  <h3>4.4 主链路 ≠ 评估外环</h3>
+  <p>项目里还有一个 <code>evaluation/</code> 目录和"Patch Selection"（从多个候选补丁里挑最好的）。那是<strong>离线评测系统</strong>，用于跑基准测试、给研究用的，<strong>不在你每次 <code>trae-cli run</code> 的执行路径上</strong>。别把论文里的评测流程反推成线上行为。</p>
+  <details>
+    <summary>小澄清：Patch Selection 为什么会有"多个候选补丁"？</summary>
+    <div class="dbody">
+      你的直觉没错——<strong>线上单次运行，一个 Agent 确实只产出一个 patch</strong>。多个候选是离线评测刻意"多跑几遍"攒出来的：
+      <ul>
+        <li><strong>候选怎么来</strong>：因为 LLM 带温度采样（如 <code>temperature=0.5</code>），对同一个 benchmark 实例<strong>重复生成 N 次</strong>，就得到 N 条互不相同的补丁，被收集进一个候选文件——每个实例带 <code>patches:[…N…]</code> 数组，还附 <code>success_id</code> 标准答案。</li>
+        <li><strong>为什么这么做</strong>：这是 <strong>best-of-N / 测试时扩展</strong>的思路——用更多算力（多跑 N 遍）换更高成功率。官方 README 称之为"集成推理（ensemble reasoning）"，把目标建模成"最优解搜索"。</li>
+        <li><strong>怎么挑</strong>：一个独立的 <code>SelectorAgent</code>（也带 bash/编辑工具、在 Docker 沙箱里）先做回归测试过滤 + 去重 + 分组，再阅读代码、跑测试，从 Patch-1…N 里选出最可能正确的一个；可选的"多数投票"会让选择器多跑几遍取众数。</li>
+        <li><strong>为什么确定是离线</strong>：候选文件带 <code>success_id</code>（"这个补丁对不对"的标准答案）——线上系统不可能预先知道答案，只有评测才有。它跑的是 SWE-bench 评测镜像，入口也独立于 <code>trae-cli</code>。</li>
+      </ul>
+      类比：不是信任某一次修复，而是让同一个工程师独立修 10 遍，再请一位资深评审把 10 个方案都拿去跑测试、挑最好的——用更多算力换更稳的结果。
+    </div>
+  </details>
+  <p>那它到底有什么用？分两层：<strong>在这个仓库里，它是离线研究/评测工具</strong>——用来衡量"生成 N 个再选优"比"只生成 1 个"能把成功率抬高多少、选择器能否可靠挑中正确补丁（<code>success_id</code> 标准答案就是干这个的）。<strong>它背后的思想则可以产品化</strong>：真实任务也跑 N 遍再选优，用 N 倍算力换"不那么依赖单次运气"的更高命中率——README 明说目的是"进一步增强 Trae Agent"。但要注意两点：它提升的是<strong>成功率</strong>而非单次运行的"稳定性"（减少的是 run-to-run 的运气成分，标价是 N 倍算力 + 选择开销）；而且它<strong>当前完全不在线上路径</strong>，所以你正常 <code>trae-cli run</code> 并不会享受到这份加成。</p>
+
+  <details>
+    <summary>常见误解一：Trae 有"记忆系统"吗？</summary>
+    <div class="dbody">没有独立的 Memory Store。对话历史由 Provider 客户端维护，就是一份不断增长的消息列表。当前实现里没有通用的上下文压缩机制——上下文管理主要靠"精确的工具设计"（比如 str_replace 只传需要替换的片段，而不是整个文件）来控制体积。把"上下文工程"理解成"让每一步只带必要的信息"，就对了。</div>
+  </details>
+  <details>
+    <summary>常见误解二：LakeView 是"军师"，会指导主模型？</summary>
+    <div class="dbody">不是。LakeView 是<strong>旁路解说员</strong>：它读取 Agent 的步骤，生成人类可读的摘要和分类标签，只用于终端展示。它的输出<strong>不会回灌进主模型的上下文</strong>，不影响任何决策。看见过程，不等于改变过程。</div>
+  </details>
+  <details>
+    <summary>常见误解三：Patch Selection 是线上流程的一环？</summary>
+    <div class="dbody">不是。Patch Selection（从多个候选补丁中投票选优）属于 <code>evaluation/</code> 下的<strong>离线评测管线</strong>，用于基准测试和研究。你在生产里跑 <code>trae-cli run</code>，走的是单 Agent 主链路，不会触发它。读论文时别把评测外环反推成在线行为。</div>
+  </details>
+</section>
+
+<!-- ======================= 第五章 ======================= -->
+<section id="ch5" class="reveal">
+  <div class="ch-head"><span class="ch-num">05</span><h2>动手探索指南</h2></div>
+  <p>读懂的最好方式是让它跑起来，然后打开源码对照着看。</p>
+
+  <h3>5.1 先跑起来</h3>
+  <div class="cmd">
+<span class="c"># 1. 安装（项目用 uv 管理依赖）</span>
+<span class="g">uv</span> sync
+
+<span class="c"># 2. 准备配置：复制示例并填入你的 API key</span>
+<span class="g">cp</span> trae_config.yaml.example trae_config.yaml
+
+<span class="c"># 3. 跑一个任务</span>
+<span class="g">trae-cli</span> run <span class="y">"修复同一订单重复扣款的 bug"</span>
+
+<span class="c"># 或者进入交互式会话，连续布置多个任务</span>
+<span class="g">trae-cli</span> interactive
+  </div>
+  <p>跑起来后，盯着终端看它 <code>THINKING → TOOL</code> 一圈圈地循环、不断把结果喂回去，比读十页文档都直观。</p>
+
+  <h3>5.2 源码阅读顺序（五个文件，一条线）</h3>
+  <p>按下面这个顺序读，你走的就是一次任务的真实路径：</p>
+  <table>
+    <thead><tr><th>顺序</th><th>文件</th><th>看什么</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>cli.py</td><td>命令如何被解析、参数如何传下去</td></tr>
+      <tr><td>2</td><td>agent/agent.py</td><td>Agent 如何被"组装"出来（外观/工厂）</td></tr>
+      <tr><td>3</td><td>agent/base_agent.py</td><td><strong>核心循环 execute_task()</strong>，全项目的心脏</td></tr>
+      <tr><td>4</td><td>tools/base.py</td><td>工具的"四件套契约"，理解工具系统</td></tr>
+      <tr><td>5</td><td>utils/llm_clients/llm_client.py</td><td>统一消息格式如何分发到各家模型</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 常见问题（FAQ）</h3>
+  <details>
+    <summary>为什么有时任务跑完了却没有 patch？</summary>
+    <div class="dbody">两种典型情况：Agent 判断"无需改动"（patch 为空），或中途出错（ERROR 终态）。轨迹文件里能查到具体原因——这也是 Trajectory 的价值所在。</div>
+  </details>
+  <details>
+    <summary>我想给 Agent 加一个新工具，难吗？</summary>
+    <div class="dbody">不难。继承 <code>Tool</code> 基类，实现"四件套"（name / description / parameters / execute），再往 <code>tools/__init__.py</code> 的注册表里登记一行。Agent 下次启动就能用上，无需改循环逻辑。</div>
+  </details>
+  <details>
+    <summary>怎么切换模型？</summary>
+    <div class="dbody">改配置文件的 <code>models</code> 与 <code>agents.trae_agent.model</code> 两处即可，业务代码零改动——这正是 Provider 抽象层的意义。</div>
+  </details>
+  <details>
+    <summary>Agent 会不会把我的代码库搞坏？</summary>
+    <div class="dbody">默认在你的本机直接执行，所以它<strong>确实有能力</strong>改动文件。介意的话，启用 Docker 沙箱，让所有写操作和命令都进隔离容器。生产实践建议：在干净的 git 工作区里跑，随时可以 <code>git diff</code> / 回滚。</div>
+  </details>
+  <details>
+    <summary>max_steps 设多少合适？</summary>
+    <div class="dbody">它是"防失控护栏"而非"目标值"。简单 bug 十几步就够，复杂任务可能需要几十步。设小了会提前截断，设大了失控时烧钱更多——按任务复杂度调，默认值对多数场景已够用。</div>
+  </details>
+</section>
+
+<!-- ======================= 附录 A ======================= -->
+<section id="appA" class="reveal">
+  <div class="ch-head"><span class="ch-num">A</span><h2>术语对照表</h2></div>
+  <table>
+    <thead><tr><th>术语</th><th>一句话解释</th></tr></thead>
+    <tbody>
+      <tr><td>Agent Loop</td><td>思考→行动→观察的核心循环，系统的心跳</td></tr>
+      <tr><td>AgentStep</td><td>循环中的一圈，含 THINKING/CALLING_TOOL/REFLECTING 三个状态</td></tr>
+      <tr><td>Tool Call</td><td>模型发出的"我想执行某工具"的意图</td></tr>
+      <tr><td>ToolResult</td><td>工具执行后返回的真实结果</td></tr>
+      <tr><td>Trajectory</td><td>全程执行记录（黑匣子），输出为 JSON</td></tr>
+      <tr><td>LakeView</td><td>旁路解说员，把步骤翻译成人话，不参与决策</td></tr>
+      <tr><td>Provider</td><td>模型提供商（OpenAI/Anthropic/…），经统一抽象层接入</td></tr>
+      <tr><td>Patch</td><td>最终交付的代码补丁（git diff）</td></tr>
+      <tr><td>CKG</td><td>代码知识图谱，帮 Agent 快速理解代码结构</td></tr>
+      <tr><td>MCP</td><td>模型上下文协议，用于动态接入外部工具</td></tr>
+      <tr><td>Sandbox</td><td>Docker 隔离执行环境，保护主机</td></tr>
+      <tr><td>max_steps</td><td>循环步数上限，防失控护栏</td></tr>
+      <tr><td>task_done</td><td>"交卷铃"工具，Agent 用它宣告任务完成</td></tr>
+      <tr><td>str_replace</td><td>精确字符串替换的编辑方式，只改病灶</td></tr>
+      <tr><td>Reflection</td><td>对工具结果的反思，喂回上下文供下一轮思考</td></tr>
+      <tr><td>System Prompt</td><td>给 Agent 的"岗位说明书"，定义角色与规则</td></tr>
+      <tr><td>TraeAgent</td><td>面向软件工程任务的具体 Agent 实现</td></tr>
+      <tr><td>BaseAgent</td><td>定义核心循环的抽象基类</td></tr>
+      <tr><td>ToolExecutor</td><td>工具执行器，支持并行/顺序，可被沙箱装饰</td></tr>
+      <tr><td>Patch Selection</td><td>离线评测里的"多选优"机制，不属于线上主链路</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ======================= 附录 B ======================= -->
+<section id="appB" class="reveal">
+  <div class="ch-head"><span class="ch-num">B</span><h2>源码目录速查</h2></div>
+  <table>
+    <thead><tr><th>路径</th><th>用途</th><th>什么时候看</th></tr></thead>
+    <tbody>
+      <tr><td>trae_agent/cli.py</td><td>命令行入口</td><td>想知道命令怎么被解析</td></tr>
+      <tr><td>trae_agent/agent/</td><td>Agent 核心（循环、状态、Docker）</td><td>想懂主链路，先看这里</td></tr>
+      <tr><td>trae_agent/tools/</td><td>全部工具实现</td><td>想加/改工具</td></tr>
+      <tr><td>trae_agent/prompt/</td><td>系统提示词</td><td>想看 Agent 的"岗位说明书"</td></tr>
+      <tr><td>trae_agent/utils/</td><td>配置、LLM 客户端、轨迹、MCP</td><td>想懂模型层/记录层</td></tr>
+      <tr><td>trae_agent/utils/cli/</td><td>终端控制台（simple/rich）</td><td>想定制输出界面</td></tr>
+      <tr><td>evaluation/</td><td>SWE-bench 评测与 Patch Selection</td><td>做研究/跑基准时</td></tr>
+      <tr><td>tests/</td><td>单元测试</td><td>改代码后验证</td></tr>
+      <tr><td>docs/</td><td>流程图、工具说明、路线图</td><td>找官方图示</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ======================= 附录 C ======================= -->
+<section id="appC" class="reveal">
+  <div class="ch-head"><span class="ch-num">C</span><h2>进阶阅读</h2></div>
+  <p>本指南是"最顶层入口"。想往下钻，按这个梯度走：</p>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">梯度 1</span>全景架构参考</div>
+    <a href="./trae_agent_architecture.html">trae_agent_architecture.html</a> —— 十八章全景解析，是整套文档体系的"主索引"。
+  </div>
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">梯度 2</span>模块级开发文档</div>
+    <a href="./docs/trae-agent/">docs/trae-agent/</a> —— 13 份源码级契约文档（Agent Runtime、Tool、Context、Memory、Docker、Trajectory、LLM Provider、MCP、CKG 等），统一 16 节模板，适合精确查阅。
+  </div>
+</section>
+
+<!-- ======================= 三句话总结 ======================= -->
+<section class="reveal">
+  <div class="takeaway">
+    <div class="tk">读完如果只记三句话</div>
+    <ol>
+      <li><strong>智能来自循环，不来自某个超级模型。</strong>"思考→行动→观察"的闭环反馈，才是 Agent 能自我纠错的根本原因。</li>
+      <li><strong>模型负责判断，工具负责现实。</strong>所有"能力"都建立在可信的工具层之上，思考与执行之间永远隔着一层可控的边界。</li>
+      <li><strong>过程全程留痕、随时可查。</strong>Trajectory 让每一个决策都有据可依——看得见过程，才谈得上信任结果。</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  Trae Agent 架构入门指南 · 基于 trae-agent v0.1.0 源码与 arXiv:2507.23370 · 与 trae_agent_architecture.html 系列配套
+</footer>
+
+<script>
+// 顶部阅读进度条
+const prog=document.getElementById('progress');
+addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  const p=h.scrollTop/(h.scrollHeight-h.clientHeight)*100;
+  prog.style.width=p+'%';
+},{passive:true});
+
+// 滚动显现
+const io=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');io.unobserve(e.target);}});
+},{threshold:.06});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// 侧边栏高亮当前章节
+const links=[...document.querySelectorAll('#sidebar a[href^="#"]:not(.ch)')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const spy=new IntersectionObserver(es=>{
+  es.forEach(e=>{
+    if(e.isIntersecting){
+      links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id));
+    }
+  });
+},{rootMargin:'-20% 0px -70% 0px'});
+secs.forEach(s=>spy.observe(s));
+</script>
+</body>
+</html>

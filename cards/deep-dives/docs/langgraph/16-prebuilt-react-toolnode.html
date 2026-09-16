@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第16章：Prebuilt ReAct 与 ToolNode 开发文档</title>
+  <style>
+    :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--soft:#e8e1d4;--text:#44403c;--muted:#78716c;--line:rgba(28,25,23,.12);--blue:#4338ca;--green:#15803d;--yellow:#c2410c;--red:#b91c1c;--purple:#6d28d9}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.72 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code,.mono{font-family:Consolas,"SFMono-Regular",monospace}code{color:#1c1917;background:var(--soft);padding:.12em .35em;border-radius:4px}
+    .layout{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1500px;margin:auto}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:24px 18px;border-right:1px solid var(--line);background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
+    .sidebar strong{display:block;margin-bottom:10px}.sidebar a{display:block;padding:5px 8px;color:var(--muted);border-left:2px solid transparent}.sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:#fffdf8}
+    main{min-width:0;padding:32px clamp(22px,5vw,72px) 80px}.back{display:inline-block;margin-bottom:18px}.hero,.section{max-width:1050px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.hero{padding:26px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(135deg,#fffdf8,#f4f1ea)}
+    h1{margin:0 0 8px;font-size:clamp(28px,4vw,43px);line-height:1.2;color:#1c1917}h2{margin-top:52px;padding-bottom:8px;border-bottom:1px solid var(--line);color:#1c1917}h3{margin-top:26px;color:#1c1917}
+    .meta,.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.meta div,.card{padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--panel)}.label{display:block;color:var(--muted);font-size:12px}
+    .badge{display:inline-block;margin:3px 5px 3px 0;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:12px}.current{color:var(--green)}.migration{color:var(--yellow)}.gap{color:var(--red)}.optional{color:var(--purple)}
+    .callout{margin:16px 0;padding:13px 15px;border-left:4px solid var(--blue);background:var(--panel)}.warn{border-left-color:var(--yellow)}.danger{border-left-color:var(--red)}.ok{border-left-color:var(--green)}
+    .flow{padding:16px;overflow:auto;border:1px solid var(--line);border-radius:8px;background:#f0ebe0;white-space:pre;line-height:1.55}.table-wrap{overflow-x:auto;margin:14px 0}table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:10px 12px;border:1px solid var(--line);vertical-align:top;text-align:left}th{background:var(--soft);color:#1c1917}
+    .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.small{color:var(--muted);font-size:13px}
+    @media(max-width:860px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);columns:2}.sidebar strong{column-span:all}main{padding:22px 16px 60px}}@media(max-width:520px){.sidebar{columns:1}.hero{padding:18px}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="本章目录">
+    <strong>第16章目录</strong>
+    <a href="#position">1. 模块定位</a><a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a><a href="#architecture">4. 架构组成</a>
+    <a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态模型</a>
+    <a href="#interfaces">7. 接口、协议与事件</a><a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a><a href="#observability">12. 可观测性与排障</a>
+    <a href="#tests">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与已知限制</a><a href="#sources">16. 源码索引与进一步阅读</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+  <main>
+    <a class="back" href="../../langgraph_architecture.html#s16">← 返回 LangGraph 架构总览第 16 章</a>
+    <header class="hero">
+      <h1>Prebuilt ReAct 与 ToolNode：从工具循环到普通 StateGraph</h1>
+      <p>面向维护 Agent Loop、工具治理、中断恢复与 LangChain agents 迁移的开发级源码审计。</p>
+      <p><span class="badge current">当前实现</span><span class="badge migration">迁移兼容</span><span class="badge optional">可选能力</span><span class="badge gap">明确证据缺口</span></p>
+      <div class="meta">
+        <div><span class="label">包基线</span><code>langgraph-prebuilt 1.1.0</code></div>
+        <div><span class="label">证据状态</span>源码与聚焦测试已审计；Git SHA 因当前命令环境无 Git 可执行文件而未取得</div>
+        <div><span class="label">主要 Owner</span><code>libs/prebuilt/langgraph/prebuilt/</code></div>
+        <div><span class="label">目标读者</span>Agent、Tool、HITL、迁移与平台开发者</div>
+        <div><span class="label">最近验证</span>2026-08-14</div>
+        <div><span class="label">运行边界</span>本地 Python Graph；不代表 API Server</div>
+      </div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p><code>langgraph-prebuilt</code> 是高层构图和工具执行库，不是新的调度内核。<code>create_react_agent</code> 把 model、tools、hook 和路由装配进 <code>StateGraph</code>，最后调用 <code>compile()</code> 返回 <code>CompiledStateGraph</code>；执行、checkpoint、interrupt 和 stream 仍由普通 LangGraph Runtime 提供。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:787-828</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:861-1002</code></span></p>
+      <div class="table-wrap"><table>
+        <tr><th>职责</th><th>本模块负责</th><th>委托/明确不负责</th></tr>
+        <tr><td>ReAct 构图</td><td>model/tool 节点、条件边、hook、structured response、return_direct</td><td>超级步调度、Channel 合并、checkpoint 由 core LangGraph 负责</td></tr>
+        <tr><td>工具执行</td><td>输入解析、并行调用、注入、结果规范化、工具错误消息</td><td>外部 API 权限、事务、幂等和速率限制由工具或 wrapper 负责</td></tr>
+        <tr><td>兼容入口</td><td>保留 <code>create_react_agent</code> 与旧别名</td><td>新 Agent middleware 设计位于 <code>langchain.agents.create_agent</code></td></tr>
+        <tr><td>持久化</td><td>把 <code>checkpointer</code>/<code>store</code> 传给编译器</td><td>不自行实现 saver、Store 或远程服务队列</td></tr>
+      </table></div>
+      <p>包声明依赖 <code>langgraph-checkpoint &gt;=2.1.0,&lt;5.0.0</code> 与 <code>langchain-core &gt;=1.3.1</code>，测试才额外依赖 core <code>langgraph</code> 和具体 saver。<span class="evidence"><code>libs/prebuilt/pyproject.toml:5-29</code>、<code>libs/prebuilt/pyproject.toml:37-50</code></span></p>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <div class="flow">调用方
+  invoke / stream / ainvoke / astream
+            │
+            ▼
+CompiledStateGraph（普通 Pregel 可执行图）
+  agent ──tool_calls──► tools: ToolNode ──ToolMessage/Command──┐
+    ▲          │                                               │
+    │          └─无调用─► post hook / structured response / END│
+    └──────────────── pre_model_hook（可选）◄──────────────────┘
+                              │
+          ┌───────────────────┼────────────────────┐
+          ▼                   ▼                    ▼
+   ChatModel provider    外部工具副作用       Checkpointer / Store</div>
+      <p>公共入口由 <code>langgraph.prebuilt.__init__</code> 导出；真正 Owner 分别是 <code>chat_agent_executor.py</code> 与 <code>tool_node.py</code>。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/__init__.py:1-23</code></span></p>
+      <p>进程边界必须分清：ToolNode 本身在 Python 运行时中调用 <code>BaseTool.invoke/ainvoke</code>。某个工具可以访问网络或数据库，但那是工具的副作用边界；Auth、队列、远程 checkpoint 与部署能力不能反推为 prebuilt 默认能力。</p>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="cards">
+        <div class="card"><strong>ReAct loop</strong><p>模型产出 tool calls，工具结果以消息回灌模型，直到模型不再请求工具。</p></div>
+        <div class="card"><strong>Message reducer</strong><p><code>add_messages</code> 按消息 ID 追加、替换或删除，不是简单 list 拼接。</p></div>
+        <div class="card"><strong>ToolRuntime</strong><p>每个 tool call 独立构造的受信运行上下文，包含 state、context、config、store、writer、call id 等。</p></div>
+        <div class="card"><strong>Control-flow value</strong><p><code>Command</code> 改变 State 或路由；<code>GraphBubbleUp</code> 是异常型控制流，不等同普通工具失败。</p></div>
+      </div>
+      <p><code>AgentState.messages</code> 标注为 <code>Annotated[Sequence[BaseMessage], add_messages]</code>，<code>remaining_steps</code> 是 ManagedValue。旧 State 类型本身也已标记迁往 LangChain agents。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:53-74</code></span></p>
+      <p><code>Runtime</code> 面向图节点；<code>ToolRuntime</code> 面向单个工具调用，额外携带 <code>state</code>、<code>config</code> 与 <code>tool_call_id</code>。两者不可互换。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1662-1730</code></span></p>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <h3>4.1 Agent model 节点与路由</h3>
+      <p>model 节点先取得 <code>messages</code>（有 pre-hook 时可取 <code>llm_input_messages</code>），校验历史，再同步或异步调用静态/动态模型并返回 <code>{"messages":[response]}</code> partial update。步数不足时，它用相同 message ID 返回解释性 AIMessage，从而由 reducer 替换原响应。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:620-721</code></span></p>
+      <h3>4.2 ToolNode</h3>
+      <p>构造阶段把 callable 转为 <code>BaseTool</code>，按名称建索引，并一次扫描 schema 与函数签名缓存注入信息；执行阶段才解析 tool calls、构造逐调用 runtime、注入受信参数、调用工具并组合输出。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:743-786</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1967-2030</code></span></p>
+      <h3>4.3 v1 与 v2 图形差异</h3>
+      <p>兼容参数 <code>version</code> 默认 <code>v2</code>。v1 把某轮全部 tool calls 交给一次 <code>tools</code> 节点运行；v2 为每个 call 产生一个 <code>Send("tools", ToolCallWithContext(...))</code>。二者都仍是 StateGraph/Pregel task，只是 fan-out 和恢复粒度不同。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:305-308</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:830-859</code></span></p>
+      <h3>4.4 hooks 与 structured response</h3>
+      <p><code>pre_model_hook</code> 每轮位于 model 前；<code>post_model_hook</code> 位于 model 后并重新判断尚未完成的 calls；最终 structured response 由独立节点再次使用 model 的 <code>with_structured_output</code> 生成。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:723-785</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:874-968</code></span></p>
+    </section>
+
+    <section class="section" id="flows">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 成功路径：模型 → 并行工具 → 模型 → END</h3>
+      <ol>
+        <li>调用方提交含 HumanMessage 的 State；<code>add_messages</code> 规范化消息并分配缺失 ID。</li>
+        <li><code>agent</code> 校验完整历史，模型返回带多个 tool calls 的 AIMessage。</li>
+        <li>v1 路由到一个 ToolNode task；v2 为每个 call 建独立 Send task。ToolNode 创建对应 <code>ToolRuntime</code>。</li>
+        <li>sync 使用 executor，async 使用协程并发；普通返回被 BaseTool 规范成 ToolMessage，Command 经过结构校验。</li>
+        <li>消息 reducer 在超级步屏障后合并 writes；非 <code>return_direct</code> 路回 model。模型不再发 tool call 时结束，或进入 structured response 节点。</li>
+      </ol>
+      <p>真实双工具测试得到两条 ToolMessage，随后模型生成最终 AIMessage。<span class="evidence"><code>libs/prebuilt/tests/test_react_agent.py:1093-1179</code></span></p>
+      <h3>5.2 拒绝/提前结束路径</h3>
+      <ul>
+        <li>历史中 AI tool call 没有对应 ToolMessage：model 调用前抛 <code>ValueError(INVALID_CHAT_HISTORY)</code>，不向 provider 发送非法历史。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:243-271</code></span></li>
+        <li>未知工具名：不是异常终止，而是返回绑定相同 call id 的 <code>ToolMessage(status="error")</code>，让模型有机会纠正。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1268-1279</code>、<code>libs/prebuilt/tests/test_tool_node.py:568-594</code></span></li>
+        <li><code>return_direct=True</code> 的工具完成后路由 END；并行轮中任一 call 属于 return-direct 工具也会提前结束。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:970-990</code>、<code>libs/prebuilt/tests/test_react_agent.py:982-1084</code></span></li>
+        <li>剩余步数不足且模型仍请求工具时，model 返回 “need more steps” AIMessage，不执行该批工具。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:620-634</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:681-694</code></span></li>
+      </ul>
+      <h3>5.3 中断与恢复路径</h3>
+      <p>工具内 <code>interrupt()</code> 产生 <code>GraphInterrupt/GraphBubbleUp</code>，直接工具执行路径显式上抛；根图记录 pending interrupt，调用方以同一 thread 配置和 <code>Command(resume=...)</code> 恢复。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:973-1003</code>、<code>libs/prebuilt/tests/test_react_agent.py:580-595</code></span></p>
+      <div class="callout warn"><strong>恢复副作用差异：</strong>真实并行中断测试中，v1 恢复后非中断天气工具执行两次；v2 因独立 Send task 只执行一次。动态 interrupt 恢复仍会从中断工具函数开头重跑，所以中断前副作用必须幂等或拆到独立节点。<span class="evidence"><code>libs/prebuilt/tests/test_react_agent.py:598-676</code></span></div>
+    </section>
+
+    <section class="section" id="state">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap"><table>
+        <tr><th>数据</th><th>所有者/生命周期</th><th>关键语义</th></tr>
+        <tr><td><code>messages</code></td><td>StateGraph Channel；跨超级步</td><td>按 ID 替换、追加、RemoveMessage 删除；不是线程共享 list</td></tr>
+        <tr><td><code>remaining_steps</code></td><td>ManagedValue；当前执行</td><td>保护循环预算，不要求调用者手工维护普通字段</td></tr>
+        <tr><td><code>structured_response</code></td><td>可选 State key</td><td>启用 response_format 时 schema 必须声明该 key</td></tr>
+        <tr><td><code>ToolRuntime.state</code></td><td>单个 tool call 的快照</td><td>v2 Send 可从携带快照或 Pregel local read 水合</td></tr>
+        <tr><td><code>ToolRuntime.store</code></td><td>编译图注入的 BaseStore 引用</td><td>跨 thread 长期数据；不是 checkpoint</td></tr>
+        <tr><td>pending writes/checkpoint</td><td>core Runtime/checkpointer</td><td>prebuilt 只透传配置，不另建持久化格式</td></tr>
+      </table></div>
+      <p><code>add_messages</code> 会把输入转成消息、补 ID；同 ID 的新消息替换旧消息，RemoveMessage 删除已有 ID，删除未知 ID 则报错，<code>REMOVE_ALL_MESSAGES</code> 清空此前历史。<span class="evidence"><code>libs/langgraph/langgraph/graph/message.py:187-240</code></span></p>
+      <p>v2 的新 Send payload 可以仅含 tool call，再经 Pregel 提供的 <code>CONFIG_KEY_READ</code> 从 channels 做 fresh local read；ManagedValue 仍走自己的 runtime 注入路径。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1281-1313</code></span></p>
+      <p>Secret 不应放进模型可见 messages 或普通 tool args。Store 的 namespace、TTL、租户授权和数据清理由应用所有；ToolNode 仅传递 Store 对象。</p>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <h3>7.1 公共 API</h3>
+      <p><code>create_react_agent(...)-&gt;CompiledStateGraph</code> 支持 Runnable 的 invoke/stream/async/state API；<code>ToolNode</code> 自身也是 Runnable node，可接收消息 list、含消息字段的 dict/BaseModel、直接 tool-call list，或内部 <code>ToolCallWithContext</code>。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:278-308</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1224-1266</code></span></p>
+      <h3>7.2 Tool 输出协议</h3>
+      <p>工具的规范结果是 <code>ToolMessage</code>、<code>Command</code> 或由二者组成的 list；普通 BaseTool 返回通常先由 LangChain 转成 ToolMessage。Command 当前图更新必须包含且仅终结一次对应 call id 的 ToolMessage；输入形状与 <code>Command.update</code> 的 dict/list 形状必须一致。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1432-1501</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1503-1579</code></span></p>
+      <p>多个 <code>Command.PARENT</code> 且 goto 为 Send list 时，ToolNode 合并为一个 parent Command；其他 Command 和消息更新保持独立输出供 LangGraph 处理。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:862-920</code>、<code>libs/prebuilt/tests/test_tool_node.py:1197-1281</code></span></p>
+      <h3>7.3 Wrapper 协议</h3>
+      <p><code>wrap_tool_call(request, execute)</code> 与异步版本允许修改不可变请求副本、多次调用 execute 做重试、零次调用做缓存/拒绝，或直接返回 ToolMessage/Command。异步未给 <code>awrap_tool_call</code> 时会退回 sync wrapper 和 sync tool 执行。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:202-283</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1161-1222</code></span></p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap"><table>
+        <tr><th>配置项</th><th>类型/可选值</th><th>默认</th><th>生效边界</th><th>失败行为与来源</th></tr>
+        <tr><td><code>version</code></td><td><code>v1 | v2</code></td><td><code>v2</code></td><td>tool-call fan-out/恢复粒度</td><td>其他值 ValueError；<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:305-305</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:533-536</code></td></tr>
+        <tr><td><code>handle_tool_errors</code></td><td>bool/string/callable/异常类型/tuple</td><td>仅默认工具调用错误策略</td><td>ToolNode 普通异常</td><td>匹配则 error ToolMessage，否则上抛；<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:743-770</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:984-1012</code></td></tr>
+        <tr><td><code>messages_key</code></td><td>string</td><td><code>messages</code></td><td>ToolNode 输入/输出</td><td>找不到消息或 AIMessage 报 ValueError；<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:743-756</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1224-1266</code></td></tr>
+        <tr><td><code>response_format</code></td><td>schema 或 prompt/schema tuple</td><td>None</td><td>最终额外 model call</td><td>自定义 State 缺 key 时构图拒绝；<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:538-552</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:744-785</code></td></tr>
+        <tr><td><code>checkpointer</code></td><td><code>None | False | True | BaseCheckpointSaver</code></td><td>None</td><td>透传给 <code>StateGraph.compile</code>；None 可继承父图、False 禁用、True 仅适合作为嵌套子图自行持久化</td><td>根图以 True 执行时 RuntimeError；<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:300-301</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:995-1002</code>、<code>libs/langgraph/langgraph/types.py:100-119</code>、<code>libs/langgraph/langgraph/pregel/main.py:2579-2588</code></td></tr>
+        <tr><td><code>store</code></td><td><code>BaseStore | None</code></td><td>None</td><td>编译后注入 Runtime / ToolRuntime</td><td>InjectedStore 无 store 时 ValueError；<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:300-301</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1407-1415</code></td></tr>
+        <tr><td><code>interrupt_before/after</code></td><td>节点名 list 或 None</td><td>None</td><td>静态断点</td><td>传给 compile；不同于工具内动态 interrupt</td></tr>
+        <tr><td><code>context_schema</code></td><td>type 或 None</td><td>None</td><td>Runtime context</td><td>旧 <code>config_schema</code> 只发迁移警告并映射；<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:520-530</code></td></tr>
+      </table></div>
+      <p>工具自身的 <code>return_direct</code> 优先影响图路由；model 若已绑定 tools，构图会校验数量和名称，缺失或不匹配直接拒绝。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:173-217</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:595-597</code></span></p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <p>ToolNode sync 路径使用 <code>get_executor_for_config(config)</code> 和 <code>executor.map</code>；async 路径为每个 call 建 coroutine 并 <code>asyncio.gather</code>。返回列表保持输入顺序，但完成时间和外部副作用顺序不受该列表顺序保证。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:793-860</code></span></p>
+      <p>v1 的“一个 ToolNode task 内并行”和 v2 的“多个 Send/PUSH task”不能混为一谈。两者的工具都可能并发；v2 额外获得 task 级 pending-write/恢复隔离，真实中断测试证明它能避免已完成兄弟工具重跑。<span class="evidence"><code>libs/prebuilt/tests/test_react_agent.py:645-676</code></span></p>
+      <div class="callout danger">Channel reducer 只合并图 State writes，不会为两个工具同时修改同一数据库行、文件、支付请求或邮件发送提供锁。使用数据库事务、幂等键、租户级锁，或把有依赖的操作拆成顺序图节点。</div>
+      <p>源码未为 ToolNode 定义独立队列容量、背压、工具超时或重试预算；这些来自 RunnableConfig/executor、工具客户端、wrapper 或上层 Runtime。不要虚构固定并发数或 SLA。</p>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <p><code>InjectedState</code>、<code>InjectedStore</code> 与 <code>ToolRuntime</code> 属系统注入参数。执行前，ToolNode 会移除模型伪造的所有 injected keys，再写入受信值；缺失必要 state 字段或 Store 时拒绝。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1315-1430</code></span></p>
+      <p>完整 schema 与函数签名都用于发现注入参数，schema 注解优先；任何 <code>InjectedToolArg</code> 子类也会被列入剥离集合。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1967-2029</code></span></p>
+      <div class="table-wrap"><table>
+        <tr><th>风险</th><th>内建防线</th><th>应用仍需负责</th></tr>
+        <tr><td>模型伪造 user/store/runtime</td><td>隐藏 schema 参数并剥离 caller 值</td><td>context 和 Store 本身必须由可信入口建立</td></tr>
+        <tr><td>未知工具</td><td>error ToolMessage，默认 fail-closed 不执行</td><td>wrapper 动态注册工具时重新做授权</td></tr>
+        <tr><td>危险副作用</td><td>无默认审批</td><td>在 post-model hook/wrapper 实现 policy、HITL、审计与幂等</td></tr>
+        <tr><td>错误信息泄露</td><td>错误模板可配置</td><td>不要把 Secret、SQL、内部路径回显给模型</td></tr>
+        <tr><td>多租户 Store</td><td>只注入 Store 引用</td><td>namespace 必须绑定可信 tenant/user，工具不能相信模型给出的租户 ID</td></tr>
+      </table></div>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table>
+        <tr><th>故障/现象</th><th>检测与即时行为</th><th>状态影响</th><th>恢复/运维</th></tr>
+        <tr><td>未知工具</td><td>生成 error ToolMessage</td><td>历史完整，模型可修正</td><td>检查 bind_tools 与注册表</td></tr>
+        <tr><td>参数校验或普通工具异常</td><td>按 handle 策略转 error ToolMessage 或抛出</td><td>转换时写消息；抛出时 task 失败</td><td>可由模型重试、wrapper 重试或图级重试；副作用后重试需幂等</td></tr>
+        <tr><td>无 Store 却请求 InjectedStore</td><td>ValueError</td><td>该调用无成功 ToolMessage</td><td>compile(store=...) 或移除依赖</td></tr>
+        <tr><td>非法历史</td><td>model 前 ValueError</td><td>不向 provider 发请求</td><td>补齐每个 call id 的 ToolMessage 或从合法 checkpoint 恢复</td></tr>
+        <tr><td>动态 interrupt</td><td>GraphBubbleUp 到根图</td><td>checkpoint 记录 pending interrupt</td><td>同 thread 用 Command(resume=...)；保证节点前段幂等</td></tr>
+        <tr><td>Command 缺匹配 ToolMessage</td><td>ValueError</td><td>拒绝不完整历史更新</td><td>让当前图 Command 恰好终结对应 call id</td></tr>
+        <tr><td>async model 被 sync invoke</td><td>RuntimeError</td><td>model 节点失败</td><td>改用 ainvoke/astream 或提供 sync model</td></tr>
+      </table></div>
+      <h3>11.1 GraphBubbleUp 与 wrapper 的准确边界</h3>
+      <p>没有 wrapper 时，sync/async 的直接工具执行都先捕获 <code>GraphBubbleUp</code> 并立即重抛，普通错误处理器即使声明捕获它也不能吞掉；测试覆盖这一点。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:973-1003</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1120-1159</code>、<code>libs/prebuilt/tests/test_tool_node.py:597-626</code></span></p>
+      <div class="callout danger"><strong>当前 wrapper 锐边：</strong><code>_run_one/_arun_one</code> 的 wrapper 外层捕获普通 <code>Exception</code>，在 <code>handle_tool_errors</code> 启用时会转为 error ToolMessage；由于 <code>GraphBubbleUp</code> 继承 <code>Exception</code>，一个 passthrough wrapper 经 <code>execute()</code> 收到的控制流异常存在被该外层转换的实现风险。现有测试只覆盖无 wrapper 的传播，未覆盖 wrapper + interrupt。wrapper 应显式 <code>except GraphBubbleUp: raise</code>，且扩展时应补回归测试。<span class="evidence"><code>libs/langgraph/langgraph/errors.py:50-54</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1053-1067</code>、<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1204-1222</code></span></div>
+      <h3>11.2 迁移兼容边界</h3>
+      <p><code>create_react_agent</code> 已用 LangGraph v1 deprecation 类别标记迁往 <code>langchain.agents.create_agent</code>；旧别名 <code>create_tool_calling_executor</code> 仍直接指向它。它是兼容入口，不应成为新项目唯一架构基线。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:274-317</code>、<code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:1004-1015</code></span></p>
+      <p>迁移不是机械改 import：当前 prebuilt 参数包含 v1/v2、pre/post hook、State schema、structured response 与 ToolNode wrapper；LangChain <code>create_agent</code> 使用 middleware，尤其工具 wrapper 应迁到 <code>AgentMiddleware.wrap_tool_call</code> 并重新证明 interrupt、State 类型、stream 与 checkpoint 兼容。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:202-222</code></span></p>
+    </section>
+
+    <section class="section" id="observability">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap"><table>
+        <tr><th>现象</th><th>先检查</th><th>常见原因</th><th>修复</th></tr>
+        <tr><td>模型不断重试未知工具</td><td>最后 AIMessage/tool name/error ToolMessage</td><td>模型绑定表与 ToolNode 注册表漂移</td><td>统一工具源；构图阶段保持名称校验</td></tr>
+        <tr><td>恢复后外部动作重复</td><td>version、checkpoint tasks、工具计数</td><td>v1 同 task 重跑或中断前副作用</td><td>评估 v2；使用幂等键/独立节点</td></tr>
+        <tr><td>模型 provider 拒绝消息</td><td>每个 AI tool call id 是否有 ToolMessage</td><td>手工 update/Command 破坏历史</td><td>使用 ToolNode 规范输出并修复 checkpoint 输入</td></tr>
+        <tr><td>Store 注入为空</td><td>compile(store=...) 与 Runtime</td><td>只构造 Store 但未交给图</td><td>在编译边界传 Store；验证 namespace</td></tr>
+        <tr><td>中断变成 error ToolMessage</td><td>是否配置 wrapper 与 handle_tool_errors</td><td>wrapper 外层泛化异常转换</td><td>显式重抛 GraphBubbleUp；加 wrapper interrupt 测试</td></tr>
+        <tr><td>async 工具阻塞</td><td>是否仅提供 sync wrapper/tool</td><td>async 路径回退到同步执行</td><td>提供真正 <code>awrap_tool_call</code> 与 async tool</td></tr>
+      </table></div>
+      <p>可用观测面包括 CompiledStateGraph 的 values/updates/messages/custom 等 stream、节点名 <code>agent/tools/hooks</code>、ToolMessage 的 <code>status/name/tool_call_id</code>、checkpoint task/interrupt，以及工具通过 stream writer 发出的自定义事件。ToolRuntime 还可在启用 tools stream 时发送 output delta；未启用对应 writer 时静默 no-op。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1732-1750</code>、<code>libs/prebuilt/tests/test_react_agent.py:1182-1206</code></span></p>
+    </section>
+
+    <section class="section" id="tests">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table>
+        <tr><th>契约/不变量</th><th>真实测试</th><th>类型</th><th>能证明什么</th><th>缺口</th></tr>
+        <tr><td>ReAct 双工具成功闭环</td><td><code>libs/prebuilt/tests/test_react_agent.py:1093-1179</code></td><td>集成</td><td>普通 StateGraph、ToolMessage 回灌、最终 AIMessage</td><td>不证明真实 provider</td></tr>
+        <tr><td>v1/v2 并行中断恢复</td><td><code>libs/prebuilt/tests/test_react_agent.py:598-676</code></td><td>持久化集成</td><td>v1 重跑兄弟工具、v2 task 隔离</td><td>只用测试 saver/假模型</td></tr>
+        <tr><td>错误策略与未知工具</td><td><code>libs/prebuilt/tests/test_tool_node.py:240-594</code></td><td>sync/async 单元</td><td>error ToolMessage、类型过滤、关闭处理后上抛</td><td>无外部重试语义</td></tr>
+        <tr><td>GraphBubbleUp 传播</td><td><code>libs/prebuilt/tests/test_tool_node.py:597-626</code></td><td>单元</td><td>无 wrapper 直接路径不吞控制流</td><td>缺 wrapper + interrupt</td></tr>
+        <tr><td>State/Store 注入</td><td><code>libs/prebuilt/tests/test_tool_node.py:1343-1479</code></td><td>多 schema/图集成</td><td>字段、全 State、编译 Store 注入</td><td>不证明租户授权</td></tr>
+        <tr><td>parent Send Command 合并</td><td><code>libs/prebuilt/tests/test_tool_node.py:1197-1281</code></td><td>单元</td><td>两个 parent Send 合成一个 Command</td><td>不证明远程子图</td></tr>
+        <tr><td>wrapper 重试/短路/Command</td><td><code>libs/prebuilt/tests/test_on_tool_call.py:755-837</code>、<code>libs/prebuilt/tests/test_on_tool_call.py:930-1119</code></td><td>单元</td><td>多次 execute、零次 execute、Command 透传</td><td>缺取消与 GraphBubbleUp</td></tr>
+        <tr><td>config_schema 迁移</td><td><code>libs/prebuilt/tests/test_deprecation.py:13-41</code></td><td>deprecation</td><td>旧参数映射、未知 kwargs 拒绝</td><td>不证明 LangChain 新 API 等价</td></tr>
+      </table></div>
+      <p>本文没有修改库源码，因此仓库规则中的 <code>make format/lint/test</code> 不适用于代码变更门禁；文档验证见本次交付结果。实际修改 prebuilt 时，应在 <code>libs/prebuilt</code> 运行三项完整门禁，并优先运行上述聚焦测试。</p>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table>
+        <tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr>
+        <tr><td>改变 ReAct 路由</td><td><code>chat_agent_executor.py</code> routers/edges</td><td>v1/v2、hooks、return_direct、structured response</td><td>图快照 + sync/async + interrupt 恢复</td></tr>
+        <tr><td>新增注入类型</td><td><code>tool_node.py</code> detection/injection</td><td>模型 schema 隐藏、伪造参数剥离、validation filtering</td><td>函数签名和 args_schema；缺值 fail-closed</td></tr>
+        <tr><td>工具策略/审批</td><td>wrapper 或 LangChain middleware</td><td>错误分类、GraphBubbleUp、审计、幂等</td><td>允许/拒绝/恢复三路径</td></tr>
+        <tr><td>Command 能力</td><td>normalize/validate/combine</td><td>消息终结、CURRENT/PARENT、Send 合并</td><td>dict/list 输入与多个并行 call</td></tr>
+        <tr><td>迁往 create_agent</td><td>应用 factory/middleware</td><td>State、hooks、tool wrapper、stream、checkpointer</td><td>旧新双跑 fixture 与 checkpoint 策略</td></tr>
+      </table></div>
+      <h3>14.1 推荐的工具治理 wrapper</h3>
+      <ol>
+        <li>从 <code>request.runtime.context</code> 读取可信主体，不从模型 args 读取 tenant/user。</li>
+        <li>先做工具名、参数与资源范围授权；拒绝时返回绑定原 call id 的安全 ToolMessage。</li>
+        <li>调用 <code>execute(request.override(...))</code>；只对确认可重试的瞬时异常重试。</li>
+        <li>把 <code>GraphBubbleUp</code> 单独重抛；不要把 interrupt 变成模型可见普通错误。</li>
+        <li>记录 tool name、call id、decision、attempt 和耗时，但清理 Secret。</li>
+      </ol>
+      <p>禁止直接修改 <code>ToolCallRequest</code> 属性；该方式已发 deprecation warning，应使用返回新实例的 <code>override()</code>。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:151-199</code></span></p>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap"><table>
+        <tr><th>选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr>
+        <tr><td>ReAct 编译为普通 StateGraph</td><td>复用 checkpoint、stream、interrupt、可视化</td><td>需要理解 Pregel 超级步而非 while-loop 直觉</td><td>若新 middleware API 已覆盖全部契约</td></tr>
+        <tr><td>v2 每 call 一个 Send</td><td>更细恢复与 HITL 隔离</td><td>更多 task/路由开销；仍需 reducer 合并</td><td>大量微工具调用或状态体积压测</td></tr>
+        <tr><td>错误转 ToolMessage</td><td>模型可自修复，历史保持完整</td><td>可能泄露内部错误或造成无界重试</td><td>安全敏感/不可重试副作用应 fail-closed</td></tr>
+        <tr><td>强制 Command 终结消息</td><td>避免 provider 非法历史</td><td>复杂 handoff 需显式构造 ToolMessage</td><td>消息协议改变时</td></tr>
+        <tr><td>兼容入口继续保留</td><td>降低现有应用升级成本</td><td>两套 Agent API 长期漂移</td><td>迁移验证完成并进入移除窗口</td></tr>
+      </table></div>
+      <p>已知限制包括：无 ToolNode 内建事务/锁/速率限制；无固定并发或背压保证；工具外部副作用不能由 Channel reducer 回滚；wrapper 控制流异常传播存在上述缺口；本仓库测试不能证明具体 LLM provider、API Server 或托管平台行为。</p>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap"><table>
+        <tr><th>角色</th><th>路径与行号</th><th>用途</th></tr>
+        <tr><td>公共导出</td><td><code>libs/prebuilt/langgraph/prebuilt/__init__.py:1-23</code></td><td>当前 API 表面</td></tr>
+        <tr><td>ReAct 入口/迁移</td><td><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:274-317</code></td><td>签名、deprecated 边界</td></tr>
+        <tr><td>图装配</td><td><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:787-1002</code></td><td>StateGraph 节点、边、compile</td></tr>
+        <tr><td>消息合法性</td><td><code>libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py:243-271</code></td><td>tool call/result 配对</td></tr>
+        <tr><td>ToolNode 并发</td><td><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:793-860</code></td><td>sync executor / async gather</td></tr>
+        <tr><td>注入与信任</td><td><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1281-1430</code></td><td>State 水合、Store/Runtime 注入、伪造值剥离</td></tr>
+        <tr><td>Command 协议</td><td><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1432-1579</code></td><td>输出规范化与消息终结</td></tr>
+        <tr><td>Runtime 类型</td><td><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1662-1730</code></td><td>ToolRuntime 字段</td></tr>
+        <tr><td>message reducer</td><td><code>libs/langgraph/langgraph/graph/message.py:187-244</code></td><td>追加、替换、删除</td></tr>
+        <tr><td>真实集成测试</td><td><code>libs/prebuilt/tests/test_react_agent.py:598-676</code></td><td>并行 interrupt 恢复</td></tr>
+        <tr><td>真实 ToolNode 测试</td><td><code>libs/prebuilt/tests/test_tool_node.py:240-626</code></td><td>错误、未知工具、控制流</td></tr>
+        <tr><td>wrapper 测试</td><td><code>libs/prebuilt/tests/test_on_tool_call.py:755-1119</code></td><td>异常、重试、短路、Command</td></tr>
+        <tr><td>依赖与版本</td><td><code>libs/prebuilt/pyproject.toml:5-29</code></td><td>包基线和依赖范围</td></tr>
+      </table></div>
+      <p>进一步阅读：<a href="15-functional-api.html">第 15 章 Functional API</a>、<a href="17-remotegraph-sdk-cli.html">第 17 章 RemoteGraph / SDK / CLI</a>，以及<a href="../../langgraph_architecture.html#s7">总览第 7 章 Pregel Runtime</a>、<a href="../../langgraph_architecture.html#s11">总览第 11 章 Interrupt</a>、<a href="../../langgraph_architecture.html#s12">总览第 12 章 Store/Memory/Cache</a>。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <div class="table-wrap"><table>
+        <tr><th>术语</th><th>本章含义</th></tr>
+        <tr><td>ReAct</td><td>Reason + Act；模型推理后请求工具，再根据工具结果继续的循环模式。</td></tr>
+        <tr><td>Prebuilt</td><td>构建于 LangGraph core 之上的高层现成组件，不是独立运行时。</td></tr>
+        <tr><td>ToolNode</td><td>解析并执行一批 tool calls、完成注入和输出规范化的 Runnable 图节点。</td></tr>
+        <tr><td>Tool call</td><td>AIMessage 中由模型提出的结构化工具请求，至少关联 name、args 与 id。</td></tr>
+        <tr><td>ToolMessage</td><td>与 tool call id 配对的工具结果消息；<code>status="error"</code> 表示可回灌模型的失败结果。</td></tr>
+        <tr><td>Command</td><td>携带 State update、goto 与 graph 作用域的控制值；不同于抛异常。</td></tr>
+        <tr><td>GraphBubbleUp</td><td>向上层图传播 interrupt 等控制流的异常基类；不应按普通工具错误处理。</td></tr>
+        <tr><td>InjectedState</td><td>声明工具需要完整图 State 或某字段的隐藏参数注解。</td></tr>
+        <tr><td>InjectedStore</td><td>声明工具需要编译图所持 BaseStore 的隐藏参数注解。</td></tr>
+        <tr><td>ToolRuntime</td><td>按单个 call 注入的工具运行上下文，包含 State、context、config、Store、writer 和 call id。</td></tr>
+        <tr><td>Wrapper</td><td>包围单次工具执行的拦截器，可授权、改写、短路或重试。</td></tr>
+        <tr><td>Send / PUSH task</td><td>携带自定义参数动态调度节点的机制；ReAct v2 用它拆分每个 tool call。</td></tr>
+        <tr><td>ManagedValue</td><td>由 Runtime 管理、不是普通用户 Channel 字段的运行值；本章典型值为 RemainingSteps。</td></tr>
+        <tr><td>Checkpointer</td><td>保存图执行 State、版本与 pending writes 以支持恢复的组件；不同于长期 Store。</td></tr>
+        <tr><td>return_direct</td><td>工具属性；该工具完成后兼容 ReAct 图直接结束，不再调用 model。</td></tr>
+        <tr><td>HITL</td><td>Human in the Loop，人类参与审批或补充输入；常通过动态 interrupt 实现。</td></tr>
+      </table></div>
+      <p class="small">本页只描述本仓库基线中的本地 Python prebuilt 实现；远程 API Server 与托管平台能力需按各自版本和协议另行验证。</p>
+    </section>
+  </main>
+</div>
+<script>
+  const links=[...document.querySelectorAll('.sidebar a')];
+  const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const observer=new IntersectionObserver(entries=>{
+    const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+    if(!visible)return;
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+visible.target.id));
+  },{rootMargin:'-15% 0px -70% 0px',threshold:[0,.1,.5]});
+  sections.forEach(section=>observer.observe(section));
+</script>
+</body>
+</html>

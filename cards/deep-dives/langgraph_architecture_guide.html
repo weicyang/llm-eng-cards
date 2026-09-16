@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LangGraph 架构入门指南 — 给第一次接触这个项目的你</title>
+<style>
+:root{
+  --bg:#f4f1ea; --bg-soft:#fffdf8; --surface:#fffdf8; --surface-2:#fffdf8;
+  --border:rgba(28,25,23,.12); --border-soft:rgba(28,25,23,.10);
+  --text:#1c1917; --muted:#78716c; --faint:#a8a29e;
+  --green:#15803d; --blue:#4338ca; --purple:#6d28d9; --yellow:#c2410c;
+  --red:#b91c1c; --cyan:#0f766e; --orange:#c2410c;
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+  --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Segoe UI",system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:16px; line-height:1.85;
+  background-image:
+    radial-gradient(900px 500px at 8% -5%, rgba(67,56,202,.07), transparent 60%),
+    radial-gradient(800px 500px at 100% 100%, rgba(21,128,61,.06), transparent 60%),
+    radial-gradient(rgba(255,255,255,.028) 1px, transparent 1px);
+  background-size:auto,auto,26px 26px;
+  background-attachment:fixed;
+}
+::selection{background:rgba(67,56,202,.3)}
+
+/* ---------- 顶部阅读进度条 ---------- */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:200;
+  background:linear-gradient(90deg,var(--green),var(--blue),var(--purple));
+  box-shadow:0 0 10px rgba(67,56,202,.5);transition:width .1s linear}
+
+/* ---------- 侧边栏 ---------- */
+#sidebar{position:fixed;top:0;left:0;width:252px;height:100vh;overflow-y:auto;
+  background:rgba(244,241,234,.92);border-right:1px solid var(--border-soft);
+  padding:26px 0 60px;z-index:100;backdrop-filter:blur(6px)}
+#sidebar .brand{padding:0 22px 18px;border-bottom:1px solid var(--border-soft);margin-bottom:14px}
+#sidebar .brand .b1{font-weight:800;font-size:1.05rem;letter-spacing:-.01em}
+#sidebar .brand .b2{font-family:var(--mono);font-size:.68rem;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.14em;margin-top:4px}
+#sidebar a{display:block;padding:6px 22px;color:var(--muted);text-decoration:none;
+  font-size:.84rem;border-left:2px solid transparent;transition:all .18s}
+#sidebar a:hover{color:var(--text);background:rgba(67,56,202,.06)}
+#sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+#sidebar a.ch{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--faint);margin-top:14px;pointer-events:none}
+#sidebar a.sub{padding-left:38px;font-size:.78rem}
+#sidebar::-webkit-scrollbar{width:6px}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ---------- 主内容区 ---------- */
+main{margin-left:252px;max-width:880px;padding:0 48px 120px}
+
+/* ---------- 头部：左标题 + 右终端 ---------- */
+header{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;
+  padding:72px 0 56px}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--green);display:inline-flex;align-items:center;gap:10px;margin-bottom:18px}
+.kicker::before{content:"";width:34px;height:1px;background:var(--green)}
+h1{font-size:clamp(1.9rem,3.6vw,2.7rem);font-weight:800;letter-spacing:-.025em;line-height:1.25}
+h1 .hl{color:var(--blue)}
+.lede{color:var(--muted);margin-top:16px;font-size:1.02rem}
+.meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.meta-pill{font-family:var(--mono);font-size:.7rem;padding:5px 12px;border:1px solid var(--border);
+  border-radius:999px;color:var(--muted);transition:all .2s}
+.meta-pill:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-2px)}
+
+/* 终端窗口 */
+.terminal{background:#e8e1d4;border:1px solid var(--border);border-radius:10px;overflow:hidden;
+  box-shadow:0 18px 50px rgba(28,25,23,.5);font-family:var(--mono);font-size:.78rem}
+.terminal .tbar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#f0ebe0;
+  border-bottom:1px solid var(--border-soft)}
+.terminal .dot{width:11px;height:11px;border-radius:50%}
+.terminal .tbar .title{margin-left:8px;color:var(--faint);font-size:.7rem}
+.terminal .tbody{padding:16px 16px 20px;line-height:1.9}
+.tline{opacity:0;animation:tIn .4s ease forwards;white-space:pre-wrap;word-break:break-all}
+@keyframes tIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.tline .p{color:var(--green)} .tline .ok{color:var(--green)} .tline .th{color:var(--blue)}
+.tline .tool{color:var(--yellow)} .tline .dim{color:var(--faint)} .tline .err{color:var(--red)}
+.tline .pp{color:var(--purple)}
+.cursor{display:inline-block;width:8px;height:15px;background:var(--green);vertical-align:-2px;
+  animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- 章节 ---------- */
+section{padding:34px 0 8px}
+.ch-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
+.ch-num{font-family:var(--mono);font-weight:700;font-size:1rem;color:var(--green);
+  border:1px solid rgba(21,128,61,.4);padding:3px 10px;border-radius:6px;flex-shrink:0;
+  background:rgba(21,128,61,.07)}
+h2{font-size:1.68rem;font-weight:800;letter-spacing:-.02em}
+h3{font-size:1.22rem;font-weight:700;margin:34px 0 12px;letter-spacing:-.01em;
+  padding-left:13px;border-left:3px solid var(--blue)}
+h4{font-size:1.02rem;font-weight:700;margin:22px 0 8px;color:var(--blue)}
+p{margin:12px 0}
+strong{color:var(--text);font-weight:700}
+code{font-family:var(--mono);font-size:.86em;background:rgba(67,56,202,.1);
+  color:var(--blue);padding:2px 7px;border-radius:5px}
+a{color:var(--blue)}
+ul,ol{margin:12px 0 12px 26px}
+li{margin:7px 0}
+
+/* 卡片 */
+.card{background:var(--surface);border:1px solid var(--border-soft);border-left:3px solid var(--blue);
+  border-radius:8px;padding:18px 22px;margin:18px 0;transition:transform .2s,box-shadow .2s,border-color .2s}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(28,25,23,.35)}
+.card.blue{border-left-color:var(--blue)} .card.green{border-left-color:var(--green)}
+.card.yellow{border-left-color:var(--yellow)} .card.purple{border-left-color:var(--purple)}
+.card.red{border-left-color:var(--red)} .card.cyan{border-left-color:var(--cyan)}
+.card .card-title{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:9px}
+.card .tag{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;
+  padding:2px 8px;border-radius:4px;flex-shrink:0}
+.tag.blue{background:rgba(67,56,202,.15);color:var(--blue)}
+.tag.green{background:rgba(21,128,61,.15);color:var(--green)}
+.tag.yellow{background:rgba(194,65,12,.15);color:var(--yellow)}
+.tag.purple{background:rgba(109,40,217,.15);color:var(--purple)}
+.tag.red{background:rgba(185,28,28,.15);color:var(--red)}
+.tag.cyan{background:rgba(15,118,110,.15);color:var(--cyan)}
+
+/* 定义块（一句话定义） */
+.definition{background:linear-gradient(135deg,rgba(21,128,61,.1),rgba(67,56,202,.08));
+  border:1px solid rgba(21,128,61,.35);border-radius:10px;padding:24px 28px;margin:22px 0;
+  font-size:1.08rem;line-height:1.8}
+.definition strong{color:var(--green)}
+
+/* 类比框 */
+.analogy{border:1.5px dashed var(--yellow);background:rgba(194,65,12,.06);border-radius:8px;
+  padding:16px 20px;margin:18px 0;transition:background .2s}
+.analogy:hover{background:rgba(194,65,12,.1)}
+.analogy .al{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.14em;
+  color:var(--yellow);margin-bottom:6px;display:block}
+
+/* 源码入口提示 */
+.src{font-family:var(--mono);font-size:.74rem;color:var(--green);margin:14px 0 4px;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.src::before{content:"▸";color:var(--green)}
+.src code{background:rgba(21,128,61,.1);color:var(--green)}
+
+/* 步骤（旅程） */
+.step{position:relative;margin:26px 0 26px 26px;padding:4px 0 4px 30px;
+  border-left:2px solid var(--border)}
+.step::before{content:attr(data-n);position:absolute;left:-19px;top:0;width:36px;height:36px;
+  border-radius:50%;background:var(--surface-2);border:2px solid var(--blue);color:var(--blue);
+  font-family:var(--mono);font-weight:700;font-size:.9rem;display:flex;align-items:center;
+  justify-content:center;transition:all .25s}
+.step:hover::before{background:var(--blue);color:#f4f1ea;box-shadow:0 0 18px rgba(67,56,202,.5);
+  transform:scale(1.12)}
+.step .step-title{font-size:1.12rem;font-weight:700;margin-bottom:4px}
+.step .step-role{font-family:var(--mono);font-size:.68rem;color:var(--faint);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
+
+/* 折叠面板 */
+details{background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;
+  margin:14px 0;overflow:hidden;transition:border-color .2s}
+details[open]{border-color:var(--border)}
+details summary{cursor:pointer;padding:14px 20px;font-weight:600;font-size:.94rem;
+  list-style:none;display:flex;align-items:center;gap:10px;user-select:none;transition:background .2s}
+details summary:hover{background:rgba(67,56,202,.05)}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"+";font-family:var(--mono);color:var(--blue);font-weight:700;
+  transition:transform .25s;flex-shrink:0}
+details[open] summary::before{transform:rotate(45deg)}
+details .dbody{padding:2px 20px 16px;color:var(--muted);font-size:.93rem}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:.9rem;background:var(--surface);
+  border-radius:8px;overflow:hidden;border:1px solid var(--border-soft)}
+th{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;
+  text-align:left;padding:12px 16px;background:var(--surface-2);color:var(--muted);
+  border-bottom:1px solid var(--border)}
+td{padding:11px 16px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:rgba(67,56,202,.05)}
+td:first-child{color:var(--blue);font-weight:600;white-space:nowrap}
+
+/* SVG 图容器 */
+.figure{background:var(--bg-soft);border:1px solid var(--border-soft);border-radius:10px;
+  padding:24px;margin:24px 0;transition:border-color .25s}
+.figure:hover{border-color:var(--border)}
+.figure svg{width:100%;height:auto;display:block}
+.figure .fig-cap{font-family:var(--mono);font-size:.72rem;color:var(--faint);text-align:center;
+  margin-top:14px;letter-spacing:.04em}
+.figure .fig-cap b{color:var(--muted)}
+
+/* 命令块 */
+.cmd{background:#e8e1d4;border:1px solid var(--border);border-left:3px solid var(--green);
+  border-radius:8px;padding:16px 20px;font-family:var(--mono);font-size:.82rem;line-height:1.9;
+  margin:16px 0;overflow-x:auto;white-space:pre}
+.cmd .c{color:var(--faint)} .cmd .g{color:var(--green)} .cmd .y{color:var(--yellow)}
+.cmd .b{color:var(--blue)} .cmd .v{color:var(--purple)}
+
+/* 三句话总结 */
+.takeaway{background:linear-gradient(135deg,rgba(21,128,61,.12),rgba(15,118,110,.08));
+  border:1px solid rgba(21,128,61,.4);border-radius:12px;padding:28px 32px;margin:30px 0}
+.takeaway .tk{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.16em;
+  color:var(--green);margin-bottom:16px}
+.takeaway ol{margin:0 0 0 22px}
+.takeaway li{margin:12px 0;font-size:1.02rem}
+.takeaway li strong{color:var(--green)}
+
+/* 滚动显现 */
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:none}
+
+footer{margin-left:252px;border-top:1px solid var(--border-soft);padding:34px 48px 60px;
+  color:var(--faint);font-size:.8rem;font-family:var(--mono)}
+
+@media (max-width:1000px){
+  #sidebar{display:none}
+  main,footer{margin-left:0}
+  main{padding:0 22px 90px}
+  header{grid-template-columns:1fr;padding-top:52px}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav id="sidebar">
+  <div class="brand">
+    <div class="b1">LangGraph</div>
+    <div class="b2">Architecture Guide</div>
+  </div>
+  <a href="#top" class="active">指南概览</a>
+  <a href="#ch1" class="ch">第一章</a>
+  <a href="#ch1">LangGraph 是什么？</a>
+  <a href="#ch2" class="ch">第二章</a>
+  <a href="#ch2">一次退款审批的完整旅程</a>
+  <a href="#ch3" class="ch">第三章</a>
+  <a href="#ch3">六大核心模块详解</a>
+  <a href="#m-graph" class="sub">3.1 StateGraph 蓝图</a>
+  <a href="#m-channel" class="sub">3.2 Channel 状态盒子</a>
+  <a href="#m-pregel" class="sub">3.3 Pregel 超级步</a>
+  <a href="#m-checkpoint" class="sub">3.4 Checkpoint 存档</a>
+  <a href="#m-hitl" class="sub">3.5 中断与流</a>
+  <a href="#m-upper" class="sub">3.6 上层与边界</a>
+  <a href="#ch4" class="ch">第四章</a>
+  <a href="#ch4">设计哲学与边界</a>
+  <a href="#ch5" class="ch">第五章</a>
+  <a href="#ch5">动手探索指南</a>
+  <a href="#appA" class="ch">附录</a>
+  <a href="#appA">A · 术语对照表</a>
+  <a href="#appB">B · 源码目录速查</a>
+  <a href="#appC">C · 进阶阅读</a>
+</nav>
+
+<main id="top">
+
+<!-- ======================= 头部 ======================= -->
+<header>
+  <div>
+    <div class="kicker">Architecture Guide · 基于 langgraph v1.2.11 monorepo 源码</div>
+    <h1>LangGraph <span class="hl">架构入门指南</span></h1>
+    <p class="lede">给第一次接触这个项目的你 —— 不贴大段源码、不堆学术术语，用一张图、一个退款审批的故事、六个模块，帮你在 40 分钟内真正理解这个"能随时暂停、随时恢复的 AI 工作流引擎"是怎么跑起来的。</p>
+    <div class="meta-row">
+      <span class="meta-pill">阅读约 40 分钟</span>
+      <span class="meta-pill">零大段源码</span>
+      <span class="meta-pill">3 张图可带走</span>
+      <span class="meta-pill">中文 · 术语保留英文</span>
+    </div>
+  </div>
+  <div class="terminal" aria-hidden="true">
+    <div class="tbar">
+      <span class="dot" style="background:#b91c1c"></span>
+      <span class="dot" style="background:#c2410c"></span>
+      <span class="dot" style="background:#15803d"></span>
+      <span class="title">refund_flow.py — 一次真实的运行长这样</span>
+    </div>
+    <div class="tbody">
+      <div class="tline" style="animation-delay:.2s"><span class="p">$</span> python refund_flow.py</div>
+      <div class="tline" style="animation-delay:.9s"><span class="th">● superstep 1</span> fetch_order → 订单金额 ¥3000</div>
+      <div class="tline" style="animation-delay:1.6s"><span class="th">● superstep 2</span> risk_check → 高风险 · 需人工审批</div>
+      <div class="tline" style="animation-delay:2.3s"><span class="pp">◐ INTERRUPT</span> <span class="dim">进度已写入 checkpoint · 等待审批</span></div>
+      <div class="tline" style="animation-delay:3.0s"><span class="dim"># —— 两小时后，审批人点了"同意" ——</span></div>
+      <div class="tline" style="animation-delay:3.7s"><span class="p">$</span> python refund_flow.py --resume approved</div>
+      <div class="tline" style="animation-delay:4.4s"><span class="th">● superstep 3</span> execute_refund → 退款完成 · 已通知用户</div>
+      <div class="tline" style="animation-delay:5.1s"><span class="ok">✓ DONE</span> 全程有存档 · 任意存档点可回放 <span class="cursor"></span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= 第一章 ======================= -->
+<section id="ch1" class="reveal">
+  <div class="ch-head"><span class="ch-num">01</span><h2>LangGraph 是什么？</h2></div>
+
+  <div class="definition">
+    一句话说清：<strong>LangGraph 是一个用来构建"有状态、可暂停、可恢复"的 AI 工作流与 Agent 的执行内核。</strong>
+    你向它声明"有哪些步骤、步骤之间怎么走"（一张图），它负责把这张图<strong>可靠地跑起来</strong>——该并行的并行、该存档的存档、该停下来等人的停下来；哪怕进程崩溃、服务器重启，也能从上次的存档点继续执行。
+  </div>
+
+  <p>它由 LangChain 团队开源，用 Python 编写，当前核心包版本 <code>langgraph 1.2.11</code>。名字里的 "Graph" 来自 Google 的 Pregel 图计算论文——但别被学术背景吓到，你只需要记住：它把一张"流程图"变成了带<strong>游戏存档</strong>的耐久执行引擎。</p>
+
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">传统方式</span>裸代码写 AI 流程的痛</div>
+    状态存在内存变量里 → 进程一崩全丢；"暂停等人工审批、批完再继续"要自己写序列化；想并行跑两个步骤要自己处理同步；失败之后从哪恢复全靠运气。每做一个严肃的 Agent，都在重新发明一遍轮子。
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">LangGraph 的方式</span>声明图，运行时兜底</div>
+    你只声明节点和边，剩下的交给运行时：状态自动管理并在每一步之后存档；<code>interrupt()</code> 一行代码实现暂停等人；并行节点的输出按你预先声明的规则自动合并；全程每一步都可回放、可审计。
+  </div>
+
+  <div class="analogy">
+    <span class="al">类比理解</span>
+    把 LangGraph 想象成 AI 流程的<strong>游戏存档系统</strong>：你写的图 = 游戏剧本；每一轮执行（superstep，超级步）= 一次自动存档；checkpoint = 存档文件；<code>interrupt()</code> = 剧情暂停等玩家做选择。游戏崩溃了，重开是从上次存档继续——而不是从头再打一遍。
+  </div>
+
+  <h3>30 秒看懂整体架构</h3>
+  <p>整个系统拆开看，就是五个方块：</p>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 150" role="img" aria-label="极简架构图">
+      <defs>
+        <marker id="ar0" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+      </defs>
+      <rect x="12" y="36" width="160" height="78" rx="8" fill="#fffdf8" stroke="#c2410c" stroke-width="1.6"/>
+      <text x="92" y="68" text-anchor="middle" fill="#c2410c" font-size="15" font-weight="700">你的图定义</text>
+      <text x="92" y="92" text-anchor="middle" fill="#78716c" font-size="11">StateGraph · 节点/边</text>
+
+      <rect x="200" y="36" width="150" height="78" rx="8" fill="#fffdf8" stroke="#0f766e" stroke-width="1.6"/>
+      <text x="275" y="68" text-anchor="middle" fill="#0f766e" font-size="15" font-weight="700">compile()</text>
+      <text x="275" y="92" text-anchor="middle" fill="#78716c" font-size="11">校验 · 装配成可执行体</text>
+
+      <rect x="378" y="28" width="168" height="94" rx="8" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2.2"/>
+      <text x="462" y="62" text-anchor="middle" fill="#15803d" font-size="16" font-weight="800">Pregel 运行时</text>
+      <text x="462" y="86" text-anchor="middle" fill="#78716c" font-size="11">超级步循环 · 调度合并</text>
+      <text x="462" y="106" text-anchor="middle" fill="#15803d" font-size="10" font-family="monospace">loop.tick()</text>
+
+      <rect x="574" y="36" width="160" height="78" rx="8" fill="#fffdf8" stroke="#6d28d9" stroke-width="1.6"/>
+      <text x="654" y="68" text-anchor="middle" fill="#6d28d9" font-size="15" font-weight="700">Channel + Checkpoint</text>
+      <text x="654" y="92" text-anchor="middle" fill="#78716c" font-size="11">状态盒子 · 存档文件</text>
+
+      <rect x="762" y="36" width="146" height="78" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.6"/>
+      <text x="835" y="68" text-anchor="middle" fill="#4338ca" font-size="15" font-weight="700">输出 / 交互</text>
+      <text x="835" y="92" text-anchor="middle" fill="#78716c" font-size="11">Stream · Interrupt</text>
+
+      <line x1="172" y1="75" x2="196" y2="75" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar0)"/>
+      <line x1="350" y1="75" x2="374" y2="75" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar0)"/>
+      <line x1="546" y1="75" x2="570" y2="75" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar0)"/>
+      <line x1="734" y1="75" x2="758" y2="75" stroke="#4338ca" stroke-width="1.8" marker-end="url(#ar0)"/>
+    </svg>
+    <div class="fig-cap">图 1 · <b>就这么简单。</b>后面整篇指南，就是把这五个方块逐个打开。</div>
+  </div>
+
+  <details>
+    <summary>先澄清：它"不是"什么</summary>
+    <div class="dbody">
+      <ul>
+        <li><strong>不是开箱即用的 Agent / 聊天机器人</strong>：仓库里没有一个"助手产品"，连 ReAct Agent 也只是用同一套机制编译出来的一张"示例图"。</li>
+        <li><strong>不是 LangChain</strong>：LangChain 负责调用模型与工具生态，LangGraph 负责"把这些能力组合成可靠的流程"。两者是搭档，不是替代关系。</li>
+        <li><strong>不是跨机器的分布式集群</strong>：本仓库运行时的并发在进程之内；队列、多租户、部署属于单独部署的 LangGraph Server（不在本仓库内）。</li>
+        <li><strong>不是让模型变聪明的魔法</strong>：它不提升 LLM 的输出质量，只是把模型的不确定性关进可审计、可恢复的状态机里。</li>
+      </ul>
+    </div>
+  </details>
+</section>
+
+<!-- ======================= 第二章 ======================= -->
+<section id="ch2" class="reveal">
+  <div class="ch-head"><span class="ch-num">02</span><h2>一次退款审批的完整旅程</h2></div>
+
+  <p>抽象的架构很难记住，故事好记。我们跟着一个真实场景走完全程——走完这一遍，LangGraph 的核心机制你就都见过了。</p>
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">场景</span>电商客服系统收到一笔退款申请</div>
+    金额 ¥3000，超过了"¥1000 以下免审批"的规则。要求：查订单 → 风控判断 → <strong>暂停下来等人工审批</strong> → 批准后执行退款并通知用户。棘手的地方在于：审批人可能两小时后才回复——你的程序总不能开着等两小时。这正是"有状态、可暂停、可恢复"的主场。
+  </div>
+
+  <div class="step" data-n="1">
+    <div class="step-title">画一张图：声明节点与连线</div>
+    <div class="step-role">StateGraph · 声明式 DSL</div>
+    <p>节点就是普通 Python 函数，职责只有一个：<strong>读当前状态，返回一小块"增量"</strong>（partial update，局部更新）。我们用 <code>add_node</code> 登记四个节点——<code>fetch_order</code>（查订单）、<code>risk_check</code>（风控）、<code>human_approval</code>（人工审批）、<code>execute_refund</code>（执行退款）；用 <code>add_edge</code> 连起固定流程，再给金额判断加一条条件边。最后调用 <code>compile(checkpointer=...)</code>——蓝图变成可执行的东西。</p>
+    <div class="analogy"><span class="al">类比理解</span>像写剧本：先定角色（节点）和走位（边），再交给导演（compile）检查一遍走位有没有断档，然后才能开机。</div>
+    <p><code>checkpointer</code> 参数就是"存档插件"：测试用内存版（<code>InMemorySaver</code>），本地用 SQLite，生产用 Postgres——后面 3.4 节细说。</p>
+    <div class="src">源码入口：<code>libs/langgraph/langgraph/graph/state.py</code>（StateGraph / compile）</div>
+  </div>
+
+  <div class="step" data-n="2">
+    <div class="step-title">启动执行：一次 invoke，一个"存档槽"</div>
+    <div class="step-role">graph.invoke · thread_id</div>
+    <p>调用 <code>graph.invoke(输入, {"configurable": {"thread_id": "refund-001"}})</code>。这里的 <code>thread_id</code>（线程 id）相当于<strong>存档槽的名字</strong>：同一个 thread_id 的多次调用，续写的是同一段故事。后面审批人回复时，就是靠它找回这次执行的存档。</p>
+  </div>
+
+  <div class="step" data-n="3">
+    <div class="step-title">超级步 1：查订单 → 合并 → 存档</div>
+    <div class="step-role">Pregel Loop · 第 1 圈</div>
+    <p>运行时不是"顺着边一个节点一个节点地跑"，而是按<strong>超级步（superstep）</strong>推进。这一步里只有 <code>fetch_order</code> 被触发；它返回 <code>{"order": {...}}</code>——注意它交出的只是"增量"。这一步的所有任务结束后，系统才在<strong>屏障</strong>处把增量统一合并进状态（Channel，3.2 节细说），并写下第一个 checkpoint（存档）。</p>
+    <div class="analogy"><span class="al">类比理解</span>回合制游戏：本回合该行动的单位并行行动，全部结束后裁判统一结算、存档，再进下一回合。</div>
+  </div>
+
+  <div class="step" data-n="4">
+    <div class="step-title">超级步 2：风控 → interrupt() 全场暂停</div>
+    <div class="step-role">risk_check · human_approval · interrupt</div>
+    <p><code>risk_check</code> 判断金额超过阈值，图走到 <code>human_approval</code>。这个节点里调用了一行 <code>interrupt({"订单": ..., "问题": "是否批准退款？"})</code>——运行时立刻<strong>"冻结"现场</strong>：把当前进度写成 checkpoint，把中断信息（<code>__interrupt__</code>，附带你要展示给审批人的内容）返回给调用方，然后这次调用就结束了。</p>
+    <div class="card yellow">
+      <div class="card-title"><span class="tag yellow">关键</span>interrupt 不是 sleep，是"存档离场"</div>
+      只要配的是持久化 saver（SQLite / Postgres），此时你甚至可以让进程退出、服务器重启。等两小时还是两天，都不占用任何算力——因为执行上下文不在内存里，而在磁盘上的 checkpoint 里。
+    </div>
+    <div class="src">源码入口：<code>libs/langgraph/langgraph/types.py</code>（interrupt / Command / Send）</div>
+  </div>
+
+  <div class="step" data-n="5">
+    <div class="step-title">审批通过：从存档里捡起来继续</div>
+    <div class="step-role">Command(resume=...) · 同一 thread_id</div>
+    <p>两小时后，审批系统回调你的服务。你只需再次调用：<code>graph.invoke(Command(resume="approved"), 同一个 thread_id)</code>。运行时加载 checkpoint、重建状态，重新进入 <code>human_approval</code> 节点——这一次 <code>interrupt()</code> 不再暂停，而是<strong>直接返回</strong> <code>"approved"</code>，图继续往下走。</p>
+    <div class="card red">
+      <div class="card-title"><span class="tag red">重要澄清</span>恢复不是"从暂停的那行代码继续"</div>
+      checkpoint 保存的是可序列化的状态，<strong>不保存 Python 的执行现场（栈帧）</strong>。所以节点在恢复时会<strong>从头重新执行</strong>，直到 <code>interrupt()</code> 调用处"原地"拿到你传入的 resume 值。推论：<strong>interrupt 之前的副作用（写数据库、发 HTTP 请求）会被再执行一次</strong>——它们必须幂等，或者干脆挪到 interrupt 返回之后。
+    </div>
+  </div>
+
+  <div class="step" data-n="6">
+    <div class="step-title">超级步 3：执行退款 → 完成，全程留痕</div>
+    <div class="step-role">execute_refund · END · state API</div>
+    <p><code>execute_refund</code> 执行完毕，图到达 <code>END</code>，返回最终状态。想审计？<code>graph.get_state(config)</code> 查看最新状态，<code>graph.get_state_history(config)</code> 列出<strong>所有历史存档</strong>——你甚至可以指定某个旧存档从那里"开新分支"重跑（time-travel，时间旅行），比如回到审批前改选"拒绝"看看会发生什么。</p>
+  </div>
+
+  <h3>旅程回顾：一张图看完</h3>
+  <div class="figure">
+    <svg viewBox="0 0 920 280" role="img" aria-label="退款审批旅程全景图">
+      <defs>
+        <marker id="ar2" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+        <marker id="ar2p" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#6d28d9"/>
+        </marker>
+      </defs>
+      <text x="20" y="26" fill="#15803d" font-size="12.5" font-weight="700" font-family="monospace">主运行链路 · 每个节点跑在一个超级步里，步末自动存档</text>
+
+      <rect x="20" y="44" width="64" height="56" rx="7" fill="#fffdf8" stroke="#a8a29e" stroke-width="1.4"/>
+      <text x="52" y="77" text-anchor="middle" fill="#78716c" font-size="12" font-weight="700">START</text>
+
+      <rect x="108" y="44" width="130" height="56" rx="7" fill="#fffdf8" stroke="#15803d" stroke-width="1.6"/>
+      <text x="173" y="68" text-anchor="middle" fill="#15803d" font-size="13" font-weight="700">fetch_order</text>
+      <text x="173" y="88" text-anchor="middle" fill="#78716c" font-size="10.5">超级步 1 · 查订单</text>
+
+      <rect x="262" y="44" width="130" height="56" rx="7" fill="#fffdf8" stroke="#15803d" stroke-width="1.6"/>
+      <text x="327" y="68" text-anchor="middle" fill="#15803d" font-size="13" font-weight="700">risk_check</text>
+      <text x="327" y="88" text-anchor="middle" fill="#78716c" font-size="10.5">超级步 2 · 风控</text>
+
+      <rect x="416" y="36" width="164" height="72" rx="7" fill="rgba(161,98,7,.08)" stroke="#c2410c" stroke-width="2"/>
+      <text x="498" y="62" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">human_approval</text>
+      <text x="498" y="82" text-anchor="middle" fill="#c2410c" font-size="10.5">interrupt() 暂停等人</text>
+      <text x="498" y="99" text-anchor="middle" fill="#78716c" font-size="9.5">进程可以退出 · 不占算力</text>
+
+      <rect x="666" y="44" width="140" height="56" rx="7" fill="#fffdf8" stroke="#15803d" stroke-width="1.6"/>
+      <text x="736" y="68" text-anchor="middle" fill="#15803d" font-size="13" font-weight="700">execute_refund</text>
+      <text x="736" y="88" text-anchor="middle" fill="#78716c" font-size="10.5">超级步 3 · 退款</text>
+
+      <rect x="830" y="44" width="64" height="56" rx="7" fill="#fffdf8" stroke="#a8a29e" stroke-width="1.4"/>
+      <text x="862" y="77" text-anchor="middle" fill="#78716c" font-size="12" font-weight="700">END</text>
+
+      <line x1="84" y1="72" x2="104" y2="72" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="238" y1="72" x2="258" y2="72" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="392" y1="72" x2="412" y2="72" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="580" y1="72" x2="662" y2="72" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <line x1="806" y1="72" x2="826" y2="72" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar2)"/>
+      <text x="620" y="62" text-anchor="middle" fill="#c2410c" font-size="10.5" font-family="monospace">resume</text>
+
+      <text x="498" y="140" text-anchor="middle" fill="#6d28d9" font-size="11.5" font-family="monospace">两小时后 · Command(resume="approved") · 同一 thread_id</text>
+      <path d="M498,148 L498,112" fill="none" stroke="#6d28d9" stroke-width="1.6" stroke-dasharray="5,4" marker-end="url(#ar2p)"/>
+
+      <rect x="20" y="180" width="874" height="52" rx="7" fill="rgba(109,40,217,.08)" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="6,5"/>
+      <text x="457" y="203" text-anchor="middle" fill="#6d28d9" font-size="12.5" font-weight="700">checkpoint 层 · 每个超级步末尾写一次存档</text>
+      <text x="457" y="222" text-anchor="middle" fill="#78716c" font-size="11">状态快照 + 版本号 + 任务级中间写（pending writes）→ get_state_history() 可列出全部存档</text>
+    </svg>
+    <div class="fig-cap">图 2 · <b>绿色 = 节点执行，黄色 = 人工中断，紫色 = 持久化。</b>第 2 章六步全部发生在这条线上。</div>
+  </div>
+</section>
+
+<!-- ======================= 第三章 ======================= -->
+<section id="ch3" class="reveal">
+  <div class="ch-head"><span class="ch-num">03</span><h2>六大核心模块详解</h2></div>
+  <p>下面把系统拆成六个模块逐个看。<strong>不需要全部读完——挑你感兴趣的部分即可。</strong>每个模块都配了一个生活类比和源码入口，方便你想深入时知道从哪下手。</p>
+
+  <!-- 3.1 StateGraph -->
+  <h3 id="m-graph">3.1 StateGraph —— 蓝图与验收员</h3>
+  <div class="analogy"><span class="al">类比理解</span><code>StateGraph</code> 是<strong>建筑蓝图</strong>：记录了有几个房间、走廊怎么连——但蓝图不能住人，它<strong>不能直接被调用</strong>。<code>compile()</code> 是施工加验收：检查每条边的两端都存在、中断配置合法，然后交钥匙——产出的 <code>CompiledStateGraph</code> 继承自运行时引擎 <code>Pregel</code>，从此自带 invoke / stream / 状态查询的全部能力。</div>
+
+  <p>图的"原料"是 <strong>Schema</strong>（状态结构声明）。新手期只需要关心一个：<code>State</code>——所有节点共享的可变状态，通常就是一个 <code>TypedDict</code>。每个字段默认对应一种叫 <code>LastValue</code>（只保留最后一次值）的 Channel；如果这个字段会被多个节点并行写（比如消息列表），就要给它配一个 <strong>reducer</strong>（合并函数），写作 <code>Annotated[list, add_messages]</code> 这种形式——细节在 3.2。</p>
+
+  <table>
+    <thead><tr><th>构件</th><th>干什么</th><th>一句话</th></tr></thead>
+    <tbody>
+      <tr><td>add_node</td><td>登记一个节点（普通函数即可）</td><td>角色进场</td></tr>
+      <tr><td>add_edge</td><td>固定走向：A 跑完必到 B</td><td>走廊</td></tr>
+      <tr><td>add_conditional_edges</td><td>看当前状态决定下一步去哪</td><td>岔路口</td></tr>
+      <tr><td>START / END</td><td>入口与出口（保留节点）</td><td>大门与退场</td></tr>
+      <tr><td>Command</td><td>一个返回值同时表达"改状态 + 跳到哪 + 提供恢复值"</td><td>节点的万能指令单</td></tr>
+      <tr><td>Send</td><td>向同一节点扇出多份输入（map-reduce 的基础）</td><td>一把钥匙开 N 扇门</td></tr>
+    </tbody>
+  </table>
+
+  <details>
+    <summary>小澄清：compile() 到底干了什么？</summary>
+    <div class="dbody">按顺序大致是：校验节点/边/中断配置 → 确定输入、输出和流式通道 → 合并全局与节点级的 retry / cache / timeout 策略 → 把每个节点包装成带"读什么、写什么"契约的 Pregel 节点 → 把边和分支翻译成触发关系。<strong>编译不执行任何模型或工具</strong>，也不把 Python 函数变成什么静态计划——它造出的是"触发关系图"，动态分支和中断仍然在运行时决定。</div>
+  </details>
+  <div class="src">源码入口：<code>libs/langgraph/langgraph/graph/state.py</code>（StateGraph · compile · CompiledStateGraph）</div>
+
+  <!-- 3.2 Channel -->
+  <h3 id="m-channel">3.2 Channel —— 状态不是大 dict，是一组"有合并规则的盒子"</h3>
+  <div class="analogy"><span class="al">类比理解</span>两个节点同时干活，结果怎么合？LangGraph 的答案：状态不是一个大 dict，而是<strong>拆成一个个盒子</strong>，每个盒子上写着"多人往里扔东西时怎么合并"。这个盒子就是 Channel。</div>
+
+  <p>你在 Schema 里写的每个字段，编译时都会解析成一个 Channel。最常用的几种：</p>
+  <table>
+    <thead><tr><th>Channel</th><th>合并规则</th><th>什么时候用</th></tr></thead>
+    <tbody>
+      <tr><td>LastValue</td><td>只保留最后一个值；同一步被两个节点写会<strong>直接报错</strong></td><td>标量状态、单一来源（默认）</td></tr>
+      <tr><td>BinaryOperatorAggregate</td><td>把本步每份写入依次喂给你的 reducer 聚合</td><td>消息列表、计数、集合（<code>Annotated[T, reducer]</code>）</td></tr>
+      <tr><td>EphemeralValue</td><td>只活一个超级步，下一步自动清空</td><td>入口输入、一次性触发信号</td></tr>
+      <tr><td>Topic / NamedBarrierValue</td><td>收集多份值 / 等所有指定来源到齐才可读</td><td>Send 扇出的任务队列、多前驱汇合</td></tr>
+    </tbody>
+  </table>
+
+  <p>这套设计把"并行的意外"变成了"显式的契约"：两个节点同时写一个字段，结果不取决于谁先跑完，而取决于你声明的 reducer；如果你没声明（LastValue），系统宁可<strong>大声报错</strong>也不让数据悄悄错乱。顺带一提：同一超级步里，兄弟节点<strong>看不到彼此刚写的值</strong>——大家读的都是本步开始时的稳定快照，写统一在屏障后合并，这从机制上避免了执行顺序带来的数据竞争。</p>
+  <details>
+    <summary>小澄清：reducer 有什么讲究？</summary>
+    <div class="dbody">reducer 最好满足<strong>结合律</strong>（怎么分组算结果都一样），最好也满足交换律——因为并行任务的写入顺序只保证确定性排序，你的业务语义不应该依赖"谁先到"。像 <code>operator.add</code>（列表拼接）、消息去重合并这类都是安全的选择。</div>
+  </details>
+  <div class="src">源码入口：<code>libs/langgraph/langgraph/channels/</code>（last_value.py · binop.py · topic.py · named_barrier_value.py）</div>
+
+  <!-- 3.3 Pregel -->
+  <h3 id="m-pregel">3.3 Pregel 运行时 —— 超级步的心跳</h3>
+  <div class="analogy"><span class="al">类比理解</span><strong>回合制策略游戏</strong>。每一回合（超级步）：① 读取上一回合结束时的稳定盘面 → ② 判定哪些单位这回合该行动 → ③ 这些单位并行行动 → ④ 全部结束后裁判统一结算 → ⑤ 存档 → ⑥ 进入下一回合。同一回合内，单位之间<strong>互相看不到对方的动作</strong>——这一下消灭了一大类数据竞争问题。</div>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 250" role="img" aria-label="超级步循环图">
+      <defs>
+        <marker id="ar3" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#15803d"/>
+        </marker>
+      </defs>
+      <rect x="16" y="60" width="150" height="66" rx="7" fill="#fffdf8" stroke="#4338ca" stroke-width="1.6"/>
+      <text x="91" y="88" text-anchor="middle" fill="#4338ca" font-size="13" font-weight="700">读稳定快照</text>
+      <text x="91" y="108" text-anchor="middle" fill="#78716c" font-size="10.5">上一步合并后的状态</text>
+
+      <rect x="196" y="60" width="168" height="66" rx="7" fill="#fffdf8" stroke="#0f766e" stroke-width="1.6"/>
+      <text x="280" y="88" text-anchor="middle" fill="#0f766e" font-size="13" font-weight="700">准备任务</text>
+      <text x="280" y="108" text-anchor="middle" fill="#78716c" font-size="10.5">PULL ∪ PUSH 谁该行动</text>
+
+      <rect x="394" y="60" width="150" height="66" rx="7" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2"/>
+      <text x="469" y="88" text-anchor="middle" fill="#15803d" font-size="13.5" font-weight="800">并行执行</text>
+      <text x="469" y="108" text-anchor="middle" fill="#78716c" font-size="10.5">节点返回"增量"writes</text>
+
+      <rect x="574" y="60" width="168" height="66" rx="7" fill="#fffdf8" stroke="#c2410c" stroke-width="1.6"/>
+      <text x="658" y="88" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">屏障 · 统一合并</text>
+      <text x="658" y="108" text-anchor="middle" fill="#78716c" font-size="10.5">apply_writes 按 reducer</text>
+
+      <rect x="772" y="60" width="132" height="66" rx="7" fill="rgba(109,40,217,.08)" stroke="#6d28d9" stroke-width="1.6"/>
+      <text x="838" y="88" text-anchor="middle" fill="#6d28d9" font-size="13" font-weight="700">写 checkpoint</text>
+      <text x="838" y="108" text-anchor="middle" fill="#78716c" font-size="10.5">存档 · 可恢复点</text>
+
+      <line x1="166" y1="93" x2="192" y2="93" stroke="#15803d" stroke-width="1.7" marker-end="url(#ar3)"/>
+      <line x1="364" y1="93" x2="390" y2="93" stroke="#15803d" stroke-width="1.7" marker-end="url(#ar3)"/>
+      <line x1="544" y1="93" x2="570" y2="93" stroke="#15803d" stroke-width="1.7" marker-end="url(#ar3)"/>
+      <line x1="742" y1="93" x2="768" y2="93" stroke="#15803d" stroke-width="1.7" marker-end="url(#ar3)"/>
+
+      <path d="M838,126 L838,178 L91,178 L91,130" fill="none" stroke="#15803d" stroke-width="1.6" stroke-dasharray="6,5" marker-end="url(#ar3)"/>
+      <text x="465" y="170" text-anchor="middle" fill="#15803d" font-size="11.5" font-family="monospace">下一超级步：只有"看见新状态"的节点才会被触发</text>
+      <text x="465" y="222" text-anchor="middle" fill="#a8a29e" font-size="11">遇到 interrupt → 冻结离场 · 到达 END → 返回结果 · 达到 recursion_limit → 报错停止</text>
+    </svg>
+    <div class="fig-cap">图 3 · 超级步循环：<b>读快照 → 备任务 → 并行跑 → 屏障合并 → 存档 → 下一圈。</b>这就是 Pregel 运行时的全部心跳。</div>
+  </div>
+
+  <p>每圈"谁该行动"由两类任务组成：</p>
+  <table>
+    <thead><tr><th>类型</th><th>来源</th><th>白话</th></tr></thead>
+    <tbody>
+      <tr><td>PULL</td><td>边和状态（Channel）版本变化自动触发</td><td>"轮到你了"——大多数节点属于这种</td></tr>
+      <tr><td>PUSH</td><td><code>Send(node, arg)</code> 扇出、Functional API 的 <code>task</code> 调用</td><td>"加塞一个临时任务"，同一节点可以被塞多份不同输入</td></tr>
+    </tbody>
+  </table>
+
+  <details>
+    <summary>小澄清：superstep、node、task——三个概念啥区别？</summary>
+    <div class="dbody">
+      <p>它们不在同一个维度：<strong>node 是图上的"角色"</strong>（建图时声明的一个函数），<strong>superstep 是运行时的"一回合"</strong>（Pregel 主循环转一圈），<strong>task 是某一回合里的具体执行单元</strong>（"用这份输入跑这个节点"）。就像回合制游戏：角色定义在游戏开始前，回合里多个角色可以同时行动，同一个角色也能在多回合里反复登场。</p>
+      <table>
+        <thead><tr><th></th><th>Node</th><th>Task</th><th>Superstep</th></tr></thead>
+        <tbody>
+          <tr><td>是什么</td><td>图上声明的计算单元</td><td>一次具体的节点调用实例</td><td>一次完整的循环迭代：备任务→执行→合并→存档</td></tr>
+          <tr><td>存在于</td><td>建图时（静态）</td><td colspan="2">运行时（动态）——task 每轮按需生成，superstep 是时间单位</td></tr>
+          <tr><td>数量关系</td><td colspan="2">一个 superstep 可含 1 或 N 个 task（没有任务就没有这一轮）；同一 node 可在多个 superstep 反复跑（循环图）</td><td><code>recursion_limit</code> 数的是 superstep，不是 node</td></tr>
+          <tr><td>边界职责</td><td colspan="2">只管"读状态 → 交增量"</td><td>屏障合并 + checkpoint 存档发生在这里</td></tr>
+        </tbody>
+      </table>
+      <p>那为什么很多资料说"一个 node 就是一个超步"？因为在<strong>串行线性图</strong>（A→B→C）里，一个超步恰好只跑一个 node、它跑完就写一次存档——这是常见图形状下的性质，<strong>是巧合，不是定义</strong>。一旦出现并行（一轮两个 node）、Send 扇出（同 node 一轮多个 task）或循环（同 node 跨多轮），这个等式立刻失效。</p>
+      <p>两个易忽略的点：① 同一轮并行的两个 task 读的是<strong>同一份快照</strong>——谁也不看见谁的写入，合并后才可见（这正是并行安全的来源）；② <code>Send</code> 给同一节点扇出 N 份输入，就是同一轮的 N 个 task。源码：<code>pregel/_loop.py</code> 的 <code>tick()</code>+<code>after_tick()</code> 合起来就是一圈，<code>_algo.py</code> 的 <code>prepare_next_tasks()</code> 决定"这轮谁行动"。</p>
+    </div>
+  </details>
+
+  <div class="card red">
+    <div class="card-title"><span class="tag red">易踩坑</span>recursion_limit 限制的是超级步数</div>
+    它不是 Python 递归深度。带循环的图（比如 ReAct 循环）完全合法；报 <code>GraphRecursionError</code> 通常说明你的循环没收敛，或者限额与工作量不匹配——而不是"递归写错了"。
+  </div>
+  <div class="src">源码入口：<code>libs/langgraph/langgraph/pregel/</code>（main.py 入口 · _loop.py 的 tick()/after_tick() · _algo.py 的 prepare_next_tasks()/apply_writes()）</div>
+
+  <!-- 3.4 Checkpoint -->
+  <h3 id="m-checkpoint">3.4 Checkpoint —— 存档系统与 Durable Execution</h3>
+  <div class="analogy"><span class="al">类比理解</span>游戏<strong>存档文件</strong>。要唯一定位一个存档，需要三个坐标：<code>thread_id</code>（哪一局的存档槽）+ <code>checkpoint_ns</code>（哪个子关卡——用来区分嵌套的子图）+ <code>checkpoint_id</code>（这一局里的第几个存档）。Durable Execution（耐久执行）就是靠它实现的：崩了重开，从存档继续。</div>
+
+  <table>
+    <thead><tr><th>存档里有什么</th><th>作用</th></tr></thead>
+    <tbody>
+      <tr><td>channel_values</td><td>状态的快照——每个"盒子"里当前装的是什么</td></tr>
+      <tr><td>channel_versions</td><td>每个盒子更新到了第几版，判断"数据变没变"</td></tr>
+      <tr><td>versions_seen</td><td>每个节点已经"看过"哪个版本——决定下一圈该唤醒谁</td></tr>
+      <tr><td>pending writes</td><td>任务级的中间写：成功结果、错误、中断标记……恢复时用来跳过已成功的任务</td></tr>
+      <tr><td>✗ Python 执行现场</td><td><strong>不保存</strong>栈帧——这正是"恢复后节点从头重跑"的根本原因</td></tr>
+    </tbody>
+  </table>
+
+  <p>持久化分两层：<code>put_writes</code> 在每个任务完成时立刻记下它的中间写；<code>put</code> 在整个超级步结束后写下完整的新存档。好处是：同一步里部分节点成功、部分失败时，恢复可以<strong>跳过已成功的，只重跑失败的</strong>。</p>
+  <table>
+    <thead><tr><th>存档插件（Saver）</th><th>存哪</th><th>适用</th></tr></thead>
+    <tbody>
+      <tr><td>InMemorySaver</td><td>内存</td><td>测试与调试——进程退出即清空，不是生产存储</td></tr>
+      <tr><td>SqliteSaver</td><td>单个 SQLite 文件</td><td>本地开发、低并发</td></tr>
+      <tr><td>PostgresSaver</td><td>Postgres 分表存储</td><td>生产环境——首次使用要显式调用 setup() 建表</td></tr>
+    </tbody>
+  </table>
+  <details>
+    <summary>小澄清：Checkpoint 是按超级步存的吗？——实际是两层</summary>
+    <div class="dbody">
+      <p>"CP 只按超级步存"是个常见误解，实际是两层：<strong>task 级</strong>——每个 task 一结束，它的 writes 立刻通过 <code>put_writes</code> 记为 pending writes；<strong>superstep 级</strong>——整轮全部跑完、合并之后，才由 <code>put</code> 写完整快照（<code>_loop.py</code> 的 <code>after_tick()</code> 里，源码注释就叫 <code># finish superstep</code>）。</p>
+      <p>为什么不能只在超级步边界存？为了<strong>部分失败的恢复粒度</strong>：假设一轮里 3 个 task 成功了 2 个、失败了 1 个，进程崩了——恢复时加载上一步的完整存档，再凭 pending writes 认出"哪些已经成功"，<strong>只重跑失败的那 1 个</strong>。如果只有超级步级存档，崩溃就得整轮全部重来。</p>
+      <p>例外：durability 设为 <code>exit</code> 时，<code>put_writes</code> 也不立即落盘（攒到图退出统一写），那种模式本来就不追求中途可恢复。一句话记忆：<strong>superstep 是存档点，task 是存档点之间的进度条</strong>。</p>
+    </div>
+  </details>
+  <details>
+    <summary>小澄清：存档的"时机"也能调？</summary>
+    <div class="dbody">能。durability（持久化时机）有三档：<code>sync</code>（下一步开始前必须落盘，恢复点最强）、<code>async</code>（落盘与下一步重叠，吞吐更高）、<code>exit</code>（图退出时才统一落盘）。<strong>默认是 async</strong>。另外提醒一句：启用了 checkpointer 但不传 <code>thread_id</code>，是建立不起可恢复线程的。</div>
+  </details>
+  <div class="src">源码入口：<code>libs/checkpoint/langgraph/checkpoint/</code>（base 合约 · memory 内存实现）· <code>libs/checkpoint-sqlite/</code> · <code>libs/checkpoint-postgres/</code></div>
+
+  <!-- 3.5 Interrupt & Streaming -->
+  <h3 id="m-hitl">3.5 Interrupt 与 Stream —— 与人类交互的接口</h3>
+  <p>LangGraph 把"等人"做成了第一公民机制，分两种用法：</p>
+  <table>
+    <thead><tr><th>用法</th><th>在哪声明</th><th>语义</th></tr></thead>
+    <tbody>
+      <tr><td>静态：interrupt_before / after</td><td>compile 或调用时</td><td>"在某节点执行前 / 执行后暂停"——适合固定的审批点</td></tr>
+      <tr><td>动态：interrupt(value)</td><td>节点代码内部</td><td>"运行到这一行时暂停"，并把 value 抛给调用方展示——适合"看了数据才知道要不要问人"</td></tr>
+    </tbody>
+  </table>
+  <p>两者都用 <code>Command(resume=...)</code> 恢复（见第 2 章 Step 5）。而 <code>Command</code> 本身是个多面手，四个维度可以组合：<strong>update</strong>（改状态）、<strong>resume</strong>（递交恢复值）、<strong>goto</strong>（跳到指定节点或 Send）、<strong>graph</strong>（作用于当前图或上抛父图）。</p>
+
+  <details>
+    <summary>小澄清：interrupt 中断在半路，存档怎么写？</summary>
+    <div class="dbody">
+      <p>结论先行：<strong>不写新的完整 checkpoint</strong>——那个超级步没走完（异常抛出后，负责合并与存档的 <code>after_tick()</code> 被整个跳过），状态没变化，本来也不需要新存档。但中断信息不会丢：它被转成一条 <strong>task 级写入</strong>，挂在上一份完整存档上。</p>
+      <div class="cmd"><span class="c"># 中断后的磁盘状态：</span>
+上一份完整 checkpoint（上一个超级步的状态快照，原封不动）
+  └─ pending writes: (task_id, "__interrupt__", Interrupt(value=..., id=...))</div>
+      <p>机制：节点里 <code>interrupt(value)</code> 抛出异常 → 执行器把它转成对保留通道 <code>__interrupt__</code> 的写入（<code>_runner.py</code> 的 <code>commit()</code>，注释就叫 "save interrupt to checkpointer"）→ 走 <code>put_writes</code> 立即落盘。静态 <code>interrupt_before</code> 更简单：在准备任务的 <code>tick()</code> 里就抛出，一个任务都没跑，"上一份存档 + 中断点配置"已完整描述暂停位置。</p>
+      <p>恢复时加载存档和 pending writes、重建那个被中断的 task，<code>interrupt()</code> 原地返回 resume 值，这一步走完才产生新的完整存档——这正是"恢复后节点从头跑"（第 4 章误解二）和"第一次调用返回里带 <code>__interrupt__</code>"背后的机制。</p>
+    </div>
+  </details>
+
+  <p>再说 Streaming（流式输出）：它不是"加个日志开关"，而是运行时的<strong>数据平面</strong>——你想看什么粒度，就订阅什么 mode：</p>
+  <table>
+    <thead><tr><th>mode</th><th>输出什么</th><th>典型用途</th></tr></thead>
+    <tbody>
+      <tr><td>values</td><td>每步之后的完整状态</td><td>状态全量视图</td></tr>
+      <tr><td>updates</td><td>每个节点产出的增量</td><td>UI 增量刷新、执行轨迹</td></tr>
+      <tr><td>messages</td><td>LLM 的逐 token 消息</td><td>聊天打字机效果</td></tr>
+      <tr><td>custom</td><td>节点通过 stream_writer 主动发的自定义事件</td><td>进度条、业务事件</td></tr>
+      <tr><td>debug</td><td>组合调试事件</td><td>开发期全景（数据量最大）</td></tr>
+    </tbody>
+  </table>
+  <details>
+    <summary>小澄清：time-travel 是调试玩具还是正经能力？</summary>
+    <div class="dbody">正经能力。指定历史 <code>checkpoint_id</code> 从旧状态继续执行，等于 replay（重放）或 fork（分叉）：回到审批前改选"拒绝"、回到出错前换个输入重试，都走这条路。它和 <code>update_state</code> 一样，都是在历史线上<strong>创建新的存档节点</strong>，而不是原地修改数据库记录。</div>
+  </details>
+  <div class="src">源码入口：<code>libs/langgraph/langgraph/types.py</code>（interrupt · Command · Send）· <code>libs/langgraph/langgraph/stream/</code></div>
+
+  <!-- 3.6 上层与边界 -->
+  <h3 id="m-upper">3.6 上层建筑：Prebuilt、Functional API、SDK / CLI</h3>
+  <p>前面五个模块是内核。这一节看三类"建在内核之上 / 伸向内核之外"的东西。</p>
+
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">Prebuilt</span>预制房：ReAct Agent 只是一张编译好的图</div>
+    <code>create_react_agent</code> 没有引入任何新机制——它就是用 StateGraph 帮你画好了一张"模型思考 → 有工具调用就去执行工具 → 回来接着想……"的循环图；<code>ToolNode</code> 负责并行执行模型发起的多个工具调用。<strong>注意：</strong>它已被标记迁往 <code>langchain.agents.create_agent</code>——内部结构仍值得读（是理解"Agent 循环如何降解为普通图"的最好样例），但新项目请先评估目标 API。
+  </div>
+
+  <div class="card green">
+    <div class="card-title"><span class="tag green">Functional API</span>写成函数的样子，跑同一个内核</div>
+    <code>@entrypoint</code> 把一个普通 Python 函数包装成可执行的图；函数里的 <code>@task</code> 调用会变成可并行的任务。控制流天然就是 if/else 和 for，适合"用代码表达流程更顺手"的场景；需要可视化、显式路由、统一状态结构时，还是选 StateGraph。<strong>两者共用同一套 Pregel / checkpoint / interrupt / streaming</strong>——Functional 不是"轻量但不可恢复"的旁路。
+  </div>
+
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">SDK / RemoteGraph / CLI</span>远程边界：Server 在另一个仓库</div>
+    生产级部署通常跑在 <strong>LangGraph Server</strong>（本仓库之外）上。<code>sdk-py</code> 提供 threads / runs / store 等 HTTP/SSE/WebSocket 客户端；<code>RemoteGraph</code> 把"远程图"包装成可以塞进本地图里的节点——但真正的执行、存档、排队都发生在 Server 端；<code>cli</code> 则把 <code>langgraph.json</code> 编译成本地开发服务或容器镜像（new / dev / validate / build / up / deploy）。
+  </div>
+
+  <details>
+    <summary>展开看：ReAct 预制图长什么样</summary>
+    <div class="dbody">
+      <div class="cmd"><span class="c"># create_react_agent 编译出的图，骨架就这么简单：</span>
+START → agent（调用模型）
+          │
+   模型输出里有 tool_calls 吗？
+   有 ────┴──── 没有
+   ▼            ▼
+ToolNode     结束（END）
+（并行跑工具）
+   │
+   └──────► 回到 agent（下一圈思考）</div>
+      所谓"Agent 循环"，在 LangGraph 里就是一张带条件边和循环的普通图——因此它自动获得存档、中断、流式和恢复能力，一行额外代码都不用写。
+    </div>
+  </details>
+  <div class="src">源码入口：<code>libs/prebuilt/langgraph/prebuilt/</code>（chat_agent_executor.py · tool_node.py）· <code>libs/langgraph/langgraph/func/</code> · <code>libs/sdk-py/</code> · <code>libs/cli/</code></div>
+</section>
+
+<!-- ======================= 第四章 ======================= -->
+<section id="ch4" class="reveal">
+  <div class="ch-head"><span class="ch-num">04</span><h2>设计哲学与边界</h2></div>
+  <p>理解了"怎么跑"，再看"为什么这么设计"。下面四条是贯穿整个项目的铁律，也是新手最容易读偏的地方。</p>
+
+  <h3>4.1 确定性骨架 + Agentic 决策</h3>
+  <p>流程的骨架——节点、边、审批点——是<strong>显式、可审计</strong>的；LLM 则在节点内部决定"下一步去哪"（通过条件边、<code>Command</code>、<code>Send</code> 在运行时动态改变走向）。模型的不确定性被关在确定性的骨架里：你可以不知道模型会输出什么，但永远知道流程<strong>可能</strong>走到哪、<strong>必须</strong>经过哪些关卡。</p>
+
+  <h3>4.2 状态是一等公民，执行现场不是</h3>
+  <p>所有可恢复性都建立在"<strong>可序列化、带版本的状态</strong>"之上，而不是"函数执行到哪一行"。这是同一个设计决策的两面：正因为 checkpoint 只保存状态不保存栈帧，才能跨进程、跨机器、跨时间恢复——代价是"恢复后节点从头重跑"，副作用的幂等管理成了你的责任。</p>
+
+  <h3>4.3 本仓库 ≠ LangGraph 的全部</h3>
+  <p>本仓库 = 核心运行时 + 持久化实现 + Python SDK + CLI。生产环境的队列、多租户、鉴权、托管部署属于<strong>仓库之外</strong>的 LangGraph Server / 平台层。读代码时如果觉得"这个功能怎么没有"，很可能它本来就在 Server 侧。反过来：SDK 能调用的服务端能力，也不等于本地运行时自带。</p>
+
+  <h3>4.4 版本并存是常态，读码先问"默认吗、稳定吗"</h3>
+  <p><code>create_react_agent</code> 正在迁往 LangChain；Streaming 有 v1 / v2 / v3 三代接口并存（v3 仍是实验面）；DeltaChannel 还是 beta。源码里存在某个能力，<strong>不等于它默认启用、更不等于它是新项目的推荐选择</strong>。对外集成时固定接口版本，别依赖"默认值永远不变"。</p>
+
+  <details>
+    <summary>常见误解一：Checkpointer 可以顺便当长期记忆库？</summary>
+    <div class="dbody">不可以。Checkpointer 服务的是<strong>单条执行线程</strong>的恢复；跨会话的用户记忆应放进 <strong>Store</strong>（namespace + key + value，可选语义检索）。一个管"执行到哪了"，一个管"记住了什么"——混用会让记忆和线程生命周期绑死。另有一个 Cache（节点结果缓存），管的是"同样的输入别重复算"，三者职责互不重叠。</div>
+  </details>
+  <details>
+    <summary>常见误解二：interrupt 之后是从断点"继续"？</summary>
+    <div class="dbody">不是"继续"，是"<strong>带着答案重走</strong>"。节点从头重新执行，<code>interrupt()</code> 调用处直接拿到 resume 值。请把每个 interrupt 点看成"可重放边界"：边界之前的副作用会被再执行一次，要么幂等，要么挪到边界之后。</div>
+  </details>
+  <details>
+    <summary>常见误解三：节点并行跑，一切自动安全？</summary>
+    <div class="dbody"><strong>状态合并</strong>是安全的——由 Channel reducer 保证，写错了会大声报错。但<strong>外部世界的副作用</strong>（两个工具同时写同一个数据库、同时调同一个外部 API）不受 Channel 保护，需要你在工具层自己做幂等键、锁或依赖拆分。</div>
+  </details>
+</section>
+
+<!-- ======================= 第五章 ======================= -->
+<section id="ch5" class="reveal">
+  <div class="ch-head"><span class="ch-num">05</span><h2>动手探索指南</h2></div>
+  <p>读懂的最好方式是让它跑起来，然后打开源码对照着看。</p>
+
+  <h3>5.1 先跑起来：20 行的"人工审批"最小版</h3>
+  <p>这是第 2 章故事的极简版（去掉查订单和风控，只保留审批与执行）。第一次 invoke 会停在 interrupt，第二次用 <code>Command(resume=...)</code> 恢复：</p>
+  <div class="cmd"><span class="c"># pip install langgraph</span>
+<span class="b">from</span> typing_extensions <span class="b">import</span> TypedDict
+<span class="b">from</span> langgraph.graph <span class="b">import</span> StateGraph, START, END
+<span class="b">from</span> langgraph.checkpoint.memory <span class="b">import</span> InMemorySaver
+<span class="b">from</span> langgraph.types <span class="b">import</span> interrupt, Command
+
+<span class="b">class</span> <span class="y">State</span>(TypedDict):
+    amount: <span class="b">int</span>
+    approved: <span class="b">bool</span>
+
+<span class="b">def</span> <span class="g">human_approval</span>(state: State):
+    <span class="c"># 运行到这里会暂停，把括号里的内容抛给调用方；恢复时返回审批结果</span>
+    decision = interrupt({<span class="y">"amount"</span>: state[<span class="y">"amount"</span>], <span class="y">"question"</span>: <span class="y">"是否批准退款？"</span>})
+    <span class="b">return</span> {<span class="y">"approved"</span>: decision == <span class="y">"approved"</span>}
+
+<span class="b">def</span> <span class="g">execute_refund</span>(state: State):
+    print(<span class="y">f"已退款 ¥{state['amount']}"</span>)
+
+g = StateGraph(State)
+g.add_node(<span class="y">"human_approval"</span>, human_approval)
+g.add_node(<span class="y">"execute_refund"</span>, execute_refund)
+g.add_edge(START, <span class="y">"human_approval"</span>)
+g.add_edge(<span class="y">"human_approval"</span>, <span class="y">"execute_refund"</span>)
+g.add_edge(<span class="y">"execute_refund"</span>, END)
+graph = g.compile(checkpointer=InMemorySaver())
+
+cfg = {<span class="y">"configurable"</span>: {<span class="y">"thread_id"</span>: <span class="y">"t1"</span>}}
+print(graph.invoke({<span class="y">"amount"</span>: 3000, <span class="y">"approved"</span>: False}, cfg))  <span class="c"># 停在 interrupt</span>
+print(graph.invoke(Command(resume=<span class="y">"approved"</span>), cfg))            <span class="c"># 恢复并跑完</span></div>
+  <p>跑起来后，重点看两处：第一次 invoke 的返回里带着 <code>__interrupt__</code>（里面就是你 interrupt 时抛出的内容）；第二次 invoke 之后"已退款 ¥3000"被打印。注意：<code>InMemorySaver</code> 把存档放在内存里，本示例支持的是<strong>同一进程内</strong>的暂停-恢复；想跨进程重启恢复，把 saver 换成 <code>SqliteSaver</code> / <code>PostgresSaver</code> 即可，代码其余部分一行不用改。</p>
+
+  <h3>5.2 源码阅读顺序（八个文件，一条线）</h3>
+  <p>按下面这个顺序读，你走的就是一次执行的真实路径：</p>
+  <table>
+    <thead><tr><th>顺序</th><th>文件</th><th>看什么</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>langgraph/graph/state.py</td><td>StateGraph 与 compile：蓝图如何验收、装配</td></tr>
+      <tr><td>2</td><td>langgraph/channels/last_value.py · binop.py</td><td>两种最基本的"状态盒子"及其合并规则</td></tr>
+      <tr><td>3</td><td>langgraph/pregel/main.py</td><td>invoke / stream / 状态 API 的入口</td></tr>
+      <tr><td>4</td><td>langgraph/pregel/_loop.py</td><td><strong>tick() / after_tick()</strong>：超级步的心跳，全项目的心脏</td></tr>
+      <tr><td>5</td><td>langgraph/pregel/_algo.py</td><td>prepare_next_tasks（谁该行动）与 apply_writes（怎么合并）</td></tr>
+      <tr><td>6</td><td>langgraph/types.py</td><td>interrupt / Command / Send：人机交互与动态控制</td></tr>
+      <tr><td>7</td><td>checkpoint/base/__init__.py（libs/checkpoint）</td><td>存档协议：get / put / put_writes 三件套</td></tr>
+      <tr><td>8</td><td>prebuilt/chat_agent_executor.py（libs/prebuilt）</td><td>看 ReAct 如何降解为一张普通图</td></tr>
+    </tbody>
+  </table>
+  <p class="src">路径均相对于各库根：<code>libs/langgraph/</code>、<code>libs/checkpoint/</code>、<code>libs/prebuilt/</code></p>
+
+  <h3>5.3 三个练习，由浅入深</h3>
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">练习 1</span>加一条条件边</div>
+    给 5.1 的图加一个 <code>risk_check</code> 节点：金额 ≤ 1000 直接跳到 <code>execute_refund</code>，否则走 <code>human_approval</code>。体会"条件边读着状态选路"。
+  </div>
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">练习 2</span>看清楚每一步</div>
+    把 <code>invoke</code> 换成 <code>graph.stream(输入, cfg, stream_mode="updates")</code>，观察每个节点交出的"增量"长什么样——这是理解"partial update"最直观的一课。
+  </div>
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">练习 3</span>时间旅行</div>
+    跑完一次后，用 <code>graph.get_state_history(cfg)</code> 列出所有存档；挑"审批之前"的那个 checkpoint_id 放进 config，用 <code>Command(resume="rejected")</code> 恢复——看看分支如何走向拒绝。
+  </div>
+
+  <h3>5.4 常见问题（FAQ）</h3>
+  <details>
+    <summary>恢复之后，某个节点为什么"多执行了一次"？</summary>
+    <div class="dbody">这是机制不是 bug：恢复时中断所在的节点<strong>从头重跑</strong>（checkpoint 不保存栈帧）。该节点在 interrupt 之前的副作用会再执行一次——把它们做成幂等，或挪到 interrupt 返回之后。</div>
+  </details>
+  <details>
+    <summary>必须连 LangSmith 才能用吗？</summary>
+    <div class="dbody">不必须。本地核心完全独立运行；LangSmith 提供的是可观测、评估与部署等增强能力，属于集成层，不是运行前提。</div>
+  </details>
+  <details>
+    <summary>checkpointer 怎么选？</summary>
+    <div class="dbody">调试用 <code>InMemorySaver</code>（进程退出即清空）；单机本地用 <code>SqliteSaver</code>；生产用 <code>PostgresSaver</code>——记得首次显式调用 <code>setup()</code> 建表，并且调用时务必带上 <code>thread_id</code>。</div>
+  </details>
+  <details>
+    <summary>设了 interrupt_before，为什么有时不暂停？</summary>
+    <div class="dbody">静态中断只在"目标节点被触发、且相关状态自上次中断后确实变化过"时生效——这是刻意设计，防止恢复后立刻在原地再次中断。先确认触发条件和状态版本，再怀疑配置。</div>
+  </details>
+  <details>
+    <summary>我想给系统加新能力，从哪下手？</summary>
+    <div class="dbody">最常见的需求（加业务节点）零门槛——节点就是普通函数。更深的扩展面（自定义 Channel / Saver / Store / 缓存 / 工具治理 / 流转换器）各需要实现哪个接口、最低要验证什么，见深度解析的<a href="./langgraph_architecture.html#s18">第十八章扩展点清单</a>。</div>
+  </details>
+</section>
+
+<!-- ======================= 附录 A ======================= -->
+<section id="appA" class="reveal">
+  <div class="ch-head"><span class="ch-num">A</span><h2>术语对照表</h2></div>
+  <table>
+    <thead><tr><th>术语</th><th>白话解释</th></tr></thead>
+    <tbody>
+      <tr><td>StateGraph</td><td>图的"蓝图"构造器，声明节点与边，本身不可执行</td></tr>
+      <tr><td>Pregel</td><td>执行引擎：compile 后的图继承它，获得 invoke/stream/恢复能力</td></tr>
+      <tr><td>Superstep / 超级步</td><td>读快照 → 并行执行 → 屏障合并 → 存档的一个回合</td></tr>
+      <tr><td>Channel</td><td>状态的"盒子"：值容器 + 合并规则 + 版本号</td></tr>
+      <tr><td>Reducer</td><td>你声明的合并函数，决定并行写入如何聚合成一个值</td></tr>
+      <tr><td>Partial update / writes</td><td>节点返回的"增量"，在超级步屏障处才被合并进状态</td></tr>
+      <tr><td>PULL / PUSH</td><td>被状态变化/边触发的任务 / 由 Send、task 调用主动创建的任务</td></tr>
+      <tr><td>Checkpoint</td><td>超级步边界的存档：状态快照 + 版本 + 任务级中间写</td></tr>
+      <tr><td>Pending writes</td><td>任务级中间写；恢复时据此跳过已成功的任务</td></tr>
+      <tr><td>thread_id</td><td>"存档槽"名字，标识一条持续的执行/会话线</td></tr>
+      <tr><td>checkpoint_ns</td><td>存档命名空间，区分嵌套的子图</td></tr>
+      <tr><td>Durability</td><td>存档时机：sync / async（默认）/ exit</td></tr>
+      <tr><td>Interrupt</td><td>"存档离场"式的暂停；用 Command(resume=...) 恢复，节点从头重跑</td></tr>
+      <tr><td>Command</td><td>多面手指令：update 改状态 / resume 递交值 / goto 跳转 / PARENT 上抛</td></tr>
+      <tr><td>Send</td><td>向同一节点扇出多份输入，map-reduce 的基础</td></tr>
+      <tr><td>Store</td><td>跨线程的长期记忆（namespace KV，可选语义检索），别和 Checkpointer 混用</td></tr>
+      <tr><td>Cache</td><td>节点结果缓存：同样输入别重复算，与记忆无关</td></tr>
+      <tr><td>Stream mode</td><td>流式输出的订阅粒度：values / updates / messages / custom / debug…</td></tr>
+      <tr><td>recursion_limit</td><td>超级步数量上限（不是 Python 递归深度），防失控护栏</td></tr>
+      <tr><td>RemoteGraph</td><td>把远程 Server 上的图包装成本地可用的节点/子图</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ======================= 附录 B ======================= -->
+<section id="appB" class="reveal">
+  <div class="ch-head"><span class="ch-num">B</span><h2>源码目录速查</h2></div>
+  <table>
+    <thead><tr><th>路径</th><th>用途</th><th>什么时候看</th></tr></thead>
+    <tbody>
+      <tr><td>libs/langgraph/langgraph/graph/</td><td>StateGraph DSL 与 compile</td><td>想懂"图怎么声明、怎么验收"</td></tr>
+      <tr><td>libs/langgraph/langgraph/channels/</td><td>各类 Channel（LastValue / reducer 聚合 / Topic…）</td><td>想懂状态合并规则</td></tr>
+      <tr><td>libs/langgraph/langgraph/pregel/</td><td>运行时：invoke/stream、超级步循环、调度合并</td><td>想懂主链路，先看这里</td></tr>
+      <tr><td>libs/langgraph/langgraph/func/</td><td>Functional API（entrypoint / task）</td><td>想用函数风格写流程</td></tr>
+      <tr><td>libs/langgraph/langgraph/stream/</td><td>流式输出与事件转换</td><td>想定制流式协议</td></tr>
+      <tr><td>libs/langgraph/langgraph/types.py</td><td>interrupt / Command / Send / 策略类型</td><td>想懂人机交互与动态控制</td></tr>
+      <tr><td>libs/checkpoint/</td><td>Checkpoint / Store / Cache 合约 + 内存实现</td><td>想懂存档协议或自研 Saver</td></tr>
+      <tr><td>libs/checkpoint-sqlite/ · libs/checkpoint-postgres/</td><td>SQLite / Postgres 存档实现</td><td>选型与生产接入</td></tr>
+      <tr><td>libs/prebuilt/</td><td>ReAct、ToolNode、工具注入</td><td>想看"预制 Agent"内部结构</td></tr>
+      <tr><td>libs/sdk-py/</td><td>Python SDK：threads / runs / store 客户端</td><td>对接远程 Server</td></tr>
+      <tr><td>libs/cli/</td><td>命令行：new / dev / validate / build / up / deploy</td><td>部署与本地开发服务</td></tr>
+      <tr><td>libs/langgraph/tests/</td><td>单元测试（Pregel、中断、时间旅行、流…）</td><td>改代码后验证、找行为范例</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ======================= 附录 C ======================= -->
+<section id="appC" class="reveal">
+  <div class="ch-head"><span class="ch-num">C</span><h2>进阶阅读</h2></div>
+  <p>本指南是"最顶层入口"。想往下钻，按这个梯度走：</p>
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">梯度 1</span>全景深度解析</div>
+    <a href="./langgraph_architecture.html">langgraph_architecture.html</a> —— 二十章源码级架构解析 + 完整流程图，是整套文档体系的"主索引"。本篇是它的入门台阶，读完本篇再上去，坡度刚好。
+  </div>
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">梯度 2</span>模块级开发文档</div>
+    <a href="./docs/langgraph/">docs/langgraph/</a> —— 第 04~18 章的 15 份源码审计文档（StateGraph DSL、Pregel 运行时、Checkpoint、Interrupt、Streaming、Prebuilt、SDK/CLI 等），适合按需精读与精确查阅。
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">梯度 3</span>学术源头</div>
+    <a href="https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/">Pregel 论文</a>（BSP 执行模型的出处）与 <a href="https://beam.apache.org/">Apache Beam</a>（数据流思想）——理解"超级步"名字的由来，非必读。
+  </div>
+</section>
+
+<!-- ======================= 三句话总结 ======================= -->
+<section class="reveal">
+  <div class="takeaway">
+    <div class="tk">读完如果只记三句话</div>
+    <ol>
+      <li><strong>图只是表面，Channel 才是状态机。</strong>运行时看到的不是线和框，而是"谁订阅了哪个状态、写入如何合并"——并行安全来自声明出来的合并契约，不来自运气。</li>
+      <li><strong>存档发生在超级步边界，且不保存执行现场。</strong>这一条同时解释了：为什么恢复后节点会重跑、为什么并行结果可预测、为什么能跨进程跨时间恢复。</li>
+      <li><strong>LangGraph 的价值不是让 Agent 更聪明，而是把不可靠的 LLM 决策，关进可版本化、可重放、可审计的状态机里。</strong>它管"可靠地执行"，模型质量、工具权限和业务幂等仍是你的责任。</li>
+    </ol>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  LangGraph 架构入门指南 · 基于 langgraph v1.2.11 monorepo 源码（2026-08-14 工作区快照）· 与 langgraph_architecture.html 系列配套
+</footer>
+
+<script>
+// 顶部阅读进度条
+const prog=document.getElementById('progress');
+addEventListener('scroll',()=>{
+  const h=document.documentElement;
+  const p=h.scrollTop/(h.scrollHeight-h.clientHeight)*100;
+  prog.style.width=p+'%';
+},{passive:true});
+
+// 滚动显现
+const io=new IntersectionObserver(es=>{
+  es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('visible');io.unobserve(e.target);}});
+},{threshold:.06});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// 侧边栏高亮当前章节
+const links=[...document.querySelectorAll('#sidebar a[href^="#"]:not(.ch)')];
+const secs=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const spy=new IntersectionObserver(es=>{
+  es.forEach(e=>{
+    if(e.isIntersecting){
+      links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+e.target.id));
+    }
+  });
+},{rootMargin:'-20% 0px -70% 0px'});
+secs.forEach(s=>spy.observe(s));
+</script>
+</body>
+</html>

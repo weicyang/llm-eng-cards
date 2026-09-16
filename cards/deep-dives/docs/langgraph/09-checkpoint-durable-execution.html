@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 09 章：Checkpoint 与 Durable Execution｜LangGraph 架构深度解析</title>
+  <style>
+    :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--panel2:#e8e1d4;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--green:#15803d;--orange:#c2410c;--red:#b91c1c;--purple:#6d28d9;--yellow:#c2410c}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:20px}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .32rem;border-radius:4px;overflow-wrap:anywhere}
+    .layout{display:grid;grid-template-columns:280px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:24px 18px;border-right:1px solid var(--border);background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
+    .sidebar strong{display:block;margin-bottom:12px}.sidebar a{display:block;padding:5px 8px;border-left:2px solid transparent;color:var(--muted);font-size:13px}.sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+    main{min-width:0;padding:44px 46px 72px}.container{max-width:1120px;margin:auto}.back{display:inline-block;margin-bottom:22px}.eyebrow{color:var(--purple);font-weight:700;letter-spacing:.08em}
+    h1{font-size:36px;line-height:1.25;margin:8px 0 14px}h2{font-size:25px;margin:54px 0 16px;padding-bottom:8px;border-bottom:1px solid var(--border)}h3{font-size:19px;margin:28px 0 10px}p,li{max-width:92ch}.lead{font-size:17px;color:#44403c}.muted{color:var(--muted)}
+    .meta,.grid2,.grid3{display:grid;gap:12px}.meta{grid-template-columns:repeat(3,minmax(0,1fr));margin:24px 0}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}
+    .card,.callout,.flow,.formula{border:1px solid var(--border);border-radius:8px;background:var(--panel);padding:14px 16px}.card strong{display:block;color:#fff;margin-bottom:5px}.callout{margin:16px 0;border-left:4px solid var(--blue)}.callout.warn{border-left-color:var(--yellow)}.callout.danger{border-left-color:var(--red)}.callout.good{border-left-color:var(--green)}
+    .tag{display:inline-block;padding:1px 8px;margin:2px 4px 2px 0;border:1px solid var(--border);border-radius:99px;color:#44403c;font-size:12px}.tag.current{border-color:var(--green);color:#15803d}.tag.default{border-color:var(--blue);color:#0f766e}.tag.optional{border-color:var(--purple);color:#6d28d9}.tag.limit{border-color:var(--yellow);color:#a16207}
+    .table-wrap{overflow-x:auto;margin:14px 0 22px;border:1px solid var(--border);border-radius:8px}table{width:100%;border-collapse:collapse;min-width:700px;background:var(--panel)}th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid var(--border)}th{background:#f0ebe0;color:var(--text)}tr:last-child td{border-bottom:0}
+    .flow{white-space:pre-wrap;font:14px/1.7 Consolas,"Courier New",monospace;color:#44403c}.formula{text-align:center;color:#6d28d9;font-weight:700;margin:18px 0}.section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.evidence{color:var(--muted);font-size:.92em}
+    dl{display:grid;grid-template-columns:180px 1fr;gap:8px 18px}dt{color:#fff;font-weight:700}dd{margin:0;color:#44403c}.checklist li{margin:5px 0}.footer{margin-top:52px;padding-top:18px;border-top:1px solid var(--border);color:var(--muted)}
+    @media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--border);columns:2}.sidebar strong{column-span:all}.sidebar a{break-inside:avoid}.meta,.grid2,.grid3{grid-template-columns:1fr}main{padding:30px 20px}h1{font-size:29px}}
+    @media(max-width:520px){.sidebar{columns:1}main{padding:24px 14px}dl{grid-template-columns:1fr;gap:2px}dd{margin-bottom:10px}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="本章目录">
+    <strong>09 · Checkpoint / Durable Execution</strong>
+    <a href="#position">1. 模块定位</a>
+    <a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a>
+    <a href="#architecture">4. 架构组成</a>
+    <a href="#flows">5. 完整运行流程</a>
+    <a href="#data-model">6. 数据与状态模型</a>
+    <a href="#interfaces">7. 接口、协议与事件</a>
+    <a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a>
+    <a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a>
+    <a href="#troubleshooting">12. 可观测性与排障</a>
+    <a href="#testing">13. 测试与验证</a>
+    <a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与已知限制</a>
+    <a href="#source-index">16. 源码索引与进一步阅读</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+  <main><div class="container">
+    <a class="back" href="../../langgraph_architecture.html#s9">← 返回 LangGraph 架构总览第 09 章</a>
+    <div class="eyebrow">LANGGRAPH 架构深度解析 · 第 09 章</div>
+    <h1>Checkpoint 与 Durable Execution</h1>
+    <p class="lead">从 task 级写入到超级步快照：解释 LangGraph 如何把 Channel 状态、版本与执行结果变成可恢复协议，以及这种协议明确没有承诺什么。</p>
+    <div class="meta">
+      <div class="card"><strong>事实基线</strong><code>langgraph 1.2.11</code><br><code>langgraph-checkpoint 4.2.0</code><br><span class="muted">Git SHA：当前环境无法取得</span></div>
+      <div class="card"><strong>证据状态</strong><span class="tag current">源码已审计</span><span class="tag current">测试已映射</span><br><span class="muted">最近验证：2026-08-14</span></div>
+      <div class="card"><strong>主要 Owner</strong><code>libs/checkpoint/</code><br><code>libs/langgraph/langgraph/pregel/_checkpoint.py</code><br><code>libs/langgraph/langgraph/pregel/_loop.py</code></div>
+    </div>
+    <p><span class="tag current">当前事实</span><span class="tag default">默认行为</span><span class="tag optional">可选能力</span><span class="tag limit">边界/限制</span></p>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>Checkpoint 子系统是本地 Pregel Runtime 的<strong>执行恢复协议</strong>。当前 <code>Checkpoint</code> 本体保存 <code>channel_values</code>、<code>channel_versions</code>、<code>versions_seen</code> 等超级步快照字段；读取时由 <code>CheckpointTuple</code> 把该快照与 config、metadata、parent config 以及可空的 <code>pending_writes</code> 关联起来。它恢复的是“下一步应调度什么、哪些 task 结果已经完成”，不是保存 Python 栈帧、continuation（续延）、线程、协程或打开的网络连接。<span class="evidence">两种类型的字段边界见 <code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:89-146</code>；运行时装载 tuple 见 <code>libs/langgraph/langgraph/pregel/_loop.py:1629-1708</code>。</span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>职责</th><th>本模块负责</th><th>委托/明确不负责</th></tr></thead>
+        <tbody>
+          <tr><td>执行状态</td><td>超级步边界快照、task writes、父 checkpoint 链</td><td>State schema/reducer 由 Graph/Channel；不保存 Python 栈帧</td></tr>
+          <tr><td>恢复调度</td><td>用 <code>versions_seen</code> 与 pending writes 恢复任务</td><td>节点业务副作用的幂等与补偿由应用负责</td></tr>
+          <tr><td>存储协议</td><td><code>BaseCheckpointSaver</code> sync/async 接口</td><td>SQLite/Postgres 表结构、事务和迁移由第 10 章的实现负责</td></tr>
+          <tr><td>记忆/缓存</td><td>同一执行 thread 的可恢复历史</td><td>跨 thread 语义记忆属于 Store；结果缓存属于 Cache</td></tr>
+          <tr><td>服务能力</td><td>本地 Runtime 调用 saver</td><td>远程 API Server 的鉴权、多租户、队列、备份与 SLA 不在本仓库本模块内</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout good"><strong>开发心智模型：</strong><code>put_writes</code> 是“某个 task 已经产生了什么”，<code>put</code> 是“屏障合并后整张图处于什么 checkpoint”。二者时间粒度和恢复用途不同，不能当作两个等价保存入口。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:277-318</code></span></div>
+      <div class="callout"><strong>为什么结构化离散步骤使 checkpoint 可移植：</strong>LangChain 官方设计长文指出，单个大 <code>while</code> 循环或可中断生成器依赖仍存活的执行状态，难以保存成可在另一台机器、任意时间后恢复的格式。LangGraph 先把执行拆成 node/superstep，再在屏障处只序列化 Channel 值、版本和每个 node 已见版本；恢复端据此重新规划下一批 task，而不搬运语言运行时的指令指针。这里的“可移植”是<strong>checkpoint 数据不依赖原 Python 进程继续存活</strong>，不是承诺任意代码版本、序列化类型、外部资源或部署环境都自动兼容。<span class="evidence">设计依据：<a href="https://www.langchain.com/blog/building-langgraph">LangChain《Building LangGraph》</a>；当前字段契约：<code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:92-123</code>；恢复规划：<code>libs/langgraph/langgraph/pregel/_loop.py:599-681</code>。</span></div>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <div class="flow">应用：graph.invoke / stream / ainvoke / astream
+  │ RunnableConfig：thread_id、checkpoint_ns、checkpoint_id、durability
+  ▼
+Pregel main
+  ├─ SyncPregelLoop ── get_tuple / put_writes / put ──► BaseCheckpointSaver
+  └─ AsyncPregelLoop ─ aget_tuple / aput_writes / aput ► BaseCheckpointSaver
+          │
+          ├─ InMemorySaver（测试/调试）
+          ├─ SQLite saver（兄弟库）
+          └─ Postgres saver（兄弟库）
+  ▲
+Channel map + channel_versions + versions_seen + task pending writes</div>
+      <p><code>langgraph</code> 对 <code>langgraph-checkpoint&gt;=4.1.0,&lt;5.0.0</code> 有生产依赖；checkpoint 基础包自身依赖 <code>langchain-core</code> 与 <code>ormsgpack</code>。这说明 Runtime 消费公共 saver 协议，而不是依赖某个数据库实现。<span class="evidence"><code>libs/langgraph/pyproject.toml:26-33</code>；<code>libs/checkpoint/pyproject.toml:5-17</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>表面</th><th>角色</th><th>进程/持久性边界</th><th>主要证据</th></tr></thead>
+        <tbody>
+          <tr><td><code>BaseCheckpointSaver</code></td><td>定义 get/list/put/put_writes/delete/version 及 async 对偶</td><td>接口本身不保证数据库事务级别</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:176-225,227-318,417-509</code></td></tr>
+          <tr><td><code>PregelLoop</code></td><td>持有当前 checkpoint、pending writes、durability</td><td>单次本地运行的状态所有者</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:247-254,284-320</code></td></tr>
+          <tr><td><code>InMemorySaver</code></td><td>内存协议实现，覆盖 sync/async 方法</td><td>默认只在当前 Python 进程对象内</td><td><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:33-99,523-611</code></td></tr>
+          <tr><td>Serde</td><td>把 checkpoint、metadata、write 值编码/解码</td><td>反序列化是信任边界</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:209-216,713-742</code></td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="grid2">
+        <div class="card"><strong>Checkpoint</strong>某一时刻的图状态快照：<code>v</code>、<code>id</code>、<code>ts</code>、<code>channel_values</code>、<code>channel_versions</code>、<code>versions_seen</code>、<code>updated_channels</code>。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:92-123</code></span></div>
+        <div class="card"><strong>CheckpointMetadata</strong>描述快照来源和历史语境；<code>source</code> 可为 input/loop/update/fork，另有 <code>step</code>、<code>parents</code>、<code>run_id</code> 与 Delta 计数。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:37-85</code></span></div>
+        <div class="card"><strong>CheckpointTuple</strong>读取 API 的聚合返回：config + checkpoint + metadata + 可空 parent_config + 可空 pending_writes。pending writes 不属于 <code>Checkpoint</code> TypedDict 本体。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:139-146</code></span></div>
+        <div class="card"><strong>PendingWrite</strong><code>(task_id, channel, value)</code> 三元组；它把 task 结果、ERROR、INTERRUPT、RESUME 等特殊写挂到产生该 task 的 checkpoint。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:22-31,788-795</code></span></div>
+      </div>
+      <h3>三维坐标不是一个复合字符串</h3>
+      <div class="formula">Checkpoint identity = thread_id × checkpoint_ns × checkpoint_id</div>
+      <ul>
+        <li><code>thread_id</code>：执行线/会话线的身份；复用它会延续该 thread 的状态。</li>
+        <li><code>checkpoint_ns</code>：同一 thread 内的图/子图命名空间；根图通常是空字符串，子图按嵌套路径隔离。</li>
+        <li><code>checkpoint_id</code>：命名空间内的具体历史点；省略时 saver 通常取最新点，显式给出时用于精确读取、回放或分叉。</li>
+      </ul>
+      <p>InMemorySaver 的存储形状直接体现这三维坐标：checkpoint 为 thread → namespace → checkpoint id；writes 以三元组为外键。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:68-83</code></span></p>
+      <div class="callout warn"><strong>不要误读：</strong><code>thread_id</code> 不是数据库租户授权；<code>checkpoint_ns</code> 不是安全沙箱；<code>checkpoint_id</code> 也不是全局唯一访问令牌。它们是持久化寻址字段，调用方仍需在外层完成身份验证和授权。</div>
+      <h3>数据快照、task 结果与执行栈是三件事</h3>
+      <ul>
+        <li><strong><code>Checkpoint</code>：</strong>只表达可序列化的图状态和调度版本；其 TypedDict 没有 <code>pending_writes</code>、Python frame 或 continuation 字段。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:92-123</code></span></li>
+        <li><strong><code>CheckpointTuple.pending_writes</code>：</strong>saver 读取时关联到该 checkpoint 的 task 级结果；Loop 将普通 writes 注回稳定 task id，使已成功 task 可跳过，控制写则不伪装成成功结果。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:139-146</code>；<code>libs/langgraph/langgraph/pregel/_loop.py:736-749,1675-1684</code>。</span></li>
+        <li><strong>重放：</strong>恢复会重新进入节点或 Functional API entrypoint；已完成 task 的结果可复用，但未完成 task 可能重跑。外部 API、文件和数据库副作用不在 checkpoint 的原子边界内，必须以幂等键、查重、outbox/事务或补偿保护。<span class="evidence">历史设计动机见 <a href="https://www.langchain.com/blog/building-langgraph">LangChain 设计长文</a>；当前跳过规则见 <code>libs/langgraph/langgraph/pregel/_loop.py:661-664,736-749</code>。</span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>组件</th><th>输入 → 输出</th><th>状态/失败隔离</th><th>扩展点</th></tr></thead>
+        <tbody>
+          <tr><td><code>create_checkpoint</code></td><td>旧 checkpoint + live channels + step → 新 checkpoint</td><td>只构造可保存快照；DeltaChannel 可仅保存 snapshot，其余靠祖先 writes 重建</td><td>Channel 的 <code>checkpoint()</code>；saver 的版本生成</td></tr>
+          <tr><td><code>channels_from_checkpoint</code></td><td>specs + checkpoint → hydrated channels + managed specs</td><td>普通 Channel 直接恢复；DeltaChannel 缺值时走祖先链</td><td><code>get_delta_channel_history</code></td></tr>
+          <tr><td><code>PregelLoop.put_writes</code></td><td>task id + writes → loop pending list + saver task writes</td><td><code>exit</code> 运行中不下沉到 saver；UntrackedValue 不持久化</td><td>saver <code>put_writes/aput_writes</code></td></tr>
+          <tr><td><code>PregelLoop._put_checkpoint</code></td><td>metadata + 当前 Channel map → 顺序提交 checkpoint</td><td>保存任务排队，前一个 put 完成后才提交下一个</td><td>saver <code>put/aput</code></td></tr>
+          <tr><td>Sync/Async Loop</td><td>config + input + saver → 执行与恢复</td><td>分别绑定 sync 与 async saver API；状态语义对齐</td><td>自定义 saver 两套方法</td></tr>
+        </tbody>
+      </table></div>
+      <p>构造 checkpoint 时，<code>channel_versions</code> 和 <code>versions_seen</code> 被保留，<code>updated_channels</code> 被排序记录；这些版本数据让调度器可以判断节点是否看过新的 Channel 值。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:149-214</code></span></p>
+      <p>恢复时 Loop 先按 config 读取精确或最新 tuple，把 parent、metadata、pending writes 装回内存，再 hydrate Channel，最后进入 <code>_first</code> 处理新输入、Command 或 resume。sync 与 async 代码路径是一一对应的。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1629-1708</code>；<code>libs/langgraph/langgraph/pregel/_loop.py:1887-1968</code></span></p>
+    </section>
+
+    <section class="section" id="flows">
+      <h2>5. 完整运行流程</h2>
+      <h3>路径 A：正常成功，task writes 进入超级步 checkpoint</h3>
+      <ol>
+        <li><strong>触发/读取：</strong><code>invoke/stream</code> 解析 saver 与默认 durability；Loop 用 config 读取最新或指定的 <code>CheckpointTuple</code>。默认 durability 是 <code>async</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2589-2612</code>；<code>libs/langgraph/langgraph/pregel/_loop.py:1629-1654</code></span></li>
+        <li><strong>执行：</strong>同一超级步的 tasks 基于稳定 Channel 快照运行；每个 task 完成后将 <code>(channel,value)</code> 交给 Loop。</li>
+        <li><strong>task 持久化：</strong>非 <code>exit</code> 模式下，Loop 用当前 checkpoint id 调 <code>put_writes</code>；InMemorySaver 以 <code>(thread,ns,checkpoint)</code> + <code>(task,index)</code> 保存。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:415-505</code>；<code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:467-503</code></span></li>
+        <li><strong>屏障合并：</strong><code>after_tick</code> 收集 task writes，经 <code>apply_writes</code> 更新 Channel/版本，再清空本步 pending list。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-718</code></span></li>
+        <li><strong>超级步持久化：</strong><code>_put_checkpoint</code> 计算新版本、构造快照并提交 <code>put</code>；提交按前序 future 串行，避免 checkpoint 乱序。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1132-1219</code></span></li>
+      </ol>
+      <h3>路径 B：配置拒绝或无效能力</h3>
+      <ol>
+        <li>存在 checkpointer 但 config 没有可配置坐标时，Pregel 默认解析直接抛 <code>ValueError</code>，不会进入节点执行。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2589-2593</code></span></li>
+        <li>调用 <code>Command(resume=...)</code> 却没有 checkpointer 时，Loop 抛 <code>RuntimeError</code>；空 Command 则抛 <code>EmptyInputError</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:902-931</code></span></li>
+        <li>显式传 durability 但没有 checkpointer 时，仅发出“durability 无效果”的 warning；它不会凭空创建持久化。sync/async 入口行为一致。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2798-2805,3229-3232</code></span></li>
+      </ol>
+      <h3>路径 C：同一步部分失败，恢复跳过成功 task</h3>
+      <ol>
+        <li>task one 成功并落下普通 pending write；task two 失败并落下 ERROR。整体超级步没有形成新的已合并 checkpoint。</li>
+        <li>下次以同一 thread 恢复时，Loop 从 tuple 装载 pending writes，重新生成相同稳定 task ids。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1675-1684,611-629</code></span></li>
+        <li><code>_reapply_writes_to_succeeded_nodes</code> 把普通 writes 注回对应 task；ERROR/INTERRUPT/RESUME 等控制信号被跳过，所以成功 task 因已有 writes 不再执行，失败/中断 task 保持空 writes 并重跑或路由。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:661-664,736-749</code></span></li>
+        <li>sync 与 async 测试都断言成功节点调用次数仍为 1。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:891-976</code>；<code>libs/langgraph/tests/test_pregel_async.py:1807-1897</code></span></li>
+      </ol>
+      <div class="callout danger"><strong>边界：</strong>“跳过成功 task”只避免重复执行已由 pending writes 证明完成的 LangGraph task；若失败 task 在抛错前已调用外部 API、写文件或提交数据库，但尚未产生可识别的成功 write，该副作用仍可能在重跑时发生。应用必须使用幂等键、事务/outbox 或补偿。</div>
+    </section>
+
+    <section class="section" id="data-model">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>对象/字段</th><th>语义</th><th>生命周期与约束</th><th>证据</th></tr></thead>
+        <tbody>
+          <tr><td><code>Checkpoint.v/id/ts</code></td><td>格式版本、单调可排序 id、ISO 时间</td><td>每次构造新 checkpoint 生成；恢复不能把 id 当授权凭据</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:92-103</code></td></tr>
+          <tr><td><code>channel_values</code></td><td>可持久 Channel 值；Delta 可省略非快照值</td><td>UntrackedValue 明确不落盘</td><td><code>libs/langgraph/langgraph/pregel/_checkpoint.py:159-205</code>；<code>libs/langgraph/langgraph/pregel/_loop.py:439-454</code></td></tr>
+          <tr><td><code>channel_versions</code></td><td>Channel 单调版本</td><td>saver 可定制版本方案，但必须可比较地递增</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:109-120,692-711</code></td></tr>
+          <tr><td><code>versions_seen</code></td><td>node → channel → 已消费版本</td><td>参与下一任务判断；不是业务审计日志</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:115-120</code></td></tr>
+          <tr><td><code>CheckpointMetadata</code></td><td>source、step、parents、run_id 等</td><td>总字段可扩展；内部坐标键不会复制进 metadata</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:37-85,757-807</code></td></tr>
+          <tr><td><code>PendingWrite</code></td><td>绑定 task 的中间结果或控制信号</td><td>归属于产生 task 的 checkpoint；在屏障合并后进入下一快照</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:31,139-146</code></td></tr>
+          <tr><td><code>parent_config</code></td><td>父 checkpoint 坐标</td><td>形成历史/分叉链；Delta 重建可能依赖链</td><td><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:263-309</code></td></tr>
+        </tbody>
+      </table></div>
+      <p>InMemorySaver 将 Channel 值按 <code>(thread_id, checkpoint_ns, channel, version)</code> 放入 blobs，从 checkpoint 主记录中分离；<code>new_versions</code> 决定本次写哪些 blob。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:78-83,421-465</code></span></p>
+      <p>清理 thread 必须同时删除 checkpoint、writes 与 blobs；内存实现如此执行。生产实现还需考虑父链、事务、备份、保留期和 DeltaChannel 祖先依赖，不能只删除“旧快照”而忽略 writes。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:505-521</code>；<code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:374-415</code></span></p>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>同步 API</th><th>异步 API</th><th>语义</th><th>错误/幂等注意</th></tr></thead>
+        <tbody>
+          <tr><td><code>get_tuple</code></td><td><code>aget_tuple</code></td><td>按 config 取 checkpoint、metadata、parent、pending writes</td><td>未命中返回 None；精确 id 与 latest 必须区分</td></tr>
+          <tr><td><code>list</code></td><td><code>alist</code></td><td>按 config/filter/before/limit 遍历历史</td><td>排序、分页和 filter 契约应由 conformance 验证</td></tr>
+          <tr><td><code>put</code></td><td><code>aput</code></td><td>保存超级步 checkpoint + metadata + new_versions</td><td>返回带新 checkpoint id 的 config</td></tr>
+          <tr><td><code>put_writes</code></td><td><code>aput_writes</code></td><td>保存 task 级中间 writes，可带 task_path</td><td>特殊 write 使用负 index；普通 write 避免重复覆盖语义漂移</td></tr>
+          <tr><td><code>delete_thread</code></td><td><code>adelete_thread</code></td><td>删除 thread 全部状态</td><td>属于破坏性生命周期操作</td></tr>
+          <tr><td><code>get_next_version</code></td><td>同一同步方法</td><td>生成 Channel 下一版本</td><td>自定义版本必须单调递增</td></tr>
+        </tbody>
+      </table></div>
+      <p>基础接口签名与同步/异步对偶由 <code>BaseCheckpointSaver</code> 定义。异步图不应借助阻塞数据库方法伪装成 async；自定义 saver 应实现对应的异步 I/O。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:227-318,417-509</code></span></p>
+      <p>Checkpoint 还可通过 <code>checkpoints</code> stream/debug 路径发出；Loop 在准备任务时把 config、metadata、tasks、pending writes 和 parent config 交给 debug 映射。事件是观测视图，不替代 saver 中的持久事实。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:631-650</code></span></p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为</th><th>来源</th></tr></thead>
+        <tbody>
+          <tr><td><code>thread_id</code></td><td>通常为 string</td><td>无业务默认</td><td>显式 config</td><td>saver thread 身份</td><td>缺少可配置坐标时拒绝执行</td><td><code>libs/langgraph/langgraph/pregel/main.py:2589-2593</code></td></tr>
+          <tr><td><code>checkpoint_ns</code></td><td>string</td><td>根图通常 <code>""</code></td><td>子图/显式坐标</td><td>同 thread 的命名空间</td><td>错误继承可造成状态串线</td><td><code>libs/langgraph/langgraph/_internal/_constants.py:52-59</code></td></tr>
+          <tr><td><code>checkpoint_id</code></td><td>string，可选</td><td>省略即 latest 查询</td><td>显式 id 优先</td><td>精确历史点/回放</td><td>未命中返回 None，Loop 使用空起点</td><td><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:230-310</code></td></tr>
+          <tr><td><code>durability</code></td><td>sync/async/exit</td><td><code>async</code></td><td>调用参数 → configurable → 默认</td><td>单次执行并传播给子图</td><td>无 saver 时 warning 且无效果</td><td><code>libs/langgraph/langgraph/pregel/main.py:2602-2612,2862-2864</code></td></tr>
+          <tr><td><code>checkpoint_during</code></td><td>bool（迁移项）</td><td>无</td><td>不得与 durability 同时给</td><td>旧调用兼容</td><td>同时提供时 ValueError；并发出弃用 warning</td><td><code>libs/langgraph/langgraph/pregel/main.py:2725-2735</code></td></tr>
+        </tbody>
+      </table></div>
+      <h3>Durability 的精确定义</h3>
+      <div class="grid3">
+        <div class="card"><strong><code>sync</code></strong>下一超级步开始前等待 checkpoint future。task writes 也按任务产生，恢复窗口最窄，但存储延迟进入步间关键路径。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2983-2988</code></span></div>
+        <div class="card"><strong><code>async</code>（默认）</strong>checkpoint 与下一步执行重叠；提交仍按前序 future 排序。进程在后台保存完成前崩溃，最新边界可能尚未持久。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2602-2604</code>；<code>libs/langgraph/langgraph/pregel/_loop.py:1199-1209</code></span></div>
+        <div class="card"><strong><code>exit</code></strong>中间 <code>_put_checkpoint</code> 只推进内存状态，不调用 saver；图退出/中断/错误的上下文清理时保存最终 checkpoint 和 pending writes。运行中宕机不具备逐步恢复承诺。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1132-1147,1317-1335</code></span></div>
+      </div>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <ul>
+        <li><strong>超级步屏障：</strong>task writes 在 task 完成时可先持久化，但 Channel 合并发生在 <code>after_tick</code>；兄弟 task 不会因为 saver 已收到 write 就即时看到它。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-718</code></span></li>
+        <li><strong>提交顺序：</strong>sync/async 的 checkpoint put 都等待前一个 put；Delta write futures 也在 checkpoint 可见前 drain，避免读到“有 checkpoint、缺 backing writes”的状态。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1530-1547,1783-1802</code></span></li>
+        <li><strong>sync 等待点：</strong>仅 <code>sync</code> 在每个 tick 后显式等待 checkpoint future；<code>async</code> 允许重叠，但 executor/上下文退出仍负责收尾。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2983-2988,3457-3465</code></span></li>
+        <li><strong>取消：</strong>async Loop 在退出时创建并等待 stack exit task；若取消，会把该 task 附到异常参数中供上层等待后再复用数据库连接。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1972-1988</code></span></li>
+        <li><strong>内存占用：</strong>InMemorySaver 的 checkpoints、writes、blobs 都随 thread 历史增长，除非显式 delete/prune 或销毁对象；实现没有容量上限、TTL 或跨进程协调。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:68-99,505-521</code></span></li>
+      </ul>
+      <div class="callout warn">源码没有为本模块给出固定吞吐、容量、超时或 SLA。性能取决于 Channel 数据大小、序列化成本、超级步频率、saver I/O 和 durability；不要把 <code>async</code> 写成“绝不阻塞”或把 <code>sync</code> 写成“事务性 exactly-once”。</div>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>风险</th><th>当前代码边界</th><th>开发要求</th><th>证据</th></tr></thead>
+        <tbody>
+          <tr><td>不可信反序列化</td><td>默认 JsonPlusSerializer 能处理多种 Python 类型；allowlist 可收紧，不能支持时会 warning</td><td>新应用启用 strict msgpack 或显式 allowlist；只读取可信存储</td><td><code>libs/checkpoint/README.md:45-50</code>；<code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:713-742</code></td></tr>
+          <tr><td>租户越权</td><td>thread/ns/id 仅用于寻址，本地 saver 不执行租户授权</td><td>在进入 graph 前把认证主体映射到允许的 thread，拒绝客户端任意读写别人的 id</td><td><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:230-310</code></td></tr>
+          <tr><td>Secret/PII 落盘</td><td>可持久 Channel 和 pending writes 会经 serde 保存；metadata 会吸收部分标量 config</td><td>State 最小化、加密存储、保留/删除策略；Secret 不放进可持久 State</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:757-807</code></td></tr>
+          <tr><td>外部副作用重复</td><td>checkpoint 只证明内部 write，不提供外部系统原子事务</td><td>幂等键、outbox、去重表或补偿；审批放在不可逆副作用之前</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:736-749</code></td></tr>
+          <tr><td>内存实现泄漏</td><td>进程内字典无访问控制、加密、TTL 和容量限制</td><td>仅测试/调试；生产选择有访问控制、备份与加密策略的 saver</td><td><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:36-44</code></td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout danger"><strong>Fail-closed 原则：</strong>坐标缺失应拒绝启动持久化执行；反序列化 allowlist 拒绝的类型不应悄悄恢复为任意对象。若业务把 checkpoint 用作审计或授权依据，需要独立的不可抵赖日志与权限模型，本模块没有提供这些保证。</div>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+        <tbody>
+          <tr><td>同一步某 task 失败</td><td>ERROR pending write/异常</td><td>超级步不提交合并结果</td><td>成功 task writes 可保留</td><td>同 thread 恢复，跳成功 task，仅重跑未完成/失败 task</td><td>核对 pending writes 的 task id 与 channel</td></tr>
+          <tr><td><code>sync</code> saver put 失败</td><td>future.result 抛错</td><td>下一步前失败</td><td>新 checkpoint 不应视为已确认</td><td>修复存储后从最后可读 checkpoint 恢复</td><td>检查 saver 日志、连接和事务</td></tr>
+          <tr><td><code>async</code> 进程崩溃</td><td>最新边界缺失</td><td>后台 put 可能未完成</td><td>恢复点可能落后</td><td>从最后已持久点重放；副作用需去重</td><td>若不可接受，改用 sync</td></tr>
+          <tr><td><code>exit</code> 运行中崩溃</td><td>没有本次最终 checkpoint</td><td>本次中间进展可能全部丢失</td><td>仅已有父 checkpoint 可靠</td><td>整段重新执行</td><td>长流程不要选择 exit</td></tr>
+          <tr><td>指定 checkpoint_id 不存在</td><td><code>get_tuple</code> 返回 None</td><td>Loop 形成 synthetic empty 起点</td><td>可能像新 thread 一样开始</td><td>调用方应先校验历史点存在</td><td>核对 thread/ns/id 三维坐标</td></tr>
+          <tr><td>旧 checkpoint 格式</td><td>compile graph 的 migrate hook</td><td>载入后迁移内存对象</td><td>兼容 v2/v3 fixture</td><td>以 migration 测试校验目标形状</td><td>升级前保留样本并做回归</td></tr>
+        </tbody>
+      </table></div>
+      <p>checkpoint migration 测试将旧 fixture 复制后交给 graph 的迁移函数，并比较新格式目标；另有 sync/async 从保存历史恢复的覆盖。<span class="evidence"><code>libs/langgraph/tests/test_checkpoint_migration.py:1473-1508,1511-1595,1598-1669</code></span></p>
+      <p><code>exit</code> 在正常顶层退出、错误或 interrupt 时通过 Loop 上下文清理落下最终状态；但操作系统强杀、进程崩溃或机器断电未必执行该清理，因此不能把“退出时保存”推广成“任何终止都保存”。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1317-1335</code></span></p>
+    </section>
+
+    <section class="section" id="troubleshooting">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+        <tbody>
+          <tr><td>恢复后成功节点又执行</td><td>读取 latest tuple 的 <code>pending_writes</code>；比较 task id</td><td>使用新 thread/ns；<code>exit</code> 中崩溃；task id/图拓扑改变；write 尚未落盘</td><td>固定坐标和图结构；改 sync；为副作用加幂等</td></tr>
+          <tr><td>子图状态串到别处</td><td>打印 StateSnapshot config 中的 thread/ns/id</td><td>错误继承父 config 或复用 node namespace</td><td>明确子图 checkpointer 语义；独立 thread 应保留根 namespace</td></tr>
+          <tr><td>get_state 值与历史点不同</td><td>区分 latest config 与带 checkpoint_id 的精确 config</td><td>latest 视图可应用 pending writes，精确历史点保持边界快照</td><td>排障时同时查看 tuple 与 StateSnapshot</td></tr>
+          <tr><td>durability 设置无效果</td><td>确认编译图存在 checkpointer</td><td>无 saver，只产生 warning</td><td>配置合适 saver 与 thread_id</td></tr>
+          <tr><td>历史增长/内存上涨</td><td>统计 thread、namespace、checkpoint、writes、blobs</td><td>InMemorySaver 无 TTL/容量限制；未清理 thread</td><td>测试结束 delete_thread；生产换数据库 saver 并设计保留期</td></tr>
+          <tr><td>恢复时报反序列化 warning/类型变化</td><td>检查 JsonPlus allowlist 与存储类型</td><td>未注册模块或 strict 模式阻断</td><td>加入最小 allowlist，避免开放任意模块</td></tr>
+          <tr><td>async 退出后连接仍忙</td><td>检查 CancelledError 是否携带 exit task</td><td>取消发生在 async stack 清理期间</td><td>上层先等待退出 task，再复用连接</td></tr>
+        </tbody>
+      </table></div>
+      <p>测试明确区分“latest state 应用成功 pending write”与“带 checkpoint_id 的精确状态不应用 pending writes”，这是排障时最容易混淆的两个视图。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:950-969</code>；<code>libs/langgraph/tests/test_pregel_async.py:1871-1890</code></span></p>
+      <p>可观测字段至少应包含 run/thread、checkpoint namespace/id、metadata source/step、task id、write channel、durability 和 saver 操作耗时；但敏感 Channel 值不应直接进入日志。</p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+        <tbody>
+          <tr><td>部分失败后跳过成功 task</td><td><code>libs/langgraph/tests/test_pregel.py:891-976</code><br><code>libs/langgraph/tests/test_pregel_async.py:1807-1897</code></td><td>sync/async 参数化集成</td><td>pending ordinary write 注回成功 task，成功节点调用次数不增加</td><td>不证明外部副作用 exactly-once</td></tr>
+          <tr><td>旧 checkpoint 可迁移</td><td><code>libs/langgraph/tests/test_checkpoint_migration.py:1473-1669</code></td><td>migration fixture</td><td>多个旧版本迁移到当前形状并可 sync/async 读取执行</td><td>不覆盖任意第三方 saver 私有格式</td></tr>
+          <tr><td>子图 namespace 与恢复隔离</td><td><code>libs/langgraph/tests/test_subgraph_persistence.py:30-687</code><br><code>libs/langgraph/tests/test_subgraph_persistence_async.py:30-709</code></td><td>sync/async 子图集成</td><td>stateless/stateful、interrupt/resume、独立 thread 根 namespace</td><td>不等于多租户权限测试</td></tr>
+          <tr><td>InMemorySaver 查询与 metadata</td><td><code>libs/checkpoint/tests/test_memory.py:81-210</code></td><td>单元</td><td>filter、namespace、sync/async list 与 metadata 合并</td><td>源码仍标有 before/limit 测试覆盖不足</td></tr>
+          <tr><td>内存 serde allowlist</td><td><code>libs/checkpoint/tests/test_memory.py:222-321</code></td><td>安全回归</td><td>warning、allowlist、strict 阻断和 proxy 隔离</td><td>不证明存储加密</td></tr>
+          <tr><td>三维坐标与 pending write 合约</td><td><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_get_tuple.py</code><br><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_put_writes.py</code></td><td>conformance</td><td>自定义 saver 应达到统一读写行为</td><td>具体数据库事务保证需各实现测试</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout">本文默认 validator 是文档结构与引用检查，不替代库测试。此次任务只创建文档，未修改任何 library 源码，因此没有运行各库的 <code>make format/lint/test</code>；最终验证结果见交付报告。</div>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+        <tbody>
+          <tr><td>新增自定义 saver</td><td><code>BaseCheckpointSaver</code></td><td>sync/async get/list/put/put_writes/delete；版本与 serde</td><td>checkpoint-conformance，重点是 pending writes、排序、父链、并发</td></tr>
+          <tr><td>修改 Checkpoint 字段</td><td>checkpoint base 类型 + Pregel <code>_checkpoint.py</code></td><td>迁移、所有 saver、stream/debug、fixtures</td><td>旧历史可读；sync/async 形状一致；无 silent data loss</td></tr>
+          <tr><td>修改 durability</td><td>Pregel main + Loop</td><td>同步/异步入口、子图传播、退出与取消</td><td>三模式部分失败、interrupt、进程中止窗口测试</td></tr>
+          <tr><td>修改 task write 编码</td><td>Loop <code>put_writes</code> + saver</td><td>WRITES_IDX_MAP、task_path、恢复回放、错误处理</td><td>普通 write 去重与特殊 write last-write 行为不漂移</td></tr>
+          <tr><td>改变 namespace 规则</td><td>internal config/constants + subgraph 调用</td><td>replay、state history、独立 child thread</td><td>同步/异步子图持久化全套回归</td></tr>
+          <tr><td>清理/裁剪历史</td><td>saver prune/delete/copy</td><td>checkpoint、writes、blobs、parent_config、Delta history</td><td>保留点可完整重建；分叉链不串线</td></tr>
+        </tbody>
+      </table></div>
+      <h3>自定义 Saver 最低检查清单</h3>
+      <ul class="checklist">
+        <li>同一个 <code>thread_id + checkpoint_ns</code> 下，无 id 读取 latest；有 id 精确读取。</li>
+        <li><code>put</code> 返回的新 config 包含已保存 checkpoint id，parent 指向写入前的 config。</li>
+        <li><code>put_writes</code> 以 checkpoint + task id 隔离，普通 write 不因重试无限重复，特殊控制 write 按协议更新。</li>
+        <li>checkpoint 可见前，相关 blob/write 已满足实现声明的一致性；并发提交不会倒序。</li>
+        <li>async 方法使用真正异步驱动或明确的线程隔离，不在事件循环中做长时间阻塞 I/O。</li>
+        <li>删除、复制、裁剪同时维护祖先链；DeltaChannel 需要保留到最近 snapshot 的完整路径。</li>
+      </ul>
+      <p>基础类明确说明自定义 saver 应考虑 async 版本；默认 <code>get_next_version</code> 只提供整数递增，自定义字符串版本必须自行实现。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:176-206,692-711</code></span></p>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>何时重评</th></tr></thead>
+        <tbody>
+          <tr><td>每 task 还是每 step 保存</td><td>task 用 put_writes，step 用 put</td><td>部分失败可复用成功结果，同时保留一致快照</td><td>协议与存储模型更复杂</td><td>saver 无法原子/有序实现两类写时</td></tr>
+          <tr><td>默认 durability</td><td>async</td><td>存储 I/O 与执行重叠</td><td>崩溃时最新边界可能未完成</td><td>副作用昂贵、合规要求或重放成本高时改 sync</td></tr>
+          <tr><td>exit 模式</td><td>仅退出时保存</td><td>减少中间 checkpoint I/O</td><td>长运行中的恢复能力弱，强杀时整段丢失</td><td>运行时间增长或故障域扩大时停用</td></tr>
+          <tr><td>恢复粒度</td><td>重新进入未完成节点，不续接栈帧</td><td>checkpoint 不依赖原 Python 进程继续存活；兼容代码、serde、存储与环境中可在后续进程恢复</td><td>节点前半段副作用可能重复；代码或 Schema 漂移仍需迁移</td><td>业务无法幂等时拆节点或使用事务工作流</td></tr>
+          <tr><td>经典 Pregel 基础</td><td>借用 superstep、屏障和 checkpoint 的概念组织本地图执行</td><td>步骤边界明确，Channel 更新与恢复规划可基于稳定快照</td><td>Google Pregel 的分布式图计算背景不能反推本仓库具备 worker 级 checkpoint、重分片或分布式 worker recovery</td><td>只有仓库内出现相应协调协议、实现与故障测试时才能扩展此结论</td></tr>
+          <tr><td>内存实现</td><td>简单字典 + serde</td><td>测试快、无外部依赖、易检查</td><td>无跨进程耐久、容量/TTL/ACL/HA</td><td>任何生产、多进程或恢复要求出现时换 saver</td></tr>
+          <tr><td>Checkpoint 与 Memory</td><td>执行历史和跨 thread Store 分离</td><td>生命周期、权限和查询模型更清楚</td><td>应用需管理两个组件</td><td>不要通过把所有业务知识塞入 checkpoint 来“简化”</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout warn"><strong>概念继承不等于部署能力继承：</strong>LangGraph 官方 overview 只说明其受 Pregel 启发；Google Pregel 论文页面给出经典系统来源。本文据此使用 BSP/superstep/checkpoint 作为心智模型，但本章源码只证明 <code>SyncPregelLoop</code>/<code>AsyncPregelLoop</code> 与 saver 协议，不能据经典 Pregel 推断分布式 worker 故障恢复。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1469-1528,1722-1781</code>；<a href="https://docs.langchain.com/oss/python/langgraph/overview">LangGraph overview</a>；<a href="https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/">Google Research：Pregel</a>。</span></div>
+      <div class="callout warn"><strong>InMemorySaver 的明确边界：</strong>官方类注释只推荐调试或测试，并推荐生产使用 Postgres saver。虽然实现存在可选 <code>PersistentDict</code> factory 机制，它仍不自动获得事务、多进程协调、备份、租户授权或高可用保证，不应据此改写成生产级方案。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:33-44,628-698</code></span></div>
+    </section>
+
+    <section class="section" id="source-index">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>类别</th><th>路径与行号</th><th>用途</th></tr></thead>
+        <tbody>
+          <tr><td>公共类型</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:31-146</code></td><td>PendingWrite、Metadata、Checkpoint、Tuple</td></tr>
+          <tr><td>Saver 协议</td><td><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:176-318,417-580</code></td><td>sync/async 读写与生命周期接口</td></tr>
+          <tr><td>Checkpoint 构造/恢复</td><td><code>libs/langgraph/langgraph/pregel/_checkpoint.py:28-36,149-319</code></td><td>v4 空点、快照、Channel hydration、Delta replay</td></tr>
+          <tr><td>task writes</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:415-548</code></td><td>pending write 归一化、持久化和 exit 汇总</td></tr>
+          <tr><td>屏障与恢复跳过</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:599-749</code></td><td>prepare、回放成功 writes、apply、checkpoint</td></tr>
+          <tr><td>输入/恢复</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:848-1035</code></td><td>resume、time travel、empty input、input checkpoint</td></tr>
+          <tr><td>checkpoint 提交</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:1081-1219</code></td><td>durability 判断、metadata、顺序 put</td></tr>
+          <tr><td>exit 收尾</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:1221-1335</code></td><td>exit Delta writes、最终 checkpoint/pending writes</td></tr>
+          <tr><td>sync/async Loop</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:1469-1719,1722-1988</code></td><td>两条 I/O 链、读取、executor、取消收尾</td></tr>
+          <tr><td>入口默认值</td><td><code>libs/langgraph/langgraph/pregel/main.py:2548-2612,2701-2735,2983-2988,3109-3143,3457-3465</code></td><td>默认 async、旧参数迁移、sync 等待点</td></tr>
+          <tr><td>内存实现</td><td><code>libs/checkpoint/langgraph/checkpoint/memory/__init__.py:33-140,230-521,523-625</code></td><td>存储布局、CRUD、sync/async 对偶、边界</td></tr>
+          <tr><td>主要测试</td><td><code>libs/langgraph/tests/test_pregel.py:891-1144</code><br><code>libs/langgraph/tests/test_pregel_async.py:1807-2061</code><br><code>libs/langgraph/tests/test_checkpoint_migration.py:1473-1669</code><br><code>libs/checkpoint/tests/test_memory.py:81-321</code></td><td>partial failure、恢复、migration、memory/serde</td></tr>
+          <tr><td>官方设计长文</td><td><a href="https://www.langchain.com/blog/building-langgraph">Building LangGraph: Designing an Agent Runtime from first principles</a></td><td>结构化离散步骤、BSP/Pregel 选择与可移植 checkpoint 的设计理由</td></tr>
+          <tr><td>官方 overview</td><td><a href="https://docs.langchain.com/oss/python/langgraph/overview">LangGraph overview</a></td><td>低层 orchestration 定位、durable execution 能力与 Pregel 启发来源</td></tr>
+          <tr><td>经典概念基础</td><td><a href="https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/">Google Research：Pregel: a system for large-scale graph processing</a></td><td>仅用于 superstep/checkpoint 的历史概念背景；不作为当前 LangGraph 分布式恢复能力证据</td></tr>
+        </tbody>
+      </table></div>
+      <p>进一步阅读：<a href="../../langgraph_architecture.html#s9">架构总览第 09 章</a>；<a href="08-scheduling-send-subgraph.html">第 08 章调度、Send 与子图</a>；<a href="10-sqlite-postgres-serde.html">第 10 章 SQLite / Postgres / Serde</a>；<a href="11-interrupt-hitl-timetravel.html">第 11 章 Interrupt / HITL / Time-travel</a>。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <dl>
+        <dt>Checkpoint</dt><dd>超级步边界上的可序列化图状态快照；不包含 Python 栈帧。</dd>
+        <dt>CheckpointMetadata</dt><dd>描述 checkpoint 来源、step、父图坐标、run 等上下文的可扩展元数据。</dd>
+        <dt>CheckpointTuple</dt><dd>saver 读取返回的聚合对象，包含 config、checkpoint、metadata、parent_config 和 pending_writes。</dd>
+        <dt>PendingWrite</dt><dd><code>(task_id, channel, value)</code> 中间写；用于保存 task 结果及 ERROR、INTERRUPT、RESUME 等控制状态。</dd>
+        <dt>Durable Execution</dt><dd>耐久执行：利用已保存状态和 task 结果，在故障或中断后从可证明的边界继续，而非保证外部副作用 exactly-once。</dd>
+        <dt>thread_id</dt><dd>一条持久执行/会话线的标识；是寻址字段，不是租户授权机制。</dd>
+        <dt>checkpoint_ns</dt><dd>同一 thread 内区分根图、子图和嵌套执行的命名空间。</dd>
+        <dt>checkpoint_id</dt><dd>namespace 内某个具体历史 checkpoint 的标识；显式指定用于精确读取或回放。</dd>
+        <dt>put_writes</dt><dd>task 粒度保存中间 writes 的 saver 操作。</dd>
+        <dt>put</dt><dd>超级步边界保存整体 checkpoint、metadata 与新 Channel 版本的 saver 操作。</dd>
+        <dt>sync durability</dt><dd>下一超级步前等待 checkpoint 持久化完成。</dd>
+        <dt>async durability</dt><dd>checkpoint 持久化与下一超级步重叠；当前默认模式。</dd>
+        <dt>exit durability</dt><dd>图退出上下文收尾时才持久化本次最终状态；运行中崩溃窗口最大。</dd>
+        <dt>Channel</dt><dd>State 的运行时存储单元，定义值、更新合并、版本和 checkpoint 形状。</dd>
+        <dt>versions_seen</dt><dd>每个节点已经消费到的 Channel 版本映射，参与下一步调度。</dd>
+        <dt>Superstep</dt><dd>超级步：一批任务读取稳定快照并行执行，随后在屏障处合并 writes 的 BSP 阶段。</dd>
+        <dt>Replay / Resume</dt><dd>Replay 从指定历史点重放并可形成分支；Resume 从当前 pending interrupt/失败状态继续。两者都不是恢复 Python 指令指针。</dd>
+        <dt>InMemorySaver</dt><dd>基于进程内映射的 saver，适合测试与调试，不提供生产数据库的耐久、容量、ACL 与高可用保证。</dd>
+        <dt>Store / Cache</dt><dd>Store 保存跨 thread 业务记忆；Cache 复用节点结果。两者都不替代 Checkpointer 的执行恢复职责。</dd>
+        <dt>Serde</dt><dd>serializer/deserializer，负责 checkpoint 与 writes 编解码，也是反序列化安全边界。</dd>
+      </dl>
+    </section>
+
+    <div class="footer">第 09 章 · Checkpoint 与 Durable Execution · 源码证据基于当前工作区版本。<br><a href="../../langgraph_architecture.html#s9">返回 LangGraph 架构总览 #s9</a></div>
+  </div></main>
+</div>
+<script>
+(() => {
+  const links = [...document.querySelectorAll('.sidebar a')];
+  const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const activate = () => {
+    let current = sections[0];
+    for (const section of sections) {
+      if (section.getBoundingClientRect().top <= 120) current = section;
+    }
+    links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + current.id));
+  };
+  addEventListener('scroll', activate, {passive: true});
+  activate();
+})();
+</script>
+</body>
+</html>

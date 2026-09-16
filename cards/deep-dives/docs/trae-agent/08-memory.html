@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae Agent Memory 机制开发文档</title>
+<style>
+:root{
+  --bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);
+  --text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;
+  --green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.7;padding:64px 24px 48px 292px;overflow-x:hidden}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+code{background:rgba(194,65,12,.11);color:var(--orange);padding:.08rem .3rem;border-radius:4px;font-size:.88em;overflow-wrap:anywhere;word-break:break-word}
+.topbar{position:fixed;inset:0 0 auto 0;height:48px;z-index:20;display:flex;align-items:center;gap:1rem;min-width:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.2rem}
+.topbar a{font-size:.88rem;font-weight:650;white-space:nowrap}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.86rem}
+.sidebar{position:fixed;top:48px;bottom:0;left:0;width:268px;overflow:auto;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;backdrop-filter:blur(12px)}
+.sidebar strong{display:block;color:var(--blue);margin-bottom:.7rem}
+.sidebar a{display:block;color:var(--text);opacity:.72;font-size:.79rem;padding:.2rem .35rem;border-left:2px solid transparent}
+.sidebar a:hover,.sidebar a.active{opacity:1;border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1080px;margin:0 auto}
+h1{font-size:2rem;margin:.2rem 0 .35rem;overflow-wrap:anywhere;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{color:var(--blue);font-size:1.35rem;margin:0 0 1rem;border-bottom:1px solid var(--border);padding-bottom:.45rem}
+h3{color:var(--blue2);font-size:1.08rem;margin:1.25rem 0 .55rem}
+p{margin:.55rem 0}
+ul,ol{margin:.55rem 0 .65rem 1.35rem;padding:0}
+li{margin:.25rem 0}
+.subtitle{color:var(--muted);margin:0 0 1.2rem}
+.section{min-width:0;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.55rem;margin:0 0 1.25rem;scroll-margin-top:62px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.meta-grid,.card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.meta,.card{min-width:0;overflow-wrap:anywhere;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.85rem}
+.meta b,.card b{display:block;color:var(--blue2);font-size:.82rem;margin-bottom:.2rem}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:.05rem .45rem;margin:.1rem .3rem .1rem 0;font-size:.72rem;font-weight:700}
+.fact{color:var(--green)}.optional{color:var(--yellow)}.roadmap{color:var(--muted)}.risk{color:var(--red)}
+.callout{border-left:3px solid var(--blue);background:rgba(67,56,202,.06);padding:.8rem 1rem;margin:.8rem 0}
+.warning{border-left-color:var(--red);background:rgba(185,28,28,.06)}
+.good{border-left-color:var(--green);background:rgba(21,128,61,.06)}
+.diagram{display:flex;align-items:stretch;gap:.45rem;overflow-x:auto;padding:.85rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+.node{min-width:132px;flex:1;border:1px solid var(--blue);border-radius:8px;padding:.7rem;text-align:center;background:rgba(67,56,202,.05)}
+.node.side{border-style:dashed;border-color:var(--yellow)}
+.node.no{border-color:var(--red);background:rgba(185,28,28,.04)}
+.node strong{display:block;color:var(--blue2)}
+.node small{display:block;color:var(--muted);margin-top:.2rem}
+.arrow{align-self:center;color:var(--purple);font-size:1.25rem;font-weight:700}
+.sequence{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem 1rem;overflow:auto}
+.sequence .step{display:grid;grid-template-columns:2.1rem minmax(130px,.8fr) minmax(240px,2fr);gap:.6rem;border-bottom:1px dashed var(--border);padding:.45rem 0}
+.sequence .step:last-child{border-bottom:0}
+.n{width:1.7rem;height:1.7rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue);color:var(--bg);font-size:.75rem;font-weight:800}
+table{width:100%;max-width:100%;border-collapse:collapse;margin:.7rem 0;font-size:.84rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--border);padding:.5rem .62rem;vertical-align:top;min-width:110px}
+th{background:#e8e1d4;color:var(--blue);text-align:left}
+tr:nth-child(even){background:rgba(244,241,234,.45)}
+.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}
+.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;box-decoration-break:clone}
+.source-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.55rem 0}
+.source-card b{color:var(--purple)}
+.source-note{font-size:.82rem;color:var(--muted);border-left:3px solid var(--border);padding-left:.8rem;margin:.7rem 0}
+.footer{text-align:center;color:var(--muted);font-size:.78rem;padding:1rem}
+@media(max-width:900px){body{padding:64px 14px 36px}.sidebar{display:none}.meta-grid,.card-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.topbar .title{display:none}.topbar{padding:0 .8rem}h1{font-size:1.45rem}.section{padding:1rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.diagram{flex-direction:column}.arrow{transform:rotate(90deg);text-align:center}.sequence .step{grid-template-columns:2rem 1fr}.sequence .step div:last-child{grid-column:2}}
+.chapter-nav{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;margin:1.5rem 0 .5rem}
+.chapter-nav a{flex:1 1 16rem;min-width:0;max-width:100%;border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;background:var(--surface2);overflow-wrap:anywhere}
+.chapter-nav .prev{margin-right:auto}.chapter-nav .next{margin-left:auto;text-align:right}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="../../trae_agent_architecture.html">← 返回 Trae Agent 架构总览</a>
+  <span class="title">模块 08 / Memory 机制</span>
+</header>
+
+<nav class="sidebar" aria-label="页面目录">
+  <strong>Memory 机制</strong>
+  <a href="#position">1. 模块定位</a>
+  <a href="#context">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念与术语</a>
+  <a href="#components">4. 架构组成</a>
+  <a href="#flow">5. 完整运行流程</a>
+  <a href="#state">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口、协议与事件</a>
+  <a href="#config">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发、性能与资源</a>
+  <a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败、恢复与兼容</a>
+  <a href="#observability">12. 可观测性与排障</a>
+  <a href="#tests">13. 测试与验证</a>
+  <a href="#extension">14. 开发与扩展指南</a>
+  <a href="#tradeoffs">15. 设计权衡与限制</a>
+  <a href="#sources">16. 源码索引</a>
+  <a href="#glossary">附录 · 术语对照表</a>
+</nav>
+
+<main class="container">
+  <h1>Trae Agent Memory 机制开发文档</h1>
+  <p class="subtitle">界定当前唯一的主对话“记忆”——Provider Client 进程内 <code>message_history</code>——并证明持久 Memory、RAG、Replay 与 Compaction 仍未实现。</p>
+
+  <section class="section" aria-label="文档元数据">
+    <div class="meta-grid">
+      <div class="meta"><b>一句话目标</b>说明 Agent 记住什么、状态活多久、何时串接，以及哪些相似能力绝不能称为 Memory。</div>
+      <div class="meta"><b>源码快照</b>工作区源码快照；<code>pyproject.toml</code> 版本 <code>0.1.0</code>；本机 Git CLI 不可用，未取得 SHA。</div>
+      <div class="meta"><b>证据状态</b><span class="badge fact">已验证（静态审计）</span>Provider、run/interactive、Trajectory、Lakeview、tests/docs 已核对；未调用真实 Provider。</div>
+      <div class="meta"><b>所有者路径</b><code>trae_agent/utils/llm_clients/</code>；生命周期调用方位于 <code>trae_agent/agent/</code> 与 <code>trae_agent/cli.py</code>。</div>
+      <div class="meta"><b>目标读者</b>会话隔离、Context/Memory、Provider、Interactive 与可观测性开发者。</div>
+      <div class="meta"><b>最近验证</b>2026-07-27</div>
+    </div>
+    <p>
+      <span class="badge fact">源码事实：会话内进程状态</span>
+      <span class="badge risk">缺口：任务边界无统一 reset</span>
+      <span class="badge roadmap">未实现：持久 Memory / RAG / Compaction / Replay</span>
+    </p>
+  </section>
+
+  <section class="section" id="position">
+    <h2>1. 模块定位</h2>
+    <div class="callout good"><strong>核心结论：</strong>当前没有独立 Memory 模块。主 Agent 的多轮连续性由具体 Provider Client 在 Python 对象内维护的 <code>message_history</code> 提供；<code>BaseAgent</code> 只发送本轮增量消息。它是 Context 状态，不是跨会话长期记忆。</div>
+    <table>
+      <tr><th>边界</th><th>当前负责</th><th>明确不负责</th></tr>
+      <tr><td>Provider Client</td><td>保存 Provider 原生消息历史，按 <code>reuse_history</code> 追加或替换。</td><td>无数据库、检索、TTL、版本、跨进程恢复。</td></tr>
+      <tr><td><code>TraeAgent</code> / <code>BaseAgent</code></td><td>每任务重建初始消息，并把 Tool Result 等增量交给 Provider。</td><td>不拥有统一完整历史，也不做 Compaction。<span class="evidence"><code>trae_agent/agent/trae_agent.py:102-153</code></span>；<span class="evidence"><code>trae_agent/agent/base_agent.py:147-236</code></span></td></tr>
+      <tr><td>Trajectory</td><td>把交互与步骤写入 JSON，供审计和调试。</td><td>Runtime 不读取它恢复历史，也没有 Replay 执行器。</td></tr>
+      <tr><td>Lakeview</td><td>用独立 Client 生成供人阅读的步骤摘要与标签。</td><td>不回灌主 History，不是 Memory 或 Compaction。</td></tr>
+      <tr><td>CKG / Sequential Thinking</td><td>前者是可选代码图工具；后者保存工具对象内的 thought 计数/分支。</td><td>都不是通用会话 Memory Store；不能替代 Provider History。</td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="context">
+    <h2>2. 系统位置与依赖</h2>
+    <div class="diagram" role="img" aria-label="Memory 主链和旁路">
+      <div class="node"><strong>TraeAgent</strong><small>System + Task 增量</small></div><div class="arrow">→</div>
+      <div class="node"><strong>BaseAgent</strong><small>Tool Result 增量</small></div><div class="arrow">→</div>
+      <div class="node"><strong>Provider Client</strong><small>进程内 message_history</small></div><div class="arrow">→</div>
+      <div class="node"><strong>Provider API</strong><small>完整请求</small></div>
+    </div>
+    <div class="diagram" role="img" aria-label="不存在的持久记忆与实际旁路">
+      <div class="node side"><strong>Trajectory</strong><small>只写审计 JSON</small></div>
+      <div class="node side"><strong>Lakeview</strong><small>只供 CLI 展示</small></div>
+      <div class="node no"><strong>Memory Store / RAG</strong><small>当前不存在</small></div>
+      <div class="node no"><strong>Replay / Resume</strong><small>当前不存在</small></div>
+    </div>
+    <div class="card-grid">
+      <div class="card"><b>上游入口</b><code>Agent.run()</code> 调用 <code>new_task()</code> 后进入 Loop；主链没有 Memory Manager 调用。<code>trae_agent/agent/agent.py:59-100</code></div>
+      <div class="card"><b>下游依赖</b>七个 Provider Adapter 保存各自 SDK 原生消息结构；历史不经过统一 Schema 持久化。</div>
+      <div class="card"><b>进程边界</b><code>run</code> 每次命令创建新 Agent；Interactive 在循环外只创建一次 Agent，因此对象复用语义不同。</div>
+      <div class="card"><b>依赖证据</b><code>pyproject.toml:7-26</code> 没有向量数据库或 Embedding/RAG 框架依赖；仓库运行时搜索也没有对应实现。</div>
+    </div>
+  </section>
+
+  <section class="section" id="concepts">
+    <h2>3. 核心概念与术语</h2>
+    <table>
+      <tr><th>术语</th><th>本仓库中的准确含义</th><th>不要混淆为</th></tr>
+      <tr><td>Conversation Memory</td><td>Provider Client 对象内随请求累积的原生消息。</td><td>独立持久 Memory 服务。</td></tr>
+      <tr><td>Task / Session</td><td>源码有 Task 和 Interactive CLI 生命周期，但没有稳定的 Session ID、Session Schema 或 Session Store。</td><td>可恢复、可寻址的服务端会话。</td></tr>
+      <tr><td>Long-term Memory</td><td><span class="badge roadmap">未实现</span>仓库没有跨进程、跨会话的记忆读写链。</td><td>Trajectory 文件或 CKG 缓存。</td></tr>
+      <tr><td>RAG</td><td><span class="badge roadmap">未实现</span>没有 Embedding、向量检索、召回排序与 Prompt 注入流水线。</td><td>普通文件搜索、MCP 或 CKG Tool。</td></tr>
+      <tr><td>Compaction</td><td><span class="badge roadmap">未实现</span>没有摘要替换、裁剪、滑动窗口或 Token-aware 历史治理。</td><td>Tool Result 局部截断或 Lakeview 摘要。</td></tr>
+      <tr><td>Trajectory</td><td>增量重写的任务审计 JSON。</td><td>Memory、Checkpoint 或可执行 Replay。</td></tr>
+      <tr><td>重放（Replay）</td><td><span class="badge roadmap">未实现</span>没有从 Trajectory 重建 Provider History、验证 Tool 副作用或继续 Agent Loop 的入口。</td><td>人工阅读 JSON。</td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="components">
+    <h2>4. 架构组成</h2>
+    <h3>4.1 Provider History 是主对话状态</h3>
+    <table>
+      <tr><th>实现</th><th>状态</th><th>响应写回</th><th>清除/替换语义</th></tr>
+      <tr><td>OpenAI Responses</td><td><code>ResponseInputParam</code></td><td>追加 function call 与 assistant text。</td><td><code>set_chat_history</code> 替换；<code>reuse_history=false</code> 从本轮重建。<code>trae_agent/utils/llm_clients/openai_client.py:27-135</code></td></tr>
+      <tr><td>Anthropic</td><td><code>message_history</code> + 分离的 <code>system_message</code></td><td>按 text/tool_use block 追加 assistant 消息。</td><td>替换普通历史；但 <code>set_chat_history([])</code> 不会把既有 <code>system_message</code> 复位。<code>trae_agent/utils/llm_clients/anthropic_client.py:19-67,108-188</code></td></tr>
+      <tr><td>Google</td><td><code>message_history</code> + <code>system_instruction</code></td><td>保存新输入和 candidate content。</td><td><code>set_chat_history</code> 同时替换普通历史与 System；false 模式替换本轮。<code>trae_agent/utils/llm_clients/google_client.py:21-65,124-135</code></td></tr>
+      <tr><td>Azure / OpenRouter / Doubao</td><td>共享 Chat Completion 消息数组</td><td>追加 assistant content/tool_calls。</td><td>共享 OpenAI-compatible 的替换语义。<code>trae_agent/utils/llm_clients/openai_compatible_base.py:65-77,109-215</code></td></tr>
+      <tr><td>Ollama</td><td><code>ResponseInputParam</code></td><td><span class="badge risk">当前不追加 assistant 响应</span></td><td>能替换输入历史，但多轮记录本身不完整。<code>trae_agent/utils/llm_clients/ollama_client.py:28-44,71-144</code></td></tr>
+    </table>
+    <h3>4.2 Task 初始化与对象生命周期</h3>
+    <p><code>new_task()</code> 会覆盖 <code>_task</code> 和 <code>_initial_messages</code>，但不调用 <code>set_chat_history</code>。因此“新 Task”并不等于“新 Provider 会话”。<span class="evidence"><code>trae_agent/agent/trae_agent.py:102-153</code></span></p>
+    <h3>4.3 局部 Tool 状态</h3>
+    <p><code>SequentialThinkingTool</code> 的 <code>thought_history</code> 与 <code>branches</code> 随 Tool 对象存在，执行结果仅暴露长度和分支名。Interactive 复用 Agent/Tool 时它们也可能跨任务残留；这属于工具内部 Scratchpad，不是可检索 Agent Memory。<span class="evidence"><code>trae_agent/tools/sequential_thinking_tool.py:154-157,277-312</code></span></p>
+    <h3>4.4 Trajectory 与 Lakeview 旁路</h3>
+    <p>Recorder 保存的是传给 Adapter 的本轮增量 <code>messages</code> 和响应，不是实际完整 Provider 请求快照。Lakeview 使用独立 Client 且显式 <code>reuse_history=False</code>；两者均没有回读主 History 的路径。<span class="evidence"><code>trae_agent/utils/trajectory_recorder.py:77-189</code></span>；<span class="evidence"><code>trae_agent/utils/lake_view.py:94-175</code></span></p>
+  </section>
+
+  <section class="section" id="flow">
+    <h2>5. 完整运行流程</h2>
+    <h3>5.1 单个 <code>run</code> 成功路径</h3>
+    <div class="sequence">
+      <div class="step"><span class="n">1</span><strong>创建对象</strong><div>CLI 创建一次 <code>Agent</code>，其 <code>BaseAgent</code> 构造一个 <code>LLMClient</code>；历史初始为空。</div></div>
+      <div class="step"><span class="n">2</span><strong>初始化任务</strong><div><code>new_task</code> 构造 System/User 增量，Trajectory 开始新记录；不执行历史 reset。</div></div>
+      <div class="step"><span class="n">3</span><strong>首轮请求</strong><div><code>BaseAgent</code> 调用 <code>chat(..., reuse_history=True)</code>；Adapter 将初始消息加入自身 History。</div></div>
+      <div class="step"><span class="n">4</span><strong>持续累积</strong><div>Adapter 保存模型响应；Tool Result 作为下一轮增量进入同一 History，直到完成或失败。</div></div>
+      <div class="step"><span class="n">5</span><strong>结束进程</strong><div>资源清理后 CLI 进程退出，内存 History 随对象销毁；Trajectory JSON 留在磁盘，但不会成为下次输入。</div></div>
+    </div>
+    <h3>5.2 Interactive 后续任务串接路径</h3>
+    <div class="sequence">
+      <div class="step"><span class="n">1</span><strong>复用 Agent</strong><div>Simple/Rich Interactive 都在会话外创建一次 Agent，后续任务反复调用同一 <code>agent.run</code>。<code>trae_agent/cli.py:494-512,516-584</code></div></div>
+      <div class="step"><span class="n">2</span><strong>覆盖初始消息</strong><div>第二次 <code>new_task</code> 重建新的 System/User 增量，却不清空 Provider History。</div></div>
+      <div class="step"><span class="n">3</span><strong>追加旧历史</strong><div>默认 <code>reuse_history=True</code>，新 Task 消息拼到旧 Task 之后；模型可能看到前序任务内容。</div></div>
+      <div class="step"><span class="n">4</span><strong>覆盖轨迹文件</strong><div><code>start_recording</code> 清空同一 JSON 的 interaction/step 数组；这与 Provider History 的继续累积相反。</div></div>
+    </div>
+    <h3>5.3 拒绝、失败与恢复</h3>
+    <ul>
+      <li>缺 <code>project_path</code> 时在 Provider 调用前抛 <code>AgentError</code>；没有新历史写入。<span class="evidence"><code>trae_agent/agent/trae_agent.py:125-129</code></span></li>
+      <li>Provider 请求失败时通用重试复用同一状态和参数；没有从持久 Memory 恢复、裁剪或跨 Provider Failover。</li>
+      <li>进程重启会丢失 Provider History；现有 Trajectory 不能自动 Resume。恢复只能重新运行任务并重新产生副作用。</li>
+    </ul>
+  </section>
+
+  <section class="section" id="state">
+    <h2>6. 数据与状态模型</h2>
+    <table>
+      <tr><th>状态</th><th>权威所有者</th><th>生命周期</th><th>清理/持久化</th></tr>
+      <tr><td><code>message_history</code></td><td>具体 Provider Client</td><td>Client 对象生命周期；默认每轮累积。</td><td>无自动清理；公开 <code>set_chat_history</code> 可替换，但主 Runtime 不调用。</td></tr>
+      <tr><td>Anthropic/Google System</td><td>Provider Client 独立字段</td><td>Client 生命周期；新 System 可覆盖。</td><td>各实现 reset 细节不同，不能只清数组后假定全部状态消失。</td></tr>
+      <tr><td><code>_initial_messages</code></td><td><code>BaseAgent</code></td><td>当前 Task；每次 <code>new_task</code> 覆盖。</td><td>不是完整 History，不持久化。</td></tr>
+      <tr><td>Sequential Thinking 状态</td><td>Tool 对象</td><td>Tool 对象生命周期。</td><td>没有任务边界 reset；不写独立 Memory Store。</td></tr>
+      <tr><td><code>trajectory_data</code></td><td><code>TrajectoryRecorder</code></td><td>Recorder/Task；每次更新全量写 JSON。</td><td><code>start_recording</code> 清空交互与步骤，但不负责 Provider History。</td></tr>
+      <tr><td>Lakeview <code>steps</code></td><td><code>LakeView</code> 对象</td><td>Console/Lakeview 对象生命周期。</td><td>供摘要标签输入；不进入主 Agent Context。</td></tr>
+    </table>
+    <div class="callout warning"><strong>没有 Session 数据模型：</strong>没有 Session ID、Memory Key、用户/租户归属、TTL、事务、锁、版本、归档、迁移或删除 API。唯一可写磁盘的 Trajectory 也没有被 Runtime 当作会话状态读取。</div>
+    <p class="source-note"><code>start_recording()</code> 在复用 Recorder 时重置 <code>llm_interactions</code>/<code>agent_steps</code>，但没有同步重置旧的 <code>end_time</code>、<code>success</code>、<code>final_result</code> 与 <code>execution_time</code>；新任务 finalize 前可能短暂保留旧终态字段。<span class="evidence"><code>trae_agent/utils/trajectory_recorder.py:39-75,198-218</code></span></p>
+  </section>
+
+  <section class="section" id="interfaces">
+    <h2>7. 接口、协议与事件</h2>
+    <table>
+      <tr><th>接口</th><th>输入</th><th>状态效果与限制</th></tr>
+      <tr><td><code>LLMClient.chat(..., reuse_history=True)</code></td><td>本轮 <code>LLMMessage[]</code>、Model、Tools</td><td>默认累积 Provider History；没有 Session Key。<code>trae_agent/utils/llm_clients/llm_client.py:72-80</code></td></tr>
+      <tr><td><code>LLMClient.set_chat_history(messages)</code></td><td>统一 <code>LLMMessage[]</code></td><td>委托 Adapter 转换并替换；不是持久导入协议，也没有 <code>get</code>/<code>clear</code> 对称接口。</td></tr>
+      <tr><td><code>Agent.run(task, extra_args)</code></td><td>Task 与项目参数</td><td>没有 history/session 参数；复用 Agent 即复用 Client。<code>trae_agent/agent/agent.py:59-100</code></td></tr>
+      <tr><td><code>TrajectoryRecorder</code></td><td>Task、Interaction、Step、Final 状态</td><td>只写 JSON；没有 load/replay/resume 方法。<code>trae_agent/utils/trajectory_recorder.py:20-265</code></td></tr>
+      <tr><td>Lakeview</td><td>AgentStep 文本</td><td>生成展示摘要；每次独立请求显式不复用历史。</td></tr>
+    </table>
+    <p>没有 Memory 事件总线、写入确认、幂等 Key 或删除事件。可见事件只有 Provider 请求、Agent Step、Tool 副作用、Console 更新与 Trajectory 文件写入。</p>
+  </section>
+
+  <section class="section" id="config">
+    <h2>8. 配置与默认行为</h2>
+    <table>
+      <tr><th>配置/参数</th><th>类型/值</th><th>默认</th><th>生效位置</th><th>Memory 含义</th><th>失败行为</th></tr>
+      <tr><td><code>reuse_history</code></td><td>bool，API 参数</td><td><code>true</code></td><td>各 Provider <code>chat</code></td><td>true 追加、false 替换；CLI 无对应开关。</td><td>转换/API 异常按 Adapter 路径抛出。</td></tr>
+      <tr><td><code>max_steps</code></td><td>int</td><td>示例 200；Interactive Click 默认 20</td><td>Agent Loop</td><td>限制轮数，不限制历史大小或保留期。</td><td>耗尽后任务 ERROR。</td></tr>
+      <tr><td><code>max_tokens</code></td><td><code>int | None</code></td><td>示例 4096</td><td>Provider 输出参数</td><td>不是输入窗口、Memory 容量或 Compaction 阈值。</td><td>Provider 拒绝后通用重试。</td></tr>
+      <tr><td><code>enable_lakeview</code></td><td>bool</td><td>Dataclass/示例 true</td><td>Console 装配</td><td>不改变主 History。</td><td>缺配置时 Config 创建失败。</td></tr>
+      <tr><td><code>trajectory_file</code></td><td>path | None</td><td>时间戳路径</td><td>Agent 构造</td><td>只指定审计文件，不启用持久 Memory。</td><td>写失败仅打印 Warning。</td></tr>
+    </table>
+    <div class="callout warning">当前 YAML、环境变量和 CLI 均没有 <code>memory</code>、<code>session</code>、<code>embedding</code>、<code>vector_store</code>、<code>retrieval</code>、<code>retention</code> 或 <code>compaction</code> 配置。<span class="evidence"><code>trae_agent/utils/config.py:29-190</code></span>；<span class="evidence"><code>trae_config.yaml.example:1-44</code></span></div>
+  </section>
+
+  <section class="section" id="concurrency">
+    <h2>9. 并发、性能与资源</h2>
+    <ul>
+      <li>当前单 Agent Loop 串行调用同步 Provider <code>chat</code>；History 是无锁可变列表，不适合共享给并发 Task。</li>
+      <li>Rich Console 通过 <code>is_running_task</code> 管理 UI 状态，但 Provider Client 本身没有锁、Copy-on-write 或并发隔离契约。<span class="evidence"><code>trae_agent/utils/cli/rich_console.py:147-191</code></span></li>
+      <li>History、Tool Result 和 Tool Schema 没有 Token 预算、背压、有界 Buffer、TTL 或淘汰策略；长任务的内存和请求负载持续增长。</li>
+      <li><code>set_chat_history</code> 是整体替换，不是原子事务；源码没有并发调用保护。</li>
+      <li>Trajectory 每次事件都全量重写 JSON；这是额外 I/O，与 Provider History 的内存增长彼此独立。</li>
+    </ul>
+    <p class="source-note">累计 Usage 是计费/观测值，不等于当前 History Token 数；同一旧历史会在后续请求中重复计入 input tokens。</p>
+  </section>
+
+  <section class="section" id="security">
+    <h2>10. 安全与信任边界</h2>
+    <table>
+      <tr><th>边界</th><th>当前行为</th><th>风险/缺口</th></tr>
+      <tr><td>Provider History</td><td>Issue、路径、文件内容、Tool Output 可进入外部模型请求。</td><td>无字段级脱敏、租户隔离、显式销毁或最小保留策略。</td></tr>
+      <tr><td>Interactive 任务隔离</td><td>同一 Agent/Client 可跨任务复用历史。</td><td>旧项目内容可能泄露到后续 Task；切换工作目录尤其危险。</td></tr>
+      <tr><td>Trajectory 文件</td><td>保存任务、增量消息、响应、Tool 参数与结果。</td><td>明文 JSON 可能含源码、命令输出和 Secret；源码没有加密、权限收紧或脱敏。文档所称“API key 不记录”不能证明 Tool 输出不会包含 Key。</td></tr>
+      <tr><td>Lakeview</td><td>把步骤文本发送给第二个 Provider Client。</td><td>额外数据外发面；不是本地 Memory 隔离层。</td></tr>
+      <tr><td>外部 Memory 扩展</td><td>当前不存在。</td><td>未来必须定义用户/项目身份、ACL、删除、保留、加密、Prompt Injection 与数据来源可信度。</td></tr>
+    </table>
+    <div class="callout warning"><strong>Fail-open 风险：</strong>当前没有任务边界 reset；Interactive 继续执行而不是因无法证明隔离而拒绝。需要强隔离时，应每任务创建新 Agent/Client，而不是依赖 UI 的 <code>clear</code> 命令——它只清屏。<span class="evidence"><code>trae_agent/cli.py:531-564</code></span></div>
+  </section>
+
+  <section class="section" id="failure">
+    <h2>11. 失败、恢复与兼容</h2>
+    <table>
+      <tr><th>故障/现象</th><th>检测方式</th><th>即时行为</th><th>状态影响</th><th>恢复/运维</th></tr>
+      <tr><td>第二个 Interactive Task 引用旧内容</td><td>复用同一 CLI；首轮 input token 异常高</td><td>新消息追加旧 History</td><td>语义污染/跨项目泄露</td><td>退出并重启；开发上新增统一 task-boundary reset。</td></tr>
+      <tr><td>进程崩溃或重启</td><td>任务中断</td><td>内存 History 丢失</td><td>无自动 Resume</td><td>人工读 Trajectory 后重新运行；注意 Tool 副作用可能已发生。</td></tr>
+      <tr><td>Context 超限</td><td>Provider 错误、重试日志、Step.error</td><td>同一过大请求通用重试</td><td>不裁剪，最终任务失败</td><td>拆任务、限制输出、重启会话；实现真正 Compaction。</td></tr>
+      <tr><td>Ollama 多轮缺模型回复</td><td>检查下一轮请求/源码 History</td><td>只保存输入增量</td><td>Tool 配对与语义可能不完整</td><td>补响应写回和多轮契约测试。</td></tr>
+      <tr><td>Trajectory 写失败</td><td>stdout Warning</td><td>主任务继续</td><td>审计证据缺失，不影响内存 History</td><td>检查目录权限/空间；不能据此假定 Memory 失败。</td></tr>
+      <tr><td>误把 JSON 当 Replay 输入</td><td>没有 load/replay API</td><td>Runtime 不消费文件</td><td>无法恢复状态或副作用边界</td><td>先设计版本化 Replay/Resume 协议，不要直接重放 Tool Calls。</td></tr>
+    </table>
+    <p>没有历史 Schema 版本、迁移器或遗留会话导入。<code>set_chat_history</code> 接收统一消息列表，但它只做当前进程内 Provider 转换，不能证明跨版本兼容或可恢复性。</p>
+  </section>
+
+  <section class="section" id="observability">
+    <h2>12. 可观测性与排障</h2>
+    <h3>12.1 当前能看到什么</h3>
+    <ul>
+      <li>Console 展示累计 Token 与 Agent 状态，但不展示 History 条数、当前 Context Token、Session ID 或剩余窗口。</li>
+      <li>Trajectory 记录本轮增量输入、响应和 Tool 结果；不能直接还原 Adapter 实际发送的完整原生请求。</li>
+      <li>源码调试可查看具体 Client 的 <code>message_history</code>；这是内部可变实现，不是稳定诊断 API。</li>
+    </ul>
+    <h3>12.2 现象驱动排障</h3>
+    <table>
+      <tr><th>现象</th><th>先检查</th><th>可能原因</th><th>处理</th></tr>
+      <tr><td>新任务知道旧任务细节</td><td>是否处于同一 Interactive 进程</td><td>Provider History 未 reset；Tool 状态也可能残留</td><td>重启 CLI；不要把 <code>clear</code> 当清历史。</td></tr>
+      <tr><td>Trajectory 是新任务，但模型仍谈旧任务</td><td>Recorder 与 Provider 生命周期差异</td><td>Recorder 数组已重置，Provider History 未重置</td><td>以 Provider 请求为准；修复统一任务边界。</td></tr>
+      <tr><td>重启后“忘记”全部上下文</td><td>是否期望跨进程恢复</td><td>当前只有内存 History</td><td>这是当前设计；持久 Memory 尚未实现。</td></tr>
+      <tr><td>Lakeview 很短但 Token 仍上涨</td><td>主 Provider Usage</td><td>Lakeview 未回灌或替换 History</td><td>实现 Context Policy，不能调 Lakeview 解决。</td></tr>
+      <tr><td>看见 Trajectory JSON 就认为可 Replay</td><td>是否存在读取与执行入口</td><td>只有写入器和静态 docs</td><td>把 JSON 用作人工审计；不要自动执行其中 Tool Calls。</td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="tests">
+    <h2>13. 测试与验证</h2>
+    <table>
+      <tr><th>契约/不变量</th><th>测试路径</th><th>测试类型</th><th>能证明什么</th><th>证据缺口</th></tr>
+      <tr><td>Google History/System 替换</td><td><code>tests/utils/test_google_client.py:83-109,196-236</code></td><td>单元/转换</td><td><code>set_chat_history</code> 分离 System，转换 Tool 消息。</td><td>未覆盖连续两次 chat、false 模式和 Interactive 隔离。</td></tr>
+      <tr><td>Ollama set/history</td><td><code>tests/utils/test_ollama_client_utils.py:52-98</code></td><td>烟雾/实时倾向</td><td>接口可调用。</td><td>断言仅 <code>assertTrue(True)</code>，不能证明响应写回或隔离。</td></tr>
+      <tr><td>OpenRouter set/history</td><td><code>tests/utils/test_openrouter_client_utils.py:51-94</code></td><td>烟雾/实时倾向</td><td>接口可调用。</td><td>没有断言 History 内容和两轮配对。</td></tr>
+      <tr><td>Task 初始化</td><td><code>tests/agent/test_trae_agent.py:49-65</code></td><td>单元</td><td>缺参数拒绝、任务字段与工具初始化。</td><td>未证明 <code>new_task</code> 清理或保留 Provider/Tool 状态。</td></tr>
+      <tr><td>Lakeview 配置</td><td><code>tests/utils/test_config.py:194-217</code></td><td>配置单元</td><td>默认 Provider 与禁用行为。</td><td>未断言摘要不回灌主 History。</td></tr>
+      <tr><td>Trajectory/Interactive</td><td>未发现聚焦测试</td><td>证据缺口</td><td>—</td><td>无 Recorder 重用、两任务串接、Replay 不存在性或崩溃恢复测试。</td></tr>
+    </table>
+    <div class="callout warning"><strong>核心测试缺口：</strong>没有跨七种 Provider 的统一两轮 History Contract Test；没有 Simple/Rich Interactive 两任务隔离测试；没有统一 clear/reset、Context Overflow、Compaction 或跨进程恢复测试。</div>
+  </section>
+
+  <section class="section" id="extension">
+    <h2>14. 开发与扩展指南</h2>
+    <table>
+      <tr><th>变更目标</th><th>所有者表面</th><th>必要证明</th></tr>
+      <tr><td>修复任务隔离</td><td><code>Agent.run/new_task</code> 与 <code>LLMClient</code> 公共接口</td><td>所有 Provider 同时清普通/System 状态；Simple/Rich/程序化复用一致；Tool 状态是否重置有明确契约。</td></tr>
+      <tr><td>引入 Session API</td><td>新增 Provider 之上的 Session/Context 层</td><td>Session ID、所有权、生命周期、并发、删除、TTL、Schema 版本、迁移与失败原子性。</td></tr>
+      <tr><td>实现持久 Project Memory</td><td>独立 Memory Service/Repository，不塞进单个 Adapter</td><td>项目/用户 Key、ACL、加密、来源、去重、更新/遗忘、审计、备份与删除。</td></tr>
+      <tr><td>实现 RAG</td><td>Memory 检索层 + Prompt/Context Policy</td><td>索引范围、Embedding 版本、召回/重排、Token 预算、Prompt Injection 防护、过期与重建。</td></tr>
+      <tr><td>实现 Compaction</td><td>Provider 之上的统一 Context Policy</td><td>保留 System、最近消息、Tool Call/Result 配对；Token-aware 预算；摘要可审计；失败回退。</td></tr>
+      <tr><td>实现 Replay/Resume</td><td>版本化 Trajectory Reader + 副作用策略</td><td>区分只读可视化、模型重放与 Tool 重执行；幂等性、确认、工作区快照、Secret 与版本兼容。</td></tr>
+      <tr><td>新增 Provider</td><td><code>BaseLLMClient</code> 子类</td><td>set/append/replace、System、content/tool 配对、两轮历史、任务 reset 与 Usage 契约。</td></tr>
+    </table>
+    <div class="callout"><strong>禁止捷径：</strong>不要把 Trajectory 加载后直接执行称为安全 Replay；不要把 Lakeview 摘要直接回灌称为 Compaction；不要把 CKG 或文件搜索称为长期 Memory；不要只清 <code>message_history</code> 而遗漏 Provider 分离字段和 stateful Tool。</div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <h2>15. 设计权衡与已知限制</h2>
+    <table>
+      <tr><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重新评估条件</th></tr>
+      <tr><td>Provider 保存原生 History</td><td>适配各 SDK 的 System/Tool 结构直接。</td><td>统一 reset、迁移、审计、压缩和 Failover 困难。</td><td>需要 Session、长任务或跨 Provider 切换时。</td></tr>
+      <tr><td>BaseAgent 只传增量</td><td>Loop 简洁，避免复制协议。</td><td>上层看不到实际完整请求，Trajectory 也不是请求快照。</td><td>需要窗口治理与可重现请求时。</td></tr>
+      <tr><td>Interactive 复用 Agent</td><td>减少重复构造，保留交互连续感。</td><td>当前没有显式“延续/隔离”选择，可能跨任务污染。</td><td>支持多项目、多用户或安全隔离时。</td></tr>
+      <tr><td>Trajectory 写文件但不回读</td><td>审计旁路不改变主推理。</td><td>不能 Resume/Replay；敏感数据长期留存。</td><td>需要恢复、实验重放或合规治理时。</td></tr>
+      <tr><td>无自动 Compaction</td><td>不引入摘要信息损失和额外策略复杂度。</td><td>History 无界增长，超窗后没有有效恢复。</td><td>长任务频繁超窗或成本不可控时。</td></tr>
+    </table>
+    <h3>当前限制（源码事实）</h3>
+    <ul>
+      <li>没有独立 Memory Store、Memory DB、向量库、Embedding、RAG、相关性检索或跨会话持久记忆。</li>
+      <li>没有通用 Compaction、Pruning、窗口预检、Checkpoint、Resume 或 Replay 执行器。</li>
+      <li>Interactive 和程序化复用同一 Agent 时可能串接 Provider History；没有统一 clear/reset API 或任务隔离测试。</li>
+      <li>Ollama History 当前不保存 assistant 响应；不同 Provider 的 System reset 语义不完全一致。</li>
+      <li>Sequential Thinking 有局部进程状态，但不是通用 Memory，且任务边界同样没有 reset。</li>
+      <li>Trajectory 不是 Memory 或 Replay；Lakeview 不是 Memory；CKG 不是 Conversation/Long-term Memory。</li>
+    </ul>
+    <h3>Roadmap 与证据缺口</h3>
+    <p><code>docs/roadmap.md</code> 规划 SDK、Sandbox、Trajectory Analysis、MCP 和 Multi-Agent，但没有定义持久 Memory、RAG、Compaction 或 Replay 的已承诺契约。外部 Project Memory、统一 Session、向量检索和可恢复执行只能列为二次开发路线，不能写成官方已实现或已排期能力。</p>
+  </section>
+
+  <section class="section" id="sources">
+    <h2>16. 源码索引与进一步阅读</h2>
+    <div class="source-card"><b>入口与生命周期</b><code>trae_agent/cli.py:414-611</code>；<code>trae_agent/agent/agent.py:14-100</code>；<code>trae_agent/agent/trae_agent.py:102-170</code></div>
+    <div class="source-card"><b>增量消息与 Loop</b><code>trae_agent/agent/base_agent.py:147-236</code>；<code>trae_agent/agent/base_agent.py:301-352</code></div>
+    <div class="source-card"><b>公共 Provider 接口</b><code>trae_agent/utils/llm_clients/base_client.py:13-44</code>；<code>trae_agent/utils/llm_clients/llm_client.py:27-86</code></div>
+    <div class="source-card"><b>Provider History</b><code>trae_agent/utils/llm_clients/openai_client.py:27-209</code>；<code>trae_agent/utils/llm_clients/anthropic_client.py:19-220</code>；<code>trae_agent/utils/llm_clients/google_client.py:21-229</code>；<code>trae_agent/utils/llm_clients/openai_compatible_base.py:65-286</code>；<code>trae_agent/utils/llm_clients/ollama_client.py:28-196</code></div>
+    <div class="source-card"><b>局部 Tool 状态</b><code>trae_agent/tools/sequential_thinking_tool.py:154-157,277-312</code>；CKG 磁盘缓存属于代码图工具，见 <code>trae_agent/tools/ckg/ckg_database.py:16-19,108-185</code></div>
+    <div class="source-card"><b>Trajectory 与 Lakeview</b><code>trae_agent/utils/trajectory_recorder.py:20-265</code>；<code>trae_agent/utils/lake_view.py:78-209</code>；<code>trae_agent/utils/cli/rich_console.py:130-199</code></div>
+    <div class="source-card"><b>配置与依赖</b><code>trae_agent/utils/config.py:29-190</code>；<code>trae_config.yaml.example:1-44</code>；<code>pyproject.toml:1-26</code></div>
+    <div class="source-card"><b>测试</b><code>tests/agent/test_trae_agent.py:49-147</code>；<code>tests/utils/test_google_client.py:83-236</code>；<code>tests/utils/test_ollama_client_utils.py:52-122</code>；<code>tests/utils/test_openrouter_client_utils.py:51-118</code>；<code>tests/utils/test_config.py:194-217</code></div>
+    <div class="source-card"><b>当前文档与漂移</b><code>README.md:17-24,127-139</code>；<code>docs/TRAJECTORY_RECORDING.md:1-338</code>；<code>docs/roadmap.md:1-96</code>。Trajectory 文档包含已漂移的旧导入/示例，并只描述记录与分析，不能证明 Replay。</div>
+    <div class="source-card"><b>总览纠错证据</b><code>trae_agent_architecture.html</code> 的模块 08 把 Trajectory 称为“离线记忆”并称可用于 Replay；当前源码只有 Writer，没有 Memory Reader 或 Replay Runtime，本子文档以源码边界纠正该表述。</div>
+    <div class="source-card"><b>已存在的相邻子文档</b><a href="05-context-engineering.html">05 Context Engineering 上下文工程</a>；<a href="03-agent-runtime.html">03 Agent Runtime 核心</a></div>
+    <p class="source-note">仓库相对引用均以 Trae Agent 源码根为基准；对“未实现”的判断来自运行时、配置、依赖、测试与 docs 的联合审计。未检查外部服务端是否自行保留请求，本文只描述本仓库 Client 的状态所有权。</p>
+  </section>
+
+  <section class="section" id="glossary">
+    <h2>附录 · 术语对照表</h2>
+    <table>
+      <tr><th>英文术语</th><th>中文</th><th>一句话解释</th></tr>
+      <tr><td>Conversation Memory</td><td>对话记忆</td><td>单次会话中维护的上下文信息</td></tr>
+      <tr><td>Long-term Memory</td><td>长期记忆</td><td>跨会话持久保存的知识与经验</td></tr>
+      <tr><td>Task / Session</td><td>任务 / 会话</td><td>一次完整的 Agent 执行过程</td></tr>
+      <tr><td>Compaction</td><td>压缩</td><td>自动精简过长的对话历史</td></tr>
+      <tr><td>Replay</td><td>重放</td><td>重新执行已记录的 Agent 轨迹</td></tr>
+      <tr><td>Trajectory</td><td>轨迹</td><td>Agent 执行全过程的结构化记录</td></tr>
+    </table>
+  </section>
+
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a class="prev" href="07-agent-loop.html">← 07 Agent Loop</a>
+    <a class="next" href="09-patch-selection.html">09 Patch Selection →</a>
+  </nav>
+  <footer class="footer">Trae Agent 架构模块文档 · 08 Memory 机制 · 基于工作区源码快照</footer>
+</main>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')];
+const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const observer=new IntersectionObserver(entries=>{
+  const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>b.intersectionRatio-a.intersectionRatio)[0];
+  if(!visible)return;
+  links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+visible.target.id));
+},{rootMargin:'-15% 0px -70% 0px',threshold:[0,.1,.5]});
+sections.forEach(section=>observer.observe(section));
+</script>
+</body>
+</html>

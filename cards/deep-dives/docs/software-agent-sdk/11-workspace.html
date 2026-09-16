@@ -1,0 +1,769 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>11 Workspace 与 Git｜Software Agent SDK 架构模块</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --accent: #4338ca;
+      --good: #15803d;
+      --warn: #c2410c;
+      --bad: #b91c1c;
+      --code: #44403c;
+      --nav-width: 17rem;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 15px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      color: var(--code);
+      font-family: "Cascadia Code", Consolas, monospace;
+    }
+    code {
+      padding: .12rem .32rem;
+      border-radius: .3rem;
+      background: var(--panel-2);
+    }
+    pre {
+      overflow-x: auto;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: .5rem;
+      background: var(--panel);
+      white-space: pre;
+    }
+    .layout { display: grid; grid-template-columns: var(--nav-width) 1fr; }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.2rem;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+    }
+    aside strong { display: block; margin-bottom: .8rem; }
+    aside a {
+      display: block;
+      margin: .15rem 0;
+      padding: .28rem .48rem;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    aside a.active {
+      border-left-color: var(--accent);
+      color: var(--text);
+      background: rgba(67,56,202, .08);
+    }
+    main { min-width: 0; max-width: 1100px; padding: 2rem 3rem 5rem; }
+    .back { display: inline-block; margin-bottom: 1.4rem; }
+    h1 { margin: 0 0 .5rem; font-size: 2.15rem; line-height: 1.2; }
+    h2 {
+      margin-top: 3.2rem;
+      padding-bottom: .45rem;
+      border-bottom: 1px solid var(--border);
+      font-size: 1.5rem;
+    }
+    h3 { margin-top: 1.8rem; font-size: 1.15rem; }
+    .lead { max-width: 55rem; color: var(--muted); font-size: 1.05rem; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .65rem;
+      margin: 1.5rem 0;
+    }
+    .meta div, .callout {
+      padding: .75rem .9rem;
+      border: 1px solid var(--border);
+      border-radius: .5rem;
+      background: var(--panel);
+    }
+    .meta dt { color: var(--muted); font-size: .82rem; }
+    .meta dd { margin: .18rem 0 0; }
+    .tag {
+      display: inline-block;
+      margin: .15rem .25rem .15rem 0;
+      padding: .08rem .45rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .tag.current { border-color: var(--good); color: var(--good); }
+    .tag.optional { border-color: var(--accent); color: var(--accent); }
+    .tag.deploy { border-color: var(--warn); color: var(--warn); }
+    .callout { margin: 1rem 0; border-left: 3px solid var(--accent); }
+    .callout.warn { border-left-color: var(--warn); }
+    .callout.bad { border-left-color: var(--bad); }
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+    table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    th, td {
+      padding: .58rem .68rem;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); }
+    td { background: rgba(255,253,248, .55); }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .flow { border-left: 3px solid var(--border); padding-left: 1rem; }
+    .flow li { margin-bottom: .62rem; }
+    .small { color: var(--muted); font-size: .88rem; }
+    @media (max-width: 850px) {
+      .layout { display: block; }
+      aside {
+        position: relative;
+        width: auto;
+        height: auto;
+        max-height: 18rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      main { padding: 1.4rem 1rem 4rem; }
+      .meta { grid-template-columns: 1fr; }
+      h1 { font-size: 1.75rem; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside aria-label="本文目录">
+      <strong>11 Workspace 与 Git</strong>
+      <a href="#positioning">1. 模块定位</a>
+      <a href="#dependencies">2. 系统位置与依赖</a>
+      <a href="#concepts">3. 核心概念</a>
+      <a href="#components">4. 架构组成</a>
+      <a href="#flows">5. 完整运行流程</a>
+      <a href="#state">6. 数据与状态模型</a>
+      <a href="#interfaces">7. 接口、协议与事件</a>
+      <a href="#configuration">8. 配置与默认行为</a>
+      <a href="#concurrency">9. 并发、性能与资源</a>
+      <a href="#security">10. 安全与信任边界</a>
+      <a href="#failure">11. 失败、恢复与兼容</a>
+      <a href="#operations">12. 可观测性与排障</a>
+      <a href="#testing">13. 测试与验证</a>
+      <a href="#development">14. 开发与扩展指南</a>
+      <a href="#tradeoffs">15. 设计权衡与已知限制</a>
+      <a href="#sources">16. 源码索引与进一步阅读</a>
+      <a href="#glossary">17. 术语表</a>
+    </aside>
+
+    <main>
+      <a class="back" href="../../software_agent_architecture.html#workspace">← 返回架构总览：Workspace</a>
+      <header>
+        <h1>Workspace 与 Git</h1>
+        <p class="lead">
+          Workspace 是环境、远端控制与 Git/文件操作的执行端口：SDK 定义统一契约，
+          本地实现直接触达当前主机，远端实现经 Agent Server 协议执行，而 Workspace
+          包负责获得和管理具体容器或云运行时。当前具体 ToolExecutor 通常仍由 Agent
+          在同一进程直接调用；并非所有工具 I/O 都必须转发为 Workspace 方法。
+        </p>
+        <dl class="meta">
+          <div><dt>源码版本</dt><dd>当前工作区快照；环境中 Git 命令不可用，无法取得 SHA</dd></div>
+          <div><dt>证据状态</dt><dd>已完成源码与测试静态审计；未进行真实 Docker、Cloud、Apptainer 部署验证</dd></div>
+          <div><dt>主要所有者</dt><dd><code>openhands-sdk/.../workspace/</code>、<code>openhands-workspace/.../workspace/</code>、Agent Server worktree/Git 路由</dd></div>
+          <div><dt>目标读者</dt><dd>SDK/Tool/Agent Server 开发者、运行时后端维护者与故障排查人员</dd></div>
+          <div><dt>最近验证</dt><dd>2026-08-14</dd></div>
+          <div>
+            <dt>结论分类</dt>
+            <dd>
+              <span class="tag current">当前</span>
+              <span class="tag optional">可选</span>
+              <span class="tag deploy">部署</span>
+              <span class="tag">证据缺口已标注</span>
+            </dd>
+          </div>
+        </dl>
+      </header>
+
+      <section class="section" id="positioning">
+        <h2>1. 模块定位</h2>
+        <p>
+          <code>BaseWorkspace</code> 是抽象执行端口，声明命令执行、文件上传/下载、
+          Git changes/diff、pause/resume 与上下文管理；它不规定操作发生在本机还是沙箱。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/base.py:25-61,150-261</code></span>
+          <code>Workspace</code> 工厂只按 <code>host</code> 是否存在选择
+          <code>LocalWorkspace</code> 或 <code>RemoteWorkspace</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/workspace.py:12-49</code></span>
+        </p>
+        <p>
+          <strong>论文基线：</strong>官方论文
+          <a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690</a> §3.1
+          解释了从 V0 强制沙箱转向 V1 opt-in sandbox（按需启用沙箱）的动机：V0
+          把 Agent 与工具放在两个可能状态分叉、分别崩溃的进程中；后来为了本地 CLI、
+          MCP、凭据、文件与 IDE 直连又增加旁路和重复实现。V1 因而默认统一为本地同进程
+          Agent/Tool 执行，只在需要隔离或资源控制时容器化。论文 §4.10 再用 Local/Remote
+          Conversation 与 Workspace 说明从本地到远端的部署切换。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>职责</th><th>本模块负责</th><th>委托/明确不负责</th></tr></thead>
+            <tbody>
+              <tr><td>执行契约</td><td>工作目录、显式 Workspace 命令/文件/Git API、生命周期结果模型</td><td>Tool 如何决定和产生 I/O 由 Tools/Agent 负责；不要求每个 executor 都调用 Workspace 方法</td></tr>
+              <tr><td>本地执行</td><td>主机命令、文件复制、Git helper 调用</td><td>不提供容器隔离；权限等同 SDK 进程</td></tr>
+              <tr><td>远端执行</td><td>HTTP 请求生成、认证头、命令事件轮询、wire 路径</td><td>实际副作用与 Bash 事件持久化由 Agent Server 负责</td></tr>
+              <tr><td>后端生命周期</td><td>Docker、Cloud、Apptainer、Runtime API 的创建、健康检查、清理</td><td>公共操作协议复用 <code>RemoteWorkspace</code></td></tr>
+              <tr><td>会话隔离</td><td>Agent Server 可为本地 Git workspace 创建 conversation worktree</td><td>Conversation 状态和事件恢复不属于 Workspace</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warn">
+          Workspace 不是完整安全沙箱的同义词。<code>LocalWorkspace</code> 直接使用主机权限；
+          它是工厂在未给 <code>host</code> 时选择的默认实现，不提供进程、文件系统或网络隔离。
+          是否存在隔离取决于显式选择的后端、挂载、网络与 Agent Server 部署。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/workspace.py:20-49</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/local.py:17-34</code></span>
+        </div>
+      </section>
+
+      <section class="section" id="dependencies">
+        <h2>2. 系统位置与依赖</h2>
+        <pre aria-label="Workspace 组件关系">Agent ── in-process call ──► concrete ToolExecutor
+  ├─ TerminalExecutor ──► tmux/subprocess/PowerShell session
+  ├─ FileEditorExecutor ──► host-native FileEditor
+  └─ tools needing environment metadata read workspace.working_dir
+
+Explicit Workspace API caller
+  └─ BaseWorkspace (SDK port)
+      ├─ LocalWorkspace ── host command / files / SDK Git helpers
+      └─ RemoteWorkspace ── HTTP ── Agent Server
+          ├─ Bash API + BashOutput event files
+          ├─ File API
+          └─ Git API ── SDK Git helpers
+
+Provisioning adapters (Workspace package)
+  ├─ DockerWorkspace / DockerDevWorkspace
+  ├─ ApptainerWorkspace
+  ├─ OpenHandsCloudWorkspace
+  └─ APIRemoteWorkspace
+       └─ all inherit RemoteWorkspace after obtaining agent-server host/key</pre>
+        <p>
+          SDK 包拥有可序列化接口和 <code>LocalWorkspace</code>/<code>RemoteWorkspace</code>；
+          Workspace 包拥有具体部署适配器，并公开轻量导入面。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/__init__.py:1-23</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/__init__.py:1-43</code></span>
+          Agent Server 的 Git 路由重新调用 SDK Git helper，并用 executor 避免在异步路由中阻塞事件循环。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/git_router.py:43-112</code></span>
+        </p>
+        <div class="callout">
+          <strong>论文伪代码的阅读边界：</strong>论文 §4.10 的
+          <code>BaseWorkspace.execute_command/file_upload/file_download</code> 是部署抽象的
+          简化示意，不是“所有 ToolExecutor I/O 必须经过 Workspace 方法”的运行时约束。
+          当前 <code>TerminalExecutor</code> 自己持有终端 session 并直接执行 Action，
+          <code>FileEditorExecutor</code> 自己持有按 workspace root 构造的 FileEditor；
+          Tool definition 常从 <code>ConversationState.workspace.working_dir</code> 注入根目录。
+          这些具体 executor 与本地 Agent 通常同进程运行。
+          <span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:63-123</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:541-579</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/file_editor/impl.py:22-73</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/file_editor/definition.py:224-245</code></span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>所有者表面</th><th>进程边界</th><th>决定性下游</th></tr></thead>
+            <tbody>
+              <tr><td>SDK Workspace</td><td>调用者进程</td><td>主机 OS 或 HTTP</td></tr>
+              <tr><td>Workspace 后端包</td><td>调用者进程 + 容器/云控制面</td><td>Docker CLI、Apptainer、Cloud/Runtime API</td></tr>
+              <tr><td>Agent Server</td><td>远端执行进程</td><td>Bash service、文件系统、Git CLI</td></tr>
+              <tr><td>Conversation worktree</td><td>Agent Server 进程</td><td>本地 Git repository object store</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="concepts">
+        <h2>3. 核心概念</h2>
+        <h3>Host path 与 source/wire path</h3>
+        <p>
+          <strong>host-native path（主机原生路径）</strong>用于当前进程真正读写文件，
+          应由 <code>Path</code>/<code>os.path</code> 按当前 OS 判断。
+          <strong>source/wire path（来源/传输路径）</strong>则是配置或 HTTP 中表达的路径，
+          可能来自另一操作系统。<code>is_absolute_path_source()</code>同时识别 POSIX 与
+          Windows 绝对路径；<code>is_host_absolute_path()</code>只承认当前主机语义；
+          <code>to_posix_path()</code>只替换分隔符，不解析或校验。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/utils/path.py:13-49</code></span>
+        </p>
+        <h3>Workspace、runtime 与 worktree</h3>
+        <ul>
+          <li><strong>Workspace：</strong>执行接口及其 working directory。</li>
+          <li><strong>Runtime/sandbox：</strong>承载 Agent Server 的容器或云资源；由具体后端管理。</li>
+          <li><strong>Git worktree：</strong>共享对象库、拥有独立工作目录和分支的 Git checkout；这里只对本地 Git workspace 可选启用。</li>
+          <li><strong>saved workspaces：</strong>GUI 的路径列表，是独立的文件后端元数据，不等于运行中 Workspace。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/workspaces_router.py:1-7,58-83</code></span></li>
+        </ul>
+        <h3>Opt-in sandbox 与 LocalWorkspace 默认值</h3>
+        <p>
+          “opt-in”描述的是部署选择，不是 LocalWorkspace 内部的开关。未传
+          <code>host</code> 时，<code>Workspace</code> 工厂返回 <code>LocalWorkspace</code>；
+          它的命令、文件和 Git 实现直接使用当前主机能力。要获得容器或云隔离，调用方必须
+          显式构造 Docker、Apptainer、Cloud 或其他 Remote 后端，并单独审计挂载、网络、
+          凭据和资源限制。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/workspace.py:20-49</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/local.py:47-80</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/__init__.py:1-43</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="components">
+        <h2>4. 架构组成</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>组件</th><th>职责与输入输出</th><th>状态/故障隔离</th><th>扩展点</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>BaseWorkspace</code></td>
+                <td>定义 <code>CommandResult</code>、<code>FileOperationResult</code> 与 Git 返回类型；保存会话 ID/累计成本</td>
+                <td>默认 pause/resume 抛 <code>NotImplementedError</code>；completion callback 为 best-effort</td>
+                <td>实现抽象命令、文件、Git 方法</td>
+              </tr>
+              <tr>
+                <td><code>LocalWorkspace</code></td>
+                <td>命令调用共享 <code>execute_command</code>；上传/下载均为 <code>shutil.copy2</code>；Git path 相对 <code>working_dir</code> 拼接</td>
+                <td>无独立远端资源；文件错误转 <code>FileOperationResult(success=False)</code></td>
+                <td>适合开发、测试和 Agent Server 本地会话</td>
+              </tr>
+              <tr>
+                <td><code>RemoteWorkspaceMixin</code></td>
+                <td>生成 Bash/File/Git HTTP 请求；同步和异步 workspace 共用生成器</td>
+                <td>HTTP、轮询、路径规范化集中在协议层</td>
+                <td>新远端后端只需提供 host/key 与生命周期</td>
+              </tr>
+              <tr>
+                <td><code>DockerWorkspace</code></td>
+                <td>选择端口、运行预构建镜像、映射 8000、健康检查、日志线程、stop/remove</td>
+                <td>容器 ID、镜像名、日志线程为私有状态</td>
+                <td><code>get_image()</code>；Dev 子类可现场构建</td>
+              </tr>
+              <tr>
+                <td><code>ApptainerWorkspace</code></td>
+                <td>拉取/复用 SIF，启动无守护进程容器，支持 bind/GPU/fakeroot</td>
+                <td>进程组、SIF cache、日志线程；清理发送 TERM 后必要时 KILL</td>
+                <td>预构建镜像或已有 SIF，适合 HPC</td>
+              </tr>
+              <tr>
+                <td><code>OpenHandsCloudWorkspace</code></td>
+                <td>创建/恢复 Cloud sandbox，发现 exposed Agent Server URL；也支持 sandbox 内 local-agent-server 模式</td>
+                <td>Cloud API 与 Agent Server 使用不同 client/认证；可 keep alive</td>
+                <td>Cloud sandbox spec、SaaS settings/secrets</td>
+              </tr>
+              <tr>
+                <td><code>APIRemoteWorkspace</code></td>
+                <td>通过 Runtime API attach/start/pause/resume/stop，随后复用远端协议</td>
+                <td>runtime ID/URL/session key；启动异常先 cleanup</td>
+                <td>镜像、runtime class、resource factor、target type</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          上述边界可由各实现直接核对。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/local.py:17-216</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:18-378</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/docker/workspace.py:53-428</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/apptainer/workspace.py:28-413</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/cloud/workspace.py:53-305,430-532</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/remote_api/workspace.py:19-155,245-426</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="flows">
+        <h2>5. 完整运行流程</h2>
+        <h3>5.1 正常成功：远端命令</h3>
+        <ol class="flow">
+          <li>调用 <code>RemoteWorkspace.execute_command(command, cwd, timeout)</code>，同步类驱动共享 generator；异步类使用 <code>AsyncClient</code> 驱动同一 generator。<span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/base.py:109-154</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/async_remote_workspace.py:48-78</code></span></li>
+          <li><code>cwd</code> 经 slash normalization 后，客户端 POST <code>/api/bash/start_bash_command</code>；服务端启动后台任务并立即返回 command ID。<span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:88-109</code></span> <span class="evidence"><code>openhands-agent-server/openhands/agent_server/bash_router.py:100-108</code></span></li>
+          <li>客户端以 command ID、<code>kind=BashOutput</code> 和递增 <code>order</code> 轮询事件，每个 ID 只消费一次；看见非空 <code>exit_code</code> 即结束。<span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:111-193</code></span></li>
+          <li>最终输出规范化为 <code>CommandResult</code>；Workspace 本身不写 Conversation Event。Bash 事件由 Agent Server 的 Bash service 拥有。</li>
+        </ol>
+
+        <h3>5.2 拒绝/提前结束：输入或环境不可用</h3>
+        <ol class="flow">
+          <li>Docker 在端口被占用、Docker daemon 不可用或镜像启动失败时抛 <code>RuntimeError</code>，不返回一个“半就绪” workspace。<span class="evidence"><code>openhands-workspace/openhands/workspace/docker/workspace.py:185-209,240-282</code></span></li>
+          <li>Apptainer 要求 <code>server_image</code>/<code>sif_file</code> 恰好一个；SIF 不存在或 runtime 不可用时初始化失败。<span class="evidence"><code>openhands-workspace/openhands/workspace/apptainer/workspace.py:155-203</code></span></li>
+          <li>Git API 缺少 <code>path</code> 由 FastAPI 返回 422；<code>ref</code> 与 <code>commit</code> 同时传入返回 400；其余 <code>GitError</code> 映射 400。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/git_router.py:115-153</code></span></li>
+          <li>conversation workspace 静态文件服务只接受 <code>LocalWorkspace</code>，并拒绝 resolve 后逃出 workspace 根目录的路径。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/workspace_router.py:41-77</code></span></li>
+        </ol>
+
+        <h3>5.3 恢复/降级：runtime 与 worktree</h3>
+        <ol class="flow">
+          <li>Cloud 可按已有 <code>sandbox_id</code> resume；<code>STARTING</code> 和 <code>PAUSED</code> 作为可重试状态，<code>ERROR/MISSING</code> 为终止失败。<span class="evidence"><code>openhands-workspace/openhands/workspace/cloud/workspace.py:272-390</code></span></li>
+          <li>Runtime API 发现 running/paused session 时 attach，paused 先 resume；健康等待对 pending/running 重试，对 failed/crashloopbackoff 抛终止错误。<span class="evidence"><code>openhands-workspace/openhands/workspace/remote_api/workspace.py:141-182,292-367</code></span></li>
+          <li>请求 <code>worktree=True</code> 时，Agent Server 只对有效本地 Git repo 创建 worktree；非 Git workspace 原样继续，因此这是显式的 fail-soft 降级。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:191-206,251-274</code></span></li>
+          <li>基准 ref 优先级为更新后的 <code>origin/&lt;default&gt;</code>、本地 <code>main</code>、本地 <code>master</code>、最后 <code>HEAD</code>；fetch 失败只使用缓存 refs。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:148-188</code></span></li>
+        </ol>
+      </section>
+
+      <section class="section" id="state">
+        <h2>6. 数据与状态模型</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>状态</th><th>权威位置</th><th>生命周期/清理</th></tr></thead>
+            <tbody>
+              <tr><td><code>working_dir</code></td><td>Pydantic workspace model，<code>Path</code> 输入规范化为字符串</td><td>随 Workspace/Conversation 序列化；不是目录内容快照</td></tr>
+              <tr><td>HTTP client</td><td><code>RemoteWorkspace._client</code> 私有属性</td><td>惰性创建；host/key 改变后 <code>reset_client()</code></td></tr>
+              <tr><td>容器/runtime identity</td><td>各后端私有 ID/URL/key</td><td>context exit 或析构清理；<code>keep_alive</code> 可保留云资源</td></tr>
+              <tr><td>Bash 输出</td><td>Agent Server Bash event store</td><td>客户端按 order/ID 增量读取；不是 Conversation EventLog</td></tr>
+              <tr><td>Git worktree</td><td><code>/tmp/conversation-worktrees/&lt;conversation_id&gt;/&lt;repo_name&gt;</code>（默认）</td><td>创建前 prune；冲突 worktree/branch 强制移除后重建</td></tr>
+              <tr><td>saved workspaces</td><td>Agent Server file-backed JSON store</td><td>更新去重；损坏文件返回 409，避免默认值覆盖原数据</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          worktree 分支名为 <code>openhands/&lt;conversation_id&gt;</code>。若原始 workspace 是
+          repo 子目录，则先计算 <code>source_workspace.relative_to(repo_root)</code>，再在
+          worktree 根内复现该相对路径。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:208-248</code></span>
+          这共享 Git 对象库但隔离文件树和分支；当前创建代码没有在会话结束时删除 worktree
+          的直接证据，因此不应假设其随 Conversation 自动回收。
+        </p>
+        <p>
+          Workspace 仅保存成本与 conversation ID 供退出回调使用，回调失败被记录并吞掉，
+          不改变主操作结果。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/base.py:52-135</code></span>
+          但具体后端的退出链并不完全对称：Docker 与 Apptainer 的
+          <code>__exit__()</code> 直接调用 <code>cleanup()</code>，没有继续调用
+          <code>RemoteWorkspace.__exit__()</code>，所以不能假设它们会发送父类的 automation
+          completion callback；Cloud 显式发送，Runtime API 后端则调用父类后再清理。
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/docker/workspace.py:351-357</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/apptainer/workspace.py:374-380</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/cloud/workspace.py:798-806</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/remote_api/workspace.py:421-426</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="interfaces">
+        <h2>7. 接口、协议与事件</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>入口</th><th>请求/返回</th><th>错误与幂等语义</th></tr></thead>
+            <tbody>
+              <tr><td><code>execute_command</code></td><td>command/cwd/timeout → <code>CommandResult</code></td><td>远端协议错误转 exit -1；超时也为 -1，但 <code>timeout_occurred</code> 区分</td></tr>
+              <tr><td><code>file_upload/download</code></td><td>本地与远端路径 → <code>FileOperationResult</code></td><td>异常转 <code>success=False</code>；上传会覆盖目标，非事务</td></tr>
+              <tr><td><code>git_changes</code></td><td><code>GET /api/git/changes?path=...</code> → changes list</td><td>非 repo 返回 200 + 空列表；Git command error 返回 400</td></tr>
+              <tr><td><code>git_diff</code></td><td><code>GET /api/git/diff?path=...</code> → <code>GitDiff</code></td><td>非 repo 返回两个 null；<code>ref</code>/<code>commit</code> 互斥</td></tr>
+              <tr><td><code>pause/resume</code></td><td>无返回值</td><td>能力依后端；Local no-op，Cloud pause 未实现</td></tr>
+              <tr><td>workspace static route</td><td>conversation ID + path → <code>FileResponse</code></td><td>仅本地；目录只服务 index；越界 400，缺失 404</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          远程 Git 的关键契约是将路径放在 query parameter 中，而不是 URL path segment，
+          并在发送前用 slash-normalized 字符串拼接。绝对 POSIX 或 Windows 路径保持绝对，
+          相对路径才拼到 <code>working_dir</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:18-31,325-378</code></span>
+        </p>
+        <p>
+          Bash 命令事件顺序是协议的一部分：客户端指定时间排序、最多 100 条、仅
+          <code>BashOutput</code>，以后续 <code>order__gt</code> 游标继续；重复 event ID
+          被视为协议异常，而不是静默重复输出。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:111-169</code></span>
+        </p>
+        <p>
+          <code>cwd=None</code> 也存在 Local/Remote 差异：Local 会替换为
+          <code>self.working_dir</code>，Remote 则省略请求中的 <code>cwd</code>，Agent Server
+          最终把 null 直接交给 <code>asyncio.create_subprocess_shell</code>，使用服务端进程的
+          当前目录。要求确定目录的调用方应显式传入 <code>workspace.working_dir</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/local.py:47-80</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:88-104</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/models.py:580-586</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/bash_service.py:272-278</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="configuration">
+        <h2>8. 配置与默认行为</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+            <tbody>
+              <tr><td>Workspace factory <code>working_dir</code></td><td>str</td><td><code>workspace/project</code></td><td>调用参数</td><td>新对象</td><td>无 host 即 Local</td><td><code>openhands-sdk/openhands/sdk/workspace/workspace.py:20-49</code></td></tr>
+              <tr><td>Remote <code>read_timeout</code></td><td>float</td><td>600s</td><td>模型字段</td><td>重建 client</td><td>httpx timeout</td><td><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:45-53</code></td></tr>
+              <tr><td>Remote <code>max_connections</code></td><td>int/null</td><td>null（不限）</td><td>模型字段</td><td>重建 client</td><td>连接池控制</td><td><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:49-53</code></td></tr>
+              <tr><td>Docker image</td><td>str/null</td><td><code>ghcr.io/openhands/agent-server:latest-python</code></td><td>调用参数</td><td>新容器</td><td>null 被拒绝</td><td><code>openhands-workspace/openhands/workspace/docker/workspace.py:80-88,144-169</code></td></tr>
+              <tr><td>Docker platform</td><td>amd64/arm64</td><td><code>linux/amd64</code></td><td>调用参数</td><td>新容器</td><td>Docker run 失败</td><td><code>openhands-workspace/openhands/workspace/docker/workspace.py:104-106,240-261</code></td></tr>
+              <tr><td>Docker/Apptainer health timeout</td><td>float &gt; 0</td><td>120s</td><td>调用参数</td><td>启动/恢复时读取</td><td>超时抛 RuntimeError</td><td><code>openhands-workspace/openhands/workspace/docker/workspace.py:123-127,314-349</code>；<code>openhands-workspace/openhands/workspace/apptainer/workspace.py:143-147,350-372</code></td></tr>
+              <tr><td>Cloud working dir</td><td>str</td><td><code>/workspace/project</code></td><td>调用参数</td><td>新对象</td><td>由远端操作消费</td><td><code>openhands-workspace/openhands/workspace/cloud/workspace.py:85-93</code></td></tr>
+              <tr><td>Cloud keep alive</td><td>bool</td><td>false</td><td>调用参数</td><td>cleanup 时读取</td><td>true 时不删除 sandbox</td><td><code>openhands-workspace/openhands/workspace/cloud/workspace.py:131-151,485-525</code></td></tr>
+              <tr><td>Runtime pull policy</td><td>Always/IfNotPresent/Never</td><td>IfNotPresent</td><td>调用参数</td><td>新 runtime</td><td>控制面错误透传</td><td><code>openhands-workspace/openhands/workspace/remote_api/workspace.py:43-82</code></td></tr>
+              <tr><td>Conversation worktree root</td><td>Path</td><td><code>/tmp/conversation-worktrees</code></td><td>Agent Server Config</td><td>新 conversation</td><td>非 Git 时降级原 workspace</td><td><code>openhands-agent-server/openhands/agent_server/config.py:257-264</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="small">后端还有挂载、GPU、网络、日志与 API timeout 等选项；只有部署需要时才启用，不应当作统一 Workspace 契约。</p>
+      </section>
+
+      <section class="section" id="concurrency">
+        <h2>9. 并发、性能与资源</h2>
+        <ul>
+          <li><strong>同步/异步共用请求生成器：</strong>减少协议漂移，但 generator 内命令轮询使用 <code>time.sleep(0.1)</code>；<code>AsyncRemoteWorkspace</code> 驱动同一 generator，因此该短 sleep 仍会同步阻塞事件循环。<span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:119-172</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/async_remote_workspace.py:48-55</code></span></li>
+          <li><strong>HTTP 连接：</strong>同步 Remote 可配置 <code>max_connections</code>；Async 目前没有把该字段传入 AsyncClient limits。同步默认读超时 600 秒，AsyncClient 固定 60 秒。<span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/base.py:88-107</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/async_remote_workspace.py:32-46</code></span></li>
+          <li><strong>异步健康检查：</strong><code>AsyncRemoteWorkspace.alive</code> 是同步 property，并直接调用 <code>urlopen</code>，因此在 async 调用链中读取它也会阻塞线程；它不是可 await 的健康检查。<span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/async_remote_workspace.py:152-165</code></span></li>
+          <li><strong>Agent Server Git：</strong>文件系统/Git CLI 工作放入默认 executor，避免占用 FastAPI event loop。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/git_router.py:43-112</code></span></li>
+          <li><strong>日志线程：</strong>Docker/Apptainer 可启动 daemon thread；cleanup 设置 event 并最多等待 2 秒。<span class="evidence"><code>openhands-workspace/openhands/workspace/docker/workspace.py:266-312,367-378</code></span> <span class="evidence"><code>openhands-workspace/openhands/workspace/apptainer/workspace.py:317-348,388-413</code></span></li>
+          <li><strong>端口分配：</strong>Docker/Apptainer 从 30000–39999 随机尝试最多 50 个端口；“检查后再绑定”存在竞争窗口，最终由 runtime 启动失败兜底。<span class="evidence"><code>openhands-workspace/openhands/workspace/docker/workspace.py:22-50</code></span></li>
+          <li><strong>worktree：</strong>同一 conversation ID 会强制清理既有 worktree 和 branch 后重建；代码未展示跨请求锁，因此调用方必须避免同 ID 并发创建。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:208-239</code></span></li>
+        </ul>
+      </section>
+
+      <section class="section" id="security">
+        <h2>10. 安全与信任边界</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>边界</th><th>当前控制</th><th>不能据此推断</th></tr></thead>
+            <tbody>
+              <tr><td>Remote → Agent Server</td><td>存在 api key 时发送 <code>X-Session-API-Key</code></td><td>无 key 时 header 为空，不代表服务端一定开放；由部署配置决定</td></tr>
+              <tr><td>Cloud/Runtime 控制面</td><td>分别使用 Bearer 或 <code>X-API-Key</code>；session key 用于 Agent Server</td><td>两个 key 不可互换</td></tr>
+              <tr><td>路径</td><td>wire path 规范化；静态服务 resolve 后验证仍位于 workspace 根</td><td>slash normalization 不是授权或 traversal 校验</td></tr>
+              <tr><td>本地执行</td><td>继承调用进程 OS 权限</td><td><code>working_dir</code> 不构成沙箱边界</td></tr>
+              <tr><td>同进程 ToolExecutor</td><td>Action 由 Agent 直接交给具体 executor；executor 可直接访问主机库、子进程或文件系统</td><td>Workspace 接口存在不表示该工具调用已被远端化或隔离</td></tr>
+              <tr><td>挂载与环境</td><td>Docker/Apptainer 只转发明确列出的 env；挂载由显式配置产生</td><td>挂载可能扩大容器对主机数据的访问范围</td></tr>
+              <tr><td>Git clone secret</td><td>provider hostname 精确匹配后才注入 token；日志 URL 做凭据遮罩</td><td>clone 是有网络和磁盘副作用的操作</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          认证头来源见 <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:38-65</code></span>；
+          静态文件 symlink 也因 <code>resolve()</code> 后的 containment 检查而受边界约束。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/workspace_router.py:66-77</code></span>
+          Repo URL 会把 HTTP 升级为 HTTPS，并仅对精确 provider host 注入 token。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/repo.py:143-163,288-323</code></span>
+        </p>
+        <div class="callout bad">
+          Workspace API 本身不执行 Agent 的 confirmation、SecurityAnalyzer 或 Tool Hook。
+          直接调用 <code>execute_command</code> 的程序必须自行建立准入策略。
+        </div>
+      </section>
+
+      <section class="section" id="failure">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+            <tbody>
+              <tr><td>远端命令超时</td><td>轮询期限内无 exit code</td><td>返回 exit -1 与 timeout 文本</td><td>远端进程是否终止没有客户端证据</td><td>仅在确认副作用安全后重试</td><td>按 command ID 查 Bash events</td></tr>
+              <tr><td>HTTP/协议异常</td><td><code>raise_for_status</code> 或解析错误</td><td>命令转错误结果；Git 抛异常</td><td>client 保留</td><td>settings/Cloud 部分路径有 Tenacity；基本命令没有</td><td>核对 host、key、server_info</td></tr>
+              <tr><td>非 Git 路径</td><td><code>GitRepositoryError</code></td><td>changes=[]，diff=null/null</td><td>不改变目录</td><td>初始化 repo 后重查</td><td>检查 path 指向 repo/文件</td></tr>
+              <tr><td>容器启动后退出</td><td>Docker inspect 或 Apptainer poll</td><td>抛 RuntimeError</td><td>构造失败</td><td>修复镜像/环境后新建</td><td>查看容器日志</td></tr>
+              <tr><td>Cloud STARTING/PAUSED</td><td>控制面 status</td><td>抛可重试 RuntimeError；PAUSED 先 resume</td><td>保留 sandbox ID</td><td>指数退避至 300 秒策略上限</td><td>检查 Cloud sandbox 状态</td></tr>
+              <tr><td>worktree fetch 失败</td><td><code>GitCommandError</code></td><td>warning，继续缓存 ref 优先级</td><td>仍可能创建 worktree</td><td>修复网络后新会话可刷新</td><td>检查 origin/HEAD 和本地 main/master</td></tr>
+              <tr><td>worktree 请求但非 repo</td><td>repo 校验失败</td><td>保留原 LocalWorkspace</td><td>无隔离 branch</td><td>git init/选择 repo 后重建会话</td><td>确认 stored workspace 路径</td></tr>
+              <tr><td>saved workspace JSON 损坏</td><td>load=null 且文件存在</td><td>409，禁止写默认值覆盖</td><td>原文件保留</td><td>人工修复文件</td><td>备份后校验 schema</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Python 公共导出包括 <code>BaseWorkspace</code>、Local/Remote、结果模型和 repo 类型；
+          具体后端也由 Workspace 包 <code>__all__</code> 导出，因此移除或改签名属于公共 API
+          兼容面。Docker 对已移除的 <code>mount_dir</code> 选择显式报错并指向
+          <code>volumes</code>，而非静默忽略。
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/docker/workspace.py:134-142</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="operations">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+            <tbody>
+              <tr><td>远端命令一直等待</td><td>command ID、<code>/api/bash/bash_events/search</code>、最后 order/exit code</td><td>错误 endpoint、命令未结束、事件缺失</td><td>确认使用 <code>start_bash_command</code>，检查 Agent Server Bash service</td></tr>
+              <tr><td>Windows 客户端 Git 查询失败</td><td>实际 query 中 <code>path</code> 是否为 <code>C:/...</code></td><td>反斜杠泄漏或用 URL path segment</td><td>统一走 <code>_join_remote_path</code> + query param</td></tr>
+              <tr><td>容器健康超时</td><td>Docker logs/inspect 或 Apptainer stdout/process exit</td><td>镜像入口、端口、认证 env、进程崩溃</td><td>先修复日志中的首个失败，再调整 timeout</td></tr>
+              <tr><td>Cloud workspace 无 host</td><td>sandbox status、exposed URLs 中 <code>AGENT_SERVER</code></td><td>沙箱未 RUNNING 或暴露 URL 缺失</td><td>恢复/重建 sandbox，核对 spec</td></tr>
+              <tr><td>Git changes 为空</td><td>路径是否 repo、ref、实际工作树状态</td><td>非 repo 会有意返回空列表</td><td>不要把 200+[] 当作 repo 存在证明</td></tr>
+              <tr><td>会话改到了原仓库</td><td>stored <code>workspace.working_dir</code>、system suffix、当前 branch</td><td>worktree 未启用/非 Git 降级/调用方绕过 active workspace</td><td>确认 <code>worktree=True</code> 且 repo 有效，只在 active workspace 操作</td></tr>
+              <tr><td>workspace 页面泄露疑虑</td><td>请求 path、resolve 后 target、workspace 类型</td><td>越界或外部 symlink</td><td>应得到 400/404；若不是，立即阻断路由并修复 containment</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          可用观测面包括后端 logger、Docker/Apptainer 日志流、Cloud/Runtime status、
+          BashOutput events、Git HTTP 状态码以及 <code>RemoteWorkspace.get_server_info()</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/base.py:118-131</code></span>
+          当前源码没有 Workspace 专属 metrics 或 audit log 的证据。
+        </p>
+      </section>
+
+      <section class="section" id="testing">
+        <h2>13. 测试与验证</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr><td>Host/wire 路径语义分离</td><td><code>tests/sdk/utils/test_path.py:44-60</code></td><td>单元</td><td>跨平台 source absolute 与当前主机 absolute 区别</td><td>不证明所有调用方均选对 helper</td></tr>
+              <tr><td>远端命令轮询/超时/错误</td><td><code>tests/sdk/workspace/remote/test_remote_workspace_mixin.py:71-305,613-679</code></td><td>单元/回归</td><td>endpoint、游标输出、timeout 与日志不泄露命令 secret</td><td>无真实网络背压测试</td></tr>
+              <tr><td>远程 Git slash normalization</td><td><code>tests/sdk/workspace/remote/test_remote_workspace_mixin.py:682-728</code></td><td>跨平台回归</td><td>Windows/相对/绝对路径均用 query param 和正斜杠</td><td>未覆盖 URL 编码代理差异</td></tr>
+              <tr><td>Git API 错误语义</td><td><code>tests/agent_server/test_git_router.py:34-147,233-322,389-440</code></td><td>路由/部分真实 Git</td><td>200/400/422、ref 传递、旧 path routes 已移除</td><td>不证明 REST 已发布版本兼容历史</td></tr>
+              <tr><td>后端继承、清理和 health timeout</td><td><code>tests/workspace/test_docker_workspace.py:47-149,193-212</code></td><td>单元</td><td>公共继承、懒导入、镜像清理、timeout 校验</td><td>mock，不启动真实 Docker</td></tr>
+              <tr><td>Apptainer GPU/bind</td><td><code>tests/workspace/test_apptainer_workspace.py:45-113</code></td><td>单元</td><td><code>--nv</code> 与 bind 参数进入命令</td><td>不验证 HPC runtime</td></tr>
+              <tr><td>各后端 pause/resume</td><td><code>tests/workspace/test_workspace_pause_resume.py:75-255</code></td><td>单元</td><td>Local no-op、Docker/Runtime API 调用、Cloud pause 拒绝</td><td>不验证暂停中的连接行为</td></tr>
+              <tr><td>worktree 路径/分支/子目录</td><td><code>tests/agent_server/test_conversation_service.py:1640-1750</code></td><td>真实本地 Git</td><td>目录形状、独立 branch、agent guidance、子目录保持</td><td>未证明长期清理策略</td></tr>
+              <tr><td>静态文件 containment</td><td><code>tests/agent_server/test_workspace_router.py:62-200</code></td><td>路由/文件系统</td><td>index、缺失、traversal、内外 symlink</td><td>平台 symlink 权限可能不同</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="development">
+        <h2>14. 开发与扩展指南</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+            <tbody>
+              <tr><td>新增统一 Workspace 能力</td><td>SDK <code>BaseWorkspace</code> 与结果模型</td><td>Local、Remote sync/async、所有公开后端、导出面</td><td>公共 API 兼容、兄弟实现一致、跨包测试</td></tr>
+              <tr><td>新增部署后端</td><td><code>openhands-workspace</code> 子包</td><td>公开导出、生命周期、health、cleanup、pause/resume 能力声明</td><td>不在 import 时触发重依赖/副作用；协议复用 Remote</td></tr>
+              <tr><td>修改远端路径</td><td><code>utils/path.py</code>、Remote mixin、Agent Server 路由</td><td>Windows/POSIX/相对/绝对测试</td><td>wire 用 slash normalization；本地写盘用 host-native 判断</td></tr>
+              <tr><td>扩展 Git REST</td><td>SDK Git helper + Agent Server <code>git_router.py</code></td><td>返回模型、OpenAPI、Remote client</td><td>REST 兼容与 5-minor deprecation runway；错误映射</td></tr>
+              <tr><td>修改 worktree 策略</td><td>Agent Server conversation service/config</td><td>request schema、agent guidance、恢复/清理测试</td><td>repo 子目录保持、非 Git 降级、并发冲突策略</td></tr>
+              <tr><td>修改文件服务</td><td>Agent Server file/workspace routers</td><td>path 校验和 symlink 测试</td><td>不能只做字符串前缀判断，必须 resolve 后 containment</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          禁止捷径：不要用当前主机的 <code>Path</code> 拼远端 URL；不要把
+          <code>working_dir</code> 当成安全边界；不要在 Workspace 后端重复实现
+          Remote 协议；不要因“非 Git 返回空”而吞掉其他 <code>GitError</code>。
+        </div>
+      </section>
+
+      <section class="section" id="tradeoffs">
+        <h2>15. 设计权衡与已知限制</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+            <tbody>
+              <tr><td>Local/Remote 一致性</td><td>抽象同步接口，另有 AsyncRemote</td><td>调用面简单，后端复用</td><td>异步类不是 BaseWorkspace；共享 generator 中有同步 sleep，timeout/limits 默认也不完全对称</td><td>异步高并发出现 event-loop 延迟或 API 需要统一类型时</td></tr>
+              <tr><td>命令结果传输</td><td>后台启动 + 事件轮询</td><td>可增量抓取且服务端任务独立</td><td>100 条 page 与轮询间隔带来延迟；超时不证明远端命令已取消</td><td>需要强取消、流式背压或大输出保证时</td></tr>
+              <tr><td>非 Git workspace</td><td>changes/diff 返回空，worktree 请求降级</td><td>GUI 和会话可继续</td><td>空结果不能区分“干净 repo”与“非 repo”</td><td>客户端需要精确诊断时可增加兼容的状态字段/端点</td></tr>
+              <tr><td>会话隔离</td><td>Git worktree 而非复制 repo</td><td>共享对象库、快速、保留子目录</td><td>branch/worktree 清理与同 ID 并发需要治理；fetch 引入网络依赖</td><td>磁盘泄漏、跨租户共享或并发冲突成为实际问题时</td></tr>
+              <tr><td>多部署后端</td><td>后端只负责 provisioning，再复用 Remote</td><td>协议行为集中</td><td>各后端 pause、认证、cleanup 能力并不完全一致</td><td>需要可查询 capability model 而不是靠异常判断时</td></tr>
+              <tr><td>上下文退出</td><td>各后端自行串联 callback 与 cleanup</td><td>可按资源类型定制</td><td>Docker/Apptainer 跳过父类退出逻辑，completion callback 与 Cloud/Runtime 不对称</td><td>automation 需要所有后端一致报告完成状态时</td></tr>
+              <tr><td>路径跨平台</td><td>source/wire 与 host-native helper 分离</td><td>避免 Windows 路径污染 URL 或 POSIX 本地写盘</td><td>调用者必须选择正确 helper；规范化本身不验证安全</td><td>发现新的 UNC/URL/挂载语义时扩充聚焦测试</td></tr>
+              <tr><td>默认隔离</td><td>论文 §3.1 的 opt-in sandbox；LocalWorkspace 默认直接运行</td><td>本地开发、MCP 和 IDE 集成路径简单，避免 V0 双进程状态分叉</td><td>默认没有 OS 隔离；调用方必须按威胁模型选择远端/容器后端</td><td>不可信代码、多租户或资源配额成为要求时</td></tr>
+              <tr><td>Tool/Workspace 边界</td><td>具体工具通常同进程执行，按需读取 working_dir；Workspace 另提供环境控制 API</td><td>工具实现不被强制套入通用远程 I/O 代理</td><td>不能只审计 Workspace 方法就推断全部工具副作用</td><td>需要统一能力代理、集中授权或全量远端执行时</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          真实 Docker、Cloud、Apptainer 的容量、延迟、SLA、网络隔离强度与并发上限均没有
+          当前审计证据，本文不提供推测数值。worktree 结束清理机制也未在决定性创建路径中发现；
+          这是明确的证据缺口，不应写成“自动删除”。
+        </p>
+      </section>
+
+      <section class="section" id="sources">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <ul>
+          <li>公共抽象与生命周期：<code>openhands-sdk/openhands/sdk/workspace/base.py:25-261</code></li>
+          <li>Local 实现：<code>openhands-sdk/openhands/sdk/workspace/local.py:17-216</code></li>
+          <li>Local/Remote 工厂：<code>openhands-sdk/openhands/sdk/workspace/workspace.py:12-49</code></li>
+          <li>Remote 同步入口：<code>openhands-sdk/openhands/sdk/workspace/remote/base.py:51-317</code></li>
+          <li>Remote sync/async 共享协议：<code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:18-378</code></li>
+          <li>Async Remote：<code>openhands-sdk/openhands/sdk/workspace/remote/async_remote_workspace.py:14-165</code></li>
+          <li>路径 helper：<code>openhands-sdk/openhands/sdk/utils/path.py:13-68</code></li>
+          <li>Repo clone、安全与重试：<code>openhands-sdk/openhands/sdk/workspace/repo.py:91-196,297-402,424-511</code></li>
+          <li>Docker/Dev：<code>openhands-workspace/openhands/workspace/docker/workspace.py:53-428</code>；<code>openhands-workspace/openhands/workspace/docker/dev_workspace.py:10-123</code></li>
+          <li>Cloud：<code>openhands-workspace/openhands/workspace/cloud/workspace.py:53-532</code></li>
+          <li>Apptainer：<code>openhands-workspace/openhands/workspace/apptainer/workspace.py:28-413</code></li>
+          <li>Runtime API：<code>openhands-workspace/openhands/workspace/remote_api/workspace.py:19-426</code></li>
+          <li>Agent Server Bash/File/Git：<code>openhands-agent-server/openhands/agent_server/bash_router.py:100-122</code>；<code>openhands-agent-server/openhands/agent_server/file_router.py:649-687</code>；<code>openhands-agent-server/openhands/agent_server/git_router.py:43-181</code></li>
+          <li>具体 ToolExecutor 同进程证据：<code>openhands-tools/openhands/tools/terminal/impl.py:63-123,541-579</code>；<code>openhands-tools/openhands/tools/file_editor/impl.py:22-73</code></li>
+          <li>Conversation worktree：<code>openhands-agent-server/openhands/agent_server/conversation_service.py:85-274</code></li>
+          <li>Workspace 静态服务：<code>openhands-agent-server/openhands/agent_server/workspace_router.py:32-124</code></li>
+          <li>论文设计基线：<a href="https://arxiv.org/abs/2511.03690">官方论文 arXiv:2511.03690 §3.1、§4.10</a></li>
+          <li>架构总览回链：<a href="../../software_agent_architecture.html#workspace"><code>software_agent_architecture.html#workspace</code></a></li>
+        </ul>
+        <p class="small">相邻章节：<a href="10-security.html">10 安全、确认与 Hooks</a> · <a href="12-mcp.html">12 MCP 集成边界</a>。</p>
+      </section>
+
+      <section class="section" id="glossary">
+        <h2>17. 术语表</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>术语</th><th>本文含义</th></tr></thead>
+            <tbody>
+              <tr><td>Workspace</td><td>向 Agent/Tool 提供 working directory、命令、文件和 Git 操作的统一执行端口，不天然等于沙箱。</td></tr>
+              <tr><td>LocalWorkspace</td><td>在 SDK 当前进程所在主机直接产生副作用的 Workspace。</td></tr>
+              <tr><td>Opt-in sandbox</td><td>默认采用本地直接执行，只在调用方显式选择容器、云或其他远端后端时增加隔离；不是 LocalWorkspace 的布尔开关。</td></tr>
+              <tr><td>ToolExecutor</td><td>执行已验证 Action 并返回 Observation 的具体工具实现；当前本地运行时通常与 Agent 同进程，不要求所有 I/O 经 Workspace 方法。</td></tr>
+              <tr><td>RemoteWorkspace</td><td>通过 HTTP 调用 Agent Server 执行副作用的同步 Workspace。</td></tr>
+              <tr><td>Runtime / Sandbox</td><td>承载 Agent Server 和文件系统的容器或云执行环境，由部署后端创建或连接。</td></tr>
+              <tr><td>Host-native path</td><td>按当前操作系统文件系统规则解析、可实际用于本地读写的路径。</td></tr>
+              <tr><td>Source/Wire path</td><td>来自配置、序列化或网络协议的路径表达，可能采用另一 OS 的语法。</td></tr>
+              <tr><td>Slash normalization</td><td>将反斜杠替换为正斜杠用于 wire/storage/display；不等于 resolve、校验或授权。</td></tr>
+              <tr><td>Git worktree</td><td>共享同一 Git 对象库、具有独立工作目录与 branch 的 checkout。</td></tr>
+              <tr><td>Conversation worktree</td><td>Agent Server 按 conversation ID 创建的可选 Git worktree，用于隔离会话文件和分支。</td></tr>
+              <tr><td>SIF</td><td>Singularity Image Format，Apptainer 使用的容器镜像文件格式。</td></tr>
+              <tr><td>HPC</td><td>High Performance Computing，高性能计算环境；常使用无需 Docker daemon/root 的 Apptainer。</td></tr>
+              <tr><td>Provisioning</td><td>创建、连接、健康检查和销毁 runtime 的部署生命周期，不包含统一命令/文件协议本身。</td></tr>
+              <tr><td>Fail-soft</td><td>可选能力不可用时保留核心流程，例如非 Git workspace 请求 worktree 时继续使用原目录。</td></tr>
+              <tr><td>Containment</td><td>路径 resolve 后仍位于授权 workspace 根内的约束，用于阻止 traversal 和外部 symlink。</td></tr>
+              <tr><td>Backpressure</td><td>消费者处理速度低于生产者时限制数据流的机制；当前命令轮询没有显式流式背压协议。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll("aside a")];
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const activate = () => {
+        let current = sections[0];
+        for (const section of sections) {
+          if (section.getBoundingClientRect().top <= 130) current = section;
+        }
+        links.forEach((link) => {
+          link.classList.toggle(
+            "active",
+            link.getAttribute("href") === `#${current.id}`
+          );
+        });
+      };
+      document.addEventListener("scroll", activate, { passive: true });
+      activate();
+    })();
+  </script>
+</body>
+</html>

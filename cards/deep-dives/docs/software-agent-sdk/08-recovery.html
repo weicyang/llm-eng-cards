@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>08 Condenser 与分层恢复策略｜Software Agent SDK 架构</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --red: #b91c1c;
+      --purple: #6d28d9;
+      --code: #b91c1c;
+      --sidebar: 18rem;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 15px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+        monospace;
+    }
+    code { color: var(--code); }
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: var(--sidebar);
+      padding: 1.25rem 1rem;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
+    .sidebar strong { display: block; margin-bottom: .75rem; }
+    .sidebar a {
+      display: block;
+      padding: .3rem .55rem;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    .sidebar a.active {
+      border-left-color: var(--blue);
+      color: var(--text);
+      background: rgba(67,56,202, .08);
+    }
+    main {
+      width: min(76rem, calc(100% - var(--sidebar)));
+      margin-left: var(--sidebar);
+      padding: 2rem clamp(1rem, 4vw, 4rem) 5rem;
+    }
+    .back { display: inline-block; margin-bottom: 1.25rem; }
+    h1 { margin: 0 0 .35rem; font-size: clamp(2rem, 4vw, 3rem); }
+    h2 {
+      margin-top: 3.25rem;
+      padding-bottom: .4rem;
+      border-bottom: 1px solid var(--border);
+      scroll-margin-top: 1rem;
+    }
+    h3 { margin-top: 1.8rem; }
+    .lede { max-width: 58rem; color: var(--muted); font-size: 1.08rem; }
+    .meta, .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      gap: .8rem;
+      margin: 1.5rem 0;
+    }
+    .card, .callout {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .card b { display: block; color: var(--muted); font-size: .82rem; }
+    .tag {
+      display: inline-block;
+      margin: .15rem .25rem .15rem 0;
+      padding: .08rem .48rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .tag.current { color: var(--green); border-color: rgba(21,128,61,.5); }
+    .tag.optional { color: var(--purple); border-color: rgba(109,40,217,.5); }
+    .tag.gap { color: var(--yellow); border-color: rgba(194,65,12,.5); }
+    .callout.warning { border-left: 4px solid var(--yellow); }
+    .callout.danger { border-left: 4px solid var(--red); }
+    .callout.info { border-left: 4px solid var(--blue); }
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+    table { width: 100%; border-collapse: collapse; min-width: 50rem; }
+    th, td {
+      padding: .65rem .75rem;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); }
+    pre {
+      overflow-x: auto;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence::before { content: "〔"; color: var(--muted); }
+    .section span.evidence::after { content: "〕"; color: var(--muted); }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      color: var(--muted);
+      font-size: .86em;
+    }
+    .flow { border-left: 3px solid var(--blue); padding-left: 1rem; }
+    .flow li { margin: .45rem 0; }
+    .muted { color: var(--muted); }
+    @media (max-width: 860px) {
+      .sidebar {
+        position: static;
+        width: auto;
+        max-height: 16rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      main { width: auto; margin-left: 0; padding: 1.25rem; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="sidebar" aria-label="本页目录">
+    <strong>08 Condenser 与恢复</strong>
+    <a href="#position">1. 模块定位</a>
+    <a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a>
+    <a href="#architecture">4. 架构组成</a>
+    <a href="#flows">5. 完整运行流程</a>
+    <a href="#data">6. 数据与状态模型</a>
+    <a href="#interfaces">7. 接口、协议与事件</a>
+    <a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a>
+    <a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a>
+    <a href="#operations">12. 可观测性与排障</a>
+    <a href="#testing">13. 测试与验证</a>
+    <a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与已知限制</a>
+    <a href="#sources">16. 源码索引与进一步阅读</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+
+  <main>
+    <a class="back" href="../../software_agent_architecture.html#recovery">← 返回架构总览：Condenser 与分层恢复策略</a>
+    <header>
+      <h1>Condenser 与分层恢复策略</h1>
+      <p class="lede">
+        本章解释 SDK 如何在不改写追加式事件历史的前提下缩减 LLM 可见上下文，
+        并把瞬时传输故障、备用模型、纠正性 nudge、上下文压缩与最终错误分成可审计的恢复层。
+      </p>
+      <div class="meta">
+        <div class="card"><b>源码版本</b>工作区当前快照；本环境无可读取的 Git 元数据，SHA 未取得</div>
+        <div class="card"><b>证据状态</b>源码与测试已审计；未执行真实模型 integration</div>
+        <div class="card"><b>主要所有者</b><code>openhands-sdk/openhands/sdk/context/condenser/</code></div>
+        <div class="card"><b>目标读者</b>SDK 开发者、Agent 扩展作者、故障排查人员</div>
+        <div class="card"><b>最近验证</b>2026-08-14</div>
+        <div class="card"><b>事实分类</b>
+          <span class="tag current">当前</span>
+          <span class="tag optional">可选</span>
+          <span class="tag gap">证据缺口</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>
+        Condenser（上下文压缩器）不是事件存储，也不是 Conversation 状态机；它接收只读
+        <code>View</code>，返回可直接转成 LLM messages 的新 <code>View</code>，或返回一条待追加的
+        <code>Condensation</code> 事件。基类还明确要求实现不得原地修改 Conversation 缓存的
+        View。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:16-62</code></span>
+      </p>
+      <p>
+        官方论文 <a href="https://arxiv.org/abs/2511.03690">§4.6</a> 将 Condenser 定位为
+        context window management（上下文窗口管理）：历史过大时丢弃部分 LLM 可见事件并以摘要
+        替代，压缩结果作为事件保存；发送给 LLM 前再应用这些事件。当前实现与这一高层定位一致，
+        但具体规范形状是 <code>Condensation</code>，其应用发生在 View 投影，不删除 EventLog
+        原始事件。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:11-37,78-96</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/context/view/view.py:111-129</code></span>
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>职责</th><th>本模块负责</th><th>委托或明确不负责</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>触发与策略</td>
+              <td>判断是否压缩、选择 soft/hard、计算遗忘范围、生成摘要。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:117-184</code></span></td>
+              <td>模型真实输入上限由 LLM runtime metadata 提供；Agent 在压缩判断前解析它。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:669-682</code></span></td>
+            </tr>
+            <tr>
+              <td>历史表达</td>
+              <td>用 <code>Condensation</code> 标记遗忘 ID、摘要与插入位置。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:11-35</code></span></td>
+              <td>不删除 EventLog 原事件；View 在投影时应用压缩。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:83-96</code></span></td>
+            </tr>
+            <tr>
+              <td>错误恢复</td>
+              <td>把 provider 错误分型后，针对 malformed history 与 context overflow 请求压缩。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:30-43</code></span></td>
+              <td>无法恢复的异常由 Conversation run loop 置为 <code>ERROR</code> 并记录顶层错误事件。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1997-2018</code></span></td>
+            </tr>
+            <tr>
+              <td>工具与安全</td>
+              <td>维持可操作边界，避免切断 tool call/result 原子单元。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/view/view.py:38-50</code></span></td>
+              <td>不执行工具、不做确认、鉴权或 Workspace 授权；这些属于相邻模块。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <pre aria-label="同步与异步恢复调用链">同步：
+LocalConversation.run → Agent.step → prepare_llm_messages
+  → Condenser.condense → View 或 Condensation
+  → LLM.completion/responses → Tenacity retry → fallback → exception mapping
+
+异步：
+LocalConversation.arun → Agent.astep → aprepare_llm_messages
+  → Condenser.acondense → LLM.acompletion（摘要器）
+  → LLM.acompletion/aresponses → 同一 RetryMixin → thread-offloaded fallback</pre>
+      <p>
+        同步 Agent 在生成新动作前先处理未匹配 Action，再解析 LLM runtime metadata，随后让
+        Condenser 处理当前缓存 View；若返回 <code>Condensation</code>，本轮只发出该事件并结束，
+        下一轮才从应用过压缩的 View 调用模型。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:643-687</code></span>
+      </p>
+      <p>
+        异步路径调用 <code>aprepare_llm_messages()</code> 和 <code>condenser.acondense()</code>；
+        基类默认把 async 委托给 sync，真正有异步 I/O 的摘要器覆盖异步生成方法，因此自定义同步
+        Condenser 无需额外实现即可工作。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/utils.py:696-723</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:54-62</code></span>
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>所有者</th><th>表面</th><th>依赖方向</th></tr></thead>
+          <tbody>
+            <tr><td>Context</td><td><code>CondenserBase</code>、Rolling、Summary、Pipeline、NoOp</td><td>依赖 View、Event、LLM。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/__init__.py:1-22</code></span></td></tr>
+            <tr><td>Event</td><td><code>CondensationRequest</code>、<code>Condensation</code>、动态 summary event</td><td>被 View 与 Agent 消费。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:51-132</code></span></td></tr>
+            <tr><td>LLM</td><td>Retry、Fallback、provider exception mapping</td><td>位于 LiteLLM transport 与 Agent 之间。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:961-1033</code></span></td></tr>
+            <tr><td>Conversation</td><td>运行循环、状态锁、手动 <code>condense()</code></td><td>拥有可变状态与最终状态。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2804-2851</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>View 与 EventLog</h3>
+          <p>View 是活跃分支中“当前可给 LLM 的事件”投影，不是规范历史；加载时按事件顺序应用 request 与 condensation，并执行历史合法性约束。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/view/view.py:142-160</code></span></p>
+        </div>
+        <div class="card">
+          <h3>Soft 与 Hard</h3>
+          <p>Soft 表示希望压缩但失败后仍可用原 View 继续；Hard 表示本轮不能跳过，普通压缩不可用时尝试 hard context reset。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:95-105</code></span></p>
+        </div>
+        <div class="card">
+          <h3>Retry 与 Fallback</h3>
+          <p>Retry 对同一 LLM 的白名单瞬时异常重试；Fallback 在主模型重试耗尽后按配置尝试其他 profile。两者都不改变 Conversation 历史。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:76-102</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:39-45</code></span></p>
+        </div>
+        <div class="card">
+          <h3>Nudge 与 Condensation</h3>
+          <p>Nudge 是新增一条纠正性 user-role 事件让模型改答；Condensation 改变后续 View 的历史投影。空/纯 reasoning 响应走前者。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:252-272</code></span></p>
+        </div>
+      </div>
+      <div class="callout warning">
+        <strong>Malformed history 不等于 context overflow。</strong>
+        前者表示 tool_use/tool_result 等消息结构不合法，通常提示事件流、恢复或顺序问题；
+        后者表示输入超过模型上下文容量。两者使用不同 SDK 异常，仅在 Agent 恢复动作上都可能
+        汇合到 <code>CondensationRequest</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/types.py:57-77</code></span>
+      </div>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>组件</th><th>职责与输入输出</th><th>故障隔离与扩展点</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><code>CondenserBase</code></td>
+              <td><code>View + agent_llm → View | Condensation</code>；定义 sync/async 与显式 request 能力查询。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:32-76</code></span></td>
+              <td>新策略实现 <code>condense</code>；异步 I/O 策略应覆盖 <code>acondense</code>。</td>
+            </tr>
+            <tr>
+              <td><code>RollingCondenser</code></td>
+              <td>把 requirement 判定、普通压缩和 hard reset 编排成统一模板。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:107-198</code></span></td>
+              <td>子类实现 requirement 与 condensation；基类隔离 soft 失败和 hard 降级。</td>
+            </tr>
+            <tr>
+              <td><code>LLMSummarizingCondenser</code></td>
+              <td>按 request、token、event 三类原因选遗忘范围，并调用独立摘要 LLM。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:30-49</code></span></td>
+              <td>摘要异常统一包装为 <code>NoCondensationAvailableException</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:223-246</code></span></td>
+            </tr>
+            <tr>
+              <td><code>PipelineCondenser</code></td>
+              <td>顺序传递 View；任一阶段返回 Condensation 即短路，async 逐阶段 await。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/pipeline_condenser.py:42-67</code></span></td>
+              <td>允许组合策略；当前 SDK 测试目录未发现专门 Pipeline 单元测试，属证据缺口。</td>
+            </tr>
+            <tr>
+              <td><code>NoOpCondenser</code></td>
+              <td>原样返回 View，主要用于测试。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/no_op_condenser.py:7-14</code></span></td>
+              <td>不处理显式 request，不能承担 overflow 恢复。</td>
+            </tr>
+            <tr>
+              <td><code>FallbackStrategy</code></td>
+              <td>延迟加载备用 LLM profile，逐个尝试，成功时合并 metrics。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:63-118</code></span></td>
+              <td>临时关闭备用 LLM 自身 fallback，防止递归链。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:92-104</code></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="flows">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 正常成功：预防性压缩后继续</h3>
+      <ol class="flow">
+        <li>Agent 读取 Conversation 缓存的活跃分支 View，并在压缩前解析 route-aware 输入上限。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:669-682</code></span></li>
+        <li>摘要器同时检查未处理 request、有效 token 上限和 event 数；多个原因并存时取最严格的遗忘目标。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:117-154</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:267-314</code></span></li>
+        <li>遗忘边界必须落在所有 View properties 共同允许的 manipulation index，避免拆开 Action/Observation 等原子单元。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/view/view.py:38-50</code></span></li>
+        <li>摘要 LLM 返回文本后生成 <code>Condensation</code>；Agent 发出事件并结束当前 step。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:221-246</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:684-687</code></span></li>
+        <li>事件进入 View 时移除指定 ID、插入动态 summary event、清除 request 标记；下一 step 才向 Agent LLM 发送压缩后的 messages。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/view/view.py:117-129</code></span></li>
+      </ol>
+
+      <h3>5.2 提前结束：Soft 压缩暂不可用</h3>
+      <p>
+        仅 event 数超过阈值是 soft requirement。若原子边界或最小进展要求导致无法生成有效
+        condensation，Rolling 基类记录 debug 并返回原 View；Agent 仍可完成本轮模型调用，
+        后续 step 会再次判断。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:165-184</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:159-198</code></span>
+      </p>
+
+      <h3>5.3 分层恢复：并非每个故障都依次经过所有层</h3>
+      <ol class="flow">
+        <li><strong>Retry：</strong>连接、限流、服务不可用、超时、服务内部错误和空响应进入同一 Tenacity 指数退避装饰器。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:145-153</code></span></li>
+        <li><strong>Fallback：</strong>主调用重试耗尽后，只有同一瞬时异常集合且配置了策略时才尝试备用 LLM；全部失败后保留并重新映射主错误。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:961-985</code></span></li>
+        <li><strong>Nudge：</strong>函数调用校验失败、内容策略拦截、空响应或只有 reasoning 的响应分别新增纠正消息并让循环继续；它们不是 transport retry 的固定下一层。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:727-759</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:252-272</code></span></li>
+        <li><strong>Condensation：</strong>context overflow 发 request；malformed history 先完整重建并 enforce View，再发 request。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:760-801</code></span></li>
+        <li><strong>Hard reset：</strong>hard requirement 的普通摘要不可用时，总结整个 View；失败则逐轮缩短每个事件字符串。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:316-359</code></span></li>
+        <li><strong>Hard error：</strong>没有可处理 request 的 condenser，或 hard reset 仍失败，异常冒泡到 run loop，状态变为 <code>ERROR</code> 并产生 <code>ConversationErrorEvent</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1997-2018</code></span></li>
+      </ol>
+    </section>
+
+    <section class="section" id="data">
+      <h2>6. 数据与状态模型</h2>
+      <p>
+        规范历史仍是 Conversation 的追加式事件序列。<code>Condensation</code> 只保存被遗忘
+        event IDs、可空 summary、可空 summary offset 和生成摘要的 LLM response ID；它不原地
+        改写旧事件。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:11-37</code></span>
+      </p>
+      <p>
+        <code>CondensationSummaryEvent</code> 由 condensation 动态生成，ID 固定为
+        <code>&lt;condensation-id&gt;-summary</code>，明确不作为常规事件单独存储；其 LLM role
+        为 <code>user</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:51-76</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:120-132</code></span>
+      </p>
+      <p>
+        ConversationState 持有按活跃 branch leaf 增量维护的 View 缓存；线性追加只重放尾部，
+        branch 切换或恢复会完整重建。malformed history 恢复显式调用 <code>rebuild_view()</code>，
+        使所有 View properties 重新执行 enforcement。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:336-395</code></span>
+      </p>
+      <div class="callout info">
+        <strong>生命周期边界：</strong>摘要器无独立数据库、事务或清理任务。压缩的持久恢复能力来自
+        Conversation 已持久化的 request/condensation 事件与重建 View 的确定性应用；事件文件和
+        base state 的物理持久化由状态/事件模块负责，不属于本章。
+      </div>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>接口/事件</th><th>契约</th><th>顺序与错误语义</th></tr></thead>
+          <tbody>
+            <tr><td><code>condense/acondense</code></td><td>输入只读 View 和可空 agent LLM；输出 View 或 Condensation。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:32-62</code></span></td><td>返回事件时调用方必须先追加事件，不可在同一步继续采样。</td></tr>
+            <tr><td><code>Conversation.condense()</code></td><td>公共同步入口；无兼容 condenser 时抛 <code>ValueError</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2804-2839</code></span></td><td>先发 request，再持状态锁强制执行一个同步 Agent step。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2841-2851</code></span></td></tr>
+            <tr><td><code>CondensationRequest</code></td><td>非 LLMConvertible 的 environment event，只在 View 中设置未处理标志。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:99-117</code></span></td><td>后续 Condensation 到达时清除标志。</td></tr>
+            <tr><td><code>Condensation</code></td><td>environment event；应用时过滤 IDs，只有 summary 与 offset 同时存在才插入摘要。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/condenser.py:78-96</code></span></td><td>应用是新的 list 投影，不删除规范事件。</td></tr>
+            <tr><td>错误分类</td><td>overflow 与 malformed 均映射为 <code>AGENT_ACTION</code>、retryable、用户动作 retry，但错误 code 保持不同。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/error_classification.py:82-85</code></span></td><td>分类是面向 API/telemetry 的小型安全词表，不携带 detail。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/error_classification.py:23-36</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Pipeline 的 <code>handles_condensation_requests()</code> 采用“任一阶段支持即为支持”，但
+        request 仍按 pipeline 顺序传递；扩展者需保证前置阶段不会破坏后续阶段识别 request 所需的
+        View 元数据。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/pipeline_condenser.py:45-67</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <p>
+        直接构造 <code>Agent</code> 时 condenser 默认是 <code>None</code>；通过
+        <code>OpenHandsAgentSettings</code> 创建标准 Agent 时，默认 settings variant 是启用的
+        <code>LLMSummarizingCondenserSettings</code>。订阅 LLM 是明确例外：
+        <code>create_agent()</code> 不构建 condenser。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:265-280</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1286-1296</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1344-1354</code></span>
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+          <tbody>
+            <tr><td><code>enabled</code></td><td>bool</td><td>true</td><td>关闭则返回 None</td><td>构建 Agent 时消费</td><td>overflow 无压缩恢复</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:149-165</code></span></td></tr>
+            <tr><td><code>max_size</code></td><td>int，settings ≥20；运行模型 &gt;0</td><td>240</td><td>与其他原因取更激进目标</td><td>构建时</td><td>仅 event 压力是 soft</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:166-181</code></span></td></tr>
+            <tr><td><code>max_tokens</code></td><td>正整数或 null</td><td>null</td><td>与 agent 有效上限取较小值</td><td>构建时</td><td>token 压力是 hard</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:96-115</code></span></td></tr>
+            <tr><td><code>keep_first</code></td><td>非负整数</td><td>settings 与类默认均为 2</td><td>始终保留开头最少事件</td><td>构建时</td><td>空间不足校验失败</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:216-227</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:73-81</code></span></td></tr>
+            <tr><td><code>minimum_progress</code></td><td>0 到 1 之间</td><td>0.1</td><td>遗忘比例下限</td><td>构建时</td><td>视 requirement 走 soft 延迟或 hard reset</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:228-243</code></span></td></tr>
+            <tr><td><code>hard_context_reset_max_retries</code></td><td>正整数</td><td>5</td><td>hard reset 外层尝试预算</td><td>构建时</td><td>耗尽后返回 None</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:244-255</code></span></td></tr>
+            <tr><td><code>hard_context_reset_context_scaling</code></td><td>0 到 1 之间</td><td>0.8</td><td>每次失败缩短事件字符串</td><td>构建时</td><td>按比例继续重试</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:256-270</code></span></td></tr>
+            <tr><td><code>num_retries</code></td><td>非负整数</td><td>5 次总 attempt</td><td>先于 fallback</td><td>LLM 构建时</td><td>耗尽后进入 error handler</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:337-340</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:91-100</code></span></td></tr>
+            <tr><td><code>retry_multiplier/min/max</code></td><td>float/int/int</td><td>8.0 / 8 / 64 秒</td><td>Tenacity 指数等待</td><td>LLM 构建时</td><td>等待后重试白名单异常</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:337-340</code></span></td></tr>
+            <tr><td><code>fallback_strategy</code></td><td>FallbackStrategy 或 null</td><td>null</td><td>retry 耗尽后</td><td>运行时配置；不序列化</td><td>全部失败重抛主错误</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:614-622</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Settings 构建摘要器时复制 agent LLM、改用 <code>usage_id="condenser"</code> 并重置独立
+        metrics；若用户未显式设置 max_tokens，则在可得时继承 agent 的有效输入上限。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:273-293</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <ul>
+        <li>同步与异步 retry 共用一个 Tenacity 装饰器；Tenacity 原生识别 coroutine，没有第二套 async retry 状态机。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:76-102</code></span></li>
+        <li>异步 fallback 当前调用备用 LLM 的同步 completion/responses，并把整个 fallback 尝试放入 executor，避免阻塞 event loop。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:987-1016</code></span></li>
+        <li>LLM summary 的 sync/async 实现分别调用 <code>completion</code>/<code>acompletion</code>；摘要 LLM 若配置 retry/fallback，会沿其自身完整 LLM 恢复链执行。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:223-232</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:419-425</code></span></li>
+        <li>摘要生成强制使用非 streaming 的 LLM copy，因为没有 token callback；copy 共享 usage identity/metrics 归属。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:83-91</code></span></li>
+        <li>token 遗忘范围使用二分搜索寻找最短可移除前缀，但每次比较仍需把事件转换成 messages 并调用 tokenizer。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/utils.py:89-116</code></span></li>
+      </ul>
+      <h3>9.1 论文引用的成本与性能实验</h3>
+      <p>
+        官方论文 <a href="https://arxiv.org/abs/2511.03690">§4.6</a> 引用外部实验并总结：
+        默认 <code>LLMSummarizingCondenser</code> 可带来“最高 2× API 成本降低且 Agent
+        性能无退化”。该结论的直接实验来源是论文参考文献 [17] 的
+        <a href="https://www.openhands.dev/blog/openhands-context-condensensation-for-more-efficient-ai-agents">OpenHands Context Condensation for More Efficient AI Agents</a>（官方 URL slug 保留了 <code>condensensation</code> 拼写）：
+        在其测试子集与所比较的 condensation breakpoints 上，压缩后每轮成本最终低于 baseline
+        的一半，平均解决率为 54%，baseline 为 53%。
+      </p>
+      <div class="callout warning">
+        <strong>外部实验，不是运行时保证。</strong>
+        “最高 2×”是特定 SWE-bench 子集、模型、价格、对话长度与 breakpoint 配置下的经验结果；
+        “无退化”指该实验解决率未下降，不是 SLA，也不保证所有模型、任务、摘要 prompt 或
+        <code>max_size</code>/<code>keep_first</code> 配置都保持质量。当前源码只实现压缩与
+        metrics 归属机制，不含强制成本上限或性能验收条件。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:117-184,186-246</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:273-293</code></span>
+      </div>
+      <div class="callout warning">
+        <strong>锁的当前行为：</strong><code>Agent.astep()</code> 在主 LLM network wait 前会临时释放状态锁，
+        但异步 condenser 在该释放区间之前执行。因此 LLM-backed <code>acondense()</code> 的摘要网络等待
+        仍发生在 run loop 的 step 临界区内；这是响应性限制，不应误写成所有异步 LLM I/O 都释放锁。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:872-880</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:912-923</code></span>
+      </div>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <p>
+        摘要器会把被遗忘事件逐个转为字符串，渲染进 prompt，并发送给其配置的摘要 LLM；此路径没有
+        在 Condenser 内额外做 secret redaction。部署者必须把摘要 LLM 视为接收 Conversation 历史的
+        信任边界，并沿用 LLM 配置与 Secret 管理策略。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:186-228</code></span>
+      </p>
+      <p>
+        hard reset 失败时通过 <code>maybe_truncate</code> 缩短每个 event string，这解决上下文容量，
+        不是敏感信息清洗。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:328-354</code></span>
+      </p>
+      <p>
+        Fallback profile 由本地 <code>LLMProfileStore</code> 延迟加载；找不到或 profile 值非法时记录
+        error 并跳过。它不绕过鉴权：备用模型使用自己 profile 中的 LLM 配置。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:120-149</code></span>
+      </p>
+      <div class="callout danger">
+        <strong>Fail-closed 边界：</strong>鉴权错误不属于 retry/fallback 白名单；generic provider 400
+        也不会因“可能可恢复”而自动反复发送。映射优先识别 context、malformed 与 auth，随后才处理
+        其他错误。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:36-68</code></span>
+      </div>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+          <tbody>
+            <tr><td>连接/429/超时/5xx/空响应</td><td>LiteLLM 类型或 <code>LLMNoResponseError</code></td><td>指数退避</td><td>不写历史</td><td>预算耗尽后可 fallback</td><td>检查 retry 日志、provider 与备用 profile。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:145-153</code></span></td></tr>
+            <tr><td>空响应且 temperature=0</td><td>Retry callback 检查异常与 kwargs</td><td>下一 attempt 改为 1.0</td><td>不写历史</td><td>仍受同一 attempt 预算</td><td>检查模型空 choices/未完成 stream。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:49-72</code></span></td></tr>
+            <tr><td>内容策略拦截</td><td>typed 或文本模式</td><td>写重述 nudge</td><td>继续 RUNNING</td><td>改变请求后再采样</td><td>检查 nudge 与 provider policy。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:738-759</code></span></td></tr>
+            <tr><td>Malformed history</td><td>tool pairing/ID/JSON 模式</td><td>重建 View，写 request</td><td>继续 RUNNING</td><td>hard condensation</td><td>调查事件顺序、resume 与 Action/Observation。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/classifier.py:34-58</code></span></td></tr>
+            <tr><td>Context overflow</td><td>typed error或长 prompt 模式</td><td>写 request</td><td>继续 RUNNING</td><td>hard condensation</td><td>调整上限、输入或启用 compatible condenser。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/classifier.py:22-32</code></span></td></tr>
+            <tr><td>Soft 无合法遗忘范围</td><td><code>NoCondensationAvailableException</code></td><td>返回原 View</td><td>不结束</td><td>后续 step 再试</td><td>检查原子边界、keep_first、minimum_progress。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:167-174</code></span></td></tr>
+            <tr><td>Hard 无合法范围</td><td>同上且 requirement=HARD</td><td>总结整个 View</td><td>成功则继续</td><td>缩短字符串，多次尝试</td><td>检查摘要模型容量和日志。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:176-194</code></span></td></tr>
+            <tr><td>无可处理 request 的 condenser</td><td>能力查询 false/None</td><td>异常重新抛出</td><td>run loop → ERROR</td><td>无自动恢复</td><td>配置 LLMSummarizingCondenser 或修复历史。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:781-801</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        兼容方面，Condenser 类型通过 discriminated union 导出；settings 对没有
+        <code>condenser_kind</code> 的旧 payload 默认解释为 <code>llm_summarizing</code>。
+        事件本身属于持久化兼容表面，修改字段必须遵守 SDK 事件永久可加载政策。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:319-338</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="operations">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+          <tbody>
+            <tr><td>反复出现 request 但没有 condensation</td><td>查看 condenser 类型、<code>handles_condensation_requests</code> 与 warning</td><td>NoOp/自定义策略不处理 request，或 hard reset 返回 None</td><td>启用兼容策略；检查摘要 LLM。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:64-76</code></span></td></tr>
+            <tr><td>event 数超限仍继续增长</td><td>查看 debug “No condensation available”</td><td>soft requirement 暂无合法边界或进展不足</td><td>检查工具循环边界与阈值，不要把 soft 延迟当作丢事件。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:159-174</code></span></td></tr>
+            <tr><td>Malformed 被误报为 token 超限</td><td>检查最终异常 code 与 classifier pattern</td><td>provider 文案同时命中长 prompt 模式；mapping 的 context 判定优先</td><td>补充更精确分类测试，并评估优先级。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:36-43</code></span></td></tr>
+            <tr><td>摘要成本似乎消失</td><td>按 <code>usage_id</code> 与 token usage 记录检查 metrics</td><td>settings 创建独立 condenser metrics；直接构造可能共享不同配置</td><td>检查 LLM registry/metrics 汇总，而非只看 agent LLM 单项。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:278-293</code></span></td></tr>
+            <tr><td>fallback 全失败后显示主错误</td><td>查看每个 fallback warning 与最终 error</td><td>设计上重抛主错误，备用失败仅记录日志</td><td>逐个验证 profile；不要依赖最后一个备用异常作为顶层 code。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:81-118</code></span></td></tr>
+            <tr><td>Conversation 进入 ERROR</td><td>检查最新 <code>ConversationErrorEvent.code/detail/classification</code></td><td>恢复链耗尽或无 compatible condenser</td><td>按 code 区分 overflow、malformed、auth 与内部错误。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/conversation_error.py:11-42</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Retry 的每次 sleep 前会写 error 日志，并把当前 attempt 和最大 attempts 附到异常供下游消费；
+        LLM telemetry 则只在 retry 最终耗尽后的 error handler 记录最终失败，避免重复 telemetry。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:104-144</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:839-848</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+          <tbody>
+            <tr><td>Soft 返回原 View；Hard 可 reset</td><td><code>tests/sdk/context/condenser/test_rolling_condenser.py:56-237</code></td><td>单元</td><td>Rolling 模板分支与默认失败语义</td><td>主要是同步 mock</td></tr>
+            <tr><td>token/event/request 判定、进展阈值、摘要失败</td><td><code>tests/sdk/context/condenser/test_llm_summarizing_condenser.py:685-942</code></td><td>单元</td><td>soft/hard、hard reset、sync/async 摘要异常</td><td>provider 真正 tokenizer 差异另由 integration 覆盖</td></tr>
+            <tr><td>retry attempt 与空响应 temperature 调整</td><td><code>tests/sdk/llm/test_api_connection_error_retry.py:43-129</code>；<code>tests/sdk/llm/test_llm_no_response_retry.py:61-188</code></td><td>单元</td><td>attempt 是总调用次数，sync/async 对称</td><td>实际退避时钟未在本次文档任务执行</td></tr>
+            <tr><td>fallback 顺序、metrics 与 async parity</td><td><code>tests/sdk/llm/test_llm_fallback.py:64-189</code>；<code>tests/sdk/llm/test_llm_fallback.py:321-438</code></td><td>单元</td><td>瞬时故障 fallback、全部失败映射主错误、async thread fallback</td><td>真实 profile/网络未执行</td></tr>
+            <tr><td>malformed 与 overflow 分型、View rebuild</td><td><code>tests/sdk/agent/test_agent_context_window_condensation.py:130-324</code></td><td>单元</td><td>Chat/Responses、sync/async、无 condenser 的硬错误</td><td>使用 RaisingLLM，不证明每个 provider 文案</td></tr>
+            <tr><td>provider 错误映射</td><td><code>tests/sdk/llm/test_exception_mapping.py:23-120</code></td><td>单元</td><td>Anthropic tool history 与 JSON argument parse 映射为 malformed</td><td>pattern 依赖 provider 文案稳定性</td></tr>
+            <tr><td>a01–a08 malformed 消息矩阵</td><td><code>tests/integration/tests/a01_unmatched_tool_use.py:1-69</code> 至 <code>tests/integration/tests/a08_parallel_wrong_order.py:1-82</code></td><td>API compliance</td><td>覆盖缺 result、孤立/重复/错 ID、插入消息、并行缺失与错序</td><td>这些测试记录各 provider 接受/拒绝结果，不直接证明 Agent 自动修复</td></tr>
+            <tr><td>a-suite 禁用 retry 观察原始响应</td><td><code>tests/integration/api_compliance/base.py:212-238</code></td><td>测试基础设施</td><td>避免 transport retry 掩盖 provider 对 malformed 输入的原始行为</td><td>需要 LLM_API_KEY 与真实 endpoint</td></tr>
+            <tr><td>thinking block 原子单元</td><td><code>tests/integration/tests/c01_thinking_block_condenser.py:35-96</code>；<code>tests/integration/tests/c01_thinking_block_condenser.py:173-287</code></td><td>Live integration</td><td>遗忘早期 thinking unit、保留后续 thinking</td><td>仅支持 extended thinking 的模型运行</td></tr>
+            <tr><td>hard reset 后可继续且可再次普通压缩</td><td><code>tests/integration/tests/c02_hard_context_reset.py:15-151</code></td><td>Live integration</td><td>首个 offset=0、后续 offset&gt;0、摘要不被错误遗忘</td><td>依赖模型稳定完成指令</td></tr>
+            <tr><td>soft 延迟、token 与 size 触发</td><td><code>tests/integration/tests/c03_delayed_condensation.py:24-104</code>；<code>tests/integration/tests/c04_token_condenser.py:36-107</code>；<code>tests/integration/tests/c05_size_condenser.py:31-101</code></td><td>Live integration</td><td>真实 Agent loop 中延迟成功及两类资源触发</td><td>长重复工具任务可能被部分模型拒绝</td></tr>
+            <tr><td><a href="https://arxiv.org/abs/2511.03690">论文 §4.6</a> 引用的成本/性能结论</td><td><a href="https://www.openhands.dev/blog/openhands-context-condensensation-for-more-efficient-ai-agents">论文参考文献 [17] 外部实验</a></td><td>外部 SWE-bench 子集实验</td><td>所测配置下每轮成本最终低于一半，解决率 54% 对 53% baseline</td><td>不是当前仓库单元测试、SLA 或跨模型保证</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout info">
+        <strong>分类注意：</strong>仓库规则只用 <code>b*</code>/<code>t*</code> 区分 behavior 与普通
+        integration；<code>a*</code> 是 API malformed-history compliance，<code>c*</code> 是
+        condenser integration，不能把 a/c 当作 behavior tests。
+      </div>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+          <tbody>
+            <tr><td>新增 Condenser</td><td><code>context/condenser/</code></td><td>导出、settings discriminator（若公开配置）、sync/async</td><td>只读 View、View/Condensation 两种输出、request 能力、soft/hard 测试</td></tr>
+            <tr><td>新增 provider malformed 模式</td><td><code>llm/exceptions/classifier.py</code></td><td>mapping 与 provider compliance case</td><td>不得误匹配普通 400 或 context overflow</td></tr>
+            <tr><td>调整 retry 白名单</td><td><code>llm/llm.py</code>、<code>RetryMixin</code></td><td>fallback 异常集合与 sync/async tests</td><td>证明错误是瞬时且重复请求安全</td></tr>
+            <tr><td>调整 fallback</td><td><code>llm/fallback_strategy.py</code></td><td>metrics、call context、Chat/Responses、async</td><td>禁止递归 fallback；失败时保留主错误语义</td></tr>
+            <tr><td>修改 Condensation event</td><td><code>event/condenser.py</code></td><td>View apply、历史事件兼容 handler、序列化测试</td><td>旧持久化事件永久可加载</td></tr>
+            <tr><td>改变默认值</td><td><code>settings/model.py</code></td><td>settings schema、持久化兼容与 release-note gate</td><td>区分直接 Agent 默认与 settings-built Agent 默认</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>不要在 Condenser 中原地修改输入 View；返回新 View 或事件。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/condenser/base.py:40-51</code></span></li>
+        <li>不要按裸下标切割历史；使用 manipulation indices 维护所有 View properties 的共同边界。<span class="evidence"><code>openhands-sdk/openhands/sdk/context/view/view.py:38-50</code></span></li>
+        <li>不要把 malformed history 重新归类成 overflow 以复用代码；共享恢复动作不代表共享错误类型。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:36-43</code></span></li>
+        <li>异步摘要策略必须真正 await 异步 transport；不要用阻塞 sync LLM 调用实现 <code>acondense</code>。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+          <tbody>
+            <tr><td>追加式历史如何“遗忘”</td><td>追加 tombstone-like Condensation，在 View 投影应用</td><td>保留审计与恢复原始历史</td><td>View 重建与事件兼容更复杂</td><td>事件量或重建成本成为实测瓶颈</td></tr>
+            <tr><td>压缩粒度</td><td>保留开头、摘要中段、保留最近尾部</td><td>兼顾早期目标与近期连续性</td><td>摘要可能丢细节；prompt cache 被破坏</td><td>质量评测证明其他 memory 策略更优</td></tr>
+            <tr><td>Soft failure</td><td>保留原 View 继续</td><td>event 阈值启发式不会中断任务</td><td>历史可暂时超过期望 event 上限</td><td>模型输入已接近硬容量时应依赖 token hard trigger</td></tr>
+            <tr><td>Hard reset</td><td>总结整个 View并逐次截短事件字符串</td><td>在普通边界不可用时仍有恢复机会</td><td>上下文损失最大；每次外层 attempt 还可能触发摘要 LLM 自身 retry</td><td>出现高成本或低恢复率的实测证据</td></tr>
+            <tr><td>Async fallback</td><td>在线程池运行同步备用调用</td><td>复用成熟同步 fallback 逻辑</td><td>不是真正 async transport，线程资源受外部 executor 管理</td><td>高并发 fallback 显示线程池压力</td></tr>
+            <tr><td>Malformed 恢复</td><td>先 enforce 重建 View，再压缩</td><td>能修复部分结构性历史并保留独立诊断</td><td>可能掩盖上游事件流 bug，且不是所有 malformed 都可由遗忘修复</td><td>同一错误重复出现时应调查 persistence/resume</td></tr>
+            <tr><td>成本优化</td><td>通过摘要约束后续每步输入 token</td><td><a href="https://arxiv.org/abs/2511.03690">论文 §4.6</a> 引用的特定实验最高约 2× 成本降低且解决率未降</td><td>摘要本身收费且可能丢失细节；收益依模型、任务、价格和阈值而变</td><td>目标 workload 的成本/质量评测不再复现实验趋势</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        当前明确的证据缺口：没有发现 <code>PipelineCondenser</code> 专门单元测试；本次文档工作未
+        执行需要真实模型与凭据的 a/c integration；工作区没有可读取的 Git 元数据，无法把页面绑定
+        到具体 SHA。这些缺口不应以推测的 provider SLA、成功率或容量数字填补。
+      </p>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <ul>
+        <li>抽象、Rolling soft/hard 与 sync/async：<code>openhands-sdk/openhands/sdk/context/condenser/base.py:16-252</code></li>
+        <li>LLM 摘要器、token/event/request 与 hard reset：<code>openhands-sdk/openhands/sdk/context/condenser/llm_summarizing_condenser.py:30-515</code></li>
+        <li>Pipeline：<code>openhands-sdk/openhands/sdk/context/condenser/pipeline_condenser.py:7-67</code></li>
+        <li>NoOp：<code>openhands-sdk/openhands/sdk/context/condenser/no_op_condenser.py:7-14</code></li>
+        <li>token 计数与二分范围：<code>openhands-sdk/openhands/sdk/context/condenser/utils.py:8-173</code></li>
+        <li>压缩事件 Schema 与 apply：<code>openhands-sdk/openhands/sdk/event/condenser.py:11-132</code></li>
+        <li>View 投影与 enforcement：<code>openhands-sdk/openhands/sdk/context/view/view.py:22-160</code></li>
+        <li>Agent sync/async 异常映射：<code>openhands-sdk/openhands/sdk/agent/agent.py:637-1001</code></li>
+        <li>消息准备 sync/async：<code>openhands-sdk/openhands/sdk/agent/utils.py:567-751</code></li>
+        <li>Retry：<code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:22-144</code></li>
+        <li>Fallback：<code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:28-149</code></li>
+        <li>provider classifier 与 mapping：<code>openhands-sdk/openhands/sdk/llm/exceptions/classifier.py:22-153</code>；<code>openhands-sdk/openhands/sdk/llm/exceptions/mapping.py:30-71</code></li>
+        <li>最终错误状态：<code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1860-2020</code></li>
+        <li>配置构建：<code>openhands-sdk/openhands/sdk/settings/model.py:149-338</code>；<code>openhands-sdk/openhands/sdk/settings/model.py:1286-1359</code></li>
+        <li>论文定位与外部实验：<a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690 §4.6</a>；<a href="https://www.openhands.dev/blog/openhands-context-condensensation-for-more-efficient-ai-agents">论文参考文献 [17] 实验原文</a></li>
+        <li>架构总览：<a href="../../software_agent_architecture.html#recovery"><code>software_agent_architecture.html#recovery</code></a></li>
+      </ul>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>术语</th><th>本章含义</th></tr></thead>
+          <tbody>
+            <tr><td>Condenser</td><td>把 Conversation 的 LLM 可见 View 缩小，或产生压缩事件的策略对象。</td></tr>
+            <tr><td>Condensation</td><td>记录遗忘 event IDs、摘要和插入位置的持久事件；不是已删除历史的副本。</td></tr>
+            <tr><td>CondensationRequest</td><td>请求下一次 compatible condenser 必须尝试压缩的内部事件。</td></tr>
+            <tr><td>View</td><td>活跃事件分支经 condensation 与历史合法性规则投影后的 LLM 可见事件序列。</td></tr>
+            <tr><td>Soft requirement</td><td>希望压缩，但暂时失败时仍允许使用原 View 继续的要求。</td></tr>
+            <tr><td>Hard requirement</td><td>必须在继续调用 Agent LLM 前完成压缩，否则只能降级或报错的要求。</td></tr>
+            <tr><td>Hard context reset</td><td>普通遗忘范围不可用时，对整个 View 生成摘要的高损失恢复方式。</td></tr>
+            <tr><td>Retry</td><td>对同一个 LLM 和同一次逻辑请求，按白名单异常与退避预算重新尝试。</td></tr>
+            <tr><td>Fallback</td><td>主 LLM 重试耗尽后，改用按顺序配置的备用 LLM profile 完成本次调用。</td></tr>
+            <tr><td>Nudge</td><td>框架注入的纠正性 user-role 消息，用于让模型改变下一次输出。</td></tr>
+            <tr><td>Malformed history</td><td>消息结构不符合 provider 协议，如 tool_use/tool_result 缺失、重复、错序或 ID 不匹配。</td></tr>
+            <tr><td>Context overflow</td><td>模型输入超过当前 route/model 可接受的上下文窗口，不表示消息结构一定非法。</td></tr>
+            <tr><td>Manipulation index</td><td>同时满足所有 View properties、可安全插入摘要或切割事件的边界。</td></tr>
+            <tr><td>LLM profile</td><td>可由 profile store 加载、包含模型与连接配置的备用 LLM 定义。</td></tr>
+            <tr><td>Attempt</td><td>Tenacity 预算中的一次实际 transport 调用；当前 <code>num_retries</code> 表现为总 attempts，而非“首次外加 N 次”。</td></tr>
+            <tr><td>2× cost reduction</td><td><a href="https://arxiv.org/abs/2511.03690">论文 §4.6</a> 引用的特定外部实验中，压缩后每轮成本最终低于 baseline 一半的经验总结；不是 SDK 成本 SLA。</td></tr>
+            <tr><td>API compliance test</td><td>直接向真实 provider 发送特定非法消息排列，记录接受或拒绝行为的 a-suite 测试。</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll(".sidebar a")];
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        links.forEach((link) => {
+          link.classList.toggle(
+            "active",
+            link.getAttribute("href") === `#${visible.target.id}`
+          );
+        });
+      }, { rootMargin: "-10% 0px -75% 0px" });
+      sections.forEach((section) => observer.observe(section));
+    })();
+  </script>
+</body>
+</html>

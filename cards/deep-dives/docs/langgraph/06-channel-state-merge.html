@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LangGraph 第 06 章：Channel 与状态合并开发指南</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--surface2:#f0ebe0;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--red:#b91c1c;--purple:#6d28d9;--yellow:#c2410c}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.72 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif;padding:58px 22px 42px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .3rem;border-radius:4px;font-size:.91em}strong{color:var(--text)}
+.topbar{position:fixed;z-index:20;top:0;left:0;right:0;height:46px;display:flex;align-items:center;gap:12px;padding:0 18px;background:var(--surface);border-bottom:1px solid var(--border)}.topbar .status{margin-left:auto;color:var(--muted);font-size:12px}.sidebar{position:fixed;z-index:10;left:0;top:46px;bottom:0;width:276px;overflow:auto;padding:15px 12px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);backdrop-filter:blur(12px)}.sidebar strong{display:block;color:var(--blue);padding:4px 8px 9px}.sidebar a{display:block;color:var(--muted);font-size:12.5px;padding:4px 8px;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1120px;margin:auto}h1{color:var(--blue);line-height:1.25;margin:20px 0 7px;font-size:2.15rem}.subtitle{color:var(--muted);margin:0 0 18px}.section{scroll-margin-top:58px;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:25px 29px;margin:0 0 18px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section h2{font-size:1.4rem;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:8px;margin:0 0 15px}.section h3{font-size:1.12rem;color:var(--blue2);margin:21px 0 7px}.section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.meta,.grid2,.grid3{display:grid;gap:11px;margin:12px 0}.meta{grid-template-columns:repeat(4,minmax(0,1fr))}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px}.card b{display:block;color:var(--blue2);margin-bottom:3px}.badges{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.badge{font-size:12px;font-weight:700;border:1px solid;border-radius:999px;padding:1px 8px}.fact{color:var(--green)}.default{color:var(--blue)}.beta{color:var(--purple)}.risk{color:var(--red)}
+.key,.warn,.boundary{padding:14px 17px;border-radius:8px;background:var(--surface2);margin:13px 0}.key{border-left:3px solid var(--blue)}.warn{border:1px solid var(--red)}.boundary{border:1px dashed var(--yellow)}.warn:before{content:"风险";display:block;color:var(--red);font-weight:700}.boundary:before{content:"边界";display:block;color:var(--yellow);font-weight:700}.mono{white-space:pre;overflow:auto;background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:14px;color:var(--blue2);font:13px/1.55 Consolas,"Cascadia Code",monospace}
+.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;margin:11px 0;font-size:13.5px;min-width:720px}th{color:var(--blue);background:#e8e1d4}th,td{text-align:left;vertical-align:top;border:1px solid var(--border);padding:8px 10px}tr:nth-child(even){background:rgba(244,241,234,.4)}ul,ol{padding-left:22px}li{margin:4px 0}.small{font-size:12.5px;color:var(--muted)}.footer{text-align:center;color:var(--muted);padding:18px}
+@media(max-width:980px){body{padding-left:18px}.sidebar{display:none}.meta{grid-template-columns:1fr 1fr}}@media(max-width:650px){body{padding:52px 9px 24px}.section{padding:18px 14px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.grid2,.grid3,.meta{grid-template-columns:1fr}h1{font-size:1.65rem}.topbar .status{display:none}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="../../langgraph_architecture.html#s6">返回 LangGraph 架构总览 · 第 06 章</a>
+  <span class="status">源码审计版 · 2026-08-14</span>
+</header>
+<aside class="sidebar" aria-label="本页目录">
+  <strong>Channel 与状态合并</strong>
+  <a href="#position">1. 模块定位</a>
+  <a href="#dependencies">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念</a>
+  <a href="#architecture">4. 架构组成</a>
+  <a href="#flows">5. 完整运行流程</a>
+  <a href="#state-model">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口、协议与事件</a>
+  <a href="#configuration">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发、性能与资源</a>
+  <a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败、恢复与兼容</a>
+  <a href="#observability">12. 可观测性与排障</a>
+  <a href="#testing">13. 测试与验证</a>
+  <a href="#development">14. 开发与扩展指南</a>
+  <a href="#tradeoffs">15. 设计权衡与限制</a>
+  <a href="#sources">16. 源码索引</a>
+  <a href="#glossary">17. 术语表</a>
+</aside>
+<main class="container">
+  <h1>第 06 章：Channel 与状态合并</h1>
+  <p class="subtitle">从 Channel map、BSP 稳定快照到确定性屏障合并，并审计 DeltaChannel 的快照—历史重放契约。</p>
+  <div class="meta">
+    <div class="card"><b>版本基线</b><code>langgraph 1.2.11</code><br><code>checkpoint 4.2.0</code><br><span class="small">Git SHA：当前工具不可取得</span></div>
+    <div class="card"><b>证据状态</b>当前源码与聚焦测试已审计<br><span class="small">文档 validator 已通过</span></div>
+    <div class="card"><b>主要 Owner</b><code>libs/langgraph/langgraph/channels/</code><br><code>libs/langgraph/langgraph/pregel/_algo.py</code></div>
+    <div class="card"><b>目标读者</b>修改 State reducer、Pregel 合并、checkpoint saver 或排查并发状态问题的开发者</div>
+  </div>
+  <div class="badges"><span class="badge fact">当前事实</span><span class="badge default">默认行为</span><span class="badge beta">Beta：DeltaChannel</span><span class="badge risk">历史链风险</span></div>
+
+  <section class="section" id="position">
+    <h2>1. 模块定位</h2>
+    <p>LangGraph 的运行时 State 不是多个节点共同原地修改的 Python <code>dict</code>，而是一张以名称索引的 <strong>Channel map</strong>。StateGraph 节点返回 partial update；Runtime 把它规范化为 task writes，等本超级步任务结束后，再由 <code>apply_writes</code> 在屏障处合并。Channel 决定值如何读取、多个 update 如何折叠、何时清空、何时可触发订阅者以及如何进入 checkpoint。<span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:19-99</code></span></p>
+    <div class="key"><strong>职责分界：</strong>本模块拥有 Channel 值语义和屏障合并；StateGraph schema 到 Channel 的编译属于第 04/05 章，任务并发执行属于第 07/08 章，checkpoint 存储事务与数据库裁剪属于第 09/10 章。</div>
+    <div class="table-wrap"><table>
+      <thead><tr><th>负责</th><th>委托</th><th>明确不负责</th></tr></thead>
+      <tbody>
+        <tr><td><code>BaseChannel</code> 生命周期；各 Channel 的 merge/availability；<code>apply_writes</code> 排序、分组、版本推进</td><td>节点输出规范化给 Graph/Pregel 写入层；版本 ID 生成给 saver；持久化给 checkpointer</td><td>节点何时并发启动、事务提交、网络鉴权、跨 thread Store、模型或工具副作用</td></tr>
+        <tr><td><code>DeltaChannel</code> 内存 reducer、快照表示和 replay</td><td>祖先 writes 查询给 <code>BaseCheckpointSaver.get_delta_channel_history</code></td><td>自动修复被删除或错误裁剪的祖先链；保证任意 reducer 可重放</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="section" id="dependencies">
+    <h2>2. 系统位置与依赖</h2>
+    <div class="mono">StateGraph schema / Pregel channel specs
+          │
+          ▼
+Checkpoint ──hydrate──► Channel map（本超级步稳定输入）
+          │                         │
+          │                  节点只产生 task writes
+          │                         ▼
+          └──────────── 屏障：after_tick → apply_writes
+                                    │
+                 ┌──────────────────┼─────────────────┐
+                 ▼                  ▼                 ▼
+           Channel.update      channel_versions  updated_channels
+                 │                  │                 │
+                 └──────── checkpoint / 下步 PULL 调度 ┘</div>
+    <p><code>PregelLoop.tick()</code> 先基于当前 checkpoint 和 Channel map 构造整步任务；Runner 执行完成后，<code>after_tick()</code> 才调用 <code>apply_writes</code>，随后输出 values、清除 pending writes 并创建 checkpoint。这个调用顺序形成 Bulk Synchronous Parallel（BSP，批量同步并行）的读写屏障。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:599-681</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-723</code></span></p>
+    <div class="grid3">
+      <div class="card"><b>上游调用方</b><code>PregelLoop.after_tick</code>、输入写入、<code>update_state</code>、恢复时 pending writes 重放。</div>
+      <div class="card"><b>决定性下游</b><code>BaseChannel.update/consume/finish</code> 与 saver 的 <code>get_next_version</code>。</div>
+      <div class="card"><b>兄弟路径</b>sync/async 共享合并算法；async 只改变 I/O 调用方式，不改变 Channel merge 顺序。</div>
+    </div>
+  </section>
+
+  <section class="section" id="concepts">
+    <h2>3. 核心概念</h2>
+    <h3>3.1 稳定快照与屏障合并</h3>
+    <p>“稳定快照”是逻辑隔离语义：超级步 <em>n</em> 的所有兄弟任务从进入该步时的 Channel map 读取。某任务先完成并不会让其 writes 对仍在运行的兄弟任务可见。只有整步完成，writes 才在屏障后成为超级步 <em>n+1</em> 可见状态。这里不是数据库 MVCC，也不承诺节点副作用隔离；它只约束 LangGraph State 的可见性。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:611-629</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-718</code></span></p>
+    <div class="table-wrap"><table>
+      <thead><tr><th>经典 Pregel superstep</th><th>LangGraph 当前映射</th><th>不能推出的等价关系</th></tr></thead>
+      <tbody>
+        <tr><td><strong>Read：</strong>Vertex 在超级步 <em>S</em> 读取自身状态，并接收 <em>S-1</em> 发送给它的消息</td><td><code>prepare_next_tasks</code> 从当前 checkpoint、Channel map 和版本前沿准备整步任务；兄弟任务读稳定逻辑快照</td><td>Channel 不是某个 Vertex 的私有值或消息邮箱；一个节点可订阅多个命名 Channel，Channel 也可被多个节点订阅</td></tr>
+        <tr><td><strong>Compute：</strong>每个活跃 Vertex 执行用户函数、修改本地状态并发送消息</td><td>活跃 node/task 并发执行，只累计 task-local <code>(channel, value)</code> writes，不直接改共享 Channel</td><td>LangGraph node 不是拥有持久私有状态与出边的经典 Vertex；State key、控制边和任务写入共同构成运行时数据流</td></tr>
+        <tr><td><strong>Barrier：</strong>所有 Vertex 完成本步后进入全局同步点</td><td><code>after_tick()</code> 等整步 tasks 完成，再把它们交给 <code>apply_writes</code>；后者稳定排序、标记 trigger consumption、分 Channel 聚合 writes</td><td><code>NamedBarrierValue</code> 是图内固定 join Channel，不等于 PregelLoop 的全局超级步屏障</td></tr>
+        <tr><td><strong>Message visibility：</strong><em>S</em> 中发送的消息到 <em>S+1</em> 才可见</td><td><code>BaseChannel.update(vals)</code> 在屏障执行；reducer 把本步 updates 合成新 Channel value，变更后推进 <code>channel_versions</code>，下一轮再以其和 <code>versions_seen</code> 的差判断订阅者是否有未消费变化</td><td>reducer 是 State 合并代数，不等同于 Pregel 可选 message combiner；版本向量记录变化/消费，不是论文消息本身</td></tr>
+      </tbody>
+    </table></div>
+    <p>这个对照只说明 <strong>BSP 的阶段与可见性边界</strong>：论文以 Vertex-centric message passing 描述大图计算，LangGraph 则以 node/task 对命名 Channel map 的订阅和写入组织有状态 agent。二者不是数据模型或分布式实现的同构。当前合并顺序、Channel 生命周期与版本推进由 <code>apply_writes</code> 明确定义。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:253-342</code></span> <span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:87-120</code></span></p>
+    <h3>3.2 update、value 与 checkpoint</h3>
+    <p><code>ValueType</code> 是读取值类型，<code>UpdateType</code> 是写入单元类型，二者可以不同；例如 <code>Topic</code> 读取 <code>Sequence[T]</code>，但接收 <code>T | list[T]</code>。<code>checkpoint()</code>/<code>from_checkpoint()</code> 是 Channel 自身快照协议，不等于整个 Pregel checkpoint。<span class="evidence"><code>libs/langgraph/langgraph/channels/topic.py:23-85</code></span></p>
+    <h3>3.3 版本向量</h3>
+    <p><code>channel_versions[channel]</code> 表示该 Channel 的当前单调版本；<code>versions_seen[node][channel]</code> 表示某节点执行时已消费到的触发版本。调度器比较二者，决定订阅节点是否有未消费更新。它们描述“变化与消费”，不保存值本身。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:89-123</code></span></p>
+    <h3>3.4 稳定排序不是 reducer 无序免责条款</h3>
+    <p><code>apply_writes</code> 按 task path 前三段的字符串表示稳定排序，再按 Channel 收集 writes。它消除线程完成先后的影响，但 <code>BaseChannel.update</code> 的抽象契约仍声明 update 序列顺序可视为任意；自定义 reducer 应满足结合性，并在业务要求跨拓扑稳定时尽量满足交换性。不要依赖 task ID 或 path 第四段以后的偶然顺序。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:253-309</code></span> <span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:87-99</code></span></p>
+  </section>
+
+  <section class="section" id="architecture">
+    <h2>4. 架构组成</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>组件</th><th>值与更新语义</th><th>生命周期 / 失败隔离</th><th>典型用途</th></tr></thead>
+      <tbody>
+        <tr><td><code>LastValue</code></td><td>保存唯一 update；同一步不是恰好一个非空 update 时，多写拒绝</td><td>空更新不改变；多写抛 <code>InvalidUpdateError</code></td><td>普通 State 标量、唯一生产者</td></tr>
+        <tr><td><code>BinaryOperatorAggregate</code></td><td>把当前值与本步 updates 依次交给二元 reducer；支持一次 <code>Overwrite</code></td><td>同一步多个 Overwrite 拒绝</td><td><code>Annotated[T, reducer]</code> 聚合字段</td></tr>
+        <tr><td><code>EphemeralValue</code></td><td>保留前一超级步写入；下一步空更新清空</td><td><code>guard=True</code> 时同一步多写拒绝</td><td>START 输入、边信号</td></tr>
+        <tr><td><code>Topic</code></td><td>扁平化单值/列表；默认每步先清空，<code>accumulate=True</code> 跨步累积</td><td>空值时不可读</td><td>PubSub、Send 任务主题</td></tr>
+        <tr><td><code>NamedBarrierValue</code></td><td>收齐预定义 names 才可读；订阅者消费后清空 seen</td><td>未知 name 拒绝</td><td>固定多前驱 waiting edge</td></tr>
+        <tr><td><code>DeltaChannel</code>（beta）</td><td>batch reducer 合并；普通 checkpoint 不存完整值，通过 seed + 祖先 writes 重建</td><td>依赖 saver 历史链；同一步多个 Overwrite 拒绝</td><td>大型聚合值降低快照写放大</td></tr>
+      </tbody>
+    </table></div>
+    <p><code>LastValue.update</code> 对多个值 fail-closed，并直接建议为该 key 声明 <code>Annotated</code> reducer；这不是“最后完成者胜出”。<span class="evidence"><code>libs/langgraph/langgraph/channels/last_value.py:56-72</code></span> <code>NamedBarrierValue</code> 只有 <code>seen == names</code> 才 available，消费后重置，因此它表达一次固定 join，而不是动态 fan-out 的自动 barrier。<span class="evidence"><code>libs/langgraph/langgraph/channels/named_barrier_value.py:56-81</code></span></p>
+  </section>
+
+  <section class="section" id="flows">
+    <h2>5. 完整运行流程</h2>
+    <h3>5.1 成功路径：兄弟 reducer writes 在屏障合并</h3>
+    <ol>
+      <li><strong>触发与读取：</strong><code>tick()</code> 从当前 <code>channel_versions</code>/<code>versions_seen</code> 选择 PULL 任务；所有任务读取本步进入时的 Channel map。</li>
+      <li><strong>执行：</strong>兄弟节点可以并发运行，各自只向 task-local writes 容器追加 <code>(channel, value)</code>；完成速度不改变 State 可见性。</li>
+      <li><strong>屏障：</strong><code>after_tick()</code> 在所有任务完成后汇总 writes，调用 <code>apply_writes</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-698</code></span></li>
+      <li><strong>规范化与合并：</strong>任务按 path 排序；触发版本记入 <code>versions_seen</code>；被读取 Channel 先 <code>consume()</code>；writes 按 Channel 分组后调用一次 <code>update(vals)</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:253-320</code></span></li>
+      <li><strong>版本与输出：</strong>真正改变且可用的 Channel 获得本步统一的 <code>next_version</code>，加入 <code>updated_channels</code>，供 values stream、checkpoint 与下一步快速调度使用。</li>
+      <li><strong>最终状态：</strong>下一超级步才看到合并结果；若没有可触发节点，<code>finish()</code> 可让 AfterFinish Channel 完成最后一次状态转换。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:325-345</code></span></li>
+    </ol>
+    <h3>5.2 拒绝路径：LastValue 并发写冲突</h3>
+    <ol>
+      <li>两个兄弟任务在同一步写同一个普通 State key，写入被稳定收集为两个 values。</li>
+      <li><code>LastValue.update([v1, v2])</code> 检测长度不为 1，抛出错误码为 <code>INVALID_CONCURRENT_GRAPH_UPDATE</code> 的 <code>InvalidUpdateError</code>。<span class="evidence"><code>libs/langgraph/langgraph/channels/last_value.py:56-64</code></span></li>
+      <li>该步不应被描述为部分成功状态；开发者必须重构为唯一写者、拆开超级步，或为字段声明明确 reducer。测试直接验证多值拒绝。<span class="evidence"><code>libs/langgraph/tests/test_channels.py:33-49</code></span></li>
+    </ol>
+    <h3>5.3 恢复路径：DeltaChannel 冷读重建</h3>
+    <ol>
+      <li>加载 checkpoint 时，如果 DeltaChannel 在目标 <code>channel_values</code> 中缺失，hydration 将其加入一次批量 history 查询。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:229-263</code></span></li>
+      <li>saver 从目标的父 checkpoint 开始沿 parent chain 向祖先遍历，收集目标 Channel 的 pending writes，直到遇到最近的 <code>_DeltaSnapshot</code> 或迁移前普通值 seed；目标 checkpoint 自己的 pending writes 属于下一超级步，不纳入当前值。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:149-170</code></span> <span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:620-649</code></span></li>
+      <li><code>from_checkpoint(seed)</code> 建立 base，<code>replay_writes</code> 按 oldest-to-newest 重放；若遇到 Overwrite，以最后一个 Overwrite 作为 reset point。<span class="evidence"><code>libs/langgraph/langgraph/channels/delta.py:118-157</code></span></li>
+      <li>恢复后得到普通内存 Channel；后续节点读取与普通 reducer 无异。迁移测试证明 BinaryOperatorAggregate 的旧 plain-value blob 可作为 seed，冷读后继续折叠新 deltas。<span class="evidence"><code>libs/langgraph/tests/test_delta_channel_migration.py:137-167</code></span> <span class="evidence"><code>libs/langgraph/tests/test_delta_channel_migration.py:638-660</code></span></li>
+    </ol>
+  </section>
+
+  <section class="section" id="state-model">
+    <h2>6. 数据与状态模型</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>状态</th><th>所有者</th><th>生命周期</th><th>清理 / 迁移风险</th></tr></thead>
+      <tbody>
+        <tr><td>内存 Channel value</td><td>当前 PregelLoop 的 Channel 实例</td><td>由 checkpoint hydrate；在屏障更新</td><td><code>copy()</code> 必须避免可变值共享；DeltaChannel 使用浅拷贝，嵌套可变对象仍要求 reducer 谨慎</td></tr>
+        <tr><td><code>channel_values</code></td><td>Checkpoint</td><td>普通 Channel 存 snapshot；DeltaChannel 非快照步缺席</td><td>缺席对 DeltaChannel 表示需要历史重放，不表示业务值为空</td></tr>
+        <tr><td><code>channel_versions</code></td><td>Checkpoint / saver version generator</td><td>Channel 状态改变时推进</td><td>必须单调且同类型可比较；不能把值版本当数据库事务号</td></tr>
+        <tr><td><code>versions_seen</code></td><td><code>apply_writes</code></td><td>任务消费 triggers 时更新</td><td>错误复制会造成节点漏跑或重复跑</td></tr>
+        <tr><td>Delta seed + ancestor writes</td><td>Checkpointer parent chain</td><td>直到快照或迁移前 plain value 为锚点</td><td>prune/copy/delete 若断链或漏写，冷读可能丢状态；live invoke 正确不代表冷读正确</td></tr>
+        <tr><td><code>counters_since_delta_snapshot</code></td><td>Checkpoint metadata</td><td>按 Channel 记录 update 次数与超级步数</td><td>属于 beta 磁盘契约；迁移工具不可假设字段永久稳定</td></tr>
+      </tbody>
+    </table></div>
+    <p>当前 Pregel checkpoint 格式常量为 <code>4</code>；创建 checkpoint 时复制版本向量，把普通 Channel 的可序列化快照写入 <code>channel_values</code>，而指定的 DeltaChannel 写入 <code>_DeltaSnapshot(ch.get())</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:23-36</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:149-214</code></span></p>
+    <div class="warn">DeltaChannel 的 history 是状态的一部分，而不是可随意丢弃的审计日志。删除 ancestor、只复制 tip checkpoint、重排 pending writes 或让 shallow/prune 实现忽略 delta 能力，都会破坏重建。任何 saver 的 copy/prune/delete 必须以 DELTA_HISTORY conformance 为准，不能仅验证普通 <code>get/put</code>。</div>
+    <p>本模块不保存 Secret，也不建立 namespace 授权；这些由上层 config、checkpointer 存储和服务端边界负责。Channel 值一旦进入 checkpoint writes 或 snapshot，就受 saver serde 与存储保留策略约束。</p>
+  </section>
+
+  <section class="section" id="interfaces">
+    <h2>7. 接口、协议与事件</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>接口</th><th>输入 → 输出</th><th>错误 / 幂等语义</th></tr></thead>
+      <tbody>
+        <tr><td><code>BaseChannel.update(values)</code></td><td>本步某 Channel 的 updates → 是否发生状态改变</td><td>可拒绝非法多写；会在屏障调用，包括必要时的空序列</td></tr>
+        <tr><td><code>consume()</code></td><td>订阅任务已运行 → 是否改变 Channel</td><td>用于 barrier/一次性值；默认 no-op</td></tr>
+        <tr><td><code>finish()</code></td><td>候选终局通知 → 是否改变 Channel</td><td>可让 AfterFinish Channel 最终可见；默认 no-op</td></tr>
+        <tr><td><code>checkpoint()/from_checkpoint()</code></td><td>内存状态 ↔ 可序列化表示</td><td>空 Channel 使用 <code>MISSING</code>；实现须复制复杂结构</td></tr>
+        <tr><td><code>apply_writes(...)</code></td><td>checkpoint + Channel map + tasks → <code>updated_channels</code></td><td>未知 Channel 写仅 warning 并忽略；保留写类型不进入普通 Channel</td></tr>
+        <tr><td><code>get_delta_channel_history</code></td><td>config + Channel names → 每 Channel seed/writes</td><td>beta；writes 必须 oldest-to-newest，目标自身 pending writes 排除</td></tr>
+      </tbody>
+    </table></div>
+    <p><code>apply_writes</code> 会跳过 <code>NO_WRITES</code>、<code>PUSH</code>、<code>RESUME</code>、<code>INTERRUPT</code>、<code>RETURN</code>、<code>ERROR</code> 与 <code>ERROR_SOURCE_NODE</code> 等控制写；向未注册 Channel 写入时记录 warning 而不是动态创建 State key。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:294-313</code></span></p>
+    <p>values stream 在屏障合并之后、checkpoint 写入之前生成，因此它观察的是本步可见 State；task/update stream 的粒度与含义不同，不能用节点完成事件推断同一步兄弟已读取新 State。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:692-718</code></span></p>
+  </section>
+
+  <section class="section" id="configuration">
+    <h2>8. 配置与默认行为</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>配置项</th><th>类型 / 可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为</th><th>来源</th></tr></thead>
+      <tbody>
+        <tr><td><code>DeltaChannel.snapshot_frequency</code></td><td>正整数</td><td><code>1000</code></td><td>字段 Channel 实例</td><td>单 Channel update 计数达到阈值时快照</td><td>小于等于 0 构造时 <code>ValueError</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/delta.py:57-84</code></span></td></tr>
+        <tr><td><code>LANGGRAPH_DELTA_MAX_SUPERSTEPS_SINCE_SNAPSHOT</code></td><td>可解析整数的环境变量</td><td><code>5000</code></td><td>进程启动配置</td><td>即使 Channel 不再写入，也限制祖先步跨度</td><td>导入时无法转整数会失败</td><td><span class="evidence"><code>libs/langgraph/langgraph/_internal/_config.py:32-35</code></span></td></tr>
+        <tr><td><code>Topic.accumulate</code></td><td>布尔</td><td><code>False</code></td><td>Channel 构造参数</td><td>是否跨超级步保留历史 values</td><td>无专属校验；错误类型由 Python 调用暴露</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/topic.py:27-41</code></span></td></tr>
+        <tr><td><code>EphemeralValue.guard</code></td><td>布尔</td><td><code>True</code></td><td>Channel 构造参数</td><td>同一步是否拒绝多 updates</td><td>为真且多写时 <code>InvalidUpdateError</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/ephemeral_value.py:15-26</code></span></td></tr>
+        <tr><td>版本生成器</td><td>saver <code>get_next_version</code></td><td>无 saver 路径可用整数增量；Base saver 默认 <code>+1</code></td><td>checkpointer 实现</td><td>版本比较、调度和 blob 索引</td><td>字符串版本必须由实现覆写</td><td><span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:692-711</code></span></td></tr>
+      </tbody>
+    </table></div>
+    <div class="boundary">没有“让 LastValue 自动选最后完成者”的配置。要允许同一步多写，必须把业务合并规则声明为 reducer Channel；这是一项 schema 设计，而不是运行时容错开关。</div>
+  </section>
+
+  <section class="section" id="concurrency">
+    <h2>9. 并发、性能与资源</h2>
+    <h3>9.1 BSP 隔离的实际保证</h3>
+    <p>Runner 可以使用线程或协程并发执行节点，但 State 合并是单个屏障阶段。这样避免共享 dict 的写竞态，同时把冲突显式收敛到 Channel 契约。该保证不覆盖节点访问的数据库、文件、网络和进程全局对象；这些副作用仍需要业务锁、事务或幂等键。</p>
+    <h3>9.2 排序与确定性</h3>
+    <p>任务按 <code>task_path_str(path[:3])</code> 排序；PULL 节点候选集合也会排序，triggers 元组同样排序，减少 hash/set 枚举差异。稳定排序保证同一拓扑和输入下不受完成时序影响，但若 reducer 非结合或非交换，改变图 path、fan-out 索引或批次边界仍可能改变结果。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:468-495</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:601-623</code></span></p>
+    <h3>9.3 版本推进</h3>
+    <p>每次 <code>apply_writes</code> 先从所有 Channel 的最高现有版本生成一个 <code>next_version</code>；本步所有真正改变的 Channel 使用这个版本。这形成超级步级可比较前沿，而不是每个 update 各发一个版本。consume、空更新导致的生命周期变化和 finish 也会推进版本。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:271-292</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:315-342</code></span></p>
+    <h3>9.4 DeltaChannel 的成本模型</h3>
+    <p>普通 reducer 以完整值换取常数级 checkpoint hydration；DeltaChannel 以较少完整快照换取祖先查询、pending writes 读取和 reducer 重放。系统通过“update 次数或超级步跨度任一达到阈值”触发快照。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:50-71</code></span> 该上界限制的是逻辑祖先步跨度，不是固定数据库查询次数或字节数；实际 I/O 仍取决于 saver 实现、每步 writes 数和索引。</p>
+    <p>Delta hydration 将所有待重放 Channel 合并为一次 saver 调用，避免逐 Channel 独立走祖先链；sync 与 async 都保持该批量形状。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:254-277</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:296-319</code></span></p>
+  </section>
+
+  <section class="section" id="security">
+    <h2>10. 安全与信任边界</h2>
+    <ul>
+      <li><strong>Schema 不是授权：</strong>Channel 约束可写 key 与合并形状，但不验证调用者是否有权更改业务字段。</li>
+      <li><strong>Reducer 是受信代码：</strong>它处理节点或恢复历史中的数据，可能分配大量内存、抛异常或产生不确定结果。不要对不可信输入执行任意动态导入或代码求值。</li>
+      <li><strong>历史值是持久化输入：</strong>Delta replay 会再次把旧 writes 送入 reducer。反序列化 allowlist、加密和租户隔离属于 serde/saver/服务端，Channel 本身不提供。</li>
+      <li><strong>未知 Channel fail-soft：</strong><code>apply_writes</code> 对未知 key 记录 warning 并忽略；如果业务要求非法字段必须拒绝，应在 State 输出规范化或节点边界校验，而不能只依赖该 warning。</li>
+      <li><strong>资源攻击面：</strong>不受限的 Topic accumulation、列表 reducer 或过大的 delta history 可放大内存和 I/O；本模块没有内建配额、背压或租户级容量限制。</li>
+    </ul>
+  </section>
+
+  <section class="section" id="failure">
+    <h2>11. 失败、恢复与兼容</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>故障 / 现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试 / 恢复</th><th>运维操作</th></tr></thead>
+      <tbody>
+        <tr><td>LastValue 同步骤多写</td><td><code>InvalidUpdateError</code> 与错误码</td><td>屏障合并失败</td><td>不能将该步视为已提交 State</td><td>修正 schema/reducer 后从安全 checkpoint 重跑</td><td>定位同一步写同 key 的兄弟节点</td></tr>
+        <tr><td>Barrier 收到未知 name</td><td><code>InvalidUpdateError</code></td><td>拒绝 update</td><td>join 不完成</td><td>修正边或写入值</td><td>比对编译期 names 集合</td></tr>
+        <tr><td>未知 Channel key</td><td>logger warning</td><td>忽略该 write</td><td>目标字段不变</td><td>修正节点输出或写入声明</td><td>将 warning 纳入测试/告警</td></tr>
+        <tr><td>Delta 祖先链断裂</td><td>冷读值缺失、历史与 live 结果不一致</td><td>history walk 提前结束</td><td>可能从错误 seed 或空值重放</td><td>从完整备份恢复链；不可用盲重试修复数据</td><td>暂停 prune/copy，验证 saver conformance</td></tr>
+        <tr><td>Delta reducer 非 batching-invariant</td><td>live 与冷读/迁移结果分歧</td><td>重放批次改变结果</td><td>持久状态语义漂移</td><td>修正 reducer 并设计数据迁移</td><td>增加分批与合批等价属性测试</td></tr>
+        <tr><td>迁移前 plain-value checkpoint</td><td>history 返回 plain seed</td><td><code>from_checkpoint</code> 直接采用</td><td>旧累计值作为新 delta 基础</td><td>继续重放迁移后 writes</td><td>保留 settled ancestor 与冷读回归</td></tr>
+        <tr><td>Delta message ID 不稳定</td><td>多次 <code>get_state</code> ID 改变</td><td>追踪与去重漂移</td><td>同一消息表现为不同实体</td><td>写入持久化前分配 ID</td><td>验证 sync/async 与 dict 输入</td></tr>
+      </tbody>
+    </table></div>
+    <p>Runtime 在持久化 DeltaChannel writes 前调用 <code>ensure_message_ids</code>，避免 reducer 重放时反复生成新 ID；相关测试覆盖 sync、async 与 JSON dict 风格输入。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:456-498</code></span> <span class="evidence"><code>libs/langgraph/tests/test_delta_channel_id_stability.py:59-108</code></span></p>
+    <p><code>DeltaChannel</code> 明确标记 beta：线程预期可读，但 <code>get_delta_channel_history</code>、<code>_DeltaSnapshot</code> 和 counters metadata 的周边契约尚不稳定。升级前必须验证存量 thread、time travel、copy/prune 与冷读，而不能只验证新 thread 的 invoke 返回。<span class="evidence"><code>libs/langgraph/langgraph/channels/delta.py:25-48</code></span></p>
+  </section>
+
+  <section class="section" id="observability">
+    <h2>12. 可观测性与排障</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+      <tbody>
+        <tr><td>兄弟节点看不到对方刚写的值</td><td>确认两者是否属于同一超级步</td><td>BSP 稳定快照，属于预期</td><td>增加显式边进入下一步；不要用 sleep 调整完成顺序</td></tr>
+        <tr><td>并发更新报错</td><td>错误 key、task path、该 key 的 Channel 类型</td><td>普通字段映射到 LastValue</td><td>唯一写者或声明满足业务代数的 reducer</td></tr>
+        <tr><td>节点未被再次调度</td><td><code>channel_versions</code>、节点 <code>versions_seen</code>、Channel availability</td><td>值未变、Channel 已 consume、节点已看过版本</td><td>检查 Channel 返回的 updated 布尔值和触发边</td></tr>
+        <tr><td>Topic 下一步为空</td><td><code>accumulate</code> 与空更新</td><td>默认非累积，每步会清空旧 values</td><td>需要历史时显式累积，或换持久 reducer State</td></tr>
+        <tr><td>invoke 返回正确但 get_state 丢值</td><td>冷读、parent chain、pending writes、seed checkpoint</td><td>Delta history 漏掉首个迁移后 write 或链被裁剪</td><td>修复 saver history；加入冷读回归，不以 live 返回代替</td></tr>
+        <tr><td>Delta 冷读越来越慢</td><td>最近 <code>_DeltaSnapshot</code>、counters、祖先跨度</td><td>快照未落盘、阈值过大或 saver 查询低效</td><td>验证快照 cadence 与版本写入；基于实测调整频率</td></tr>
+      </tbody>
+    </table></div>
+    <p>排障时优先同时查看 task writes 与 checkpoint：stream 的 <code>updates</code> 只能说明节点产生了什么，<code>values</code> 才说明屏障后可见什么；Delta 问题必须再做一次从 saver 的冷 hydration。</p>
+  </section>
+
+  <section class="section" id="testing">
+    <h2>13. 测试与验证</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>契约 / 不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+      <tbody>
+        <tr><td>LastValue 多写拒绝；Topic/BinOp 基本生命周期</td><td><span class="evidence"><code>libs/langgraph/tests/test_channels.py:33-107</code></span></td><td>单元</td><td>核心 Channel update/get/checkpoint 行为</td><td>不单独证明 Pregel 并发屏障</td></tr>
+        <tr><td>Delta 基本 update、replay、Overwrite</td><td><span class="evidence"><code>libs/langgraph/tests/test_channels.py:139-188</code></span></td><td>单元</td><td>MISSING 快照、按历史重放与 reset</td><td>不覆盖数据库 saver</td></tr>
+        <tr><td>InMemorySaver 冷读组装 writes</td><td><span class="evidence"><code>libs/langgraph/tests/test_channels.py:409-436</code></span></td><td>端到端</td><td>非快照 tip 可通过 writes 重建</td><td>只覆盖内存实现</td></tr>
+        <tr><td>Overwrite 强制 Delta snapshot</td><td><span class="evidence"><code>libs/langgraph/tests/test_channels.py:439-523</code></span></td><td>端到端</td><td>reset 后快照与后续 replay</td><td>未证明任意自定义 reducer</td></tr>
+        <tr><td>最大超级步跨度强制快照</td><td><span class="evidence"><code>libs/langgraph/tests/test_delta_channel_supersteps_bound.py:72-147</code></span></td><td>回归/边界</td><td>停止写入的 Channel 仍有 replay-depth 边界</td><td>使用 InMemorySaver 与 patch 后小阈值</td></tr>
+        <tr><td>fresh/non-fresh update_state</td><td><span class="evidence"><code>libs/langgraph/tests/test_delta_channel_update_state.py:74-141</code></span></td><td>回归</td><td>fresh 强制 snapshot；后续写走 delta/counter</td><td>主要为 InMemorySaver</td></tr>
+        <tr><td>BinaryOperatorAggregate → Delta 迁移</td><td><span class="evidence"><code>libs/langgraph/tests/test_delta_channel_migration.py:137-218</code></span></td><td>迁移 sync/async</td><td>settled 祖先与 time travel 保持旧值</td><td>文件头明确未覆盖 Postgres 变体</td></tr>
+        <tr><td>迁移后首写冷读不丢失</td><td><span class="evidence"><code>libs/langgraph/tests/test_delta_channel_migration.py:638-680</code></span></td><td>缺陷回归</td><td>live 正确、cold 错误这一类风险被直接覆盖</td><td>仍需每个生产 saver 的 conformance</td></tr>
+        <tr><td>exit durability 写序与重建</td><td><span class="evidence"><code>libs/langgraph/tests/test_delta_channel_exit_mode.py:26-147</code></span></td><td>模式回归</td><td>合成 task ID 排序、stub/snapshot 与冷读</td><td>此处引用范围主要覆盖内存 saver</td></tr>
+      </tbody>
+    </table></div>
+    <div class="boundary">当前 <code>test_algo.py</code> 对 <code>apply_writes</code> 的直接单元覆盖较弱，主要只验证 task path 字符串排序。因此，稳定快照与整步合并的证明还依赖 <code>PregelLoop.after_tick</code> 实现和更高层图测试；修改排序或版本算法时应补充聚焦单元测试。</div>
+  </section>
+
+  <section class="section" id="development">
+    <h2>14. 开发与扩展指南</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+      <tbody>
+        <tr><td>新增自定义 Channel</td><td><code>channels/base.py</code> 子类</td><td>公共导出、schema 解析（若需）、checkpoint serde</td><td>空值、copy、update([])、多写、consume/finish、round-trip</td></tr>
+        <tr><td>改变 reducer 字段语义</td><td>State annotation 与 reducer</td><td>所有并发写者、迁移策略、历史 checkpoint</td><td>结合性；必要时交换性；live/cold 等价；异常原子性</td></tr>
+        <tr><td>修改 apply_writes 排序</td><td><code>pregel/_algo.py</code></td><td>PUSH/PULL task path、exit delta 写序、缓存/恢复</td><td>随机完成时序下结果稳定；版本与 versions_seen 不回退</td></tr>
+        <tr><td>实现 Delta saver</td><td><code>BaseCheckpointSaver</code> 及存储实现</td><td>history、copy、prune、delete、sync/async</td><td>seed terminator、oldest-to-newest、target writes 排除、线程/namespace 隔离</td></tr>
+        <tr><td>调整 snapshot cadence</td><td><code>DeltaChannel</code>、<code>_checkpoint.py</code>、metadata</td><td>sync/async/exit、update_state、迁移</td><td>快照不丢 blob；counter reset；无写 Channel 的跨度上界</td></tr>
+      </tbody>
+    </table></div>
+    <h3>自定义 reducer 最低检查</h3>
+    <ol>
+      <li>定义单位元或空 State 行为，不能依赖首次 update 恰好来自某节点。</li>
+      <li>证明分批等价：<code>reduce(reduce(s, xs), ys) == reduce(s, xs + ys)</code>；Delta replay 会改变批次边界。<span class="evidence"><code>libs/langgraph/langgraph/channels/delta.py:38-48</code></span></li>
+      <li>若兄弟写入顺序不应影响业务结果，再证明交换性；稳定 path 只能固定当前拓扑下的顺序。</li>
+      <li>避免原地修改输入 State 或共享嵌套对象；返回新值，确保 checkpoint/copy 与并发读取不互相污染。</li>
+      <li>测试普通运行、并发多写、异常、checkpoint 冷读、恢复、time travel、update_state，以及适用的迁移路径。</li>
+    </ol>
+    <div class="warn">禁止通过捕获 <code>InvalidUpdateError</code> 后任取一个值来“修复” LastValue 冲突；这会把确定性 schema 错误降级为静默数据丢失。</div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <h2>15. 设计权衡与已知限制</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本 / 失败模式</th><th>重评条件</th></tr></thead>
+      <tbody>
+        <tr><td>并发 State 可见性</td><td>BSP 稳定快照 + 屏障合并</td><td>节点完成顺序不泄漏为隐式依赖</td><td>兄弟不能即时通信；需多一个超级步</td><td>业务确需流式共享时应引入外部协调，而非破坏 State 语义</td></tr>
+        <tr><td>Pregel / Beam 灵感边界</td><td>采用 Pregel 式 BSP 迭代；官方仅将 Apache Beam 列为灵感来源</td><td>可借用 superstep、稳定可见性和数据流心智模型</td><td>不能据此假设 Vertex/message mailbox、Beam PCollection/window/watermark 或分布式 runner 与 Channel map 同构</td><td>任何更强对应都必须由当前源码或公开协议逐项证明</td></tr>
+        <tr><td>普通字段多写</td><td>LastValue fail-closed</td><td>尽早暴露缺失 reducer</td><td>图拓扑变化可能暴露原先隐藏冲突</td><td>业务有合法多写代数时声明 reducer</td></tr>
+        <tr><td>确定性</td><td>task path 稳定排序</td><td>不依赖线程/协程完成顺序</td><td>path 变化和非交换 reducer 仍改变结果</td><td>需要拓扑无关结果时要求交换性</td></tr>
+        <tr><td>大状态持久化</td><td>DeltaChannel 周期快照 + 历史重放</td><td>降低每个 checkpoint 的完整值写放大</td><td>读放大、历史链耦合、迁移和裁剪复杂</td><td>冷读延迟、存储成本或运维复杂度超过完整快照</td></tr>
+        <tr><td>Delta 契约稳定性</td><td>当前标为 beta</td><td>可迭代 saver/history 表面</td><td>磁盘字段与能力可能变化</td><td>跨 saver conformance、迁移工具和长期兼容成熟后</td></tr>
+      </tbody>
+    </table></div>
+    <p><strong>当前限制：</strong><code>DeltaChannel.copy()</code> 对 value 使用浅拷贝；嵌套可变结构若被 reducer 原地修改，可能破坏快照隔离。<span class="evidence"><code>libs/langgraph/langgraph/channels/delta.py:110-116</code></span> <code>_messages_delta_reducer</code> 也明确不是 <code>add_messages</code> 的完整功能等价面，缺少部分 remove-all、未知 ID 错误和 chunk 转换语义；不能仅因名称相近就无测试迁移。<span class="evidence"><code>libs/langgraph/langgraph/graph/message.py:247-262</code></span></p>
+  </section>
+
+  <section class="section" id="sources">
+    <h2>16. 源码索引与进一步阅读</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>角色</th><th>符号 / 路径</th><th>审计重点</th></tr></thead>
+      <tbody>
+        <tr><td>经典 BSP / Pregel 语义</td><td><a href="https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/">Google Pregel 论文（官方）</a></td><td>Vertex-centric superstep、上一步消息在下一步可见、全局同步屏障；用于语义对照，不用于宣称实现同构</td></tr>
+        <tr><td>LangGraph 设计解释</td><td><a href="https://www.langchain.com/blog/building-langgraph">LangChain 官方设计长文：Building LangGraph</a></td><td>BSP/Pregel 选择、Channel 订阅、并行隔离、屏障后确定性更新、版本比较与 checkpoint 设计意图</td></tr>
+        <tr><td>灵感来源边界</td><td><a href="https://docs.langchain.com/oss/python/langgraph/overview#acknowledgements">LangGraph 官方 Overview：Acknowledgements</a></td><td>官方表述为 inspired by Pregel and Apache Beam；Beam 是灵感来源，不表示 API、执行模型或分布式语义一一对应</td></tr>
+        <tr><td>抽象协议</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:19-121</code></span></td><td>Value/Update/Checkpoint、copy、update、consume、finish</td></tr>
+        <tr><td>拒绝语义</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/last_value.py:20-78</code></span></td><td>每步至多一个值与错误码</td></tr>
+        <tr><td>聚合语义</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/binop.py:65-155</code></span></td><td>二元 fold、Overwrite、同一步双 Overwrite 拒绝</td></tr>
+        <tr><td>一次性值</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/ephemeral_value.py:15-79</code></span></td><td>空更新清空与 guard</td></tr>
+        <tr><td>Topic</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/topic.py:23-94</code></span></td><td>扁平化、默认清空、累积</td></tr>
+        <tr><td>Barrier</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/named_barrier_value.py:13-81</code></span></td><td>names/seen、availability、consume</td></tr>
+        <tr><td>Delta 内存契约</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/delta.py:25-202</code></span></td><td>beta、batch reducer、snapshot_frequency、replay、Overwrite</td></tr>
+        <tr><td>屏障合并</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:232-345</code></span></td><td>稳定排序、versions_seen、consume、update、finish</td></tr>
+        <tr><td>Loop 调用方</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-723</code></span></td><td>after_tick 的 apply/output/checkpoint 顺序</td></tr>
+        <tr><td>Checkpoint 构建与 hydration</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_checkpoint.py:149-319</code></span></td><td>Delta snapshot、seed/history 批量恢复、sync/async 对称</td></tr>
+        <tr><td>版本与 history Schema</td><td><span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:89-173</code></span></td><td>Checkpoint、ChannelVersions、DeltaChannelHistory</td></tr>
+        <tr><td>默认 history 实现</td><td><span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:620-690</code></span></td><td>parent walk、write 顺序、seed terminator、async</td></tr>
+        <tr><td>包版本</td><td><span class="evidence"><code>libs/langgraph/pyproject.toml:5-33</code></span></td><td><code>langgraph 1.2.11</code> 及 checkpoint 依赖范围</td></tr>
+      </tbody>
+    </table></div>
+    <p>相邻阅读：<a href="05-compile-pregel.html">第 05 章 Compile 到 Pregel</a>；<a href="07-pregel-runtime.html">第 07 章 Pregel Runtime</a>。总览定位与上下文请使用顶部的第 06 章回链。</p>
+  </section>
+
+  <section class="section" id="glossary">
+    <h2>17. 术语表</h2>
+    <div class="grid2">
+      <div class="card"><b>Channel map</b>运行时以名称到 <code>BaseChannel</code> 实例的映射表达 State；不是共享 dict 的即时并发修改。</div>
+      <div class="card"><b>BSP</b>Bulk Synchronous Parallel，批量同步并行：稳定读取、并行计算、屏障合并三个阶段。</div>
+      <div class="card"><b>Stable snapshot</b>稳定快照；同一超级步所有兄弟任务读取同一个逻辑 State 边界。</div>
+      <div class="card"><b>Barrier</b>屏障；等待整步任务完成后统一应用 writes。<code>NamedBarrierValue</code> 则是图中固定多前驱 join 的 Channel。</div>
+      <div class="card"><b>Partial update</b>节点只返回需要改变的 State 字段；Runtime 将其变成 Channel writes。</div>
+      <div class="card"><b>Reducer</b>归约函数；把当前值与一个或多个 updates 合成为新值，必须明确代数性质。</div>
+      <div class="card"><b>Associative / batching-invariant</b>结合性 / 批次不变性；分批 fold 与合批 fold 得到相同结果，是 Delta replay 的硬要求。</div>
+      <div class="card"><b>Commutative</b>交换性；交换 writes 顺序仍得到相同结果。不是所有 reducer 的强制接口要求，但可降低拓扑排序耦合。</div>
+      <div class="card"><b>LastValue</b>每超级步最多接受一个 update 的 Channel；“last”不表示并发时任选最后完成者。</div>
+      <div class="card"><b>Overwrite</b>显式重置聚合值的更新形式；同一步多个 Overwrite 会被拒绝。</div>
+      <div class="card"><b>channel_versions</b>每个 Channel 的单调变化版本，用于调度与 checkpoint blob 身份。</div>
+      <div class="card"><b>versions_seen</b>每个节点已经消费到的触发 Channel 版本，用于判断是否应再次执行。</div>
+      <div class="card"><b>DeltaChannel</b>通过周期完整快照与祖先 writes 重放恢复聚合值的 beta Channel。</div>
+      <div class="card"><b>Seed</b>Delta history 向祖先回溯遇到的最近完整基础值，可为 <code>_DeltaSnapshot</code> 或迁移前普通值。</div>
+      <div class="card"><b>Pending write</b>附着于 task/checkpoint 的中间写；Delta history 选择其中属于目标 Channel 且位于目标路径上的 writes。</div>
+      <div class="card"><b>Cold read</b>丢弃当前内存 Channel 后，从 saver checkpoint 与历史重新 hydration；是验证 Delta 持久正确性的必要测试。</div>
+      <div class="card"><b>MISSING</b>内部“值缺席”哨兵，不等于业务值 <code>None</code>；对 DeltaChannel 可表示需要历史重放。</div>
+      <div class="card"><b>Hydration</b>从 checkpoint snapshot 或 seed + writes 重建内存 Channel map 的过程。</div>
+    </div>
+  </section>
+  <p class="footer">LangGraph Channel 与状态合并 · 源码审计基线 2026-08-14</p>
+</main>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')];
+const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const observer=new IntersectionObserver(entries=>{
+  entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top).slice(0,1).forEach(entry=>{
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+entry.target.id));
+  });
+},{rootMargin:'-15% 0px -75% 0px'});
+sections.forEach(section=>observer.observe(section));
+</script>
+</body>
+</html>

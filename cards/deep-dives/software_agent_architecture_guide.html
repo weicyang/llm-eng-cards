@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Software Agent SDK 架构入门指南 — 给第一次接触这个项目的你</title>
+<style>
+:root{
+  --bg:#f4f1ea; --bg-soft:#fffdf8; --surface:#fffdf8; --surface-2:#fffdf8;
+  --border:rgba(28,25,23,.12); --border-soft:rgba(28,25,23,.10);
+  --text:#1c1917; --muted:#78716c; --faint:#a8a29e;
+  --green:#15803d; --blue:#4338ca; --purple:#6d28d9; --yellow:#c2410c;
+  --red:#b91c1c; --cyan:#0f766e; --orange:#c2410c;
+  --mono:"Cascadia Code","JetBrains Mono",Consolas,"Courier New",monospace;
+  --sans:"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Segoe UI",system-ui,sans-serif;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg); color:var(--text); font-family:var(--sans);
+  font-size:16px; line-height:1.85;
+  background-image:
+    radial-gradient(900px 500px at 8% -5%, rgba(67,56,202,.07), transparent 60%),
+    radial-gradient(800px 500px at 100% 100%, rgba(21,128,61,.06), transparent 60%),
+    radial-gradient(rgba(255,255,255,.028) 1px, transparent 1px);
+  background-size:auto,auto,26px 26px;
+  background-attachment:fixed;
+}
+::selection{background:rgba(67,56,202,.3)}
+
+/* ---------- 顶部阅读进度条 ---------- */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:200;
+  background:linear-gradient(90deg,var(--green),var(--blue),var(--purple));
+  box-shadow:0 0 10px rgba(67,56,202,.5);transition:width .1s linear}
+
+/* ---------- 侧边栏 ---------- */
+#sidebar{position:fixed;top:0;left:0;width:252px;height:100vh;overflow-y:auto;
+  background:rgba(244,241,234,.92);border-right:1px solid var(--border-soft);
+  padding:26px 0 60px;z-index:100;backdrop-filter:blur(6px)}
+#sidebar .brand{padding:0 22px 18px;border-bottom:1px solid var(--border-soft);margin-bottom:14px}
+#sidebar .brand .b1{font-weight:800;font-size:1.02rem;letter-spacing:-.01em}
+#sidebar .brand .b2{font-family:var(--mono);font-size:.66rem;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.14em;margin-top:4px}
+#sidebar a{display:block;padding:6px 22px;color:var(--muted);text-decoration:none;
+  font-size:.84rem;border-left:2px solid transparent;transition:all .18s}
+#sidebar a:hover{color:var(--text);background:rgba(67,56,202,.06)}
+#sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+#sidebar a.ch{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;
+  letter-spacing:.12em;color:var(--faint);margin-top:14px;pointer-events:none}
+#sidebar a.sub{padding-left:38px;font-size:.78rem}
+#sidebar::-webkit-scrollbar{width:6px}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ---------- 主内容区 ---------- */
+main{margin-left:252px;max-width:880px;padding:0 48px 120px}
+
+/* ---------- 头部：左标题 + 右终端 ---------- */
+header{display:grid;grid-template-columns:1fr 1fr;gap:40px;align-items:center;
+  padding:72px 0 56px}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.18em;text-transform:uppercase;
+  color:var(--green);display:inline-flex;align-items:center;gap:10px;margin-bottom:18px}
+.kicker::before{content:"";width:34px;height:1px;background:var(--green)}
+h1{font-size:clamp(1.9rem,3.6vw,2.7rem);font-weight:800;letter-spacing:-.025em;line-height:1.25}
+h1 .hl{color:var(--blue)}
+.lede{color:var(--muted);margin-top:16px;font-size:1.02rem}
+.meta-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+.meta-pill{font-family:var(--mono);font-size:.7rem;padding:5px 12px;border:1px solid var(--border);
+  border-radius:999px;color:var(--muted);transition:all .2s}
+.meta-pill:hover{border-color:var(--blue);color:var(--blue);transform:translateY(-2px)}
+
+/* 终端窗口 */
+.terminal{background:#e8e1d4;border:1px solid var(--border);border-radius:10px;overflow:hidden;
+  box-shadow:0 18px 50px rgba(28,25,23,.5);font-family:var(--mono);font-size:.76rem}
+.terminal .tbar{display:flex;align-items:center;gap:7px;padding:11px 14px;background:#f0ebe0;
+  border-bottom:1px solid var(--border-soft)}
+.terminal .dot{width:11px;height:11px;border-radius:50%}
+.terminal .tbar .title{margin-left:8px;color:var(--faint);font-size:.7rem}
+.terminal .tbody{padding:16px 16px 20px;line-height:1.9}
+.tline{opacity:0;animation:tIn .4s ease forwards;white-space:pre-wrap;word-break:break-all}
+@keyframes tIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.tline .p{color:var(--green)} .tline .ok{color:var(--green)} .tline .th{color:var(--blue)}
+.tline .tool{color:var(--yellow)} .tline .dim{color:var(--faint)} .tline .err{color:var(--red)}
+.cursor{display:inline-block;width:8px;height:15px;background:var(--green);vertical-align:-2px;
+  animation:blink 1s step-end infinite}
+@keyframes blink{50%{opacity:0}}
+
+/* ---------- 章节 ---------- */
+section{padding:34px 0 8px}
+.ch-head{display:flex;align-items:baseline;gap:16px;margin-bottom:8px}
+.ch-num{font-family:var(--mono);font-weight:700;font-size:1rem;color:var(--green);
+  border:1px solid rgba(21,128,61,.4);padding:3px 10px;border-radius:6px;flex-shrink:0;
+  background:rgba(21,128,61,.07)}
+h2{font-size:1.68rem;font-weight:800;letter-spacing:-.02em}
+h3{font-size:1.22rem;font-weight:700;margin:34px 0 12px;letter-spacing:-.01em;
+  padding-left:13px;border-left:3px solid var(--blue)}
+h4{font-size:1.02rem;font-weight:700;margin:22px 0 8px;color:var(--blue)}
+p{margin:12px 0}
+strong{color:var(--text);font-weight:700}
+code{font-family:var(--mono);font-size:.86em;background:rgba(67,56,202,.1);
+  color:var(--blue);padding:2px 7px;border-radius:5px}
+a{color:var(--blue)}
+ul,ol{margin:12px 0 12px 26px}
+li{margin:7px 0}
+
+/* 卡片 */
+.card{background:var(--surface);border:1px solid var(--border-soft);border-left:3px solid var(--blue);
+  border-radius:8px;padding:18px 22px;margin:18px 0;transition:transform .2s,box-shadow .2s,border-color .2s}
+.card:hover{transform:translateY(-3px);box-shadow:0 10px 30px rgba(28,25,23,.35)}
+.card.blue{border-left-color:var(--blue)} .card.green{border-left-color:var(--green)}
+.card.yellow{border-left-color:var(--yellow)} .card.purple{border-left-color:var(--purple)}
+.card.red{border-left-color:var(--red)} .card.cyan{border-left-color:var(--cyan)}
+.card .card-title{font-weight:700;margin-bottom:6px;display:flex;align-items:center;gap:9px}
+.card .tag{font-family:var(--mono);font-size:.62rem;text-transform:uppercase;letter-spacing:.12em;
+  padding:2px 8px;border-radius:4px;flex-shrink:0}
+.tag.blue{background:rgba(67,56,202,.15);color:var(--blue)}
+.tag.green{background:rgba(21,128,61,.15);color:var(--green)}
+.tag.yellow{background:rgba(194,65,12,.15);color:var(--yellow)}
+.tag.purple{background:rgba(109,40,217,.15);color:var(--purple)}
+.tag.red{background:rgba(185,28,28,.15);color:var(--red)}
+.tag.cyan{background:rgba(15,118,110,.15);color:var(--cyan)}
+
+/* 定义块（一句话定义） */
+.definition{background:linear-gradient(135deg,rgba(21,128,61,.1),rgba(67,56,202,.08));
+  border:1px solid rgba(21,128,61,.35);border-radius:10px;padding:24px 28px;margin:22px 0;
+  font-size:1.08rem;line-height:1.8}
+.definition strong{color:var(--green)}
+
+/* 类比框 */
+.analogy{border:1.5px dashed var(--yellow);background:rgba(194,65,12,.06);border-radius:8px;
+  padding:16px 20px;margin:18px 0;transition:background .2s}
+.analogy:hover{background:rgba(194,65,12,.1)}
+.analogy .al{font-family:var(--mono);font-size:.66rem;text-transform:uppercase;letter-spacing:.14em;
+  color:var(--yellow);margin-bottom:6px;display:block}
+
+/* 源码入口提示 */
+.src{font-family:var(--mono);font-size:.74rem;color:var(--green);margin:14px 0 4px;
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.src::before{content:"▸";color:var(--green)}
+.src code{background:rgba(21,128,61,.1);color:var(--green)}
+.deep{font-size:.82rem;color:var(--faint);margin:2px 0 6px 18px}
+.deep a{color:var(--cyan);text-decoration:none}
+.deep a:hover{text-decoration:underline}
+
+/* 步骤（旅程） */
+.step{position:relative;margin:26px 0 26px 26px;padding:4px 0 4px 30px;
+  border-left:2px solid var(--border)}
+.step::before{content:attr(data-n);position:absolute;left:-19px;top:0;width:36px;height:36px;
+  border-radius:50%;background:var(--surface-2);border:2px solid var(--blue);color:var(--blue);
+  font-family:var(--mono);font-weight:700;font-size:.9rem;display:flex;align-items:center;
+  justify-content:center;transition:all .25s}
+.step:hover::before{background:var(--blue);color:#f4f1ea;box-shadow:0 0 18px rgba(67,56,202,.5);
+  transform:scale(1.12)}
+.step .step-title{font-size:1.12rem;font-weight:700;margin-bottom:4px}
+.step .step-role{font-family:var(--mono);font-size:.68rem;color:var(--faint);
+  text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
+
+/* 折叠面板 */
+details{background:var(--surface);border:1px solid var(--border-soft);border-radius:8px;
+  margin:14px 0;overflow:hidden;transition:border-color .2s}
+details[open]{border-color:var(--border)}
+details summary{cursor:pointer;padding:14px 20px;font-weight:600;font-size:.94rem;
+  list-style:none;display:flex;align-items:center;gap:10px;user-select:none;transition:background .2s}
+details summary:hover{background:rgba(67,56,202,.05)}
+details summary::-webkit-details-marker{display:none}
+details summary::before{content:"+";font-family:var(--mono);color:var(--blue);font-weight:700;
+  transition:transform .25s;flex-shrink:0}
+details[open] summary::before{transform:rotate(45deg)}
+details .dbody{padding:2px 20px 16px;color:var(--muted);font-size:.93rem}
+details.misinfo{border-left:3px solid var(--red)}
+details.misinfo summary::before{color:var(--red)}
+
+/* 表格 */
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:.9rem;background:var(--surface);
+  border-radius:8px;overflow:hidden;border:1px solid var(--border-soft)}
+th{font-family:var(--mono);font-size:.68rem;text-transform:uppercase;letter-spacing:.1em;
+  text-align:left;padding:12px 16px;background:var(--surface-2);color:var(--muted);
+  border-bottom:1px solid var(--border)}
+td{padding:11px 16px;border-bottom:1px solid var(--border-soft);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tbody tr{transition:background .15s}
+tbody tr:hover{background:rgba(67,56,202,.05)}
+td:first-child{color:var(--blue);font-weight:600;white-space:nowrap}
+
+/* SVG 图容器 */
+.figure{background:var(--bg-soft);border:1px solid var(--border-soft);border-radius:10px;
+  padding:24px;margin:24px 0;transition:border-color .25s}
+.figure:hover{border-color:var(--border)}
+.figure svg{width:100%;height:auto;display:block}
+.figure .fig-cap{font-family:var(--mono);font-size:.72rem;color:var(--faint);text-align:center;
+  margin-top:14px;letter-spacing:.04em}
+.figure .fig-cap b{color:var(--muted)}
+
+/* 命令块 / ASCII 回顾 */
+.cmd{background:#e8e1d4;border:1px solid var(--border);border-left:3px solid var(--green);
+  border-radius:8px;padding:16px 20px;font-family:var(--mono);font-size:.82rem;line-height:2;
+  margin:16px 0;overflow-x:auto}
+.cmd .c{color:var(--faint)} .cmd .g{color:var(--green)} .cmd .y{color:var(--yellow)}
+pre.recap{background:#e8e1d4;border:1px solid var(--border);border-radius:8px;
+  padding:18px 20px;font-family:var(--mono);font-size:.78rem;line-height:1.7;color:#44403c;
+  margin:16px 0;overflow-x:auto;white-space:pre}
+
+/* 三句话总结 */
+.takeaway{background:linear-gradient(135deg,rgba(21,128,61,.12),rgba(15,118,110,.08));
+  border:1px solid rgba(21,128,61,.4);border-radius:12px;padding:28px 32px;margin:30px 0}
+.takeaway .tk{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.16em;
+  color:var(--green);margin-bottom:16px}
+.takeaway ol{margin:0 0 0 22px}
+.takeaway li{margin:12px 0;font-size:1.02rem}
+.takeaway li strong{color:var(--green)}
+
+/* 滚动显现 */
+.reveal{opacity:0;transform:translateY(20px);transition:opacity .6s ease,transform .6s ease}
+.reveal.visible{opacity:1;transform:none}
+
+footer{margin-left:252px;border-top:1px solid var(--border-soft);padding:34px 48px 60px;
+  color:var(--faint);font-size:.8rem;font-family:var(--mono)}
+
+@media (max-width:1000px){
+  #sidebar{display:none}
+  main,footer{margin-left:0}
+  main{padding:0 22px 90px}
+  header{grid-template-columns:1fr;padding-top:52px}
+}
+@media (max-width:640px){
+  :not(pre)>code{white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+  table{display:block;max-width:100%;overflow-x:auto}
+  td:first-child{white-space:normal}
+  .src{overflow-wrap:anywhere;word-break:break-word}
+}
+</style>
+</head>
+<body>
+<div id="progress"></div>
+
+<nav id="sidebar">
+  <div class="brand">
+    <div class="b1">Software Agent SDK</div>
+    <div class="b2">Architecture Guide</div>
+  </div>
+  <a href="#top" class="active">指南概览</a>
+  <a href="#ch1" class="ch">第一章</a>
+  <a href="#ch1">这个 SDK 是什么？</a>
+  <a href="#ch2" class="ch">第二章</a>
+  <a href="#ch2">一条任务的完整旅程</a>
+  <a href="#ch3" class="ch">第三章</a>
+  <a href="#ch3">八大核心模块详解</a>
+  <a href="#m-trio" class="sub">3.1 Agent / Conversation / LLM</a>
+  <a href="#m-state" class="sub">3.2 状态机与事件树</a>
+  <a href="#m-context" class="sub">3.3 上下文工程</a>
+  <a href="#m-llm" class="sub">3.4 LLM 管道与恢复</a>
+  <a href="#m-tool" class="sub">3.5 工具体系</a>
+  <a href="#m-security" class="sub">3.6 安全、确认与 Hooks</a>
+  <a href="#m-remote" class="sub">3.7 远程执行与 Server</a>
+  <a href="#m-ext" class="sub">3.8 扩展生态</a>
+  <a href="#ch4" class="ch">第四章</a>
+  <a href="#ch4">设计哲学与常见误解</a>
+  <a href="#ch5" class="ch">第五章</a>
+  <a href="#ch5">动手探索指南</a>
+  <a href="#appA" class="ch">附录</a>
+  <a href="#appA">A · 术语对照表</a>
+  <a href="#appB">B · 源码目录速查</a>
+  <a href="#appC">C · 进阶阅读</a>
+</nav>
+
+<main id="top">
+
+<!-- ======================= 头部 ======================= -->
+<header>
+  <div>
+    <div class="kicker">Architecture Guide · 基于 Software Agent SDK v1.42.1 源码</div>
+    <h1>Software Agent SDK<br><span class="hl">架构入门指南</span></h1>
+    <p class="lede">给第一次接触这个项目的你 —— 不贴大段源码、不堆学术术语，用一个故事、四张图、八个模块，帮你在 40 分钟内真正理解"一个会改代码的 AI 员工"是如何被这套基础设施组装、驱动和兜底的。</p>
+    <div class="meta-row">
+      <span class="meta-pill">阅读约 40 分钟</span>
+      <span class="meta-pill">零源码粘贴</span>
+      <span class="meta-pill">4 张图可带走</span>
+      <span class="meta-pill">中文 · 术语保留英文</span>
+    </div>
+  </div>
+  <div class="terminal" aria-hidden="true">
+    <div class="tbar">
+      <span class="dot" style="background:#b91c1c"></span>
+      <span class="dot" style="background:#c2410c"></span>
+      <span class="dot" style="background:#15803d"></span>
+      <span class="title">conversation — 一次真实的任务长这样</span>
+    </div>
+    <div class="tbody">
+      <div class="tline" style="animation-delay:.2s"><span class="p">$</span> uv run python my_agent.py</div>
+      <div class="tline" style="animation-delay:.9s"><span class="ok">✓</span> <span class="dim">Conversation 已创建 · workspace=local · tools=3</span></div>
+      <div class="tline" style="animation-delay:1.6s"><span class="th">● MessageEvent</span> "把 fetch_data() 改成异步并跑通测试"</div>
+      <div class="tline" style="animation-delay:2.3s"><span class="th">● Agent.step</span> 思考：先看看 utils.py 现状……</div>
+      <div class="tline" style="animation-delay:3.0s"><span class="tool">● TOOL</span> FileEditor view → utils.py <span class="dim">(48 行)</span></div>
+      <div class="tline" style="animation-delay:3.7s"><span class="tool">● TOOL</span> FileEditor str_replace → async def fetch_data()</div>
+      <div class="tline" style="animation-delay:4.4s"><span class="tool">● TOOL</span> Terminal: pytest tests/test_utils.py <span class="ok">✓ 7 passed</span></div>
+      <div class="tline" style="animation-delay:5.1s"><span class="ok">✓ FINISHED</span> "已完成，共修改 2 个文件" <span class="dim">· 事件已落盘</span></div>
+      <div class="tline" style="animation-delay:5.8s"><span class="p">$</span> <span class="cursor"></span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ======================= 第一章 ======================= -->
+<section id="ch1" class="reveal">
+  <div class="ch-head"><span class="ch-num">01</span><h2>这个 SDK 是什么？</h2></div>
+
+  <div class="definition">
+    一句话说清：<strong>Software Agent SDK 是一套用来搭建"软件工程 AI 员工"的地基。</strong>
+    它本身不是一个终端产品，而是一个 Python 工具包：四行核心代码 —— 一个 <strong>LLM</strong>（大脑）、一个 <strong>Agent</strong>（岗位说明书）、一个 <strong>Conversation</strong>（一次工作过程）、一个 <strong>Workspace</strong>（工地）—— 就能拼出一个会读代码、改文件、跑命令的智能体；而状态恢复、可配置的安全确认、远程执行这些生产级能力，地基已经替你打好了。
+  </div>
+
+  <p>它是 OpenHands 团队开源的智能体基础设施，用 Python 写成，整个仓库由四个可独立分发的包组成。你可以把它理解成：别人给你造好的"AI 员工管理系统" —— 你只需要定义这个员工用什么大脑（LLM）、带什么工具（Tools）、在哪块工地上干活（Workspace），剩下的"怎么思考、怎么记账、出错怎么兜底、怎么远程上班"，系统都有标准答案。</p>
+
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">从零自己写</span>一个能改代码的 Agent 要踩的坑</div>
+    对话历史越来越长怎么办？进程崩了怎么接着上次干？模型把工具参数写错了怎么救？危险命令（比如 <code>rm -rf</code>）怎么拦住？同一个 Agent 怎么部署成服务给多人用？……每一个问题，都够一个团队折腾几个月。
+  </div>
+  <div class="card green">
+    <div class="card-title"><span class="tag green">SDK 的方式</span>这些问题都有现成的、经过源码审计的答案</div>
+    上下文超长了有 Condenser（压缩器）自动摘要；崩溃后可从已持久化的状态与事件恢复 SDK 会话；工具参数错误有分层的恢复阶梯；启用确认模式后，符合策略的危险操作可进入"确认流"等人点头；要部署，可以使用 Agent Server。
+  </div>
+
+  <details>
+    <summary>先澄清：它"不是"什么</summary>
+    <div class="dbody">
+      <ul>
+        <li><strong>不是聊天机器人 UI。</strong>它没有界面，只有协议和运行时。你看到的任何产品形态（CLI、Web、IDE 插件）都是别人基于它搭的上层。</li>
+        <li><strong>不是"乐高零件袋"。</strong>它带有明确的主张：事件必须记成树、状态必须集中在 Conversation、同步和异步必须对称。你是在一套成熟的工作流程上做定制，而不是从零拼装。</li>
+        <li><strong>不等同于 OpenHands。</strong>OpenHands 这个产品是建在这套 SDK 上的"样板房"；SDK 是可复用的地基本身。</li>
+      </ul>
+    </div>
+  </details>
+
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">论文谱系</span>先分清 V1、V0 与 CodeAct</div>
+    直接描述这套 SDK 的是
+    <a href="https://arxiv.org/abs/2511.03690" target="_blank" rel="noopener noreferrer">MLSys 2026 Software Agent SDK 论文</a>：
+    它解释为什么从 V0 的单体、强制沙箱重构为四包、可选隔离、事件溯源与双层组合。
+    <a href="https://arxiv.org/abs/2407.16741" target="_blank" rel="noopener noreferrer">ICLR 2025 OpenHands 论文</a>
+    讲的是旧 V0 平台；
+    <a href="https://proceedings.mlr.press/v235/wang24h.html" target="_blank" rel="noopener noreferrer">ICML 2024 CodeAct 论文</a>
+    讲的是“用可执行代码作为动作”的研究思想。后两篇不能用来推断当前
+    <code>Agent</code>、<code>EventLog</code>、Workspace 或 REST API。
+  </div>
+
+  <h3>30 秒看懂整体架构</h3>
+  <p>整个系统分三层：最上面是你的应用；中间是运行时"三件套"；最下面四个包是地基。</p>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 330" role="img" aria-label="30 秒架构总览">
+      <defs>
+        <marker id="ar1" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+        <marker id="ar2" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#78716c"/>
+        </marker>
+      </defs>
+      <!-- 顶层：你的应用 -->
+      <rect x="330" y="14" width="260" height="52" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="460" y="36" text-anchor="middle" fill="#4338ca" font-size="15" font-weight="700">你的应用 / 产品</text>
+      <text x="460" y="55" text-anchor="middle" fill="#78716c" font-size="11">CLI · Web · IDE 插件 · 自动化脚本</text>
+
+      <line x1="460" y1="66" x2="460" y2="102" stroke="#4338ca" stroke-width="1.6" marker-end="url(#ar1)"/>
+
+      <!-- 中层：三件套 -->
+      <rect x="96" y="106" width="216" height="92" rx="8" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="1.8"/>
+      <text x="204" y="134" text-anchor="middle" fill="#15803d" font-size="15.5" font-weight="800">Agent</text>
+      <text x="204" y="156" text-anchor="middle" fill="#78716c" font-size="11">岗位说明书 · 冻结的配置</text>
+      <text x="204" y="174" text-anchor="middle" fill="#a8a29e" font-size="10.5">用什么大脑 / 带什么工具</text>
+
+      <rect x="352" y="106" width="216" height="92" rx="8" fill="rgba(109,40,217,.08)" stroke="#6d28d9" stroke-width="2.2"/>
+      <text x="460" y="134" text-anchor="middle" fill="#6d28d9" font-size="15.5" font-weight="800">Conversation</text>
+      <text x="460" y="156" text-anchor="middle" fill="#78716c" font-size="11">这一天的上班过程</text>
+      <text x="460" y="174" text-anchor="middle" fill="#a8a29e" font-size="10.5">状态 · 事件账本 · 运行循环</text>
+
+      <rect x="608" y="106" width="216" height="92" rx="8" fill="rgba(161,98,7,.08)" stroke="#c2410c" stroke-width="1.8"/>
+      <text x="716" y="134" text-anchor="middle" fill="#c2410c" font-size="15.5" font-weight="800">LLM</text>
+      <text x="716" y="156" text-anchor="middle" fill="#78716c" font-size="11">外包租来的大脑</text>
+      <text x="716" y="174" text-anchor="middle" fill="#a8a29e" font-size="10.5">模型调用 · 重试 · 指标</text>
+
+      <line x1="312" y1="152" x2="350" y2="152" stroke="#78716c" stroke-width="1.4" marker-end="url(#ar2)"/>
+      <line x1="568" y1="140" x2="606" y2="140" stroke="#78716c" stroke-width="1.4" marker-end="url(#ar2)"/>
+      <line x1="606" y1="166" x2="568" y2="166" stroke="#78716c" stroke-width="1.4" marker-end="url(#ar2)"/>
+      <text x="331" y="146" text-anchor="middle" fill="#a8a29e" font-size="9.5" transform="rotate(-90 331 146)">驱动</text>
+
+      <!-- 底层：四包地基 -->
+      <line x1="460" y1="198" x2="460" y2="234" stroke="#78716c" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#ar2)"/>
+      <rect x="16" y="238" width="206" height="62" rx="8" fill="rgba(15,118,110,.08)" stroke="#0f766e" stroke-width="1.4"/>
+      <text x="119" y="263" text-anchor="middle" fill="#0f766e" font-size="13" font-weight="700">openhands-sdk</text>
+      <text x="119" y="283" text-anchor="middle" fill="#78716c" font-size="10.5">核心运行时 · 协议与编排</text>
+
+      <rect x="238" y="238" width="206" height="62" rx="8" fill="rgba(15,118,110,.08)" stroke="#0f766e" stroke-width="1.4"/>
+      <text x="341" y="263" text-anchor="middle" fill="#0f766e" font-size="13" font-weight="700">openhands-tools</text>
+      <text x="341" y="283" text-anchor="middle" fill="#78716c" font-size="10.5">内置工具 · 终端/编辑器/浏览器</text>
+
+      <rect x="460" y="238" width="206" height="62" rx="8" fill="rgba(15,118,110,.08)" stroke="#0f766e" stroke-width="1.4"/>
+      <text x="563" y="263" text-anchor="middle" fill="#0f766e" font-size="13" font-weight="700">openhands-workspace</text>
+      <text x="563" y="283" text-anchor="middle" fill="#78716c" font-size="10.5">执行环境 · Docker/云端</text>
+
+      <rect x="682" y="238" width="222" height="62" rx="8" fill="rgba(15,118,110,.08)" stroke="#0f766e" stroke-width="1.4"/>
+      <text x="793" y="263" text-anchor="middle" fill="#0f766e" font-size="13" font-weight="700">openhands-agent-server</text>
+      <text x="793" y="283" text-anchor="middle" fill="#78716c" font-size="10.5">远程运行时 · REST + WebSocket</text>
+
+      <text x="460" y="322" text-anchor="middle" fill="#a8a29e" font-size="11">四包分层、单向依赖：上层可以用下层，下层绝不反向 import 上层</text>
+    </svg>
+    <div class="fig-cap">图 1 · <b>30 秒架构总览</b>：你的应用坐在三件套上，三件套站在四个包的地基上。后面整篇指南，就是把中间这一层逐个打开。</div>
+  </div>
+
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">记住这张图</span>全文的心智模型只有三句话</div>
+    <strong>Agent 是岗位说明书</strong>（写好就不许改），<strong>Conversation 是这一天的上班过程</strong>（所有进度和状态都在这里），<strong>事件账本是工作日志</strong>（写下的每一笔都不可抵赖）。理解了这三个角色的分工，你就抓住了这个项目的灵魂。
+  </div>
+</section>
+
+<!-- ======================= 第二章 ======================= -->
+<section id="ch2" class="reveal">
+  <div class="ch-head"><span class="ch-num">02</span><h2>一条任务的完整旅程</h2></div>
+
+  <div class="card yellow">
+    <div class="card-title"><span class="tag yellow">本篇故事线</span>一个真实的代码修改任务</div>
+    假设你有一个 Python 项目，想让你的 AI 员工干这件事：<br>
+    <strong>"把 utils.py 里的 fetch_data() 函数改成异步版本，并让所有相关测试通过。"</strong><br>
+    接下来，我们跟着这条任务走一遍完整旅程。每一步都对应源码里的一个真实位置。
+  </div>
+
+  <div class="step" data-n="1">
+    <div class="step-title">开工 —— 创建一个 Conversation</div>
+    <div class="step-role">Conversation 工厂 · 分流 Local / Remote</div>
+    <p>你写下这样一段代码：<code>Conversation(agent=agent, workspace="./my_project")</code>。注意 —— <code>Conversation</code> 并不是一个普通类，而是一个<strong>工厂</strong>：它会看你给的"工地"是什么类型，再决定造出哪种会话。</p>
+    <p>传入的是本地路径或 <code>LocalWorkspace</code>，就造一个 <code>LocalConversation</code>（在你自己的机器上干活）；传入的是 <code>RemoteWorkspace</code>，就造一个 <code>RemoteConversation</code>（把活儿发给远程的 Agent Server 去干）。两种会话用法几乎一样，但内部机制差别很大 —— 远程的故事我们放到 3.7 节再讲，本篇先跟本地这条线。</p>
+    <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/conversation/conversation.py</code> → <code>Conversation.__new__()</code>（按 workspace 类型分流）</p>
+  </div>
+
+  <div class="step" data-n="2">
+    <div class="step-title">接单 —— send_message 只是"开单据"</div>
+    <div class="step-role">LocalConversation.send_message()</div>
+    <p>你调用 <code>conversation.send_message("把 fetch_data() 改成异步并跑通测试")</code>。很多人以为这一步 Agent 就开始干活了 —— <strong>并没有</strong>。这一步只做三件事：</p>
+    <ul>
+      <li>把你的话包装成一条 <code>Message</code>；</li>
+      <li>如果上一次会话已经 <code>FINISHED</code> 或 <code>STUCK</code>，把状态复位回 <code>IDLE</code>（相当于"翻篇，重新上工"）；</li>
+      <li>发出一条 <code>MessageEvent</code>，写进事件账本。</li>
+    </ul>
+    <p>就像餐厅服务员把点菜单夹进票夹 —— 菜还没开始炒。真正开火，是下一步。</p>
+    <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py</code> → <code>send_message()</code></p>
+  </div>
+
+  <div class="step" data-n="3">
+    <div class="step-title">开火 —— run() 心跳循环与 Agent.step()</div>
+    <div class="step-role">LocalConversation.run() · Agent.step()</div>
+    <p>你调用 <code>conversation.run()</code>。这是一个 <code>while True</code> 的心跳循环，每一轮都干同一件事：请 <code>Agent.step()</code> 走一步。<strong>一步</strong>的内部流程是：</p>
+    <ol>
+      <li><strong>组装上下文</strong>：从事件账本的活跃分支生成 <code>View</code>（LLM 能"看见"的对话历史），再拼上系统提示词；</li>
+      <li><strong>调用 LLM</strong>：把上下文发给大脑，拿回响应；</li>
+      <li><strong>分类响应</strong>：用 <code>classify_response()</code> 把响应归成四类（见表下）；</li>
+      <li><strong>分派处理</strong>：有工具调用就执行工具；有最终答复就收工。</li>
+    </ol>
+    <table>
+      <thead><tr><th>响应类型</th><th>含义</th><th>系统的反应</th></tr></thead>
+      <tbody>
+        <tr><td><code>TOOL_CALLS</code></td><td>大脑说"我要用工具"</td><td>执行工具，把结果记入账本，继续下一轮</td></tr>
+        <tr><td><code>CONTENT</code></td><td>大脑给出了最终答复</td><td>标记 <code>FINISHED</code>，准备收工</td></tr>
+        <tr><td><code>REASONING_ONLY</code></td><td>只思考，没说话也没动手</td><td>发一条"纠正性提醒"（nudge），请它给出实际输出</td></tr>
+        <tr><td><code>EMPTY</code></td><td>空响应</td><td>同上，提醒一下再来</td></tr>
+      </tbody>
+    </table>
+    <p class="src">源码入口：<code>local_conversation.py</code> → <code>run()</code> · <code>openhands-sdk/openhands/sdk/agent/agent.py</code> → <code>step()</code> · <code>agent/response_dispatch.py</code> → <code>classify_response()</code></p>
+  </div>
+
+  <div class="step" data-n="4">
+    <div class="step-title">动手 —— 工具执行，先过 PreToolUse，再记账和执行</div>
+    <div class="step-role">ParallelToolExecutor · Action ⇄ Observation</div>
+    <p>大脑第一步的响应是 <code>TOOL_CALLS</code>：先看一眼 <code>utils.py</code>。系统先构造 <code>ActionEvent</code> 并运行 <code>PreToolUse</code> Hook；Hook 放行后，动作才落进账本，再由安全分析器与确认策略决定等待还是执行。正常完成的工具调用会追加一个通过 <code>action_id</code> 回指动作的 <code>ObservationEvent</code>；崩溃边界允许暂时存在未配对 Action，恢复逻辑会显式处理。</p>
+    <p>如果大脑一次要求多个工具（比如"同时读三个文件"），<code>ParallelToolExecutor</code> 会并行执行它们；需要独占同一资源的工具则由资源锁排队，防止打架。</p>
+    <p>于是账本里依次多了：<code>ActionEvent(FileEditor view utils.py)</code> → <code>ObservationEvent(48 行代码)</code> → <code>ActionEvent(FileEditor str_replace …)</code> → <code>ObservationEvent(修改成功)</code> → <code>ActionEvent(Terminal pytest …)</code> → <code>ObservationEvent(7 passed)</code>。</p>
+    <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/agent/parallel_executor.py</code> → <code>ParallelToolExecutor.execute_batch()</code> · 配对逻辑见 <code>conversation/state.py</code> → <code>get_unmatched_actions()</code></p>
+  </div>
+
+  <div class="step" data-n="5">
+    <div class="step-title">打盹与自愈 —— 恢复机制在后台待命</div>
+    <div class="step-role">Condenser · 重试 / Fallback / Nudge</div>
+    <p>这条任务一路顺利，但真实世界里 Agent 随时会摔跤，而系统早就备好了兜底：对话历史太长快撑爆上下文窗口了，<strong>Condenser（压缩器）</strong>会自动把旧历史摘要成一份小结（注意：只压缩"给大脑看的视图"，账本原文一字不动）；LLM 的 API 报了临时错误，<strong>重试与 fallback</strong> 会自动换姿势再来；大脑连续放空，系统会 nudge 它一下。这一切对 <code>run()</code> 循环是透明的 —— 心跳照旧。</p>
+    <p>另一种"暂停"是故意的：应用启用确认模式后，如果某个动作被安全策略判定需要人点头，状态会切到 <code>WAITING_FOR_CONFIRMATION</code>，循环退出等你。你确认后再次 <code>run()</code>，Agent 会先执行那些等待中的动作，再继续心跳。默认配置使用 <code>NeverConfirm</code>，不会要求确认。</p>
+  </div>
+
+  <div class="step" data-n="6">
+    <div class="step-title">交卷 —— FINISHED，但门口还有一道岗</div>
+    <div class="step-role">Stop Hooks · 持久化落盘</div>
+    <p>测试全绿之后，大脑返回 <code>CONTENT</code>："已完成，共修改 2 个文件。"状态切到 <code>FINISHED</code>。但循环不会立刻退出 —— 门口站着 <strong>Stop Hooks（停止钩子）</strong>：你可以配置一段脚本在 Agent 宣布完成时做检查（比如"跑一遍 lint"），如果钩子返回"不同意"，状态会被拨回 <code>RUNNING</code>，Agent 继续加班。钩子放行后，循环才真正退出。</p>
+    <p>此时已持久化的 <code>base_state.json</code>（状态快照）与事件文件可用于恢复 SDK 会话状态、事件历史和待处理 Action。两条写入路径不构成跨文件事务，也不会回滚或重放命令、文件修改、HTTP 请求等外部副作用。</p>
+    <p class="src">源码入口：Stop hook 判定见 <code>local_conversation.py</code> → <code>run()</code> 的 FINISHED 分支 · 持久化见 <code>conversation/state.py</code></p>
+  </div>
+
+  <h3>旅程回顾：一张图看完</h3>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 380" role="img" aria-label="任务旅程全景图">
+      <defs>
+        <marker id="jar1" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#4338ca"/>
+        </marker>
+        <marker id="jar2" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#c2410c"/>
+        </marker>
+        <marker id="jar3" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#6d28d9"/>
+        </marker>
+      </defs>
+      <!-- 主链六个盒子 -->
+      <rect x="16" y="150" width="128" height="66" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.6"/>
+      <text x="80" y="178" text-anchor="middle" fill="#4338ca" font-size="13" font-weight="700">send_message</text>
+      <text x="80" y="198" text-anchor="middle" fill="#78716c" font-size="10.5">开单据（记入账本）</text>
+
+      <rect x="168" y="150" width="118" height="66" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.6"/>
+      <text x="227" y="178" text-anchor="middle" fill="#4338ca" font-size="13" font-weight="700">run() 循环</text>
+      <text x="227" y="198" text-anchor="middle" fill="#78716c" font-size="10.5">心跳 while True</text>
+
+      <rect x="310" y="150" width="128" height="66" rx="8" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2"/>
+      <text x="374" y="178" text-anchor="middle" fill="#15803d" font-size="13" font-weight="700">Agent.step()</text>
+      <text x="374" y="198" text-anchor="middle" fill="#78716c" font-size="10.5">组装 View → 问大脑</text>
+
+      <rect x="462" y="150" width="128" height="66" rx="8" fill="#fffdf8" stroke="#4338ca" stroke-width="1.6"/>
+      <text x="526" y="178" text-anchor="middle" fill="#4338ca" font-size="13" font-weight="700">响应分派</text>
+      <text x="526" y="198" text-anchor="middle" fill="#78716c" font-size="10.5">四类：工具/答复/…</text>
+
+      <rect x="614" y="150" width="128" height="66" rx="8" fill="rgba(161,98,7,.08)" stroke="#c2410c" stroke-width="1.6"/>
+      <text x="678" y="178" text-anchor="middle" fill="#c2410c" font-size="13" font-weight="700">工具执行</text>
+      <text x="678" y="198" text-anchor="middle" fill="#78716c" font-size="10.5">先记账 · 可并行</text>
+
+      <rect x="766" y="150" width="138" height="66" rx="8" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="1.6"/>
+      <text x="835" y="178" text-anchor="middle" fill="#15803d" font-size="13" font-weight="700">Observation 回账本</text>
+      <text x="835" y="198" text-anchor="middle" fill="#78716c" font-size="10.5">或 CONTENT → 收工</text>
+
+      <line x1="144" y1="183" x2="166" y2="183" stroke="#4338ca" stroke-width="1.5" marker-end="url(#jar1)"/>
+      <line x1="286" y1="183" x2="308" y2="183" stroke="#4338ca" stroke-width="1.5" marker-end="url(#jar1)"/>
+      <line x1="438" y1="183" x2="460" y2="183" stroke="#4338ca" stroke-width="1.5" marker-end="url(#jar1)"/>
+      <line x1="590" y1="183" x2="612" y2="183" stroke="#4338ca" stroke-width="1.5" marker-end="url(#jar1)"/>
+      <line x1="742" y1="183" x2="764" y2="183" stroke="#4338ca" stroke-width="1.5" marker-end="url(#jar1)"/>
+
+      <!-- 回路：再来一轮 -->
+      <path d="M 835 150 C 835 92, 374 92, 374 148" fill="none" stroke="#15803d" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#jar1)"/>
+      <text x="604" y="100" text-anchor="middle" fill="#15803d" font-size="11">还没干完？观察结果进账本，回到思考再来一轮</text>
+
+      <!-- 上方旁路：condenser -->
+      <rect x="306" y="22" width="180" height="48" rx="8" fill="rgba(161,98,7,.08)" stroke="#c2410c" stroke-width="1.3" stroke-dasharray="5 4"/>
+      <text x="396" y="42" text-anchor="middle" fill="#c2410c" font-size="12" font-weight="600">Condenser 压缩旁路</text>
+      <text x="396" y="60" text-anchor="middle" fill="#78716c" font-size="10">历史太长？先做一份摘要</text>
+      <line x1="374" y1="148" x2="386" y2="72" stroke="#c2410c" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#jar2)"/>
+
+      <!-- 下方旁路：确认 -->
+      <rect x="440" y="286" width="200" height="52" rx="8" fill="rgba(109,40,217,.08)" stroke="#6d28d9" stroke-width="1.3" stroke-dasharray="5 4"/>
+      <text x="540" y="308" text-anchor="middle" fill="#6d28d9" font-size="12" font-weight="600">WAITING_FOR_CONFIRMATION</text>
+      <text x="540" y="326" text-anchor="middle" fill="#78716c" font-size="10">危险动作暂停，等人点头</text>
+      <line x1="526" y1="216" x2="536" y2="284" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#jar3)"/>
+      <path d="M 440 312 C 300 312, 240 260, 228 218" fill="none" stroke="#6d28d9" stroke-width="1.2" stroke-dasharray="4 4" marker-end="url(#jar3)"/>
+      <text x="280" y="296" text-anchor="middle" fill="#6d28d9" font-size="10.5">确认后再次 run()</text>
+
+      <!-- 下方旁路：恢复阶梯 -->
+      <rect x="666" y="286" width="238" height="52" rx="8" fill="rgba(185,28,28,.06)" stroke="#b91c1c" stroke-width="1.3" stroke-dasharray="5 4"/>
+      <text x="785" y="308" text-anchor="middle" fill="#b91c1c" font-size="12" font-weight="600">恢复阶梯（出错时）</text>
+      <text x="785" y="326" text-anchor="middle" fill="#78716c" font-size="10">重试 → 换模型 → 提醒 → 压缩 → 报错</text>
+      <line x1="700" y1="216" x2="760" y2="284" stroke="#b91c1c" stroke-width="1.2" stroke-dasharray="4 4"/>
+
+      <text x="460" y="368" text-anchor="middle" fill="#a8a29e" font-size="11">实线 = 必经主路 · 虚线 = 旁路与兜底能力 · Stop Hooks 守在 FINISHED 门口（见正文第 6 步）</text>
+    </svg>
+    <div class="fig-cap">图 2 · <b>旅程全景</b>：主链六盒 + 三条旁路。这一张图，是后面八个模块的"地图"。</div>
+  </div>
+
+  <pre class="recap">你的任务："把 fetch_data() 改成异步并跑通测试"
+│
+├─ 1. Conversation(agent, workspace="./my_project")      ← 工厂分流：Local 会话
+├─ 2. send_message(...)                                   ← 只开单据：MessageEvent 入账本
+├─ 3. run() 心跳循环开始
+│     └─ Agent.step()：组装 View → 问 LLM → 分类响应
+│         ├─ TOOL_CALLS：view utils.py → str_replace → pytest
+│         │    （每步先写 ActionEvent，回执 ObservationEvent 成对入账）
+│         ├─ 中途兜底：太长→压缩 / API 抖动→重试 / 放空→提醒（本篇没触发）
+│         └─ CONTENT："已完成，共修改 2 个文件"
+├─ 4. Stop Hooks 检查 → 放行
+└─ 5. FINISHED · base_state.json + 事件文件落盘，可断电恢复
+
+你收到：两个文件被修改，7 个测试通过，全程零人工干预。</pre>
+</section>
+
+<!-- ======================= 第三章 ======================= -->
+<section id="ch3" class="reveal">
+  <div class="ch-head"><span class="ch-num">03</span><h2>八大核心模块详解</h2></div>
+
+  <p>第 2 章走完了任务旅程。这一章我们把地图上的每个区域打开，看看设计者是怎么想的。<strong>不需要全部读完 —— 挑你感兴趣的部分即可。</strong>每节结尾都有源码入口和深度文档链接，想钻多深都行。</p>
+
+  <!-- ============ 3.1 三件套 ============ -->
+  <h3 id="m-trio">3.1 Agent / Conversation / LLM —— 岗位说明书、上班过程与租来的大脑</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    想象一家公司雇了一名新员工：<strong>Agent 是岗位说明书</strong> —— 写明了这个岗位用什么大脑、带什么工具、遵守什么守则，打印归档后<strong>不许再改</strong>；<strong>Conversation 是这位员工某一天的上班过程</strong> —— 干到哪了、记了什么账、现在什么状态，全在这一天里；<strong>LLM 是从外包公司按小时租来的大脑</strong> —— 它本身不记事，每次被问都是看着你递过去的材料现场作答。
+  </div>
+
+  <p>这三者的分工是整个 SDK 最重要的设计决策：<strong>声明和策略放 Agent，会话事实和进度放 Conversation，模型能力与调用级运行态封装在 LLM。</strong>Agent 的字段被冻结（Pydantic frozen 模型），Conversation 因而能围绕独立 State 暂停、恢复和分叉；复用同一个 Agent 时仍要知道嵌套 LLM 的 Metrics、缓存和 fallback 状态可能被共享。</p>
+
+  <table>
+    <thead><tr><th>角色</th><th>管什么</th><th>可变吗</th><th>类比</th></tr></thead>
+    <tbody>
+      <tr><td><code>Agent</code></td><td>用哪个 LLM、带哪些工具、提示词怎么拼、安全策略是什么</td><td>冻结，创建后不可改</td><td>岗位说明书</td></tr>
+      <tr><td><code>Conversation</code></td><td>执行状态、事件账本、心跳循环、恢复与中断</td><td>全部可变状态的家</td><td>这一天的上班过程</td></tr>
+      <tr><td><code>LLM</code></td><td>模型调用、重试、fallback、用量指标</td><td>不承载会话事实，但持有 Metrics、缓存与路由等运行态</td><td>租来的大脑</td></tr>
+    </tbody>
+  </table>
+
+  <p>心跳的核心是 <code>Agent.step()</code> —— 每被调用一次就走"组装上下文 → 调 LLM → 分类响应 → 分派处理"一圈：</p>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 300" role="img" aria-label="Agent.step 心跳循环">
+      <defs>
+        <marker id="sar1" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#15803d"/>
+        </marker>
+        <marker id="sar2" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#6d28d9"/>
+        </marker>
+      </defs>
+      <!-- 环形四步 -->
+      <rect x="330" y="20" width="260" height="56" rx="10" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="1.8"/>
+      <text x="460" y="44" text-anchor="middle" fill="#15803d" font-size="14" font-weight="700">① 组装上下文（View + 系统提示）</text>
+      <text x="460" y="63" text-anchor="middle" fill="#78716c" font-size="10.5">从事件树活跃分支"放映"历史</text>
+
+      <rect x="640" y="122" width="230" height="56" rx="10" fill="rgba(161,98,7,.08)" stroke="#c2410c" stroke-width="1.8"/>
+      <text x="755" y="146" text-anchor="middle" fill="#c2410c" font-size="14" font-weight="700">② 调用 LLM</text>
+      <text x="755" y="165" text-anchor="middle" fill="#78716c" font-size="10.5">Chat / Responses 双门面</text>
+
+      <rect x="330" y="224" width="260" height="56" rx="10" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="460" y="248" text-anchor="middle" fill="#4338ca" font-size="14" font-weight="700">③ 分类响应 classify_response()</text>
+      <text x="460" y="267" text-anchor="middle" fill="#78716c" font-size="10.5">TOOL_CALLS / CONTENT / REASONING_ONLY / EMPTY</text>
+
+      <rect x="50" y="122" width="230" height="56" rx="10" fill="rgba(161,98,7,.08)" stroke="#c2410c" stroke-width="1.8"/>
+      <text x="165" y="146" text-anchor="middle" fill="#c2410c" font-size="14" font-weight="700">④ 执行工具 · 结果入账</text>
+      <text x="165" y="165" text-anchor="middle" fill="#78716c" font-size="10.5">ActionEvent ⇄ ObservationEvent</text>
+
+      <path d="M 590 62 C 660 70, 700 95, 730 120" fill="none" stroke="#15803d" stroke-width="1.6" marker-end="url(#sar1)"/>
+      <path d="M 730 178 C 700 205, 650 228, 592 242" fill="none" stroke="#15803d" stroke-width="1.6" marker-end="url(#sar1)"/>
+      <path d="M 328 246 C 270 230, 230 200, 205 180" fill="none" stroke="#15803d" stroke-width="1.6" marker-end="url(#sar1)"/>
+      <path d="M 140 122 C 150 90, 220 55, 328 42" fill="none" stroke="#15803d" stroke-width="1.6" marker-end="url(#sar1)"/>
+      <text x="460" y="152" text-anchor="middle" fill="#15803d" font-size="13" font-weight="700">Agent.step() = 一圈</text>
+      <text x="460" y="172" text-anchor="middle" fill="#a8a29e" font-size="10.5">run() 循环让它一圈接一圈</text>
+
+      <!-- 出口 -->
+      <path d="M 590 260 C 700 280, 760 268, 800 240" fill="none" stroke="#6d28d9" stroke-width="1.5" stroke-dasharray="5 4" marker-end="url(#sar2)"/>
+      <text x="812" y="222" fill="#6d28d9" font-size="11.5" font-weight="600">CONTENT</text>
+      <text x="812" y="238" fill="#6d28d9" font-size="11.5" font-weight="600">→ FINISHED</text>
+    </svg>
+    <div class="fig-cap">图 3 · <b>心跳一圈</b>：TOOL_CALLS 走 ④ 回到 ①；CONTENT 是唯一的"正常出口"。REASONING_ONLY / EMPTY 则在 ③ 处被提醒后重新进圈。</div>
+  </div>
+
+  <details class="misinfo">
+    <summary>常见误解澄清："Agent 是冻结的" ≠ "整个对象图都不可变"</summary>
+    <div class="dbody">
+      冻结的只是 <code>Agent</code> 这一层的 Pydantic 字段。它内部引用的 <code>LLM</code> 并不是冻结模型 —— LLM 身上还挂着调用指标（Metrics）、临时缓存和 fallback 状态这些运行期的可变数据。所以准确的说法是：<strong>配置层冻结，运行态有自己明确的归属</strong>（指标归 LLM，事实归 Conversation）。想"修改"一个 Agent？正确姿势是用它的字段拷贝出一个新的 Agent，而不是原地改。
+    </div>
+  </details>
+
+  <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/agent/agent.py</code> → <code>Agent</code> · <code>conversation/conversation.py</code> → <code>Conversation.__new__()</code> · <code>conversation/impl/local_conversation.py</code> → <code>LocalConversation</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#mental-model">主文档 03 · 核心运行时心智模型</a> · <a href="docs/software-agent-sdk/04-lifecycle.html">子文档 04 · 端到端执行主链</a></p>
+
+  <!-- ============ 3.2 状态机与事件树 ============ -->
+  <h3 id="m-state">3.2 状态机与事件树 —— 像 Git 一样记账</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    事件账本不像流水账，更像 <strong>Git 仓库</strong>：每条事件是一个 commit，记录着自己的 <code>parent_id</code>（父提交）；当前"读到哪了"由一个像 <code>HEAD</code> 的指针 <code>leaf_event_id</code> 标记；<strong>fork（分叉）就是开新分支</strong>去试另一种走法，<strong>navigate（导航）就是切分支</strong>。根节点的"父提交"是一个哨兵值 <code>__root__</code>，相当于空提交。
+  </div>
+
+  <p>为什么不是简单的列表？因为 Agent 需要<strong>试错</strong>：走了一半发现路不对，可以回到某个节点换个方向重来 —— 之前发生的事不能被抹掉（它们是已经发生的"事实"），只能开新分支。于是"事件是树，不是列表"成了整个系统的关键不变量：<strong>LLM 看到的上下文、会话恢复、可视化回放，都只是"从 HEAD 沿父指针走到根"这条活跃分支的不同读法。</strong></p>
+
+  <div class="figure">
+    <svg viewBox="0 0 920 290" role="img" aria-label="事件树示意图">
+      <defs>
+        <marker id="tar1" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto">
+          <path d="M0,0 L9,4 L0,8 Z" fill="#15803d"/>
+        </marker>
+      </defs>
+      <!-- 主链节点 -->
+      <circle cx="70" cy="120" r="14" fill="#fffdf8" stroke="#78716c" stroke-width="1.6"/>
+      <text x="70" y="125" text-anchor="middle" fill="#78716c" font-size="10" font-weight="700">根</text>
+      <circle cx="200" cy="120" r="17" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="200" y="125" text-anchor="middle" fill="#4338ca" font-size="10.5" font-weight="700">e1</text>
+      <circle cx="330" cy="120" r="17" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="330" y="125" text-anchor="middle" fill="#4338ca" font-size="10.5" font-weight="700">e2</text>
+      <circle cx="460" cy="120" r="17" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="460" y="125" text-anchor="middle" fill="#4338ca" font-size="10.5" font-weight="700">e3</text>
+      <circle cx="590" cy="120" r="17" fill="#fffdf8" stroke="#4338ca" stroke-width="1.8"/>
+      <text x="590" y="125" text-anchor="middle" fill="#4338ca" font-size="10.5" font-weight="700">e4</text>
+      <circle cx="720" cy="120" r="19" fill="rgba(21,128,61,.08)" stroke="#15803d" stroke-width="2.4"/>
+      <text x="720" y="125" text-anchor="middle" fill="#15803d" font-size="10.5" font-weight="700">e5</text>
+
+      <line x1="84" y1="120" x2="181" y2="120" stroke="#78716c" stroke-width="1.4"/>
+      <line x1="217" y1="120" x2="311" y2="120" stroke="#78716c" stroke-width="1.4"/>
+      <line x1="347" y1="120" x2="441" y2="120" stroke="#78716c" stroke-width="1.4"/>
+      <line x1="477" y1="120" x2="571" y2="120" stroke="#78716c" stroke-width="1.4"/>
+      <line x1="607" y1="120" x2="699" y2="120" stroke="#78716c" stroke-width="1.4"/>
+
+      <!-- HEAD 指针 -->
+      <path d="M 720 44 L 720 96" stroke="#15803d" stroke-width="1.8" marker-end="url(#tar1)"/>
+      <text x="720" y="32" text-anchor="middle" fill="#15803d" font-size="12" font-weight="700">leaf_event_id（HEAD）</text>
+
+      <!-- 分支 -->
+      <path d="M 460 137 C 460 185, 520 205, 558 208" fill="none" stroke="#6d28d9" stroke-width="1.6" stroke-dasharray="5 4"/>
+      <circle cx="580" cy="210" r="17" fill="rgba(109,40,217,.08)" stroke="#6d28d9" stroke-width="1.8"/>
+      <text x="580" y="215" text-anchor="middle" fill="#6d28d9" font-size="10.5" font-weight="700">f1</text>
+      <line x1="597" y1="210" x2="673" y2="210" stroke="#6d28d9" stroke-width="1.4" stroke-dasharray="5 4"/>
+      <circle cx="692" cy="210" r="17" fill="rgba(109,40,217,.08)" stroke="#6d28d9" stroke-width="1.8"/>
+      <text x="692" y="215" text-anchor="middle" fill="#6d28d9" font-size="10.5" font-weight="700">f2</text>
+      <text x="800" y="215" fill="#6d28d9" font-size="11.5">fork：从 e3 开分支试另一条路</text>
+
+      <!-- 事件类型标注 -->
+      <text x="200" y="166" text-anchor="middle" fill="#a8a29e" font-size="10">MessageEvent</text>
+      <text x="330" y="166" text-anchor="middle" fill="#a8a29e" font-size="10">ActionEvent</text>
+      <text x="460" y="94" text-anchor="middle" fill="#a8a29e" font-size="10">ObservationEvent</text>
+      <text x="590" y="166" text-anchor="middle" fill="#a8a29e" font-size="10">ActionEvent</text>
+      <text x="720" y="166" text-anchor="middle" fill="#a8a29e" font-size="10">ObservationEvent</text>
+
+      <text x="460" y="266" text-anchor="middle" fill="#a8a29e" font-size="11.5">活跃分支 = 从 HEAD（e5）沿 parent_id 一路走到根 —— LLM 的上下文只放映这条线</text>
+    </svg>
+    <div class="fig-cap">图 4 · <b>事件树</b>：每条事件带 parent_id；fork 开分支，navigate 切分支；EventLog 公共 API 只追加，不原地更新已有事件。</div>
+  </div>
+
+  <p>会话"现在处于什么状况"，由一个八态状态机描述：</p>
+
+  <table>
+    <thead><tr><th>状态</th><th>大白话含义</th><th>属于终态吗</th></tr></thead>
+    <tbody>
+      <tr><td><code>IDLE</code></td><td>还没开工（或刚被"翻篇"）</td><td>否</td></tr>
+      <tr><td><code>RUNNING</code></td><td>心跳循环正在跑</td><td>否</td></tr>
+      <tr><td><code>PAUSED</code></td><td>被暂停 / 被中断，随时可继续</td><td>否</td></tr>
+      <tr><td><code>WAITING_FOR_CONFIRMATION</code></td><td>卡在安全确认，等人点头</td><td>否</td></tr>
+      <tr><td><code>FINISHED</code></td><td>Agent 宣布干完了（注意：不代表任务成功，见第 4 章）</td><td>是</td></tr>
+      <tr><td><code>ERROR</code></td><td>出错终止（比如迭代数达到上限，默认 500 轮）</td><td>是</td></tr>
+      <tr><td><code>STUCK</code></td><td>卡死检测器判定"原地打转"</td><td>是</td></tr>
+      <tr><td><code>DELETING</code></td><td>会话正在被删除</td><td>否</td></tr>
+    </tbody>
+  </table>
+
+  <p>账本怎么落盘？答案朴素得可爱：<strong>没有数据库</strong>。状态快照存成一份 <code>base_state.json</code>，事件逐条存成小文件（<code>events/event-NNNNN.json</code>）。恢复一次会话 = 把状态快照和事件文件读回来，再让 Agent 校验（verify）一遍。这也意味着你随时可以用文本工具直接"翻账本"排障。</p>
+
+  <details class="misinfo">
+    <summary>小澄清：Action 和 Observation 为什么必须成对？</summary>
+    <div class="dbody">
+      正常工具动作（Action）会有回执（Observation），Observation 通过 <code>action_id</code>（以及 LLM 侧的 <code>tool_call_id</code>）回指动作。如果动作写入后进程就崩了，账本上会留下未配对 Action。恢复后的 <code>run()</code> 会扫描这些动作（<code>get_unmatched_actions()</code>）并重新分派，结构错误则由错误事件收口；这会修复 LLM 所需的工具历史结构，但不能证明崩溃前的外部副作用尚未发生，因此非幂等工具需要额外核对。
+    </div>
+  </details>
+
+  <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/conversation/state.py</code> → <code>ConversationExecutionStatus</code> · <code>conversation/event_store.py</code> → <code>EventLog</code> · <code>event/base.py</code> → <code>parent_id</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#state-events">主文档 05 · 状态机、事件树与恢复</a> · <a href="docs/software-agent-sdk/05-state-events.html">子文档 05</a></p>
+
+  <!-- ============ 3.3 上下文工程 ============ -->
+  <h3 id="m-context">3.3 上下文工程 —— 给"金鱼记忆"的大脑递材料</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    LLM 每次调用都是"现场作答"，它能看到什么，完全取决于你递过去的材料。这份材料叫 <strong>View</strong> —— 就像数据库里的<strong>视图（View）</strong>：它不存储数据，只是按规则从底层数据（事件树的活跃分支）投影出来的一份"只读呈现"。而 <strong>Condenser</strong> 是材料太厚时的<strong>真空压缩袋</strong>：把旧材料抽真空压成一份摘要，原件依然完好地躺在账本里。
+  </div>
+
+  <p>每次 <code>Agent.step()</code> 组装上下文时，系统做三件事：</p>
+  <ol>
+    <li><strong>生成 View</strong>：从活跃分支把事件翻译成 LLM 对话消息。这不是简单拼接 —— View 有一套严格规则：Observation 不能凭空出现、同一批工具调用必须原子呈现、工具调用与回执必须配对……这些规则保证了递到大脑面前的历史永远是"合法"的。</li>
+    <li><strong>拼装系统提示词</strong>：由一个 PromptSection 注册表按顺序组装 —— 有静态段落（环境信息、人格设定），也有动态段落（比如当前可用的技能列表，每次调用现场解析）。</li>
+    <li><strong>按需瘦身</strong>：如果历史超过预算，Condenser 出场。</li>
+  </ol>
+
+  <p>Condenser 家族有几款现成实现：<code>RollingCondenser</code>（滚动窗口，旧消息滚出去）和 <code>LLMSummarizingCondenser</code>（请 LLM 把旧历史写成一份摘要）等，还能用 Pipeline 把它们串起来。压缩发生时，系统会在账本里记一条 <code>Condensation</code> 事件 —— 压缩本身也是"发生过的事实"。</p>
+
+  <details class="misinfo">
+    <summary>常见误解澄清：压缩会删事件吗？—— 不会</summary>
+    <div class="dbody">
+      Condenser 只是 <strong>View 的转换器</strong>：它改变"这次给大脑看什么"，从不触碰账本。事件文件一条不少，随时可以 fork 回压缩前的分支、完整回放。把"上下文管理"和"事实存储"彻底分开，是这套设计能兼顾省 token 与可恢复的关键。
+    </div>
+  </details>
+
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">顺带一提</span>Skills 的"渐进披露"</div>
+    给 Agent 装了很多技能（Skills）时，系统不会把所有技能全文塞进提示词 —— 那会瞬间撑爆上下文。默认只注入每个技能的一行简介（规范上限 1024 字符），Agent 觉得哪个有用，再通过 <code>invoke_skill</code> 把全文"借阅"进来。像图书馆：书架上只摆目录，要书再去找管理员。
+  </div>
+
+  <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/context/view/</code> → <code>View</code> · <code>context/condenser/base.py</code> → <code>RollingCondenser</code> · <code>context/condenser/llm_summarizing_condenser.py</code> · <code>skills/skill.py</code> → <code>to_prompt()</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#context">主文档 06 · 上下文工程与 Prompt</a> · <a href="docs/software-agent-sdk/06-context.html">子文档 06</a> · <a href="docs/software-agent-sdk/08-recovery.html">子文档 08 · Condenser 家族</a></p>
+
+  <!-- ============ 3.4 LLM 管道 ============ -->
+  <h3 id="m-llm">3.4 LLM 调用管道 —— 翻译公司与五层安全网</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    各家模型厂商的 API 方言都不一样。<code>LLM</code> 类就是一家<strong>翻译公司</strong>：你对它说同一种"普通话"（SDK 的统一调用方式），它内部的译员（LiteLLM 传输层）负责翻译成各家方言。每个资深译员手边还有一本<strong>国别手册</strong>（model features，模型特性注册表），记着"这家要额外带这个参数、那家不支持图片"之类的差异 —— 而不是把所有 if-else 都塞进前台接待员（主调用逻辑）的脑子里。
+  </div>
+
+  <p>这家翻译公司对内有两个门面：<strong>Chat Completions</strong> 和 <strong>Responses</strong> 两套 API，各配同步与异步版本（<code>completion()</code> / <code>acompletion()</code>、<code>responses()</code> / <code>aresponses()</code>）。默认会自动挑合适的 API。两扇门最终都汇聚到同一条传输通道，重试逻辑对两条路一视同仁。</p>
+
+  <p>真正值钱的是出错时的<strong>分层恢复阶梯</strong> —— 从轻到重共五级：</p>
+
+  <table>
+    <thead><tr><th>层级</th><th>触发场景</th><th>系统的动作</th><th>类比</th></tr></thead>
+    <tbody>
+      <tr><td>1 · Retry</td><td>网络抖动、限流等临时错误</td><td>自动重试（带退避）</td><td>电话占线，稍等重拨</td></tr>
+      <tr><td>2 · Fallback</td><td>主模型持续不可用</td><td>切换到备用模型继续</td><td>这个译员病了，换一个顶上</td></tr>
+      <tr><td>3 · Nudge</td><td>模型返回空响应或只思考不输出</td><td>发一条纠正性提醒再问一次</td><td>"麻烦给个准话"</td></tr>
+      <tr><td>4 · Condense</td><td>上下文太长被拒绝</td><td>先压缩历史再重试</td><td>材料太厚，先做摘要再递</td></tr>
+      <tr><td>5 · Hard error</td><td>以上都救不回来</td><td>抛错终止，状态进入 ERROR</td><td>上报主管，人工介入</td></tr>
+    </tbody>
+  </table>
+
+  <details>
+    <summary>小澄清："上下文太长"和"历史格式坏了"是两种病</summary>
+    <div class="dbody">
+      模型报"历史不合法"（比如工具回执缺失或重复）时，系统不会把它当成"上下文溢出"去盲目压缩，而是归类为专门的 <code>LLMMalformedConversationHistoryError</code> 单独处理 —— 日志里也能看出这是"历史坏了"而不是"历史长了"。分清楚病因，才能对症下药。
+    </div>
+  </details>
+
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">工程细节</span>同步与异步完全对称</div>
+    SDK 里每个异步方法都有同步孪生兄弟：<code>acompletion</code> ↔ <code>completion</code>、<code>acondense</code> ↔ <code>condense</code>、<code>astep</code> ↔ <code>step</code>、<code>arun</code> ↔ <code>run</code>。重试机制天然兼容两者。所以写脚本可以用同步版图省事，做服务就用异步版提吞吐 —— 语义一模一样。
+  </div>
+
+  <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/llm/llm.py</code> → <code>completion()</code> / <code>_transport_call()</code> · 模型特性见 <code>llm/utils/model_features.py</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#llm">主文档 07 · LLM 抽象与调用管道</a> · <a href="docs/software-agent-sdk/07-llm.html">子文档 07</a> · <a href="docs/software-agent-sdk/08-recovery.html">子文档 08 · 分层恢复</a></p>
+
+  <!-- ============ 3.5 工具体系 ============ -->
+  <h3 id="m-tool">3.5 工具体系 —— USB 接口与共享吊塔的工地</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    每个工具都像一个 <strong>USB 设备</strong>：想接入系统，必须符合统一接口 —— 一份"铭牌"（ToolSpec：名字、描述、参数 schema）加一个"执行器"（拿到动作、返回回执）。插座（注册表）不关心你是键盘还是硬盘，只认接口。而并行执行像一个<strong>有多台设备共享一台吊塔的工地</strong>：谁要用吊塔（独占资源），先登记，调度器按登记排队，绝不撞车。
+  </div>
+
+  <p>一个工具从定义到被调用，走这样一条链：</p>
+
+  <table>
+    <thead><tr><th>环节</th><th>角色</th><th>大白话</th></tr></thead>
+    <tbody>
+      <tr><td>ToolSpec</td><td>工具的"铭牌"</td><td>叫什么、干什么、参数长什么样</td></tr>
+      <tr><td>Registry</td><td>插座 / 注册表</td><td>所有可用工具在这里登记；<code>list_usable_tools()</code> 还会过滤掉环境里用不了的（比如没装浏览器就隐藏浏览器工具）</td></tr>
+      <tr><td><code>Agent.tools_map</code></td><td>这个员工领到的工具包</td><td>名字 → 工具定义的映射，Agent 创建时装配</td></tr>
+      <tr><td>ToolExecutor</td><td>执行器</td><td>真正动手：接收 Action，返回 Observation</td></tr>
+      <tr><td>ParallelToolExecutor</td><td>并行调度员</td><td>一批动作同时开工，用资源锁防冲突，保证回执顺序合法</td></tr>
+    </tbody>
+  </table>
+
+  <p><code>openhands-tools</code> 包里自带了一批"标配工具"：</p>
+
+  <table>
+    <thead><tr><th>工具</th><th>干什么</th></tr></thead>
+    <tbody>
+      <tr><td>Terminal</td><td>跑 shell 命令（Agent 的"双手"）</td></tr>
+      <tr><td>File Editor</td><td>查看 / 精确替换 / 插入文件内容（只切病灶的"手术刀"）</td></tr>
+      <tr><td>Grep / Glob</td><td>搜内容 / 找文件（优先用 ripgrep）</td></tr>
+      <tr><td>Browser</td><td>浏览器操作（环境可用时才出现）</td></tr>
+      <tr><td>Task（子代理委派）</td><td>把子任务外包给一个独立的子会话（见 3.8）</td></tr>
+      <tr><td>Finish / Think</td><td>"交卷铃"与"草稿纸"</td></tr>
+    </tbody>
+  </table>
+
+  <p>想给 Agent 加个自定义工具？实现一个工具类（铭牌 + 执行器），然后放进 <code>Agent(tools=[...])</code> 就完事 —— 就像插上 USB 设备，系统自动认出并告诉大脑怎么用。</p>
+
+  <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/tool/tool.py</code> → <code>ToolExecutor</code> · <code>tool/registry.py</code> → <code>list_usable_tools()</code> · <code>agent/parallel_executor.py</code> → <code>ParallelToolExecutor</code> · 示例 <code>examples/01_standalone_sdk/02_custom_tools.py</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#tools">主文档 09 · 工具体系与并行执行</a> · <a href="docs/software-agent-sdk/09-tools.html">子文档 09</a></p>
+
+  <!-- ============ 3.6 安全 ============ -->
+  <h3 id="m-security">3.6 安全、确认与 Hooks —— 先开单，后开火</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    一家靠谱的餐厅，服务员不会喊一声"做红烧肉"厨师就直接开火。SDK 会先构造点单信息并让 <code>PreToolUse</code> 门禁检查；门禁放行后才把 <code>ActionEvent</code> 写入账本，随后由安全分析与确认策略决定等待还是执行。确认并非默认开启，只有配置确认模式后，需要顾客点头的动作才会暂停。
+  </div>
+
+  <p>具体走一遍：Agent 提出一批工具调用后，系统构造 Action 并先运行 <code>PreToolUse</code>；被拒绝的 Action 不写入 EventLog。放行的 Action 持久化后，系统再问 <strong>SecurityAnalyzer（安全分析器）</strong>："这批动作风险几何？"分析器给出风险等级（没配分析器就是"未知"）。接着 <strong>ConfirmationPolicy（确认策略）</strong> 根据风险等级拍板：</p>
+
+  <table>
+    <thead><tr><th>策略</th><th>行为</th></tr></thead>
+    <tbody>
+      <tr><td><code>AlwaysConfirm</code></td><td>每个动作都问 —— 最谨慎</td></tr>
+      <tr><td><code>NeverConfirm</code></td><td>从不打断 —— 全自动（用于可信环境）</td></tr>
+      <tr><td><code>ConfirmRisky</code></td><td>只拦高风险动作 —— 常用折中</td></tr>
+    </tbody>
+  </table>
+
+  <p><strong>默认行为：</strong><code>ConversationSettings.confirmation_mode</code> 关闭，运行态使用 <code>NeverConfirm</code>；因此仅配置风险分析不等于启用了人工确认。</p>
+
+  <p>需要确认时，状态切到 <code>WAITING_FOR_CONFIRMATION</code>，<code>run()</code> 循环退出。你确认后再次调用 <code>run()</code>，Agent 在下一步开头看到账本上那些"待执行的动作"，就当作你已点头，继续执行。<strong>"先持久化再确认"不是实现细节，而是刻意设计</strong>：哪怕确认到一半进程崩了，重启后那些动作依然原样在账本上等着你，不会丢、不会重复开单。</p>
+
+  <p>另一个守门机制是 <strong>Hooks（钩子）</strong> —— 在生命周期的关键节点上可以挂你自己的脚本或提示词，像安在各个门口的门禁：</p>
+
+  <table>
+    <thead><tr><th>门口</th><th>你能做什么</th></tr></thead>
+    <tbody>
+      <tr><td>会话开始 / 结束时</td><td>初始化环境、收尾检查（Stop hook 可以<strong>拒绝收工</strong>，让 Agent 继续干）</td></tr>
+      <tr><td>收到消息时</td><td>改写或增强用户输入</td></tr>
+      <tr><td>工具执行前后</td><td>拦截、审计、补充上下文</td></tr>
+    </tbody>
+  </table>
+
+  <details class="misinfo">
+    <summary>常见误解澄清：Workspace 不是"安全沙箱"的同义词</summary>
+    <div class="dbody">
+      安全是<strong>分工</strong>的：SecurityAnalyzer 管风险判定，ConfirmationPolicy 管要不要问人，Hooks 管自定义门禁，Workspace 管的是"命令在哪里执行"（本地 / Docker / 云端）。把 Agent 放进 Docker 工作区确实能隔离破坏面，但那是部署选择，不是 SDK 默认的安全承诺 —— 别把"在容器里跑"当成唯一防线。
+    </div>
+  </details>
+
+  <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/security/confirmation_policy.py</code> · <code>security/analyzer.py</code> → <code>analyze_pending_actions()</code> · <code>hooks/manager.py</code> · 示例 <code>examples/01_standalone_sdk/04_confirmation_mode_example.py</code> 与 <code>33_hooks/</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#security">主文档 10 · 安全、确认与 Hooks</a> · <a href="docs/software-agent-sdk/10-security.html">子文档 10</a> · <a href="docs/software-agent-sdk/11-workspace.html">子文档 11 · Workspace</a></p>
+
+  <!-- ============ 3.7 远程与 Server ============ -->
+  <h3 id="m-remote">3.7 远程执行与 Agent Server —— 控制塔与"别信第一声'完成'"</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    本地会话是你亲自在工地盯着；远程会话则像<strong>遥控一个外包团队</strong>：<strong>Agent Server 是控制塔</strong>，REST API 是指令通道（"开工""暂停""查进度"），WebSocket 是实时雷达屏（事件和状态一有变化就推送过来）。你手里的 <code>RemoteConversation</code> 是个遥控器 —— 用法和本地几乎一样，但每一次"看起来完成了"，都要等控制塔的权威广播才算数。
+  </div>
+
+  <p><code>openhands-agent-server</code> 包把整套 SDK 装进一个 FastAPI 服务里：<code>create_app()</code> 应用工厂组装约二十组 REST 路由（统一挂在 <code>/api/*</code> 前缀下：会话、事件、工具、文件、设置……），外加独立的 WebSocket 路由（事件流在 <code>/sockets/events/{conversation_id}</code>）。服务内部由 ConversationService（管会话生命周期）和 EventService（管事件流转与广播）分头打理，还支持"暖池"模式（deferred init）：先占个坑不干活，等真正分配了用户再初始化，加快调度。</p>
+
+  <p>远程模式下最精妙的设计是<strong>完成屏障（completion barrier）</strong>。为什么？回看 3.6 节：Agent 喊出 <code>FINISHED</code> 后，Stop hook 有权拒绝放行，状态会被拨回 <code>RUNNING</code>。也就是说 —— <strong>第一次收到的 FINISHED 可能只是"狼来了"</strong>。于是遥控器端定了三条规矩：</p>
+
+  <table>
+    <thead><tr><th>信号</th><th>可信度</th><th>处理方式</th></tr></thead>
+    <tbody>
+      <tr><td>WS 推送的字段级 FINISHED</td><td>只当"提示"</td><td>不作数，继续等</td></tr>
+      <tr><td>run 结束后的 WS 全量状态快照</td><td><strong>权威信号</strong></td><td>收到即核对事件、确认完成</td></tr>
+      <tr><td>REST 轮询到终态且始终没有 WS 快照</td><td>兜底信号</td><td>连续 30 秒（<code>TERMINAL_HARD_FALLBACK_SECS</code>）才接受，防止无限挂起</td></tr>
+    </tbody>
+  </table>
+
+  <p>顺带区分两个容易混的"停"：<strong>pause（暂停）</strong>是按下暂停键，稍后可以从容继续；<strong>interrupt（中断）</strong>是取消正在进行的那次运行 —— 底层直接取消异步任务，取消信号从 LLM 的 HTTP 流一路贯穿到会话循环，最后状态落到 <code>PAUSED</code> 并记一条中断事件。快、狠、但可恢复。</p>
+
+  <p class="src">源码入口：<code>openhands-agent-server/openhands/agent_server/api.py</code> → <code>create_app()</code> · <code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py</code> → <code>_wait_for_run_completion()</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#server">主文档 14 · Agent Server</a> · <a href="docs/software-agent-sdk/14-server.html">子文档 14</a> · <a href="docs/software-agent-sdk/15-remote.html">子文档 15 · 完成屏障</a></p>
+
+  <!-- ============ 3.8 扩展生态 ============ -->
+  <h3 id="m-ext">3.8 扩展生态 —— 小抄、插件包与外包小队</h3>
+
+  <div class="analogy">
+    <span class="al">Analogy → 类比理解</span>
+    想让这位 AI 员工变得更强，有四种互不冲突的路子：<strong>Skills 是"小抄"</strong>（按任务现查现用的操作手册）；<strong>Plugins 是"插件包"</strong>（成捆地加装技能、钩子和工具）；<strong>Subagent 是"外包小队"</strong>（把子任务整个委托出去，独立开工、独立记账）；<strong>MCP 是"外部工具集装箱"</strong>（接入别人按标准协议发布的工具服务）。
+  </div>
+
+  <table>
+    <thead><tr><th>机制</th><th>是什么</th><th>什么时候物化（真正生效）</th></tr></thead>
+    <tbody>
+      <tr><td>Skills</td><td>带触发条件的操作手册；简介常驻提示词，全文按需借阅（见 3.3）</td><td>Agent 主动 <code>invoke_skill</code> 或消息命中触发词时</td></tr>
+      <tr><td>Plugins</td><td>技能 + 钩子 + 工具的打包分发单元，可从本地或远程装载</td><td>第一次发消息时<strong>懒加载</strong> —— 创建会话后立刻查插件是查不到的</td></tr>
+      <tr><td>Subagent</td><td>由 Task 工具发起的独立子会话（有自己的事件账本），干完把结果汇报回来</td><td>主 Agent 决定委派时</td></tr>
+      <tr><td>MCP</td><td>接入外部 MCP 服务器发布的工具，支持运行时动态发现与刷新</td><td>会话初始化连接 MCP 服务器时</td></tr>
+    </tbody>
+  </table>
+
+  <div class="card yellow">
+    <div class="card-title"><span class="tag yellow">容易踩的坑</span>MCP 配置有三种形状，只认一种规范形</div>
+    SDK 自己的配置形状是<strong>扁平的服务器映射</strong>（<code>dict[str, MCPServer]</code>）；网上常见的 <code>.mcp.json</code> 那种 <code>{"mcpServers": {...}}</code> 包一层的写法，是旧格式的兼容入口，系统会自动拆包；而 FastMCP 的类型化配置只在真正建立连接的那一刻才被构造出来。三种形状各管一段，写配置时认准"服务器映射"这一种就不会错。
+  </div>
+
+  <p>还有两件"后勤"值得知道：<strong>Settings（设置）</strong>是这套系统的装备清单 —— 可序列化配置收敛在 <code>AgentSettings</code> 与 <code>ConversationSettings</code> 两个规范模型中，持久化形状带着 <code>schema_version</code> 迁移链和黄金样本兼容门禁；<strong>Secrets（密钥）</strong>则统一走加密/脱敏管道，序列化时默认打码。</p>
+
+  <p class="src">源码入口：<code>openhands-sdk/openhands/sdk/skills/skill.py</code> · <code>mcp/config.py</code> → <code>MCPServer</code> · <code>settings/model.py</code> → <code>AgentSettings</code> · <code>subagent/load.py</code></p>
+  <p class="deep">深入阅读：<a href="software_agent_architecture.html#extensions">主文档 13 · 扩展生态</a> · <a href="docs/software-agent-sdk/13-extensions.html">子文档 13</a> · <a href="docs/software-agent-sdk/12-mcp.html">子文档 12 · MCP</a> · <a href="docs/software-agent-sdk/16-settings.html">子文档 16 · Settings</a> · <a href="docs/software-agent-sdk/18-patterns.html">子文档 18 · 模式与权衡</a></p>
+</section>
+
+<!-- ======================= 第四章 ======================= -->
+<section id="ch4" class="reveal">
+  <div class="ch-head"><span class="ch-num">04</span><h2>设计哲学与常见误解</h2></div>
+
+  <p>八个模块看完，最后用四条"铁律"把它们串起来。这四条是设计者在无数次权衡后立下的规矩 —— 读源码时遇到不理解的设计，回头看看这四条，多半能想通。</p>
+
+  <div class="card green">
+    <div class="card-title"><span class="tag green">铁律 1</span>协议与实现分离，四包各管一段</div>
+    SDK 定义协议与编排，Tools 提供能力，Workspace 提供执行环境，Agent Server 提供远程运行时。依赖方向永远是单向的：上层可以用下层，下层绝不反向 import 上层。这让"换个工具包""换个部署形态"都变成拔插头换插座，而不是拆房子。
+  </div>
+
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">铁律 2</span>可变状态只有一个家</div>
+    Agent 的 Pydantic 字段冻结、事件不可变，会话事实集中在 Conversation 的
+    <code>ConversationState</code> 里。想知道"这次会话现在什么情况"，只问它一个；想恢复、分叉、持久化，也以它为权威。
+    但这不是“整个对象图都不可变”：当前 LLM 仍维护 Metrics、缓存、fallback 和 Router 的
+    <code>active_llm</code> 等运行态。官方论文中的 immutable components 是设计概括，读代码时应以这个更精确的边界为准。
+  </div>
+
+  <div class="card purple">
+    <div class="card-title"><span class="tag purple">铁律 3</span>同步与异步，永远成对出现</div>
+    从 LLM 调用到 condenser 到 Agent.step 再到 run，每一层都有同步/异步两个孪生版本，基类提供默认委托，你自定义的子类不用改就能同时跑两条路。写脚本图省事用同步，做服务要吞吐用异步。
+  </div>
+
+  <div class="card yellow">
+    <div class="card-title"><span class="tag yellow">铁律 4</span>向后兼容是硬约束，不是口号</div>
+    公开 API 的废弃必须给出至少跨越 5 个 minor 版本的移除缓冲期；历史事件格式的兼容是<strong>永久义务</strong>（旧账本必须永远读得懂）；持久化设置带版本号迁移链，由 CI 的黄金样本门禁把守。升级 SDK，你的旧会话、旧配置不该出事。
+  </div>
+
+  <details class="misinfo">
+    <summary>常见误解一：事件账本 = 某个数据库？—— 真不是</summary>
+    <div class="dbody">
+      没有 SQLite、没有 Postgres。落盘形状就是 <code>base_state.json</code> 加一叠逐条的事件 JSON 文件。恢复 = 读回快照与事件 + Agent 校验。这个"朴素到可以 cat"的设计，换来了排障透明（随时翻账本）、部署零依赖（不需要数据库运维）和格式永久可控（JSON 文本就是最好的长期存档）。代价是大规模检索要靠代码而非 SQL —— 这是刻意的取舍。
+    </div>
+  </details>
+
+  <details class="misinfo">
+    <summary>常见误解二：FINISHED = 任务成功？—— 差得远</summary>
+    <div class="dbody">
+      <code>FINISHED</code> 的准确含义只有一句：<strong>Agent 决定不再继续了</strong>（它给出了 CONTENT 响应）。测试跑没跑通、改得对不对，状态机一概不知。想要"真正的验收"，得靠 Stop hooks 在收工门口做检查（不合格就拒停，Agent 继续加班），或者引入专门的评审机制。另外记住 3.7 节的教训：远程模式下，第一声 FINISHED 连"它决定停了"都不一定算数。
+    </div>
+  </details>
+
+  <details class="misinfo">
+    <summary>常见误解三：升级 SDK 只需要看 changelog？—— 先认清四种"兼容表面"</summary>
+    <div class="dbody">
+      这个仓库把"兼容"拆成四条独立的战线：<strong>Python API</strong>（类和方法，有弃用缓冲期）、<strong>Field 默认值</strong>（Pydantic 字段默认值变更会被单独标记和通告）、<strong>REST/OpenAPI 契约</strong>（服务端接口，同样有 5 个 minor 的缓冲）、<strong>持久化格式</strong>（设置带迁移链，事件永久兼容）。你的集成面碰到的是哪一条战线，升级时就要看哪一条的规则 —— 笼统地问"这个版本有没有 breaking change"是没有标准答案的。
+    </div>
+  </details>
+</section>
+
+<!-- ======================= 第五章 ======================= -->
+<section id="ch5" class="reveal">
+  <div class="ch-head"><span class="ch-num">05</span><h2>动手探索指南</h2></div>
+
+  <h3>5.1 先跑起来 —— 建立第一手感</h3>
+
+  <div class="cmd"><span class="c"># 1) 准备开发环境（需要 uv >= 0.8.13）</span>
+<span class="g">make build</span>
+
+<span class="c"># 2) 配置你的模型凭据（Linux/macOS）</span>
+<span class="g">export LLM_MODEL=<span class="y">"gpt-5.5"</span> LLM_API_KEY=<span class="y">"sk-..."</span></span>
+<span class="c"># Windows PowerShell 用户：</span>
+<span class="g">$env:LLM_MODEL=<span class="y">"gpt-5.5"</span>; $env:LLM_API_KEY=<span class="y">"sk-..."</span></span>
+
+<span class="c"># 3) 跑第一个例子：让 Agent 把当前项目的 3 个事实写进 FACTS.txt</span>
+<span class="g">uv run python examples/01_standalone_sdk/01_hello_world.py</span></div>
+
+  <p>这个例子只有 29 行，却浓缩了全部核心概念 —— 值得逐行读一遍：</p>
+
+  <div class="cmd"><span class="c"># examples/01_standalone_sdk/01_hello_world.py（结构示意）</span>
+llm = LLM(model=<span class="y">"…"</span>, api_key=<span class="y">"…"</span>)                             <span class="c"># 租大脑</span>
+agent = Agent(llm=llm, tools=[Terminal, FileEditor, TaskTracker])  <span class="c"># 写岗位说明书</span>
+conversation = Conversation(agent=agent, workspace=<span class="y">"./"</span>)          <span class="c"># 开一天班</span>
+conversation.send_message(<span class="y">"Write 3 facts about the project..."</span>)   <span class="c"># 开单据</span>
+conversation.run()                                                 <span class="c"># 开火，心跳到收工</span></div>
+
+  <p>跑通之后，按兴趣继续翻 <code>examples/01_standalone_sdk/</code>（约 50 个由浅入深的例子）：<code>02_custom_tools.py</code>（加工具）、<code>04_confirmation_mode_example.py</code>（确认流）、<code>10_persistence.py</code>（持久化与恢复）、<code>11_async.py</code>（异步版）、<code>14_context_condenser.py</code>（压缩器）、<code>45_parallel_tool_execution.py</code>（并行工具）……几乎每个模块都有对应的"活标本"。</p>
+
+  <h3>5.2 源码阅读路线 —— 六个文件，一条线</h3>
+
+  <table>
+    <thead><tr><th>顺序</th><th>文件</th><th>看什么</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><code>examples/01_standalone_sdk/01_hello_world.py</code></td><td>一切如何开始：LLM → Agent → Conversation 三行组装</td></tr>
+      <tr><td>2</td><td><code>openhands-sdk/openhands/sdk/conversation/conversation.py</code></td><td><code>Conversation.__new__()</code>：工厂如何按 workspace 分流 Local / Remote</td></tr>
+      <tr><td>3</td><td><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py</code></td><td><code>run()</code> 心跳循环：所有退出条件都在这里，是"项目的心跳"</td></tr>
+      <tr><td>4</td><td><code>openhands-sdk/openhands/sdk/agent/agent.py</code></td><td><code>step()</code>：一步之内发生的一切（组装 → 调 LLM → 分派 → 执行）</td></tr>
+      <tr><td>5</td><td><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py</code></td><td><code>classify_response()</code>：四类响应的判定逻辑</td></tr>
+      <tr><td>6</td><td><code>openhands-sdk/openhands/sdk/conversation/state.py</code></td><td>状态机、HEAD 推进、事件持久化 —— 所有"事实"的家</td></tr>
+    </tbody>
+  </table>
+
+  <h3>5.3 常见问题</h3>
+
+  <details>
+    <summary>这和 LangChain / LangGraph 有什么区别？</summary>
+    <div class="dbody">
+      简单说：那边更像"零件库 + 图编排框架"，你自己决定怎么拼；这边是一套<strong>带有强烈主张的完整运行时</strong> —— 事件必须是树、状态必须集中、恢复/确认/远程都有内置的标准答案，还配了可直接部署的 Agent Server。如果你想要"开箱即用的软件工程 Agent 基础设施"，选它；如果你想从零自由编排任意形状的图，那边更灵活。两者不是同一层次的东西。
+    </div>
+  </details>
+
+  <details>
+    <summary>OpenHands 和这个 SDK 是什么关系？</summary>
+    <div class="dbody">
+      SDK 是地基，OpenHands 产品是建在地基上的房子。这个仓库里的 <code>openhands-agent-server</code> 就是"把房子交付出去的脚手架"：把 SDK 装进 REST/WebSocket 服务，配上 Docker 镜像和二进制发布。
+    </div>
+  </details>
+
+  <details>
+    <summary>我想给 Agent 加一个自己的工具，麻烦吗？</summary>
+    <div class="dbody">
+      不麻烦：实现一个工具类（提供 ToolSpec 铭牌 + 执行逻辑），放进 <code>Agent(tools=[...])</code> 即可。照抄 <code>examples/01_standalone_sdk/02_custom_tools.py</code> 起步。细节看<a href="docs/software-agent-sdk/09-tools.html">子文档 09</a>。
+    </div>
+  </details>
+
+  <details>
+    <summary>pause 和 interrupt 到底有什么区别？</summary>
+    <div class="dbody">
+      <code>pause</code> 是"按暂停键"：循环停在干净的位置，随时继续；<code>interrupt</code> 是"取消正在进行的那次运行"：直接取消底层异步任务，取消信号从模型 HTTP 流一路传到会话循环，状态落到 <code>PAUSED</code> 并记一条中断事件。一个温和，一个果断，但都不毁数据 —— 账本永远完整。
+    </div>
+  </details>
+
+  <details>
+    <summary>会话跑到一半进程崩了，之前的工作白费吗？</summary>
+    <div class="dbody">
+      不会。所有事件和状态快照都在落盘（3.2 节）。重启后从持久化目录恢复会话，系统还会主动修补"孤儿动作"（发出了但没回执的工具调用），保证恢复后的历史对 LLM 依然合法。试试 <code>10_persistence.py</code> 这个例子。
+    </div>
+  </details>
+
+  <details>
+    <summary>我要把它用在生产环境，还要关心什么？</summary>
+    <div class="dbody">
+      三件事：<strong>部署</strong>（用 agent-server 的 Docker 镜像或二进制，注意 warm-pool/deferred init 配置）、<strong>密钥管理</strong>（Secrets 默认脱敏，配置好加密与注入方式）、<strong>升级纪律</strong>（第 4 章的四条兼容表面，尤其是持久化格式的迁移链）。分别看<a href="docs/software-agent-sdk/14-server.html">子文档 14</a>、<a href="docs/software-agent-sdk/16-settings.html">16</a>、<a href="docs/software-agent-sdk/17-engineering.html">17</a>。
+    </div>
+  </details>
+</section>
+
+<!-- ======================= 附录 ======================= -->
+<section id="appA" class="reveal">
+  <div class="ch-head"><span class="ch-num">A</span><h2>附录 A · 术语对照表</h2></div>
+
+  <table>
+    <thead><tr><th>术语</th><th>一句话解释</th></tr></thead>
+    <tbody>
+      <tr><td>Agent</td><td>"岗位说明书"：冻结的配置对象，声明用什么大脑、带什么工具、守什么策略</td></tr>
+      <tr><td>Conversation</td><td>"这一天的上班过程"：持有全部可变状态的运行时会话</td></tr>
+      <tr><td>ConversationState</td><td>会话的"总台账"：执行状态、事件树 HEAD、迭代数等全在这里</td></tr>
+      <tr><td>EventLog</td><td>事件账本的文件实现：公共 API 逐条追加事件 JSON，不原地更新已有事件；普通文件存储不提供密码学防篡改</td></tr>
+      <tr><td>事件树</td><td>事件按 parent_id 组成的树结构（不是列表！），支持 fork / navigate</td></tr>
+      <tr><td>leaf_event_id（HEAD）</td><td>事件树的"当前阅读位置"指针，像 Git 的 HEAD</td></tr>
+      <tr><td>base_state.json</td><td>会话状态快照文件，与事件文件一起承担持久化与恢复</td></tr>
+      <tr><td>ActionEvent / ObservationEvent</td><td>"订单与回执"：正常工具调用靠 action_id 配对；恢复逻辑允许并处理未配对 Action</td></tr>
+      <tr><td>View</td><td>"数据库视图"：从事件树活跃分支投影出的 LLM 可见历史，带合法性规则</td></tr>
+      <tr><td>Condenser</td><td>"压缩袋"：View 的转换器，压缩给 LLM 看的历史，不碰账本</td></tr>
+      <tr><td>PromptSection</td><td>系统提示词的"模板段落"，由注册表按静态/动态分组组装</td></tr>
+      <tr><td>Skills</td><td>"小抄"：渐进披露的操作手册，简介常驻、全文按需借阅</td></tr>
+      <tr><td>LLMResponseType</td><td>响应四分类：TOOL_CALLS / CONTENT / REASONING_ONLY / EMPTY</td></tr>
+      <tr><td>nudge</td><td>"提醒一句"：对空响应或纯思考响应的纠正性追问</td></tr>
+      <tr><td>ToolSpec / ToolDefinition</td><td>工具的"铭牌"与完整定义：名字、描述、参数 schema、执行器</td></tr>
+      <tr><td>tools_map</td><td>Agent 装配好的工具包：名字 → 工具定义的映射</td></tr>
+      <tr><td>ParallelToolExecutor</td><td>并行工具调度员：批量执行、资源锁防冲突</td></tr>
+      <tr><td>DeclaredResources</td><td>工具声明的独占资源，供并行调度排队的"吊塔登记表"</td></tr>
+      <tr><td>SecurityAnalyzer</td><td>"安检员"：给待执行动作评定风险等级</td></tr>
+      <tr><td>ConfirmationPolicy</td><td>"拍板人"：按风险等级决定要不要人工确认（Always / Never / ConfirmRisky）</td></tr>
+      <tr><td>Hooks</td><td>"门禁"：挂在生命周期节点上的自定义脚本/提示词（含可拒停的 Stop hook）</td></tr>
+      <tr><td>Workspace</td><td>"工地"：命令和文件操作发生的地方（本地 / Docker / 云端 / 远程 API）</td></tr>
+      <tr><td>Agent Server</td><td>"控制塔"：把 SDK 装进 FastAPI 的远程运行时（REST + WebSocket）</td></tr>
+      <tr><td>RemoteConversation</td><td>"遥控器"：本地 API 手感、远程执行实质的会话实现</td></tr>
+      <tr><td>完成屏障</td><td>远程模式的收工规矩：WS 全量快照才权威，首次 FINISHED 不作数</td></tr>
+      <tr><td>MCP</td><td>"外部工具集装箱"：按标准协议接入外部工具服务</td></tr>
+      <tr><td>AgentSettings</td><td>规范的设置面：可序列化配置的唯一权威形状，带 schema_version 迁移链</td></tr>
+      <tr><td>Stuck 检测</td><td>"防原地打转"机制：判定 Agent 卡死后将会话置为 STUCK</td></tr>
+      <tr><td>max_iteration_per_run</td><td>单次 run 的迭代上限（默认 500），超限置 ERROR 退出</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="appB" class="reveal">
+  <div class="ch-head"><span class="ch-num">B</span><h2>附录 B · 源码目录速查</h2></div>
+
+  <table>
+    <thead><tr><th>目录</th><th>内容</th><th>什么时候看</th></tr></thead>
+    <tbody>
+      <tr><td><code>openhands-sdk/openhands/sdk/</code></td><td>核心运行时：agent / conversation / event / context / llm / tool / security / hooks / mcp / settings / skills</td><td>想理解任何主链机制时，先来这里</td></tr>
+      <tr><td><code>openhands-tools/openhands/tools/</code></td><td>内置工具实现（terminal、file_editor、grep、glob、task、browser 等）</td><td>想改工具行为或照抄一个自定义工具时</td></tr>
+      <tr><td><code>openhands-workspace/openhands/workspace/</code></td><td>进阶工作区实现：Docker、Apptainer、Cloud、Remote API</td><td>关心"命令在哪隔离执行"时</td></tr>
+      <tr><td><code>openhands-agent-server/openhands/agent_server/</code></td><td>FastAPI 服务端：路由、会话/事件服务、WebSocket、发布脚本</td><td>做远程部署或排查服务端问题时</td></tr>
+      <tr><td><code>examples/01_standalone_sdk/</code></td><td>约 50 个由浅入深的单文件示例 + 目录式示例</td><td>找"活标本"时，永远先翻这里</td></tr>
+      <tr><td><code>tests/</code></td><td>按包分域的测试（sdk / tools / workspace / agent_server / cross / integration）</td><td>想确认某个契约的准确语义时，测试是最诚实的文档</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="appC" class="reveal">
+  <div class="ch-head"><span class="ch-num">C</span><h2>附录 C · 进阶阅读</h2></div>
+
+  <p>本指南是整套文档体系的<strong>最顶层入口</strong>。想往下钻，按这个梯度走：</p>
+
+  <div class="card green">
+    <div class="card-title"><span class="tag green">梯度 1</span>架构主文档（21 章）</div>
+    <a href="software_agent_architecture.html">software_agent_architecture.html</a> —— 同一套内容的"深度版"：从代码事实出发的完整架构解析，带事实徽章与源码证据索引。适合想逐章吃透设计决策的你。
+  </div>
+
+  <div class="card blue">
+    <div class="card-title"><span class="tag blue">梯度 2</span>15 篇模块子文档</div>
+    <a href="docs/software-agent-sdk/04-lifecycle.html">04 执行主链</a> ·
+    <a href="docs/software-agent-sdk/11-workspace.html">11 Workspace</a> ·
+    <a href="docs/software-agent-sdk/18-patterns.html">18 模式与权衡</a> —— 目录共 15 篇，每个核心模块一篇，统一 17 节模板（含成功/拒绝/恢复三条路径的源码级追踪）。适合要动某个模块的代码、排查某个具体故障的你。
+  </div>
+
+  <div class="card yellow">
+    <div class="card-title"><span class="tag yellow">随手翻</span>仓库自带文档</div>
+    根目录 <code>AGENTS.md</code>（仓库工作约定与工程记忆）、<code>DEVELOPMENT.md</code>（开发环境）、各包自己的 <code>AGENTS.md</code>（包级细则）。写代码前先看对应包的那份。
+  </div>
+
+  <div class="card cyan">
+    <div class="card-title"><span class="tag cyan">论文入口</span>研究动机与实验数据</div>
+    先读
+    <a href="https://arxiv.org/abs/2511.03690" target="_blank" rel="noopener noreferrer">MLSys 2026 SDK 论文</a>
+    的第 3–5 章，再用本指南和架构主文档核对当前实现。论文中的可靠性、延迟、成本与 benchmark
+    都是特定样本和版本的实验快照，不是你部署环境的 SLA；类名、默认值和失败行为仍以 1.42.1
+    源码与测试为准。
+  </div>
+</section>
+
+<div class="takeaway reveal">
+  <div class="tk">读完如果只记三句话</div>
+  <ol>
+    <li><strong>Agent 是岗位说明书，Conversation 是上班过程，事件账本是工作日志</strong> —— 配置冻结、状态集中、事实不可变，全部机制都从这三个角色的分工长出来。</li>
+    <li><strong>事件不是列表，是一棵像 Git 的树</strong> —— 上下文、恢复、分叉，都只是"从 HEAD 走到根"这条活跃分支的不同读法；EventLog 公共 API 采用追加语义，试错靠开分支。</li>
+    <li><strong>"完成"从来不是一声吆喝</strong> —— Stop hook 能拒停，远程的第一声 FINISHED 不作数，真正的收工要等权威的全量快照。这套系统对"状态"的较真，就是它敢承诺可恢复的底气。</li>
+  </ol>
+</div>
+
+</main>
+
+<footer>
+  Software Agent SDK Architecture Guide · 基于 v1.42.1 源码（环境中 git 不可用，SHA 缺）<br>
+  与 software_agent_architecture.html 深度版及 docs/software-agent-sdk/ 15 篇子文档配套 · 2026-08
+</footer>
+
+<script>
+// 阅读进度条
+const p=document.getElementById('progress');
+addEventListener('scroll',()=>{const h=document.documentElement;
+  p.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+'%'},{passive:true});
+// 滚动显现
+const io=new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){e.target.classList.add('visible');io.unobserve(e.target)}}),{threshold:.06});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+// 侧边栏 scroll-spy
+const links=[...document.querySelectorAll('#sidebar a[href^="#"]:not(.ch)')];
+const spy=new IntersectionObserver(es=>es.forEach(e=>{
+  if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.getAttribute('href')==='#'+e.target.id))}}),
+  {rootMargin:'-20% 0px -70% 0px'});
+document.querySelectorAll('section[id]').forEach(s=>spy.observe(s));
+</script>
+</body>
+</html>

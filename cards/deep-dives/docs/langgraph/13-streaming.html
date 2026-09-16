@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="LangGraph Streaming 开发级源码审计：stream mode、v1/v2/v3、namespace、队列、StreamMux、取消、背压与远程边界。">
+  <title>13 Streaming：事件、版本、队列与远程边界</title>
+  <style>
+    :root{color-scheme:light;--bg:#f4f1ea;--surface:#fffdf8;--surface2:#e8e1d4;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--green:#15803d;--yellow:#c2410c;--red:#b91c1c;--purple:#6d28d9}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:16px/1.72 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code,pre{font-family:"Cascadia Code","SFMono-Regular",Consolas,monospace}code{padding:.1em .32em;border-radius:4px;background:rgba(120,113,108,.18);font-size:.92em}
+    pre{overflow:auto;padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--surface);line-height:1.5}.layout{display:grid;grid-template-columns:minmax(220px,270px) minmax(0,1fr);max-width:1500px;margin:0 auto}
+    aside{position:sticky;top:0;height:100vh;overflow:auto;padding:22px 16px;border-right:1px solid var(--border);background:var(--surface)}aside strong{display:block;margin:12px 10px}nav a{display:block;padding:5px 10px;border-left:2px solid transparent;color:var(--muted);font-size:13px}
+    nav a.active{border-color:var(--blue);color:var(--text);background:rgba(67,56,202,.08)}main{min-width:0;max-width:1120px;padding:36px 52px 80px}.back{display:inline-block;margin-bottom:18px}
+    h1{margin:0 0 8px;font-size:clamp(2rem,5vw,3.2rem);line-height:1.15}h2{margin-top:52px;padding-bottom:8px;border-bottom:1px solid var(--border);font-size:1.65rem}h3{margin-top:30px;color:#1c1917}p,li{max-width:94ch}
+    .lead{color:var(--muted);font-size:1.12rem}.meta,.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:22px 0}.card,.callout{padding:16px;border:1px solid var(--border);border-radius:8px;background:var(--surface)}
+    .card b{display:block;margin-bottom:4px;color:var(--muted);font-size:13px}.callout{border-left:4px solid var(--blue)}.callout.warning{border-left-color:var(--yellow)}.callout.danger{border-left-color:var(--red)}
+    .tag{display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--border);border-radius:999px;color:var(--muted);font-size:12px}.tag.current{color:var(--green)}.tag.experimental{color:var(--yellow)}.tag.remote{color:var(--purple)}
+    .table-wrap{overflow-x:auto;margin:18px 0}table{width:100%;border-collapse:collapse;min-width:760px}th,td{padding:10px 12px;border:1px solid var(--border);text-align:left;vertical-align:top}th{background:var(--surface2)}tbody tr:nth-child(even){background:rgba(120,113,108,.05)}
+    .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+    dt{margin-top:14px;font-weight:700;color:var(--blue)}dd{margin-left:0;color:var(--muted)}.flow{padding:16px;border:1px dashed var(--border);border-radius:8px;background:var(--surface);overflow-wrap:anywhere}
+    @media(max-width:860px){.layout{display:block}aside{position:static;width:auto;height:auto;max-height:44vh;border-right:0;border-bottom:1px solid var(--border)}main{padding:28px 20px 60px}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <strong>13 Streaming</strong>
+    <nav aria-label="当前页面目录">
+      <a href="#position">1. 模块定位</a><a href="#dependencies">2. 系统位置与依赖</a>
+      <a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a>
+      <a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态模型</a>
+      <a href="#interfaces">7. 接口、协议与事件</a><a href="#configuration">8. 配置与默认行为</a>
+      <a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a>
+      <a href="#failure">11. 失败、恢复与兼容</a><a href="#observability">12. 可观测性与排障</a>
+      <a href="#testing">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a>
+      <a href="#tradeoffs">15. 设计权衡与已知限制</a><a href="#sources">16. 源码索引</a>
+      <a href="#glossary">17. 术语表</a>
+    </nav>
+  </aside>
+  <main>
+    <a class="back" href="../../langgraph_architecture.html#s13">← 返回 LangGraph 架构总览第十三章</a>
+    <h1>Streaming：事件、版本、队列与远程边界</h1>
+    <p class="lead">从 Pregel 的 Channel/Write 变化到调用方可消费的数据平面：准确区分七种 mode、三代契约、本地队列与 v3 投影，以及跨 API Server 的 SSE/WS 传输责任。</p>
+    <div>
+      <span class="tag current">当前事实</span><span class="tag current">langgraph 1.2.11</span>
+      <span class="tag experimental">v3 experimental</span><span class="tag remote">远程能力</span>
+    </div>
+    <div class="meta">
+      <div class="card"><b>证据状态</b>源码、类型与聚焦测试已审计；Git SHA 因当前环境无 Git 可执行程序而未取得</div>
+      <div class="card"><b>主要 Owner</b><code>libs/langgraph/langgraph/stream/</code>、<code>pregel/_messages.py</code>、<code>pregel/main.py</code></div>
+      <div class="card"><b>目标读者</b>图运行时、Agent UI、流式协议、SDK 与扩展开发者</div>
+      <div class="card"><b>最近验证</b>2026-08-14；包版本来自 <span class="evidence"><code>libs/langgraph/pyproject.toml:5-30</code></span></div>
+    </div>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>Streaming 是执行结果的增量<strong>投影与交付层</strong>，不是独立调度器，也不是把日志开关改成实时输出。Pregel Loop 仍拥有任务、Channel、checkpoint 与超级步；stream 层把 Loop、callback 和节点 writer 产生的事件按 mode、namespace 和版本整形后交给本地迭代器或远程 transport。七个稳定 mode 的公共枚举是 <code>values</code>、<code>updates</code>、<code>messages</code>、<code>custom</code>、<code>checkpoints</code>、<code>tasks</code>、<code>debug</code>。<span class="evidence"><code>libs/langgraph/langgraph/types.py:122-141</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>职责</th><th>本模块负责</th><th>委托/明确不负责</th></tr></thead>
+        <tbody>
+          <tr><td>事件生产</td><td>mode 选择、消息 callback、custom writer、输出形状</td><td>节点执行、BSP 屏障与 writes 合并由 Pregel Runtime 负责</td></tr>
+          <tr><td>本地交付</td><td>v1/v2 queue drain；v3 caller-driven pump、projection、transformer</td><td>不提供跨进程 durability 或消息代理</td></tr>
+          <tr><td>嵌套来源</td><td>用 checkpoint namespace 标识子图来源</td><td>namespace 的生成与 checkpoint 身份属于调度/持久化模块</td></tr>
+          <tr><td>远程交付</td><td>SDK 解码、订阅、游标、重连和客户端队列</td><td>API Server 的执行、鉴权、保留窗口与取消语义不在本地 Pregel 内</td></tr>
+        </tbody>
+      </table></div>
+      <div class="callout">关键不变量：stream 观察到的是事件或屏障后的可见状态；它不能让同一超级步中的兄弟任务提前看到彼此 writes。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2959-2963</code></span></div>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <div class="flow"><code>StateGraph / Functional API → CompiledStateGraph(Pregel) → Sync/Async PregelLoop → StreamProtocol → SyncQueue/AsyncQueue → v1/v2 iterator</code><br>
+      <code>v3 stream_events → v2 StreamPart → ProtocolEvent → StreamMux → built-in/custom transformers → StreamChannel projections</code><br>
+      <code>Remote client → API Server → SSE/WS → SDK transport/controller → typed projections</code></div>
+      <p>v3 不是另一套执行内核：它创建 <code>StreamMux</code>，从 transformers 收集所需 mode，然后在内部调用 <code>stream(..., version="v2", subgraphs=True)</code> 或 async 对应物，再把 <code>StreamPart</code> 转成 <code>ProtocolEvent</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3504-3558</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3560-3612</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>表面</th><th>Owner</th><th>输入/输出</th><th>进程边界</th></tr></thead>
+        <tbody>
+          <tr><td>mode 与 typed part</td><td><code>types.py</code></td><td><code>StreamMode</code>、<code>StreamPart</code></td><td>本地公共类型</td></tr>
+          <tr><td>v1/v2 执行入口</td><td><code>pregel/main.py</code></td><td>input/config → iterator/async iterator</td><td>本进程</td></tr>
+          <tr><td>消息捕获</td><td><code>pregel/_messages.py</code></td><td>LangChain callback → message + metadata</td><td>本进程 callback</td></tr>
+          <tr><td>v3 投影</td><td><code>stream/</code></td><td>ProtocolEvent → typed channels/handles</td><td>本进程，实验</td></tr>
+          <tr><td>SDK thread stream</td><td><code>libs/sdk-py/langgraph_sdk/_async/stream.py</code> 与 sync 镜像</td><td>wire Event → subscriptions/projections</td><td>跨 API Server</td></tr>
+        </tbody>
+      </table></div>
+      <p>LangGraph 包直接依赖 <code>langchain-core</code>、checkpoint、SDK 与 prebuilt；v3 message 投影还依赖 <code>langchain-protocol</code> 提供的事件形状。<span class="evidence"><code>libs/langgraph/pyproject.toml:26-33</code></span> Python SDK 依赖 HTTPX、WebSockets 与 protocol 包。<span class="evidence"><code>libs/sdk-py/pyproject.toml:14-20</code></span></p>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>概念</th><th>准确语义</th><th>常见误解</th></tr></thead>
+        <tbody>
+          <tr><td><code>values</code></td><td>每个相关步骤后完整可见 state；Functional API 通常只在结束时发一次</td><td>不是每个 task 的即时共享 dict</td></tr>
+          <tr><td><code>updates</code></td><td>节点/任务名到局部输出；同一步多个更新可分开发出</td><td>不是已经 reducer 合并后的完整 state</td></tr>
+          <tr><td><code>messages</code></td><td>v1/v2 为 message/token 与 metadata；v3 投影为每次模型调用的 <code>ChatModelStream</code></td><td>不等同普通日志文本</td></tr>
+          <tr><td><code>custom</code></td><td>节点或 task 通过 <code>StreamWriter</code> 主动发出的任意数据</td><td>未选该 mode 时 writer 是 no-op</td></tr>
+          <tr><td><code>checkpoints</code></td><td>创建 checkpoint 时的 StateSnapshot 类视图；无 checkpointer 时不产生</td><td>不是持久化成功 SLA，也不保存 Python 栈帧</td></tr>
+          <tr><td><code>tasks</code></td><td>task start/result，含 id、input、triggers、result/error/interrupts</td><td>不是节点日志；可暴露输入与错误</td></tr>
+          <tr><td><code>debug</code></td><td>checkpoint、task、task_result 的带 step/timestamp 包装</td><td>不是生产环境免费全量追踪</td></tr>
+        </tbody>
+      </table></div>
+      <p>v2 的 <code>StreamPart</code> 是以 <code>type</code> 为判别字段的 TypedDict union，每个 part 都有 <code>ns</code> 与 <code>data</code>；<code>values</code> 额外承载 typed <code>interrupts</code>。<span class="evidence"><code>libs/langgraph/langgraph/types.py:264-354</code></span></p>
+      <p><strong>namespace（命名空间）</strong>是子图调用路径，元素通常形如 <code>node_name:task_id</code>；根为 <code>()</code>。它表达来源，不是租户授权边界。v1 在 <code>subgraphs=True</code> 时把 namespace 放进 tuple；v2 始终放进 <code>part["ns"]</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2713-2718</code></span></p>
+    </section>
+
+    <section class="section" id="components">
+      <h2>4. 架构组成</h2>
+      <h3>4.1 Pregel 生产与队列</h3>
+      <p><code>stream()</code> 规范化 mode 后建立无界 <code>SyncQueue</code>；消息 callback 和 custom writer 都向它写入三元组 <code>(namespace, mode, payload)</code>，Loop 则通过 <code>StreamProtocol</code> 写入。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2737-2749</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2811-2854</code></span> 同步实现用 semaphore 唤醒 eager 消费，但 queue 的 <code>put</code> 从不阻塞。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_queue.py:70-122</code></span></p>
+      <p>Loop 在 task 准备/完成处产生 <code>tasks</code>，checkpoint 处产生 <code>checkpoints</code>，屏障合并后产生 <code>values</code>。这解释了 mode 的事件时机，而不是保证不同 callback/transport 的全局事务顺序。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:631-674</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:683-724</code></span></p>
+      <h3>4.2 Message handler</h3>
+      <p><code>StreamMessagesHandler</code> 以内联 callback 避免额外线程顺序问题，按 run id 保存 metadata，捕获 chat model token 与节点最终 message，并按 message id 去重。它用 checkpoint namespace 过滤子图，<code>TAG_NOSTREAM</code> 与 hidden tag 可阻止相应事件。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_messages.py:49-104</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_messages.py:130-179</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_messages.py:191-256</code></span></p>
+      <h3>4.3 StreamMux、StreamChannel 与 transformers</h3>
+      <p><code>StreamMux</code> 按注册顺序运行 transformer，合并 projection，拒绝 key 冲突，把命名 <code>StreamChannel</code> 自动转发为 protocol event，并在根 mux 分配单调 <code>seq</code>。任何 transformer 返回 <code>False</code> 都可从主事件日志抑制事件，但此前 transformer 的副作用保留。<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:227-296</code></span></p>
+      <p><code>StreamChannel</code> 是 drain-on-consume、单订阅者、本地内存队列；未订阅时本地 projection 不积累，命名 channel 的 wire forwarding 仍执行。<code>tee/atee</code> 才是显式 fan-out。构造参数 <code>maxlen</code> 当前只校验、不实施容量限制。<span class="evidence"><code>libs/langgraph/langgraph/stream/stream_channel.py:14-68</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/stream_channel.py:120-180</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/stream_channel.py:245-341</code></span></p>
+      <h3>4.4 GraphRunStream</h3>
+      <p><code>GraphRunStream</code>/<code>AsyncGraphRunStream</code> 不开后台 pump；调用方迭代 projection、raw events 或读取 output 才推动底层图。sync 每次拉一个 part；async 用 condition 保证只有一个并发 <code>__anext__</code>。<span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:36-55</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:417-482</code></span></p>
+    </section>
+
+    <section class="section" id="flows">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 正常成功路径：本地 v2 多 mode</h3>
+      <ol>
+        <li>调用方传入 input、config、mode 列表与 <code>version="v2"</code>；默认 mode 来自 graph 的 <code>self.stream_mode</code>，通常是 <code>values</code>。</li>
+        <li><code>_defaults</code> 把 mode 转为 set，合并 <code>print_mode</code>，解析 output keys、checkpointer 与 durability。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2543-2613</code></span></li>
+        <li>runtime 安装 message callback、custom writer 与 <code>StreamProtocol</code>；Loop/Runner 执行 task，事件写入 queue。</li>
+        <li><code>_output</code> drain queue。v2 统一输出 <code>{"type", "ns", "data"}</code>，对 values 抽出 interrupts，并用 state/output mapper 恢复声明的 Pydantic/dataclass 类型。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2884-2902</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:4184-4230</code></span></li>
+        <li>超级步完成后 values 反映合并后的 Channel map；迭代器耗尽，run manager 得到正常终态。</li>
+      </ol>
+      <h3>5.2 拒绝/提前结束路径：v3 契约保护</h3>
+      <ol>
+        <li>调用方选择 <code>stream_events(version="v3")</code>，同时错误地传入 <code>stream_mode</code> 或 <code>subgraphs</code>。</li>
+        <li>dispatcher 在运行图之前 fail-closed 抛出 <code>TypeError</code>，因为 v3 必须从 transformer 需求计算 mode，并强制所有子图 namespace 流入 mux。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:379-414</code></span></li>
+        <li>同样，传预构造 transformer instance、非 callable、projection key 冲突或在 sync lane 注册 async-only transformer，都会在 pump 前拒绝。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:428-440</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:227-267</code></span></li>
+        <li>无节点错误、无 checkpoint 写、无流事件；调用方修正配置后重新创建 run。</li>
+      </ol>
+      <h3>5.3 中断、恢复与取消路径</h3>
+      <ol>
+        <li>节点触发 interrupt 时，values v2 part 把 interrupts 放在独立字段；v3 run 只统计自身 scope 的 values 事件并设置 <code>interrupted/interrupts</code>。<span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:110-121</code></span></li>
+        <li>本地恢复由调用方用同一 thread/checkpoint config 再次调用 graph 并传 <code>Command(resume=...)</code>；stream 只是展示新执行，不保存恢复位置。动态 interrupt 恢复会从节点开头重跑，因此先前外部副作用仍需幂等。</li>
+        <li>v3 sync 提前退出应使用 context manager 或 <code>abort()</code>；它关闭 generator，使 <code>GeneratorExit</code> 传播。async abort 会取消正在等待的 <code>__anext__</code>，再 <code>aclose</code> generator 与 mux。<span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:148-182</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:484-535</code></span></li>
+        <li>远程 SDK 的 interrupt 由独立 lifecycle/input SSE 更新；<code>run.respond</code> 校验 outstanding interrupt，拒绝无 interrupt、歧义或错误 id，再向 Server 发送 <code>input.respond</code>。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:211-266</code></span></li>
+      </ol>
+    </section>
+
+    <section class="section" id="state">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>数据</th><th>Owner/生命周期</th><th>持久化</th><th>清理与隐私</th></tr></thead>
+        <tbody>
+          <tr><td>Channel values/writes</td><td>Pregel Loop；跨超级步</td><td>由 checkpointer 决定</td><td>stream 只读投影，不改变 retention</td></tr>
+          <tr><td><code>SyncQueue/AsyncQueue</code></td><td>一次 v1/v2 调用</td><td>否</td><td>迭代 drain；无界，慢消费可增长</td></tr>
+          <tr><td><code>StreamPart</code></td><td>v2 单事件</td><td>否</td><td>携带 state、message、input/error 时应按敏感数据处理</td></tr>
+          <tr><td><code>ProtocolEvent</code></td><td>v3 mux/远程 wire</td><td>本地否；Server buffer 策略不在仓内证明</td><td><code>seq</code> 排序，wall-clock timestamp 不保证单调</td></tr>
+          <tr><td><code>StreamChannel</code> buffer</td><td>一个 projection 订阅</td><td>否</td><td>消费即删除；未订阅不积累；close/fail 终结</td></tr>
+          <tr><td>SDK subscription queue</td><td>一个 thread stream session</td><td>否</td><td>context close 后取消任务、关闭 transport、使 active handles 失败</td></tr>
+        </tbody>
+      </table></div>
+      <p><code>ProtocolEvent.params</code> 包含 namespace、毫秒 wall-clock timestamp、data 与可选 interrupts；跨根事件的总序应使用 mux 分配的 <code>seq</code>，不能使用可能因 NTP 回拨的 timestamp。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:14-41</code></span></p>
+      <p><code>checkpoints</code> mode 只有配置 checkpointer 才产生数据；它的 payload 包含 config、metadata、values、next、parent_config 与 tasks，但这只是 checkpoint 视图，不意味着客户端收到事件后持久化才完成。<span class="evidence"><code>libs/langgraph/langgraph/types.py:182-220</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/transformers.py:927-963</code></span></p>
+      <div class="callout warning">Namespace 不是访问控制。远程事件中的 state、task input、metadata、error 与 custom payload 都可能含 Secret/PII；授权、脱敏与租户隔离必须在 Server/应用边界完成。</div>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>接口</th><th>版本/返回</th><th>顺序与错误语义</th></tr></thead>
+        <tbody>
+          <tr><td><code>stream/astream</code></td><td>v1 默认：单 mode 为 payload；多 mode 为 <code>(mode,data)</code>；subgraph 再加 namespace tuple</td><td>执行错误由迭代抛出；消费者必须继续迭代才推进/观察</td></tr>
+          <tr><td><code>stream/astream</code></td><td>v2：typed <code>StreamPart</code>，统一 <code>type/ns/data</code></td><td>values interrupts 独立字段；声明 state 可由 mapper 恢复</td></tr>
+          <tr><td><code>stream_events/astream_events</code></td><td>v1/v2 委托 LangChain Runnable <code>StreamEvent</code></td><td>不同于 Pregel <code>stream(version="v2")</code> 的 StreamPart</td></tr>
+          <tr><td><code>stream_events(version="v3")</code></td><td><code>GraphRunStream</code>；async 返回 awaitable 的 <code>AsyncGraphRunStream</code></td><td>实验；caller-driven；raw ProtocolEvent 与 typed projection 并存</td></tr>
+          <tr><td>SDK <code>client.runs.stream</code></td><td>传统 run SSE 客户端，支持 v1/v2 wire 转换</td><td>网络重连使用 SSE id；并非本地 queue</td></tr>
+          <tr><td>SDK <code>client.threads.stream</code></td><td>thread-centric v3 context manager；typed projections，共享 SSE；async 可选 WS</td><td>依赖 Server protocol、cursor、lifecycle 终态</td></tr>
+        </tbody>
+      </table></div>
+      <p>不要把两个“v2”混为一谈：<code>Pregel.stream(version="v2")</code> 是 LangGraph typed StreamPart；<code>Runnable.stream_events(version="v2")</code> 是 LangChain callback StreamEvent。Pregel 对 <code>stream_events</code> 的 v1/v2 分支直接委托父类，v3 才进入 GraphRunStream。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3614-3717</code></span></p>
+      <p>v3 built-ins 默认注册 values、messages、lifecycle、subgraphs；updates/custom/checkpoints/tasks/debug 只有相应 transformer 被编译或调用时注册才成为 projection。transformer 的 <code>required_stream_modes</code> 决定底层实际请求哪些事件。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3528-3555</code></span></p>
+      <p>v3 messages 不再把 legacy <code>AIMessageChunk</code> tuple 直接变成 projection；它按 content-block protocol 与 run id 建立 <code>ChatModelStream</code>，但节点最终完整 AIMessage 可作为 fallback。<span class="evidence"><code>libs/langgraph/langgraph/stream/transformers.py:155-195</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/transformers.py:265-340</code></span></p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为</th><th>来源</th></tr></thead>
+        <tbody>
+          <tr><td><code>stream_mode</code></td><td>七种 mode 或序列</td><td><code>self.stream_mode</code>，graph 默认 values；作为父图节点调用时未显式传值则 values</td><td>调用参数高于 graph 字段</td><td>v1/v2</td><td>v3 显式传入即 TypeError</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:709-714</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2737-2744</code></span></td></tr>
+          <tr><td><code>version</code> on stream</td><td>v1/v2</td><td>v1</td><td>调用参数</td><td>Pregel StreamPart 形状</td><td>类型/实现只支持两者</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2655-2671</code></span></td></tr>
+          <tr><td><code>version</code> on stream_events</td><td>v1/v2/v3</td><td>v2</td><td>调用参数</td><td>Runnable events 或 GraphRunStream</td><td>v3 标注 beta/experimental</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3638-3659</code></span></td></tr>
+          <tr><td><code>subgraphs</code></td><td>bool</td><td>false</td><td>调用参数</td><td>v1/v2 namespace</td><td>v3 强制 true，不接受覆盖</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2667-2718</code></span></td></tr>
+          <tr><td><code>print_mode</code></td><td>同 StreamMode</td><td>空</td><td>与 stream mode 合并生产，但只打印</td><td>本地控制台</td><td>不改变返回值</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2699-2701</code></span></td></tr>
+          <tr><td><code>transformers</code></td><td>scope-aware callable 序列</td><td>空，另含四个 v3 built-ins</td><td>built-ins → compile-time → call-time；before_builtins 可前置</td><td>v3</td><td>instance/冲突/async lane 不符即拒绝</td><td><span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:123-148</code></span></td></tr>
+          <tr><td>SDK <code>max_queue_size</code></td><td>int</td><td>async thread stream 1024</td><td>构造参数</td><td>远程订阅队列</td><td>当前 fanout 使用 put_nowait；满队列可抛 QueueFull</td><td><span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1157-1183</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1316-1324</code></span></td></tr>
+        </tbody>
+      </table></div>
+      <p><code>debug=True</code> 在当前 <code>stream()</code> 入口把 <code>print_mode</code> 设置为 updates + values；它与 <code>stream_mode="debug"</code> 的结构化返回不是同一开关。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2745-2746</code></span></p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <h3>9.1 v1/v2：无界 queue，不承诺消费者背压</h3>
+      <p><code>SyncQueue.put</code> 永不阻塞，<code>AsyncQueue</code> 继承默认无界 <code>asyncio.Queue</code>；因此 v1/v2 中生产者快于消费者时，queue 可增长。eager 模式的 waiter 只用于尽快把已产生事件交给 generator，不是容量控制。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_queue.py:12-41</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2932-2957</code></span></p>
+      <h3>9.2 v3 本地：拉模型形成自然节拍</h3>
+      <p>v3 每次 projection cursor 缺数据才请求 pump；未订阅 projection 不缓存，单消费者通常把缓冲限制在调用方驱动的事件节奏内。async 多 projection 并发共享一个 condition/single-flight pull，避免并发推进同一 async generator。<span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:319-345</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/stream_channel.py:38-46</code></span></p>
+      <p>但 <code>tee/atee</code> 为每个分支复制 buffer；落后的分支可以积压。<code>StreamChannel(maxlen=...)</code> 当前不实施截断或阻塞，因此不能据此声称有硬背压。<span class="evidence"><code>libs/langgraph/langgraph/stream/stream_channel.py:245-341</code></span></p>
+      <h3>9.3 transformer 调度</h3>
+      <p>async <code>aprocess</code> 在 transformer 链中串行 await，适合必须在后续 observer 前完成的脱敏；独立异步工作可 <code>schedule()</code>。mux 正常关闭会 await scheduled tasks，失败则 cancel 并 await，再运行失败清理。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:166-184</code></span> <span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:380-449</code></span></p>
+      <h3>9.4 远程背压边界</h3>
+      <p>SDK async fanout 从共享 SSE 读取后对每个 subscription 执行 <code>put_nowait</code>；队列容量是客户端保护阈值，不是传播到 Server/Pregel 的端到端流量控制。慢消费者可能触发客户端 QueueFull/断流，而 Server 是否暂停生产、保留多久、是否可重放属于仓库外 API Server 契约。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1605-1665</code></span></p>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <ul>
+        <li><strong>输入与输出：</strong><code>tasks</code> 可包含节点 input、result、error；<code>values/checkpoints/debug</code> 可包含完整业务 state；<code>custom</code> 完全由应用定义。选择 mode 即选择数据暴露面。</li>
+        <li><strong>消息过滤：</strong><code>TAG_NOSTREAM</code> 可排除模型流，hidden tag 可排除节点链事件，但这属于事件选择，不是授权机制。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_messages.py:130-149</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_messages.py:191-212</code></span></li>
+        <li><strong>transformer 信任：</strong>transformer 可观察、修改或抑制事件；<code>before_builtins</code> 可在内建 messages 投影前做 PII redaction，但修改 tasks 的 namespace/id/result 会破坏 lifecycle 与 subgraph bookkeeping。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:94-109</code></span></li>
+        <li><strong>远程 Auth：</strong>SDK 只是客户端，Server URL、headers、token 与服务端授权必须由部署层配置；本地 Pregel 没有隐式多租户 ACL。SDK 会把 headers 转发到 command 与 stream 请求，但不能证明 Server 的策略。</li>
+        <li><strong>fail-closed：</strong>若必须在输出前脱敏，应使用 awaited、before-builtins transformer，并让失败传播；默认 <code>schedule(on_error="log")</code> 会记录并吞掉异步任务错误，不适合强制安全门。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:233-292</code></span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+        <tbody>
+          <tr><td>节点异常</td><td>iterator/output 抛原异常</td><td>mux fail，projection 先 drain 已缓存项再抛</td><td>由 Pregel/checkpointer 决定 pending writes</td><td>按图的 retry/checkpoint 规则，不由 stream 重试</td><td>查看 tasks/debug 与 checkpoint</td></tr>
+          <tr><td>动态 interrupt</td><td>values interrupts；v3 interrupted</td><td>运行暂停，不等于失败</td><td>checkpoint 保留恢复状态</td><td>同 thread 传 resume；节点从头执行</td><td>确保副作用幂等</td></tr>
+          <tr><td>v3 提前退出</td><td>消费者 break/context exit</td><td><code>abort</code> 关闭或取消底层 generator</td><td>已完成 writes 仍按 runtime 语义存在</td><td>需要恢复时走 checkpoint，而非复用已 abort stream</td><td>始终使用 context manager</td></tr>
+          <tr><td>transformer finalize 失败</td><td>close/aclose 抛首个错误</td><td>仍继续关闭其余 transformer/channel</td><td>图可能已完成，projection 终结失败</td><td>修 transformer；不要盲目重跑副作用图</td><td>区分执行成功与投影收尾失败</td></tr>
+          <tr><td>远程瞬断</td><td>SSE handle done/error</td><td>SDK 用 cursor/since 重连并按 event_id 去重</td><td>Server 状态继续；客户端有重放窗口依赖</td><td>默认有限次数；耗尽后 surface RuntimeError</td><td>核对 Server retention、网络与游标</td></tr>
+          <tr><td>远程取消</td><td>run REST 状态/lifecycle</td><td>客户端 projection 应终止</td><td>执行终态由 Server 持久化</td><td>取消不是本地 generator close 的同义词</td><td>用 runs cancel API，并查询 thread/run 状态</td></tr>
+          <tr><td>v1 嵌套在外层 v3</td><td>内层只有最终 message、缺 token</td><td>外层 v2 handler 改变 callback 路由</td><td>state 正常，token 投影不完整</td><td>内外统一 v3，或显式调用 model.stream</td><td>迁移测试覆盖嵌套模型调用</td></tr>
+        </tbody>
+      </table></div>
+      <p>Mux 的 sync close 会保存首个 finalize 异常但继续清理；fail hook 的异常被隔离，原始错误写入所有 channel。<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:298-345</code></span> v3 嵌套兼容限制由公共 docstring 明确记录。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3667-3676</code></span></p>
+      <p>SDK thread-centric v3 的共享 SSE 重连默认最多 5 次，使用指数退避、<code>since=&lt;cursor&gt;</code> 和 <code>event_id</code> 去重；这不能替代业务 exactly-once。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1201-1217</code></span> <span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1667-1706</code></span></p>
+    </section>
+
+    <section class="section" id="observability">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>现象</th><th>检查</th><th>可能原因</th><th>修复</th></tr></thead>
+        <tbody>
+          <tr><td>只收到最终值，没有 token</td><td>version、messages handler、模型调用方式、tags</td><td>未选 messages；模型不流式；v3 内嵌 v1 限制；TAG_NOSTREAM</td><td>统一协议版本，验证模型 callback，移除不当 tag</td></tr>
+          <tr><td>子图事件混在根事件</td><td>v1 tuple namespace / v2 ns / v3 params.namespace</td><td>消费方丢弃 namespace 或未按 scope 投影</td><td>把 namespace 作为路由主键，不按 node name 猜来源</td></tr>
+          <tr><td>checkpoints projection 为空</td><td>graph 是否配置 checkpointer</td><td>无 saver，因此没有 checkpoint 事件</td><td>需要持久诊断时显式配置 saver</td></tr>
+          <tr><td>v1/v2 内存增长</td><td>消费者吞吐、mode 数量、values/debug payload</td><td>无界 queue + 慢消费</td><td>减少 mode/payload、及时 drain、迁移 caller-driven v3 或在远程层限流</td></tr>
+          <tr><td>v3 projection 没有早期事件</td><td>是否在事件产生前开始迭代 projection</td><td>lazy-subscribe 丢弃未订阅 projection 的本地 item</td><td>先取得 cursor，再驱动 output/其他 projection；并发消费时先注册所有消费者</td></tr>
+          <tr><td>事件顺序看似倒退</td><td>比较 seq 而非 timestamp</td><td>wall clock/NTP 或多 projection 错误合并</td><td>raw protocol 用 seq；本地多 projection 用 interleave</td></tr>
+          <tr><td>SDK 瞬断后重复</td><td>event_id、cursor、since、Server replay</td><td>重连重放重叠或 Server 缺稳定 id</td><td>保留 SDK 去重；业务处理仍做幂等</td></tr>
+          <tr><td>SDK projection 卡住</td><td>是否进入 context、是否 run.start、lifecycle 是否到终态、队列是否满</td><td>订阅早于 gate、Server 缺 terminal、慢消费者</td><td>使用 context manager，设 timeout，查 lifecycle transport 与 Server 状态</td></tr>
+        </tbody>
+      </table></div>
+      <p><code>tasks</code> 提供任务级开始/结果，<code>debug</code> 再包装 step 与 timestamp；排障时优先选择最小可解释 mode，避免默认打开完整 state。<span class="evidence"><code>libs/langgraph/langgraph/types.py:144-179</code></span> <span class="evidence"><code>libs/langgraph/langgraph/types.py:223-261</code></span></p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+        <tbody>
+          <tr><td>v3 success/error/interrupt/abort</td><td><span class="evidence"><code>libs/langgraph/tests/test_pregel_stream_events_v3.py:397-555</code></span></td><td>单元/E2E</td><td>values/output、异常传播、中断、sync abort</td><td>不证明远程 Server</td></tr>
+          <tr><td>async 深层取消</td><td><span class="evidence"><code>libs/langgraph/tests/test_pregel_stream_events_v3.py:590-766</code></span></td><td>async E2E</td><td>abort 取消 in-flight 与嵌套子图</td><td>阻塞原生代码仍依赖协作取消</td></tr>
+          <tr><td>lazy-subscribe/内存</td><td><span class="evidence"><code>libs/langgraph/tests/test_pregel_stream_events_v3.py:1667-1780</code></span></td><td>单元</td><td>drain、未订阅不积累、tee fan-out</td><td>非生产负载 benchmark</td></tr>
+          <tr><td>transformer fail/async lane</td><td><span class="evidence"><code>libs/langgraph/tests/test_pregel_stream_events_v3.py:1090-1177</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_pregel_stream_events_v3.py:1430-1664</code></span></td><td>单元</td><td>清理隔离、调度、拒绝 sync、错误策略</td><td>用户 transformer 仍需自测</td></tr>
+          <tr><td>v3 kwargs 拒绝与转发</td><td><span class="evidence"><code>libs/langgraph/tests/test_stream_events_v3_kwarg_forwarding.py:52-108</code></span></td><td>单元</td><td>context 透传；stream_mode/subgraphs fail-fast</td><td>其他 kwargs 逐项行为由相邻模块负责</td></tr>
+          <tr><td>subgraph namespace/终态</td><td><span class="evidence"><code>libs/langgraph/tests/test_stream_subgraph_transformer.py:191-275</code></span></td><td>合成事件</td><td>handle path、completed/failed/interrupted、grandchild mini-mux</td><td>Server wire 另测</td></tr>
+          <tr><td>messages protocol</td><td><span class="evidence"><code>libs/langgraph/tests/test_stream_messages_transformer.py:176-280</code></span></td><td>单元</td><td>message lifecycle、并发 run 路由、tool 忽略</td><td>模型供应商特性需集成测试</td></tr>
+          <tr><td>SDK SSE 解析/重连</td><td><span class="evidence"><code>libs/sdk-py/tests/test_client_stream.py:94-156</code></span>、<span class="evidence"><code>libs/sdk-py/tests/test_client_stream.py:159-292</code></span></td><td>transport 单元</td><td>trailing event、Last-Event-ID 重连</td><td>真实网络代理需集成验证</td></tr>
+          <tr><td>SDK thread stream</td><td><span class="evidence"><code>libs/sdk-py/tests/streaming/test_thread_stream.py:93-190</code></span></td><td>fake Server</td><td>session、headers、订阅与 transport 选择</td><td>真实 API Server 可用性不在默认单测</td></tr>
+          <tr><td>sync 并发/重连</td><td><span class="evidence"><code>libs/sdk-py/tests/streaming/test_sync_thread_stream.py:49-190</code></span></td><td>线程/transport 单元</td><td>run gate、退避、rotation buffer</td><td>跨进程压力未证明</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+        <tbody>
+          <tr><td>新增/改变 stream mode</td><td><code>types.py</code>、Loop emit、<code>main._output</code></td><td>sync/async、v1/v2 typed union、v3 transformer、SDK schema/decoder</td><td>单/多 mode、namespace、interrupt/error、远程兼容</td></tr>
+          <tr><td>自定义 v3 projection</td><td><code>StreamTransformer</code>、<code>StreamMux</code></td><td>scope factory、required modes、sync/async hooks、close/fail</td><td>projection key 唯一、子图克隆、慢消费、取消</td></tr>
+          <tr><td>内容脱敏/过滤</td><td><code>before_builtins</code> transformer</td><td>messages 与 raw protocol；必要时 fail-closed</td><td>先于 built-in 快照；不破坏 tasks bookkeeping</td></tr>
+          <tr><td>改变 message shape</td><td><code>_messages.py</code>、<code>MessagesTransformer</code></td><td>LangChain callback protocol、whole-message fallback、SDK decoder</td><td>并发 run/message id、tool role、v1 migration</td></tr>
+          <tr><td>远程流 transport</td><td>SDK transport/controller</td><td>sync/async、SSE/WS、cursor/replay/dedup、close</td><td>瞬断、重复、乱序、队列满、取消、终态缺失</td></tr>
+        </tbody>
+      </table></div>
+      <h3>14.1 最小 transformer 规则</h3>
+      <ol>
+        <li>传 class 或 <code>factory(scope)</code>，不要传 instance；每个 scope 必须得到独立状态。</li>
+        <li><code>init()</code> 返回 projection dict；命名 <code>StreamChannel</code> 会进入 wire，未命名 channel 仅本地。</li>
+        <li>声明精确 <code>required_stream_modes</code>，否则底层不会为 projection 生产数据。</li>
+        <li>同步工作实现 <code>process</code>；必须有序的 async 工作实现 <code>aprocess</code>；解耦工作用 <code>schedule</code> 并明确 <code>on_error</code>。</li>
+        <li>让 mux 管理 channel close/fail；在测试中覆盖正常、异常、abort、未订阅、子图 scope 与 async task 清理。</li>
+      </ol>
+      <div class="callout danger">禁止捷径：不要从 node name 重建 namespace，不要把 timestamp 当全序，不要用 <code>maxlen</code> 声称本地 v3 有硬容量，不要把 SDK 重连说成 exactly-once，也不要把 Server 的取消/Auth 写成本地 Pregel 默认能力。</div>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+        <tbody>
+          <tr><td>兼容与类型</td><td>v1 默认保兼容，v2 typed 并存</td><td>旧调用方不破坏，新调用方可判别 union</td><td>两套输出 shape 增加测试矩阵</td><td>大版本迁移可改变默认</td></tr>
+          <tr><td>v3 易用性</td><td>GraphRunStream + projection + transformer</td><td>按需拉取、typed message/subgraph handle、扩展能力</td><td>实验 API、lazy-subscribe、单消费者约束</td><td>协议稳定且远程对齐后再固化</td></tr>
+          <tr><td>本地 v1/v2 实时性</td><td>无界 queue + eager waiter</td><td>producer 不因 UI 停顿阻塞</td><td>慢消费者导致内存增长，无端到端背压</td><td>生产内存问题要求有界/丢弃策略时</td></tr>
+          <tr><td>v3 内存</td><td>caller-driven + 未订阅不缓存</td><td>常见单消费者内存小</td><td>晚订阅会错过 projection；tee 慢分支积压</td><td>需要 replay/fan-out 时应引入显式 broker/retention</td></tr>
+          <tr><td>transformer 顺序</td><td>有序串行 pipeline</td><td>脱敏后下游可见的确定性</td><td>慢 <code>aprocess</code> 阻塞整条流</td><td>独立计算迁移到 schedule 或外部流处理</td></tr>
+          <tr><td>本地与远程统一</td><td>共享 protocol 概念，transport 分层</td><td>SDK 可提供相似 projection</td><td>取消、背压、重连、retention 不可能完全相同</td><td>Server 协议提供明确 flow control 与 durability 契约</td></tr>
+        </tbody>
+      </table></div>
+      <p>当前源码中 v3 明确标注 beta/experimental，公共契约可能变化。<span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:36-55</code></span> 此外，sync 与 async v3 message 消费形态不完全相同；远程 sync SDK 还使用后台 lifecycle watcher 线程，而 async client 才支持 WebSocket。<span class="evidence"><code>libs/sdk-py/README.md:52-57</code></span></p>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>角色</th><th>路径与行号</th><th>阅读重点</th></tr></thead>
+        <tbody>
+          <tr><td>公共类型</td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:122-141</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/types.py:264-354</code></span></td><td>七 mode、StreamWriter、typed parts</td></tr>
+          <tr><td>sync 入口</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2615-3000</code></span></td><td>默认值、callback、queue、Loop、output drain</td></tr>
+          <tr><td>v3 入口</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3504-3780</code></span></td><td>mux、transformer、v2 内核、实验 dispatcher</td></tr>
+          <tr><td>消息</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_messages.py:49-408</code></span></td><td>v1/v2 handler、namespace、去重、content-block</td></tr>
+          <tr><td>本地 queue</td><td><span class="evidence"><code>libs/langgraph/langgraph/_internal/_queue.py:12-124</code></span></td><td>无界 FIFO 与 wait</td></tr>
+          <tr><td>v3 mux</td><td><span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:26-225</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:227-523</code></span></td><td>注册、child mux、分发、清理、wire</td></tr>
+          <tr><td>v3 run/channel</td><td><span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:36-215</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/stream/run_stream.py:319-578</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/stream/stream_channel.py:14-341</code></span></td><td>pump、abort、backpressure、fan-out</td></tr>
+          <tr><td>built-in transformers</td><td><span class="evidence"><code>libs/langgraph/langgraph/stream/transformers.py:28-340</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/stream/transformers.py:343-925</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/stream/transformers.py:927-1039</code></span></td><td>values/messages/subgraph/lifecycle/其他 modes</td></tr>
+          <tr><td>SDK async v3</td><td><span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1-129</code></span>、<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1157-1414</code></span>、<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_async/stream.py:1584-1777</code></span></td><td>thread session、subscription、fanout、重连</td></tr>
+          <tr><td>SDK sync 镜像</td><td><span class="evidence"><code>libs/sdk-py/langgraph_sdk/_sync/stream.py:1073-1283</code></span>、<span class="evidence"><code>libs/sdk-py/langgraph_sdk/_sync/stream.py:1452-1629</code></span></td><td>线程 watcher、close、respond、终态</td></tr>
+        </tbody>
+      </table></div>
+      <p>相邻主题继续回到总览：持久化与恢复见第九章，Interrupt 见第十一章，Runtime 错误与取消见第十四章，RemoteGraph/SDK/CLI 的完整进程边界见第十七章。本任务未创建这些尚不存在的子文档链接。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <dl>
+        <dt>BSP（Bulk Synchronous Parallel）</dt><dd>批同步并行；同一超级步读取稳定快照，writes 在屏障后合并。</dd>
+        <dt>Stream mode</dt><dd>选择流中承载哪类数据的枚举；当前稳定集合为 values、updates、messages、custom、checkpoints、tasks、debug。</dd>
+        <dt>StreamPart</dt><dd>Pregel <code>stream(version="v2")</code> 的判别联合，统一含 type、ns、data。</dd>
+        <dt>StreamEvent</dt><dd>LangChain Runnable callback 事件；不要与 StreamPart 混淆。</dd>
+        <dt>ProtocolEvent</dt><dd>v3 内部与远程协议使用的 event envelope，含 method、params、可选 event_id/seq。</dd>
+        <dt>Namespace / ns</dt><dd>标识子图嵌套调用来源的路径；根为空 tuple/list，不是授权域。</dd>
+        <dt>SyncQueue / AsyncQueue</dt><dd>v1/v2 Pregel 把 producer 与 iterator 解耦的本地无界 FIFO。</dd>
+        <dt>StreamMux</dt><dd>v3 中按顺序分发 ProtocolEvent、运行 transformers、管理 projections 与生命周期的中央多路器。</dd>
+        <dt>StreamTransformer</dt><dd>把原始事件转换、过滤或投影为 typed channel/handle 的扩展点。</dd>
+        <dt>StreamChannel</dt><dd>v3 本地单消费者、消费即删除、可按需驱动 pump 的 projection 队列。</dd>
+        <dt>GraphRunStream</dt><dd>实验 v3 的同步 run handle；projection 迭代或 output 读取驱动图运行。</dd>
+        <dt>Caller-driven pump</dt><dd>没有后台生产线程，由调用方每次请求下一项推动底层 graph iterator。</dd>
+        <dt>Backpressure（背压）</dt><dd>下游变慢时限制上游生产的机制；本地 v3 的拉模型有自然节拍，但 v1/v2 无界队列与远程 SDK 不提供统一端到端背压保证。</dd>
+        <dt>Drain-on-consume</dt><dd>项目从 StreamChannel buffer 取出后即删除，不保留历史。</dd>
+        <dt>SSE</dt><dd>Server-Sent Events，SDK 远程流的 HTTP 单向事件 transport。</dd>
+        <dt>WS / WebSocket</dt><dd>双向长连接 transport；当前 Python SDK async thread stream 可选，sync 文档边界以 SSE 为主。</dd>
+        <dt>Cursor / since</dt><dd>远程重连时表示已经应用到哪个序号，并请求从其后重放；仍需 event_id 去重和业务幂等。</dd>
+        <dt>Interrupt</dt><dd>可恢复暂停，不是普通错误；恢复位置由 checkpoint/Pregel 持有，stream 仅传递事件与 payload。</dd>
+      </dl>
+    </section>
+  </main>
+</div>
+<script>
+  (() => {
+    const links = [...document.querySelectorAll("nav a")];
+    const sections = links.map(a => document.querySelector(a.getAttribute("href"))).filter(Boolean);
+    const activate = () => {
+      let current = sections[0];
+      for (const section of sections) if (section.getBoundingClientRect().top <= 120) current = section;
+      links.forEach(a => a.classList.toggle("active", a.getAttribute("href") === `#${current.id}`));
+    };
+    addEventListener("scroll", activate, {passive:true});
+    activate();
+  })();
+</script>
+</body>
+</html>

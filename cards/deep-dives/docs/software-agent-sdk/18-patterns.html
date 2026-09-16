@@ -1,0 +1,1670 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="OpenHands Software Agent SDK 跨包设计模式、架构权衡与二次开发指南。">
+  <title>18 模式、权衡与二次开发 · Software Agent SDK</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --surface: #fffdf8;
+      --surface-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --orange: #c2410c;
+      --purple: #6d28d9;
+      --red: #b91c1c;
+      --sidebar: 292px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      font: 15px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre, .mono {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    }
+    code {
+      padding: .12em .38em;
+      border-radius: 5px;
+      background: rgba(120,113,108, .18);
+      font-size: .9em;
+    }
+    pre {
+      overflow: auto;
+      margin: 14px 0;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      color: #44403c;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 58px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(244,241,234, .96);
+      backdrop-filter: blur(12px);
+    }
+    .brand { font-weight: 700; letter-spacing: .2px; }
+    .header-meta { color: var(--muted); font-size: 13px; }
+    .layout { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
+    aside {
+      position: sticky;
+      top: 58px;
+      height: calc(100vh - 58px);
+      overflow: auto;
+      padding: 22px 14px 28px 18px;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+    }
+    aside .toc-title {
+      margin: 0 8px 12px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    nav a {
+      display: block;
+      margin: 2px 0;
+      padding: 5px 9px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    nav a:hover, nav a.active {
+      color: var(--text);
+      background: var(--surface);
+      text-decoration: none;
+    }
+    nav a.active { box-shadow: inset 2px 0 var(--blue); }
+    main { min-width: 0; max-width: 1280px; padding: 48px 58px 100px; }
+    .back { display: inline-block; margin-bottom: 22px; font-size: 13px; }
+    .hero { padding: 8px 0 38px; border-bottom: 1px solid var(--border); }
+    .eyebrow {
+      color: var(--blue);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+    h1 { margin: 9px 0 12px; font-size: clamp(32px, 5vw, 50px); line-height: 1.12; }
+    .lead { max-width: 940px; color: #57534e; font-size: 18px; }
+    .meta-row, .badge-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      margin-top: 18px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--surface);
+      font-size: 12px;
+    }
+    .badge.fact { color: #15803d; border-color: rgba(21,128,61, .45); }
+    .badge.optional { color: #a16207; border-color: rgba(194,65,12, .45); }
+    .badge.deploy { color: #6d28d9; border-color: rgba(109,40,217, .45); }
+    .badge.gap { color: #c2410c; border-color: rgba(194,65,12, .45); }
+    section { scroll-margin-top: 80px; padding: 43px 0 14px; }
+    section + section { border-top: 1px solid var(--border); }
+    h2 { margin: 0 0 16px; font-size: 28px; line-height: 1.3; }
+    h3 { margin: 28px 0 10px; font-size: 20px; }
+    h4 { margin: 22px 0 8px; color: #44403c; font-size: 16px; }
+    p { margin: 9px 0 14px; }
+    ul, ol { padding-left: 24px; }
+    li { margin: 5px 0; }
+    .muted { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0;
+    }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      padding: 17px 18px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+    }
+    .card h3, .card h4 { margin-top: 0; }
+    .card p:last-child { margin-bottom: 0; }
+    .callout {
+      margin: 18px 0;
+      padding: 15px 17px;
+      border-left: 3px solid var(--blue);
+      border-radius: 0 7px 7px 0;
+      background: rgba(67,56,202, .08);
+    }
+    .callout strong:first-child { color: var(--blue); }
+    .callout.warning {
+      border-left-color: var(--yellow);
+      background: rgba(194,65,12, .08);
+    }
+    .callout.warning strong:first-child { color: #a16207; }
+    .callout.danger {
+      border-left-color: var(--red);
+      background: rgba(185,28,28, .08);
+    }
+    .callout.danger strong:first-child { color: var(--red); }
+    .callout.design {
+      border-left-color: var(--purple);
+      background: rgba(109,40,217, .08);
+    }
+    .callout.design strong:first-child { color: #6d28d9; }
+    .table-wrap { overflow-x: auto; margin: 16px 0 22px; }
+    table { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 14px; }
+    th, td {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--surface-2); color: #44403c; }
+    td { background: rgba(255,253,248, .55); }
+    .flow {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      overflow-x: auto;
+      margin: 18px 0;
+      padding: 12px 0;
+    }
+    .flow .step {
+      flex: 1 0 155px;
+      min-width: 155px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      text-align: center;
+    }
+    .flow .arrow { align-self: center; color: var(--muted); font-size: 20px; }
+    .section span.evidence {
+      display: inline;
+      margin: 0;
+      padding: 0;
+      overflow-wrap: anywhere;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      line-height: inherit;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .source-list li { margin-bottom: 8px; }
+    .anti { color: #b91c1c; font-weight: 600; }
+    .recommended { color: #15803d; font-weight: 600; }
+    footer {
+      margin-top: 55px;
+      padding-top: 25px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+    }
+    @media (max-width: 1050px) {
+      :root { --sidebar: 244px; }
+      main { padding: 40px 34px 80px; }
+      .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      header { padding: 0 15px; }
+      .header-meta { display: none; }
+      .layout { display: block; }
+      aside { display: none; }
+      main { padding: 30px 18px 70px; }
+      .grid, .grid.three { grid-template-columns: 1fr; }
+      h1 { font-size: 36px; }
+    }
+    @media print {
+      header, aside { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      body { color: #111; background: white; }
+      section + section { border-top-color: #ddd; }
+      .card, td, th, pre { color: #111; background: white; border-color: #ccc; }
+      .muted { color: #555; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">OpenHands · Architecture Module 18</div>
+    <div class="header-meta">源码审计 · 模式与二次开发 · 2026-08-14</div>
+  </header>
+  <div class="layout">
+    <aside>
+      <div class="toc-title">本页目录</div>
+      <nav id="toc">
+        <a href="#position">1. 模块定位</a>
+        <a href="#system">2. 系统位置与依赖</a>
+        <a href="#concepts">3. 核心概念</a>
+        <a href="#architecture">4. 架构组成</a>
+        <a href="#flows">5. 完整运行流程</a>
+        <a href="#state">6. 数据与状态模型</a>
+        <a href="#interfaces">7. 接口、协议与事件</a>
+        <a href="#configuration">8. 配置与默认行为</a>
+        <a href="#concurrency">9. 并发、性能与资源</a>
+        <a href="#security">10. 安全与信任边界</a>
+        <a href="#recovery">11. 失败、恢复与兼容</a>
+        <a href="#operations">12. 可观测性与排障</a>
+        <a href="#testing">13. 测试与验证</a>
+        <a href="#extension">14. 开发与扩展指南</a>
+        <a href="#tradeoffs">15. 设计权衡与限制</a>
+        <a href="#sources">16. 源码索引</a>
+        <a href="#glossary">17. 术语表</a>
+      </nav>
+    </aside>
+    <main>
+      <a class="back" href="../../software_agent_architecture.html#patterns">← 返回架构总览第 18 章</a>
+      <div class="hero">
+        <div class="eyebrow">CHAPTER 18 · CROSS-CUTTING DESIGN</div>
+        <h1>模式、权衡与二次开发</h1>
+        <p class="lead">
+          本章不是第二份系统总览，而是面向扩展作者的“决策手册”：从跨包不变量中提炼
+          Event Sourcing Lite、Ports and Adapters、Registry、State Machine、Bulkhead
+          与 Layered Recovery，说明应在哪个 owner 表面改、哪些行为不能绕过，以及何时应重新评估现有设计。
+        </p>
+        <div class="meta-row">
+          <span class="badge fact">证据状态：源码与聚焦测试已核对</span>
+          <span class="badge gap">Git SHA：当前环境无法读取</span>
+          <span class="badge fact">代码基线：仓库标注 1.42.1</span>
+          <span class="badge fact">最近验证：2026-08-14</span>
+        </div>
+        <div class="badge-row">
+          <span class="badge fact">当前：跨包公共扩展点</span>
+          <span class="badge optional">可选：并行、fallback、plugins、hooks</span>
+          <span class="badge deploy">部署：REST + WebSocket、deferred init</span>
+          <span class="badge gap">证据缺口：未取得 Git SHA、未做浏览器渲染</span>
+        </div>
+        <p class="muted">
+          主要所有者：<code>openhands-sdk/openhands/sdk/</code>、
+          <code>openhands-tools/openhands/tools/</code>、
+          <code>openhands-workspace/openhands/workspace/</code>、
+          <code>openhands-agent-server/openhands/agent_server/</code>。目标读者：
+          Tool、LLM、Prompt、安全策略、Workspace 后端与 Agent Server 的二次开发者及评审者。
+        </p>
+      </div>
+
+      <section id="position" class="section">
+        <h2>1. 模块定位</h2>
+        <p>
+          本模块研究“多个模块共同遵守的结构规则”，不重述各模块完整调用链。它负责把模式映射到真实 owner、
+          失败边界和扩展任务；具体 LLM 参数、工具实现细节、事件树算法、远程协议字段仍由对应模块和源码拥有。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>范围</th><th>本章回答</th><th>本章不负责</th><th>相邻 owner</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>跨包模式</td>
+                <td>为何存在、如何组合、失败隔离在哪里</td>
+                <td>逐文件 API 罗列</td>
+                <td>SDK 的 Agent、Conversation、Event、Tool、Workspace 接口</td>
+              </tr>
+              <tr>
+                <td>权衡</td>
+                <td>冻结 Agent、事件文件、并行工具、懒加载、REST+WS 的收益与成本</td>
+                <td>没有源码证据的容量或性能承诺</td>
+                <td>Local/Remote Conversation 与 Agent Server</td>
+              </tr>
+              <tr>
+                <td>二次开发</td>
+                <td>Tool/LLM/Prompt/Security/Workspace/Server 的推荐扩展表面</td>
+                <td>下游 GUI 排序、图标和产品交互</td>
+                <td>各包公共导出与 registry</td>
+              </tr>
+              <tr>
+                <td>反模式</td>
+                <td>所有权违规、旁路安全、状态复制和兼容破坏</td>
+                <td>以抽象名义预设未来需求</td>
+                <td>测试与兼容门禁</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <strong>最小决策原则</strong>
+          <div>
+            新能力先寻找现有 port、registry 或策略接口；只有当现有边界无法表达真实需求时才扩大核心模型。
+            <code>AgentBase</code> 明确把 Agent 定义为无状态、完全由配置描述的对象，并以
+            <code>ConfigDict(frozen=True)</code> 阻止字段原地替换。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:100-124</code></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="system" class="section">
+        <h2>2. 系统位置与依赖</h2>
+        <pre>下游应用 / CLI / SaaS
+        │ Python API                         │ REST 控制 + WS 事件
+        ▼                                    ▼
+  Agent / Conversation ports        Agent Server adapters
+        │                                    │
+        ├── Tool registry ──────────► openhands-tools executors
+        ├── Workspace port ─────────► local / remote / Docker / cloud adapters
+        ├── LLM facade ─────────────► LiteLLM/provider transport
+        └── Event + State ──────────► FileStore / EventLog / remote mirror</pre>
+        <p>
+          Ports and Adapters（端口与适配器）在此仓库不是单一框架类，而是一组依赖方向：
+          SDK 定义 <code>BaseWorkspace</code> 的命令、文件和 Git 能力，具体 Docker 后端在
+          Workspace 包继承 SDK 的 <code>RemoteWorkspace</code>；工具的
+          <code>ToolDefinition</code>/<code>ToolExecutor</code> 协议在 SDK，Terminal、
+          File Editor、Browser 等实现位于 Tools 包。远程触发最终仍由服务端
+          <code>LocalConversation</code> 执行工具，Remote 只控制和镜像。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/base.py:25-50</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:283-302</code></span>
+          <span class="evidence"><code>openhands-workspace/openhands/workspace/docker/workspace.py:53-83</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>所有者</th><th>拥有的抽象/实现</th><th>允许依赖</th><th>禁止反向渗透</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>openhands-sdk</code></td>
+                <td>Agent、Conversation、Event、LLM facade、Tool/Workspace ports、策略</td>
+                <td>通用依赖与 provider 库</td>
+                <td>不得导入具体 Tools、Docker 或 FastAPI 服务实现</td>
+              </tr>
+              <tr>
+                <td><code>openhands-tools</code></td>
+                <td>工具 schema、executor、presets</td>
+                <td>SDK ports</td>
+                <td>不得拥有会话持久化或远程控制面</td>
+              </tr>
+              <tr>
+                <td><code>openhands-workspace</code></td>
+                <td>Docker、Cloud、Apptainer、API remote 后端</td>
+                <td>SDK Workspace 类型</td>
+                <td>不得重写 Agent loop</td>
+              </tr>
+              <tr>
+                <td><code>openhands-agent-server</code></td>
+                <td>FastAPI、ConversationService、EventService、鉴权、WS</td>
+                <td>SDK 与 Tools</td>
+                <td>不得在路由中复制 SDK 的 Agent/Tool 决策逻辑</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="concepts" class="section">
+        <h2>3. 核心概念</h2>
+        <div class="grid three">
+          <div class="card">
+            <h3>Event Sourcing Lite</h3>
+            <p>
+              事件是可重放历史，<code>base_state.json</code> 是当前字段快照，二者共同恢复。
+              它不是“只由事件推导全部状态”的纯 Event Sourcing，也不是数据库中心模型。
+            </p>
+          </div>
+          <div class="card">
+            <h3>Ports and Adapters</h3>
+            <p>
+              核心依赖抽象端口，具体 I/O 由 adapters 实现。边界价值在可替换和测试，不在增加层数。
+            </p>
+          </div>
+          <div class="card">
+            <h3>Registry</h3>
+            <p>
+              用稳定名称把持久化规格解析为运行时实现，推迟重型初始化，并集中冲突与可用性规则。
+            </p>
+          </div>
+          <div class="card">
+            <h3>State Machine</h3>
+            <p>
+              <code>ConversationExecutionStatus</code> 和 init state 显式约束可进入、暂停、确认、完成与失败阶段。
+            </p>
+          </div>
+          <div class="card">
+            <h3>Bulkhead</h3>
+            <p>
+              舱壁隔离通过每个 Agent 的 executor、每个 executor 的线程池/资源锁、每个 EventService
+              的 run task/lock，将局部阻塞限制在较小故障域。
+            </p>
+          </div>
+          <div class="card">
+            <h3>Layered Recovery</h3>
+            <p>
+              从 transport retry、备用模型、纠正消息、压缩恢复到硬错误，按副作用和信息损失逐层升级。
+            </p>
+          </div>
+        </div>
+        <h3>易混概念</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>概念 A</th><th>概念 B</th><th>决定性区别</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>EventLog</td>
+                <td>View</td>
+                <td>前者是全部持久事件；后者是活跃分支的只读 LLM 投影，可重建且不持久化。
+                  <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:232-255</code></span>
+                </td>
+              </tr>
+              <tr>
+                <td>冻结 Agent</td>
+                <td>完全不可变对象图</td>
+                <td>冻结阻止 Pydantic 字段赋值；Agent 仍有运行时 PrivateAttr，
+                  配置变更以 <code>model_copy(update=...)</code> 产生新实例。
+                  <span class="evidence"><code>tests/sdk/agent/test_agent_immutability.py:19-32</code></span>
+                  <span class="evidence"><code>tests/sdk/agent/test_agent_immutability.py:129-148</code></span>
+                </td>
+              </tr>
+              <tr>
+                <td>Tool registry</td>
+                <td>Prompt registry</td>
+                <td>Tool registry 是进程级、带锁的名称解析表，当前重复名会告警后覆盖；PromptRegistry
+                  是有序实例集合，重复 <code>register</code> 报错，显式 <code>replace</code> 才覆盖。
+                  <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:31-34</code></span>
+                  <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:139-146</code></span>
+                  <span class="evidence"><code>openhands-sdk/openhands/sdk/context/prompts/registry.py:26-64</code></span>
+                </td>
+              </tr>
+              <tr>
+                <td>REST FINISHED</td>
+                <td>post-run FULL_STATE</td>
+                <td>前者在 Stop hook 完成前可能可见，仅为提示；后者在 run 退出且待发布事件冲刷后发送，是首选完成信号。
+                  <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1208-1221</code></span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>源码优先的限定</strong>
+          <div>
+            当前 <code>LLM.model_config</code> 只有 <code>extra="ignore"</code> 与
+            <code>arbitrary_types_allowed=True</code>，没有 <code>frozen=True</code>；
+            备用策略还会临时置空 fallback 以避免递归。因此“冻结配置”在当前源码中可直接用于
+            <code>Agent</code>，不应无条件扩展到整个 LLM 对象图。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:663-668</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:81-104</code></span>
+          </div>
+        </div>
+      </section>
+
+      <section id="architecture" class="section">
+        <h2>4. 架构组成</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>组成</th><th>输入 → 输出</th><th>状态所有者</th><th>故障隔离</th><th>扩展点</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Agent 配置核</td>
+                <td>LLM、Tool specs、Context、Condenser → step 决策</td>
+                <td>字段冻结；Conversation 持有当前 Agent</td>
+                <td>每个 Agent 有独立 ParallelToolExecutor</td>
+                <td><code>AgentBase</code>、<code>model_copy</code></td>
+              </tr>
+              <tr>
+                <td>Conversation 状态机</td>
+                <td>消息/待处理 Action → 状态与事件</td>
+                <td><code>ConversationState</code></td>
+                <td>FIFO state lock、run task、取消 token</td>
+                <td>Callbacks、Hooks、策略对象</td>
+              </tr>
+              <tr>
+                <td>Event Sourcing Lite</td>
+                <td>Event → 独立 JSON 文件；字段变更 → base snapshot</td>
+                <td>EventLog + <code>base_state.json</code></td>
+                <td>文件锁、重复 ID/父节点校验、缓存重建</td>
+                <td>FileStore、Event 类型兼容处理器</td>
+              </tr>
+              <tr>
+                <td>Registries</td>
+                <td>稳定名称/section → runtime definition/PromptBlocks</td>
+                <td>各 registry 自己</td>
+                <td>锁、重复策略、可用性检查</td>
+                <td><code>register_tool</code>、<code>PromptRegistry</code>、agent registry</td>
+              </tr>
+              <tr>
+                <td>Ports/Adapters</td>
+                <td>抽象操作 → 本地、HTTP、容器或 provider I/O</td>
+                <td>adapter 生命周期</td>
+                <td>边界错误映射与清理</td>
+                <td>ToolExecutor、Workspace、provider helper</td>
+              </tr>
+              <tr>
+                <td>Remote control plane</td>
+                <td>REST command + WS event → RemoteState mirror</td>
+                <td>服务端 LocalConversation 权威；客户端镜像</td>
+                <td>reconcile、状态队列、30 秒 hard fallback</td>
+                <td>FastAPI router/service、WebSocket subscriber</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>模式不是互斥标签</h3>
+        <p>
+          一次工具调用同时穿过多个模式：Tool 名称先经 Registry 解析成 adapter；Conversation 的
+          State Machine 把 Action 持久化并做准入；ParallelToolExecutor 以 Bulkhead 和资源锁执行；
+          Observation 回写 EventLog；失败再由 Layered Recovery 决定是结构化 Observation、重试、
+          压缩还是 ERROR。单独实现其中一层而绕过其余层，通常就是本章所称的反模式。
+        </p>
+      </section>
+
+      <section id="flows" class="section">
+        <h2>5. 完整运行流程</h2>
+        <h3>5.1 成功路径：注册工具到可恢复 Observation</h3>
+        <ol>
+          <li>
+            扩展包注册 <code>ToolDefinition</code> 子类；registry 保存 resolver 与
+            <code>is_usable()</code> checker。类型必须实现具体 <code>create</code>，创建结果必须是
+            <code>Sequence[ToolDefinition]</code>。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:67-92</code></span>
+          </li>
+          <li>
+            Conversation 首次 <code>send_message()</code>/<code>run()</code> 执行线程安全懒初始化：
+            plugins → file agents → Agent tools/MCP → state → LLM registry。构造器不做这些易失败 I/O。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1455-1521</code></span>
+          </li>
+          <li>
+            LLM tool calls 先形成 ActionEvent 并进入事件回调；安全分析、确认与 PreToolUse hook
+            决定是否可执行。可执行 batch 交给 ParallelToolExecutor。
+          </li>
+          <li>
+            executor 按 <code>DeclaredResources</code> 选择无锁、具体资源锁或工具级互斥；
+            结果虽然并发计算，仍按输入 Action 顺序收集和发出。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:67-126</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:312-329</code></span>
+          </li>
+          <li>
+            Observation 与 Action 配对后写 EventLog；独立事件文件支持按索引/ID读取，HEAD 推进，
+            View 增量投影活跃分支。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:315-381</code></span>
+          </li>
+        </ol>
+
+        <h3>5.2 拒绝路径：PreToolUse 阻止副作用</h3>
+        <ol>
+          <li>ActionEvent 已存在，HookEventProcessor 按工具名运行 PreToolUse hooks。</li>
+          <li>
+            hook deny 时把 <code>action_id → reason</code> 写入 ConversationState，而不是删除 Action；
+            HookExecutionEvent 仍用于观测。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:126-176</code></span>
+          </li>
+          <li>
+            Agent 准备 batch 时弹出 blocked reason，不把该 Action 交给 executor，转而生成
+            <code>UserRejectObservation(rejection_source="hook")</code>，维持 Action–Observation 配对。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:240-266</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:312-329</code></span>
+          </li>
+          <li>最终状态继续由 run loop 决定；拒绝不是未记录异常，也不应被重试器重新执行。</li>
+        </ol>
+
+        <h3>5.3 恢复路径：provider 失败到压缩或硬错误</h3>
+        <div class="flow">
+          <div class="step">Transport retry<br>同一请求</div>
+          <div class="arrow">→</div>
+          <div class="step">Fallback LLM<br>瞬时错误</div>
+          <div class="arrow">→</div>
+          <div class="step">Nudge<br>可纠正输出</div>
+          <div class="arrow">→</div>
+          <div class="step">Condensation<br>历史/窗口问题</div>
+          <div class="arrow">→</div>
+          <div class="step">ERROR<br>不可恢复</div>
+        </div>
+        <ul>
+          <li>
+            Tenacity 统一包装同步/异步 callable，按异常类型、尝试次数和指数等待重试；
+            <code>LLMNoResponseError</code> 在 temperature 为 0 时把下一次调用参数改为 1.0。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:22-102</code></span>
+          </li>
+          <li>
+            备用模型只接管连接、限流、服务不可用、超时、内部错误与无响应等瞬时故障；每个新请求仍从主模型开始。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:28-61</code></span>
+          </li>
+          <li>
+            空/仅推理响应产生 framework nudge；内容策略阻断也写纠正消息，不立刻硬失败。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:252-321</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:738-759</code></span>
+          </li>
+          <li>
+            历史畸形先 <code>rebuild_view()</code> 再发 <code>CondensationRequest</code>；
+            context overflow 也可请求压缩，但两类错误保持独立。无可处理 condenser 时异常上抛，
+            run loop 设 ERROR 并写 ConversationErrorEvent。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:760-801</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1997-2018</code></span>
+          </li>
+        </ul>
+      </section>
+
+      <section id="state" class="section">
+        <h2>6. 数据与状态模型</h2>
+        <h3>6.1 Event Sourcing Lite 的规范存储</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>数据</th><th>规范位置</th><th>身份/顺序</th><th>恢复方式</th><th>生命周期风险</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>事件</td>
+                <td><code>events/event-{idx:05d}-{event_id}.json</code></td>
+                <td>连续 index + EventID + parent_id</td>
+                <td>扫描文件名建索引，按需反序列化</td>
+                <td>索引 gap 会截断可见连续前缀；重复 ID 和未知父节点拒绝追加</td>
+              </tr>
+              <tr>
+                <td>基础状态</td>
+                <td><code>base_state.json</code></td>
+                <td>Conversation ID 与 Pydantic fields</td>
+                <td>反序列化后挂 EventLog、重建 View、校验 Agent/tools</td>
+                <td>无 cipher 时 Secret 会被掩码并在恢复时丢失</td>
+              </tr>
+              <tr>
+                <td>View</td>
+                <td>仅内存 PrivateAttr</td>
+                <td>当前 resolved leaf</td>
+                <td>线性 append 增量回放；分支切换/冷加载全量重建</td>
+                <td>旧引用在 rebuild 后失效</td>
+              </tr>
+              <tr>
+                <td>远程镜像</td>
+                <td>RemoteState / RemoteEventsList</td>
+                <td>服务端事件与 FULL_STATE</td>
+                <td>初始 REST + WS + reconnect reconcile</td>
+                <td>不是服务端状态的第二权威副本</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          文件名规范与目录常量由 persistence constants 定义。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/persistence_const.py:4-10</code></span>
+          EventLog 在追加时持有 FileStore 进程/线程锁、与磁盘同步、校验 ID 和显式 parent，
+          再写单个 JSON 文件并更新内存索引。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/event_store.py:184-233</code></span>
+          这给出增量追加、单事件检查和分支历史，但不提供数据库事务、跨文件原子提交或 NFS 上可靠的
+          <code>flock</code>；源码明确要求共享网络存储使用其他协调机制。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/event_store.py:30-41</code></span>
+        </p>
+        <h3>6.2 为什么不是完整 Event Sourcing</h3>
+        <p>
+          <code>execution_status</code>、stats、SecretRegistry、blocked actions、Agent 配置等公共字段会自动写入
+          base snapshot；事件本身不嵌入 snapshot。恢复先读 base，再挂载 EventLog、重建 View，并允许替换
+          LLM/context/condenser，但 persisted tools 必须与运行时 Agent 兼容。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:420-442</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:444-552</code></span>
+          这减少了“从创世事件重放全部可变字段”的成本，也意味着不能只复制 events 目录就声称得到完整会话。
+        </p>
+        <h3>6.3 锁与持久化事务边界</h3>
+        <p>
+          ConversationState 使用同步 FIFOLock；context manager 内的多个字段变更延迟到退出时合并一次
+          base_state 写入，但一次 event append 与一次 base snapshot 仍是不同文件操作，不构成跨文件事务。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:253-257</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:580-607</code></span>
+          因而恢复逻辑必须容忍“事件已写、某些派生字段尚未写”的边界，并从事件重建 View/HEAD 相关语义。
+        </p>
+      </section>
+
+      <section id="interfaces" class="section">
+        <h2>7. 接口、协议与事件</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>表面</th><th>输入/输出</th><th>顺序与幂等</th><th>错误/确认语义</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>register_tool</code> / <code>resolve_tool</code></td>
+                <td>名称 + ToolDefinition class/instance → definitions</td>
+                <td>注册顺序保留；当前工具重复注册会覆盖，不是 first-wins</td>
+                <td>未知名 KeyError；坏 create 结果 TypeError</td>
+              </tr>
+              <tr>
+                <td><code>PromptRegistry</code></td>
+                <td>PromptSection + frozen PromptContext → static/dynamic blocks</td>
+                <td>按 tier 分组且各 tier 保持注册顺序</td>
+                <td>重复 register 报错；replace 是显式覆盖</td>
+              </tr>
+              <tr>
+                <td>agent registry</td>
+                <td>名称 + factory + definition → AgentFactory</td>
+                <td>程序化重复报错；plugin/file 使用 if_absent，first registration wins</td>
+                <td>未知 Tool/Skill 在 factory 创建时 ValueError</td>
+              </tr>
+              <tr>
+                <td>Conversation events</td>
+                <td>Message/Action/Observation/Hook/State update</td>
+                <td>Event ID 唯一；Action–Observation 必须配对；tree parent 决定活跃分支</td>
+                <td>拒绝也产生 Observation，不删除 Action</td>
+              </tr>
+              <tr>
+                <td>REST</td>
+                <td>创建、消息、run、pause、interrupt、查询</td>
+                <td>命令式控制；409 表示 run 已在进行</td>
+                <td>公共 OpenAPI 有 5 minor deprecation runway</td>
+              </tr>
+              <tr>
+                <td>WebSocket</td>
+                <td>增量 Event 与 FULL_STATE；也接受消息</td>
+                <td>订阅先注册再发 snapshot；可按 all/since 补历史</td>
+                <td>断线靠 REST/reconcile；不受 OpenAPI 兼容检查覆盖</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          WebSocket 订阅的初始 state snapshot 在 worker thread 创建，避免同步 FIFOLock 阻塞 FastAPI event loop，
+          并用超时限制初始推送；超时只丢 snapshot，订阅仍保留。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:790-819</code></span>
+          Socket 支持 <code>resend_mode=all|since</code>，历史可由 REST 加载、WS 从时间点后接续；
+          <code>resend_all</code> 仅为隐藏的遗留参数。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/sockets.py:226-278</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/sockets.py:308-345</code></span>
+        </p>
+      </section>
+
+      <section id="configuration" class="section">
+        <h2>8. 配置与默认行为</h2>
+        <p>模式本身没有单一配置对象；下表只列直接改变这些模式运行方式的已验证配置。</p>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>Agent.tool_concurrency_limit</code></td>
+                <td><code>int &gt;= 1</code></td>
+                <td>1</td>
+                <td>Agent 实例配置</td>
+                <td>新 Agent 或 model_copy</td>
+                <td>大于 1 时共享 Conversation/文件系统，错误声明资源会产生竞态</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:292-306</code></span></td>
+              </tr>
+              <tr>
+                <td><code>LLM.num_retries</code></td>
+                <td><code>int &gt;= 0</code></td>
+                <td>5</td>
+                <td>LLM 配置</td>
+                <td>后续调用生效</td>
+                <td>预算耗尽后映射/上抛，才进入 fallback</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:337-340</code></span></td>
+              </tr>
+              <tr>
+                <td><code>retry_min_wait/max_wait</code></td>
+                <td>非负秒数</td>
+                <td>8 / 64</td>
+                <td>LLM 配置</td>
+                <td>后续调用生效</td>
+                <td>指数等待被上下界截断</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:337-340</code></span></td>
+              </tr>
+              <tr>
+                <td><code>LLM.timeout</code></td>
+                <td><code>int | None</code></td>
+                <td>300 秒</td>
+                <td>传输调用</td>
+                <td>后续调用生效</td>
+                <td><code>None</code> 禁用超时，源码标注不建议生产使用</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:342-348</code></span></td>
+              </tr>
+              <tr>
+                <td><code>LLM.fallback_strategy</code></td>
+                <td><code>FallbackStrategy | None</code></td>
+                <td>None</td>
+                <td>retry 之后</td>
+                <td>运行时配置；不序列化</td>
+                <td>仅瞬时错误；全部失败后重抛主错误</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/llm/llm.py:614-620</code></span></td>
+              </tr>
+              <tr>
+                <td><code>ConversationState.persistence_dir</code></td>
+                <td><code>str | None</code></td>
+                <td><code>workspace/conversations</code></td>
+                <td>显式 FileStore 优先于路径</td>
+                <td>创建时</td>
+                <td>None 且无 FileStore 时退到内存，跨请求不持久</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:102-106</code></span>
+                  <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:500-510</code></span></td>
+              </tr>
+              <tr>
+                <td><code>OPENHANDS_REMOTE_WS_READY_TIMEOUT</code></td>
+                <td>可解析 float</td>
+                <td>30 秒</td>
+                <td>环境变量</td>
+                <td>创建 RemoteConversation 时</td>
+                <td>required 为 true 时连接未就绪抛 WebSocketConnectionError</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1007-1035</code></span></td>
+              </tr>
+              <tr>
+                <td><code>OPENHANDS_REMOTE_WS_READY_REQUIRED</code></td>
+                <td>字符串布尔</td>
+                <td>true</td>
+                <td>环境变量</td>
+                <td>创建时</td>
+                <td>false 时告警并依赖 REST reconcile 继续</td>
+                <td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1010-1025</code></span></td>
+              </tr>
+              <tr>
+                <td><code>Config.deferred_init</code></td>
+                <td>bool</td>
+                <td>false</td>
+                <td>服务端配置/环境</td>
+                <td>启动模式</td>
+                <td>dormant/initializing 时受保护 API 返回 503</td>
+                <td><span class="evidence"><code>openhands-agent-server/openhands/agent_server/config.py:352-360</code></span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>不是所有 registry 都遵循同一冲突规则</strong>
+          <div>
+            二开代码不能假设“first wins”是全局规则。Agent 的非程序化来源使用 first-wins；
+            Prompt 要求显式 replace；Tool 当前重复名会告警并覆盖。若统一这些语义，会改变公共行为，
+            需先迁移调用方和测试，而不是偷偷调整一个通用 helper。
+          </div>
+        </div>
+      </section>
+
+      <section id="concurrency" class="section">
+        <h2>9. 并发、性能与资源</h2>
+        <h3>9.1 工具并行是一组舱壁，不是“全部 gather”</h3>
+        <p>
+          每个 Agent 在 <code>model_post_init</code> 中按 <code>tool_concurrency_limit</code>
+          创建自己的 ParallelToolExecutor；executor 再拥有自己的 ResourceLockManager。
+          嵌套 subagent 因此不会与父 Agent 共用同一线程池/锁管理器而互相死锁。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:416-424</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:51-65</code></span>
+        </p>
+        <ul>
+          <li>
+            默认 <code>max_workers=1</code> 串行；多个调用且上限大于 1 才创建 per-batch ThreadPoolExecutor。
+            sync 收集 futures，async 使用专用 pool + <code>asyncio.gather</code>，避免占用进程共享默认池。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:98-126</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:128-191</code></span>
+          </li>
+          <li>
+            未声明资源意味着保守的 <code>tool:&lt;name&gt;</code> 互斥；显式空 keys 才表示无共享资源；
+            具体 keys 进行资源级互斥。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:250-280</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:275-311</code></span>
+          </li>
+          <li>
+            多资源锁按排序顺序获取，使用 FIFOLock 防饥饿；不同前缀有源码定义的获取超时，
+            超时产生 ResourceLockTimeout，反向释放已获取锁。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:21-28</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:84-117</code></span>
+          </li>
+          <li>
+            async task 取消不会自动终止已运行线程；executor 会调用具体
+            <code>tool.executor.interrupt()</code>，实现者必须保证线程安全和幂等。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:215-253</code></span>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:317-327</code></span>
+          </li>
+        </ul>
+        <h3>9.2 状态锁与事件循环</h3>
+        <p>
+          ConversationState 的锁是同步 FIFOLock。Agent Server 创建订阅 snapshot、发送消息和需要等待该锁的
+          操作必须越过 worker-thread boundary；EventService 也只有在 Conversation 与 Agent 都提供真正 async
+          override 时才原生 await <code>arun()</code>，否则把 sync run 放入专用 executor。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1171-1198</code></span>
+          在 async route 上直接 <code>with conversation._state</code> 可能冻结整个 FastAPI event loop，
+          这不是局部性能问题，而是破坏服务舱壁。
+        </p>
+        <h3>9.3 背压与有意未承诺的指标</h3>
+        <p>
+          源码证明了线程池上限、资源锁超时、初始 subscriber push 超时和 remote run 总超时；
+          没有证据支持固定吞吐、延迟、队列容量或 SLA。扩展作者应把压测阈值放入 stress budget，
+          不应把开发机观测写成运行时保证。
+        </p>
+      </section>
+
+      <section id="security" class="section">
+        <h2>10. 安全与信任边界</h2>
+        <h3>10.1 防护链的位置</h3>
+        <pre>不可信用户/模型输入
+  → Pydantic Action schema
+  → 构造 ActionEvent
+  → PreToolUse hook（组织策略）
+      └─ deny：不写入 EventLog
+  → 放行的 ActionEvent 持久化
+  → SecurityAnalyzer（风险）
+  → ConfirmationPolicy（是否询问）
+  → ToolExecutor（在当前执行环境产生副作用）
+  → PostToolUse hook + ObservationEvent</pre>
+        <p>
+          SecurityAnalyzer 负责把 Action 评估为 SecurityRisk；分析器批处理时单项异常降为 HIGH，
+          避免异常悄悄放行。ConfirmationPolicy 是独立策略：AlwaysConfirm、NeverConfirm 或按阈值且默认确认
+          UNKNOWN 的 ConfirmRisky。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/security/analyzer.py:85-111</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/security/confirmation_policy.py:27-61</code></span>
+        </p>
+        <h3>10.2 Adapter 不等于可信边界</h3>
+        <ul>
+          <li>Tool schema/annotations 是提示与验证，不等于沙箱；真正副作用权限由 Workspace/进程/容器决定。</li>
+          <li>
+            RemoteWorkspace 的 API key 进入 <code>X-Session-API-Key</code>；wire path 统一为 POSIX，
+            不应把 host-native <code>Path</code> 直接拼入 URL。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:18-65</code></span>
+          </li>
+          <li>
+            Agent Server 的普通 <code>/api/*</code> 同时应用 session-key auth 与 deferred-init gate；
+            <code>/api/init</code> 单独使用 bootstrap auth，workspace 静态资源有 cookie/header 二选一边界。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:403-466</code></span>
+          </li>
+          <li>
+            Secret 在无 cipher 的 snapshot 中被掩码且恢复丢失；不要在自定义 serializer 中自行实现另一套掩码。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:420-436</code></span>
+          </li>
+        </ul>
+        <div class="callout danger">
+          <strong>禁止把旁路当等价调用</strong>
+          <div>
+            直接调用 executor、Workspace 或程序化 <code>execute_tool</code> 可能跳过 Agent loop 的确认、
+            Hooks、Action 持久化和 Observation 配对。若业务需要受信任的管理旁路，应在 API 名称、鉴权、
+            审计和文档中明确它是不同安全契约，不能复用“Agent 已检查”的假设。
+          </div>
+        </div>
+        <h3>10.3 多租户安全不是现有组件的自动推论</h3>
+        <p>
+          论文 §7 指出，独立容器、每会话事件日志、会话级 SecretRegistry 与 Agent Server
+          session authentication 只是多租户隔离和访问控制的基础。共享 LLM API key、MCP server、
+          secret registry 后端与基础设施资源仍需要租户身份、授权、配额、审计和密钥边界；论文明确把
+          <strong>完整多租户安全审计</strong>列为未来工作。当前源码可以证明 session-key auth、
+          Conversation/Secret 的作用域和可选容器化，不能据此声称完成 tenant-aware IAM 或端到端审计。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:403-466</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:197-201</code></span>
+          来源：<a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690</a> §7
+          “Multi-Tenant Deployment”。
+        </p>
+      </section>
+
+      <section id="recovery" class="section">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>LLM 瞬时传输错误</td>
+                <td>类型化 provider/LiteLLM exception</td>
+                <td>Tenacity retry</td>
+                <td>历史不变</td>
+                <td>预算耗尽后可试 fallback profile</td>
+                <td>核对 retry 日志、provider、profile 与费用合并</td>
+              </tr>
+              <tr>
+                <td>函数参数非法/空响应</td>
+                <td>schema validation 或 response classifier</td>
+                <td>写纠正 MessageEvent</td>
+                <td>继续 RUNNING</td>
+                <td>模型下一轮自纠正</td>
+                <td>检查 nudge 与重复模式，避免无界循环</td>
+              </tr>
+              <tr>
+                <td>历史畸形</td>
+                <td><code>LLMMalformedConversationHistoryError</code></td>
+                <td>重建 View、CondensationRequest</td>
+                <td>继续或 ERROR</td>
+                <td>condenser 处理；无能力则硬失败</td>
+                <td>检查 Action–Observation 和 resume 事件</td>
+              </tr>
+              <tr>
+                <td>context window 超限</td>
+                <td><code>LLMContextWindowExceedError</code></td>
+                <td>CondensationRequest</td>
+                <td>继续或 ERROR</td>
+                <td>摘要/裁剪后重试</td>
+                <td>核对 condenser 是否 handles requests</td>
+              </tr>
+              <tr>
+                <td>PreToolUse 拒绝</td>
+                <td>Hook deny/exit 2</td>
+                <td>不执行，生成 UserRejectObservation</td>
+                <td>历史合法，通常继续</td>
+                <td>不自动重放副作用</td>
+                <td>检查 HookExecutionEvent 和 rejection_source</td>
+              </tr>
+              <tr>
+                <td>Stop hook 拒绝结束</td>
+                <td><code>run_stop()</code> 返回 false</td>
+                <td>注入反馈，FINISHED → RUNNING</td>
+                <td>继续迭代</td>
+                <td>等待下一次合法完成</td>
+                <td>远端不可把字段级 FINISHED 当完成</td>
+              </tr>
+              <tr>
+                <td>WS 完成 snapshot 丢失</td>
+                <td>REST 连续 terminal，WS 队列无 FULL_STATE</td>
+                <td>等待并告警</td>
+                <td>客户端仍阻塞</td>
+                <td>连续 30 秒后 refresh + reconcile 后返回</td>
+                <td>排查 socket、subscriber 和 final publish</td>
+              </tr>
+              <tr>
+                <td>EventLog gap/损坏</td>
+                <td>扫描、JSON validation、View rebuild</td>
+                <td>只装载连续前缀或抛错</td>
+                <td>恢复受阻</td>
+                <td>不猜测缺失事件</td>
+                <td>保全文件后人工审计，不重排 index 掩盖损坏</td>
+              </tr>
+              <tr>
+                <td>deferred init 失败</td>
+                <td>initialize exception</td>
+                <td>HTTP 500，state 回滚 dormant</td>
+                <td>服务未 ready</td>
+                <td>修正请求/依赖后重新 init</td>
+                <td>以 HTTP status 探测，不依赖被重写的 detail</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Stop hook 可以在 run loop 下一轮把 FINISHED 改回 RUNNING并注入反馈。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1897-1925</code></span>
+          RemoteConversation 因而只把 armed 后的 post-run FULL_STATE 作为首选完成信号；REST terminal
+          连续 30 秒才启用 hard fallback，并在返回前刷新状态和 reconcile events。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1191-1230</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1281-1318</code></span>
+        </p>
+        <h3>兼容表面不能混用</h3>
+        <ul>
+          <li>历史 Event：旧事件必须永久可加载，deprecated field handler 不能按普通 API 清理周期删除。</li>
+          <li>公共 Python API：导出 symbol/member 的移除需要 deprecation metadata 与至少 5 minor runway。</li>
+          <li>REST/OpenAPI：破坏性 contract 需要 OpenAPI deprecation 与至少 5 minor runway。</li>
+          <li>WebSocket：不在 OpenAPI checker 覆盖内，仍需显式版本与兼容测试。</li>
+          <li>持久 Settings：走 schema_version、migration、golden fixtures；不要套用 Event handler。</li>
+        </ul>
+      </section>
+
+      <section id="operations" class="section">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>先检查</th><th>常见原因</th><th>修复方向</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>工具“配置并行”但仍串行</td>
+                <td><code>tool_concurrency_limit</code>、DeclaredResources、锁 key</td>
+                <td>默认上限 1；未声明资源回退到 tool mutex；相同资源冲突</td>
+                <td>只在能证明无冲突时声明空/细粒度 keys</td>
+              </tr>
+              <tr>
+                <td>并行后文件或 session 竞态</td>
+                <td>工具 <code>declared_resources(action)</code></td>
+                <td>漏声明共享文件、终端或浏览器；key 未规范化</td>
+                <td>使用稳定、规范化资源 key 并加并发测试</td>
+              </tr>
+              <tr>
+                <td>插件配置构造后没有生效</td>
+                <td>是否已首次 send_message/run、<code>resolved_plugins</code></td>
+                <td>插件按设计懒加载</td>
+                <td>不要在构造后立即断言 runtime tools；先触发初始化</td>
+              </tr>
+              <tr>
+                <td>恢复后历史缺动作结果</td>
+                <td>events 文件、active branch、Action/Observation ID、View rebuild</td>
+                <td>中断时 orphan、文件缺失、错误 branch、历史 schema 漂移</td>
+                <td>保留原文件；使用既有 orphan 修补/兼容路径，不伪造成功 Observation</td>
+              </tr>
+              <tr>
+                <td>Remote run 在 FINISHED 后仍等待</td>
+                <td>字段级状态、post-run FULL_STATE、REST terminal 持续时间</td>
+                <td>Stop hook 尚未完成或 final snapshot 丢失</td>
+                <td>等待权威 snapshot；超过 hard fallback 后排查 WS delivery</td>
+              </tr>
+              <tr>
+                <td>Agent Server 探针整体卡住</td>
+                <td>async route 是否同步等待 ConversationState FIFOLock</td>
+                <td>event loop 上直接进入同步锁</td>
+                <td>把锁等待移入 executor，再做 async I/O</td>
+              </tr>
+              <tr>
+                <td>安全分析器故障后动作全部需确认</td>
+                <td>analyzer error log、risk、ConfirmationPolicy</td>
+                <td>故障按 HIGH/UNKNOWN 保守处理</td>
+                <td>修复 analyzer，不要把 fail-safe 改成静默放行</td>
+              </tr>
+              <tr>
+                <td>自定义 LLM 行为散落且互相冲突</td>
+                <td>model_features、provider normalization、transport kwargs</td>
+                <td>把 capability 与 transport 混入 LLM 主链</td>
+                <td>能力先进入 feature registry，边界转换放聚焦 helper</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          关键观测面包括：EventLog 的 Action/Observation/Hook/ConversationErrorEvent，
+          ConversationState 的 execution_status/stats，LLM retry/fallback 日志，tool span，
+          Remote reconcile 日志，Agent Server 的 WebSocket 与 <code>/server_info</code>。
+          HookExecutionEvent 是控制决策的证据，不应只看最终 Observation。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:49-103</code></span>
+        </p>
+      </section>
+
+      <section id="testing" class="section">
+        <h2>13. 测试与验证</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Agent 字段冻结、model_copy 变更</td>
+                <td><span class="evidence"><code>tests/sdk/agent/test_agent_immutability.py:19-32</code></span>；
+                  <span class="evidence"><code>tests/sdk/agent/test_agent_immutability.py:129-148</code></span></td>
+                <td>SDK unit</td>
+                <td>赋值失败，新实例承载变更</td>
+                <td>不证明嵌套对象深冻结</td>
+              </tr>
+              <tr>
+                <td>EventLog ID、索引、损坏文件</td>
+                <td><span class="evidence"><code>tests/sdk/conversation/test_event_store.py:29-61</code></span>；
+                  <span class="evidence"><code>tests/sdk/conversation/test_event_store.py:152-189</code></span></td>
+                <td>SDK unit</td>
+                <td>空日志、重复 ID、缺失/损坏读取行为</td>
+                <td>不证明 NFS 锁可靠</td>
+              </tr>
+              <tr>
+                <td>资源声明三态</td>
+                <td><span class="evidence"><code>tests/sdk/agent/test_parallel_executor_locking.py:46-99</code></span>；
+                  <span class="evidence"><code>tests/sdk/agent/test_parallel_executor_locking.py:102-150</code></span></td>
+                <td>SDK concurrency</td>
+                <td>tool mutex、无锁并行、资源 key 与兼容无锁路径</td>
+                <td>具体第三方工具仍需自己的竞态测试</td>
+              </tr>
+              <tr>
+                <td>Prompt 顺序、tier、duplicate/replace</td>
+                <td><span class="evidence"><code>tests/sdk/context/prompts/test_registry.py:17-68</code></span></td>
+                <td>SDK unit</td>
+                <td>静态/动态组装和显式覆盖语义</td>
+                <td>不证明 prompt 对模型效果</td>
+              </tr>
+              <tr>
+                <td>Tool 注册类型与可用性</td>
+                <td><span class="evidence"><code>tests/sdk/tool/test_registry.py:96-154</code></span></td>
+                <td>SDK unit</td>
+                <td>拒绝 callable factory、is_usable、create params</td>
+                <td>不覆盖所有内置工具环境探测</td>
+              </tr>
+              <tr>
+                <td>Plugin 懒加载</td>
+                <td><span class="evidence"><code>tests/sdk/conversation/test_local_conversation_plugins.py:183-240</code></span></td>
+                <td>SDK integration-style unit</td>
+                <td>首次运行前的 lazy 语义与 skill merge</td>
+                <td>外部 marketplace 网络失败需独立集成测试</td>
+              </tr>
+              <tr>
+                <td>Remote 完成信号与 hard fallback</td>
+                <td><span class="evidence"><code>tests/sdk/conversation/remote/test_remote_conversation.py:940-975</code></span>；
+                  <span class="evidence"><code>tests/sdk/conversation/remote/test_remote_conversation.py:1307-1318</code></span></td>
+                <td>SDK remote unit</td>
+                <td>FULL_STATE 权威、WS 静默时的时间 fallback</td>
+                <td>真实网络乱序由 cross/live server 测试补充</td>
+              </tr>
+              <tr>
+                <td>服务端 sync-only Agent 隔离</td>
+                <td><span class="evidence"><code>tests/agent_server/test_event_service.py:2848-2905</code></span></td>
+                <td>Agent Server async unit</td>
+                <td>sync-only agent 不会被误放到原生 async event loop 路径</td>
+                <td>不等于高负载资源预算</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          改动一个 owner 后先运行对应最小测试和该文件 pre-commit；涉及跨包协议再运行
+          <code>tests/cross</code>，涉及并行、WS 背压或大量会话再运行标记为 stress 的 Agent Server 套件。
+          Prompt、工具描述或 Agent 决策变化还应触发 integration tests，因为 unit test 只能证明结构，
+          不能证明行为基准无回归。
+        </p>
+      </section>
+
+      <section id="extension" class="section">
+        <h2>14. 开发与扩展指南</h2>
+        <h3>14.1 变更路由表</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>推荐所有者表面</th><th>同步修改</th><th>必要证明</th><th>典型反模式</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>新增 Tool</td>
+                <td>Tools 包的 <code>definition.py</code> + executor；SDK <code>ToolDefinition</code> 协议</td>
+                <td>Action/Observation schema、注册、<code>declared_resources</code>、包导出</td>
+                <td>schema validation、失败 Observation、并行冲突、interrupt/close、名称一致性</td>
+                <td>在 Agent.step 里按 tool name 写分支；直接返回裸异常；漏声明共享资源</td>
+              </tr>
+              <tr>
+                <td>支持新 LLM/provider</td>
+                <td><code>llm/utils/model_features.py</code> 与聚焦 provider helper；必要时 LLM transport</td>
+                <td>canonical model、capability、参数过滤、错误映射、sync/async</td>
+                <td>能力优先级、两种 API、stream callback、retry/fallback、metrics</td>
+                <td>在 <code>llm.py</code> 到处比较 provider 字符串；混淆 transport 与 capability</td>
+              </tr>
+              <tr>
+                <td>新增 Prompt 片段</td>
+                <td><code>PromptSection</code> + registry preset</td>
+                <td>稳定唯一 name、guard、render、STATIC/DYNAMIC tier</td>
+                <td>纯函数、顺序、空输出、cache tier、目标平台/工具 guard</td>
+                <td>render 做 I/O；把每会话数据塞进 STATIC；直接拼接整份 system prompt</td>
+              </tr>
+              <tr>
+                <td>新增 Security analyzer/policy</td>
+                <td><code>SecurityAnalyzerBase</code> 或 <code>ConfirmationPolicyBase</code></td>
+                <td>Settings union/schema、Secret、错误风险语义、服务端 round-trip</td>
+                <td>LOW/MEDIUM/HIGH/UNKNOWN、异常 fail-safe、确认拒绝、Hook 组合</td>
+                <td>分析器直接执行工具；异常返回 LOW；把风险判断与确认 UI 混成一个类</td>
+              </tr>
+              <tr>
+                <td>新增 Workspace 后端</td>
+                <td>Workspace 包继承 SDK Base/Remote port</td>
+                <td>上下文清理、路径规范化、命令/文件/Git、鉴权、包导出</td>
+                <td>host-native 与 wire path、超时、失败结果、pause/resume、资源清理</td>
+                <td>SDK 导入具体容器库；在 import 时启动资源；用本机 Path 拼 URL</td>
+              </tr>
+              <tr>
+                <td>新增 Server API</td>
+                <td>聚焦 router + service；复用 ConversationService/EventService</td>
+                <td>auth/deferred gate、request/response model、OpenAPI、Remote client</td>
+                <td>状态码、并发锁、live HTTP/WS、deprecation、异常映射</td>
+                <td>async route 同步等 state lock；路由复制 Agent loop；原地破坏 REST schema</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>14.2 Tool 二开步骤</h3>
+        <ol>
+          <li>在 Tools 包定义严格 Action 与 Observation，保持工具名、参数和输出是用户可见兼容表面。</li>
+          <li>
+            实现 <code>ToolExecutor.__call__</code>，长操作同时实现线程安全、幂等的
+            <code>interrupt()</code> 与资源 <code>close()</code>。
+          </li>
+          <li>
+            用 <code>ToolDefinition.create(conv_state, **params)</code> 注入 Workspace 等运行时依赖；
+            不把不可序列化 executor 放进持久化规格。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:347-431</code></span>
+          </li>
+          <li>实现基于具体 Action 的 <code>declared_resources</code>；无法证明安全时保留 undeclared 的保守串行。</li>
+          <li>注册 ToolDefinition class，验证 <code>is_usable()</code>；环境探测属于具体 Tool，不属于 Server 路由。</li>
+        </ol>
+
+        <h3>14.3 LLM 二开步骤</h3>
+        <ol>
+          <li>
+            先判断差异是“支持什么”还是“怎么调用”：能力进入 <code>ModelFeatures</code> 和有序规则，
+            传输名/鉴权/参数进入 provider boundary。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/model_features.py:13-65</code></span>
+          </li>
+          <li>同时验证 Chat Completions 与 Responses API 选择、native/non-native tool calling 和 image/reasoning 能力。</li>
+          <li>让 provider 错误映射到已有类型，使 retry、fallback、condensation 能正确分层；不要用字符串匹配吞掉错误。</li>
+          <li>保持 sync/async token callback、metrics、completion log 对称；fallback 成本必须并入主 metrics。</li>
+        </ol>
+
+        <h3>14.4 Prompt 二开步骤</h3>
+        <ol>
+          <li>
+            实现纯 <code>PromptSection</code>：<code>guard(ctx)</code> 只判断适用性，
+            <code>render(ctx)</code> 只生成文本，均不做 I/O。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/context/prompts/section.py:103-129</code></span>
+          </li>
+          <li>
+            静态、跨会话稳定内容放 STATIC；skills、secrets、时间、工作目录等每会话内容放 DYNAMIC。
+            PromptContext 会把 template kwargs 转为 MappingProxyType，防止嵌套漂移。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/context/prompts/section.py:52-87</code></span>
+          </li>
+          <li>新 section 用 register；有意替换现有 section 用 replace，并增加顺序/cache 测试和 integration label。</li>
+        </ol>
+
+        <h3>14.5 Security 二开步骤</h3>
+        <ol>
+          <li>Analyzer 只返回风险，不决定 UI 或执行；Policy 只把风险映射为确认决定。</li>
+          <li>明确基础设施错误、解析不确定和真实高风险的映射；默认不能静默放行。</li>
+          <li>需要组织策略时使用 Hooks，并保留 HookExecutionEvent；PreToolUse deny 仍必须形成拒绝 Observation。</li>
+          <li>验证程序化旁路是否需要独立鉴权和审计，不要假定所有 executor 调用都经过安全链。</li>
+        </ol>
+
+        <h3>14.6 Workspace 二开步骤</h3>
+        <ol>
+          <li>选择 BaseWorkspace（直接实现）或 RemoteWorkspace（通过 Agent Server 协议）作为 port。</li>
+          <li>在构造中只验证配置，资源启动放 context lifecycle；确保异常路径也清理容器、连接与日志线程。</li>
+          <li>wire path 先转 POSIX；本机文件创建/校验使用 host-native 绝对路径语义。</li>
+          <li>为命令、上传/下载、Git、pause/resume、timeout 和 auth 写聚焦测试；外部进程可 patch executor。</li>
+        </ol>
+
+        <h3>14.7 Server 二开步骤</h3>
+        <ol>
+          <li>路由只做 HTTP 校验与状态码映射，运行所有权放 ConversationService/EventService。</li>
+          <li>把新 <code>/api/*</code> 路由置于 session auth + deferred-init dependency 下；例外需要显式独立信任模型。</li>
+          <li>同步 state lock 和阻塞 I/O 移入 worker executor；网络 await 不应持有同步锁。</li>
+          <li>REST 变更优先 additive；破坏变更走 OpenAPI deprecation 和 5 minor runway，并更新 Remote client/live server test。</li>
+        </ol>
+      </section>
+
+      <section id="tradeoffs" class="section">
+        <h2>15. 设计权衡与已知限制</h2>
+        <h3>15.1 论文 §7：重构时评估过的架构备选</h3>
+        <p>
+          下表记录论文对 V1 重构决策的解释；“论文选择”是 MLSys 2026 版本的设计论证，
+          “当前源码限定”用于避免把论文术语机械套到今天的实现。当前的 Event Sourcing Lite、
+          可选 Workspace 隔离与四包 workspace 仍由源码证明；论文未覆盖的后续能力继续按当前源码描述。
+          来源：<a href="https://arxiv.org/abs/2511.03690">论文 §7
+          “Architectural Alternatives Considered”</a>。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>决策轴</th><th>备选方案</th><th>论文选择与理由</th><th>当前源码限定</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>状态管理</td>
+                <td>数据库中心状态 vs Event Sourcing</td>
+                <td>拒绝把 SDK 绑定到特定数据库和不利于离线 replay 的中心模型；选择可重放、存储后端可替换的事件路径</td>
+                <td>当前是 Event Sourcing Lite：事件文件与 <code>base_state.json</code> 共同恢复，不是“所有状态只由事件推导”</td>
+              </tr>
+              <tr>
+                <td>执行隔离</td>
+                <td>强制容器化 vs 纯本地执行</td>
+                <td>选择可选隔离：默认本地路径符合 MCP/local-first，生产需要时保留 sandbox</td>
+                <td>本地不是安全沙箱；Remote/Docker 是可选 adapter，具体隔离强度由部署和容器配置决定</td>
+              </tr>
+              <tr>
+                <td>包与部署结构</td>
+                <td>单体 SDK vs 微服务</td>
+                <td>选择 SDK、Tools、Workspace、Agent Server 四包，在独立测试与依赖管理复杂度之间折中</td>
+                <td>当前仍是一个 uv workspace 中的四个发行包，不等于四个必须独立部署的微服务</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          当前证据分别落在 Conversation 的双路径持久化、Workspace port/adapter 和根 workspace 成员：
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:420-552</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/base.py:25-50</code></span>
+          <span class="evidence"><code>pyproject.toml:1-26</code></span>
+        </p>
+        <h3>15.2 当前源码归纳的权衡</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>Agent 运行配置如何共享</td>
+                <td>Agent Pydantic fields frozen；变更用 model_copy；可变运行状态在 Conversation</td>
+                <td>减少跨会话状态泄漏，序列化和恢复边界清晰</td>
+                <td>PrivateAttr 仍有生命周期；嵌套 LLM 非深冻结；动态改配置需替换对象并同步 state</td>
+                <td>PrivateAttr 共享导致真实竞态，或配置替换成本成为可测瓶颈</td>
+              </tr>
+              <tr>
+                <td>事件如何持久化</td>
+                <td>每事件一 JSON 文件 + base snapshot</td>
+                <td>增量写、可检查、FileStore 可替换、无需数据库</td>
+                <td>大量小文件、gap 敏感、跨文件非事务、NFS lock 限制</td>
+                <td>已测事件规模/存储介质使扫描、inode 或一致性成为主要故障</td>
+              </tr>
+              <tr>
+                <td>工具是否并行</td>
+                <td>默认串行；显式上限 + 声明资源后并行</td>
+                <td>兼容旧工具，能并行独立 I/O，资源冲突可局部串行</td>
+                <td>声明错误会竞态；线程取消是协作式；per-batch pool 有创建成本</td>
+                <td>大量短任务实测被线程池开销主导，或需要跨进程资源仲裁</td>
+              </tr>
+              <tr>
+                <td>插件何时加载</td>
+                <td>首次 send_message/run 懒加载，顺序合并 plugin/file agent/MCP/hooks</td>
+                <td>构造无 I/O，未使用会话不付成本，配置在初始化前完整</td>
+                <td>首次交互有冷启动失败；构造后 runtime surface 尚不可观察</td>
+                <td>产品要求预热时可增加显式 prepare API，而不是恢复构造器 I/O</td>
+              </tr>
+              <tr>
+                <td>远程控制与事件传播</td>
+                <td>REST 控制/查询 + WS 增量事件 + reconcile</td>
+                <td>命令易重试/鉴权，事件低延迟，断线可补历史</td>
+                <td>双通道乱序；FINISHED 可能早于 Stop hook；需要 FULL_STATE 与 hard fallback</td>
+                <td>协议复杂度持续上升且可由单一版本化流在真实网络条件下更可靠地替代</td>
+              </tr>
+              <tr>
+                <td>扩展发现如何解耦</td>
+                <td>多套语义明确的 registry</td>
+                <td>稳定名可持久化，初始化延迟，环境可用性集中</td>
+                <td>冲突规则不统一；全局 registry 会产生测试隔离和 import-order 风险</td>
+                <td>多租户进程出现真实名称污染，需引入会话/容器作用域 registry</td>
+              </tr>
+              <tr>
+                <td>故障如何恢复</td>
+                <td>retry → fallback → nudge → condensation → hard error</td>
+                <td>先用低损恢复，保留类型和观测</td>
+                <td>层级叠加会放大总延迟/成本；副作用后错误不能盲重试</td>
+                <td>有证据显示恢复预算不可控，应引入统一 deadline/attempt budget</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>典型反模式清单</h3>
+        <ul>
+          <li><span class="anti">状态复制：</span>在 Agent、Tool 或 Remote client 另存一份可变会话权威状态。</li>
+          <li><span class="anti">全量事件即上下文：</span>把 EventLog 直接发送给 LLM，绕过 active branch、View 和 Condenser。</li>
+          <li><span class="anti">按名字硬编码：</span>在 Agent/Server 主链写 <code>if tool_name == ...</code> 或 provider 特例。</li>
+          <li><span class="anti">假并行安全：</span>把 <code>readOnlyHint</code> 当锁声明，或为有副作用工具返回显式空 resources。</li>
+          <li><span class="anti">构造器 I/O：</span>Agent/Conversation/Workspace model 构造时下载 plugin、连接 MCP 或启动容器。</li>
+          <li><span class="anti">错误归一化过度：</span>把 malformed history、overflow、权限失败和网络失败都包装成同一重试异常。</li>
+          <li><span class="anti">安全旁路伪装：</span>直接调用 executor 后仍宣称执行经过 confirmation/Hooks。</li>
+          <li><span class="anti">async 阻塞：</span>在 FastAPI event loop 直接等待同步 FIFOLock、subprocess 或同步 HTTP。</li>
+          <li><span class="anti">兼容策略混用：</span>删除永久 Event handler，或用 Python warning 代替 REST OpenAPI deprecation。</li>
+          <li><span class="anti">双向路径混淆：</span>用 Windows host Path 拼远程 URL，或在 POSIX 本地写入中接受 Windows drive path。</li>
+          <li><span class="anti">全局 registry 偷偷覆盖：</span>依赖 import 顺序解决名称冲突而不测试各 registry 的明确规则。</li>
+        </ul>
+        <h3>15.3 论文限制与论文之后的能力</h3>
+        <div class="callout warning">
+          <strong>多 Agent 协调仍不是完整编排平台</strong>
+          <div>
+            论文 §7 以“当前实现聚焦单 Agent conversation”为发表时限制。当前源码已经加入文件/插件
+            subagent registry、独立 <code>LocalConversation</code>、可恢复 Task 与并行工具执行等后续能力；
+            这些能力不应倒写成论文已评测结论。现有 <code>TaskExecutor</code> 仍是 blocking-only，
+            <code>TaskManager.start_task()</code> 同步运行单个子会话；动态调度、异步编排、跨 Agent
+            共享状态一致性、容错恢复和完整协作协议仍需额外设计。
+            <span class="evidence"><code>openhands-tools/openhands/tools/task/impl.py:1-38</code></span>
+            <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:95-201</code></span>
+            <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:295-330</code></span>
+          </div>
+        </div>
+        <ul>
+          <li><strong>多租户：</strong>论文明确说完整安全审计仍是未来工作；当前 session auth、容器与会话级 Secret 不能替代 tenant-aware authorization、共享资源审计和隔离验证。</li>
+          <li><strong>安全分析：</strong>论文同时限定 LLM-based security analysis 可能受对抗提示和分类不一致影响；确认、Hook 与 sandbox 是分层防护，不构成绝对安全保证。</li>
+          <li><strong>论文后续能力：</strong>本章的 Event Sourcing Lite、FULL_STATE 完成信号、deferred init、resource-aware tool concurrency、plugin/file agents 与 TaskManager 均以当前源码为准；除论文明确覆盖者外，不归因于论文 §7。</li>
+        </ul>
+        <div class="callout design">
+          <strong>何时应新增抽象</strong>
+          <div>
+            只有当两个以上真实实现需要共享同一不变量，并且现有 port/strategy/registry 无法表达时才增加抽象。
+            单一 provider、单一工具或单一部署的临时差异优先留在聚焦 adapter；不要把假设性的未来能力提升为核心层。
+          </div>
+        </div>
+      </section>
+
+      <section id="sources" class="section">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <ul class="source-list">
+          <li><strong>冻结 Agent 与工具配置：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:100-124</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:292-306</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:375-424</code></span>
+          </li>
+          <li><strong>状态机与持久状态：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:48-79</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:82-127</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:420-578</code></span>
+          </li>
+          <li><strong>EventLog 与事件树：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/event_store.py:30-126</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/event_store.py:184-233</code></span>
+          </li>
+          <li><strong>Tool port 与 registry：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:250-431</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:31-197</code></span>
+          </li>
+          <li><strong>并行舱壁：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:51-191</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:21-117</code></span>
+          </li>
+          <li><strong>Prompt registry：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/context/prompts/section.py:24-143</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/context/prompts/registry.py:26-64</code></span>
+          </li>
+          <li><strong>Plugin/Agent 懒加载与优先级：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1436-1521</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:85-152</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:288-367</code></span>
+          </li>
+          <li><strong>LLM feature/retry/fallback：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/model_features.py:13-65</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/utils/retry_mixin.py:22-102</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/fallback_strategy.py:28-149</code></span>
+          </li>
+          <li><strong>分层恢复：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:727-801</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:238-321</code></span>
+          </li>
+          <li><strong>安全与 Hooks：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/security/analyzer.py:15-111</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/security/confirmation_policy.py:9-61</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:105-176</code></span>
+          </li>
+          <li><strong>Workspace ports/adapters：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/base.py:25-50</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/base.py:150-239</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/remote_workspace_mixin.py:18-65</code></span>
+          </li>
+          <li><strong>REST + WebSocket：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:951-1040</code></span>、
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1191-1318</code></span>、
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1129-1221</code></span>
+          </li>
+          <li><strong>Server 组装与 deferred state machine：</strong>
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:366-466</code></span>、
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/init_router.py:200-278</code></span>、
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/init_router.py:294-339</code></span>
+          </li>
+          <li><strong>Subagent 与 TaskManager：</strong>
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/subagent/registry.py:85-152</code></span>、
+            <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:95-201</code></span>、
+            <span class="evidence"><code>openhands-tools/openhands/tools/task/impl.py:20-69</code></span>
+          </li>
+          <li><strong>官方论文：</strong>
+            <a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690</a> §7
+            （架构备选、多租户部署与限制）。
+          </li>
+        </ul>
+        <p>
+          相邻章节：<a href="17-engineering.html">17 测试、构建与发布</a>。
+          总览用于全局导航，本页用于跨包模式选择和扩展评审。
+        </p>
+      </section>
+
+      <section id="glossary" class="section">
+        <h2>17. 术语表</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>术语</th><th>本章含义</th><th>易混点</th></tr></thead>
+            <tbody>
+              <tr><td>Event Sourcing Lite</td><td>事件文件保存历史，base snapshot 保存当前公共字段，View 从活跃分支投影</td><td>不是仅靠事件重放全部状态的纯 Event Sourcing</td></tr>
+              <tr><td>Port</td><td>核心需要的稳定能力接口，如 Workspace、ToolExecutor、SecurityAnalyzer</td><td>不是 HTTP port，也不必都是 Python Protocol</td></tr>
+              <tr><td>Adapter</td><td>把 port 映射到具体 I/O 的实现，如 DockerWorkspace、RemoteWorkspace、provider transport</td><td>adapter 负责边界转换，不应拥有 Agent 决策</td></tr>
+              <tr><td>Registry</td><td>以稳定 key/name 解析实现或有序组合 section 的注册表</td><td>不同 registry 的 duplicate/precedence 语义不同</td></tr>
+              <tr><td>State Machine</td><td>显式状态及允许转换；包括 Conversation execution status 和 deferred init state</td><td>Enum 只是状态集合，真实转换还在 run/service 逻辑</td></tr>
+              <tr><td>Bulkhead</td><td>舱壁隔离；用独立 executor、任务、锁和 subscriber 边界限制故障传播</td><td>不等于所有操作都并行</td></tr>
+              <tr><td>Layered Recovery</td><td>按成本和信息损失逐层升级的 retry、fallback、nudge、condensation、hard error</td><td>副作用后的失败不能机械重试</td></tr>
+              <tr><td>Frozen Agent</td><td>Agent Pydantic 字段禁止原地赋值，配置变更产生副本</td><td>不保证嵌套对象图深冻结；PrivateAttr 仍有运行时生命周期</td></tr>
+              <tr><td>PrivateAttr</td><td>Pydantic 不进入普通序列化字段的运行时属性，如 tool map、executor、locks</td><td>不是“无状态”的反证；关键在它不成为会话权威业务状态</td></tr>
+              <tr><td>EventLog</td><td>按文件持久化、可按 index/ID 读取的完整事件日志</td><td>不同于活跃分支 View 和 RemoteEventsList 镜像</td></tr>
+              <tr><td>View</td><td>当前事件树活跃分支经过语义约束的 LLM 输入投影</td><td>不是 EventLog 副本，也不持久化</td></tr>
+              <tr><td>HEAD / leaf_event_id</td><td>Conversation 事件树中下一事件的父节点，即当前活跃分支叶</td><td>物理文件尾部可以属于废弃分支或 state artifact</td></tr>
+              <tr><td>Action–Observation pairing</td><td>每个工具 Action 必须有对应结果，包括失败、拒绝和中断合成错误</td><td>拒绝不等于删除 Action</td></tr>
+              <tr><td>DeclaredResources</td><td>工具对当前 Action 所访问共享资源的声明</td><td>空且 declared=true 表示确认无共享资源；declared=false 表示未知并保守互斥</td></tr>
+              <tr><td>Fallback</td><td>主 LLM 在 retry 后因瞬时故障改试有序备用 profile</td><td>不是每次请求的负载均衡，也不处理所有异常</td></tr>
+              <tr><td>Nudge</td><td>框架写入的纠正性 user-role MessageEvent，引导模型下一轮修复输出</td><td>不是 transport retry，会改变事件历史</td></tr>
+              <tr><td>Condensation</td><td>压缩/摘要活跃历史以恢复上下文窗口或结构问题</td><td>不删除 EventLog 原始事件；改变的是 View 语义</td></tr>
+              <tr><td>FULL_STATE</td><td>Agent Server 发送的完整 ConversationStateUpdateEvent snapshot</td><td>armed 后 post-run snapshot 才是首选 run 完成信号</td></tr>
+              <tr><td>Reconcile</td><td>Remote client 从 REST/事件搜索补齐 WS 连接窗口或断线期间遗漏事件</td><td>不是把客户端状态写回服务端</td></tr>
+              <tr><td>Fail-safe / fail-closed</td><td>安全分析故障时提高风险或要求确认，避免静默执行</td><td>与 Hook 的某些基础设施 fail-open 行为需分别审计</td></tr>
+              <tr><td>Optional isolation</td><td>默认可本地执行，需要时改用 Remote/Docker 等隔离 adapter</td><td>“可选”不表示本地安全，也不保证所有容器部署具有相同隔离强度</td></tr>
+              <tr><td>Multi-tenant audit</td><td>验证租户身份、授权、Secret、共享服务、资源和审计链的系统性安全评估</td><td>session auth、每会话状态或独立容器只是输入证据，不等于审计已经完成</td></tr>
+              <tr><td>Multi-agent coordination</td><td>多个 Agent 的调度、通信、状态一致性、失败恢复与权限协作协议</td><td>当前 blocking Task/subagent delegation 是局部能力，不等于完整协调平台</td></tr>
+              <tr><td>Owner</td><td>对某一契约、状态或副作用拥有最终修改责任的包/模块</td><td>调用方使用对象不意味着拥有其语义</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        <p>
+          本页基于当前工作区源码、聚焦测试和包级工程规则审计。Git 可执行文件与仓库元数据在当前环境不可用，
+          因此未声称具体 SHA；未使用绝对本地路径作为正文证据。
+        </p>
+      </footer>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll("#toc a")];
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const activate = (id) => {
+        links.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === `#${id}`);
+        });
+      };
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          if (visible[0]) activate(visible[0].target.id);
+        },
+        { rootMargin: "-72px 0px -68% 0px", threshold: [0, 0.05] }
+      );
+      sections.forEach((section) => observer.observe(section));
+      if (sections[0]) activate(sections[0].id);
+    })();
+  </script>
+</body>
+</html>

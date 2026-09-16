@@ -1,0 +1,680 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>第14章：Runtime、错误与执行韧性 — LangGraph 架构深度解析</title>
+  <style>
+    :root {
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --text: #1c1917;
+      --muted: #78716c;
+      --border: rgba(28,25,23,.12);
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --red: #b91c1c;
+      --purple: #6d28d9;
+      --code: #1c1917;
+      --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      font: 16px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      color: var(--code);
+      background: rgba(120,113,108, .2);
+      border-radius: 5px;
+      padding: .12em .35em;
+      font: .9em/1.5 Consolas, "SFMono-Regular", monospace;
+    }
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--border);
+      background: rgba(244,241,234, .94);
+      backdrop-filter: blur(10px);
+    }
+    .topbar-inner {
+      max-width: var(--max);
+      margin: 0 auto;
+      padding: 10px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .back { font-weight: 650; }
+    .chapter { color: var(--muted); font-size: .9rem; }
+    .layout {
+      max-width: var(--max);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 34px;
+      padding: 30px 22px 72px;
+    }
+    .toc {
+      position: sticky;
+      top: 72px;
+      align-self: start;
+      max-height: calc(100vh - 92px);
+      overflow: auto;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+    }
+    .toc strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: .82rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .toc a {
+      display: block;
+      padding: 4px 8px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    .toc a.active {
+      border-left-color: var(--blue);
+      color: var(--text);
+      background: rgba(67,56,202, .08);
+    }
+    main { min-width: 0; }
+    .hero {
+      padding: 28px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background:
+        radial-gradient(circle at 90% 10%, rgba(67,56,202, .14), transparent 38%),
+        var(--panel);
+    }
+    h1 {
+      margin: 0 0 12px;
+      font-size: clamp(1.75rem, 4vw, 2.65rem);
+      line-height: 1.2;
+    }
+    .lede { margin: 0; color: #44403c; font-size: 1.08rem; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 18px;
+      margin: 22px 0 0;
+    }
+    .meta div {
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+    }
+    .meta dt { color: var(--muted); font-size: .82rem; }
+    .meta dd { margin: 2px 0 0; }
+    .tag {
+      display: inline-block;
+      margin: 3px 5px 3px 0;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: .8rem;
+    }
+    .tag.current { color: var(--green); }
+    .tag.default { color: var(--blue); }
+    .tag.optional { color: var(--purple); }
+    .tag.remote { color: var(--yellow); }
+    .section {
+      margin-top: 28px;
+      padding: 25px 28px;
+      border: 1px solid var(--border);
+      border-radius:16px;
+      background: var(--panel);
+      scroll-margin-top: 74px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+    .section h2 { margin: 0 0 14px; font-size: 1.48rem; }
+    .section h3 { margin: 24px 0 8px; font-size: 1.12rem; }
+    .section p { margin: 9px 0; }
+    .section ul, .section ol { padding-left: 1.35rem; }
+    .section li + li { margin-top: 5px; }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .table-wrap {
+      overflow-x: auto;
+      margin: 14px 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+    }
+    table { width: 100%; min-width: 720px; border-collapse: collapse; }
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); color: #44403c; }
+    tr:last-child td { border-bottom: 0; }
+    .callout {
+      margin: 14px 0;
+      padding: 12px 15px;
+      border-left: 4px solid var(--blue);
+      border-radius: 4px;
+      background: rgba(67,56,202, .08);
+    }
+    .callout.warn {
+      border-left-color: var(--yellow);
+      background: rgba(194,65,12, .08);
+    }
+    .callout.danger {
+      border-left-color: var(--red);
+      background: rgba(185,28,28, .08);
+    }
+    .flow {
+      overflow-x: auto;
+      padding: 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: #44403c;
+      background: #f4f1ea;
+      white-space: pre;
+      font: .88rem/1.6 Consolas, "SFMono-Regular", monospace;
+    }
+    .path {
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(120,113,108, .06);
+    }
+    .path + .path { margin-top: 14px; }
+    .kicker { color: var(--muted); font-size: .9rem; }
+    footer {
+      margin-top: 26px;
+      padding-top: 18px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; gap: 18px; padding-top: 18px; }
+      .toc { position: static; max-height: none; }
+      .toc nav { columns: 2; }
+    }
+    @media (max-width: 600px) {
+      .topbar-inner { padding: 9px 14px; }
+      .chapter { display: none; }
+      .layout { padding: 14px 12px 48px; }
+      .hero, .section { padding: 20px 17px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+      .meta { grid-template-columns: 1fr; }
+      .toc nav { columns: 1; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="back" href="../../langgraph_architecture.html#s14">← 返回 LangGraph 架构总览 · 第14章</a>
+      <span class="chapter">Runtime / Error / Resilience</span>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="toc" aria-label="本页目录">
+      <strong>本页目录</strong>
+      <nav>
+        <a href="#s14-01">1. 模块定位</a>
+        <a href="#s14-02">2. 系统位置与依赖</a>
+        <a href="#s14-03">3. 核心概念</a>
+        <a href="#s14-04">4. 架构组成</a>
+        <a href="#s14-05">5. 三类完整路径</a>
+        <a href="#s14-06">6. 数据与状态模型</a>
+        <a href="#s14-07">7. 接口、协议与事件</a>
+        <a href="#s14-08">8. 配置与默认行为</a>
+        <a href="#s14-09">9. 并发、性能与资源</a>
+        <a href="#s14-10">10. 安全与信任边界</a>
+        <a href="#s14-11">11. 失败、恢复与兼容</a>
+        <a href="#s14-12">12. 可观测性与排障</a>
+        <a href="#s14-13">13. 真实测试与验证</a>
+        <a href="#s14-14">14. 开发与扩展指南</a>
+        <a href="#s14-15">15. 权衡与限制</a>
+        <a href="#s14-16">16. 源码索引</a>
+        <a href="#glossary">17. 术语表</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <p class="kicker">LangGraph 架构深度解析 · 14</p>
+        <h1 id="page-title">Runtime、错误处理与执行韧性</h1>
+        <p class="lede">从节点运行依赖、重试与 attempt timeout，到可恢复 error handler 和 cooperative drain，建立一套不掩盖副作用与持久化边界的开发心智模型。</p>
+        <dl class="meta">
+          <div><dt>版本基线</dt><dd><code>langgraph 1.2.11</code>；Python <code>&gt;=3.10</code></dd></div>
+          <div><dt>证据状态</dt><dd>当前源码与聚焦测试已审计；Git SHA 在当前环境不可取得</dd></div>
+          <div><dt>主要 Owner</dt><dd><code>libs/langgraph/langgraph/runtime.py</code>、<code>pregel/_retry.py</code>、<code>pregel/_runner.py</code>、<code>pregel/_loop.py</code></dd></div>
+          <div><dt>目标读者</dt><dd>节点/中间件开发者、运行时维护者、故障恢复与发布工程师</dd></div>
+          <div><dt>最近验证</dt><dd>2026-08-14</dd></div>
+          <div>
+            <dt>结论标签</dt>
+            <dd>
+              <span class="tag current">当前事实</span>
+              <span class="tag default">默认行为</span>
+              <span class="tag optional">可选能力</span>
+              <span class="tag remote">远程注入</span>
+            </dd>
+          </div>
+        </dl>
+      </header>
+
+      <section class="section" id="s14-01">
+        <h2>1. 模块定位：把“如何执行”与“失败后怎么办”连起来</h2>
+        <p>本章 Owner 是运行期依赖注入和 task 级韧性：<code>Runtime</code> 暴露当前 run/node 的依赖与身份；<code>RetryPolicy</code>、<code>TimeoutPolicy</code> 约束一次节点执行；Runner 把最终失败路由到 handler；Loop 负责 pending writes、恢复与 drain 安全边界。公共类型的当前基线可见 <span class="evidence"><code>libs/langgraph/langgraph/runtime.py:26-125</code></span> 与 <span class="evidence"><code>libs/langgraph/langgraph/types.py:418-514</code></span>。</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>职责</th><th>本章负责</th><th>委托/排除</th></tr></thead>
+            <tbody>
+              <tr><td>节点运行依赖</td><td><code>context</code>、Store、stream writer、heartbeat、执行身份、run control</td><td>State 的 Channel 合并属于 Pregel/Channel；业务依赖生命周期由调用方管理</td></tr>
+              <tr><td>执行策略</td><td>task/node retry、单 attempt 的 run/idle timeout</td><td>整次 API 请求 SLA、分布式队列租约、进程 kill 不在本地策略内</td></tr>
+              <tr><td>错误恢复</td><td>最终异常、<code>ERROR</code>/<code>ERROR_SOURCE_NODE</code>、handler PUSH 与恢复</td><td>业务补偿、外部事务、幂等键仍由应用设计</td></tr>
+              <tr><td>优雅退出</td><td><code>RunControl.request_drain()</code> 在超级步边界停止后续任务</td><td>信号注册、宽限期和强制取消由宿主进程负责</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>包版本和依赖下限来自 <span class="evidence"><code>libs/langgraph/pyproject.toml:5-33</code></span>。本地开源 Runtime 不等于 LangGraph API Server：<code>ServerInfo</code> 只是 Server 可注入的元数据，本地运行通常为 <code>None</code>。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:60-76</code></span></p>
+      </section>
+
+      <section class="section" id="s14-02">
+        <h2>2. 系统位置与依赖：Builder 配策略，Pregel 执行并落 writes</h2>
+        <div class="flow" role="img" aria-label="Runtime 错误韧性调用链">StateGraph.add_node / set_node_defaults
+        │ retry_policy / timeout / error_handler
+        ▼
+CompiledStateGraph(Pregel) ── 构造 Runtime + RunControl
+        │
+        ▼
+PregelLoop.tick ──► PregelRunner.tick / atick
+                         │
+                         ├─► run_with_retry / arun_with_retry
+                         │      ├─ 成功：普通 writes
+                         │      ├─ timeout：NodeTimeoutError → retry policy
+                         │      └─ 最终失败：ERROR + ERROR_SOURCE_NODE
+                         │
+                         └─► error-handler PUSH task
+                                      │
+                                      └─► handler writes / Command
+
+RunControl.request_drain ──► 下一超级步边界 ──► GraphDrained / 可恢复 checkpoint</div>
+        <p><code>StateGraph</code> 在 compile 时把节点级配置与默认配置合并；节点显式值优先。普通节点才继承默认 <code>error_handler</code> 与 cache policy，而 retry/timeout 也可应用到 handler。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1285-1344</code></span></p>
+        <p>同步与异步主链是兄弟实现：Pregel 分别把 <code>loop.schedule_error_handler</code> 和 <code>loop.aschedule_error_handler</code> 交给 Runner。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2923-2931</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3378-3386</code></span></p>
+        <p>下游副作用有三类：节点写入由 <code>put_writes</code> 进入 task 级 pending writes；成功后 Channel 在屏障处合并；有 checkpointer 时错误标记可跨进程恢复。Store 与 Cache 是可选依赖，不是 Runtime 自身的持久状态。</p>
+      </section>
+
+      <section class="section" id="s14-03">
+        <h2>3. 核心概念：Runtime 不是 RunnableConfig</h2>
+        <h3>3.1 两个表面的分工</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>概念</th><th>承载内容</th><th>典型用法</th><th>不要放什么</th></tr></thead>
+            <tbody>
+              <tr><td><code>Runtime[ContextT]</code></td><td>类型化 context、Store、custom stream、heartbeat、previous、<code>ExecutionInfo</code>、<code>ServerInfo</code>、<code>RunControl</code></td><td>业务依赖、身份、进度、流事件与协作 drain</td><td>callbacks、tags、recursion_limit 等 Runnable 调度配置</td></tr>
+              <tr><td><code>RunnableConfig</code></td><td>run_id、callbacks、tags、metadata、recursion_limit、configurable 等</td><td>Runnable 调度、追踪与 checkpointer 定位</td><td>不要假设它等同类型化业务 context</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>Runtime</code> 的公共说明明确不含 <code>config</code>；节点需要配置时应显式声明 <code>config: RunnableConfig</code>，或调用 <code>get_config()</code>。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:124-141</code></span>。内部目前把 Runtime 放进 config 的私有 configurable 槽位供传播，但这是实现桥梁，不会把两种公共契约合并；<code>get_runtime()</code> 的实现也明确留下未来解耦注释。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:296-310</code></span></p>
+        <h3>3.2 ExecutionInfo、ServerInfo 与 RunControl</h3>
+        <ul>
+          <li><code>ExecutionInfo</code> 是 frozen、只读的节点执行快照：checkpoint/task/thread/run 身份，加上从 1 起的 <code>node_attempt</code> 与首次 attempt 时间。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:26-57</code></span></li>
+          <li><code>ServerInfo</code> 承载 <code>assistant_id</code>、<code>graph_id</code> 和可选认证用户；它是元数据，不是本地鉴权器。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:60-76</code></span></li>
+          <li><code>RunControl</code> 是单 run、可跨线程写入的 drain 信号；已 drain 的实例不能复用。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:79-104</code></span></li>
+        </ul>
+        <h3>3.3 attempt、run timeout 与“整轮 run”</h3>
+        <div class="callout warn"><strong>术语陷阱：</strong><code>TimeoutPolicy.run_timeout</code> 不是整次图运行、也不是“包含所有重试的总预算”。它是单个 node attempt 的硬 wall-clock 上限；每次 retry 都开启新的 attempt。<span class="evidence"><code>libs/langgraph/langgraph/types.py:451-480</code></span></div>
+      </section>
+
+      <section class="section" id="s14-04">
+        <h2>4. 架构组成：策略、执行器、持久化桥与控制面</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>组件</th><th>输入 → 输出</th><th>状态/隔离</th><th>扩展点</th></tr></thead>
+            <tbody>
+              <tr><td><code>Runtime</code></td><td>run context → 节点可注入依赖</td><td>按 run 构造，子图 merge；<code>ExecutionInfo</code> 按 task/attempt patch</td><td>类型化 <code>context_schema</code>、Store、stream writer</td></tr>
+              <tr><td><code>RetryPolicy</code></td><td>异常 → retry/raise 决策</td><td>每 task 计数；上次 attempt writes 在重试前清空</td><td><code>retry_on</code> 类型、序列或 predicate</td></tr>
+              <tr><td><code>TimeoutPolicy</code></td><td>elapsed/progress → <code>NodeTimeoutError</code></td><td>仅 async target；watchdog 和 progress scope 按 attempt 隔离</td><td><code>run_timeout</code>、<code>idle_timeout</code>、<code>refresh_on</code></td></tr>
+              <tr><td><code>PregelRunner</code></td><td>task future/exception → writes、panic 或 handler</td><td>区分框架取消、bubble-up 与可处理异常</td><td>node handler map、sync/async scheduler</td></tr>
+              <tr><td><code>PregelLoop</code></td><td>pending writes/control → next tasks/status</td><td>超级步、checkpoint、恢复与 drain 的 Owner</td><td>checkpointer、durability、cache</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Pregel 在每次 sync/async run 开始时构造 Runtime，解析 context、Store、stream writer、ServerInfo，并采用调用方 control、父 Runtime control 或新建 <code>RunControl</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2866-2882</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3309-3325</code></span></p>
+        <p>重试层在第一次执行前记录 <code>node_first_attempt_time</code>，每轮将 <code>node_attempt</code> patch 为 <code>attempts + 1</code>，并在每次执行前清空旧 writes。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:584-617</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:698-744</code></span></p>
+      </section>
+
+      <section class="section" id="s14-05">
+        <h2>5. 三类完整运行路径</h2>
+        <article class="path">
+          <h3>路径 A — 正常成功：Runtime 注入到屏障提交</h3>
+          <ol>
+            <li><strong>触发/输入：</strong><code>invoke/ainvoke</code> 接收 State input、<code>RunnableConfig</code> 和可选 context/control。</li>
+            <li><strong>规范化：</strong>Pregel 构造 run-scoped Runtime；task 准备后，重试层补齐 <code>ExecutionInfo</code>。当分布式执行绕过本地 task 准备时，<code>_ensure_execution_info</code> 从 config 回填。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:520-540</code></span></li>
+            <li><strong>执行：</strong>Runner 调用 sync/async retry 函数；节点读取稳定 State 快照，通过 Runtime 使用 context/Store/stream writer。</li>
+            <li><strong>写入：</strong>节点输出先进入 task writes；Runner 成功 commit，空输出也写入 <code>NO_WRITES</code> 标记，再由 Loop 在超级步屏障处理。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:604-613</code></span></li>
+            <li><strong>终态：</strong>若没有 next task，Loop 先判定 <code>done</code>；因此 terminal step 内提出 drain 仍正常返回结果。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:652-659</code></span></li>
+          </ol>
+        </article>
+        <article class="path">
+          <h3>路径 B — 校验拒绝/提前结束：不启动不安全执行</h3>
+          <ol>
+            <li><strong>策略校验拒绝：</strong>数值 timeout 被规范化为 <code>run_timeout</code>，非正数抛 <code>ValueError</code>；run/idle 都为空则策略归一化为 <code>None</code>。<span class="evidence"><code>libs/langgraph/langgraph/types.py:483-514</code></span></li>
+            <li><strong>同步目标拒绝：</strong>节点配置 timeout 时，Pregel validate 要求原生 async；同步函数无法安全地在进程内取消，因此 compile/declaration 阶段拒绝。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_utils.py:125-137</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/_internal/_timeout.py:8-25</code></span></li>
+            <li><strong>提前 drain：</strong>若 control 在首个 pending task 前已 drain，Loop 将状态置为 <code>draining</code>，主入口抛 <code>GraphDrained</code>，节点不执行。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:652-659</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:3012-3015</code></span></li>
+          </ol>
+        </article>
+        <article class="path">
+          <h3>路径 C — 重试、handler 与崩溃恢复</h3>
+          <ol>
+            <li><strong>失败与重试：</strong>异常依次匹配 policy 列表中的第一个适用项；未匹配或达到 <code>max_attempts</code> 就向 Runner 抛出。间隔按 backoff 上升、受 <code>max_interval</code> 限制，可加 jitter。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:641-682</code></span></li>
+            <li><strong>最终失败落 writes：</strong>普通异常追加 <code>ERROR</code>；若 task 有 handler，再追加源节点名 <code>ERROR_SOURCE_NODE</code>，然后调用 <code>put_writes</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:574-603</code></span></li>
+            <li><strong>先 durable、后调度：</strong>有 checkpointer 时，Loop 等待包含 <code>ERROR_SOURCE_NODE</code> 的 <code>put_writes</code> future 完成，再创建 handler task。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1572-1599</code></span></li>
+            <li><strong>handler PUSH：</strong>task id 以 checkpoint、handler 名、step、<code>PUSH</code>、失败 task id 稳定派生；metadata 的 trigger 明确是 PUSH。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:1137-1161</code></span></li>
+            <li><strong>崩溃恢复：</strong>恢复时扫描成对的 <code>ERROR_SOURCE_NODE</code>/<code>ERROR</code>，给原 task 放入非空 ERROR writes 使 Runner 跳过它，再重建空 writes 的 handler task；原副作用节点不会因 handler 崩溃而重复执行。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:751-816</code></span></li>
+          </ol>
+        </article>
+      </section>
+
+      <section class="section" id="s14-06">
+        <h2>6. 数据与状态模型：哪些是瞬时对象，哪些能恢复</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>数据</th><th>Owner/生命周期</th><th>是否持久化</th><th>关键语义</th></tr></thead>
+            <tbody>
+              <tr><td><code>Runtime</code></td><td>一次 graph run；子图继承/merge</td><td>对象本身不写 checkpoint</td><td>承载依赖与控制，不是 State Channel</td></tr>
+              <tr><td><code>ExecutionInfo</code></td><td>task/attempt 只读快照</td><td>由 checkpoint/config 身份重建</td><td><code>node_attempt</code> 从 1 开始；首次时间跨 retry 保持</td></tr>
+              <tr><td>task writes</td><td>Runner/Loop</td><td>有 checkpointer 时由 <code>put_writes</code> 保存</td><td>attempt 失败或重试前旧 writes 被清空，避免泄漏半成品</td></tr>
+              <tr><td><code>ERROR</code></td><td>失败 task 的 pending write</td><td>可持久化</td><td>携带异常；跨 serializer 后类型可能退化为字符串表示</td></tr>
+              <tr><td><code>ERROR_SOURCE_NODE</code></td><td>仅有 handler 的失败 task</td><td>可持久化</td><td>恢复路由标记，不是 State key</td></tr>
+              <tr><td><code>RunControl</code></td><td>单 run 的内存信号</td><td>不直接持久化</td><td>drain 后由 checkpoint 保存已完成进度；resume 应使用新 control</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>ERROR</code>、<code>ERROR_SOURCE_NODE</code> 是控制类 pending writes，<code>apply_writes</code> 不会把它们当成用户 Channel 更新。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:298-309</code></span>。恢复重放普通成功 writes 时也显式跳过 ERROR、source、interrupt、resume 控制信号。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:736-749</code></span></p>
+        <div class="callout"><strong>持久化限定：</strong>“错误先持久化再运行 handler”只在配置 checkpointer 时具备跨进程耐久性；没有 checkpointer，标记只服务当前 Loop 的内存执行。Checkpoint 不保存 Python 栈帧，恢复依赖 task 身份与 pending writes 重建。</div>
+        <p>跨 checkpointer 序列化后，恢复测试只保证 <code>NodeError.node</code> 和错误内容可用，不保证原异常 Python 类型仍在。<span class="evidence"><code>libs/langgraph/tests/test_retry.py:2689-2744</code></span></p>
+      </section>
+
+      <section class="section" id="s14-07">
+        <h2>7. 接口、协议与事件：节点如何声明所需能力</h2>
+        <h3>7.1 节点签名与公共对象</h3>
+        <ul>
+          <li><code>runtime: Runtime[Context]</code>：注入 context、Store、stream writer、heartbeat、执行信息和 control。</li>
+          <li><code>config: RunnableConfig</code>：独立注入回调、tags、metadata、run/configurable 值；handler 也能接收它，真实测试验证 thread_id 保留。<span class="evidence"><code>libs/langgraph/tests/test_retry.py:2452-2479</code></span></li>
+          <li><code>error: NodeError</code>：仅 error handler 使用，包含失败节点名和异常对象。<span class="evidence"><code>libs/langgraph/langgraph/errors.py:148-165</code></span></li>
+        </ul>
+        <h3>7.2 timeout 事件与进度信号</h3>
+        <p><code>refresh_on="auto"</code> 把本 attempt 的 writes、stream、child task 和后代 LangChain callback 视为进度；<code>"heartbeat"</code> 只认 <code>runtime.heartbeat()</code>。handler 被 inline 安装到本节点后代的 callback 链，兄弟节点事件不会互相续命。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:128-134</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:274-285</code></span></p>
+        <p>watchdog 区分 <code>idle</code> 与 <code>run</code>，只有 watchdog 自己的 <code>asyncio.TimeoutError</code> 转成 <code>NodeTimeoutError</code>；节点内部主动抛出的 <code>TimeoutError</code> 原样传播，避免误分类。超时时先关闭 scope、清空 writes、取消后台 task。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:460-502</code></span></p>
+        <h3>7.3 取消与 bubble-up</h3>
+        <p>框架为停止兄弟 task 发起的 <code>CancelledError</code> 继续传播；节点代码自己抛出的 <code>CancelledError</code> 会转换为 <code>NodeCancelledError</code>，进入普通失败路径，防止 run 被误报成功。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:777-794</code></span>。<code>GraphInterrupt</code>、<code>ParentCommand</code>、<code>GraphDrained</code> 属于 <code>GraphBubbleUp</code> 控制流，不应由普通 error handler 吞掉。Runner 的路由条件明确排除它。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:220-240</code></span></p>
+      </section>
+
+      <section class="section" id="s14-08">
+        <h2>8. 配置与默认行为</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为/来源</th></tr></thead>
+            <tbody>
+              <tr><td><code>RetryPolicy.initial_interval</code></td><td>秒</td><td><code>0.5</code></td><td rowspan="6">node 显式策略优先于 graph/runner 默认；policy 序列取第一个匹配项</td><td rowspan="6">每个 task 的 retry loop</td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:418-437</code></span></td></tr>
+              <tr><td><code>backoff_factor</code></td><td>倍率</td><td><code>2.0</code></td><td>按失败次数指数退避</td></tr>
+              <tr><td><code>max_interval</code></td><td>秒</td><td><code>128.0</code></td><td>限制单次等待</td></tr>
+              <tr><td><code>max_attempts</code></td><td>含首次执行的总次数</td><td><code>3</code></td><td>达到后抛最后异常</td></tr>
+              <tr><td><code>jitter</code></td><td>bool</td><td><code>True</code></td><td>开启时额外加入随机等待</td></tr>
+              <tr><td><code>retry_on</code></td><td>异常类型/序列/predicate</td><td><code>default_retry_on</code></td><td>非法形状在匹配时抛 <code>TypeError</code></td></tr>
+              <tr><td><code>run_timeout</code></td><td>正数秒或 timedelta</td><td><code>None</code></td><td>node 显式值优先于 graph default</td><td>单个 async attempt，硬上限</td><td>触发 <code>NodeTimeoutError(kind="run")</code></td></tr>
+              <tr><td><code>idle_timeout</code></td><td>正数秒或 timedelta</td><td><code>None</code></td><td>同上</td><td>单个 async attempt，无进度窗口</td><td>触发 <code>NodeTimeoutError(kind="idle")</code></td></tr>
+              <tr><td><code>refresh_on</code></td><td><code>auto</code>/<code>heartbeat</code></td><td><code>auto</code></td><td>policy 字段</td><td>仅 idle timeout</td><td>非法值抛 <code>ValueError</code>；<span class="evidence"><code>libs/langgraph/langgraph/types.py:451-514</code></span></td></tr>
+              <tr><td><code>error_handler</code></td><td>StateNode callable</td><td><code>None</code></td><td>node handler 覆盖 graph default</td><td>regular node 最终失败</td><td>handler 失败直接使 run 失败</td></tr>
+              <tr><td><code>cache_policy</code> 对 handler</td><td>CachePolicy</td><td>自动生成 handler 为 <code>None</code></td><td>graph node default 不传播给 handler</td><td>默认不缓存 handler</td><td><span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1285-1338</code></span></td></tr>
+              <tr><td><code>control</code></td><td><code>RunControl | None</code></td><td>run 内自动新建</td><td>调用方 → 父 Runtime → 新建</td><td>整个本地 run/子图链</td><td>draining 时抛 <code>GraphDrained</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>默认 retry predicate 会重试连接失败、HTTP 5xx 和大多数未列出的 Exception；明确不重试 <code>ValueError</code>、<code>TypeError</code>、算术/导入/查找/语法/运行时/OSError 等类别。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_retry.py:1-29</code></span>。<code>NodeTimeoutError</code> 刻意不继承内建 <code>TimeoutError/OSError</code>，因此默认可重试。<span class="evidence"><code>libs/langgraph/langgraph/errors.py:190-206</code></span></p>
+        <div class="callout warn"><strong>默认不等于安全：</strong>网络写操作即使异常类型可重试，也可能已经在远端成功。必须用幂等键、查询后确认或补偿事务约束副作用；不要只依赖默认 predicate。</div>
+      </section>
+
+      <section class="section" id="s14-09">
+        <h2>9. 并发、性能与资源：取消只能与代码协作</h2>
+        <h3>9.1 retry 与并发 task</h3>
+        <p>每个 task 独立执行 retry；同一超级步的其他 task 可能仍在运行。Runner 在并发 future 完成时可立即调度对应 handler，已处理异常不会触发停止其他兄弟 task 的 fatal 路径。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:277-335</code></span></p>
+        <p>重试等待发生在 worker/coroutine 内：sync 使用 <code>time.sleep</code>，async 使用 <code>asyncio.sleep</code>。没有全局“整轮 retry wall-clock budget”；最坏耗时还包括每个 attempt 的运行时间和所有退避。</p>
+        <h3>9.2 cooperative timeout</h3>
+        <p>timeout watchdog 依赖 asyncio cancellation。阻塞 GIL 的 CPU 工作或同步 <code>time.sleep()</code> 不会及时让出事件循环，因此不能保证在截止时刻中断。公共类型直接声明这一限制。<span class="evidence"><code>libs/langgraph/langgraph/types.py:451-465</code></span>。需要硬隔离时应使用进程、外部 job/queue 或具备服务端 deadline 的 I/O，而不是把线程取消当作强杀。</p>
+        <h3>9.3 cooperative drain</h3>
+        <p><code>request_drain()</code> 只设置原因字符串，不取消当前 in-flight task。Loop 在准备出下一批 task、确认仍有任务后检查信号，因此当前超级步可完成，终态 step 正常结束，下一超级步不启动。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:90-104</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:599-659</code></span></p>
+        <p>这也允许当前 Functional task 在 drain 请求后完成其已在进行的 child call 调度；sync/async 真实测试分别覆盖这一点。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:140-159</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_pregel_async.py:235-255</code></span></p>
+        <div class="callout danger"><strong>drain 不是 kill：</strong>宿主应实现“先 drain → 等宽限期 → 再 cancel/终止”的外层协议。同步函数在线程中运行时，即使 async 调用方取消，线程仍可能继续完成副作用；测试明确观察到 orphaned thread 继续运行。<span class="evidence"><code>libs/langgraph/tests/test_runtime.py:829-875</code></span></div>
+      </section>
+
+      <section class="section" id="s14-10">
+        <h2>10. 安全与信任边界</h2>
+        <ul>
+          <li><strong>ServerInfo 不是授权：</strong>本地实现从 configurable 读取 Server 放入的 assistant/graph/user 元数据；没有这些键就返回 <code>None</code>。应用不能仅因对象存在就跳过权限校验。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:4306-4334</code></span></li>
+          <li><strong>Secret 不进 State：</strong>密钥、数据库连接与租户能力应经 Runtime context 注入，避免进入 Channel、stream 或 checkpoint；Runtime 文档把 context 定义为 run dependencies。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:198-207</code></span></li>
+          <li><strong>error 可能泄密：</strong><code>ERROR</code> 会交给 checkpointer serializer，handler 又能读取异常文本。不要在异常消息中拼接 token、原始认证头或敏感 payload。</li>
+          <li><strong>predicate 必须 fail-closed：</strong>自定义 <code>retry_on</code> 应只允许已知瞬时错误；权限、校验、配额和业务拒绝不应通过重试绕过。</li>
+          <li><strong>handler 是普通能力主体：</strong>它能读 State/Runtime 并产生 writes 或 Command，应接受与普通节点相同的最小权限、timeout 与审计；不能将它视为可信的“异常后门”。</li>
+        </ul>
+        <p>handler 的默认 cache policy 不继承是正确性与安全边界：失败节点 State 可能变化，而相同 cache key 会复用错误的补偿结果。源码在 compile 时显式跳过 handler cache default。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1322-1338</code></span></p>
+      </section>
+
+      <section class="section" id="s14-11">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+            <tbody>
+              <tr><td>异常匹配 RetryPolicy</td><td><code>retry_on</code></td><td>清空 attempt writes，退避后重跑</td><td>未提交半成品 writes</td><td>最多 <code>max_attempts</code></td><td>确认副作用幂等与总预算</td></tr>
+              <tr><td>run/idle timeout</td><td>watchdog</td><td>清 writes、cancel task、抛 <code>NodeTimeoutError</code></td><td>本 attempt 不提交</td><td>由 RetryPolicy 决定；默认可重试</td><td>排查阻塞 GIL 与 heartbeat</td></tr>
+              <tr><td>最终失败且有 handler</td><td>Runner map</td><td>写 ERROR/source，调度 PUSH handler</td><td>原 task 标记失败</td><td>handler 输出可恢复流程</td><td>监控 handler 自身错误</td></tr>
+              <tr><td>handler 崩溃</td><td>普通 run failure</td><td>不递归捕获</td><td>原 ERROR/source 保留</td><td>有 checkpoint 时 resume 重跑 handler，不重跑原节点</td><td>修复 handler 后以同 thread 恢复</td></tr>
+              <tr><td>interrupt/ParentCommand/drain</td><td><code>GraphBubbleUp</code></td><td>绕过普通 handler</td><td>按对应控制流处理</td><td>interrupt/resume 或 drain checkpoint resume</td><td>不要用 handler 吞控制流</td></tr>
+              <tr><td>同步节点配置 timeout</td><td>compile/declaration 校验</td><td><code>ValueError</code></td><td>节点未开始</td><td>改 async 或外移到可隔离执行器</td><td>不要绕过校验</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>11.1 禁止递归捕获</h3>
+        <p>Runner 收集所有 handler 节点名，<code>_should_route_to_error_handler</code> 对这些节点固定返回 false；因此 node handler 失败不会落到 graph default，default handler 也不会捕获自己。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:141-174</code></span>。真实测试要求两种 handler 失败都直接暴露。<span class="evidence"><code>libs/langgraph/tests/test_retry.py:2399-2445</code></span></p>
+        <h3>11.2 handler 默认不缓存，但并非不可配置</h3>
+        <p>自动生成的 node/default handler spec 初始化为 <code>cache_policy=None</code>，而 <code>set_node_defaults(cache_policy=...)</code> 只传播给 regular node。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:871-890</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1298-1338</code></span>。底层 task 准备仍能处理有效 cache policy，所以“默认不缓存”不能误写成内核永久禁止；若扩展层强行启用，必须证明 key 含完整失败上下文且补偿无副作用。</p>
+        <h3>11.3 drain 的可恢复终态</h3>
+        <p><code>GraphDrained</code> 继承 <code>GraphBubbleUp</code>，表示在超级步边界提前退出；说明承诺 checkpoint 已保存并可后续恢复。<span class="evidence"><code>libs/langgraph/langgraph/errors.py:50-64</code></span>。即使 durability 为 <code>exit</code>，测试也验证 drain 后用相同 thread 从已完成节点继续。<span class="evidence"><code>libs/langgraph/tests/test_runtime.py:172-202</code></span></p>
+      </section>
+
+      <section class="section" id="s14-12">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>先检查</th><th>常见原因</th><th>修复</th></tr></thead>
+            <tbody>
+              <tr><td>重试次数不符</td><td><code>runtime.execution_info.node_attempt</code>、实际异常类型、policy 顺序</td><td><code>max_attempts</code> 含首次；第一个匹配 policy 生效</td><td>收窄 predicate，记录 attempt 和首次时间</td></tr>
+              <tr><td>heartbeat 仍触发 timeout</td><td><code>NodeTimeoutError.kind</code></td><td><code>run_timeout</code> 永不刷新；heartbeat 只刷新 idle</td><td>增大硬上限或拆小任务</td></tr>
+              <tr><td>idle timeout 不触发</td><td>是否阻塞 GIL；<code>refresh_on</code></td><td>事件循环没机会调度 watchdog，或 auto 信号持续续期</td><td>改 async I/O/进程执行；用 heartbeat-only 定义精确信号</td></tr>
+              <tr><td>handler 没执行</td><td>node map、异常是否 <code>GraphBubbleUp</code>、ERROR/source pending writes</td><td>未配置 handler、控制流异常被正确绕过、持久化失败</td><td>检查 compile map 和 checkpointer 错误</td></tr>
+              <tr><td>恢复后原节点又执行</td><td>checkpoint 中是否同时有 ERROR 与 source</td><td>无 checkpointer、旧数据缺 marker、恢复了错误 checkpoint</td><td>确认 thread/ns/id 与 saver 写入顺序</td></tr>
+              <tr><td>drain 后迟迟不退出</td><td>当前 in-flight node 和外层 grace timer</td><td>drain 不取消当前任务；同步线程不可强制停止</td><td>设置 async timeout、外部 deadline 和最终 cancel</td></tr>
+              <tr><td>ServerInfo 为空</td><td>运行位置与 configurable</td><td>本地 OSS 运行没有 Server 注入</td><td>不要伪造认证；本地显式传业务 context</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><code>ExecutionInfo</code> 同时给出 thread、run、checkpoint namespace、task id、attempt 和首次时间，适合形成幂等键与日志关联，但它不替代 callback/trace。真实 sync/async 集成测试验证这些字段在节点内填充。<span class="evidence"><code>libs/langgraph/tests/test_runtime.py:964-1018</code></span></p>
+        <p>timeout 的内部 observer 发出 attempt <code>start/progress/finish</code>，但其类型明确是供 langgraph-server 消费的 underscore 私有契约，不应被应用代码当作稳定公共 API。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:87-121</code></span></p>
+      </section>
+
+      <section class="section" id="s14-13">
+        <h2>13. 真实测试与验证：契约必须能映射到用例</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr><td>Runtime context 注入与 sync/async 传播</td><td><span class="evidence"><code>libs/langgraph/tests/test_runtime.py:25-56</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_runtime.py:478-507</code></span></td><td>单元/集成</td><td>签名注入、schema context 可用</td><td>不证明业务依赖线程安全</td></tr>
+              <tr><td>ExecutionInfo attempt 递增且首次时间稳定</td><td><span class="evidence"><code>libs/langgraph/tests/test_retry.py:256-307</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_retry.py:493-541</code></span></td><td>集成</td><td>retry 身份语义</td><td>时间值不是 SLA</td></tr>
+              <tr><td>默认 NodeTimeoutError 可重试</td><td><span class="evidence"><code>libs/langgraph/tests/test_retry.py:233-240</code></span></td><td>单元</td><td>默认 predicate 分类</td><td>不证明所有副作用适合重试</td></tr>
+              <tr><td>run timeout 不被 heartbeat 刷新</td><td><span class="evidence"><code>libs/langgraph/tests/test_retry.py:855-868</code></span></td><td>异步单元</td><td>硬 deadline 语义</td><td>不覆盖阻塞 GIL</td></tr>
+              <tr><td>同步 timeout 被拒绝</td><td><span class="evidence"><code>libs/langgraph/tests/test_retry.py:1228-1252</code></span></td><td>校验</td><td>Functional 声明与 StateGraph compile 门禁</td><td>第三方 Runnable 包装需单独验证</td></tr>
+              <tr><td>retry 耗尽后 handler 接收 NodeError</td><td><span class="evidence"><code>libs/langgraph/tests/test_retry.py:2013-2062</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_pregel_async.py:9598-9638</code></span></td><td>sync/async 集成</td><td>attempt 次数、错误上下文、handler 输出</td><td>不证明外部补偿事务</td></tr>
+              <tr><td>handler 崩溃后只重跑 handler</td><td><span class="evidence"><code>libs/langgraph/tests/test_retry.py:2689-2744</code></span></td><td>持久化恢复</td><td>ERROR/source 恢复路由</td><td>使用 MemorySaver，数据库 saver 依赖通用 pending-write 契约</td></tr>
+              <tr><td>drain 在 sync/async 下一步停止</td><td><span class="evidence"><code>libs/langgraph/tests/test_runtime.py:102-150</code></span></td><td>sync/async 集成</td><td>当前节点完成、后续节点不运行</td><td>不定义宿主宽限期</td></tr>
+              <tr><td>终端 step drain 正常完成</td><td><span class="evidence"><code>libs/langgraph/tests/test_runtime.py:153-169</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_runtime.py:251-268</code></span></td><td>sync/async 集成</td><td>done 判定先于 draining</td><td>无远程 Server 行为证明</td></tr>
+              <tr><td>异步 config merge 保留 callbacks/configurable</td><td><span class="evidence"><code>libs/langgraph/tests/test_config_async.py:31-69</code></span></td><td>回归测试</td><td>with_config 与 invoke-time 配置合并不丢键</td><td>不把 RunnableConfig 变成 Runtime</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>本章把“源码直接事实”和“测试行为证明”并列：测试能证明当前预期，但跨进程强杀、数据库故障注入、远程 Server drain 协议和真实网络副作用幂等不由这些本地用例证明。</p>
+      </section>
+
+      <section class="section" id="s14-14">
+        <h2>14. 开发与扩展指南</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+            <tbody>
+              <tr><td>新增 Runtime 字段</td><td><code>runtime.py</code></td><td>DEFAULT_RUNTIME、merge/override、Pregel sync/async 构造、子图传播</td><td>默认值、父子优先级、线程/协程安全、注入测试</td></tr>
+              <tr><td>改变 retry 默认</td><td><code>types.py</code>、<code>_internal/_retry.py</code>、<code>pregel/_retry.py</code></td><td>sync/async 对齐、文档与错误分类</td><td>每类异常、attempt 计数、退避/jitter、writes 清理</td></tr>
+              <tr><td>新增 timeout 信号</td><td><code>types.py</code>、<code>pregel/_retry.py</code></td><td>scope guard、observer、stream/callback、取消清理</td><td>兄弟隔离、late writes 防护、stubborn coroutine、sync 拒绝</td></tr>
+              <tr><td>改变 handler 路由</td><td><code>graph/state.py</code>、<code>_runner.py</code>、<code>_loop.py</code>、<code>_algo.py</code></td><td>compile map、ERROR/source、PUSH id、sync/async、resume</td><td>单/多节点并发、handler 崩溃、interrupt 不被吞、数据库 saver</td></tr>
+              <tr><td>改变 drain 边界</td><td><code>runtime.py</code>、<code>pregel/_loop.py</code>、<code>pregel/main.py</code></td><td>sync/async、子图、durability、Functional call</td><td>首步前、终端 step、in-flight、resume、cancel 竞态</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>14.1 推荐节点模式</h3>
+        <ol>
+          <li>把只读业务依赖放入类型化 Runtime context，把 trace/config 键放在 <code>RunnableConfig</code>，不要互相偷取私有槽位。</li>
+          <li>只为可重复的瞬时错误设置 retry；在外部写操作中使用由 <code>ExecutionInfo.task_id</code> 与业务键组合出的幂等键。</li>
+          <li>异步长任务同时设置合理的 <code>run_timeout</code> 和 <code>idle_timeout</code>；只有业务进度才 heartbeat。</li>
+          <li>handler 输出状态化的降级结果或 <code>Command</code>；避免在 handler 内做无幂等保护的第二次不可逆写。</li>
+          <li>进程退出时创建每 run 独立 control，先 request drain，再由宿主计时并最终 cancel；resume 使用新 control。</li>
+        </ol>
+        <div class="callout danger"><strong>禁止捷径：</strong>不要在 handler 内递归调用原节点模拟 retry；不要把 <code>ERROR</code> 当普通 State Channel；不要缓存有副作用的 handler；不要为同步阻塞函数伪装 async 以绕过 timeout 校验；不要复用已 drain 的 <code>RunControl</code>。</div>
+      </section>
+
+      <section class="section" id="s14-15">
+        <h2>15. 设计权衡与已知限制</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+            <tbody>
+              <tr><td>如何传运行依赖</td><td>Runtime 与 RunnableConfig 分离，内部借 config 传播</td><td>业务类型清晰，兼容 Runnable 生态</td><td>内部实现仍耦合 private configurable</td><td>公共 Runtime context manager 可独立传播</td></tr>
+              <tr><td>timeout 如何实现</td><td>async cooperative cancellation</td><td>不强杀进程，清理路径可执行</td><td>阻塞 GIL/线程无法及时终止</td><td>引入隔离 worker/租约型执行器</td></tr>
+              <tr><td>handler 何时执行</td><td>最终异常 writes durable 后立即 PUSH</td><td>同 run 低延迟恢复，崩溃窗口可重建</td><td>checkpointer latency 位于失败路径；handler 可与兄弟并发</td><td>需要队列化补偿或严格串行语义</td></tr>
+              <tr><td>为何禁止递归捕获</td><td>handler 节点永不路由到 handler</td><td>终止条件明确，不会无限补偿</td><td>handler 故障直接失败，需要运维修复</td><td>若引入独立、有限状态的补偿编排器</td></tr>
+              <tr><td>drain 如何停机</td><td>超级步边界协作停止</td><td>保留已完成 writes，可 resume</td><td>长节点延迟退出；不是强制终止</td><td>宿主要求严格 shutdown deadline</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>当前限制：</strong>没有覆盖所有重试的总 run budget；timeout 只支持可原生 async 的节点链；RunControl 只有单向 drain，没有 reset；ERROR 跨 serializer 后异常类型可能变化；本地实现没有定义远程 Server 的队列、租约、部署信号与 SLA。</p>
+        <p><strong>有意排除：</strong>Streaming v1/v2/v3 背压、checkpoint 数据库事务、Interrupt/time-travel、RemoteGraph transport 和 ToolNode error policy 分属相邻模块，本章只说明它们与 Runtime/error control 的接缝。</p>
+      </section>
+
+      <section class="section" id="s14-16">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>角色</th><th>符号/内容</th><th>当前位置</th></tr></thead>
+            <tbody>
+              <tr><td>公共 Runtime 类型</td><td><code>ExecutionInfo</code>、<code>ServerInfo</code>、<code>RunControl</code>、<code>Runtime</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/runtime.py:26-310</code></span></td></tr>
+              <tr><td>公共策略</td><td><code>RetryPolicy</code>、<code>TimeoutPolicy</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:418-514</code></span></td></tr>
+              <tr><td>默认异常分类</td><td><code>default_retry_on</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/_internal/_retry.py:1-29</code></span></td></tr>
+              <tr><td>错误类型</td><td><code>GraphDrained</code>、<code>NodeError</code>、<code>NodeCancelledError</code>、<code>NodeTimeoutError</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/errors.py:50-64</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/errors.py:148-241</code></span></td></tr>
+              <tr><td>策略消费</td><td>sync/async retry、attempt metadata、timeout watchdog</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:343-541</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_retry.py:573-853</code></span></td></tr>
+              <tr><td>失败提交</td><td><code>PregelRunner.commit</code> 与 handler 路由</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:141-174</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:574-613</code></span></td></tr>
+              <tr><td>恢复与 drain</td><td><code>tick</code>、<code>_resume_error_handlers_if_applicable</code>、sync/async schedule</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:599-681</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:736-816</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1572-1607</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1827-1862</code></span></td></tr>
+              <tr><td>handler task</td><td><code>prepare_node_error_handler_task</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:1110-1232</code></span></td></tr>
+              <tr><td>Builder/compile</td><td>默认策略合并、handler node/map</td><td><span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:272-334</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1285-1368</code></span></td></tr>
+              <tr><td>主要测试</td><td>retry/timeout/error handler、Runtime/drain、async config</td><td><span class="evidence"><code>libs/langgraph/tests/test_retry.py:179-2819</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_runtime.py:25-1162</code></span>、<span class="evidence"><code>libs/langgraph/tests/test_config_async.py:10-111</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>架构总览对应章节：<a href="../../langgraph_architecture.html#s14">第14章 Runtime 注入、错误处理与执行韧性</a>。相邻阅读：<a href="13-streaming.html">第13章 Streaming</a>；<a href="15-functional-api.html">第15章 Functional API</a>。</p>
+      </section>
+
+      <section class="section" id="glossary">
+        <h2>17. 术语表</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>术语</th><th>本章含义</th></tr></thead>
+            <tbody>
+              <tr><td>Runtime</td><td>LangGraph 注入节点/中间件的 run-scoped 依赖集合；不等于 <code>RunnableConfig</code>。</td></tr>
+              <tr><td>RunnableConfig</td><td>LangChain Runnable 的运行配置，承载 callbacks、tags、metadata、run_id、recursion_limit 和 configurable 等。</td></tr>
+              <tr><td>ExecutionInfo</td><td>当前 checkpoint/thread/run/task/node attempt 的只读执行身份。</td></tr>
+              <tr><td>ServerInfo</td><td>LangGraph Server 可注入的 assistant、graph 与 user 元数据；不是本地授权机制。</td></tr>
+              <tr><td>RunControl</td><td>一次 run 的协作控制面；当前只提供单向 drain 请求。</td></tr>
+              <tr><td>attempt</td><td>节点的一次实际执行。首次为 1，每次 retry 递增。</td></tr>
+              <tr><td>RetryPolicy</td><td>异常匹配、最大 attempt、退避、上限与 jitter 的策略。</td></tr>
+              <tr><td>run timeout</td><td><code>TimeoutPolicy.run_timeout</code>；单个 attempt 的不可刷新 wall-clock 硬上限，不是整图 run 总预算。</td></tr>
+              <tr><td>idle timeout</td><td>单个 attempt 在无可观测进度情况下允许的最长间隔。</td></tr>
+              <tr><td>heartbeat</td><td>节点显式报告业务仍在推进的信号；只刷新 idle timeout。</td></tr>
+              <tr><td>cooperative cancellation</td><td>协作式取消；依赖协程让出控制并响应 cancellation，不能安全强杀阻塞线程/GIL 工作。</td></tr>
+              <tr><td>cooperative drain</td><td>协作式排空；让 in-flight 工作完成，在安全超级步边界停止后续调度并保留恢复点。</td></tr>
+              <tr><td>ERROR</td><td>失败 task 的控制类 pending write，携带异常或其序列化表示。</td></tr>
+              <tr><td>ERROR_SOURCE_NODE</td><td>表明失败来自哪个、且已配置 handler 的原节点的控制标记，用于恢复时避免重跑原节点。</td></tr>
+              <tr><td>NodeError</td><td>注入 error handler 的失败上下文，包含源节点名与错误对象。</td></tr>
+              <tr><td>PUSH task</td><td>不是由 Channel PULL 触发、而是动态立即创建的任务；error handler 以稳定 PUSH task 调度。</td></tr>
+              <tr><td>pending writes</td><td>task 级、尚未合并到超级步 checkpoint State 的 writes；可由 checkpointer 单独保存。</td></tr>
+              <tr><td>GraphBubbleUp</td><td>Interrupt、ParentCommand、GraphDrained 等框架控制流基类；普通 error handler 不捕获。</td></tr>
+              <tr><td>idempotency</td><td>幂等性；同一 task/业务操作重复执行不会造成额外外部效果，是安全 retry/resume 的应用责任。</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <footer>
+          <p>本页只依据当前仓库源码、公共类型与真实测试描述本地 LangGraph 行为；远程部署能力均作边界限定。</p>
+          <p><a href="../../langgraph_architecture.html#s14">返回 LangGraph 架构总览 · 第14章</a></p>
+        </footer>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll(".toc a")];
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      if (!("IntersectionObserver" in window)) return;
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        links.forEach((link) => {
+          const active = link.getAttribute("href") === `#${visible.target.id}`;
+          link.classList.toggle("active", active);
+          if (active) link.setAttribute("aria-current", "true");
+          else link.removeAttribute("aria-current");
+        });
+      }, { rootMargin: "-18% 0px -68% 0px", threshold: 0 });
+      sections.forEach((section) => observer.observe(section));
+    })();
+  </script>
+</body>
+</html>

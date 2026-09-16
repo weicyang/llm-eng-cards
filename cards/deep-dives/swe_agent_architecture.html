@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SWE-agent 架构深度解析</title>
+<style>
+:root{--bg:#f4f1ea;--panel:#fffdf8;--line:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;padding:78px 24px 60px 306px}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .35rem;border-radius:4px}
+.nav{position:fixed;left:0;top:48px;bottom:0;width:282px;padding:22px 16px;background:#f0ebe0;border-right:1px solid var(--line);overflow:auto}
+.nav strong{display:block;color:var(--blue);margin-bottom:10px}.nav a{display:block;color:var(--muted);font-size:12.5px;padding:3px 8px;border-left:2px solid transparent}.nav a:hover{color:var(--text);border-left-color:var(--blue);text-decoration:none}
+.wrap{max-width:1120px;margin:auto}h1{font-size:34px;text-align:center;margin:12px 0 3px;color:#fff}h2{font-size:22px;color:var(--blue);border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 18px}h3{color:#0f766e;margin:24px 0 8px}h4{color:var(--purple);margin:18px 0 6px}.sub{text-align:center;color:var(--muted);margin-bottom:28px}
+.doc-link{display:inline-block;margin-left:.6rem;border:1px solid var(--blue);border-radius:999px;padding:.08rem .55rem;font-size:.68em;font-weight:600;vertical-align:.16rem}.doc-link:hover{background:rgba(67,56,202,.1);text-decoration:none}.subdoc-tag{display:inline-block;margin-left:.3rem;border:1px solid var(--line);border-radius:999px;padding:0 .38rem;color:var(--blue);font-size:.72em;line-height:1.45}
+.section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:25px 28px;margin:0 0 20px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.lead,.insight,.warning,.fact{padding:15px 17px;border-radius:8px;margin:14px 0}
+.lead{border:1px solid var(--green);background:rgba(21,128,61,.05)}.insight{border-left:4px solid var(--blue);background:rgba(67,56,202,.06)}.warning{border:1px solid var(--red);background:rgba(185,28,28,.05)}.fact{border:1px solid var(--purple);background:rgba(109,40,217,.05)}
+table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:13.5px}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--blue);background:#e8e1d4}tr:nth-child(even){background:rgba(244,241,234,.35)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{border:1px solid var(--line);border-radius:8px;padding:14px;background:#f4f1ea}.card strong{display:block;color:#0f766e;margin-bottom:5px}
+.badge{display:inline-block;font-size:11px;font-weight:700;border:1px solid;border-radius:999px;padding:0 7px;margin-right:5px}.main{color:var(--green)}.optional{color:var(--yellow)}.external{color:var(--purple)}.risk{color:var(--red)}
+.flow{background:white;border-radius:8px;overflow:auto;border:1px solid var(--line)}.flow img{display:block;width:100%;min-width:1100px}.links{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}.links a{border:1px solid var(--blue);border-radius:7px;padding:5px 10px}
+.path{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;counter-reset:n}.path div{counter-increment:n;border:1px solid var(--line);background:#f4f1ea;padding:12px;border-radius:7px}.path div:before{content:"模块 " counter(n);display:block;color:var(--blue);font-weight:700;font-size:11px}
+ul,ol{padding-left:22px}.small{font-size:12.5px;color:var(--muted)}.footer{text-align:center;color:var(--muted);padding:20px}
+@media(max-width:980px){body{padding:68px 20px 20px}.nav{display:none}.grid,.path{grid-template-columns:1fr}.section{padding:19px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.flow img{min-width:900px}}
+/* ===== 顶部 Tab 栏（与 trae/software_agent 对齐） ===== */
+.project-tabs{position:fixed;top:0;left:0;right:0;z-index:300;height:48px;display:flex;align-items:center;padding:0 1.25rem;background:#fffdf8;border-bottom:1px solid var(--line);box-shadow:0 1px 8px rgba(28,25,23,.5)}
+.project-tabs .tab-home{color:var(--blue);font-size:.88rem;font-weight:600;text-decoration:none;margin-right:2rem;white-space:nowrap;padding:.32rem .85rem;border:1px solid var(--line);border-radius:8px;transition:all .25s}
+.project-tabs .tab-home:hover{background:var(--blue);color:var(--bg);border-color:var(--blue);text-decoration:none;transform:translateY(-1px)}
+.project-tabs .tab-btn{background:none;border:none;cursor:pointer;font-family:inherit;font-size:.95rem;font-weight:600;color:var(--muted);padding:.95rem 1.25rem;position:relative;transition:color .2s}
+.project-tabs .tab-btn:hover{color:var(--text)}
+.project-tabs .tab-btn.active{color:var(--blue)}
+.project-tabs .tab-btn.active::after{content:'';position:absolute;bottom:-1px;left:1.25rem;right:1.25rem;height:3px;background:var(--blue);border-radius:2px 2px 0 0}
+.spanel{display:none}.spanel.active{display:block}
+body.tab-embed{padding:48px 0 0;overflow:hidden}
+body.tab-embed .nav,body.tab-flow .nav{display:none}
+body.tab-flow{padding-left:24px}
+.spanel>iframe{width:100%;height:calc(100vh - 48px);border:0;display:block;background:var(--bg)}
+#panel-flow{max-width:1400px;margin:0 auto;padding:10px 16px 60px}
+.lightbox{position:fixed;display:none;z-index:999;inset:0;background:rgba(240,235,224,.92);align-items:center;justify-content:center;padding:28px}
+.lightbox.open{display:flex}
+.lightbox img{max-width:100%;max-height:100%;background:#fff;cursor:grab;user-select:none}
+.lb-close{position:absolute;top:16px;right:18px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(28,25,23,.18);background:rgba(255,253,248,.9);color:#1c1917;font-size:16px;line-height:1;cursor:pointer;z-index:1}
+.flow img.zoom{cursor:zoom-in}
+@media(max-width:640px){.project-tabs{padding:0 .35rem;overflow-x:auto;overflow-y:hidden}.project-tabs .tab-home{margin-right:.15rem;padding:.3rem .5rem;font-size:.8rem}.project-tabs .tab-btn{padding:.95rem .5rem;font-size:.8rem;white-space:nowrap}.project-tabs .tab-btn.active::after{left:.5rem;right:.5rem}}
+.data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:var(--ink-3,#78716c);}
+.data-asof strong{color:var(--amber,#c2410c);}
+/* ===== 知识卡通用组件（与全站 A 级卡片一致） ===== */
+.arch-diagram{font-family:"Cascadia Code",Consolas,'Courier New',monospace;background:#f4f1ea;border:1px solid var(--line);border-radius:8px;padding:1rem 1.15rem;white-space:pre;overflow-x:auto;color:#0f766e;font-size:.82rem;line-height:1.55;margin:.9rem 0}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:.9rem 1.15rem;margin:.9rem 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.28rem;font-size:.78rem}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.05rem .38rem;border-radius:4px;font-size:.9em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--blue);padding-left:1rem;margin:.9rem 0;color:#44403c}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:1.1rem 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.35rem}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.35rem}
+.practice-grid ul{margin:.25rem 0 0 1.1rem!important}.practice-grid li{margin:.28rem 0}
+.qa-section details{background:#f4f1ea;border:1px solid var(--line);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:#0f766e;list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section summary::-webkit-details-marker{display:none}
+.qa-section summary::before{content:"Q";background:var(--blue);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
+.qa-section details[open] summary{margin-bottom:.6rem}
+.qa-section details>div{color:var(--text);font-size:14px}
+.nav a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+@media (max-width: 980px){.practice-grid{grid-template-columns:1fr}.arch-diagram{font-size:.68rem;padding:.7rem}}
+</style>
+</head>
+<body>
+<div class="project-tabs">
+  <a class="tab-home" href="../../index.html">⌂ 首页</a>
+  <button class="tab-btn" data-tab="guide">📖 入门指南</button>
+  <button class="tab-btn active" data-tab="docs">📋 架构文档</button>
+</div>
+
+<div id="panel-guide" class="spanel"><iframe src="swe_agent_architecture_guide.html" loading="lazy" title="SWE-agent 架构入门指南"></iframe></div>
+
+<div id="panel-docs" class="spanel active">
+<aside class="nav">
+  <strong>SWE-agent 架构深度解析</strong>
+  <a href="#scope">零、阅读约定与学习路线</a>
+  <a href="#position">一、项目定位与维护状态</a>
+  <a href="#overview">二、总体架构与依赖方向</a>
+  <a href="#flow">三、完整运行流程图</a>
+  <a href="#contracts">四、核心数据契约 <span class="subdoc-tag">子文档</span></a>
+  <a href="#config">五、配置与对象装配 <span class="subdoc-tag">子文档</span></a>
+  <a href="#run">六、Run 编排层 <span class="subdoc-tag">子文档</span></a>
+  <a href="#default-agent">七、DefaultAgent 主循环 <span class="subdoc-tag">子文档</span></a>
+  <a href="#errors">八、错误恢复与终止协议 <span class="subdoc-tag">子文档</span></a>
+  <a href="#retry-agent">九、RetryAgent 与评审选优 <span class="subdoc-tag">子文档</span></a>
+  <a href="#context">十、Context Engineering <span class="subdoc-tag">子文档</span></a>
+  <a href="#models">十一、模型抽象与成本治理 <span class="subdoc-tag">子文档</span></a>
+  <a href="#tools">十二、Tool Bundle 与 ACI <span class="subdoc-tag">子文档</span></a>
+  <a href="#environment">十三、SWEEnv 与 SWE-ReX <span class="subdoc-tag">子文档</span></a>
+  <a href="#batch">十四、Batch / Benchmark <span class="subdoc-tag">子文档</span></a>
+  <a href="#hooks">十五、Hook 扩展体系 <span class="subdoc-tag">子文档</span></a>
+  <a href="#trajectory">十六、Trajectory 与可观测性 <span class="subdoc-tag">子文档</span></a>
+  <a href="#security">十七、安全边界 <span class="subdoc-tag">子文档</span></a>
+  <a href="#patterns">十八、设计模式与取舍 <span class="subdoc-tag">子文档</span></a>
+  <a href="#extension">十九、二次开发指南</a>
+  <a href="#testing">二十、测试与验证策略</a>
+  <a href="#risks">二十一、风险与技术债</a>
+  <a href="#sharing">二十二、组内分享提纲</a>
+  <a href="#qa">二十三、知识要点 Q&amp;A</a>
+  <a href="#glossary">附录：术语与文件索引</a>
+</aside>
+<main class="wrap">
+<h1>SWE-agent 架构深度解析</h1>
+<p class="sub">从 Agent-Computer Interface 到 Retry/Reviewer：研究型软件工程智能体的完整运行时<br>事实基线：当前工作区 SWE-agent 1.1.0，Python ≥ 3.11，SWE-ReX ≥ 1.4.0</p>
+
+<div class="lead">
+  <strong>SWE-agent 的核心不是“让模型写代码”，而是设计一套对模型友好的 Agent-Computer Interface（ACI）。</strong>
+  它将任务装配、模型决策、命令解析、工具安装、沙箱执行、状态回灌、提交协议、轨迹记录和批量评测组成一个可配置、可复现的实验系统。当前完整实现的价值在研究透明度与可替换性；若目标只是轻量生产使用，官方已建议优先评估 mini-SWE-agent。
+</div>
+
+<section class="section" id="scope">
+<h2>零、阅读约定与分模块学习路线</h2>
+<p>本文只把当前源码能够证明的行为称为架构事实，并将四类能力分开描述：</p>
+<div class="grid">
+  <div class="card"><strong><span class="badge main">默认主链</span>DefaultAgent</strong>单任务、单动作的模型—环境循环；默认配置采用 function calling、工具 Bundle 与 Docker 部署。</div>
+  <div class="card"><strong><span class="badge optional">可选能力</span>配置启用</strong>RetryAgent、Reviewer/Chooser、ActionSampler、历史裁剪、OpenPR、Local/Modal deployment 等。</div>
+  <div class="card"><strong><span class="badge external">外部系统</span>SWE-ReX / LiteLLM</strong>部署运行时与模型路由已外置，本仓库通过稳定接口调用，而不是自行实现容器引擎或每家模型 SDK。</div>
+  <div class="card"><strong><span class="badge risk">维护边界</span>源码现状</strong>README 明确主开发转向 mini-SWE-agent；文档、入口和类型存在少量漂移，二次开发前应锁定版本。</div>
+</div>
+<h3>推荐学习顺序</h3>
+<div class="path">
+  <div><strong>入口与配置</strong><br><code>run.py</code>、<code>common.py</code>、<code>default.yaml</code></div>
+  <div><strong>主循环</strong><br><code>DefaultAgent.setup/step/forward/run</code></div>
+  <div><strong>工具与 ACI</strong><br><code>ToolConfig</code>、<code>ToolHandler</code>、Bundle</div>
+  <div><strong>执行环境</strong><br><code>SWEEnv</code>、Repo、SWE-ReX</div>
+  <div><strong>上下文与模型</strong><br>HistoryProcessor、LiteLLM、成本治理</div>
+  <div><strong>恢复与提交</strong><br>requery、autosubmit、exit_status</div>
+  <div><strong>质量外环</strong><br>RetryAgent、Reviewer、Chooser</div>
+  <div><strong>批跑与观测</strong><br>RunBatch、Trajectory、Inspector、评测</div>
+</div>
+</section>
+
+<section class="section" id="position">
+<h2>一、项目定位与维护状态</h2>
+<h3>1.1 软件边界</h3>
+<p>SWE-agent 是面向仓库级软件任务的研究型 Agent Runtime。输入可以是 GitHub Issue、文本、文件、SWE-bench 或多模态问题；输出不是“聊天回答”，而是目标仓库中的补丁、执行轨迹和结构化退出状态。它既支持单次修复，也支持批量 benchmark、多 attempt 评审选优和轨迹回放。</p>
+<h3>1.2 ACI 为什么是核心</h3>
+<p>模型直接操作原始 Shell 时会面临工具描述不稳定、输出过长、编辑粒度粗、状态不可见和提交协议模糊等问题。SWE-agent 把这些约束编码成 Tool Bundle、Command Schema、Parser、state command、Observation 模板与 submission sentinel，使模型看到的是一种“为 LM 重新设计的计算机接口”。</p>
+<div class="fact"><strong>论文出处：</strong>John Yang、Carlos E. Jimenez、Alexander Wettig、Kilian Lieret、Shunyu Yao、Karthik Narasimhan、Ofir Press，<em>SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering</em>，NeurIPS 2024。<a href="https://arxiv.org/abs/2405.15793">arXiv:2405.15793</a> · <a href="https://proceedings.neurips.cc/paper_files/paper/2024/file/5a7c947568c1b1328ccc5230172e1e7c-Paper-Conference.pdf">NeurIPS 官方 PDF</a></div>
+<h3>1.3 论文提出的四条 ACI 原则</h3>
+<ol>
+  <li><strong>动作简单、易懂：</strong>减少参数与文档负担，让模型可靠选择和调用。</li>
+  <li><strong>动作紧凑、高效：</strong>把导航、编辑等关键操作合并为尽可能少的步骤，而不是迫使模型跨多轮拼装高阶操作。</li>
+  <li><strong>环境反馈信息充分但简洁：</strong>明确呈现当前状态和最近动作的效果，同时避免无关上下文。</li>
+  <li><strong>护栏抑制错误传播并加速恢复：</strong>例如用语法检查拒绝错误编辑，并把可执行的错误反馈交还模型。</li>
+</ol>
+<h3>1.4 论文时代 ACI 与 1.1 默认值必须分开</h3>
+
+<p class="data-asof"><strong>数据截止 2024-05</strong> · 本卡的跑分与预算数字全部来自 SWE-agent 的 NeurIPS 2024 论文（GPT-4 Turbo / Claude 3 Opus 时代），不是当前模型的成绩；引用时务必带上模型版本，否则会被当成 SWE-agent 的现状去对比新框架。</p>
+<table>
+<tr><th>事实层</th><th>工具、交互与上下文</th><th>运行时</th></tr>
+<tr><td>NeurIPS 论文 / 仓库 <code>config/sweagent_0_7/07.yaml</code></td><td>100 行 windowed viewer、summarized search、带 lint 的行区间编辑；错误编辑回滚；只保留最近 5 个完整 Observation；文本 Thought/Action 的 ReAct 循环与 demonstration</td><td>论文实验系统及其 Docker 执行环境；这是历史实验配置</td></tr>
+<tr><td>当前工作区 v1.1 <code>config/default.yaml</code></td><td><code>edit_anthropic</code>、function calling、<code>review_on_submit_m</code>，默认 HistoryProcessor 仅为最近 2 条消息添加 <code>cache_control</code>；不默认启用 Last-5 压缩</td><td><code>SWEEnv</code> 是 SWE-ReX deployment/runtime 的同步适配层，默认 Docker deployment</td></tr>
+</table>
+<div class="warning">不要用论文指标描述 v1.1 默认配置的当前性能：模型、提示、工具、解析协议、上下文策略与执行层均已变化。<code>docs/background/architecture.md</code> 是背景说明，可滞后于当前默认配置；核对默认行为时以当前源码、<code>config/default.yaml</code> 和测试为准。</div>
+<h3>1.5 论文基线与结果（历史实验，不是当前性能）</h3>
+<table>
+<tr><th>论文实验</th><th>结果</th><th>解读边界</th></tr>
+<tr><td>SWE-bench Full，GPT-4 Turbo</td><td>12.47% = 286 / 2,294</td><td>摘要四舍五入为 12.5%；论文每实例预算为 $4</td></tr>
+<tr><td>SWE-bench Lite，GPT-4 Turbo</td><td>SWE-agent 18.0% vs. Shell-only + demonstration 11.0%</td><td>相对提升约 64%；不是 7 个绝对百分点的“当前增益”外推</td></tr>
+<tr><td>Claude 3 Opus</td><td>Full 10.46%；Lite 13.0%</td><td>说明论文 ACI 在另一模型上的可移植性，不代表新模型结果</td></tr>
+<tr><td>HumanEvalFix，GPT-4 Turbo</td><td>Python 87.7%；JavaScript 89.7%；Java 87.9%</td><td>论文 Table 2 的逐语言值；正文称总体 88.3%，但未给出与该表一致的聚合算法，属于论文内部不一致</td></tr>
+</table>
+<h3>1.6 当前维护含义</h3>
+<div class="warning">README 明确指出，大部分当前开发投入已转向 mini-SWE-agent。它不意味着本仓库失去研究价值，而意味着：生产选型要比较维护活跃度；架构学习则应把本仓库视为完整 ACI、Retry、评测和可观测性参考实现。</div>
+</section>
+
+<section class="section" id="overview">
+<h2>二、总体架构与依赖方向</h2>
+<div class="intuition-box"><p>这套分层的真正目的不是"代码整洁"，而是把「谁能被换掉」写死在依赖方向里：模型可换、解析器可换、工具集可换、部署后端可换，唯独 Agent 主循环不该被这些替换波及。研究型系统的价值就在于做消融实验时只动一层，所以依赖必须单向。</p></div>
+<div class="arch-diagram">CLI / 表现层        sweagent/run/run.py · common.py · Inspector
+      │ 子命令分发 + YAML 深合并 + Pydantic 强类型覆盖
+      ▼
+Run 编排层          RunSingle ──┐          RunBatch（线程池，每线程独立三件套）
+      │              │          └──► 实例归一化 → BatchInstance → 断点跳过 → preds.json
+      │              └──────────────────────────┐
+      │ 创建 Agent                                │ 也直接创建 Environment
+      ▼                                          │
+Agent 决策层        DefaultAgent ◄── RetryAgent（可选外环：attempt / Reviewer / Chooser）
+      │  History → Model → Parser → Action → Observation → State → Trajectory
+      ├──────────────┐
+      ▼              ▼
+Model 层          Tool / ACI 层
+LiteLLMModel      ToolConfig · ToolHandler · Bundle
+预检 / 重试        Command Schema → invoke format → Shell 字符串
+成本硬停           blocklist 拦截 · state.json 回灌 · submission sentinel
+      │              │
+      └──────┬───────┘
+             ▼
+Environment 层     SWEEnv（同步门面：start / communicate / read / write / interrupt / close）
+             │      内部 asyncio.run 驱动异步接口
+             ▼
+外部 Runtime       SWE-ReX Deployment / Runtime（Docker · Modal · Local · Dummy）
+                   ▲ 真正的信任边界在这里，不在 blocklist
+
+产物与分析层（旁路写出，不参与决策）
+   .traj  ·  .pred  ·  .patch  ·  preds.json  ·  results.json  ·  分层日志
+                   └──► Inspector（只读消费，不回灌 Agent）</div>
+<table>
+<tr><th>层</th><th>职责</th><th>关键实现</th></tr>
+<tr><td>CLI / 表现层</td><td>子命令分发、帮助、配置覆盖、进度与检查器</td><td><code>sweagent/run/run.py</code>、<code>common.py</code>、Inspector</td></tr>
+<tr><td>Run 编排层</td><td>单实例、批处理、回放；创建 Agent/Env；管理实例级 Hook</td><td><code>RunSingle</code>、<code>RunBatch</code></td></tr>
+<tr><td>Agent 决策层</td><td>Prompt、History、模型查询、Action、错误恢复、Retry/Review</td><td><code>DefaultAgent</code>、<code>RetryAgent</code></td></tr>
+<tr><td>Model 层</td><td>统一模型调用、token 预检、重试、成本与调用限额</td><td><code>LiteLLMModel</code>、<code>InstanceStats</code></td></tr>
+<tr><td>Tool / ACI 层</td><td>Bundle 解析和安装、工具 Schema、命令拦截、状态采集</td><td><code>ToolConfig</code>、<code>ToolHandler</code></td></tr>
+<tr><td>Environment 层</td><td>仓库复制与重置、Shell 会话、文件和命令桥接</td><td><code>SWEEnv</code>、Repo Config</td></tr>
+<tr><td>外部 Runtime</td><td>Docker/Modal/Local 等部署和真正的远端执行</td><td>SWE-ReX Deployment / Runtime</td></tr>
+<tr><td>产物与分析层</td><td>轨迹、预测、补丁、日志、评测结果和检查器</td><td><code>.traj</code>、<code>.pred</code>、<code>preds.json</code></td></tr>
+</table>
+<div class="insight"><strong>稳定依赖方向：</strong><code>run → agent → tools → environment → swerex</code>。Run 也直接创建 Environment；共享 DTO、异常和 utils 被各层依赖。少量延迟导入用于打破循环依赖，例如 Agent 的 replay config 对 RunSingleConfig 的引用。</div>
+</section>
+
+<section class="section" id="flow">
+<h2>三、完整运行流程图</h2>
+<p>该图将默认主链、Retry 外环、Batch 外环、SWE-bench 评测和 Inspector 置于一张图，但通过泳道、颜色和虚线区分。重点不是罗列类，而是展示控制流、数据流、错误流和持久化流如何相互作用。</p>
+<div class="links"><a href="#flow" onclick="switchSweTab('flow');return false">🗺️ 前往「系统流程图」标签页查看大图（支持滚轮缩放）</a></div>
+</section>
+
+<section class="section" id="contracts">
+<h2>四、核心数据契约<a class="doc-link" href="docs/swe-agent/04-core-data-contracts.html" title="打开核心数据契约详细设计">子文档</a></h2>
+<table>
+<tr><th>契约</th><th>生命周期与语义</th><th>关键内容</th></tr>
+<tr><td><code>ProblemStatement</code></td><td>任务输入协议，不让 Agent 感知数据来源</td><td>稳定 id、给模型的正文、给环境的正文、模板扩展字段</td></tr>
+<tr><td><code>BatchInstance</code></td><td>批处理的最小调度单元</td><td>EnvironmentConfig + ProblemStatement</td></tr>
+<tr><td><code>HistoryItem</code></td><td>对话事实源，经处理器转换后送入模型</td><td>role、content、action、tool calls、message_type、tags</td></tr>
+<tr><td><code>StepOutput</code></td><td>单步工作区，随着 query、解析、执行逐步补全</td><td>thought、action、observation、state、submission、done、exit_status</td></tr>
+<tr><td><code>TrajectoryStep</code></td><td>用于审计和回放的不可约执行记录</td><td>query、response、action、observation、state、execution_time</td></tr>
+<tr><td><code>AgentInfo</code></td><td>一次 attempt 或最终结果的聚合信息</td><td>submission、exit_status、model_stats、版本 hash、编辑文件上下文</td></tr>
+<tr><td><code>AgentRunResult</code></td><td>Agent 与 Run 层之间的返回边界</td><td>info + trajectory</td></tr>
+</table>
+<div class="fact"><strong>History 与 Trajectory 不能混为一谈：</strong>History 决定下一次模型看到什么；Trajectory 决定人类能审计和回放什么。格式错误的重询可以写入 Trajectory，但使用临时 History，不污染正式对话。</div>
+</section>
+
+<section class="section" id="config">
+<h2>五、配置与对象装配<a class="doc-link" href="docs/swe-agent/05-config-object-assembly.html" title="打开配置与对象装配详细设计">子文档</a></h2>
+<h3>5.1 配置合并</h3>
+<p>console script 指向 <code>sweagent.run.run:main</code>。顶层入口只识别子命令，随后延迟导入具体实现。<code>BasicCLI</code> 先解析一个或多个 <code>--config</code>，按顺序深合并 YAML；没有显式配置时加载 <code>config/default.yaml</code>；剩余参数由 Pydantic Settings 作为强类型 CLI 覆盖。</p>
+<p>路径相对 <code>SWE_AGENT_CONFIG_ROOT</code> 或仓库根解析，配置目录、工具目录和轨迹目录也可通过 <code>SWE_AGENT_*_DIR</code> 变量替换。未知字段通常被 <code>extra="forbid"</code> 拒绝，这让配置错误尽早暴露。</p>
+<h3>5.2 对象图</h3>
+<table>
+<tr><th>配置类型</th><th>工厂结果</th><th>判别方式</th></tr>
+<tr><td>AgentConfig</td><td>DefaultAgent / RetryAgent / ShellAgent</td><td><code>type</code></td></tr>
+<tr><td>ModelConfig</td><td>LiteLLM / Human / Replay / 测试模型</td><td>联合类型 + 特殊 model name</td></tr>
+<tr><td>ParseFunction</td><td>Function Calling、Thought/Action、XML、JSON、Bash block 等</td><td><code>type</code></td></tr>
+<tr><td>HistoryProcessor</td><td>裁剪、窗口关闭、标签、缓存控制、图像解析等</td><td><code>type</code></td></tr>
+<tr><td>RepoConfig</td><td>GitHub / Local / PreExisting / SWE-Smith</td><td><code>type</code></td></tr>
+<tr><td>InstanceSource</td><td>文件 / HF / SWE-bench / expert / SWE-Smith</td><td><code>type</code></td></tr>
+</table>
+<h3>5.3 默认配置的真实含义</h3>
+<p>默认配置不是“最小 Agent”：它使用面向 Anthropic 风格 ACI 的 system/instance 模板，启用内置 Bash，加载 registry、edit_anthropic 和 review_on_submit_m Bundle，采用 function calling，并给最后两条用户/工具消息添加 cache-control。默认 Environment 是 Python 3.11 Docker deployment。</p>
+</section>
+
+<section class="section" id="run">
+<h2>六、Run 编排层<a class="doc-link" href="docs/swe-agent/06-run-orchestration.html" title="打开 Run 编排层详细设计">子文档</a></h2>
+<h3>6.1 RunSingle</h3>
+<p><code>RunSingle.from_config</code> 负责加载环境变量、推导输出目录、创建 Agent 与 SWEEnv、保存可回放配置，并挂接 SaveApplyPatchHook；OpenPR 按配置启用。<code>run()</code> 的职责是完整资源生命周期：启动环境、通知 Hook、运行 Agent、保存预测、关闭环境。</p>
+<h3>6.2 RunBatch</h3>
+<p>RunBatch 是薄调度器：它不会改写 Agent 的决策逻辑。每个实例都创建独立 Agent 与 Env；并发使用 <code>ThreadPoolExecutor</code> 而非进程池。初始随机延迟用于缓解多个容器同时启动的惊群问题。</p>
+<h3>6.3 生命周期完整性</h3>
+<div class="warning">单实例 <code>RunSingle.run</code> 的关闭逻辑不是整体包在 <code>finally</code> 中；Batch 的单实例执行则显式在 <code>finally</code> 关闭 Env。若二次开发强化可靠性，应统一资源管理语义。</div>
+</section>
+
+<section class="section" id="default-agent">
+<h2>七、DefaultAgent 主循环<a class="doc-link" href="docs/swe-agent/07-default-agent-loop.html" title="打开 DefaultAgent 主循环详细设计">子文档</a></h2>
+<h3>7.1 Setup：构造可工作的世界</h3>
+<ol>
+  <li>安装 Tool Bundles，并初始化工具环境变量、registry 与 state 文件。</li>
+  <li>记录 SWE-agent/SWE-ReX 版本和 commit hash。</li>
+  <li>把问题正文放入环境变量，方便容器工具访问。</li>
+  <li>按顺序加入 system、demonstration、instance 和可选 strategy 消息。</li>
+  <li>通过工具 state command 采集初始工作目录、diff 等状态，填充 Jinja 模板。</li>
+</ol>
+<h3>7.2 Step：一次完整决策</h3>
+<div class="intuition-box"><p>一步之内被刻意分成两条互不干扰的写入路径：一条喂模型（History，可裁剪、可临时替换、可被处理器改写），一条喂人（<span class="term">Trajectory</span>，只追加、不修饰、每步落盘）。之所以不合并成一份记录，是因为它们的失败模式相反——上下文治理希望尽量少留，审计和复现希望一个字节都别丢。</p></div>
+<div class="arch-diagram">┌──────────────────────── DefaultAgent.step() 一轮 ────────────────────────┐
+│                                                                          │
+│  正式 History ──filter(本 Agent 消息)──► HistoryProcessor 链 ──► 模型输入 │
+│       ▲                                   (LastN / ClosedWindow /        │
+│       │                                    RemoveRegex / CacheControl)   │
+│       │                                            │                     │
+│       │                                            ▼                     │
+│       │                                 forward_with_handling            │
+│       │                                     │                            │
+│       │                     ┌───────────────┴────────────────┐           │
+│       │                     ▼                                ▼           │
+│       │              可恢复异常                          模型响应          │
+│       │        (格式错 / 拦截 / Bash 语法错)                 │            │
+│       │                     │                                ▼           │
+│       │                     │                    Parser：恰好一个 action  │
+│       │                     │                    blocklist + 多行保护     │
+│       │              ┌──────┴──────┐                        │            │
+│       │              │ 临时 History │◄──── 错误模板          ▼            │
+│       │              │ 副本重询     │      (≤ max_requeries)  SWEEnv 执行  │
+│       │              └──────┬──────┘                        │            │
+│       │                     │ 修正成功才落回正式 History      ▼            │
+│       │                     │                         Observation +      │
+│       │                     ▼                         state command      │
+│       └──── assistant(thought/action) + tool(observation) ◄───┘           │
+│                             │                                            │
+│                             ▼                                            │
+│   StepOutput 补全 ──► submission? exit_status? edited files? model stats? │
+│                             │                                            │
+│                             ▼                                            │
+│   TrajectoryStep 追加 ──► 每步重写 .traj（进程被杀也保住已完成的步骤）      │
+│                             │                                            │
+│                    done == false ? 回到循环顶 : 进入终止协议               │
+└──────────────────────────────────────────────────────────────────────────┘</div>
+<p>每轮先从正式 History 中筛出当前 Agent 的消息，再链式应用 HistoryProcessor。<code>forward_with_handling</code> 调用模型并处理可恢复异常；<code>forward</code> 将模型响应解析为唯一动作，做 blocklist 和多行命令保护，然后通过 SWEEnv 执行。</p>
+<p>执行完成后，Agent 把 assistant 的 thought/action 与工具 observation 分别加入 History，更新 submission、exit_status、edited files 和模型统计，再追加 TrajectoryStep。每一步后都会重写轨迹文件，因此进程中断时通常仍保留最近完成的步骤。</p>
+<h3>7.3 终止不是自然语言判断</h3>
+<p>默认完成协议由 submit 工具生成 <code>/root/model.patch</code>，并在输出中写入特殊 <span class="term">submission sentinel</span>。ToolHandler 检出该标志后读取 patch，将 <code>done</code> 设为真并写入结构化 exit_status。主动执行 <code>exit</code> 则产生 <code>exit_command</code>，不等于成功提交。</p>
+<div class="intuition-box"><p>把"完成"交给一个必须由工具写出的哨兵串，而不是让模型说一句"我做完了"，是因为自然语言的完成声明既不可验证也不可复现。哨兵串的好处是它同时携带副作用：要产生它就必须真的跑过 submit，patch 也就必然已经落在磁盘上——声明和证据是同一个动作。</p></div>
+</section>
+
+<section class="section" id="errors">
+<h2>八、错误恢复与终止协议<a class="doc-link" href="docs/swe-agent/08-error-recovery-termination.html" title="打开错误恢复与终止协议详细设计">子文档</a></h2>
+<table>
+<tr><th>错误类别</th><th>策略</th><th>正式 History</th><th>典型终态</th></tr>
+<tr><td>格式错误、被拦截动作、Bash 语法错误</td><td>错误模板反馈给模型，最多 max_requeries</td><td>使用临时副本，修正成功前不污染</td><td>耗尽后 <code>exit_format</code></td></tr>
+<tr><td>内容策略或 RETRY_WITHOUT_OUTPUT</td><td>重新采样</td><td>保持不变</td><td>继续或耗尽</td></tr>
+<tr><td>单次命令超时</td><td>中断会话，给模型超时 Observation</td><td>记录可理解的反馈</td><td>连续超限后 <code>exit_command_timeout</code></td></tr>
+<tr><td>实例成本/调用限额</td><td>尝试 autosubmit</td><td>结束</td><td><code>exit_cost</code></td></tr>
+<tr><td>总成本限额</td><td>向外抛出</td><td>结束</td><td>Batch 可停止整批</td></tr>
+<tr><td>上下文、API、环境、运行时错误</td><td>尝试 autosubmit</td><td>结束</td><td>exit_context/api/environment_error/error</td></tr>
+<tr><td>主动 forfeit / 总执行时长</td><td>autosubmit 当前成果</td><td>结束</td><td>exit_forfeit / exit_total_execution_time</td></tr>
+</table>
+<div class="intuition-box"><p>这张表真正的设计点是第三列：格式错误走临时 History 副本，其它错误直接结束。原因是格式错误属于"模型没听懂协议"，把失败示范留在正式对话里会让它照着错的样子继续错；而超时、超预算这类错误是环境和资源的事实，模型看到反而有助于调整策略。判断标准是"这条错误信息对后续决策有用吗"，不是"错误严不严重"。</p></div>
+<h3>8.1 Autosubmit 的工程意义</h3>
+<p>Agent 失败不代表已完成修改毫无价值。环境存活时，系统会暂存 Git diff 到 <code>/root/model.patch</code> 并走统一提交解析；环境死亡时尝试从最近 <span class="term">Trajectory</span> state 的 diff 恢复。这是一种“最大化保留部分成果”的降级策略，而不是成功保证。</p>
+<div class="highlight"><strong>示例场景：</strong>一次批跑里某个实例把 per_instance_cost_limit 用尽时，Agent 已经改好了两个源文件、正在跑第三轮测试。没有 <span class="term">Autosubmit</span> 的话这次 attempt 的产出是 0；有了它，系统在退出前把当前 Git diff 落成 <code>model.patch</code>，仍然产出一份可评测的补丁——它可能通不过测试，但至少进入了 <code>preds.json</code>，能被统计成"提交了但未 resolved"，而不是"什么都没发生"。这个区分对分析失败原因很关键：预算耗尽和模型放弃是两类完全不同的问题，混在一个空结果里就看不出来了。</div>
+</section>
+
+<section class="section" id="retry-agent">
+<h2>九、RetryAgent 与评审选优<a class="doc-link" href="docs/swe-agent/09-retry-agent-reviewer.html" title="打开 RetryAgent 与评审选优详细设计">子文档</a></h2>
+<p>RetryAgent 是 DefaultAgent 之上的 test-time scaling 外环。每次 attempt 都是独立 DefaultAgent，输出写入 <code>attempt_N</code>；重试前通过 <code>SWEEnv.hard_reset</code> 完整重启部署并恢复仓库，避免前一尝试污染下一次。</p>
+<div class="intuition-box"><p><code>hard_reset</code> 看着很浪费——整个部署重启一遍，只为了再试一次。但如果不重启，上一次 attempt 留下的半成品改动、被污染的依赖、跑歪的测试缓存都会成为下一次的隐藏输入，Best-of-N 就退化成了"一次越走越远的连续尝试"。选优的前提是候选之间相互独立，这个代价买的就是独立性。</p></div>
+<div class="arch-diagram">RetryAgent（外环）
+   │
+   ├─ attempt_0 ─► 全新 DefaultAgent ─► submission_0 ┐
+   │      │                                          │
+   │      └─ SWEEnv.hard_reset（重启部署 + 仓库回到 base commit）
+   │                                                 │
+   ├─ attempt_1 ─► 全新 DefaultAgent ─► submission_1 ┤
+   │      │                                          │
+   │      └─ hard_reset                              │
+   │                                                 │
+   └─ attempt_N ─► 全新 DefaultAgent ─► submission_N ┤
+                                                     │
+        每轮结束都问一次：成本够吗？attempt 到顶了吗？ │
+        任一为否 → 立即停止，用当前已有候选决策        │
+                                                     ▼
+        ┌────────────────────────────┬───────────────────────────────┐
+        │      ScoreRetryLoop        │       ChooserRetryLoop        │
+        ├────────────────────────────┼───────────────────────────────┤
+        │ Reviewer 对每个 submission │ 先攒齐候选，结束时统一决策     │
+        │ 多次采样打分               │   ↓                           │
+        │   ↓                        │ Preselector 缩小候选集（可选） │
+        │ 均值 −(可选)标准差惩罚      │   ↓                           │
+        │   ↓                        │ Chooser 看多份轨迹选一个索引   │
+        │ 取最高分 attempt           │   ↓                           │
+        │                            │ 选中的 attempt                │
+        └────────────────────────────┴───────────────────────────────┘
+                          │
+                          ▼
+        TrajectoryFormatter 可过滤 action/output，控制评审自身的上下文成本
+                          │
+                          ▼
+        best attempt 展平为对外唯一的 submission / exit_status / stats</div>
+<table>
+<tr><th>机制</th><th>ScoreRetryLoop</th><th>ChooserRetryLoop</th></tr>
+<tr><td>判断方式</td><td>Reviewer 对每个 submission 多次采样评分，均值可减标准差惩罚</td><td>收集多个 submission，结束时由 Chooser 选索引</td></tr>
+<tr><td>停止条件</td><td>成本、最大 attempt、最大接受数、剩余预算</td><td>成本、最大 attempt、剩余预算</td></tr>
+<tr><td>候选压缩</td><td>TrajectoryFormatter 可过滤 action/output</td><td>可先 Preselector 缩小候选，再 Chooser 决策</td></tr>
+<tr><td>最终产物</td><td>最高分 attempt</td><td>Chooser 选中的 attempt</td></tr>
+</table>
+<div class="insight">RetryAgent 并不是并行多 Agent 协作：attempt 默认顺序运行，环境在尝试间重置。它解决的是独立搜索与结果选择，而不是角色化任务分工。</div>
+</section>
+
+<section class="section" id="context">
+<h2>十、Context Engineering<a class="doc-link" href="docs/swe-agent/10-context-engineering.html" title="打开 Context Engineering 详细设计">子文档</a></h2>
+<h3>10.1 上下文组成</h3>
+<p>模型输入由 system prompt、demonstrations、instance/strategy、历轮 assistant action、工具 observation 组成。模板变量来自问题陈述、Repo 名称、工具文档、工具环境变量和 <span class="term">state command</span> 输出。多模态问题会将允许的 base64 图片 Markdown 转换为 provider 可接受的 image_url 内容。</p>
+<div class="intuition-box"><p>软件 Agent 的上下文里最占地方的从来不是问题描述，而是工具输出：一次 <code>cat</code> 大文件、一次全量测试日志就能顶掉几十轮对话。所以这一层要治理的对象是 Observation，不是 Prompt——把 system prompt 抠短几百 token 的收益，比不上正确折叠一条旧的 diff 输出。</p></div>
+<h3>10.2 HistoryProcessor 链</h3>
+<table>
+<tr><th>处理器</th><th>作用</th><th>代价/边界</th></tr>
+<tr><td>LastNObservations</td><td>保留最近 N 个 Observation，旧输出替换为省略摘要</td><td>会改变历史前缀，可能破坏 prompt cache</td></tr>
+<tr><td>ClosedWindow</td><td>同文件只保留最新窗口，旧窗口降为行数摘要</td><td>依赖窗口输出格式</td></tr>
+<tr><td>TagToolCallObservations</td><td>按工具名给 Observation 加 keep/remove 标签</td><td>需要与裁剪器组合</td></tr>
+<tr><td>RemoveRegex</td><td>移除历史中的重复大块内容，例如旧 diff</td><td>正则过宽可能丢关键信息</td></tr>
+<tr><td>ImageParsing</td><td>将内嵌图片转为多模态消息</td><td>受 MIME 和 provider 能力限制</td></tr>
+<tr><td>CacheControl</td><td>给最近用户/工具消息添加 ephemeral cache 标记</td><td>是缓存优化，不是压缩</td></tr>
+</table>
+<p>默认配置只启用 CacheControl，不代表项目没有裁剪能力，也不代表默认已经压缩历史。Context Window 在模型调用前通过 token counter 预检，超限后进入 autosubmit 终态。</p>
+<div class="intuition-box"><p>默认只开 CacheControl 而不开裁剪，是一个偏向研究可比性的选择：裁剪会改写历史前缀，让每一轮的输入都和上一轮对不上，既打掉 prompt cache，也让实验之间难以归因。默认配置宁可撞上 context 上限走 autosubmit，也不愿意默默改掉模型看到的东西——出错要出得看得见，这是实验系统和生产系统的取向差别。</p></div>
+<div class="highlight"><strong>示例场景：</strong>某个团队为了省钱，在默认配置上加了 LastNObservations(N=5)，结果账单不降反升。原因是每多一步就有一条旧 Observation 被替换成省略摘要，历史前缀随之变化，Anthropic 的 prompt cache 从第二步起就再也没命中过——省下的那点输出 token，远不够补上全价重算前缀的开销。正确的做法是先用 TagToolCallObservations 只标记那些确实巨大的工具输出（比如全量测试日志），再针对性折叠，让绝大多数轮次的前缀保持字节一致。</div>
+</section>
+
+<section class="section" id="models">
+<h2>十一、模型抽象与成本治理<a class="doc-link" href="docs/swe-agent/11-model-cost-governance.html" title="打开模型抽象与成本治理详细设计">子文档</a></h2>
+<h3>11.1 LiteLLM 适配层</h3>
+<p>生产模型统一通过 LiteLLM 调用。SWE-agent 将内部 History 转为 provider message，传入 function tools、temperature、top-p、fallbacks 和 completion kwargs；对上下文、认证、权限、内容策略等错误做分类，Tenacity 只重试被认为是暂态的错误。</p>
+<h3>11.2 统计与硬停</h3>
+<table>
+<tr><th>控制项</th><th>作用域</th><th>行为</th></tr>
+<tr><td>per_instance_cost_limit</td><td>单 attempt/实例</td><td>超限触发实例级 autosubmit</td></tr>
+<tr><td>total_cost_limit</td><td>进程全局</td><td>锁保护的 GLOBAL_STATS 超限后向 Batch 抛出</td></tr>
+<tr><td>per_instance_call_limit</td><td>实例</td><td>限制 API 调用次数</td></tr>
+<tr><td>max_input_tokens</td><td>单请求</td><td>本地预检，避免无效 API 调用</td></tr>
+<tr><td>retry min/max wait</td><td>单 API 请求</td><td>随机指数退避，默认最多 20 次</td></tr>
+<tr><td>choose_api_key_by_thread</td><td>Batch worker</td><td>同线程固定 key，提升 prompt cache 亲和</td></tr>
+</table>
+<p>若 LiteLLM 无法计算模型成本且启用了成本限额，系统抛出 ModelConfigurationError，而不是把未知成本默认为安全。这是偏保守的预算治理。</p>
+</section>
+
+<section class="section" id="tools">
+<h2>十二、Tool Bundle 与 Agent-Computer Interface<a class="doc-link" href="docs/swe-agent/12-tool-bundle-aci.html" title="打开 Tool Bundle 与 ACI 详细设计">子文档</a></h2>
+<div class="intuition-box"><p><span class="term">ACI</span> 这个概念之所以成立，是因为模型面对的"计算机"完全由我们定义：命令叫什么名字、报错长什么样、一次能看多少行、状态从哪里读回来，全是可设计项。把它们当成接口设计问题而不是 prompt 调优问题，收益才是可累积的——换个模型，接口还在。</p></div>
+<h3>12.1 Bundle 是部署单元，不是 Python 插件</h3>
+<p>每个根目录 <code>tools/&lt;name&gt;</code> 可以包含声明工具的 <code>config.yaml</code>、进入 PATH 的 <code>bin/</code>、可选 <code>install.sh</code> 与库文件。<span class="term">Bundle</span> 在 Agent setup 时上传到目标 deployment 的 <code>/root/tools/&lt;name&gt;</code>，设置权限与 PATH，并用 <code>which</code> 验证工具存在。</p>
+<div class="arch-diagram">宿主机（SWE-agent 进程）                    目标环境（Docker / Modal / Local）
+────────────────────────                   ──────────────────────────────────
+tools/&lt;name&gt;/                              /root/tools/&lt;name&gt;/
+  config.yaml  ── 声明 ──┐                    bin/*  ──► 加入 PATH
+  bin/*                  │   setup 时上传      install.sh ──► 执行一次
+  install.sh             │  ─────────────►     which &lt;cmd&gt; ──► 存在性校验
+  lib/*                  │
+                         │
+                         ▼
+              ToolConfig（合并所有 Bundle 的 Command 声明）
+                         │
+                         ▼
+              Command Schema：名称 · 参数 · 必填性 · invoke format · 多行终止符
+                         │
+        ┌────────────────┴─────────────────┐
+        ▼                                  ▼
+   给模型的 tool schema              给 Parser 的校验规则
+   (function calling 定义)           (恰好一个 call · JSON 参数合法)
+        │                                  │
+        └──────────► 模型发出 tool call ────┘
+                            │
+                            ▼
+                 按 invoke format 拼成 Shell 字符串
+                            │
+                     blocklist 拦截？──是──► 错误模板回灌，不执行
+                            │否
+                            ▼
+                 SWEEnv.communicate 在持久 Bash session 中执行
+                            │
+              ┌─────────────┴──────────────┐
+              ▼                            ▼
+        stdout/stderr               state command 落盘
+        → Observation               → /root/state.json
+              │                     （cwd · diff · 打开的窗口）
+              │                            │
+              │                     /root/.swe-agent-env
+              │                     （registry：跨子进程持久化变量）
+              └─────────────┬──────────────┘
+                            ▼
+              两者一起填充下一轮的 Jinja 模板</div>
+<h3>12.2 Command Schema 到 Shell</h3>
+<p>Command 声明名称、参数、必填性、调用格式和可选的多行终止符。FunctionCallingParser 要求模型每次恰好发出一个 tool call，验证 JSON 参数后按照 invoke format 转换为 Shell 字符串。其它 parser 支持 thought/action code block、XML、JSON 或 Bash block，用于适配不同模型能力。</p>
+<h3>12.3 State 与 Registry</h3>
+<p>Bundle 的 state command 把工作目录、diff、打开窗口等写入 <code>/root/state.json</code>，ToolHandler 在每步执行后读取并注入后续模板。<code>/root/.swe-agent-env</code> 保存 registry variables，解决工具子进程不能持久修改父 Shell 环境的问题。</p>
+<h3>12.4 默认工具组合</h3>
+<p>默认组合提供 Bash、registry、结构化文件编辑和提交前审查。仓库还包含 diff_state、filemap、forfeit、image_tools、search、submit、web_browser、windowed editing 等 Bundle，可按实验配置替换 ACI。</p>
+<h3>12.5 论文 ACI 消融与行为证据</h3>
+<table>
+<tr><th>论文 SWE-bench Lite 消融</th><th>% Resolved</th><th>观察</th></tr>
+<tr><td>Editor：linting / 无 lint / 无 edit</td><td>18.0 / 15.0 / 10.3</td><td>lint 拒绝错误编辑可减少级联失败；紧凑编辑本身贡献更大</td></tr>
+<tr><td>Search：summarized / iterative / 无专用 search</td><td>18.0 / 12.0 / 15.7</td><td>逐条 next/prev 会诱发穷举；汇总结果并提示收窄查询更有效</td></tr>
+<tr><td>Viewer：30 行 / 100 行 / 全文件</td><td>14.3 / 18.0 / 12.7</td><td>过少缺上下文，过多挤占上下文；论文配置的中间窗口最佳</td></tr>
+<tr><td>Context：Last-5 / full history / 无 demo</td><td>18.0 / 15.0 / 16.3</td><td>旧 Observation 折叠优于完整保留；该结论不等于 v1.1 默认仍采用 Last-5</td></tr>
+</table>
+<div class="insight"><strong>论文轨迹中的行为模式：</strong>Agent 通常先复现问题或定位代码，再进入“编辑—执行—根据反馈继续定位/修改”的循环。2,294 条 GPT-4 Turbo 轨迹中，51.7% 至少出现一次失败编辑；一次编辑尝试最终成功的概率为 90.5%，但首次失败后降至 57.2%。成功任务往往更早、成本更低地提交，主要未解决原因则是错误或过度特化的实现。以上均是论文配置的描述性证据，不是 v1.1 的保证。</div>
+</section>
+
+<section class="section" id="environment">
+<h2>十三、SWEEnv 与 SWE-ReX<a class="doc-link" href="docs/swe-agent/13-sweenv-swerex.html" title="打开 SWEEnv 与 SWE-ReX 详细设计">子文档</a></h2>
+<h3>13.1 薄封装边界</h3>
+<p>SWEEnv 不实现 Docker API，而是包装 SWE-ReX 的 AbstractDeployment 和 Runtime。它提供同步的 start/reset/communicate/read/write/interrupt/close API；内部通过 <code>asyncio.run</code> 驱动 SWE-ReX 异步接口。</p>
+<h3>13.2 启动与重置</h3>
+<ol>
+  <li>启动 deployment，创建读取 <code>/root/.bashrc</code> 的持久 Bash session。</li>
+  <li>设置 locale、pager 和 pip 等环境变量。</li>
+  <li>把 GitHub/Local 仓库复制到目标环境，或使用镜像中的 pre-existing repo。</li>
+  <li>执行 Repo 的 reset commands 回到 base commit。</li>
+  <li>触发环境 Hook，随后执行 post-startup commands。</li>
+</ol>
+<h3>13.3 Deployment 的真实差异</h3>
+<table>
+<tr><th>Deployment</th><th>适用场景</th><th>安全含义</th></tr>
+<tr><td>Docker（默认）</td><td>本地复现、SWE-bench 镜像</td><td>提供容器隔离，但网络、挂载、capability 和资源限制仍取决于配置</td></tr>
+<tr><td>Modal 等远端</td><td>弹性计算与远程任务</td><td>隔离和凭据边界由平台与 SWE-ReX 实现</td></tr>
+<tr><td>Local</td><td>低开销开发</td><td>Agent 动作更接近宿主机，风险显著高于 Docker</td></tr>
+<tr><td>Dummy</td><td>测试</td><td>不代表生产执行语义</td></tr>
+</table>
+</section>
+
+<section class="section" id="batch">
+<h2>十四、Batch、Benchmark 与并发<a class="doc-link" href="docs/swe-agent/14-batch-benchmark.html" title="打开 Batch 与 Benchmark 详细设计">子文档</a></h2>
+<h3>14.1 实例归一化</h3>
+<p>文件、Hugging Face、SWE-bench、expert file 和 SWE-Smith 最终都变成相同 BatchInstance。Agent 因而不需要知道任务来自哪个 benchmark。公共选择流程是正则 filter、固定 seed=42 的 shuffle、再按 Python slice 取子集。</p>
+<h3>14.2 并发模型</h3>
+<p>多 worker 使用线程池；每个线程拥有独立 Agent、SWEEnv、日志过滤器和输出目录。共享数据仅限全局成本、进度管理和 API key 分配等少数结构，并通过锁或 thread-local 保护。human 模型禁止多线程。</p>
+<h3>14.3 断点与跳过</h3>
+<p>若实例目录已有非空、可解析且带有效 exit_status 的轨迹，默认跳过。空文件、坏 JSON、缺失 exit_status 或 early_exit 会被删除并重跑。<code>redo_existing</code> 可强制重做。</p>
+<h3>14.4 评测外环</h3>
+<p>所有实例结束后合并 <code>.pred</code> 为 <code>preds.json</code>。SWE-bench evaluate 模式通过 RunHook 周期性或最终调用 sb-cli，生成 <code>results.json</code>。需要区分三个概念：Agent 完成、成功提交 patch、benchmark 实际 resolved。</p>
+</section>
+
+<section class="section" id="hooks">
+<h2>十五、Hook 扩展体系<a class="doc-link" href="docs/swe-agent/15-hook-system.html" title="打开 Hook 扩展体系详细设计">子文档</a></h2>
+<table>
+<tr><th>层级</th><th>关注点</th><th>典型 Hook</th></tr>
+<tr><td>RunHook</td><td>整批和实例生命周期、外部副作用</td><td>SaveApplyPatch、OpenPR、SweBenchEvaluate</td></tr>
+<tr><td>AgentHook</td><td>setup、模型 query、action、step、run 状态</td><td>SetStatusAgentHook、自定义追踪器</td></tr>
+<tr><td>EnvHook</td><td>部署启动、Repo copy、环境 startup、close</td><td>SetStatusEnvironmentHook</td></tr>
+<tr><td>Deployment Hook</td><td>SWE-ReX 部署的底层状态</td><td>Batch 进度状态 Hook</td></tr>
+</table>
+<p>Combined Hook 对注册对象进行广播，使核心类不依赖具体 UI 或评测实现。这是一种同步观察者机制：Hook 失败仍可能影响主链，因此高风险外部 I/O 应自行隔离异常。</p>
+</section>
+
+<section class="section" id="trajectory">
+<h2>十六、Trajectory、Prediction 与可观测性<a class="doc-link" href="docs/swe-agent/16-trajectory-observability.html" title="打开 Trajectory 与可观测性详细设计">子文档</a></h2>
+<h3>16.1 产物契约</h3>
+<table>
+<tr><th>产物</th><th>内容</th><th>用途</th></tr>
+<tr><td><code>&lt;id&gt;.traj</code></td><td>trajectory、history、info、environment、replay_config</td><td>审计、回放、Inspector、研究分析</td></tr>
+<tr><td><code>&lt;id&gt;.pred</code></td><td>model name、instance id、model patch</td><td>单实例预测交换格式</td></tr>
+<tr><td><code>&lt;id&gt;.patch</code></td><td>最终补丁</td><td>人工审查、本地应用、PR</td></tr>
+<tr><td><code>preds.json</code></td><td>整批预测</td><td>SWE-bench / sb-cli</td></tr>
+<tr><td>config YAML</td><td>整批和每实例 resolved config</td><td>复现与 replay</td></tr>
+<tr><td>trace/debug/info log</td><td>分层运行日志</td><td>基础设施和异常诊断</td></tr>
+</table>
+<h3>16.2 Inspector</h3>
+<p>Textual CLI 和 Web Inspector 只读消费轨迹，可将问题陈述、submission、gold/test patch 和 results.json 组合成展示步骤。它们不参与 Agent 决策，也不能被视为在线 memory。</p>
+<h3>16.3 可复现性</h3>
+<p>轨迹中的 SWE-agent/SWE-ReX 版本 hash、resolved config、模型参数、完整 query/action/observation 和日志共同构成复现实验所需的证据链。ReplayModel 可以重发既有动作验证 Tool/Environment 行为，但不会复现原 LLM 的随机推理。</p>
+</section>
+
+<section class="section" id="security">
+<h2>十七、安全边界<a class="doc-link" href="docs/swe-agent/17-security-boundaries.html" title="打开安全边界详细设计">子文档</a></h2>
+<table>
+<tr><th>边界</th><th>已有机制</th><th>不能保证什么</th></tr>
+<tr><td>执行隔离</td><td>默认 Docker / 可选远端 deployment</td><td>不自动限制网络、文件挂载、CPU/内存、Linux capabilities</td></tr>
+<tr><td>命令拦截</td><td>前缀 blocklist、standalone blocklist、条件正则</td><td>不是完整策略引擎；Bash 可通过其它写法实现同类效果</td></tr>
+<tr><td>交互命令</td><td>禁用 vim、裸 shell、pager 等易阻塞程序</td><td>不能检测所有等待输入的程序</td></tr>
+<tr><td>资源治理</td><td>命令超时、总执行时长、成本和 API 调用硬停</td><td>不能替代 deployment 级资源 quota</td></tr>
+<tr><td>密钥</td><td>SecretStr、.env、环境变量引用</td><td>propagate_env_variables 会进入容器，debug 日志可能暴露值</td></tr>
+<tr><td>代码发布</td><td>OpenPR 仅对 submitted patch，默认 draft 和额外检查</td><td>模型生成代码仍需人工/CI 审查</td></tr>
+</table>
+<div class="warning"><strong>最重要的安全结论：</strong>ToolFilter 是可用性和误操作保护，不是安全沙箱。真正的信任边界是 SWE-ReX deployment 配置、容器权限、网络策略、挂载和凭据最小化。</div>
+<div class="intuition-box"><p>blocklist 之所以不能当安全边界，不是因为它写得不够全，而是因为它拦的是"字符串长什么样"，而 Bash 有无穷多种写法表达同一个语义。任何基于命令文本的过滤都是在和一个图灵完备的解释器比谁的想象力更丰富——这场比赛没法赢。能赢的地方在下面一层：进程根本没有那个 capability、网络根本不通、目录根本没挂载。</p></div>
+<h3>17.1 安全落地实践</h3>
+<div class="practice-grid">
+  <div class="do">
+    <ul>
+      <li>把真正的限制下沉到 deployment：网络 egress 策略、只读挂载、非 root 用户、CPU/内存 quota、drop 掉不需要的 Linux capabilities。</li>
+      <li>给容器发短期、最小权限的凭据，任务结束即失效，而不是把宿主机的长期 API key 通过 <code>propagate_env_variables</code> 传进去。</li>
+      <li>把 Trajectory、Observation 和日志纳入脱敏流程——完整 query 会被逐步落盘，密钥一旦进过上下文就会进 <code>.traj</code>。</li>
+      <li>把 ToolFilter 定位成"防手滑"：拦 <code>vim</code>、裸 shell、pager 这类会挂起会话的交互式程序，这是它真正擅长的事。</li>
+      <li>OpenPR 保持 draft，把模型生成的补丁当作待审代码走正常 CI 与人工审查。</li>
+    </ul>
+  </div>
+  <div class="dont">
+    <ul>
+      <li>不要用 Local deployment 跑不受信任的任务：Agent 的动作直接落在宿主机上，blocklist 是唯一屏障，而它挡不住等价写法。</li>
+      <li>不要靠往 blocklist 里补正则来"加固"，新增一条规则通常只意味着多了一种被绕开的写法没被想到。</li>
+      <li>不要开 debug 级日志跑带凭据的任务，传播进容器的环境变量可能被原值打印出来。</li>
+      <li>不要把"默认 Docker"等同于"已隔离"：默认配置不限制网络、挂载和资源，隔离程度取决于你怎么配。</li>
+      <li>不要在 Hook 里做未加保护的外部 I/O，Hook 是同步广播的，它抛出的异常会打到主链上。</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<section class="section" id="patterns">
+<h2>十八、设计模式与关键取舍<a class="doc-link" href="docs/swe-agent/18-design-patterns-tradeoffs.html" title="打开设计模式与关键取舍详细设计">子文档</a></h2>
+<table>
+<tr><th>模式</th><th>应用</th><th>价值与代价</th></tr>
+<tr><td>Facade / Orchestrator</td><td>RunSingle、RunBatch</td><td>调用简单，但资源生命周期容易散落在编排代码</td></tr>
+<tr><td>Factory + Discriminated Union</td><td>Agent、Model、Parser、Repo、Instance</td><td>YAML 强类型装配；新增类型需更新 union 与工厂</td></tr>
+<tr><td>Strategy</td><td>Parser、HistoryProcessor、Reviewer、ActionSampler</td><td>研究替换方便；组合空间大、测试矩阵膨胀</td></tr>
+<tr><td>Adapter</td><td>LiteLLM、SWEEnv 对 SWE-ReX</td><td>隔离供应商和部署变化；上游行为仍可能漂移</td></tr>
+<tr><td>Observer</td><td>四层 Hook</td><td>解耦 UI/评测；同步失败可能影响主链</td></tr>
+<tr><td>Command</td><td>Bundle Command + invoke format</td><td>把工具 Schema 转为可执行动作；最终仍落到 Shell 语义</td></tr>
+<tr><td>Template Method</td><td>DefaultAgent 的 setup/step/forward/run</td><td>循环清晰；当前 agents.py 仍承担过多错误和提交职责</td></tr>
+<tr><td>Retry + Best-of-N</td><td>RetryAgent、Reviewer、Chooser</td><td>用推理成本换成功率；预算、独立性和选择器偏差需治理</td></tr>
+</table>
+<h3>核心架构取舍</h3>
+<ul>
+  <li><strong>自由度优先：</strong>模型每步只需选择一个动作，但 Bash 仍允许广泛探索。</li>
+  <li><strong>配置优先：</strong>Prompt、工具、解析和历史策略均可通过 YAML 实验，不必 fork 主循环。</li>
+  <li><strong>记录优先：</strong>每步持久化和完整 query 牺牲磁盘/隐私，换取研究可解释性。</li>
+  <li><strong>外置基础设施：</strong>SWE-ReX 与 LiteLLM 减少自建适配，却引入外部版本兼容面。</li>
+</ul>
+</section>
+
+<section class="section" id="extension">
+<h2>十九、二次开发指南</h2>
+<table>
+<tr><th>目标</th><th>推荐扩展点</th><th>必须同步验证</th></tr>
+<tr><td>新增工具</td><td>新 Bundle：config.yaml + bin + 可选 install.sh/state command</td><td>Schema、唯一命名、容器可执行、超时、输出尺寸、提交安全</td></tr>
+<tr><td>新增 Agent</td><td>AgentConfig union + get_agent_from_config</td><td>Run 接口、Hook、Trajectory、错误与资源关闭</td></tr>
+<tr><td>新增模型行为</td><td>LiteLLM config 或 AbstractModel</td><td>消息格式、tool calls、token/cost、错误分类、重试</td></tr>
+<tr><td>上下文治理</td><td>HistoryProcessor</td><td>信息损失、prompt cache、tool-call 对齐、多模态消息</td></tr>
+<tr><td>新部署后端</td><td>优先在 SWE-ReX 实现 Deployment</td><td>session、upload、file、interrupt、stop 幂等性</td></tr>
+<tr><td>新数据集</td><td>InstanceSource → BatchInstance</td><td>稳定 id、Repo/base commit、镜像、Problem extra fields</td></tr>
+<tr><td>可观测平台</td><td>Agent/Run/Env Hook + .traj 消费</td><td>不阻塞主循环、敏感信息脱敏、失败隔离</td></tr>
+<tr><td>质量外环</td><td>RetryLoop / Reviewer / Chooser / ActionSampler</td><td>预算闭环、环境独立、选择偏差、总统计一致性</td></tr>
+</table>
+<h3>建议的生产化改造顺序</h3>
+<ol>
+  <li>锁定 SWE-agent、SWE-ReX、LiteLLM 和默认 Bundle 版本，建立配置 schema 回归。</li>
+  <li>统一 RunSingle/Batch 的 <code>try/finally</code> 资源管理，保证 deployment 必定关闭。</li>
+  <li>把 ToolFilter 升级为 deployment 级网络、挂载、资源和命令政策。</li>
+  <li>对 Trajectory、Prompt、Observation 与日志做密钥和 PII 脱敏。</li>
+  <li>增加 OTel/metrics 与稳定 exit_status taxonomy，再接入服务化调度。</li>
+  <li>最后再扩展多 Agent、长期记忆或复杂检索，避免在不稳定底座上堆能力。</li>
+</ol>
+</section>
+
+<section class="section" id="testing">
+<h2>二十、测试与验证策略</h2>
+<h3>20.1 分层验证</h3>
+<table>
+<tr><th>层级</th><th>验证重点</th><th>建议方法</th></tr>
+<tr><td>配置</td><td>YAML 合并、CLI 覆盖、路径、union 判别、未知字段</td><td>Pydantic 单测 + print_config 快照</td></tr>
+<tr><td>Parser / Tool</td><td>参数校验、唯一 tool call、多行输入、blocklist、submission sentinel</td><td>无容器纯单测 + Bundle fixture</td></tr>
+<tr><td>Agent Step</td><td>History/Trajectory 分离、重询、exit_status、autosubmit</td><td>PredeterminedTestModel + Dummy Env</td></tr>
+<tr><td>Environment</td><td>启动、reset、upload、session、timeout、interrupt、close</td><td>Docker 慢测；失败注入</td></tr>
+<tr><td>Retry</td><td>attempt 独立、预算裁剪、评分/选择、best 展平</td><td>确定性 Reviewer 与固定模型输出</td></tr>
+<tr><td>Batch</td><td>skip、并发、日志隔离、中断、merge</td><td>instant_empty_submit + 2 个 file instances</td></tr>
+<tr><td>产物</td><td>.traj/.pred/preds schema、可回放性</td><td>JSON schema/契约测试 + Inspector smoke</td></tr>
+<tr><td>Benchmark</td><td>completed/submitted/resolved 区分</td><td>小 slice + sb-cli 集成测试</td></tr>
+</table>
+<h3>20.2 测试运行建议</h3>
+<p>快速反馈运行非 slow pytest；容器、Hugging Face 和 benchmark 加载放入慢测。并发回归至少覆盖两个 worker、两个独立输出目录和共享成本限制。Replay 适合验证工具与环境兼容性，不能作为模型质量测试。</p>
+</section>
+
+<section class="section" id="risks">
+<h2>二十一、当前风险与技术债</h2>
+<h3>21.1 论文明确的局限（2024）</h3>
+<div class="fact">
+<ul>
+  <li>最终 ACI 工具集仍小；论文把 web browsing、静态/动态分析、故障定位和 fuzzing 测试生成列为未来扩展，而非已验证能力。</li>
+  <li>ACI 设计和案例分析主要依靠人工查看轨迹、总结重复行为并调参；如何自动化接口设计仍未解决。</li>
+  <li>实验范围限于软件工程与代码生成；四条 ACI 原则能否迁移到其它数字工作领域尚未验证。</li>
+</ul>
+</div>
+<p class="small">这些是论文对研究范围与方法的限制。论文附录另讨论执行 LM 代码、恶意数据/基础设施和现实部署滥用风险；其 Docker 缓解措施也明确不是硬件虚拟化级隔离。</p>
+<h3>21.2 当前 v1.1 源码风险</h3>
+<table>
+<tr><th>级别</th><th>问题</th><th>影响</th><th>建议</th></tr>
+<tr><td>高</td><td><code>run-api</code> 入口引用不存在的 <code>sweagent.api.server</code></td><td>命令运行时 ImportError；对外能力误导</td><td>删除入口或恢复模块并加 CLI smoke test</td></tr>
+<tr><td>高</td><td>Tool blocklist 容易绕过</td><td>若 deployment 权限过大，模型可执行高风险动作</td><td>把控制下沉到容器、网络与系统调用策略</td></tr>
+<tr><td>高</td><td>传播环境变量可能进入容器和 debug 日志</td><td>API key / token 泄露</td><td>短期凭据、allowlist、日志脱敏、最小权限</td></tr>
+<tr><td>中</td><td><code>CombinedAgentHook.on_setup_done</code> 疑似未广播子 Hook</td><td>插件观察不到 setup 完成事件</td><td>补单测后修复转发</td></tr>
+<tr><td>中</td><td><code>RunSingle.__init__</code> 对非空 actions 重建默认对象</td><td>调用者传入配置可能丢失</td><td>核实意图并修正条件，增加构造单测</td></tr>
+<tr><td>中</td><td>SWEEnv 同步方法频繁使用 <code>asyncio.run</code></td><td>已有 event loop 场景脆弱，异步服务集成困难</td><td>提供原生 async API，CLI 再同步包装</td></tr>
+<tr><td>中</td><td>GLOBAL_STATS 与线程 key 表是进程级全局状态</td><td>测试污染、跨进程不一致、长期服务泄漏</td><td>注入 RunContext / StatsStore</td></tr>
+<tr><td>中</td><td><code>agents.py</code> 聚合循环、异常、提交和轨迹</td><td>修改风险和认知负担高</td><td>拆分 StepExecutor、ErrorPolicy、SubmissionManager</td></tr>
+<tr><td>低</td><td>最低 SWE-ReX 常量与 pyproject 下限不一致</td><td>维护者困惑、错误提示漂移</td><td>单一版本来源</td></tr>
+<tr><td>低</td><td>HistoryItem 的 message_type 类型未覆盖运行时值</td><td>静态检查失真</td><td>修正 Literal 或拆分内部/持久化类型</td></tr>
+<tr><td>战略</td><td>官方主开发转向 mini-SWE-agent</td><td>新功能与依赖兼容修复可能减少</td><td>明确 fork 维护责任或只作为研究基线</td></tr>
+</table>
+</section>
+
+<section class="section" id="sharing">
+<h2>二十二、组内分享提纲</h2>
+<h3>建议 90 分钟结构</h3>
+<table>
+<tr><th>时间</th><th>主题</th><th>要回答的问题</th></tr>
+<tr><td>0–10 分钟</td><td>定位与 ACI</td><td>为什么软件 Agent 的瓶颈不只是模型？</td></tr>
+<tr><td>10–25 分钟</td><td>总体架构与流程图</td><td>任务如何从 CLI 走到容器，再变成 patch？</td></tr>
+<tr><td>25–45 分钟</td><td>DefaultAgent 深入</td><td>History、Trajectory、Step、Action、Observation 如何协作？</td></tr>
+<tr><td>45–58 分钟</td><td>Tools 与 SWE-ReX</td><td>工具如何声明、上传、执行、反馈状态？边界在哪里？</td></tr>
+<tr><td>58–68 分钟</td><td>错误恢复与 Autosubmit</td><td>格式错、超时、成本、上下文和环境失败如何降级？</td></tr>
+<tr><td>68–77 分钟</td><td>Retry/Reviewer</td><td>Best-of-N 如何用成本换质量？它为何不是多 Agent？</td></tr>
+<tr><td>77–84 分钟</td><td>Batch、Trajectory 与评测</td><td>完成、提交、resolved 为什么是三个指标？</td></tr>
+<tr><td>84–90 分钟</td><td>风险与自研启示</td><td>哪些设计值得复用，哪些需要重构后才能生产化？</td></tr>
+</table>
+<h3>分享时应强调的五个结论</h3>
+<ol>
+  <li>Agent Runtime 的价值在“模型—工具—环境”的协议，而不是某个固定 Prompt。</li>
+  <li>History 决定行为，Trajectory 决定可解释性；二者必须分离。</li>
+  <li>工具 Bundle 是 ACI 实验的最小部署单元，SWE-ReX 才是真正的执行边界。</li>
+  <li>Retry/Reviewer 是测试时扩展，不是角色化多 Agent；必须纳入总预算。</li>
+  <li>研究可用不等于生产安全：blocklist、日志密钥、资源关闭和维护状态都需补强。</li>
+</ol>
+</section>
+
+<section class="section qa-section" id="qa">
+<h2>二十三、知识要点 Q&amp;A</h2>
+<details>
+<summary>History 和 Trajectory 到底差在哪，为什么不能合成一份？</summary>
+<div>History 是"模型下一轮会看到什么"，Trajectory 是"人类事后能审计什么"。两者的目标是冲突的：上下文治理希望尽量少留——旧 Observation 折叠、重复 diff 删掉、窗口只保留最新的；审计和复现希望一个字节都别丢，包括那些被裁掉的内容和被拒绝的错误尝试。合成一份就必须二选一。最能说明问题的是格式错误重询：错误的模型输出和纠错模板会写进 Trajectory 供分析，但只在临时 History 副本里流转，纠正成功后正式 History 里干干净净，看不到失败示范。</div>
+</details>
+<details>
+<summary>submit 工具为什么要用哨兵串，模型说一句"我改完了"不行吗？</summary>
+<div>不行，因为自然语言的完成声明既不可验证也不可复现。哨兵串的关键性质是它带副作用：要让这个字符串出现在输出里，就必须真的执行 submit 工具，而该工具会把 Git diff 写成 <code>/root/model.patch</code>。也就是说声明和证据是同一个动作产生的，ToolHandler 检出哨兵后直接去读那个文件即可，不需要相信模型。反过来，模型主动执行 <code>exit</code> 得到的是 <code>exit_command</code> 而不是成功提交——终态分类因此是结构化的，批量统计时"完成""提交""resolved"能被清楚地分开。</div>
+</details>
+<details>
+<summary>RetryAgent 算多 Agent 协作吗？</summary>
+<div>不算。多 Agent 协作的特征是角色分工和相互通信，比如一个负责规划、一个负责实现、一个负责评审，它们共享任务但看到不同的视角。RetryAgent 里的每个 attempt 都是完全相同的 DefaultAgent 配置，默认顺序执行，attempt 之间通过 <code>hard_reset</code> 刻意切断一切联系——上一次的改动、依赖状态、测试缓存都被清掉。它做的是独立采样加结果选择，属于 test-time scaling，成本换成功率。Reviewer 和 Chooser 也不是"评审员角色"，而是选择器，它们不参与解题。</div>
+</details>
+<details>
+<summary>为什么加了 HistoryProcessor 裁剪反而可能更贵？</summary>
+<div>因为裁剪会改写历史前缀，而 prompt cache 的命中条件是前缀逐字节相同。以 LastNObservations 为例，每往前走一步就有一条旧 Observation 从完整内容变成省略摘要，于是这一轮的输入和上一轮缓存下来的前缀在中间某处就分叉了，缓存从分叉点之后全部失效，需要按全价重新 prefill。省下的是几千输出 token，付出的是每轮重算整个前缀。正确的顺序是先定位真正巨大的输出（用 TagToolCallObservations 按工具名标记，比如全量测试日志），只折叠这些，让绝大多数轮次的前缀保持不变。</div>
+</details>
+<details>
+<summary>Tool Bundle 和普通的"函数工具"有什么不同？</summary>
+<div>普通函数工具是进程内的一个可调用对象，注册进去就能用。Bundle 是一个部署单元：它包含 <code>config.yaml</code> 声明、要进 PATH 的可执行文件、可选的 <code>install.sh</code> 和依赖库，在 Agent setup 阶段被整体上传到目标环境并安装，最后用 <code>which</code> 验证确实可执行。这个差别源于执行边界——工具真正运行的地方是容器里的 Bash session，不是 SWE-agent 进程。因此工具可以用任何语言写，也因此需要 <code>/root/.swe-agent-env</code> 这种 registry 文件：子进程改不了父 Shell 的环境变量，跨调用的状态只能落到文件里再读回来。</div>
+</details>
+<details>
+<summary>ToolFilter 的 blocklist 能不能当安全沙箱用？</summary>
+<div>不能，而且这不是"再多写几条正则就好"的问题。blocklist 匹配的是命令文本长什么样，但 Bash 是图灵完备的，同一个语义有无穷多种写法——变量拼接、base64 解码后执行、写进脚本再跑，都能绕过前缀匹配。真正的信任边界在下面一层：SWE-ReX 的 deployment 配置决定了进程有没有那个 capability、网络通不通、哪些目录被挂载进来。blocklist 的合理定位是防手滑和防挂起，比如拦掉 <code>vim</code>、裸 shell、pager 这类会让会话卡死等输入的交互式程序。</div>
+</details>
+<details>
+<summary>Agent 完成、成功提交、benchmark resolved 为什么要分成三个指标？</summary>
+<div>它们统计的是三件不同的事，混用会让失败分析完全失真。"完成"指 Agent 主循环正常走到终态，但终态可能是 <code>exit_cost</code> 或 <code>exit_format</code>。"成功提交"指最终产出了非空 patch，注意 Autosubmit 在预算耗尽、上下文超限时也会抢救出一份 diff，所以提交不代表 Agent 认为自己做完了。"resolved"是 SWE-bench 用测试判定补丁真的修好了问题。三者依次收窄：提交率低说明是运行时或预算问题，提交率高但 resolved 低说明是模型能力或 ACI 设计问题——只看一个数字分不出该改哪里。</div>
+</details>
+<details>
+<summary>这套架构里哪些部分值得直接借鉴到自研 Agent？</summary>
+<div>最值得抄的是三个协议层面的设计。一是 History 与 Trajectory 分离，它让上下文优化和可观测性不再互相牵制。二是结构化的 exit_status taxonomy 加 Autosubmit 降级，失败被分成可归因的类别，且尽量保住部分成果。三是工具以部署单元而非进程内函数的形式存在，让执行边界显式可配。相对不值得直接抄的是 <code>agents.py</code> 的组织方式——主循环、错误策略、提交管理和轨迹写入聚在一起，作为研究代码可读，但生产化时应该拆开；资源关闭也没有统一到 <code>try/finally</code>，这是已知的技术债。</div>
+</details>
+</section>
+
+<section class="section" id="glossary">
+<h2>附录 A：术语与关键文件索引</h2>
+<table>
+<tr><th>术语</th><th>含义</th><th>关键文件</th></tr>
+<tr><td>ACI</td><td>Agent-Computer Interface，为 LM 设计的工具与状态接口</td><td><code>sweagent/tools/</code>、根 <code>tools/</code></td></tr>
+<tr><td>Agent Loop</td><td>模型决策、动作执行、Observation 回灌循环</td><td><code>agent/agents.py</code></td></tr>
+<tr><td>History</td><td>经处理后发给模型的消息序列</td><td><code>history_processors.py</code></td></tr>
+<tr><td>Trajectory</td><td>完整执行审计记录</td><td><code>types.py</code>、<code>agents.py</code></td></tr>
+<tr><td>Bundle</td><td>可上传安装的工具集合</td><td><code>tools/bundle.py</code>、根 <code>tools/*</code></td></tr>
+<tr><td>Parser</td><td>把模型响应转换为 thought/action</td><td><code>tools/parsing.py</code></td></tr>
+<tr><td>SWEEnv</td><td>Agent 使用的同步环境门面</td><td><code>environment/swe_env.py</code></td></tr>
+<tr><td>SWE-ReX</td><td>外部 deployment/runtime 系统</td><td><code>swerex</code> 依赖</td></tr>
+<tr><td>Autosubmit</td><td>错误退出前尽量提取现有 diff</td><td><code>DefaultAgent.attempt_autosubmission_after_error</code></td></tr>
+<tr><td>RetryAgent</td><td>多 attempt + Reviewer/Chooser 的质量外环</td><td><code>agents.py</code>、<code>reviewer.py</code></td></tr>
+<tr><td>RunBatch</td><td>实例加载、线程调度、断点、汇总和评测编排</td><td><code>run/run_batch.py</code></td></tr>
+<tr><td>Inspector</td><td>轨迹的 CLI/Web 只读查看器</td><td><code>run/inspector_cli.py</code>、<code>inspector/server.py</code></td></tr>
+</table>
+<h3>关键源码阅读清单</h3>
+<p><code>pyproject.toml</code> → <code>sweagent/run/run.py</code> → <code>run/common.py</code> → <code>run/run_single.py</code> → <code>agent/agents.py</code> → <code>agent/models.py</code> → <code>tools/tools.py</code> → <code>tools/parsing.py</code> → <code>environment/swe_env.py</code> → <code>agent/reviewer.py</code> → <code>run/run_batch.py</code> → <code>inspector/server.py</code>。</p>
+</section>
+
+<section class="section">
+<h2>参考资料</h2>
+<ol>
+  <li>SWE-agent 当前工作区源码，版本 1.1.0。</li>
+  <li>John Yang、Carlos E. Jimenez、Alexander Wettig、Kilian Lieret、Shunyu Yao、Karthik Narasimhan、Ofir Press，<a href="https://arxiv.org/abs/2405.15793"><em>SWE-agent: Agent-Computer Interfaces Enable Automated Software Engineering</em></a>，NeurIPS 2024，arXiv:2405.15793；<a href="https://proceedings.neurips.cc/paper_files/paper/2024/file/5a7c947568c1b1328ccc5230172e1e7c-Paper-Conference.pdf">NeurIPS 官方 PDF</a>。</li>
+  <li>项目内 <code>docs/background/architecture.md</code> 与 <code>docs/background/aci.md</code>：背景材料，其中 architecture 页面可能滞后于当前默认配置，不作为默认值的最终证据。</li>
+  <li><a href="https://swe-rex.com">SWE-ReX</a>：SWE-agent 使用的部署与运行时抽象。</li>
+  <li><a href="https://docs.litellm.ai/">LiteLLM</a>：项目使用的统一模型 Provider 路由与成本元数据层。</li>
+  <li><a href="https://www.swebench.com/">SWE-bench</a>：仓库级 Issue 修复基准及 sb-cli 评测链路。</li>
+</ol>
+</section>
+
+<div class="footer">SWE-agent 架构深度解析 · 团队分享 / 开发文档版 · 基于当前源码快照核验 · 2026-08-14</div>
+</main>
+</div><!-- /panel-docs -->
+
+<script>
+// Tab 切换（入门指南 / 架构文档）
+function switchSweTab(name){
+  localStorage.setItem('sweAgentArchTab',name);
+  document.querySelectorAll('.spanel').forEach(function(p){p.classList.remove('active')});
+  document.querySelectorAll('.project-tabs .tab-btn').forEach(function(b){b.classList.toggle('active',b.dataset.tab===name)});
+  document.getElementById('panel-'+name).classList.add('active');
+  document.body.classList.toggle('tab-embed',name==='guide');
+  window.scrollTo(0,0);
+}
+document.querySelectorAll('.project-tabs .tab-btn').forEach(function(btn){btn.addEventListener('click',function(){switchSweTab(btn.dataset.tab)})});
+(function(){var t=localStorage.getItem('sweAgentArchTab');if(t&&t!=='docs'&&document.getElementById('panel-'+t))switchSweTab(t)})();
+// scrollspy：侧边栏高亮当前章节，取最后一个越过 160px 线的 section
+(function(){
+  const links=[...document.querySelectorAll('.nav a[href^="#"]')];
+  const sections=links.map(a=>document.getElementById(a.getAttribute('href').slice(1))).filter(Boolean);
+  if(!sections.length)return;
+  function spy(){
+    let current;
+    sections.forEach(s=>{if(s.getBoundingClientRect().top<160)current=s.id});
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current));
+  }
+  window.addEventListener('scroll',spy,{passive:true});
+  spy();
+})();
+</script>
+</body>
+</html>

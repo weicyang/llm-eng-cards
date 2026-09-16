@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>OpenClaw Memory 系统详细设计</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth;scroll-padding-top:64px}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.75;padding:64px 22px 48px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .35rem;border-radius:4px;font-size:.9em;overflow-wrap:anywhere}h1{font-size:2.3rem;line-height:1.2;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:.5rem 0 .65rem}h2{color:var(--blue);font-size:1.5rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem}h3{color:var(--blue2);font-size:1.14rem;margin:1.35rem 0 .5rem}.topbar{position:fixed;top:0;left:0;right:0;height:48px;background:#fffdf8;border-bottom:1px solid var(--border);display:flex;align-items:center;z-index:300;padding:0 18px;gap:12px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:.28rem .72rem;font-size:.84rem}.crumb{color:var(--muted);font-size:.84rem}.sidebar{position:fixed;left:0;top:48px;bottom:0;width:280px;border-right:1px solid var(--border);padding:1.1rem 1rem 2rem;overflow-y:auto}.sidebar h2{font-size:.92rem;border:0;margin:0 0 .55rem;padding:0}.sidebar a{display:block;color:var(--muted);font-size:.79rem;padding:.24rem .45rem;border-left:2px solid transparent}.sidebar a.active,.sidebar a:hover{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}.container{max-width:1160px;margin:auto}.subtitle{color:var(--muted);margin-bottom:1.2rem}.meta,.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem;margin:1rem 0 1.4rem}.meta{grid-template-columns:repeat(3,minmax(0,1fr))}.meta>div,.card{background:#f4f1ea;border:1px solid var(--border);border-radius:9px;padding:.8rem}.meta dt{color:var(--muted);font-size:.74rem}.meta dd{font-size:.87rem}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.7rem 2rem;margin-bottom:1.35rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section p{margin:.55rem 0}.section ul,.section ol{margin:.55rem 0 .55rem 1.35rem}.table-wrap{overflow-x:auto;margin:1rem 0}table{width:100%;border-collapse:collapse;font-size:.86rem;min-width:760px}th,td{border:1px solid var(--border);padding:.56rem .68rem;text-align:left;vertical-align:top}th{background:#e8e1d4;color:var(--blue)}.lead,.warning,.boundary,.evidence,.insight{border-radius:8px;padding:.9rem 1rem;margin:.85rem 0}.lead{border:1px solid var(--green);background:rgba(21,128,61,.06)}.warning{border-left:4px solid var(--red);background:rgba(185,28,28,.06)}.boundary{border-left:4px solid var(--purple);background:rgba(109,40,217,.06)}.insight{border-left:4px solid var(--blue);background:rgba(67,56,202,.06)}.evidence{background:#f4f1ea;border:1px solid var(--border);color:var(--muted);font-size:.82rem}.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;color:var(--muted);font-size:.82rem;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;-webkit-box-decoration-break:clone;box-decoration-break:clone}.flow{font-family:"Cascadia Code",Consolas,monospace;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem;white-space:pre-wrap;color:var(--blue2);font-size:.82rem;overflow:auto}.badge{display:inline-block;border:1px solid;border-radius:99px;padding:.03rem .43rem;margin-right:.3rem;font-size:.72rem}.fact{color:var(--green)}.optional{color:var(--yellow)}.owner{color:var(--purple)}.source-list{columns:2;column-gap:2rem}.footer{text-align:center;color:var(--muted);font-size:.8rem;margin:2rem}.back-top{position:fixed;right:18px;bottom:18px;border:1px solid var(--border);background:var(--surface);border-radius:50%;width:38px;height:38px;text-align:center;line-height:36px}@media(max-width:980px){body{padding:62px 13px 32px}.sidebar{display:none}.meta,.grid{grid-template-columns:1fr}.section{padding:1.2rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.source-list{columns:1}h1{font-size:1.8rem}.crumb{display:none}}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../openclaw_architecture.html">← 返回架构总览</a><span class="crumb">第 11 章 · Memory · 开发级详细设计</span></div>
+<aside class="sidebar" aria-label="页面目录"><h2>Memory 系统</h2><a href="#position">1. 模块定位</a><a href="#context">2. 系统位置与依赖</a><a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a><a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态</a><a href="#interfaces">7. 接口与事件</a><a href="#config">8. 配置与默认</a><a href="#performance">9. 并发与资源</a><a href="#security">10. 隐私边界</a><a href="#failure">11. 失败与恢复</a><a href="#operations">12. 排障</a><a href="#tests">13. 测试证据</a><a href="#development">14. 扩展指南</a><a href="#tradeoffs">15. 权衡与限制</a><a href="#sources">16. 源码索引</a></aside>
+<main class="container">
+<header id="top"><h1>OpenClaw Memory 系统详细设计</h1><p class="subtitle">从可编辑 Markdown 资产到可重建 SQLite 检索索引，并划清 builtin、QMD、Honcho、LanceDB 与 memory-wiki 的所有权。</p>
+<div class="meta"><div><dl><dt>源码基线</dt><dd>OpenClaw 2026.7.2 工作副本；当前执行环境无可用 Git 命令，SHA 未验证</dd></dl></div><div><dl><dt>证据状态</dt><dd>源码、测试、官方文档与上游依赖已交叉检查</dd></dl></div><div><dl><dt>主要所有者</dt><dd><code>extensions/memory-core/</code>；Host seam 位于 <code>src/plugin-sdk/memory-*</code></dd></dl></div><div><dl><dt>目标读者</dt><dd>Memory、Agent Runtime、插件与运维开发者</dd></dl></div><div><dl><dt>最近验证</dt><dd>2026-07-27</dd></dl></div><div><dl><dt>事实标签</dt><dd><span class="badge fact">当前事实</span><span class="badge optional">可选能力</span><span class="badge owner">所有权边界</span></dd></dl></div></div>
+<div class="lead"><strong>一句话目标：</strong>Memory 把 <code>MEMORY.md</code> 与 <code>memory/**/*.md</code> 保持为人类可读、可编辑、可审计的产品资产，再把 source、chunk、FTS、vector、embedding cache 与 index identity 存入 per-agent SQLite；索引失败或丢失不能反过来改变 Markdown 权威内容。</div></header>
+
+<section class="section" id="position"><h2>1. 模块定位</h2>
+<div class="table-wrap"><table><thead><tr><th>边界</th><th>负责</th><th>不负责/委托</th></tr></thead><tbody>
+<tr><td>耐久知识</td><td><code>MEMORY.md</code> 保存精选长期事实；<code>memory/YYYY-MM-DD.md</code> 保存追加式日记。</td><td>不把 SQLite chunk 当用户资产；删除索引不应删除 Markdown。</td></tr>
+<tr><td>检索</td><td>source 发现、切块、embedding、FTS5、sqlite-vec、path match、hybrid merge。</td><td>模型推理与上下文预算由 Agent/Context owner 负责。</td></tr>
+<tr><td>维护</td><td>watch、interval sync、targeted sync、shadow reindex、状态与 CLI。</td><td>per-agent DB schema/bootstrap 由 Host SQLite seam 提供。</td></tr>
+<tr><td>主动整理</td><td>flush plan、recall signal、dreaming、grounded backfill、promotion。</td><td>Cron 只提供调度；promotion 的内容和写入安全由 memory-core 所有。</td></tr>
+<tr><td>可替换性</td><td>exclusive memory slot 经公共 SDK 注册。</td><td>QMD 是 builtin 的可选 sidecar backend；Honcho/LanceDB 是独立插件；wiki 是非独占补充层。</td></tr>
+</tbody></table></div>
+<p class="evidence">入口与注册：<code>extensions/memory-core/index.ts:188-247</code>；Memory capability 与两个工具：<code>extensions/memory-core/index.ts:201-219</code>。</p></section>
+
+<section class="section" id="context"><h2>2. 系统位置与依赖</h2>
+<div class="flow">Workspace Markdown
+  → memory-core 发现 / 切块
+  → embedding provider + FTS5 + sqlite-vec
+  → per-agent openclaw-agent.sqlite
+  → memory_search / memory_get
+  → 模型 tool result + citations
+
+Compaction 压力 → flush plan → 受限 read/write turn → 每日 Markdown
+Recall 信号 → dreaming Cron → grounded 重水化 → MEMORY.md promotion
+memory-wiki ← public artifacts/events seam（旁路，不夺取 memory slot）</div>
+<div class="table-wrap"><table><thead><tr><th>方向</th><th>接口</th><th>事实</th><th>证据</th></tr></thead><tbody>
+<tr><td>Agent → memory</td><td><code>memory_search</code>/<code>memory_get</code></td><td>工具先检查 agent 的有效 memory config；无上下文则不注册。</td><td><code>extensions/memory-core/index.ts:48-63</code>、<code>extensions/memory-core/index.ts:89-123</code></td></tr>
+<tr><td>memory → Host</td><td>Plugin SDK memory host subpaths</td><td>插件只经公开 seam 取 config、SQLite、state lease、session visibility 和 embedding provider。</td><td><code>extensions/memory-core/index.ts:3-19</code>、<code>extensions/memory-core/src/memory/manager-db.ts:5-18</code></td></tr>
+<tr><td>memory → SQLite</td><td>per-agent DB</td><td>memory 表是 agent DB 的一组 owner-owned 表；full reindex 只发布这些表。</td><td><code>extensions/memory-core/src/memory/manager-db.ts:136-235</code></td></tr>
+<tr><td>memory → dependencies</td><td>Node SQLite、FTS5、sqlite-vec、chokidar</td><td>sqlite-vec 加速 KNN；不可用时分批 cosine scan；watcher 失败不使 Gateway 崩溃。</td><td><code>extensions/memory-core/src/memory/manager-search.ts:20-28</code>、<code>extensions/memory-core/src/memory/manager-search.ts:387-490</code>；<code>extensions/memory-core/src/memory/manager-watch-ops.ts:182-203</code></td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="concepts"><h2>3. 核心概念与术语</h2><div class="grid">
+<div class="card"><strong>Markdown 资产</strong>人类可直接审阅和修改的知识。它是内容权威，不是数据库投影。</div>
+<div class="card"><strong>Source</strong>索引来源类别，当前规范值为 <code>memory</code> 与可选 <code>sessions</code>；默认只含 memory。</div>
+<div class="card"><strong>Chunk</strong>带 path、source、行范围、hash、model、text、embedding 的检索单元。</div>
+<div class="card"><strong>Index identity</strong>provider/model/providerKey、source、scope、chunk 参数、vector dims、FTS tokenizer 的一致性指纹。</div>
+<div class="card"><strong>FTS / Vector / Path</strong>正文 BM25、语义相似度、文件路径精确度是三个信号；path exactness 形成优先 tier。</div>
+<div class="card"><strong>Shadow publish</strong>在临时 DB 完整构建，校验 live revision 后在短事务内替换 memory-owned tables。</div>
+<div class="card"><strong>Flush</strong>compaction 前的一次受限 housekeeping turn，只能 read 与 append daily memory。</div>
+<div class="card"><strong>Dreaming / Promotion</strong>可选后台整理：积累 grounded recall signal，重读真实源行，达到门槛后写入长期 MEMORY.md。</div>
+</div></section>
+
+<section class="section" id="components"><h2>4. 架构组成</h2>
+<div class="table-wrap"><table><thead><tr><th>组件</th><th>职责</th><th>故障隔离</th><th>源码</th></tr></thead><tbody>
+<tr><td>Plugin entry</td><td>注册 memory capability、tools、CLI、dreaming lifecycle。</td><td>工具实现和 provider runtime 懒加载。</td><td><code>extensions/memory-core/index.ts:42-46</code>、<code>extensions/memory-core/index.ts:188-247</code></td></tr>
+<tr><td>Source sync</td><td>发现 MEMORY.md、memory tree、extra paths 和可选 session archives，按 hash/mtime 增量同步。</td><td>targeted session sync 不必触发全量 memory rebuild。</td><td><code>extensions/memory-core/src/memory/manager-sync-ops.ts:96-280</code></td></tr>
+<tr><td>Search</td><td>并行 vector、body FTS 与 path FTS，随后 merge、minScore、limit。</td><td>FTS MATCH 失败降为 LIKE；vec 不可用分批扫描并 yield。</td><td><code>extensions/memory-core/src/memory/manager-search.ts:387-575</code>、<code>extensions/memory-core/src/memory/manager-search.ts:577-689</code></td></tr>
+<tr><td>Hybrid ranker</td><td>加权合并，保留 exact path tier，可选 decay 与 MMR。</td><td>后处理不能把非 exact 结果跨越 exact tier。</td><td><code>extensions/memory-core/src/memory/hybrid.ts:157-261</code></td></tr>
+<tr><td>Watcher</td><td>Windows/macOS 原生 recursive watch；Linux directory-tree watch；失败转 chokidar。</td><td>错误只降级 freshness，当前索引仍可查。</td><td><code>extensions/memory-core/src/memory/manager-watch-ops.ts:111-203</code>、<code>extensions/memory-core/src/memory/manager-watch-ops.ts:249-393</code>、<code>extensions/memory-core/src/memory/manager-watch-ops.ts:396-588</code></td></tr>
+<tr><td>Reindex publisher</td><td>shadow build、revision compare、短事务发布、清理 crash-left temp DB。</td><td>构建失败保留 live index；revision 冲突要求重试。</td><td><code>extensions/memory-core/src/memory/manager-sync-ops.ts:363-530</code></td></tr>
+<tr><td>Dreaming controller</td><td>维护唯一 managed Cron、运行 sweep、rank、promotion 和 report。</td><td>per-workspace 失败隔离；Cron 暂不可用有界重试并持续 reconcile。</td><td><code>extensions/memory-core/src/dreaming.ts:408-491</code>、<code>extensions/memory-core/src/dreaming.ts:494-718</code>、<code>extensions/memory-core/src/dreaming.ts:721-981</code></td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="flows"><h2>5. 完整运行流程</h2>
+<h3>5.1 成功：一次 builtin 检索</h3>
+<ol><li>工具从可信 run context 解析 agent、session、sandbox 与可搜索 corpus；模型提供的 <code>corpus</code> 只能收窄，不能扩大 trusted recall。<code>extensions/memory-core/src/tools.ts:451-487</code></li><li>manager 确认 index identity；必要时执行同步。source 文件切成带行号 chunk，embedding cache 避免重复请求。</li><li>query embedding 与 FTS/path 查询并行取候选；sqlite-vec 使用 <code>MATCH ? AND k = ?</code>，后过滤不足时扩大或回到 bounded scan。<code>extensions/memory-core/src/memory/manager-search.ts:414-490</code></li><li>vector/text 加权；exact full path、basename、stem 按 specificity 3/2/1 固定在普通结果之前。<code>extensions/memory-core/src/memory/manager-search.ts:139-161</code>、<code>extensions/memory-core/src/memory/hybrid.ts:238-252</code></li><li>可选 decay/MMR 只重排 tier 内结果；session hits 再通过 visibility guard；最后附 citation 并受 injected-char cap。<code>extensions/memory-core/src/tools.ts:719-759</code></li></ol>
+<h3>5.2 拒绝：跨会话隐私 fail-closed</h3>
+<p>conversation recall 只有在非 sandbox、scope 为 <code>same-agent-private</code>、requester 是 anchor 或受控 active-memory 子会话、anchor 与所有 alias 都是同 agent 私聊时成立。任一 alias 指向 group/channel 即拒绝；当前 transcript 本身也按 identity 排除。<span class="evidence"><code>extensions/memory-core/src/session-search-visibility.ts:157-225</code>、<code>extensions/memory-core/src/session-search-visibility.ts:227-275</code></span></p>
+<h3>5.3 恢复：shadow reindex</h3>
+<div class="flow">identity 不匹配 / 强制 / retry-dirty
+ → 获取 reindex 锁 + 捕获 live revision
+ → 创建临时 agent DB
+ → 在 live DB 外重建 sources/chunks/FTS/vector
+ → 关闭临时 DB
+ → ATTACH temp + BEGIN IMMEDIATE
+ → 验证 revision 未变
+ → 替换 memory 拥有的表 + meta
+ → 提交，标记 vector 干净，删除临时文件
+提交前失败 → 恢复 live handles + 标记 retry dirty
+revision 已变 → 拒绝发布并稍后重试</div>
+<p class="evidence"><code>extensions/memory-core/src/memory/manager-sync-ops.ts:363-530</code>；publish transaction：<code>extensions/memory-core/src/memory/manager-db.ts:136-235</code>。</p>
+<h3>5.4 Flush、Dreaming、Grounded backfill、Promotion</h3>
+<p>Flush 配置默认开启，但只有 compaction 压力、阈值和 cycle gate 满足时才构造只写当日 <code>memory/YYYY-MM-DD.md</code> 的 append-only turn；MEMORY.md、DREAMS.md 与 bootstrap 文件明确只读。Dreaming 默认是可选能力：recall、daily 与 grounded signal 写入 plugin state，Cron 运行 sweep；候选按频率、相关性、多样性、时效、巩固、概念信号评分。真正 promotion 前重新读取源文件并迁移行范围；找不到原文、落入 managed dreaming fence 或疑似 prompt/转录污染即拒绝。<span class="evidence"><code>extensions/memory-core/src/flush-plan.ts:12-43</code>、<code>extensions/memory-core/src/flush-plan.ts:97-136</code>；<code>extensions/memory-core/src/short-term-promotion.ts:1388-1669</code>、<code>extensions/memory-core/src/short-term-promotion.ts:2308-2344</code>、<code>extensions/memory-core/src/short-term-promotion.ts:2487-2678</code></span></p>
+</section>
+
+<section class="section" id="state"><h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table><thead><tr><th>状态</th><th>权威位置</th><th>关键字段</th><th>生命周期</th></tr></thead><tbody>
+<tr><td>长期/日记内容</td><td>Workspace Markdown</td><td>path、文本、行号</td><td>用户资产；flush append，promotion 受控写。</td></tr>
+<tr><td><code>memory_index_sources</code></td><td>per-agent SQLite</td><td>id/path/source/hash/mtime/size</td><td>可由 Markdown 重建。</td></tr>
+<tr><td><code>memory_index_chunks</code></td><td>per-agent SQLite</td><td>id/path/source/start/end/hash/model/text/embedding</td><td>可重建；source 变化增量替换。</td></tr>
+<tr><td>FTS/vector/path tables</td><td>SQLite virtual/derived tables</td><td>正文、embedding、path/source</td><td>纯派生；full reindex 原子发布。</td></tr>
+<tr><td>embedding cache</td><td>per-agent SQLite</td><td>provider/model/providerKey/hash/dims</td><td>跨重建复用，可裁剪。</td></tr>
+<tr><td>index meta/revision</td><td>per-agent SQLite</td><td>provider/model/sources/scope/chunk/vector/tokenizer</td><td>决定暂停、增量或 full reindex。</td></tr>
+<tr><td>recall/promotion signals</td><td>shared plugin state SQLite</td><td>workspace key、signal counts、query hash、claim hash</td><td>有界保留；不是 Markdown 内容副本。</td></tr>
+<tr><td>DREAMS/report</td><td>命名产品 artifact</td><td>review/narrative/report</td><td>可选、可审阅；不得反向污染 promotion。</td></tr>
+</tbody></table></div>
+<p class="evidence">表发布列：<code>extensions/memory-core/src/memory/manager-db.ts:187-230</code>；index identity：<code>extensions/memory-core/src/memory/manager-reindex-state.ts:8-18</code>、<code>extensions/memory-core/src/memory/manager-reindex-state.ts:127-207</code>；promotion state 使用 Plugin State：<code>extensions/memory-core/src/short-term-promotion.ts:918-1065</code>。</p></section>
+
+<section class="section" id="interfaces"><h2>7. 接口、工具与事件</h2>
+<div class="table-wrap"><table><thead><tr><th>接口</th><th>输入/输出</th><th>约束与错误</th></tr></thead><tbody>
+<tr><td><code>memory_search</code></td><td>query、maxResults、minScore、corpus → ranked excerpts</td><td>corpus 闭合枚举；失败返回 <code>disabled/unavailable</code> 与恢复动作；错误 cooldown 60s。</td></tr>
+<tr><td><code>memory_get</code></td><td>path、from、lines、corpus → bounded exact excerpt</td><td>只允许 memory/wiki corpus；不提供任意文件读取。</td></tr>
+<tr><td>Memory capability</td><td>promptBuilder、flushPlanResolver、runtime、publicArtifacts</td><td>exclusive memory slot；wiki 通过 public artifacts，不深导入 plugin internals。</td></tr>
+<tr><td>CLI</td><td><code>openclaw memory status/index/search</code></td><td>identity mismatch 指引 <code>index --force</code>；status 不等于真实 live provider 网络 proof。</td></tr>
+<tr><td>Host events</td><td>recall recorded/skipped、promotion applied、dream failure</td><td>记录 provenance 与维护结果，不把完整私密 transcript 当通用事件。</td></tr>
+</tbody></table></div>
+<p class="evidence">Tool schema：<code>extensions/memory-core/index.ts:65-87</code>；paused index 恢复指引：<code>extensions/memory-core/src/tools.ts:173-193</code>；promotion event：<code>extensions/memory-core/src/short-term-promotion.ts:2642-2667</code>。</p></section>
+
+<section class="section" id="config"><h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table><thead><tr><th>配置/行为</th><th>当前默认</th><th>生效/恢复</th><th>证据</th></tr></thead><tbody>
+<tr><td>backend</td><td><code>builtin</code></td><td>QMD 显式选择；QMD 整体失败可回 builtin。</td><td><code>docs/concepts/memory-qmd.md:32-45</code>、<code>docs/concepts/memory-qmd.md:84-88</code></td></tr>
+<tr><td>source</td><td><code>["memory"]</code></td><td>sessions 需 experimental + source，QMD 还需 exporter。</td><td><code>extensions/memory-core/src/memory/manager-reindex-state.ts:70-89</code></td></tr>
+<tr><td>chunk</td><td>400 tokens / 80 overlap</td><td>变更使 identity mismatch 并 full reindex。</td><td><code>src/agents/memory-search.ts:123-124</code>；判定：<code>extensions/memory-core/src/memory/manager-reindex-state.ts:189-193</code></td></tr>
+<tr><td>hybrid weights</td><td>vector 0.7 / text 0.3</td><td>exact path tier 独立于普通加权。</td><td><code>src/agents/memory-search.ts:130-133</code>；实现：<code>extensions/memory-core/src/memory/hybrid.ts:157-199</code></td></tr>
+<tr><td>结果</td><td>max 6、candidate multiplier 4、minScore 0.35</td><td>工具参数可收窄/覆盖允许值。</td><td><code>src/agents/memory-search.ts:128-133</code></td></tr>
+<tr><td>MMR</td><td>关闭；启用时 λ=0.7</td><td>tier 内去重重排。</td><td><code>extensions/memory-core/src/memory/mmr.ts:26-29</code>、<code>extensions/memory-core/src/memory/mmr.test.ts:59</code></td></tr>
+<tr><td>Temporal decay</td><td>关闭；半衰期 30 天</td><td>只衰减 dated daily notes；evergreen 不衰减。</td><td><code>extensions/memory-core/src/memory/temporal-decay.ts:10-14</code>、<code>docs/concepts/memory-search.md:107-112</code></td></tr>
+<tr><td>watch</td><td>启用；interval 0</td><td>watch 错误降级；可手工 force index。</td><td><code>src/agents/memory-search.ts:425-441</code>、<code>extensions/memory-core/src/memory/manager-watch-ops.ts:111-203</code>、<code>extensions/memory-core/src/memory/manager-watch-ops.ts:726-765</code></td></tr>
+<tr><td>flush</td><td>开启；soft 4000 tokens；force transcript 2 MiB</td><td>显式 <code>enabled:false</code> 关闭。</td><td><code>extensions/memory-core/src/flush-plan.ts:12-14</code>、<code>extensions/memory-core/src/flush-plan.ts:102-135</code></td></tr>
+<tr><td>dreaming</td><td>关闭</td><td>启用后 controller 维护 isolated, no-delivery Cron。</td><td><code>src/memory-host-sdk/dreaming.ts:18-25</code>、<code>extensions/memory-core/src/dreaming.ts:161-184</code>、<code>extensions/memory-core/src/dreaming.ts:408-491</code></td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="performance"><h2>9. 并发、性能与资源</h2>
+<ul><li>sqlite-vec native KNN 候选 oversample 8 倍，<code>k</code> 上限 4096；过滤后覆盖不足时扩大，仍不足则 bounded scan。<code>extensions/memory-core/src/memory/manager-search.ts:20-28</code>、<code>extensions/memory-core/src/memory/manager-search.ts:452-490</code></li><li>fallback scan 每 256 行 yield 一次，避免阻塞 Channel I/O 与 liveness。<code>extensions/memory-core/src/memory/manager-search.ts:493-575</code></li><li>full reindex 在 shadow DB 做昂贵工作，只把 publish 放入短同步 SQLite transaction；live revision 防止覆盖并发增量更新。<code>extensions/memory-core/src/memory/manager-sync-ops.ts:363-488</code></li><li>watch 使用平台原生目录粒度优先，避免大树 per-file watcher fan-out；压力过高发 warning。<code>extensions/memory-core/src/memory/manager-watch-ops.ts:146-203</code></li><li>工具检索有 deadline、manager cache 与 60 秒失败 cooldown；cleanup 为 best-effort，不隐藏已得到结果。<code>extensions/memory-core/src/tools.ts:68-171</code></li></ul></section>
+
+<section class="section" id="security"><h2>10. 安全与信任边界</h2>
+<ol><li><strong>Corpus 不由模型扩权。</strong>未知 corpus 枚举 fail-closed；trusted runtime 可强制 sessions，模型参数不能扩大 trusted recall。<code>extensions/memory-core/src/tools.ts:72-90</code>、<code>extensions/memory-core/src/tools.ts:479-487</code></li><li><strong>Session recall 双门。</strong>先要求有效 session visibility，再要求 same-agent-private anchor 与所有 aliases 都是私聊；sandbox 禁止 protected recall。<code>extensions/memory-core/src/session-search-visibility.ts:165-220</code></li><li><strong>Exact get 不是通用 read。</strong>路径由 memory manager 解析到已注册 corpus；任意 workspace/host 文件不属于工具契约。</li><li><strong>Promotion 必须 grounded。</strong>写 MEMORY.md 前重新读 source、重定位 line range、拒绝 fenced dreaming 与 prompt/transcript 污染。<code>extensions/memory-core/src/short-term-promotion.ts:2308-2344</code>、<code>extensions/memory-core/src/short-term-promotion.ts:2510-2544</code></li><li><strong>文件权限。</strong>promotion 原子替换目标、保留既有 mode，新文件 0600；只有真实权限失败且现有文件可写才保留 in-place compatibility。<code>extensions/memory-core/src/short-term-promotion.ts:2593-2639</code></li></ol></section>
+
+<section class="section" id="failure"><h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>即时行为</th><th>状态影响</th><th>恢复</th></tr></thead><tbody>
+<tr><td>显式 embedding provider 不可用</td><td>拒绝 search/sync，不静默抹掉语义索引。</td><td>旧 index 保持，dirty。</td><td>修 auth/provider；status 后 force index。</td></tr>
+<tr><td>auto/local provider 失败</td><td>允许已声明的 fallback/FTS-only 路径。</td><td>status 标记 fallback。</td><td>恢复 provider 后 identity 驱动 rebuild。</td></tr>
+<tr><td>index identity mismatch</td><td>search 暂停并返回 action。</td><td>不混用旧 vector space。</td><td><code>openclaw memory index --force</code>。</td></tr>
+<tr><td>FTS MATCH 异常</td><td>日志告警，转 LIKE。</td><td>精度/性能下降，仍返回候选。</td><td>force rebuild / 检查 tokenizer。</td></tr>
+<tr><td>sqlite-vec 不可用</td><td>分批 cosine scan。</td><td>正确性保留，延迟增加。</td><td>修 extension；重启并 status --deep。</td></tr>
+<tr><td>watcher error</td><td>native 转 chokidar；最终失败只告警。</td><td>索引可能 stale，不崩 Gateway。</td><td>手工 index；降低 extraPaths/关闭 watch。</td></tr>
+<tr><td>shadow publish revision 冲突</td><td>transaction 抛错。</td><td>live index 不变，retry dirty。</td><td>下一轮重建。</td></tr>
+<tr><td>promotion 源已变化</td><td>rehydrate 找不到候选则跳过。</td><td>不写未经证明的长期事实。</td><td>后续 recall 重新积累。</td></tr>
+</tbody></table></div>
+<p class="evidence">Provider 防降级：<code>extensions/memory-core/src/memory/manager-sync-ops.ts:75-102</code>、<code>extensions/memory-core/src/memory/manager-sync-ops.ts:261-280</code>；FTS fallback：<code>extensions/memory-core/src/memory/manager-search.ts:618-655</code>；revision gate：<code>extensions/memory-core/src/memory/manager-db.ts:161-168</code>。</p></section>
+
+<section class="section" id="operations"><h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>先检查</th><th>可能原因</th><th>动作</th></tr></thead><tbody>
+<tr><td>memory_search unavailable</td><td><code>openclaw memory status --deep</code></td><td>provider/auth、identity mismatch、manager cooldown。</td><td>按 tool warning 修复，再 force index。</td></tr>
+<tr><td>只有 keyword</td><td>status provider/vector fields</td><td>auto 无 auth、sqlite-vec 未加载、显式 provider=none。</td><td>配置 embedding provider 或接受 FTS-only。</td></tr>
+<tr><td>修改 Markdown 后搜不到</td><td>watch warning、dirty、index revision</td><td>watch pressure/error、settle 尚未完成。</td><td>手工 index；缩小 extraPaths。</td></tr>
+<tr><td>QMD 多进程/慢</td><td>QMD help 与 searchMode</td><td>旧版不支持 multi-collection；query 首次下载模型。</td><td>更新 QMD；BM25-only 用 search。</td></tr>
+<tr><td>私聊 session hit 缺失</td><td>session visibility、dmScope、anchor aliases</td><td>群组 alias 或 sandbox 导致 fail-closed。</td><td>修 session 隔离，不绕过 guard。</td></tr>
+<tr><td>Dreaming 不运行</td><td>plugin config、managed Cron、gateway_start logs</td><td>默认关闭、Cron 尚不可用、limit=0。</td><td>启用后检查 Cron reconcile。</td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="tests"><h2>13. 测试与验证证据</h2>
+<div class="table-wrap"><table><thead><tr><th>契约</th><th>测试</th><th>证明</th><th>缺口</th></tr></thead><tbody>
+<tr><td>Hybrid/MMR/decay</td><td><code>extensions/memory-core/src/memory/hybrid.test.ts:1</code>、<code>extensions/memory-core/src/memory/mmr.test.ts:1</code>、<code>extensions/memory-core/src/memory/temporal-decay.test.ts:1</code></td><td>权重、tier、默认关闭与重排。</td><td>真实大规模质量。</td></tr>
+<tr><td>DB/schema/reindex</td><td><code>extensions/memory-core/src/memory/manager-db.test.ts:1</code>、<code>extensions/memory-core/src/memory/manager.reindex-recovery.test.ts:1</code></td><td>shadow publish、失败保留 live index。</td><td>长时间断电恢复。</td></tr>
+<tr><td>Watcher</td><td><code>extensions/memory-core/src/memory/manager.watcher-config.test.ts:1</code>、<code>extensions/memory-core/src/memory/manager-targeted-sync.test.ts:1</code></td><td>配置、target sync、fallback。</td><td>所有网络文件系统。</td></tr>
+<tr><td>Session privacy</td><td><code>extensions/memory-core/src/session-search-visibility.test.ts:1</code>、<code>extensions/memory-core/src/session-search-visibility.cross-agent.test.ts:1</code>、<code>extensions/memory-core/src/session-search-visibility.qmd.test.ts:1</code></td><td>same-agent、alias、QMD artifact guard。</td><td>真实多渠道账户拓扑。</td></tr>
+<tr><td>Flush</td><td><code>extensions/memory-core/src/flush-plan.test.ts:1</code>、<code>extensions/memory-core/src/memory-budget.test.ts:1</code></td><td>默认阈值、安全提示、预算。</td><td>模型是否提取正确事实。</td></tr>
+<tr><td>Dream/promotion</td><td><code>extensions/memory-core/src/dreaming.test.ts:1</code>、<code>extensions/memory-core/src/short-term-promotion.test.ts:1</code>、<code>extensions/memory-core/src/dreaming-shadow-trial.test.ts:1</code></td><td>Cron、grounding、污染拒绝、原子写。</td><td>长期质量评价。</td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="development"><h2>14. 开发与扩展指南</h2>
+<div class="table-wrap"><table><thead><tr><th>目标</th><th>所有者表面</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>增加 embedding provider</td><td>Provider plugin + memory embedding registry public seam</td><td>query/document input、dimensions、auth failure、batch/error contract。</td></tr>
+<tr><td>改变 chunk/index</td><td><code>extensions/memory-core/src/memory/</code></td><td>identity mismatch、full rebuild、旧 live index 保留。</td></tr>
+<tr><td>新增 memory backend</td><td>exclusive memory slot plugin</td><td>工具、flush/prompt、runtime、privacy、doctor、install/restart。</td></tr>
+<tr><td>增加知识编译层</td><td>memory corpus supplement/public artifacts</td><td>不夺 active slot、不深导入 owner、provenance 与 agent scope。</td></tr>
+<tr><td>修改 promotion</td><td>memory-core dreaming/promotion</td><td>source rehydrate、污染拒绝、幂等 marker、文件权限与 rollback。</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>禁止捷径：</strong>不要把索引当用户资产；不要在 runtime 增加 JSON sidecar fallback；不要让 wiki/第三方 memory 深导入 memory-core 私有文件；不要在 search hot path 扫描插件或磁盘元数据；不要为了 provider 暂时失败而清空现有 vector index。</div></section>
+
+<section class="section" id="tradeoffs"><h2>15. 设计权衡与已知限制</h2>
+<div class="table-wrap"><table><thead><tr><th>选择</th><th>收益</th><th>成本/限制</th><th>重新评估条件</th></tr></thead><tbody>
+<tr><td>Markdown 权威 + SQLite 派生</td><td>透明、可编辑、可备份；索引可重建。</td><td>需要 watch/sync，短期可能 stale。</td><td>内容规模使文件资产不可维护。</td></tr>
+<tr><td>Hybrid 三信号</td><td>兼顾语义、精确词和文件名。</td><td>分数跨 backend 不可直接比较。</td><td>统一校准模型可证明更好。</td></tr>
+<tr><td>MMR/decay 默认关闭</td><td>保持稳定排序，不擅自偏新或多样。</td><td>大历史可能重复或陈旧。</td><td>按数据集证明默认开启净收益。</td></tr>
+<tr><td>Shadow reindex</td><td>失败不破坏 live index，publish 短。</td><td>临时占用额外磁盘与一次完整构建。</td><td>索引规模超出单机影子副本成本。</td></tr>
+<tr><td>插件边界</td><td>QMD/Honcho/LanceDB/wiki 可独立演进。</td><td>能力与隐私契约不完全等价。</td><td>形成可证明的统一 memory capability contract。</td></tr>
+</tbody></table></div>
+<h3>Backend 所有权矩阵</h3>
+<div class="table-wrap"><table><thead><tr><th>实现</th><th>角色</th><th>存储/检索</th><th>与 memory-core 的关系</th></tr></thead><tbody>
+<tr><td>memory-core builtin</td><td>默认 active slot</td><td>Markdown + agent SQLite FTS/vector/path</td><td>基准主链。</td></tr>
+<tr><td>QMD</td><td>memory-core 内可选 backend sidecar</td><td>QMD-owned index.sqlite/collections/models；OpenClaw lease 在 SQLite</td><td>失败可回 builtin；search/vsearch/query 由 QMD 契约决定。</td></tr>
+<tr><td>Honcho</td><td>外部插件/服务</td><td>远端或自托管服务、用户模型、专属 tools/hooks</td><td>可与本地 Markdown 并存，不等于 builtin backend。</td></tr>
+<tr><td>memory-lancedb</td><td>官方外部 exclusive slot</td><td>LanceDB table、per-agent owner predicate、auto recall/capture</td><td>替代 active slot；不继承 protected transcript recall。</td></tr>
+<tr><td>memory-wiki</td><td>非独占 corpus supplement</td><td>compiled Markdown + shared plugin state、claims/provenance</td><td>旁路；经 public artifacts/events bridge，不拥有 recall/promotion。</td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="sources"><h2>16. 源码索引与进一步阅读</h2>
+<ul class="source-list">
+<li><code>extensions/memory-core/index.ts:188-247</code> — plugin composition root。</li><li><code>extensions/memory-core/src/memory/manager.ts:1-1687</code> — manager lifecycle。</li>
+<li><code>extensions/memory-core/src/memory/manager-db.ts:136-235</code> — shadow table publish。</li><li><code>extensions/memory-core/src/memory/manager-search.ts:387-990</code> — vector/FTS/path。</li>
+<li><code>extensions/memory-core/src/memory/hybrid.ts:61-262</code> — merge/MMR/decay。</li><li><code>extensions/memory-core/src/memory/manager-sync-ops.ts:96-530</code> — sync/reindex/recovery。</li>
+<li><code>extensions/memory-core/src/memory/manager-watch-ops.ts:108-765</code> — watch/interval。</li><li><code>extensions/memory-core/src/tools.ts:451-952</code> — tools、deadline、corpus。</li>
+<li><code>extensions/memory-core/src/session-search-visibility.ts:157-386</code> — privacy guard。</li><li><code>extensions/memory-core/src/flush-plan.ts:97-136</code> — flush contract。</li>
+<li><code>extensions/memory-core/src/dreaming.ts:385-981</code> — dreaming controller。</li><li><code>extensions/memory-core/src/short-term-promotion.ts:1388-2678</code> — signal/backfill/promotion。</li>
+<li><code>src/plugin-sdk/memory-host-core.ts:1-525</code> — Host boundary。</li><li><code>src/plugin-sdk/memory-host-search.ts:1-44</code> — public search seam。</li>
+<li><code>extensions/memory-lancedb/lancedb-store.ts:1-252</code> — sibling backend。</li><li><code>extensions/memory-wiki/src/bridge.ts:1-365</code> — public bridge boundary。</li>
+</ul>
+<h3>外部依赖契约</h3><ul><li><a href="https://github.com/asg017/sqlite-vec/blob/main/site/features/knn.md">sqlite-vec KNN</a>：<code>vec0</code> 以 <code>MATCH</code> + <code>k</code> 查询；默认 L2，表可选择 cosine。OpenClaw 额外用 <code>vec_distance_cosine</code> 规范化分数。</li><li><a href="https://github.com/tobi/qmd/blob/main/README.md">QMD</a>：<code>search</code> 为 BM25、<code>vsearch</code> 为 vector、<code>query</code> 为 expansion + hybrid + rerank。</li><li><a href="https://github.com/lancedb/lancedb/releases/tag/v0.30.0">LanceDB 0.30.0</a> 与其 Node <code>table.ts/query.ts</code>：vector query 支持 SQL-style owner filter；OpenClaw 插件依赖版本见 <code>extensions/memory-lancedb/package.json:10-14</code>。</li></ul>
+<div class="evidence"><strong>验证范围与缺口：</strong>已直接检查 OpenClaw runtime、tests、docs 以及 sqlite-vec、QMD、LanceDB 上游源码/发布契约。未执行真实 embedding API、QMD 二进制、Honcho 服务或 LanceDB native live 测试；当前环境也无法调用 Git/pnpm，因此未运行 <code>pnpm docs:list</code> 与 <code>git diff --check</code>，源码 SHA 未验证。</div></section>
+<div class="footer">OpenClaw 架构模块 11 · Memory 系统<br>开发级子文档 · 源码、测试、官方文档与依赖契约交叉核验</div>
+</main><a class="back-top" href="#top" aria-label="返回顶部">↑</a>
+<script>(function(){const links=[...document.querySelectorAll('.sidebar a')],sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);const activate=()=>{let current=sections[0];for(const s of sections){if(s.getBoundingClientRect().top<=92)current=s}if(current)links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current.id))};document.addEventListener('scroll',activate,{passive:true});activate()})();</script>
+</body>
+</html>

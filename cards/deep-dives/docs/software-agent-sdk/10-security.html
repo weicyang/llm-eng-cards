@@ -1,0 +1,613 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>安全、确认与 Hooks：Software Agent SDK 架构模块 10</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --text: #1c1917;
+      --muted: #78716c;
+      --border: rgba(28,25,23,.12);
+      --accent: #4338ca;
+      --good: #15803d;
+      --warn: #c2410c;
+      --danger: #b91c1c;
+      --code: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 16px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      color: var(--code);
+      background: rgba(120,113,108, .18);
+      border-radius: 5px;
+      padding: .12em .34em;
+      font-family: Consolas, "SFMono-Regular", monospace;
+      font-size: .92em;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 270px minmax(0, 1fr);
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 24px 18px;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+    }
+    aside strong { display: block; margin: 12px 8px; }
+    aside a {
+      display: block;
+      color: var(--muted);
+      padding: 5px 8px;
+      border-left: 2px solid transparent;
+      font-size: 14px;
+    }
+    aside a.active {
+      color: var(--text);
+      border-left-color: var(--accent);
+      background: rgba(67,56,202, .08);
+    }
+    main { min-width: 0; padding: 34px clamp(22px, 5vw, 78px) 80px; }
+    header {
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 28px;
+    }
+    h1 { margin: 15px 0 8px; font-size: clamp(30px, 5vw, 48px); line-height: 1.2; }
+    h2 { margin-top: 52px; padding-top: 12px; font-size: 28px; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 30px; font-size: 20px; }
+    h4 { margin-bottom: 6px; }
+    p, li { max-width: 1000px; }
+    .lead { color: var(--muted); font-size: 19px; }
+    .metadata, .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 12px;
+      margin: 20px 0;
+    }
+    .meta, .card, .callout {
+      border: 1px solid var(--border);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+    .meta b { display: block; color: var(--muted); font-size: 12px; text-transform: uppercase; }
+    .tag {
+      display: inline-block;
+      margin: 3px 5px 3px 0;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .callout { border-left: 4px solid var(--accent); margin: 18px 0; }
+    .callout.warn { border-left-color: var(--warn); }
+    .callout.danger { border-left-color: var(--danger); }
+    .callout.good { border-left-color: var(--good); }
+    .table-wrap { overflow-x: auto; margin: 16px 0 24px; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 10px 12px; border: 1px solid var(--border); vertical-align: top; text-align: left; }
+    th { background: var(--panel-2); }
+    pre {
+      overflow-x: auto;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: #44403c;
+      line-height: 1.5;
+    }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .evidence::before { content: "〔证据 "; color: var(--muted); }
+    .evidence::after { content: "〕"; color: var(--muted); }
+    .flow li { margin: 8px 0; }
+    .small { color: var(--muted); font-size: 14px; }
+    dt { font-weight: 700; margin-top: 14px; }
+    dd { margin-left: 0; color: #44403c; }
+    @media (max-width: 880px) {
+      .layout { display: block; }
+      aside {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      aside nav {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+      main { padding: 24px 18px 60px; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+<div class="layout">
+  <aside>
+    <a href="../../software_agent_architecture.html#security">← 返回架构总览 · 安全章节</a>
+    <strong>本页目录</strong>
+    <nav id="toc">
+      <a href="#position">01 模块定位</a>
+      <a href="#dependencies">02 系统位置与依赖</a>
+      <a href="#concepts">03 核心概念</a>
+      <a href="#components">04 架构组成</a>
+      <a href="#runtime">05 完整运行流程</a>
+      <a href="#state">06 数据与状态模型</a>
+      <a href="#interfaces">07 接口、协议与事件</a>
+      <a href="#configuration">08 配置与默认行为</a>
+      <a href="#concurrency">09 并发、性能与资源</a>
+      <a href="#trust">10 安全与信任边界</a>
+      <a href="#failure">11 失败、恢复与兼容</a>
+      <a href="#operations">12 可观测性与排障</a>
+      <a href="#tests">13 测试与验证</a>
+      <a href="#development">14 开发与扩展指南</a>
+      <a href="#tradeoffs">15 设计权衡与已知限制</a>
+      <a href="#sources">16 源码索引与进一步阅读</a>
+      <a href="#glossary">17 术语表</a>
+    </nav>
+  </aside>
+
+  <main>
+    <header>
+      <a href="../../software_agent_architecture.html#security">Software Agent SDK 架构深度解析 / CHAPTER 10</a>
+      <h1>安全、确认与 Hooks</h1>
+      <p class="lead">把“风险判断”“是否询问用户”“生命周期拦截”和“真正执行副作用”拆成可审计的独立边界，并说明每条失败路径究竟放行还是阻断。</p>
+      <div class="metadata">
+        <div class="meta"><b>源码版本</b>当前工作树；本机无可用 <code>git</code>，无法取得 SHA</div>
+        <div class="meta"><b>证据状态</b>已验证：当前源码、Schema 与聚焦测试</div>
+        <div class="meta"><b>主要所有者</b><code>openhands-sdk/openhands/sdk/security/</code><br><code>openhands-sdk/openhands/sdk/hooks/</code></div>
+        <div class="meta"><b>目标读者</b>SDK 开发者、安全策略作者、Hook 作者、故障排查人员</div>
+        <div class="meta"><b>最近验证</b>2026-08-14</div>
+      </div>
+      <div>
+        <span class="tag">当前事实</span>
+        <span class="tag">默认行为</span>
+        <span class="tag">可选能力</span>
+        <span class="tag">持久化状态</span>
+        <span class="tag">证据缺口已标注</span>
+      </div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>本模块不是一个统一“安全沙箱”。它由四个相互独立的控制面组成：<code>SecurityAnalyzerBase</code>给 Action 分级，<code>ConfirmationPolicyBase</code>把风险映射为是否等待用户，Hook 在生命周期节点允许、拒绝或补充上下文，Tool/Workspace 最终执行副作用。分析器接口只接收已验证的 <code>ActionEvent</code> 并返回 <code>SecurityRisk</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/security/analyzer.py:15-39</code></span></p>
+      <p><strong>论文基线：</strong>官方论文 <a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690</a> §4.9 已把两项职责分开：<code>SecurityAnalyzer</code>只评估 LOW / MEDIUM / HIGH / UNKNOWN，<code>ConfirmationPolicy</code>才决定是否要求用户批准。论文 §7 同时明确，LLM 安全分析会受对抗提示和分类不一致影响，因而不能提供完整安全保证。本文以下“当前事实”以源码为准；论文结论只用于说明 V1 设计基线。</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>职责</th><th>本模块负责</th><th>委托或明确不负责</th></tr></thead>
+          <tbody>
+            <tr><td>风险分类</td><td>对待执行 Action 给出 LOW / MEDIUM / HIGH / UNKNOWN</td><td>不直接决定 UI、身份或工具授权</td></tr>
+            <tr><td>用户确认</td><td>根据 policy 决定是否进入 <code>WAITING_FOR_CONFIRMATION</code></td><td>调用 <code>run()</code> 表示批准；拒绝由 Conversation API 写入 Observation</td></tr>
+            <tr><td>生命周期策略</td><td>六种 Hook 事件、命令/Prompt/Agent 三类执行器、阻断与审计事件</td><td>不提供操作系统级隔离；命令 Hook 本身运行在宿主工作目录</td></tr>
+            <tr><td>副作用</td><td>在 PreToolUse 阻断后阻止对应 Action 进入 Tool executor</td><td>Tool 与 Workspace 模块拥有实际命令、文件、网络等能力</td></tr>
+            <tr><td>鉴权</td><td>无通用用户鉴权模型</td><td>Agent Server/部署层负责 REST、会话和租户鉴权</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn"><strong>边界结论：</strong><code>NeverConfirm</code> 是状态和启动请求的默认 policy；因此“配置了风险描述”不等于“启用了确认”。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:119-127</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/request.py:129-137</code></span></div>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <pre>用户消息
+  └─ UserPromptSubmit Hook ──deny──▶ blocked_messages
+       └─ Agent.step / astep
+            └─ LLM tool_calls → 校验并构造 ActionEvent
+                 ├─ PreToolUse Hook ──deny──▶ blocked_actions
+                 ├─ EventLog 持久化 ActionEvent
+                 ├─ SecurityAnalyzer → SecurityRisk
+                 └─ ConfirmationPolicy
+                      ├─ confirm → WAITING_FOR_CONFIRMATION
+                      └─ allow → Tool executor → ObservationEvent
+                                      └─ PostToolUse Hook
+Agent 置 FINISHED → Stop Hook ──deny──▶ 反馈 MessageEvent + RUNNING</pre>
+      <p>关键调用链是 <code>ResponseDispatchMixin._handle_tool_calls()</code>：逐个调用 <code>_get_action_event()</code>，后者通过 callback 发出 Action；所有 Action 发出后才调用 <code>_requires_user_confirmation()</code>，未等待时才执行工具。同步与异步实现保持同一顺序。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:143-236</code></span></p>
+      <p>事件 callback 最终以 <code>ConversationState.append_event()</code> 作为唯一存储入口；默认 callback 位于链尾。启用 Hook 后，<code>HookEventProcessor.on_event()</code> 先运行 Pre/Post/UserPrompt Hook，再调用原 callback，因此 <strong>PreToolUse 位于 Action 持久化之前</strong>，而 SecurityAnalyzer 与 ConfirmationPolicy 位于 Action 持久化之后。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:365-411</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:105-124</code></span></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>组件</th><th>包/所有者</th><th>依赖方向</th><th>进程边界</th></tr></thead>
+          <tbody>
+            <tr><td>Analyzer / Policy / Hook 协议</td><td>SDK</td><td>Agent、Conversation 消费</td><td>进程内对象</td></tr>
+            <tr><td>Command Hook</td><td>SDK HookExecutor</td><td>subprocess + sanitized environment</td><td>子进程</td></tr>
+            <tr><td>Prompt Hook</td><td>SDK HookExecutor</td><td>当前 Conversation 的 LLM 副本</td><td>LLM transport 边界</td></tr>
+            <tr><td>Agent Hook</td><td>SDK HookExecutor</td><td>独立 LocalConversation，禁用递归 Hooks</td><td>进程内子会话，可调用 Tool</td></tr>
+            <tr><td>实际副作用</td><td>Tool / Workspace 包</td><td>由 Agent Action batch 调用</td><td>取决于 Workspace 后端</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="cards">
+        <div class="card"><h3>SecurityAnalyzer</h3><p>风险分类器，不是确认策略。批量分析逐项捕获异常并将失败项置为 HIGH。<span class="evidence"><code>openhands-sdk/openhands/sdk/security/analyzer.py:85-111</code></span></p></div>
+        <div class="card"><h3>ConfirmationPolicy</h3><p>纯决策接口 <code>should_confirm(risk)</code>；内置 Always、Never、ConfirmRisky。<span class="evidence"><code>openhands-sdk/openhands/sdk/security/confirmation_policy.py:9-61</code></span></p></div>
+        <div class="card"><h3>Pending Action</h3><p>活跃分支上已有可执行 ActionEvent、但没有 Observation、UserRejectObservation 或按 tool_call_id 匹配的 AgentErrorEvent。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:661-701</code></span></p></div>
+        <div class="card"><h3>Hook</h3><p>在六种生命周期事件上运行的 command、prompt 或 agent 规则；它不是 SecurityAnalyzer 的子类。</p></div>
+      </div>
+      <p><code>SecurityRisk.UNKNOWN</code> 被刻意排除在 LOW &lt; MEDIUM &lt; HIGH 的可比较序列之外；与 UNKNOWN 比较会抛 <code>ValueError</code>。<code>ConfirmRisky</code> 因而先单独处理 UNKNOWN，再比较阈值。<span class="evidence"><code>openhands-sdk/openhands/sdk/security/risk.py:8-23</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/security/risk.py:69-100</code></span></p>
+      <p><code>WAITING_FOR_CONFIRMATION</code> 是非终态、可持久化执行状态，不等同于 <code>PAUSED</code>。终态只有 FINISHED、ERROR、STUCK。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:48-79</code></span></p>
+      <div class="callout"><code>is_confirmation_mode_active</code> 是“analyzer 非空且 policy 不是 NeverConfirm”的便捷属性，不是运行时是否可能等待的完整判定；例如无 analyzer 的 AlwaysConfirm 仍会对 UNKNOWN 调用 policy 并等待。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/base.py:248-263</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1047-1064</code></span></div>
+    </section>
+
+    <section class="section" id="components">
+      <h2>4. 架构组成</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>组件</th><th>输入 → 输出</th><th>状态/隔离</th><th>扩展点</th></tr></thead>
+          <tbody>
+            <tr><td><code>SecurityAnalyzerBase</code></td><td>ActionEvent → SecurityRisk</td><td>实现可有内部配置；ConversationState 持有 analyzer</td><td>实现 <code>security_risk()</code></td></tr>
+            <tr><td><code>ConfirmationPolicyBase</code></td><td>SecurityRisk → bool</td><td>序列化到 ConversationState</td><td>实现 <code>should_confirm()</code></td></tr>
+            <tr><td><code>HookConfig</code></td><td>事件类型 + matcher → 有序 HookDefinition</td><td>显式配置与插件配置拼接；显式 Hook 先运行</td><td>六个 typed fields</td></tr>
+            <tr><td><code>HookManager</code></td><td>领域参数 → HookEvent → HookResult 列表</td><td>保存 session_id、working_dir 与 executor</td><td>事件级编排</td></tr>
+            <tr><td><code>HookExecutor</code></td><td>HookDefinition + JSON event → HookResult</td><td>同步子进程、后台子进程或 LLM 子会话隔离</td><td>COMMAND / PROMPT / AGENT</td></tr>
+            <tr><td><code>HookEventProcessor</code></td><td>Conversation Event → Hook 副作用 + 原 callback</td><td>把阻断原因写入 ConversationState；发 HookExecutionEvent</td><td>callback 装饰层</td></tr>
+            <tr><td><code>_ActionBatch</code></td><td>Action 列表 + blocked map → ordered results</td><td>主线程消费阻断标记；工具可并行执行</td><td>Tool resource scheduler</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Hook 的六种事件类型是 <code>PreToolUse</code>、<code>PostToolUse</code>、<code>UserPromptSubmit</code>、<code>SessionStart</code>、<code>SessionEnd</code>、<code>Stop</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/types.py:9-17</code></span> HookDefinition 的三种执行类型是 COMMAND、PROMPT、AGENT；默认是 COMMAND。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:39-64</code></span></p>
+      <p>Agent Hook 创建独立 <code>LocalConversation</code>，只带显式允许的工具和 FinishTool，且 <code>hook_config=None</code> 防止 Hook 递归；结束后合并 usage metrics 并关闭子会话。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:259-297</code></span></p>
+      <h3>4.1 论文基线后的纵深演进</h3>
+      <p>论文 §4.9 重点描述内置 LLM 风险标注与 <code>ConfirmRisky</code>。当前源码还公开了下列可组合实现；它们是论文基线后的<strong>可选纵深防御</strong>，不是默认安全栈，也不能替代 <code>ConfirmationPolicy</code>、Hook 或 Workspace 隔离。公共导出只证明可用性，不证明任何 Conversation 自动实例化它们。<span class="evidence"><code>openhands-sdk/openhands/sdk/security/__init__.py:1-48</code></span></p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>当前实现</th><th>职责</th><th>启用边界</th><th>源码证据</th></tr></thead>
+          <tbody>
+            <tr><td><code>EnsembleSecurityAnalyzer</code></td><td>组合多个 analyzer，默认忽略有具体结果时的 UNKNOWN，并取最高具体风险；子 analyzer 异常贡献 HIGH</td><td>调用方显式构造并设置；本身不检测威胁</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/security/ensemble.py:22-101</code></span></td></tr>
+            <tr><td><code>PatternSecurityAnalyzer</code></td><td>对可执行字段与全字段使用不同确定性签名集</td><td>本地、无网络；需显式配置</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/security/defense_in_depth/pattern.py:140-244</code></span></td></tr>
+            <tr><td><code>PolicyRailSecurityAnalyzer</code></td><td>按可执行片段识别 fetch-to-exec、raw-disk-op、catastrophic-delete 等组合规则</td><td>规则命中只返回风险，仍由 policy 决定是否确认</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/security/defense_in_depth/policy_rails.py:148-185</code></span></td></tr>
+            <tr><td><code>GraySwanAnalyzer</code></td><td>把近期事件与 Action 发送到 GraySwan Cygnal API，并把 violation score 映射为风险</td><td>需要 API key/外部服务；缺 key 或请求失败返回 UNKNOWN</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/security/grayswan/analyzer.py:28-75</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/security/grayswan/analyzer.py:163-227</code></span></td></tr>
+            <tr><td><code>ToolShieldLLMSecurityAnalyzer</code></td><td>使用独立 guardrail LLM 和近期 Action 历史评估多步风险；可选加载 ToolShield safety experiences</td><td>需显式 LLM；ToolShield experiences 还需可选 extra 和显式传入，默认是空 experiences</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/security/toolshield_llm_analyzer.py:233-307</code></span></td></tr>
+            <tr><td>Hooks</td><td>在消息、工具、会话和停止节点执行可审计规则</td><td>显式或插件配置；不是 analyzer，也不天然 fail-closed</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/types.py:9-17</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:39-68</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="runtime">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 无需确认的成功路径</h3>
+      <ol class="flow">
+        <li>LLM tool call 经名称规范化、参数修复和 Pydantic Action 校验；失败会发 ActionEvent（<code>action=None</code>）与 AgentErrorEvent，不进入确认或执行。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1199-1315</code></span></li>
+        <li>构造 ActionEvent 并立即调用 <code>on_event(action_event)</code>；这是 Action 写入 EventLog 的位置。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1317-1342</code></span></li>
+        <li>callback 链先执行 PreToolUse；若允许，则默认 callback 调用 <code>append_event()</code> 持久化 Action。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:105-124</code></span></li>
+        <li>Analyzer 为每个 Action 计算风险；policy 对每个风险决策。任一返回 true，则整批等待；全部 false 才继续。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1025-1066</code></span></li>
+        <li><code>_ActionBatch</code> 消费 Hook 阻断标记，剩余 Action 交给并行 executor；结果仍按原 Action 顺序发出。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:287-339</code></span></li>
+        <li>Observation 发出时 PostToolUse 查回对应 Action，获得 tool_input/tool_response 并运行；PostToolUse 结果不改变已完成工具的结果。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:178-241</code></span></li>
+      </ol>
+
+      <h3>5.2 Action 持久化后的两阶段确认</h3>
+      <ol class="flow">
+        <li><strong>阶段一：</strong>ActionEvent 已经过 PreToolUse 并写入 EventLog，Analyzer/Policy 决定等待，状态写为 <code>WAITING_FOR_CONFIRMATION</code>；本次 run 在 step 后退出，不产生工具 Observation。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:160-184</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1931-1964</code></span></li>
+        <li><strong>阶段二批准：</strong>调用方再次调用 <code>run()</code>/<code>arun()</code>。循环先把 WAITING 改为 RUNNING；Agent.step 首先查找 unmatched actions 并直接执行，不再次采样 LLM，也不再次调用 Analyzer/Policy。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1931-1947</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:636-653</code></span></li>
+        <li><strong>阶段二拒绝：</strong><code>reject_pending_actions(reason)</code> 将 WAITING 改为 IDLE，并给每个 pending Action 追加默认来源为 user 的 UserRejectObservation，使它们不再 unmatched。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2489-2527</code></span></li>
+      </ol>
+      <div class="callout warn"><strong>确认语义不是 token：</strong>批准没有独立 ConfirmationEvent 或一次性 nonce；“再次 run”本身就是批准动作。恢复后若仍有 unmatched Action 且调用 run，也会执行它。</div>
+
+      <h3>5.3 Hook 拒绝与提前结束</h3>
+      <p>PreToolUse deny/exit 2 把 <code>action_id → reason</code> 写入 <code>blocked_actions</code>。Action batch 随后不执行该 Action，而发 <code>UserRejectObservation(rejection_source="hook")</code>，仍满足 Action–Observation 配对。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:126-176</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:312-339</code></span></p>
+      <p>UserPromptSubmit deny 把 message id 写入 <code>blocked_messages</code>；下一次 Agent.step 消费该原因、跳过 LLM 并置 FINISHED。它不会发 UserRejectObservation，因为这里没有 Action。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:243-310</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:655-667</code></span></p>
+
+      <h3>5.4 Stop deny 恢复路径</h3>
+      <p>Agent 先置 FINISHED；下一轮循环才运行 Stop Hook。若 deny，Conversation 可注入带 <code>[Stop hook feedback]</code> 前缀、source=environment 且 LLM role=user 的 MessageEvent，把状态恢复为 RUNNING 并继续 Agent。允许或无 Stop Hook 才真正退出。同步与异步循环语义一致。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1897-1925</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2093-2119</code></span></p>
+    </section>
+
+    <section class="section" id="state">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>权威数据</th><th>存储位置</th><th>生命周期</th><th>恢复语义</th></tr></thead>
+          <tbody>
+            <tr><td>Action / Observation / Reject / HookExecutionEvent</td><td><code>events/</code> 下独立 EventLog 文件</td><td>追加式</td><td>通过 active branch 重建 pending 与 LLM View</td></tr>
+            <tr><td>execution_status、policy、analyzer、blocked maps、hook_config</td><td><code>base_state.json</code></td><td>公共 Field 变更自动保存</td><td>恢复时 Pydantic 反序列化并重新附接 EventLog</td></tr>
+            <tr><td>Hook 后台进程</td><td>仅内存 <code>AsyncProcessManager</code></td><td>SessionEnd/close 清理</td><td>进程重启后不恢复</td></tr>
+            <tr><td>Prompt/Agent Hook LLM metrics</td><td>父 ConversationStats</td><td>Hook 完成后合并</td><td>随 base state stats 持久化</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p><code>ConversationState.append_event()</code> 先补 parent_id，再写 EventLog，并把非状态同步事件推进为新的 <code>leaf_event_id</code>；确认只检查当前 active branch，因此在分支导航后，废弃分支的 Action 不会被执行。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:304-334</code></span></p>
+      <p>base state 与事件是两套协同存储：base state 不含 events；EventLog 在恢复时独立附接。公共字段更改触发 autosave，在 <code>with state</code> 锁内批量到退出时写一次。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:420-442</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:517-552</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:580-607</code></span></p>
+      <p><code>blocked_actions</code> 与 <code>blocked_messages</code> 是持久字段，并采用“复制、删除、重新赋值”触发 autosave；消费后不会在重启时再次阻断。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:152-172</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:635-659</code></span></p>
+      <p>Secret 不属于本模块专属状态，但 Hook command 只接收 <code>sanitized_env()</code> 后再加入会话/事件变量；这不等价于 Secret 永不泄漏，因为 Hook 输入仍含工具参数与响应。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:460-484</code></span></p>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <h3>7.1 Python 与请求接口</h3>
+      <ul>
+        <li><code>set_confirmation_policy(policy)</code>、<code>set_security_analyzer(analyzer)</code> 修改 ConversationState 并持久化；<code>reject_pending_actions(reason)</code> 完成用户拒绝。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2483-2527</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2638-2642</code></span></li>
+        <li><code>StartConversationRequest</code> 直接携带多态 ConfirmationPolicy 与可空 SecurityAnalyzer；默认 NeverConfirm / None。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/request.py:129-137</code></span></li>
+        <li><code>execute_tool(tool_name, action)</code> 是受信调用方 API，直接调用 ToolDefinition，不产生 Action/Observation Event，也不经过 Analyzer、Policy、Pre/PostTool Hook 或 run loop。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2958-2999</code></span></li>
+      </ul>
+      <h3>7.2 Hook JSON 协议</h3>
+      <p>HookEvent 通过 stdin JSON 传递，字段包括 event_type、tool_name/input/response、message、session_id、working_dir、metadata。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/types.py:20-32</code></span> 命令 Hook 的 stdout 可返回 <code>decision</code>、<code>reason</code>、<code>additionalContext</code>、<code>continue</code>；exit 2 或 deny/continue=false 阻断，exit 0 表示成功，其他非零和异常不阻断。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:31-69</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:543-613</code></span></p>
+      <h3>7.3 事件顺序与错误语义</h3>
+      <ul>
+        <li>PreToolUse 的 HookExecutionEvent 在 ActionEvent 之前写入，因为 Hook 先于原 callback；它通过 action_id 关联尚未持久化的 Action。</li>
+        <li>PostToolUse HookExecutionEvent 在 ObservationEvent 之前写入，因为 processor 在转发 Observation 前运行 Hook。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:105-124</code></span></li>
+        <li>HookExecutionEvent 记录 success、blocked、exit_code、stdout/stderr、reason、error 与关联 id；日志字段最多持久化 50,000 字符并附截断标记。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:29-42</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/event/hook_execution.py:22-82</code></span></li>
+        <li>UserRejectObservation 的 <code>rejection_source</code> 仅允许 user/hook，默认 user；它转换成 role=tool 的结果，维持工具调用历史合法性。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/llm_convertible/observation.py:86-125</code></span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+          <tbody>
+            <tr><td><code>ConversationState.confirmation_policy</code></td><td>AlwaysConfirm / NeverConfirm / ConfirmRisky / 自定义</td><td>NeverConfirm</td><td>运行时 set 覆盖</td><td>立即生效并持久化</td><td>policy 抛错使 run 进入 ERROR</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:119-127</code></span></td></tr>
+            <tr><td><code>security_analyzer</code></td><td>SecurityAnalyzerBase | None</td><td>None（底层请求/状态）</td><td>运行时 set 覆盖</td><td>立即生效并持久化</td><td>逐 Action 异常降为 HIGH</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/request.py:129-137</code></span></td></tr>
+            <tr><td><code>ConversationSettings.confirmation_mode</code></td><td>bool</td><td>false</td><td>create_request 可被显式 kwargs setdefault 覆盖</td><td>构造请求时折叠</td><td>false 构造 NeverConfirm</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1024-1037</code></span></td></tr>
+            <tr><td><code>ConversationSettings.security_analyzer</code></td><td>类型名 | None</td><td><code>"llm"</code></td><td>依赖 confirmation_mode 的客户端展示元数据</td><td>构造请求时折叠</td><td>llm + confirmation=true 构造 ConfirmRisky；无/none 构造 None</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1038-1050</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1070-1088</code></span></td></tr>
+            <tr><td><code>HookDefinition.type</code></td><td>command / prompt / agent</td><td>command</td><td>每条 Hook 独立</td><td>配置加载/插件重载</td><td>类型所需字段缺失时校验失败</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:39-64</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:86-103</code></span></td></tr>
+            <tr><td><code>timeout</code></td><td>int 秒</td><td>60</td><td>每条 Hook</td><td>下次执行</td><td>command 超时放行；Prompt/Agent transport 异常放行</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:47-64</code></span></td></tr>
+            <tr><td><code>max_iterations</code></td><td>int</td><td>3</td><td>仅 Agent Hook 子会话</td><td>下次执行</td><td>子会话失败整体放行</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:61-64</code></span></td></tr>
+            <tr><td><code>async</code></td><td>bool；仅 command</td><td>false</td><td>每条 Hook</td><td>下次执行</td><td>启动失败放行；异步 PreToolUse 永远不能阻断</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:64-68</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/manager.py:80-99</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>HookConfig 未显式传入时搜索项目工作目录的 <code>.openhands/hooks.json</code>，再搜索用户 home；都不存在返回空配置。旧 <code>{"hooks": ...}</code> 包装和 PascalCase event keys 仍受支持且不发弃用警告。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:228-277</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:279-312</code></span></p>
+      <p>显式 Hook 与插件 Hook 合并时按各事件列表拼接，启动请求契约明确显式 Hook 先于插件 Hook。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/request.py:210-218</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:358-395</code></span></p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <p>run/arun 在 Agent step 周围持有 ConversationState 的 FIFO 锁，因此 Action 发出、Hook 阻断状态写入、确认状态切换和结果事件形成同一关键区。同步工具 batch 可并行；异步路径把阻塞工具 I/O 放入 worker thread，再按 Action 原顺序发事件。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1873-1950</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:601-634</code></span></p>
+      <p>PreToolUse 在 Action batch 并发调度之前运行，阻断项不会进入 executor。batch 线程不得直接修改 blocked_actions 或 execution_status；主线程负责这些转换。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1344-1361</code></span></p>
+      <p>同步 command Hook 串行执行；<code>execute_all</code> 在阻断时默认停止后续 Hook。PostToolUse 使用 <code>stop_on_block=False</code>，因此所有匹配 Hook 都运行且不能撤销工具副作用。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:615-635</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/manager.py:101-120</code></span></p>
+      <p>异步 command Hook 是 fire-and-forget：不捕获 stdout/stderr，立即返回启动成功结果并由 AsyncProcessManager 跟踪；超时是在后续 cleanup 检查或 SessionEnd 时终止，不提供实时背压。Windows 使用 <code>taskkill /F /T</code>，POSIX 使用进程组 TERM/KILL。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:75-156</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:497-541</code></span></p>
+      <div class="callout danger"><strong>性能与安全耦合：</strong>同步 PreToolUse、UserPromptSubmit 与 Stop Hook 会阻塞持锁的 run loop，最长由每条 Hook 的 timeout 控制；不要把高延迟外部依赖放在这些路径而不评估会话锁占用。</div>
+    </section>
+
+    <section class="section" id="trust">
+      <h2>10. 安全与信任边界</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>边界</th><th>可信输入</th><th>不可信输入</th><th>当前保护</th><th>剩余责任</th></tr></thead>
+          <tbody>
+            <tr><td>LLM → Action</td><td>注册 Tool schema</td><td>tool name / JSON arguments / security_risk</td><td>规范化 + Pydantic 校验；无 analyzer 时忽略 LLM risk 字段</td><td>Tool 自身参数语义与 Workspace 隔离</td></tr>
+            <tr><td>Analyzer → Policy</td><td>Analyzer 实现</td><td>运行时异常</td><td>异常转 HIGH</td><td>选择会确认 HIGH 的 policy；NeverConfirm 仍可放行</td></tr>
+            <tr><td>Hook command</td><td>Hook 配置/脚本</td><td>HookEvent 中的消息、工具输入与响应</td><td>JSON stdin、sanitized env、timeout</td><td>脚本必须把事件当数据；shell=True 使配置本身拥有命令执行能力</td></tr>
+            <tr><td>Prompt Hook</td><td>policy prompt</td><td>事件 JSON</td><td>system/user 分离并明确事件数据不是指令</td><td>模型仍可能受注入影响；失败会放行</td></tr>
+            <tr><td>Agent Hook</td><td>system_prompt + tools allowlist</td><td>事件 JSON</td><td>独立子会话、无递归 Hook、迭代上限</td><td>所授工具能力可产生副作用</td></tr>
+            <tr><td><code>execute_tool</code></td><td>程序化调用方</td><td>调用方构造的 Action</td><td>只验证 tool 存在和 executor 存在</td><td>调用方承担全部 Analyzer/Policy/Hook 防护</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>LLM 提供的 <code>security_risk</code> 仅在配置 analyzer 且工具不是 read-only 时被解析；无 analyzer 或 read-only 工具统一记录 UNKNOWN。这避免把模型自报风险误当独立安全判定。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1068-1093</code></span></p>
+      <p>Analyzer 的 fail-safe 只保证“分析异常 → HIGH”，并不保证最终阻断：<code>NeverConfirm</code> 对任何风险都 false；自定义 policy 也可能放行 HIGH。<span class="evidence"><code>openhands-sdk/openhands/sdk/security/analyzer.py:101-110</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/security/confirmation_policy.py:27-40</code></span></p>
+      <p>Prompt Hook 把 trusted policy 放 system message，把 HookEvent 标为 untrusted data 放 user message；Agent/Prompt Hook 无 LLM、调用失败、空响应、无效 JSON 或无效 decision 均返回 <code>ALLOW + success=False + error</code>，是可观测的 fail-open。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:194-205</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:304-376</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:390-440</code></span></p>
+      <div class="callout danger"><strong>能力限制：</strong>论文 §7 明确否认 LLM 分析能够保证完整安全；当前新增的 Ensemble、Pattern、Policy Rails、GraySwan、ToolShield 与 Hooks 只能增加独立检测或治理层。Confirmation 与 Hooks 是应用层准入，不是文件系统、网络或进程沙箱；即使所有层均启用并正常，也不能替代最小权限 Workspace、Secret 管理和部署鉴权。</div>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+          <tbody>
+            <tr><td>Analyzer 抛异常</td><td>逐 Action try/except + error log</td><td>该 Action 风险置 HIGH</td><td>取决于 policy</td><td>下次新 Action 可重试分析；pending 批准不重分析</td><td>检查 analyzer 日志和 policy 是否确认 HIGH</td></tr>
+            <tr><td>Policy 抛异常</td><td>run 顶层 exception</td><td>发 ConversationErrorEvent</td><td>ERROR</td><td>修复 policy 后重新 run</td><td>查看 error code/class</td></tr>
+            <tr><td>Command Hook exit 2 / deny</td><td>HookResult.blocked</td><td>PreTool/UserPrompt/Stop 按节点拒绝</td><td>Action 拒绝、FINISHED 或恢复 RUNNING</td><td>修改输入/规则后新一轮</td><td>看 HookExecutionEvent reason/stderr</td></tr>
+            <tr><td>Command Hook exit 1、超时、启动失败</td><td>success=false/error</td><td>放行</td><td>不改变主流程</td><td>下一次事件重新执行</td><td>若是强制策略，修复脚本且确保拒绝用 exit 2</td></tr>
+            <tr><td>Prompt/Agent Hook 无结论</td><td>ALLOW 且 success=false</td><td>放行</td><td>不改变主流程</td><td>下一次事件重试</td><td>告警聚合 failed HookExecutionEvent</td></tr>
+            <tr><td>崩溃发生在 Action 后、Observation 前</td><td>恢复后 unmatched Action</td><td>调用 run 会执行 pending Action</td><td>恢复为运行</td><td>副作用是否已发生无法由事件单独判断</td><td>执行非幂等工具前人工核对外部状态</td></tr>
+            <tr><td>用户拒绝</td><td>UserRejectObservation</td><td>不执行工具；补齐 tool result</td><td>WAITING → IDLE</td><td>后续新消息可继续</td><td>检查 rejection_source=user</td></tr>
+            <tr><td>Stop deny</td><td>Stop Hook blocked</td><td>注入反馈并继续</td><td>FINISHED → RUNNING</td><td>下一次 FINISHED 再运行 Stop Hook</td><td>避免永远 deny 导致迭代上限</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>run 的未捕获异常会把状态设为 ERROR，若 Agent 尚未发出更具体错误则追加 ConversationErrorEvent，并包装成 ConversationRunError。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1997-2018</code></span></p>
+      <p>确认恢复依赖 Action–Observation 配对。EventLog 反向扫描把 Observation/UserReject 按 action_id、AgentError 按 tool_call_id 匹配；只把 <code>action is not None</code> 的已验证 Action 视为 pending。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:661-701</code></span></p>
+      <p>HookConfig 兼容旧 wrapper 和 PascalCase 键；HookDefinition 的 <code>command</code> 仍在 JSON Schema 中保持必填、非空 REST 形状，即使 Prompt/Agent 运行时使用空字符串，以避免 REST contract break。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:47-84</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/config.py:228-277</code></span></p>
+    </section>
+
+    <section class="section" id="operations">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+          <tbody>
+            <tr><td>会话停在 waiting_for_confirmation</td><td>active branch 最后的 unmatched Action；policy/analyzer 序列化值</td><td>任一 risk 被 policy 要求确认</td><td>批准则再次 run；拒绝则调用 reject_pending_actions</td></tr>
+            <tr><td>高风险动作仍执行</td><td>policy 是否 NeverConfirm；是否走 execute_tool；HookExecutionEvent</td><td>Analyzer 只分类；policy 放行或旁路 API</td><td>使用 ConfirmRisky/AlwaysConfirm；在旁路调用方加准入</td></tr>
+            <tr><td>Hook 显示 FAILED 但操作继续</td><td>exit_code、error、blocked</td><td>只有 exit 2/deny/continue=false 阻断；错误默认放行</td><td>强制脚本用 exit 2；监控 success=false</td></tr>
+            <tr><td>工具没有运行但有 UserRejectObservation</td><td><code>rejection_source</code></td><td>user=人工拒绝；hook=PreToolUse 阻断</td><td>按来源检查确认操作或 Hook reason</td></tr>
+            <tr><td>FINISHED 后又继续</td><td>Stop HookExecutionEvent 与环境 feedback MessageEvent</td><td>Stop deny 推翻结束</td><td>修复完成条件或 Stop policy</td></tr>
+            <tr><td>PostToolUse 没运行</td><td>Observation.action_id 能否在 EventLog 查到 Action</td><td>旁路 execute_tool、缺失 Action、或无匹配 Hook</td><td>走 Agent loop；核对 matcher 与事件链</td></tr>
+            <tr><td>后台 Hook 残留</td><td>SessionEnd 是否执行；进程管理器日志</td><td>会话未 close 或进程清理失败</td><td>显式 close；缩短 timeout；核查 OS kill 权限</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>每次 Hook 执行默认发 <code>HookExecutionEvent</code>；事件包含输入摘要和结果，适合审计但也可能含敏感工具参数/响应。持久化前只做长度截断，不做字段级秘密脱敏，因此部署方需控制事件读取权限和 Hook 输出。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:49-103</code></span></p>
+      <p>Analyzer 异常写 error log；Hook error 在 PostToolUse、Session、Stop 路径写 warning；Stop deny 写 info。当前源码未定义本模块专属 Metric 或诊断 REST endpoint，主要观测面是 EventLog、base_state、日志和 ConversationStats 中的 Hook LLM usage。<span class="evidence"><code>openhands-sdk/openhands/sdk/security/analyzer.py:101-109</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:226-241</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:354-386</code></span></p>
+    </section>
+
+    <section class="section" id="tests">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+          <tbody>
+            <tr><td>两阶段确认、批准/拒绝、Finish/Think 例外、WAITING 不被 pause 覆盖</td><td><code>tests/sdk/conversation/local/test_confirmation_mode.py:346-692</code></td><td>SDK 集成</td><td>run 的真实状态与事件序列</td><td>未模拟进程在确认期间崩溃</td></tr>
+            <tr><td>Analyzer 部分失败逐项转 HIGH</td><td><code>tests/sdk/security/test_security_analyzer.py:83-194</code></td><td>单元</td><td>fail-safe 分类且不丢批次</td><td>不证明每种具体 analyzer 的外部服务行为</td></tr>
+            <tr><td>Always/Never 与多态序列化</td><td><code>tests/sdk/security/test_confirmation_policy.py:14-97</code></td><td>单元</td><td>policy 基类恢复和固定策略语义</td><td>该文件未覆盖 ConfirmRisky</td></tr>
+            <tr><td>PreTool 阻断生成 rejection 且保持原序</td><td><code>tests/sdk/agent/test_action_batch.py:81-167</code></td><td>单元</td><td>阻断项不执行、混合结果有序</td><td>不覆盖真实 Tool 副作用回滚</td></tr>
+            <tr><td>blocked maps 跨恢复持久化；UserPrompt/Pre/Post/Stop 集成；HookExecutionEvent</td><td><code>tests/sdk/hooks/test_integration.py:72-120</code>、<code>123-540</code>、<code>718-1150</code></td><td>SDK 集成</td><td>状态、callback、Stop deny 与审计事件</td><td>未覆盖远程客户端收到 FINISHED 提示的竞态</td></tr>
+            <tr><td>exit 2、timeout、串行停止、异步进程清理、Prompt/Agent fail-open</td><td><code>tests/sdk/hooks/test_executor.py:38-133</code>、<code>136-421</code>、<code>482-695</code></td><td>单元</td><td>Hook 执行协议与失败方向</td><td>不证明恶意 shell/LLM 的隔离强度</td></tr>
+            <tr><td>Stop deny 注入反馈并再次 step</td><td><code>tests/sdk/hooks/test_integration.py:823-913</code></td><td>集成</td><td>FINISHED → RUNNING → FINISHED</td><td>未覆盖无限 deny 到 max iteration</td></tr>
+            <tr><td><code>execute_tool</code> 初始化并直接执行</td><td><code>tests/sdk/conversation/local/test_execute_tool.py:127-264</code></td><td>单元/集成</td><td>旁路 API 可在消息前后调用</td><td>没有显式断言 Analyzer/Hook 未调用；该事实由实现直接证明</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout"><strong>本页验证范围：</strong>已逐项对照上述实现与测试；未修改源码，因此未运行功能 pytest。HTML 的结构验证见完成报告。</div>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+          <tbody>
+            <tr><td>新增 Analyzer</td><td><code>security/analyzer.py</code> 子类及公共导出/Settings union</td><td>序列化 discriminator、settings 构造、聚焦测试</td><td>正常风险、异常转 HIGH、恢复可加载</td></tr>
+            <tr><td>新增 Policy</td><td><code>security/confirmation_policy.py</code></td><td>多态序列化、Settings 映射、API 兼容</td><td>四种风险、UNKNOWN、阈值边界、持久化恢复</td></tr>
+            <tr><td>新增 Hook 事件类型</td><td><code>hooks/types.py</code>、<code>HOOK_EVENT_FIELDS</code>、HookConfig typed field</td><td>processor/manager、HookExecutionEvent Literal、REST Schema、测试</td><td>触发时机、阻断语义、事件顺序、兼容加载</td></tr>
+            <tr><td>改变 Hook 失败方向</td><td><code>hooks/executor.py</code> 与 manager 调用点</td><td>所有事件类型文档、测试、发布说明</td><td>每个 timeout/exception/invalid verdict 的 fail-open/closed</td></tr>
+            <tr><td>新增工具执行入口</td><td>Conversation / Agent / Tool</td><td>明确是否经过 Analyzer、Policy、Hooks、事件持久化</td><td>不得默认宣称与 Agent loop 同等安全</td></tr>
+            <tr><td>改变确认 UX</td><td>Conversation API + server/remote contract</td><td>状态、事件、恢复、并发、客户端</td><td>批准身份、幂等性、过期 Action、防重放</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <ul>
+        <li>不要在 Analyzer 中执行副作用，也不要让 Policy 重做风险分类；保持“分类 → 决策”可独立测试。</li>
+        <li>不要绕过 <code>on_event(ActionEvent)</code> 后再等待确认；持久 Action 是跨 run、跨重启恢复的依据。</li>
+        <li>强制执行的 command Hook 必须同步并用 exit 2 或结构化 deny；异步 PreToolUse 只能审计，不能阻断。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/manager.py:70-99</code></span></li>
+        <li>新增事件字段必须保持旧 Event 可永久加载；HookConfig/REST 形状也属于独立兼容表面。</li>
+        <li>涉及 agent 决策、Prompt 或安全规则变化时，除单元测试外应触发 integration tests，评估行为回归。</li>
+      </ul>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+          <tbody>
+            <tr><td>确认能否跨 run</td><td>先持久 Action，再以 unmatched 恢复</td><td>无需内存 continuation；重启可恢复</td><td>崩溃若发生在副作用后、Observation 前，可能重复非幂等动作</td><td>需要 exactly-once 或高价值外部交易</td></tr>
+            <tr><td>批准协议</td><td>第二次 run 即批准</td><td>API 简单</td><td>无独立 approver、nonce、expiry 或逐 Action 批准</td><td>多用户审批、审计签名或长时间待批</td></tr>
+            <tr><td>Analyzer 故障</td><td>逐项转 HIGH</td><td>分类层 fail-safe</td><td>最终是否阻断仍由 policy 决定</td><td>需要不可绕过的组织级强制策略</td></tr>
+            <tr><td>Hook 故障</td><td>大多数错误 fail-open；仅明确 deny 阻断</td><td>避免辅助 Hook 让 Agent 全面不可用</td><td>错误配置可静默失去保护，必须监控 success=false</td><td>安全强制 Hook 需要 fail-closed profile</td></tr>
+            <tr><td>Pre/Post 事件顺序</td><td>HookExecutionEvent 可早于被关联 Action/Observation</td><td>Hook 先决策再转发事件</td><td>流消费者需用 id 关联，不能假设引用目标已出现</td><td>事件消费者要求严格因果顺序</td></tr>
+            <tr><td>Stop 控制</td><td>Stop Hook 可推翻 FINISHED</td><td>允许完成度检查和自动返工</td><td>字段级 FINISHED 只是中间提示；deny 可循环</td><td>远程协议或 UI 无法表达“候选完成”</td></tr>
+            <tr><td>程序化工具调用</td><td><code>execute_tool</code> 明确旁路</td><td>初始化、索引、测试简单</td><td>调用方若误用会绕过全部控制面且不留 Action/Observation 轨迹</td><td>旁路被暴露给不受信客户端</td></tr>
+            <tr><td>安全保证</td><td>分类、确认、Hook 与隔离分层组合</td><td>单层失效不必等于全部失效</td><td>LLM 分类可受对抗提示影响；规则有覆盖盲区；外部 analyzer 有可用性依赖</td><td>威胁模型、租户边界或合规要求变化时</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <h3>当前证据缺口</h3>
+      <ul>
+        <li>没有源码级 exactly-once 工具副作用协议；Action Event 只能证明意图已记录，不能证明外部副作用是否发生。</li>
+        <li>没有通用“谁批准了什么”的身份事件；身份与鉴权属于部署层，当前确认 API 不携带 approver。</li>
+        <li>没有本模块专属 Metric/SLA；HookExecutionEvent 是主要审计表面。</li>
+        <li>没有证明 command Hook 的 OS 沙箱；实现使用 <code>shell=True</code> 和配置工作目录，应把 Hook 配置视为受信代码。<span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:506-516</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/hooks/executor.py:543-554</code></span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>表面</th><th>决定性符号/范围</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td>风险接口</td><td><code>openhands-sdk/openhands/sdk/security/analyzer.py:15-111</code></td><td>Analyzer 抽象、批量异常转 HIGH</td></tr>
+            <tr><td>风险枚举</td><td><code>openhands-sdk/openhands/sdk/security/risk.py:13-147</code></td><td>四种风险与 UNKNOWN 比较限制</td></tr>
+            <tr><td>确认策略</td><td><code>openhands-sdk/openhands/sdk/security/confirmation_policy.py:9-61</code></td><td>Always/Never/ConfirmRisky</td></tr>
+            <tr><td>Action 分派</td><td><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:143-236</code></td><td>Action 发出 → 确认 → 执行的同步/异步顺序</td></tr>
+            <tr><td>Agent 执行</td><td><code>openhands-sdk/openhands/sdk/agent/agent.py:571-653</code>、<code>1025-1384</code></td><td>pending 优先、风险、校验、Action batch</td></tr>
+            <tr><td>运行循环</td><td><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1856-2244</code></td><td>WAITING、Stop deny、锁和 sync/async</td></tr>
+            <tr><td>拒绝与旁路</td><td><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2483-2527</code>、<code>2958-2999</code></td><td>用户拒绝、execute_tool</td></tr>
+            <tr><td>持久状态</td><td><code>openhands-sdk/openhands/sdk/conversation/state.py:48-182</code>、<code>315-334</code>、<code>420-607</code>、<code>635-701</code></td><td>状态、EventLog、base_state、blocked map、pending</td></tr>
+            <tr><td>Hook Schema</td><td><code>openhands-sdk/openhands/sdk/hooks/config.py:25-395</code>、<code>hooks/types.py:9-40</code></td><td>事件、定义、matcher、发现与兼容</td></tr>
+            <tr><td>Hook 编排</td><td><code>openhands-sdk/openhands/sdk/hooks/manager.py:21-211</code></td><td>六种 Hook 行为</td></tr>
+            <tr><td>Hook 执行</td><td><code>openhands-sdk/openhands/sdk/hooks/executor.py:31-635</code></td><td>命令/Prompt/Agent、失败方向、资源清理</td></tr>
+            <tr><td>Hook callback</td><td><code>openhands-sdk/openhands/sdk/hooks/conversation_hooks.py:49-439</code></td><td>事件触发、阻断状态与审计事件</td></tr>
+            <tr><td>拒绝/Hook 事件</td><td><code>openhands-sdk/openhands/sdk/event/llm_convertible/observation.py:86-125</code>、<code>event/hook_execution.py:12-129</code></td><td>持久化 Schema</td></tr>
+            <tr><td>Settings</td><td><code>openhands-sdk/openhands/sdk/settings/model.py:1024-1088</code>、<code>1136-1150</code></td><td>用户设置折叠为请求对象</td></tr>
+            <tr><td>论文基线</td><td><a href="https://arxiv.org/abs/2511.03690">官方论文 arXiv:2511.03690 §4.9、§7</a></td><td>Analyzer/Policy 分责与 LLM 安全分析限制</td></tr>
+            <tr><td>架构总览</td><td><a href="../../software_agent_architecture.html#security"><code>software_agent_architecture.html#security</code></a></td><td>章节导航与核心结论</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small">相邻章节：<a href="09-tools.html">09 工具体系与并行执行</a> · <a href="11-workspace.html">11 Workspace 与 Git</a>。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <dl>
+        <dt>Action</dt><dd>模型工具调用经规范化与 Schema 校验后形成的可执行意图，以 ActionEvent 持久化。</dd>
+        <dt>Observation</dt><dd>工具执行、用户拒绝或 Agent 错误对 Action 的结果；用于维持工具调用与结果配对。</dd>
+        <dt>SecurityAnalyzer</dt><dd>安全分析器；只负责给 Action 分类风险，不决定是否询问用户。</dd>
+        <dt>ConfirmationPolicy</dt><dd>确认策略；把 SecurityRisk 映射为“执行前是否必须等待用户”。</dd>
+        <dt>Defense in depth</dt><dd>纵深防御；组合彼此独立的检测、确认、Hook 与隔离层，以降低单点失效影响，但不承诺绝对安全。</dd>
+        <dt>SecurityRisk</dt><dd>LOW、MEDIUM、HIGH、UNKNOWN 四级风险；UNKNOWN 不参与数值式排序。</dd>
+        <dt>WAITING_FOR_CONFIRMATION</dt><dd>等待确认状态；非终态，表示 EventLog 中存在尚无结果的待批 Action。</dd>
+        <dt>Pending / unmatched Action</dt><dd>活跃事件分支上尚未被 Observation、UserRejectObservation 或 AgentErrorEvent 配对的可执行 Action。</dd>
+        <dt>Hook</dt><dd>生命周期钩子；在用户消息、工具前后、会话起止或 Agent 停止时运行的策略/自动化。</dd>
+        <dt>PreToolUse / PostToolUse</dt><dd>分别在工具执行前和结果事件转发前触发；只有同步 PreToolUse 能阻止副作用。</dd>
+        <dt>UserPromptSubmit</dt><dd>用户 MessageEvent 进入 Agent 前触发，可阻断消息或向 extended_content 注入上下文。</dd>
+        <dt>Stop deny</dt><dd>Stop Hook 拒绝 Agent 结束，使 FINISHED 回到 RUNNING，并可注入返工反馈。</dd>
+        <dt>fail-safe</dt><dd>故障时选择更保守结果；本模块特指 Analyzer 异常转 HIGH，但最终是否阻断仍取决于 policy。</dd>
+        <dt>fail-open</dt><dd>控制组件故障时允许主操作继续；Hook 超时、普通非零退出和无效 LLM verdict 多数采用此行为。</dd>
+        <dt>fail-closed</dt><dd>控制组件故障时拒绝主操作；当前 Hook 执行器没有通用 fail-closed 配置。</dd>
+        <dt>HookExecutionEvent</dt><dd>持久化的 Hook 审计事件，记录触发类型、命令/标签、结果、输出和关联 Action/Message id。</dd>
+        <dt>EventLog</dt><dd>按事件独立存储的追加日志；与 base_state.json 一起支撑确认、拒绝和恢复。</dd>
+        <dt>Active branch</dt><dd>由 leaf_event_id 指向的当前事件树分支；pending Action 只从该分支计算。</dd>
+        <dt>execute_tool 旁路</dt><dd>受信程序化 API 直接调用工具；不进入 Agent loop，也不经过确认、安全分析和 Hooks。</dd>
+        <dt>LLM</dt><dd>Large Language Model，大语言模型；可用于主 Agent、风险标注以及 Prompt/Agent Hook，但其输出仍是不可信输入。</dd>
+      </dl>
+    </section>
+  </main>
+</div>
+<script>
+  (() => {
+    const links = [...document.querySelectorAll("#toc a")];
+    const sections = links
+      .map(link => document.querySelector(link.getAttribute("href")))
+      .filter(Boolean);
+    const activate = () => {
+      let current = sections[0];
+      for (const section of sections) {
+        if (section.getBoundingClientRect().top <= 140) current = section;
+      }
+      links.forEach(link => {
+        link.classList.toggle("active", link.getAttribute("href") === `#${current.id}`);
+      });
+    };
+    addEventListener("scroll", activate, { passive: true });
+    activate();
+  })();
+</script>
+</body>
+</html>

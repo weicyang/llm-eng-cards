@@ -1,0 +1,651 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>15 RemoteConversation：远程控制、状态镜像与完成屏障</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --text: #1c1917;
+      --muted: #78716c;
+      --border: rgba(28,25,23,.12);
+      --accent: #4338ca;
+      --good: #15803d;
+      --warn: #c2410c;
+      --bad: #b91c1c;
+      --code: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 16px/1.7 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+        monospace;
+    }
+    code { color: var(--code); }
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(220px, 280px) minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 24px 18px;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+    }
+    aside .back { display: block; margin-bottom: 18px; font-weight: 650; }
+    aside .toc-title {
+      margin: 14px 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    aside nav a {
+      display: block;
+      padding: 5px 9px;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    aside nav a.active {
+      border-left-color: var(--accent);
+      color: var(--text);
+      background: rgba(67,56,202, .08);
+    }
+    main { width: min(1120px, 100%); padding: 42px 54px 80px; }
+    .eyebrow {
+      color: var(--accent);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: .08em;
+    }
+    h1 { margin: 8px 0 12px; font-size: clamp(30px, 5vw, 48px); line-height: 1.18; }
+    h2 {
+      margin-top: 58px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+      font-size: 27px;
+      scroll-margin-top: 18px;
+    }
+    h3 { margin-top: 30px; font-size: 20px; scroll-margin-top: 18px; }
+    p, li { max-width: 88ch; }
+    .lead { color: var(--muted); font-size: 19px; }
+    .metadata {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 1px;
+      margin: 28px 0;
+      border: 1px solid var(--border);
+      background: var(--border);
+    }
+    .metadata div { padding: 13px 16px; background: var(--panel); }
+    .metadata strong { display: block; color: var(--muted); font-size: 12px; }
+    .tags { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 30px; }
+    .tag {
+      padding: 3px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }
+    .tag.good { border-color: var(--good); color: var(--good); }
+    .tag.warn { border-color: var(--warn); color: #a16207; }
+    .callout {
+      margin: 20px 0;
+      padding: 15px 18px;
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+    }
+    .callout.warning { border-left-color: var(--warn); }
+    .callout.danger { border-left-color: var(--bad); }
+    .flow {
+      padding: 18px;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+      color: #44403c;
+      white-space: pre;
+    }
+    .table-wrap { overflow-x: auto; margin: 18px 0; }
+    table { width: 100%; border-collapse: collapse; min-width: 720px; }
+    th, td {
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); }
+    td { background: rgba(255,253,248, .45); }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      color: #78716c;
+    }
+    .source-list li { margin: 7px 0; }
+    .muted { color: var(--muted); }
+    footer { margin-top: 58px; padding-top: 18px; border-top: 1px solid var(--border); }
+    @media (max-width: 860px) {
+      .layout { display: block; }
+      aside { position: relative; height: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+      aside nav { columns: 2; }
+      main { padding: 30px 20px 64px; }
+      .metadata { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 520px) {
+      aside nav { columns: 1; }
+      h2 { font-size: 23px; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <a class="back" href="../../software_agent_architecture.html#remote">← 返回架构总览 · Remote</a>
+      <div class="toc-title">本页目录</div>
+      <nav id="toc">
+        <a href="#position">01 模块定位</a>
+        <a href="#dependencies">02 系统位置与依赖</a>
+        <a href="#concepts">03 核心概念</a>
+        <a href="#components">04 架构组成</a>
+        <a href="#flows">05 完整运行流程</a>
+        <a href="#state">06 数据与状态模型</a>
+        <a href="#protocols">07 接口、协议与事件</a>
+        <a href="#configuration">08 配置与默认行为</a>
+        <a href="#concurrency">09 并发、性能与资源</a>
+        <a href="#security">10 安全与信任边界</a>
+        <a href="#failure">11 失败、恢复与兼容</a>
+        <a href="#observability">12 可观测性与排障</a>
+        <a href="#testing">13 测试与验证</a>
+        <a href="#development">14 开发与扩展指南</a>
+        <a href="#tradeoffs">15 设计权衡与已知限制</a>
+        <a href="#sources">16 源码索引与阅读</a>
+        <a href="#glossary">17 术语表</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header>
+        <div class="eyebrow">CHAPTER 15 · REMOTE CONVERSATION</div>
+        <h1>远程控制、状态镜像与完成屏障</h1>
+        <p class="lead">
+          解释 <code>RemoteConversation</code> 如何用 REST 发命令、用 WebSocket
+          镜像事件，并在 Stop hook 可能推翻 <code>FINISHED</code> 的条件下可靠判断一次
+          run 真正结束。
+        </p>
+        <div class="metadata">
+          <div><strong>源码版本</strong>当前工作区；Git CLI 与 .git 元数据不可用，SHA 未取得</div>
+          <div><strong>证据状态</strong>核心实现、服务端路径与聚焦测试已验证；SHA 为证据缺口</div>
+          <div><strong>主要所有者</strong><code>openhands-sdk/.../remote_conversation.py</code>、<code>openhands-agent-server/.../event_service.py</code></div>
+          <div><strong>目标读者</strong>SDK、Agent Server、远程运行与故障排查开发者</div>
+          <div><strong>最近验证</strong>2026-08-14</div>
+          <div><strong>总览回链</strong><a href="../../software_agent_architecture.html#remote">software_agent_architecture.html#remote</a></div>
+        </div>
+        <div class="tags">
+          <span class="tag good">当前事实</span>
+          <span class="tag">部署能力</span>
+          <span class="tag">可选配置</span>
+          <span class="tag warn">SHA 证据缺口</span>
+        </div>
+      </header>
+
+      <section class="section" id="position">
+        <h2>1. 模块定位</h2>
+        <p>
+          <code>RemoteConversation</code> 是同步 Python 客户端代理：它不在客户端执行
+          Agent、LLM、工具或 Hooks，而是把 Agent 配置与 LocalWorkspace 形状发送到
+          Agent Server，服务端再创建并运行真正的 <code>LocalConversation</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:694-780,819-886</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>边界</th><th>本模块负责</th><th>委托/明确不负责</th></tr></thead>
+            <tbody>
+              <tr><td>控制面</td><td>创建/附着、消息、run、pause、interrupt 等 REST 调用</td><td>路由校验与执行由 Agent Server 负责</td></tr>
+              <tr><td>数据面</td><td>接收 WS 事件，维护 RemoteState 与 RemoteEventsList 镜像</td><td>规范持久状态仍在服务端 ConversationState/EventLog</td></tr>
+              <tr><td>完成语义</td><td>arming、FULL_STATE 屏障、REST hard fallback、结束 reconcile</td><td>Stop hook 与运行循环在服务端执行</td></tr>
+              <tr><td>工具执行</td><td>接收事件及 client tool 回调所需信息</td><td><code>execute_tool()</code> 对 RemoteConversation 明确不支持 <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1658-1677</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="dependencies">
+        <h2>2. 系统位置与依赖</h2>
+        <pre class="flow">调用进程
+  RemoteWorkspace.httpx.Client ── REST /api/conversations/**
+  RemoteConversation
+    ├─ WebSocketCallbackClient ── WS /sockets/events/{id}
+    ├─ RemoteState              ← FULL_STATE / 字段更新 / REST GET
+    └─ RemoteEventsList         ← WS 增量 + REST /events/search reconcile
+                                  │
+Agent Server                     ▼
+  conversation_router → ConversationService → EventService
+                                                 │
+                                                 ▼
+                                      LocalConversation.arun()
+                                      Agent / LLM / Tools / Hooks</pre>
+        <p>
+          REST client 由 <code>RemoteWorkspace</code> 拥有并复用；它配置 base URL、认证
+          headers、连接池与分项超时。<code>RemoteConversation.close()</code> 只停止自己的
+          WS，不关闭共享 HTTP client。<span class="evidence"><code>openhands-sdk/openhands/sdk/workspace/remote/base.py:73-107; openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1680-1718</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>所有者</th><th>核心表面</th><th>依赖方向</th></tr></thead>
+            <tbody>
+              <tr><td>SDK conversation</td><td>RemoteConversation、RemoteState、RemoteEventsList、WS client</td><td>依赖 SDK Event/State 类型、httpx、websockets</td></tr>
+              <tr><td>SDK workspace</td><td>RemoteWorkspace client、host、api_key</td><td>向 conversation 提供传输与远端工作目录</td></tr>
+              <tr><td>Agent Server</td><td>routers、ConversationService、EventService、PubSub</td><td>驱动服务端 LocalConversation</td></tr>
+              <tr><td>SDK local runtime</td><td>LocalConversation.arun/interrupt、Stop hooks</td><td>被 EventService 调用，是执行所有者</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="concepts">
+        <h2>3. 核心概念</h2>
+        <dl>
+          <dt><strong>控制面（control plane）</strong></dt>
+          <dd>改变服务端状态的 REST 命令，如 <code>POST /run</code>、<code>/pause</code>、<code>/interrupt</code>。</dd>
+          <dt><strong>事件镜像（event mirror）</strong></dt>
+          <dd>客户端缓存，不是持久化真相；WS 增量与 REST reconcile 共同补齐它。</dd>
+          <dt><strong>arming</strong></dt>
+          <dd>客户端在 run POST 返回后设置的门闩，只允许本次 run 期间的 FULL_STATE 成为完成候选，防止连接初始快照误结束下一次 run。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:951-991,1156-1189</code></span></dd>
+          <dt><strong>字段级更新与 FULL_STATE</strong></dt>
+          <dd>前者用于低延迟状态镜像；后者是完整 ConversationState 快照。只有 armed 后、服务端 run 尾部发布的非 RUNNING FULL_STATE 才是正常完成屏障。<span class="evidence"><code>openhands-sdk/openhands/sdk/event/conversation_state.py:15-25,81-101</code></span></dd>
+          <dt><strong>reconcile（对账）</strong></dt>
+          <dd>分页读取全部远端事件，按 event ID 去重合并，修补 REST 初始读取与 WS 订阅/断线之间的缺口。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:319-402</code></span></dd>
+        </dl>
+      </section>
+
+      <section class="section" id="components">
+        <h2>4. 架构组成</h2>
+        <h3>4.1 WebSocketCallbackClient</h3>
+        <p>
+          独立 daemon thread 运行 asyncio WS 循环；首个状态事件置 ready，重连后调用
+          reconcile，非致命断线以 1 秒起步、最多 30 秒的指数退避重连，4001/4004
+          视为致命关闭。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:128-169,203-286</code></span>
+        </p>
+        <h3>4.2 RemoteEventsList</h3>
+        <p>
+          构造时做一次全量分页同步；随后接受 WS 增量，以 <code>RLock</code> 保护缓存，
+          按时间戳有序插入并按 event ID 去重。reconcile 失败返回已取得的部分结果，
+          不让临时 REST 错误破坏现有镜像。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:289-317,349-402,441-491</code></span>
+        </p>
+        <h3>4.3 RemoteState</h3>
+        <p>
+          <code>_cached_state</code> 为空时 REST GET；FULL_STATE 用字典 update 合并，字段事件
+          只更新单 key。客户端 setter 禁止修改 <code>execution_status</code>，明确状态所有权
+          在服务端。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:494-597</code></span>
+        </p>
+        <h3>4.4 EventService</h3>
+        <p>
+          它创建后台 run task，优先使用原生 <code>arun()</code>，兼容 sync-only 实现时转入
+          executor；finally 先等待异步事件回调排空，再清除 run task 并发布 FULL_STATE。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1129-1221</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="flows">
+        <h2>5. 完整运行流程</h2>
+        <h3>5.1 正常成功路径</h3>
+        <ol>
+          <li>构造时创建或附着会话；注册动态 client tool 事件类型，再做 REST 事件初始同步。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:791-916</code></span></li>
+          <li>启动 WS，等待首个状态快照表示订阅已建立，然后 reconcile 订阅窗口内遗漏。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:997-1040</code></span></li>
+          <li><code>send_message()</code> POST 事件且固定 <code>run=false</code>，保持“显式 run”语义。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1115-1134</code></span></li>
+          <li><code>run()</code> 清除 armed、排空旧信号，POST <code>/run</code>；blocking 模式随后 armed 并等待。409 表示已运行，不重复触发。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1136-1189</code></span></li>
+          <li>服务端 EventService 后台执行 LocalConversation.arun；run 退出后等待 pending events，最后发布 FULL_STATE。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1171-1221</code></span></li>
+          <li>客户端收到 armed 后非 RUNNING FULL_STATE，处理状态、reconcile 尾部事件并返回。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1232-1261</code></span></li>
+        </ol>
+
+        <h3>5.2 Stop hook 拒绝：字段级 FINISHED 竞态</h3>
+        <ol>
+          <li>Agent step 把状态设为 FINISHED，字段更新可先通过 WS 被客户端看见。</li>
+          <li>LocalConversation 下一轮持锁执行 Stop hook；若 hook deny，则写入反馈、恢复 RUNNING 并继续。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2082-2119</code></span></li>
+          <li>因此客户端忽略字段级 FINISHED；REST FINISHED 也只启动连续终态计时，不立即返回。</li>
+          <li>只有最终 run task 退出后的 FULL_STATE 完成屏障才结束等待。测试覆盖字段 FINISHED 与 REST FINISHED→RUNNING 回退。<span class="evidence"><code>tests/sdk/conversation/remote/test_remote_conversation.py:1078-1220</code></span></li>
+        </ol>
+
+        <h3>5.3 WS 丢失：30 秒 hard fallback</h3>
+        <p>
+          若 REST 连续报告 terminal，客户端记录首次见到时间；任一次 RUNNING 或轮询异常都会
+          重置计时。连续满 30 秒仍无 post-run FULL_STATE，才刷新 RemoteState、reconcile
+          事件并返回。该阈值按单调时间计算，不按 poll 次数计算。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1217-1229,1265-1318</code></span>
+        </p>
+
+        <h3>5.4 Pause 与 Interrupt</h3>
+        <p>
+          Pause 在 worker thread 调用同步 <code>LocalConversation.pause()</code>，它等状态锁并在
+          step 边界生效；Interrupt 直接调用 <code>LocalConversation.interrupt()</code>，先取消
+          CancellationToken，再线程安全地取消在途 asyncio task。<code>arun()</code> 捕获
+          <code>CancelledError</code>，修补 orphan actions，写 PAUSED 与 InterruptEvent，不再
+          向上传播取消异常。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2417-2481,2559-2614</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="state">
+        <h2>6. 数据与状态模型</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>对象</th><th>权威性</th><th>生命周期/同步</th><th>锁</th></tr></thead>
+            <tbody>
+              <tr><td>服务端 ConversationState + EventLog</td><td>规范运行状态与持久事件</td><td>由 LocalConversation 修改，EventService 暴露快照/检索</td><td>同步 FIFOLock；异步服务必须经 executor</td></tr>
+              <tr><td>RemoteState._cached_state</td><td>镜像；REST refresh 或 WS 更新</td><td>会话客户端存活期间</td><td>threading.RLock</td></tr>
+              <tr><td>RemoteEventsList 缓存</td><td>镜像；event ID 去重</td><td>初始全量、WS 增量、重连/完成 reconcile</td><td>threading.RLock</td></tr>
+              <tr><td>_terminal_status_queue</td><td>单次等待信号，不持久</td><td>每次 run 前排空</td><td>线程安全 Queue</td></tr>
+              <tr><td>_run_armed</td><td>本地完成门闩，不持久</td><td>POST 后 set，等待 finally clear</td><td>threading.Event</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          状态枚举包含 IDLE、RUNNING、PAUSED、WAITING_FOR_CONFIRMATION、FINISHED、ERROR、
+          STUCK、DELETING；其通用 <code>is_terminal()</code> 仅把 FINISHED、ERROR、STUCK
+          视作 terminal，特意排除初始 IDLE。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:48-79</code></span>
+        </p>
+        <div class="callout warning">
+          <strong>镜像不是持久化中心。</strong>
+          FULL_STATE 的“权威”仅指它是本次远程 run 的完成屏障；持久化与恢复仍由服务端
+          ConversationState/EventLog 负责。RemoteState 的字段 setter 不能改变服务端状态。
+        </div>
+      </section>
+
+      <section class="section" id="protocols">
+        <h2>7. 接口、协议与事件</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>入口</th><th>协议</th><th>语义</th><th>错误/确认</th></tr></thead>
+            <tbody>
+              <tr><td><code>POST /api/conversations</code></td><td>REST</td><td>创建服务端 LocalConversation；201 新建、200 复用</td><td>请求模型由 FastAPI/Pydantic 校验 <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_router.py:203-233</code></span></td></tr>
+              <tr><td><code>POST /api/conversations/{id}/events</code></td><td>REST</td><td>追加用户消息，可带 run；RemoteConversation 固定 false</td><td>仅 user role <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_router.py:206-214</code></span></td></tr>
+              <tr><td><code>POST .../{id}/run</code></td><td>REST</td><td>启动后台 run；409 表示已运行</td><td>blocking 等待发生在客户端</td></tr>
+              <tr><td><code>GET .../{id}</code></td><td>REST</td><td>状态轮询与 RemoteState refresh</td><td>404 对等待是终止故障</td></tr>
+              <tr><td><code>GET .../{id}/events/search</code></td><td>REST</td><td>最多 100/页的事件对账</td><td>分页 next_page_id <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_router.py:65-135</code></span></td></tr>
+              <tr><td><code>WS /sockets/events/{id}</code></td><td>WebSocket</td><td>状态/事件增量与初始 FULL_STATE</td><td>认证失败 4001；会话不存在 4004；订阅过多 1013 <span class="evidence"><code>openhands-agent-server/openhands/agent_server/sockets.py:190-230,279-305</code></span></td></tr>
+              <tr><td><code>POST .../pause</code></td><td>REST</td><td>step 边界暂停</td><td>200 Success 或 400</td></tr>
+              <tr><td><code>POST .../interrupt</code></td><td>REST</td><td>取消在途 async run，最终 PAUSED</td><td>200 Success 或 400 <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_router.py:236-267</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <code>ConversationStateUpdateEvent</code> 的 key 可为 <code>full_state</code> 或单字段；
+          value 为 wire 序列化值。状态字段更新先更新 RemoteState cache，再由完成 callback
+          判定是否入队；组合 callback 同时维护事件镜像、状态镜像、日志与用户回调。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:918-1004</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="configuration">
+        <h2>8. 配置与默认行为</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>类型/值</th><th>默认值</th><th>优先级</th><th>生效</th><th>失败行为</th><th>来源</th></tr></thead>
+            <tbody>
+              <tr><td><code>blocking</code></td><td>bool</td><td>true</td><td>run 参数</td><td>每次 run</td><td>false 仅触发不等待</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1136-1155</code></span></td></tr>
+              <tr><td><code>poll_interval</code></td><td>float 秒</td><td>1.0</td><td>run 参数</td><td>每次 run</td><td>控制 Queue wait/REST cadence，不改变 30 秒阈值</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1137-1151,1243-1249</code></span></td></tr>
+              <tr><td><code>timeout</code></td><td>float 秒</td><td>3600</td><td>run 参数</td><td>每次 run</td><td>抛 ConversationRunError，服务端可能仍运行</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1137-1155,1232-1241</code></span></td></tr>
+              <tr><td><code>OPENHANDS_REMOTE_WS_READY_TIMEOUT</code></td><td>可转 float</td><td>30</td><td>环境变量</td><td>构造时</td><td>到期按 REQUIRED 决定</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1007-1035</code></span></td></tr>
+              <tr><td><code>OPENHANDS_REMOTE_WS_READY_REQUIRED</code></td><td>true/false/0/no</td><td>true</td><td>环境变量</td><td>构造时</td><td>true 抛 WebSocketConnectionError；false 警告后 reconcile</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1010-1040</code></span></td></tr>
+              <tr><td><code>TERMINAL_HARD_FALLBACK_SECS</code></td><td>内部常量</td><td>30.0</td><td>不可配置</td><td>每次等待</td><td>连续确认不足时继续等待</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1223-1229</code></span></td></tr>
+              <tr><td><code>max_iteration_per_run</code></td><td>int</td><td>500</td><td>构造参数→服务端 payload</td><td>创建时</td><td>由服务端 LocalConversation 执行</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:711-728,831-877</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="concurrency">
+        <h2>9. 并发、性能与资源</h2>
+        <ul>
+          <li>客户端 WS 在 daemon thread 中运行；Queue、Event 与 RLock 协调 WS thread 和调用 <code>run()</code> 的线程。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:128-169,695-707</code></span></li>
+          <li>EventService 用 <code>asyncio.Lock</code> 原子化“检查状态并创建 run task”，避免并发 run。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1143-1169</code></span></li>
+          <li>服务端 ConversationState 使用同步锁；创建 FULL_STATE 与读取状态通过 executor，避免阻塞 FastAPI event loop。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:631-667,790-819</code></span></li>
+          <li>初始状态推送限时 0.5 秒；run 尾部等待 pending callback 最多 30 秒。PubSub 当前逐订阅者发送，慢订阅者会拖慢后续订阅者。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:82-85,804-817,1208-1217,1801-1810</code></span></li>
+          <li>事件全量同步每页 100；当前 reconcile 从头分页并合并，没有增量 cursor 优化。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:323-347,364-402</code></span></li>
+        </ul>
+      </section>
+
+      <section class="section" id="security">
+        <h2>10. 安全与信任边界</h2>
+        <p>
+          HTTP 认证 headers 由 RemoteWorkspace client 统一提供；WS 若有 api_key，连接后发送
+          <code>{"type":"auth","session_api_key":"..."}</code>，不把 key 放入 URL。
+          服务端也保留 query 参数兼容面，但首消息认证会校验配置中的 session keys，失败以
+          4001 关闭。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:213-232; openhands-agent-server/openhands/agent_server/sockets.py:190-230</code></span>
+        </p>
+        <ul>
+          <li>Hooks、confirmation policy、security analyzer 与工具副作用都在服务端信任域执行；RemoteConversation 只提交配置/命令。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:831-866,1056-1057</code></span></li>
+          <li>secrets 创建后通过专用 REST 更新；SecretSource 序列化时显式暴露给目标服务端，因此传输安全依赖部署的 HTTPS/WSS 与服务端认证。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1458-1481</code></span></li>
+          <li>拒绝 pending actions 走 confirmation response endpoint，服务端生成 UserRejectObservation；客户端不直接篡改状态。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1424-1434; openhands-agent-server/openhands/agent_server/event_router.py:217-226</code></span></li>
+        </ul>
+        <div class="callout danger">
+          <strong>不要把客户端镜像当授权依据。</strong>
+          RemoteState 可滞后或来自未完成的字段更新；准入、确认和 Hook 判定必须继续由服务端完成。
+        </div>
+      </section>
+
+      <section class="section" id="failure">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+            <tbody>
+              <tr><td>字段级 FINISHED 过早</td><td>非 FULL_STATE 状态事件</td><td>不作为成功完成信号</td><td>镜像可短暂 FINISHED</td><td>等 post-run FULL_STATE</td><td>检查 Stop hook 事件</td></tr>
+              <tr><td>WS 最终快照丢失</td><td>REST 连续 terminal 且队列无快照</td><td>等待至少 30 秒</td><td>服务端已终止、客户端仍等待</td><td>refresh + reconcile 后返回</td><td>检查 WS 断线/背压日志</td></tr>
+              <tr><td>WS ERROR/STUCK</td><td>字段更新即时入队</td><td>抛 ConversationRunError</td><td>ERROR/STUCK</td><td>ERROR 读取最近 ConversationErrorEvent</td><td>按错误 detail 修复；STUCK 检查循环</td></tr>
+              <tr><td>REST 404</td><td>轮询 HTTPStatusError</td><td>立即失败</td><td>远端 runtime 可能已删</td><td>无自动重建</td><td>用 conversation id 核对生命周期</td></tr>
+              <tr><td>REST 429/5xx/网络异常</td><td>轮询异常分类</td><td>日志告警，重置 terminal 连续计时</td><td>不改服务端状态</td><td>总 timeout 内重试</td><td>检查限流、网络与服务健康</td></tr>
+              <tr><td>Interrupt</td><td>HTTP 命令→task.cancel</td><td>取消 token/task，修补 orphan actions</td><td>PAUSED + InterruptEvent</td><td>后续 run 可恢复</td><td>检查 InterruptEvent 与合成 AgentErrorEvent</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          轮询故障分类明确区分 404、非 429 的 4xx、429/5xx、RequestError 与未知异常；
+          只有瞬时类重试到总 timeout。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1360-1387</code></span>
+        </p>
+        <p>
+          REST API 是公共兼容表面，破坏性变更需遵守 Agent Server 的 5 个 minor release
+          弃用跑道；WebSocket 不在该 OpenAPI 自动门禁内，仍需人工保持 wire 兼容。
+          <span class="evidence"><code>openhands-agent-server/AGENTS.md:118-125,167-202</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="observability">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+            <tbody>
+              <tr><td>run 在 FINISHED 后仍等待</td><td>查是否有 post-run FULL_STATE、REST terminal 持续时间、Stop hook 事件</td><td>Stop hook deny 或 WS 快照丢失</td><td>先等待完成屏障；持续超过 30 秒查 WS</td></tr>
+              <tr><td>客户端缺尾部 Action/Observation</td><td>比较 RemoteEventsList 与 <code>/events/search</code></td><td>WS callback 延迟/断线</td><td>调用 reconcile；正常 blocking run 已在返回前执行</td></tr>
+              <tr><td>构造卡在 WS ready</td><td>查看 READY timeout、4001/4004/1013 close code</td><td>认证、会话不存在、订阅上限或网络</td><td>修复 api_key/ID/容量；仅明确接受降级时关闭 REQUIRED</td></tr>
+              <tr><td>Interrupt 后历史无法继续</td><td>查 InterruptEvent 及 orphan Action 对应的 AgentErrorEvent</td><td>取消清理未完成或旧服务端</td><td>核对 SDK/Server 版本与取消链测试</td></tr>
+              <tr><td>ERROR 只有泛化信息</td><td>反向扫描最近 ConversationErrorEvent</td><td>事件镜像尚未 reconcile</td><td>对账 REST 事件并保留 code/detail</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          关键日志包括 <code>ws_connect_retry</code>、<code>ws_connection_closed_retry</code>、
+          REST terminal 三次告警、30 秒 fallback 告警和 polling retry 告警；这些日志是健康
+          信号，不改变协议语义。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:259-270,1292-1312,1378-1386</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="testing">
+        <h2>13. 测试与验证</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr><td>字段 FINISHED 不是完成</td><td><code>tests/sdk/conversation/remote/test_remote_conversation.py:1078-1163</code></td><td>单元/回归</td><td>字段事件后继续等 FULL_STATE</td><td>模拟 transport</td></tr>
+              <tr><td>REST FINISHED 可回退 RUNNING</td><td><code>tests/sdk/conversation/remote/test_remote_conversation.py:1165-1220</code></td><td>单元/回归</td><td>terminal timer 被 RUNNING 重置</td><td>模拟 Stop hook 时间线</td></tr>
+              <tr><td>arming 忽略连接初始快照</td><td><code>tests/sdk/conversation/remote/test_remote_conversation.py:1254-1302</code></td><td>单元</td><td>pre-run FULL_STATE 不入完成队列</td><td>无真实网络</td></tr>
+              <tr><td>30 秒 hard fallback</td><td><code>tests/sdk/conversation/remote/test_remote_conversation.py:1304-1352</code></td><td>单元</td><td>单调时间阈值后 REST 可完成</td><td>时间被 patch</td></tr>
+              <tr><td>reconcile 去重且幂等</td><td><code>tests/sdk/conversation/remote/test_websocket_subscription_ready.py:97-194</code></td><td>单元</td><td>按 ID 合并、空响应和重复对账</td><td>未压测大历史</td></tr>
+              <tr><td>尾部事件对账</td><td><code>tests/cross/test_remote_conversation_live_server.py:1325-1404</code></td><td>跨包 live server</td><td>WS callback lag 下 REST reconcile 可恢复事件</td><td>后续断言在同文件后段</td></tr>
+              <tr><td>Interrupt 全链路</td><td><code>tests/cross/test_remote_conversation_live_server.py:2283-2403</code></td><td>跨包 live server</td><td>REST→arun 取消→PAUSED + InterruptEvent</td><td>LLM 为测试替身</td></tr>
+              <tr><td>CancelledError 不外泄且可恢复</td><td><code>tests/sdk/conversation/test_interrupt.py:80-165,195-247</code></td><td>SDK async 单元</td><td>及时取消、PAUSED、幂等与再运行</td><td>无真实 provider HTTP</td></tr>
+              <tr><td>RemoteState 更新</td><td><code>tests/sdk/conversation/test_remote_conversation_state_updates.py:22-170</code></td><td>单元</td><td>FULL_STATE 与字段增量合并</td><td>未证明跨版本 wire 兼容</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="development">
+        <h2>14. 开发与扩展指南</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+            <tbody>
+              <tr><td>新增远程控制命令</td><td>SDK RemoteConversation + server router/service</td><td>request/response model、认证、REST 兼容文档</td><td>SDK 单元 + cross live server</td></tr>
+              <tr><td>改变完成判定</td><td>run_complete_callback、_wait_for_run_completion、EventService finally</td><td>Stop hook、arming、ERROR/STUCK、reconcile</td><td>字段/REST 竞态和 WS 丢失回归测试</td></tr>
+              <tr><td>改变状态事件 shape</td><td>ConversationStateUpdateEvent + RemoteState</td><td>旧事件永久可加载、WS server/client 同步发布</td><td>历史与当前格式测试</td></tr>
+              <tr><td>优化事件同步</td><td>RemoteEventsList + events/search</td><td>分页、排序、去重、重连 callback</td><td>断线窗口、重复、乱序与大历史基准</td></tr>
+              <tr><td>修改 Interrupt</td><td>LocalConversation、EventService、ConversationService、router</td><td>CancellationToken、orphan 修补、PAUSED/InterruptEvent</td><td>SDK async + live REST/WS</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <ul>
+          <li>禁止用第一次 FINISHED、单次 REST terminal 或“Queue 非空”代替 post-run FULL_STATE 屏障。</li>
+          <li>禁止在 async Agent Server 路径直接等待 ConversationState 的同步 FIFOLock；快照/读取移到 executor。</li>
+          <li>禁止让 RemoteState setter 假装修改服务端；新增 mutation 必须走明确 REST 命令。</li>
+          <li>REST breaking change 需要弃用跑道；WS/Event shape 也必须保留旧客户端/旧事件兼容性。</li>
+        </ul>
+      </section>
+
+      <section class="section" id="tradeoffs">
+        <h2>15. 设计权衡与已知限制</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+            <tbody>
+              <tr><td>命令与事件传输</td><td>REST + WS 双通道</td><td>命令清晰、事件低延迟</td><td>需要 reconcile 与完成屏障</td><td>统一双向协议能提供同等兼容/恢复能力</td></tr>
+              <tr><td>最终完成</td><td>post-run FULL_STATE</td><td>建立“事件已 flush、run task 已退出”边界</td><td>依赖 WS 最终投递</td><td>服务端提供可查询 run generation/receipt</td></tr>
+              <tr><td>WS 丢失降级</td><td>REST 连续 terminal 30 秒</td><td>避免永久挂起且不轻易误判 Stop hook</td><td>故障时至少额外等待 30 秒；常量不可配置</td><td>有服务端权威 run-completed token</td></tr>
+              <tr><td>事件缓存</td><td>全量分页 reconcile</td><td>实现简单、按 ID 幂等</td><td>历史增长时网络/CPU 成本上升</td><td>观测到大历史瓶颈并引入可靠 cursor</td></tr>
+              <tr><td>同步 SDK 表面</td><td>WS 后台 thread + blocking Queue</td><td>兼容同步 Conversation API</td><td>额外线程和跨线程协调</td><td>公共 async RemoteConversation 成为一等接口</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          当前没有独立的远程 run ID/generation 随 FULL_STATE 传输；arming 只能按“POST 后”
+          这一时间边界过滤初始快照。并发调用同一 RemoteConversation 的多个 blocking
+          <code>run()</code> 不是文档化支持场景，队列与单个 armed event 也未提供按 run
+          分区的信号。该限制来自当前结构，而不是已证明的并发安全保证。
+        </p>
+      </section>
+
+      <section class="section" id="sources">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <ul class="source-list">
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:100-286</code> — HTTP helper 与 WS client。</li>
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:289-491</code> — RemoteEventsList 同步、reconcile、排序与去重。</li>
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:494-684</code> — RemoteState 镜像。</li>
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:694-1058</code> — 创建/附着、callbacks、arming 与 WS handshake。</li>
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1115-1448</code> — send/run、完成等待、fallback、pause/interrupt。</li>
+          <li><code>openhands-sdk/openhands/sdk/event/conversation_state.py:15-101</code> — FULL_STATE wire event。</li>
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2022-2481,2559-2614</code> — async run、Stop hook、CancelledError 与 interrupt。</li>
+          <li><code>openhands-agent-server/openhands/agent_server/event_service.py:790-819,1129-1276,1553-1589,1801-1810</code> — 订阅、run task、pause/interrupt 与快照发布。</li>
+          <li><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1597-1624</code> — 服务层 pause/interrupt。</li>
+          <li><code>openhands-agent-server/openhands/agent_server/conversation_router.py:236-267</code> — REST pause/interrupt。</li>
+          <li><code>openhands-agent-server/openhands/agent_server/sockets.py:226-334</code> — WS endpoint、认证、订阅与历史 resend。</li>
+          <li><code>tests/sdk/conversation/remote/test_remote_conversation.py:940-1380</code> — 完成屏障与竞态回归。</li>
+          <li><code>tests/cross/test_remote_conversation_live_server.py:2283-2403</code> — Interrupt 跨包真实 HTTP/WS 栈。</li>
+        </ul>
+        <p class="muted">
+          相邻章节：<a href="14-server.html">14 Agent Server</a> ·
+          <a href="16-settings.html">16 Settings、Secrets 与兼容性</a>。
+        </p>
+      </section>
+
+      <section class="section" id="glossary">
+        <h2>17. 术语表</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>术语</th><th>本章含义</th></tr></thead>
+            <tbody>
+              <tr><td>REST</td><td>Representational State Transfer；本模块用于创建、命令与补偿查询的 HTTP API。</td></tr>
+              <tr><td>WS / WebSocket</td><td>服务端向客户端持续推送事件与状态更新的双向连接。</td></tr>
+              <tr><td>FULL_STATE</td><td><code>ConversationStateUpdateEvent.key == "full_state"</code> 的完整状态快照；post-run 版本承担完成屏障。</td></tr>
+              <tr><td>字段级更新</td><td>key 为 <code>execution_status</code>、<code>stats</code> 等单字段的状态事件；用于镜像，不等同于 run 已退出。</td></tr>
+              <tr><td>arming</td><td>POST /run 后开启的本地门闩，用于排除订阅时或上一次 run 留下的快照。</td></tr>
+              <tr><td>reconcile</td><td>通过 REST 重新读取并按 event ID 合并远端事件的对账操作。</td></tr>
+              <tr><td>hard fallback</td><td>缺少 WS 完成快照时，以 REST 连续 30 秒 terminal 状态接受完成的最后降级路径。</td></tr>
+              <tr><td>terminal</td><td>通用状态枚举中的 FINISHED、ERROR、STUCK；但远程正常完成仍需额外满足完成屏障。</td></tr>
+              <tr><td>Stop hook</td><td>Agent 已报告 FINISHED 后、运行循环真正退出前执行的停止钩子；可拒绝停止并恢复 RUNNING。</td></tr>
+              <tr><td>Pause</td><td>请求在 step 边界暂停；不会主动打断当前 async LLM 调用。</td></tr>
+              <tr><td>Interrupt</td><td>取消在途 async task 与 CancellationToken，清理历史后进入 PAUSED 的即时中断。</td></tr>
+              <tr><td>CancelledError</td><td>asyncio task 取消异常；在 LocalConversation.arun 内被消费并转换为 PAUSED + InterruptEvent。</td></tr>
+              <tr><td>orphan action</td><td>已有 ActionEvent 但尚无 ObservationEvent 的工具调用；中断时以合成 AgentErrorEvent 配对修补。</td></tr>
+              <tr><td>RemoteState</td><td>远端 ConversationState 的客户端缓存视图，不是可独立写入的状态所有者。</td></tr>
+              <tr><td>RemoteEventsList</td><td>结合 REST 全量/对账与 WS 增量的只读事件镜像。</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer>
+        <a href="../../software_agent_architecture.html#remote">← 返回架构总览第 15 章</a>
+      </footer>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll("#toc a")];
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        links.forEach((link) => {
+          link.classList.toggle(
+            "active",
+            link.getAttribute("href") === `#${visible.target.id}`
+          );
+        });
+      }, { rootMargin: "-15% 0px -72% 0px" });
+      sections.forEach((section) => observer.observe(section));
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>OpenClaw 模型、Provider 与 Failover 详细设计</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth;scroll-padding-top:68px}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.75;padding:64px 22px 48px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .35rem;border-radius:4px;font-size:.9em;overflow-wrap:anywhere}h1{font-size:2.35rem;line-height:1.2;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:.5rem 0 .65rem}h2{color:var(--blue);font-size:1.5rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem}h3{color:var(--blue2);font-size:1.16rem;margin:1.45rem 0 .55rem}.topbar{position:fixed;top:0;left:0;right:0;height:48px;background:#fffdf8;border-bottom:1px solid var(--border);display:flex;align-items:center;z-index:300;padding:0 18px;gap:12px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:.28rem .72rem;font-size:.84rem}.topbar .crumb{border:0;color:var(--muted);padding:0}.sidebar{position:fixed;left:0;top:48px;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.15rem 1rem 2rem;overflow-y:auto;z-index:200;backdrop-filter:blur(12px)}.sidebar h2{font-size:.92rem;border:0;margin:0 0 .55rem;padding:0}.sidebar a{display:block;color:var(--muted);font-size:.79rem;padding:.24rem .45rem;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}.container{max-width:1160px;margin:auto}.subtitle{color:var(--muted);font-size:1.02rem;margin-bottom:1.2rem}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin:1rem 0 1.5rem}.meta>div{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:.72rem .85rem}.meta dt{color:var(--muted);font-size:.74rem;text-transform:uppercase}.meta dd{font-size:.88rem;margin-top:.15rem}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem 2rem;margin:0 0 1.4rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section p{margin:.58rem 0}.section ul,.section ol{margin:.55rem 0 .55rem 1.35rem}.section li{margin:.28rem 0}.table-wrap{overflow-x:auto;margin:1rem 0}table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:760px}th,td{border:1px solid var(--border);padding:.58rem .7rem;text-align:left;vertical-align:top}th{background:#e8e1d4;color:var(--blue)}tr:nth-child(even){background:rgba(244,241,234,.25)}.lead,.insight,.warning,.boundary,.evidence{border-radius:8px;padding:.92rem 1.08rem;margin:.9rem 0}.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;color:var(--muted);font-size:.82rem;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;-webkit-box-decoration-break:clone;box-decoration-break:clone}.lead{background:rgba(21,128,61,.06);border:1px solid var(--green)}.lead strong{color:var(--green)}.insight{background:rgba(67,56,202,.06);border-left:4px solid var(--blue)}.warning{background:rgba(185,28,28,.06);border-left:4px solid var(--red)}.boundary{background:rgba(109,40,217,.06);border-left:4px solid var(--purple)}.evidence{background:#f4f1ea;border:1px solid var(--border);color:var(--muted);font-size:.83rem}.badge{display:inline-block;border:1px solid;border-radius:99px;padding:.04rem .45rem;margin-right:.32rem;font-size:.72rem;font-weight:700}.fact{color:var(--green)}.optional{color:var(--yellow)}.owner{color:var(--purple)}.gap{color:var(--red)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:.9rem 0}.card{background:#f4f1ea;border:1px solid var(--border);border-radius:9px;padding:1rem}.card strong{display:block;color:var(--blue2);margin-bottom:.25rem}.flow{font-family:"Cascadia Code",Consolas,monospace;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem;white-space:pre-wrap;color:var(--blue2);font-size:.82rem;line-height:1.58;margin:.8rem 0;overflow:auto}.diagram{display:grid;grid-template-columns:repeat(5,minmax(140px,1fr));gap:.65rem;min-width:850px}.diagram-wrap{overflow-x:auto}.node{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:.75rem;text-align:center;font-size:.8rem;position:relative}.node strong{display:block;color:var(--blue2)}.node:not(:last-child):after{content:"→";position:absolute;right:-.57rem;top:42%;color:var(--muted)}.status-good{color:var(--green)}.source-list{columns:2;column-gap:2rem}.source-list li{break-inside:avoid}.footer{text-align:center;color:var(--muted);font-size:.8rem;margin:2rem 0}.back-top{position:fixed;right:18px;bottom:18px;border:1px solid var(--border);background:var(--surface);border-radius:50%;width:38px;height:38px;text-align:center;line-height:36px;z-index:250}
+@media(max-width:980px){body{padding:62px 13px 32px}.sidebar{display:none}.meta,.grid{grid-template-columns:1fr}.section{padding:1.25rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.source-list{columns:1}h1{font-size:1.82rem}}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../openclaw_architecture.html">← 返回架构总览</a><span class="crumb">第 9 章 · 模型、Provider 与 Failover</span></div>
+<aside class="sidebar" aria-label="页面目录"><h2>模型与 Failover</h2>
+<a href="#position">1. 模块定位</a><a href="#context">2. 系统位置与证据地图</a><a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a><a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态</a><a href="#interfaces">7. 接口与事件</a><a href="#config">8. 配置与默认行为</a><a href="#performance">9. 并发与资源</a><a href="#security">10. 安全边界</a><a href="#failure">11. 失败与恢复</a><a href="#operations">12. 可观测性</a><a href="#tests">13. 测试证据</a><a href="#development">14. 开发指南</a><a href="#tradeoffs">15. 权衡与限制</a><a href="#sources">16. 源码索引</a>
+</aside>
+<main class="container"><header id="top">
+<h1>OpenClaw 模型、Provider 与 Failover 详细设计</h1>
+<p class="subtitle">从有效模型选择、Catalog、Auth Profile 和 Harness，到严格选择、两阶段故障转移、过载安全重试与错误归一。</p>
+<div class="meta">
+<div><dl><dt>源码基线</dt><dd>OpenClaw 2026.7.2 工作副本；当前目录无可读 Git metadata，未声明 SHA</dd></dl></div>
+<div><dl><dt>证据状态</dt><dd><span class="status-good">已验证</span>：OpenClaw 源码、测试、Schema/帮助、官方文档及 Codex app-server 上游契约已核验</dd></dl></div>
+<div><dl><dt>主要所有者</dt><dd><code>src/agents/</code>、Provider plugin、<code>src/context-engine/</code> 的相邻边界</dd></dl></div>
+<div><dl><dt>目标读者</dt><dd>Provider、模型路由、Harness、运维和 Agent Runtime 开发者</dd></dl></div>
+<div><dl><dt>最近验证</dt><dd>2026-07-27</dd></dl></div>
+<div><dl><dt>事实标签</dt><dd><span class="badge fact">当前事实</span><span class="badge optional">可选能力</span><span class="badge owner">所有者边界</span><span class="badge gap">证据缺口</span></dd></dl></div>
+</div>
+<div class="lead"><strong>一句话目标：</strong>模型路由层把用户/配置表达的逻辑模型选择解析为一次 turn 的 provider、model、auth 与 harness 执行计划；失败时先在同一 Provider 内轮换 Auth Profile，再按明确候选链切换模型，同时阻止上下文溢出、取消和已有副作用被错误重放。</div>
+</header>
+
+<section class="section" id="position"><h2>1. 模块定位</h2>
+<div class="table-wrap"><table><thead><tr><th>边界</th><th>本模块负责</th><th>委托或明确不负责</th></tr></thead><tbody>
+<tr><td>选择</td><td>解析 configured default、Channel、Session 与一次性 override，执行 allowlist 和 Harness 支持检查。</td><td>Channel 只提供 route/context；不决定 Provider 策略。</td></tr>
+<tr><td>Catalog</td><td>合并 runtime registry、manifest、配置和 Provider plugin augmentation，形成 generation 内快照。</td><td>Provider 专属 auth、onboarding、catalog 行由 Provider plugin 所有。</td></tr>
+<tr><td>认证</td><td>排序可用 Auth Profile，记录 cooldown/disabled/blocked 状态并轮换。</td><td>Secret 解析与 SQLite 事务由 auth store/Secret owner 执行。</td></tr>
+<tr><td>Failover</td><td>构造有序候选、判定可继续错误、记录尝试与 turn-local winner。</td><td>Context 溢出 留给第 10 章 compaction/retry，不跨模型掩盖。</td></tr>
+<tr><td>Harness</td><td>依据 model/provider runtime policy、显式 pin 与 supports 选择执行器。</td><td>Harness 内部协议归其插件；显式插件 Harness 失败不改用 built-in。</td></tr>
+</tbody></table></div>
+<p class="evidence">入口与 owner：<code>src/agents/command/model-selection.ts:62-566</code>、<code>src/agents/model-fallback.ts:892-1114</code>、<code>src/agents/harness/selection.ts:267-457</code>；插件边界：<code>extensions/AGENTS.md:47-61</code>。</p>
+</section>
+
+<section class="section" id="context"><h2>2. 系统位置与完整证据地图</h2>
+<div class="diagram-wrap"><div class="diagram"><div class="node"><strong>调用方</strong>agentCommand<br>cron / CLI<br>session model 切换</div><div class="node"><strong>有效选择</strong>default/channel/session/run<br>可见性策略</div><div class="node"><strong>预备事实</strong>Catalog<br>Provider 路由<br>Auth profiles</div><div class="node"><strong>执行</strong>Harness<br>Provider 流<br>tool 循环</div><div class="node"><strong>恢复</strong>profile 轮换<br>model 回退<br>终态摘要</div></div></div>
+<div class="table-wrap"><table><thead><tr><th>证据项</th><th>已检查表面</th><th>结论</th></tr></thead><tbody>
+<tr><td>入口/调用方</td><td><code>src/agents/agent-command.ts:1-518</code>、<code>src/agents/command/model-selection.ts:62-123</code></td><td>turn 在执行前完成 selection 与授权。</td></tr>
+<tr><td>Owner/被调用方</td><td><code>src/agents/model-fallback.ts:1414-2025</code>、<code>src/agents/harness/selection.ts:496-550</code></td><td>外层候选循环调用一次 prepared Harness attempt。</td></tr>
+<tr><td>兄弟实现</td><td><code>src/agents/model-fallback.ts:814-890</code>、<code>src/agents/model-fallback.ts:2028-2085</code></td><td>图片模型复用候选/尝试思想，但认证与失败策略更窄。</td></tr>
+<tr><td>状态</td><td><code>src/agents/auth-profiles/order.ts:262-531</code>、<code>src/agents/auth-profiles/usage.ts:1-103</code></td><td>凭证和 usage state 属 per-agent auth store；候选/cache 是有界进程状态。</td></tr>
+<tr><td>配置</td><td><code>src/agents/agent-scope.ts:352-588</code>、<code>docs/concepts/models.md:42-86</code></td><td>agent primary、default 和 selection source 决定 fallback strictness。</td></tr>
+<tr><td>错误/事件</td><td><code>src/agents/failover-error.ts:35-205</code>、<code>src/agents/model-fallback.ts:1471-1498</code></td><td>错误归一为 closed reason + status/code；真实 candidate transition 发诊断事件。</td></tr>
+<tr><td>测试</td><td><code>src/agents/agent-scope.test.ts:230-372</code>、<code>src/agents/model-fallback.test.ts</code>、<code>src/agents/embedded-agent-runner.run-embedded-agent.auth-profile-rotation.e2e.test.ts:622-1352</code></td><td>strict override、候选与 profile 轮换 有直接覆盖。</td></tr>
+<tr><td>当前文档</td><td><code>docs/concepts/models.md:68-86</code>、<code>docs/concepts/model-failover.md:11-343</code></td><td>与当前 selection/failover 源码总体一致。</td></tr>
+<tr><td>依赖契约</td><td><code>../codex/codex-rs/app-server-protocol/src/protocol/v2/thread.rs:56-201</code>、<code>../codex/codex-rs/app-server-protocol/src/protocol/v2/model.rs:43-52</code>、<code>../codex/codex-rs/app-server-protocol/src/protocol/v2/model.rs:130-135</code></td><td>Codex app-server 的 thread 与 model/list 是插件 Harness 的专属协议；本文不把这些字段、目录或重试语义提升为跨 Provider 契约。</td></tr>
+</tbody></table></div>
+<div class="insight"><strong>Codex 契约边界：</strong>已直接检查 sibling Codex app-server。<code>thread/start</code> 接收 model/provider、cwd、approval、sandbox/permissions、<code>baseInstructions</code>/<code>developerInstructions</code> 与 ephemeral 等线程级字段并返回实际 model/provider/cwd；<code>model/list</code> 是可分页目录并可选择包含隐藏模型。OpenClaw 的 bounded Codex 路径先读取目录，再以显式只读、临时线程启动并拒绝原生审批。证据：<code>../codex/codex-rs/app-server-protocol/src/protocol/v2/thread.rs:56-201</code>、<code>../codex/codex-rs/app-server-protocol/src/protocol/v2/model.rs:43-52</code>、<code>../codex/codex-rs/app-server-protocol/src/protocol/v2/model.rs:130-135</code>；OpenClaw 消费侧：<code>extensions/codex/src/app-server/bounded-turn.ts:184-267</code>、<code>extensions/codex/src/app-server/bounded-turn.ts:371-404</code>。这些是 Codex Harness 专属事实，不改变本章的通用 selection → auth rotation → model 回退 主链。</div>
+</section>
+
+<section class="section" id="concepts"><h2>3. 核心概念与术语</h2>
+<div class="grid">
+<div class="card"><strong>Provider</strong>拥有 transport、auth/catalog/onboarding 和 vendor policy 的逻辑路由 owner；不是模型本身。</div>
+<div class="card"><strong>Model</strong><code>provider/model</code> 逻辑引用及能力元数据；Catalog 行可以对应不同 physical route variant。</div>
+<div class="card"><strong>Catalog</strong>用于可见性、能力、context window 和 route metadata 的 generation 快照；不是一次调用。</div>
+<div class="card"><strong>Auth Profile</strong>某 Provider 的一个可轮换凭证身份及其 usage/cooldown/disabled 状态；与 Harness 身份分离。</div>
+<div class="card"><strong>Harness</strong>执行 Agent 协议和 turn 生命周期的 runtime；built-in <code>openclaw</code> 或插件实现。</div>
+<div class="card"><strong>有效 Model</strong>default、channel、stored session、primary recovery probe、explicit run override 和 可见性策略 共同得到的本次起点。</div>
+<div class="card"><strong>严格选择</strong>用户明确 Session/一次性选择不继承无关配置 fallback；失败必须可见。</div>
+<div class="card"><strong>Turn 局部 fallback</strong>本 turn 可由后续候选回答，但 winner 不永久改写下一 turn 的选中模型。</div>
+</div>
+<p class="evidence">选择优先级实现：<code>src/agents/command/model-selection.ts:224-349</code>；严格策略：<code>src/agents/agent-scope.ts:562-588</code>；Catalog route 原子性：<code>src/agents/model-catalog.ts:166-229</code>。</p>
+</section>
+
+<section class="section" id="components"><h2>4. 架构组成</h2>
+<div class="table-wrap"><table><thead><tr><th>组件</th><th>输入 → 输出</th><th>故障隔离/扩展点</th><th>源码</th></tr></thead><tbody>
+<tr><td>有效选择</td><td>config/session/channel/run → provider/model + 严格性事实</td><td>锁定或未授权 override 在执行前拒绝。</td><td><code>src/agents/command/model-selection.ts:85-157</code>、<code>src/agents/command/model-selection.ts:304-365</code></td></tr>
+<tr><td>可见性策略</td><td>Catalog + modelPolicy.allow → 允许的选择</td><td>显式 override 不可见时 fail-closed。</td><td><code>src/agents/command/model-selection.ts:125-157</code>、<code>src/agents/command/model-selection.ts:330-349</code></td></tr>
+<tr><td>预备 Catalog</td><td>registry + manifest + config + Provider hooks → 已排序快照</td><td>route 变化会清除旧 route-bound capability，避免能力串线。</td><td><code>src/agents/model-catalog.ts:192-229</code>、<code>src/agents/model-catalog.ts:410-576</code></td></tr>
+<tr><td>Auth 排序</td><td>config/store 顺序 + 合格性 + cooldown → profile ids</td><td>显式 order 保留；临时坏 profile 后移；默认按类型/expiry/lastUsed。</td><td><code>src/agents/auth-profiles/order.ts:279-431</code>、<code>src/agents/auth-profiles/order.ts:473-531</code></td></tr>
+<tr><td>候选构建器</td><td>requested model + fallback 覆盖/默认 → 去重链</td><td>显式 fallback 是 operator intent，不被 allowlist 静默过滤。</td><td><code>src/agents/model-fallback.ts:1001-1114</code></td></tr>
+<tr><td>Harness 选择器</td><td>policy + 预备 route/auth + supports → 单个 Harness</td><td>显式插件不支持/缺失就报错；只有 auto 可回 built-in。</td><td><code>src/agents/harness/selection.ts:267-457</code></td></tr>
+<tr><td>错误归一化器</td><td>嵌套 provider/transport/error payload → <code>FailoverError</code></td><td>保留 reason/status/code/raw preview 与 attribution。</td><td><code>src/agents/failover-error.ts:35-205</code></td></tr>
+<tr><td>Fallback 运行器</td><td>候选链 + attempt 回调 → 胜出/耗尽</td><td>取消、coordination、transcript、overflow 与副作用边界提前终止。</td><td><code>src/agents/model-fallback.ts:1414-2025</code></td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="flows"><h2>5. 完整运行流程</h2>
+<h3>5.1 成功路径：默认模型一次命中</h3>
+<div class="flow">agentCommand
+ → 解析已配置的默认值
+ → 应用 channel 覆盖（若无 explicit run 覆盖）
+ → 应用有效的已存储 session 覆盖
+ → 应用已授权的 explicit run 覆盖
+ → 可见性策略 + Harness 准备
+ → 解析有效 fallbacks
+ → 构建 [requested, ...fallbacks] 候选链
+ → auth 顺序选择可用 profile
+ → 选定的 Harness 运行 provider stream/tool 循环
+ → candidate_succeeded
+ → reply + usage；下一 turn 仍从选定 model 开始</div>
+<p>Stored session override 高于 Channel override；显式 run override 最后覆盖，但必须允许、未被 selection lock 锁定且通过 modelPolicy。Catalog/Harness 检查在模型调用前完成。<span class="evidence"><code>src/agents/command/model-selection.ts:230-349</code>、<code>src/agents/command/model-selection.ts:357-437</code></span></p>
+
+<h3>5.2 拒绝/提前结束路径：严格用户选择</h3>
+<div class="flow">/model 或 picker 写入 modelOverrideSource="user"
+ → 下一 turn 解析 stored provider/model
+ → resolveEffectiveModelFallbacks()
+ → user source => []
+ → 只构造 requested candidate
+ → auth/provider 失败
+ → 无其他候选，表面化原错误或单候选错误
+ → 不让无关模型替用户“成功”</div>
+<p>同样的 fail-fast 还包括：caller 未获 <code>allowModelOverride</code>、selection lock、modelPolicy 拒绝、显式 Harness 缺失或不支持。它们均发生在业务副作用前。<span class="evidence"><code>src/agents/command/model-selection.ts:117-123</code>、<code>src/agents/command/model-selection.ts:330-365</code>；<code>src/agents/agent-scope.ts:562-588</code></span></p>
+
+<h3>5.3 恢复路径：Auth 轮换 → Model fallback → 安全过载重试</h3>
+<div class="flow">候选 A / profile 1 失败
+ → 分类原因 + 标记 profile 使用状态
+ → 下一个合格 profile（同 Provider）
+ → profiles 耗尽 / 轮换上限
+ → 抛出归一化 FailoverError
+ → 外层 runner 记录转换并尝试候选 B
+ → 若胜出：turn 局部成功
+ → 若每个候选都只是过载：
+      仅当没有工具执行或 assistant 输出时
+      重试完整链 ≤ 10 次，指数 2.5s → 30s 上限
+      30s 后发出一条瞬态状态通知
+ → 否则 FallbackSummaryError / 可见终态错误</div>
+<p>模型候选循环通过 <code>canFallbackAfterError</code> 询问调用方是否已有不可重放工作；CLI max-turn 也会在 candidate fallback 前停止，因为它可能跟在成功工具动作之后。Context 溢出 被立即抛回内层 compaction 路径。<span class="evidence"><code>src/agents/model-fallback.ts:1812-1868</code>；<code>src/auto-reply/reply/agent-runner-error-handler.ts:64-70</code>、<code>src/auto-reply/reply/agent-runner-error-handler.ts:279-394</code></span></p>
+</section>
+
+<section class="section" id="state"><h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table><thead><tr><th>状态</th><th>权威位置</th><th>生命周期</th><th>说明</th></tr></thead><tbody>
+<tr><td>选中模型/来源</td><td>Session entry 的 provider/model override 与 provenance</td><td>用户命令、reset、auto recovery 更新</td><td>turn-local fallback 不写回 selection。</td></tr>
+<tr><td>Auth 凭证 + usage</td><td>每 agent SQLite auth 存储</td><td>登录/Doctor 导入；失败在锁内更新</td><td>config 的 profiles/order 是 metadata/routing，不放 secret。</td></tr>
+<tr><td>Cooldown/禁用/阻断</td><td><code>usageStats</code></td><td>失败写入；到期清理/探测恢复</td><td>可为 provider-wide 或 model-scoped。</td></tr>
+<tr><td>预备 Catalog</td><td>Gateway generation 内快照</td><td>启动/reload 重建</td><td>请求期不扫描磁盘。</td></tr>
+<tr><td>候选缓存</td><td>进程内 Map，最多 256</td><td>按 config/plugin fingerprint；FIFO 淘汰</td><td>manifestPlugins 显式传入时不缓存。</td></tr>
+<tr><td>主探测状态</td><td>进程 Map，最多 4096 key</td><td>auto fallback origin 每 5 分钟可探测</td><td>只服务遗留/自动 fallback 恢复。</td></tr>
+<tr><td>Fallback 尝试</td><td>单次调用内数组 + diagnostics</td><td>候选循环内创建，终态汇总</td><td>含 reason/status/code，避免丢失根因。</td></tr>
+</tbody></table></div>
+<p class="evidence">Session probe：<code>src/agents/agent-scope.ts:50-90</code>、<code>src/agents/agent-scope.ts:121-241</code>；candidate cache：<code>src/agents/model-fallback.ts:364-370</code>、<code>src/agents/model-fallback.ts:892-919</code>；Auth store：<code>docs/concepts/model-failover.md:87-111</code>。</p>
+</section>
+
+<section class="section" id="interfaces"><h2>7. 接口、协议与事件</h2>
+<div class="table-wrap"><table><thead><tr><th>接口/事件</th><th>契约</th><th>失败语义</th></tr></thead><tbody>
+<tr><td><code>resolveEmbeddedModelSelection</code></td><td>返回 provider/model/defaults/strictness/session/auth/harness 所需事实。</td><td>非法 override、allowlist、thinking/harness 直接抛错。</td></tr>
+<tr><td><code>resolveModelCandidateChain</code></td><td>requested first，fallback 去重；显式空 override 表示严格。</td><td>无隐式候选时保持单项。</td></tr>
+<tr><td><code>runWithModelFallback</code></td><td>支持 classifyResult、onError、onFallbackStep、side-effect veto、abort。</td><td>耗尽产生结构化 summary；coordination/overflow/abort 不伪装成 Provider 失败。</td></tr>
+<tr><td><code>ProviderFailoverErrorContext</code></td><td>Provider plugin 可参与错误分类，Core 只消费通用归一结果。</td><td>未知错误有剩余候选时可继续，最后未知错误保留原错误。</td></tr>
+<tr><td><code>model_fallback_decision</code></td><td>记录 from/to、reason、attempt、outcome。</td><td>只有真实 candidate transition 发 failover event。</td></tr>
+<tr><td>Harness <code>supports()</code></td><td>检查 prepared route/auth/runtime 是否可保真执行。</td><td>显式/pinned 不支持 fail-closed；auto 无匹配才用 built-in。</td></tr>
+</tbody></table></div>
+<p class="evidence"><code>src/agents/model-fallback.ts:1342-1375</code>、<code>src/agents/model-fallback.ts:1471-1498</code>；<code>src/agents/harness/selection.ts:298-399</code>；Provider 公共类型：<code>src/plugins/types.ts:175-226</code>。</p>
+</section>
+
+<section class="section" id="config"><h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table><thead><tr><th>配置</th><th>默认/优先级</th><th>失败行为</th><th>来源</th></tr></thead><tbody>
+<tr><td><code>agents.defaults.model.primary</code></td><td>全局 primary；per-agent primary 覆盖。</td><td>不可见且无 allowed model 时拒绝。</td><td><code>src/config/types.agent-defaults.ts:50-60</code>、<code>src/agents/agent-scope.ts:352-367</code></td></tr>
+<tr><td><code>agents.defaults.model.fallbacks</code></td><td>configured default 使用；有序。</td><td>耗尽汇总。</td><td><code>src/agents/model-fallback.ts:1087-1113</code></td></tr>
+<tr><td><code>agents.entries.*.model</code></td><td>若只设 primary 则 strict；只有自身对象显式 fallbacks 才 opt-in。</td><td><code>fallbacks:[]</code> 明确关闭。</td><td><code>src/agents/agent-scope.ts:421-453</code></td></tr>
+<tr><td><code>modelPolicy.allow</code></td><td>缺失/空为 allow-any；per-agent policy 替代 default。</td><td>显式选择在调用前拒绝并给 repair path。</td><td><code>src/agents/command/model-selection.ts:125-157</code>、<code>src/agents/command/model-selection.ts:330-346</code></td></tr>
+<tr><td><code>auth.order[provider]</code></td><td>显式 order 优先；否则 configured profiles，再 stored profiles。</td><td>无 eligible profile 进入 cooldown/fallback 判断。</td><td><code>src/agents/auth-profiles/order.ts:296-352</code></td></tr>
+<tr><td><code>agentRuntime</code></td><td>model/provider policy 解析；<code>auto</code> 探测 plugin，最后 built-in。</td><td>显式插件缺失/不支持不静默降级。</td><td><code>src/agents/harness/selection.ts:267-457</code></td></tr>
+<tr><td>过载完整链重试</td><td>内部上限 10；2.5s 指数退避至 30s；30s 后一次 notice。</td><td>已有 tool/assistant side effect 时禁用。</td><td><code>src/auto-reply/reply/agent-runner-error-handler.ts:64-70</code>、<code>src/auto-reply/reply/agent-runner-error-handler.ts:279-394</code></td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="performance"><h2>9. 并发、性能与资源</h2>
+<ul>
+<li>预备 Catalog 是 generation 快照；manifest Catalog 按 config/snapshot WeakMap 缓存，避免 request-time discovery。<span class="evidence"><code>src/agents/model-catalog.ts:77-101</code>、<code>src/agents/model-catalog.ts:327-397</code></span></li>
+<li>候选 cache 上限 256；auto-primary probe 上限 4096；cooldown probe 每 provider/agentDir 受 30 秒 throttle，状态上限 256。<span class="evidence"><code>src/agents/model-fallback.ts:369-370</code>；<code>src/agents/agent-scope.ts:50-52</code>；<code>src/agents/model-fallback.ts:1116-1121</code></span></li>
+<li>同一 Provider 的 profile 轮换 发生在内层 attempt；外层 candidate loop 串行，避免并行候选产生重复工具副作用。</li>
+<li>Cooldown profile 后移而非删除；最早到期者先排，允许无重启恢复。</li>
+<li>完整过载重试的计时器和 notice 都响应 AbortSignal；完成后取消 pending notice。</li>
+</ul>
+</section>
+
+<section class="section" id="security"><h2>10. 安全与信任边界</h2>
+<ol>
+<li><strong>Secret 与路由分离：</strong>config 只保存 profile metadata/order；secret 与 usage state 在 per-agent auth store。</li>
+<li><strong>模型选择授权：</strong>一次性 override 需要 caller 显式授权，selection lock 和 modelPolicy 在调用前 fail-closed。<span class="evidence"><code>src/agents/command/model-selection.ts:117-123</code>、<code>src/agents/command/model-selection.ts:330-346</code></span></li>
+<li><strong>显式 Harness 不降级：</strong>防止用户要求的运行时语义被另一个 backend 悄悄替换。<span class="evidence"><code>src/agents/harness/selection.ts:298-399</code>、<code>src/agents/harness/selection.ts:553-576</code></span></li>
+<li><strong>副作用重放边界：</strong>模型 fallback 和完整过载 retry 都必须在 tool execution/assistant output 前；否则表面化错误供用户核验。</li>
+<li><strong>日志脱敏：</strong>结构化诊断保存 reason/status/code 与受限 raw preview，不应写出 API key/token。</li>
+</ol>
+</section>
+
+<section class="section" id="failure"><h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table><thead><tr><th>故障/现象</th><th>即时行为</th><th>状态影响</th><th>恢复</th></tr></thead><tbody>
+<tr><td>用户选择不在 allowlist</td><td>调用前拒绝。</td><td>Session 不被新值污染。</td><td>选允许模型或修 modelPolicy。</td></tr>
+<tr><td>Auth/限流/超时</td><td>标记 profile，尝试下一 profile。</td><td>cooldown/blocked usage state 更新。</td><td>到期自动回归；必要时重新认证。</td></tr>
+<tr><td>计费/永久 auth</td><td>较长 disabled lane，向下一 profile/model。</td><td>profile 跨模型不可用。</td><td>修余额/凭证；探测或到期恢复。</td></tr>
+<tr><td>Provider 过载</td><td>同 Provider rotation 有界后尽快 model 回退。</td><td>记录 overloaded bucket。</td><td>纯失败链可做 turn-local 完整链重试。</td></tr>
+<tr><td>Context 溢出</td><td>不进入 model 回退。</td><td>候选/selection 不变。</td><td>交给 compaction/truncation（第 10 章）。</td></tr>
+<tr><td>本地协调/Transcript 错误</td><td>立即抛原错误。</td><td>不消耗候选。</td><td>修 session lock/owner 状态。</td></tr>
+<tr><td>显式 Harness 缺失/失败</td><td>fail-closed；运行中不回 built-in。</td><td>无隐藏 backend 切换。</td><td>安装/启用/修复 Harness 或改 policy。</td></tr>
+<tr><td>全部候选耗尽</td><td><code>FallbackSummaryError</code>。</td><td>可附 soonest cooldown；必要时 suspend lane。</td><td>按 reason 修 auth、等待或改候选。</td></tr>
+</tbody></table></div>
+<p class="evidence">错误隔离：<code>src/agents/model-fallback.ts:1840-1868</code>、<code>src/agents/model-fallback.ts:1932-2025</code>；状态排序：<code>src/agents/auth-profiles/order.ts:388-431</code>。</p>
+</section>
+
+<section class="section" id="operations"><h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>先检查</th><th>可能原因</th><th>操作</th></tr></thead><tbody>
+<tr><td>选的模型与回答模型不同</td><td><code>/status</code> selected/active 与 fallback notice。</td><td>配置允许 turn-local fallback。</td><td>看 <code>model_fallback_decision</code> 的 from/to/reason。</td></tr>
+<tr><td>没有走 fallback</td><td>Session <code>modelOverrideSource</code>、agent fallbacks。</td><td>用户 strict pin 或 agent primary 未显式 fallbacks。</td><td><code>/model default</code> 或配置该 agent 的 fallbacks。</td></tr>
+<tr><td>反复跳过 profile</td><td><code>openclaw models status</code>、cooldown/disabled expiry。</td><td>限流、计费、auth 永久。</td><td>等待到期或重认证；勿清空真实 provider reset。</td></tr>
+<tr><td>显示 All models failed</td><td>每个 attempt 的 reason/status/code。</td><td>候选都不可用；最后可能是 unknown。</td><td>先修首个高置信 auth/billing；检查 soonest cooldown。</td></tr>
+<tr><td>过载等待很久</td><td>重试次数、30s 通知、AbortSignal。</td><td>全链 only-overloaded 且尚无副作用。</td><td>等待有界重试或取消；已有副作用时不会自动重放。</td></tr>
+<tr><td>Harness 意外不匹配</td><td>debug <code>agent harness selected</code> candidates/reason。</td><td>auto supports、显式 runtime、prepared route 不兼容。</td><td>修 model/provider runtime policy；不要按 model prefix 猜。</td></tr>
+</tbody></table></div>
+<p class="evidence">Harness debug fields：<code>src/agents/harness/selection.ts:821-837</code>；fallback observation：<code>src/agents/model-fallback.ts:637-682</code>。</p>
+</section>
+
+<section class="section" id="tests"><h2>13. 测试与验证证据</h2>
+<div class="table-wrap"><table><thead><tr><th>契约</th><th>测试</th><th>能证明</th><th>缺口</th></tr></thead><tbody>
+<tr><td>选择来源严格性</td><td><code>src/agents/agent-scope.test.ts:230-372</code></td><td>默认、auto、user 与 agent fallback 组合。</td><td>真实 Provider 网络。</td></tr>
+<tr><td>Session 覆盖优先级</td><td><code>src/agents/agent-command.live-model-switch.test.ts:1273-2179</code></td><td>stored/channel/auto/user override 和 live switch。</td><td>跨进程 UI 现场。</td></tr>
+<tr><td>候选/cooldown/fallback</td><td><code>src/agents/model-fallback.test.ts</code>、<code>src/agents/model-fallback.probe.test.ts</code></td><td>链顺序、skip/probe、summary。</td><td>供应商 SDK 内部重试。</td></tr>
+<tr><td>Profile 轮换</td><td><code>src/agents/embedded-agent-runner.run-embedded-agent.auth-profile-rotation.e2e.test.ts:622-1352</code></td><td>assistant/prompt overload、cooldown probe、结构化日志。</td><td>真实账户 reset。</td></tr>
+<tr><td>错误规范化</td><td><code>src/agents/failover-error.test.ts:235-1124</code></td><td>status/code/payload 到 reason/status。</td><td>未来新 Provider 错误形状。</td></tr>
+<tr><td>Harness fail-closed</td><td><code>src/plugin-sdk/agent-harness-runtime.test.ts</code>、<code>src/config/config.plugin-validation.test.ts:789-1175</code>、<code>extensions/codex/src/app-server/bounded-turn.test.ts:303-318</code></td><td>显式/auto/runtime policy；Codex 测试证明 bounded turn 使用受限线程配置。</td><td>未运行真实 Codex app-server。</td></tr>
+<tr><td>过载完整链重试</td><td><code>src/auto-reply/reply/agent-runner-execution-provider-failures.test.ts:377-559</code></td><td>通知、abort、重试安全。</td><td>长时间真实服务过载。</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="development"><h2>14. 开发与扩展指南</h2>
+<div class="table-wrap"><table><thead><tr><th>变更目标</th><th>正确所有者</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>新增 Provider</td><td>Provider plugin 的 auth/catalog/runtime hooks</td><td>manifest/control-plane metadata、直接依赖契约、auth/error/live test。</td></tr>
+<tr><td>改变 effective selection</td><td><code>src/agents/command/model-selection.ts</code> + session override contract</td><td>default/channel/session/run 全优先级与 strictness。</td></tr>
+<tr><td>改变 fallback chain</td><td><code>src/agents/agent-scope.ts</code> + <code>src/agents/model-fallback.ts</code></td><td>显式空链、agent/default、auto/user、allowlist operator intent。</td></tr>
+<tr><td>新增 Harness</td><td>公开 Plugin SDK + plugin-local implementation</td><td>supports 对 prepared route/auth 的保真；显式 fail-closed；tool policy。</td></tr>
+<tr><td>新增错误分类</td><td>Provider plugin matcher 或通用 failover normalizer</td><td>真实上游错误契约、误分类反例、redaction、status/reason。</td></tr>
+<tr><td>改变 retry</td><td>内层 profile policy或外层 reply runner</td><td>副作用前/后、abort、timeout、notice、上下文溢出不串线。</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>禁止捷径：</strong>不要按 model prefix 偷选 Harness；不要在 Core 硬编码 plugin id；不要把未知错误一律当 timeout；不要让 fallback 永久覆盖用户 Session；不要在已有工具/消息副作用后重放整个 turn；涉及 Codex verdict 前必须直接检查 sibling <code>../codex</code>。</div>
+</section>
+
+<section class="section" id="tradeoffs"><h2>15. 设计权衡与已知限制</h2>
+<div class="table-wrap"><table><thead><tr><th>选择</th><th>收益</th><th>成本/限制</th></tr></thead><tbody>
+<tr><td>Profile 轮换 先于 model 回退</td><td>保持模型语义和 prompt cache，利用多账户。</td><td>状态机复杂；需精确区分 cooldown 与 permanent failure。</td></tr>
+<tr><td>用户选择 strict</td><td>尊重能力、成本和隐私意图。</td><td>短时故障不会自动“成功”。</td></tr>
+<tr><td>Fallback turn 局部</td><td>一次故障不永久改变 Session。</td><td>每 turn 可能再次尝试 primary；需 notice/probe 去噪。</td></tr>
+<tr><td>显式 Harness fail-closed</td><td>不悄悄改变 runtime/tool/协议语义。</td><td>插件故障直接影响该选择。</td></tr>
+<tr><td>未知错误有剩余候选时继续</td><td>提高可用性。</td><td>必须保留原错误；最终未知不能伪装成已知 Provider failure。</td></tr>
+<tr><td>纯过载完整链重试</td><td>吸收短时容量波动。</td><td>严格依赖无副作用证明，最多 10 次仍可能等待数分钟。</td></tr>
+</tbody></table></div>
+<div class="warning"><strong>证据限制：</strong>未运行真实 Provider、OAuth、Codex app-server 或过载 Live 测试。已检查 Codex 上游协议与生命周期源码，但本文不承诺任何供应商 SLA、SDK 内部 retry-after 默认、服务容量，也不把 Codex 专属 thread/model 协议写成通用 Provider 行为。</div>
+</section>
+
+<section class="section" id="sources"><h2>16. 源码索引与进一步阅读</h2>
+<ul class="source-list">
+<li><code>src/agents/command/model-selection.ts:62-566</code> — effective model。</li>
+<li><code>src/agents/agent-scope.ts:352-588</code> — primary/fallback strictness。</li>
+<li><code>src/agents/model-catalog.ts:192-229</code>、<code>src/agents/model-catalog.ts:327-576</code> — Catalog。</li>
+<li><code>src/agents/auth-profiles/order.ts:194-531</code> — eligibility/order。</li>
+<li><code>src/agents/auth-profiles/usage.ts:1-103</code> — usage/cooldown owner。</li>
+<li><code>src/agents/model-fallback.ts:892-1114</code> — candidate chain。</li>
+<li><code>src/agents/model-fallback.ts:1414-2025</code> — fallback loop。</li>
+<li><code>src/agents/failover-error.ts:35-205</code> — normalized error。</li>
+<li><code>src/agents/harness/selection.ts:171-255</code>、<code>src/agents/harness/selection.ts:267-457</code> — Harness。</li>
+<li><code>src/agents/embedded-agent-runner/run/assistant-failover.ts:58-325</code> — profile escalation。</li>
+<li><code>src/auto-reply/reply/agent-runner-error-handler.ts:64-70</code>、<code>src/auto-reply/reply/agent-runner-error-handler.ts:279-394</code> — overload retry。</li>
+<li><code>extensions/codex/src/app-server/bounded-turn.ts:184-267</code>、<code>extensions/codex/src/app-server/bounded-turn.ts:371-404</code> — Codex model/list 与 bounded thread 消费侧。</li>
+<li><code>../codex/codex-rs/app-server-protocol/src/protocol/v2/thread.rs:56-201</code> — Codex thread/start 上游契约。</li>
+<li><code>../codex/codex-rs/app-server-protocol/src/protocol/v2/model.rs:43-52</code>、<code>../codex/codex-rs/app-server-protocol/src/protocol/v2/model.rs:130-135</code> — Codex model/list 上游契约。</li>
+<li><code>docs/concepts/models.md:26-86</code> — 模型选择文档。</li>
+<li><code>docs/concepts/model-failover.md:11-343</code> — failover 运维契约。</li>
+</ul>
+<h3>官方进一步阅读</h3><ul>
+<li><a href="https://docs.openclaw.ai/concepts/models">Models</a></li>
+<li><a href="https://docs.openclaw.ai/concepts/model-failover">Model failover</a></li>
+<li><a href="https://docs.openclaw.ai/concepts/model-providers">Model providers</a></li>
+<li><a href="https://docs.openclaw.ai/concepts/agent-runtimes">Agent runtimes</a></li>
+</ul>
+<div class="evidence"><strong>最终证据状态：</strong>OpenClaw 当前实现、配置消费、测试、官方文档及 sibling Codex app-server 协议源码已交叉核验。Git SHA、真实 Provider/Codex Live 行为仍未验证；Codex 专属字段只用于证明 Harness 边界，不作为跨 Provider 契约。</div>
+</section>
+<div class="footer">OpenClaw Architecture Module 09 · Model, Provider &amp; Failover<br>开发级子文档 · 基于当前工作副本源码、测试与官方文档</div>
+</main><a class="back-top" href="#top" aria-label="返回顶部">↑</a>
+<script>(function(){const links=[...document.querySelectorAll('.sidebar a')];const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);const activate=()=>{let current=sections[0];for(const section of sections){if(section.getBoundingClientRect().top<=92)current=section}links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current.id))};document.addEventListener('scroll',activate,{passive:true});activate()})();</script>
+</body>
+</html>

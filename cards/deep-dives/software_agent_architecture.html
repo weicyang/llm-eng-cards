@@ -1,0 +1,1580 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="OpenHands Software Agent SDK 深度架构解析：运行时、上下文、LLM、工具、工作空间、服务端、持久化与扩展生态。">
+  <title>Software Agent SDK 深度架构解析</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --surface: #fffdf8;
+      --surface-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --orange: #c2410c;
+      --purple: #6d28d9;
+      --red: #b91c1c;
+      --sidebar: 286px;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      font: 15px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre, .mono {
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+    }
+    code {
+      padding: .12em .38em;
+      border-radius: 5px;
+      background: rgba(120,113,108, .18);
+      font-size: .9em;
+    }
+    pre {
+      overflow: auto;
+      margin: 14px 0;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      color: #44403c;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+    header {
+      position: sticky;
+      top: 48px;
+      z-index: 20;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 58px;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(244,241,234, .96);
+      backdrop-filter: blur(12px);
+    }
+    .brand { font-weight: 700; letter-spacing: .2px; }
+    .header-meta { color: var(--muted); font-size: 13px; }
+    .header-right { display: flex; align-items: center; gap: 14px; }
+    .guide-entry {
+      font-size: 12.5px; font-weight: 600; white-space: nowrap;
+      padding: 5px 12px; border-radius: 7px; text-decoration: none;
+      color: #4338ca;
+      border: 1px solid rgba(67,56,202, .5);
+      background: rgba(67,56,202, .1);
+      transition: background .2s, transform .2s;
+    }
+    .guide-entry:hover { background: rgba(67,56,202, .25); transform: translateY(-1px); }
+    .layout { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); }
+    aside {
+      position: sticky;
+      top: 106px;
+      height: calc(100vh - 106px);
+      overflow: auto;
+      padding: 22px 14px 28px 18px;
+      border-right: 1px solid var(--border);
+      background: var(--bg);
+    }
+    aside h2 {
+      margin: 0 8px 12px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    nav a {
+      display: block;
+      margin: 2px 0;
+      padding: 5px 9px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+    nav a:hover, nav a.active {
+      color: var(--text);
+      background: var(--surface);
+      text-decoration: none;
+    }
+    nav a.active { box-shadow: inset 2px 0 var(--blue); }
+    main { min-width: 0; max-width: 1250px; padding: 52px 58px 100px; }
+    .hero { padding: 20px 0 42px; border-bottom: 1px solid var(--border); }
+    .eyebrow { color: var(--blue); font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+    h1 { margin: 9px 0 12px; font-size: clamp(32px, 5vw, 54px); line-height: 1.12; }
+    .lead { max-width: 900px; color: #57534e; font-size: 18px; }
+    .meta-row, .badge-row { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 9px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--surface);
+      font-size: 12px;
+    }
+    .badge.fact { color: #15803d; border-color: rgba(21,128,61, .45); }
+    .badge.optional { color: #a16207; border-color: rgba(194,65,12, .45); }
+    .badge.deploy { color: #6d28d9; border-color: rgba(109,40,217, .45); }
+    .badge.rule { color: #c2410c; border-color: rgba(194,65,12, .45); }
+    .subdoc-tag {
+      display: inline-block;
+      margin-left: .35rem;
+      padding: .02rem .34rem;
+      border: 1px solid rgba(21,128,61, .45);
+      border-radius: 999px;
+      color: #15803d;
+      background: rgba(21,128,61, .08);
+      font-size: 10px;
+      font-weight: 700;
+      vertical-align: .08rem;
+    }
+    .doc-link {
+      display: inline-flex;
+      align-items: center;
+      margin-left: .55rem;
+      padding: .08rem .5rem;
+      border: 1px solid rgba(67,56,202, .55);
+      border-radius: 999px;
+      background: rgba(67,56,202, .12);
+      color: #0f766e;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+      vertical-align: middle;
+    }
+    .doc-link:hover { background: rgba(67,56,202, .22); text-decoration: none; }
+    .detail-docs {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 18px 0;
+    }
+    .detail-doc-card {
+      display: block;
+      padding: 15px 16px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+      color: var(--text);
+    }
+    .detail-doc-card:hover { border-color: rgba(67,56,202, .55); text-decoration: none; }
+    .detail-doc-card strong { display: block; margin-bottom: 5px; color: #0f766e; }
+    .detail-doc-card span { display: block; color: var(--muted); font-size: 13px; line-height: 1.45; }
+    section { scroll-margin-top: 132px; padding: 45px 0 14px; }
+    section + section { border-top: 1px solid var(--border); }
+    h2 { margin: 0 0 16px; font-size: 28px; line-height: 1.3; }
+    h3 { margin: 28px 0 10px; font-size: 20px; }
+    h4 { margin: 22px 0 8px; font-size: 16px; color: #44403c; }
+    p { margin: 9px 0 14px; }
+    ul, ol { padding-left: 24px; }
+    li { margin: 4px 0; }
+    .muted { color: var(--muted); }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin: 18px 0;
+    }
+    .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .card {
+      padding: 17px 18px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+    }
+    .card h3, .card h4 { margin-top: 0; }
+    .card p:last-child { margin-bottom: 0; }
+    .callout {
+      margin: 18px 0;
+      padding: 15px 17px;
+      border-left: 3px solid var(--blue);
+      border-radius: 0 7px 7px 0;
+      background: rgba(67,56,202, .08);
+    }
+    .callout strong:first-child { color: var(--blue); }
+    .callout.warning { border-left-color: var(--yellow); background: rgba(194,65,12, .08); }
+    .callout.warning strong:first-child { color: #a16207; }
+    .callout.danger { border-left-color: var(--red); background: rgba(185,28,28, .08); }
+    .callout.danger strong:first-child { color: var(--red); }
+    .callout.design { border-left-color: var(--purple); background: rgba(109,40,217, .08); }
+    .callout.design strong:first-child { color: #6d28d9; }
+    .table-wrap { overflow-x: auto; margin: 16px 0 22px; }
+    table { width: 100%; border-collapse: collapse; min-width: 700px; font-size: 14px; }
+    th, td { padding: 10px 12px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    th { background: var(--surface-2); color: #44403c; }
+    td { background: rgba(255,253,248, .55); }
+    .flow {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      overflow-x: auto;
+      margin: 18px 0;
+      padding: 12px 0;
+    }
+    .flow .step {
+      flex: 1 0 145px;
+      min-width: 145px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      text-align: center;
+    }
+    .flow .arrow { align-self: center; color: var(--muted); font-size: 20px; }
+    .diagram {
+      padding: 15px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #f6f8fa;
+      text-align: center;
+    }
+    .diagram img {
+      display: block;
+      width: 100%;
+      max-height: 640px;
+      object-fit: contain;
+      cursor: zoom-in;
+    }
+    .diagram figcaption { margin-top: 10px; color: #78716c; font-size: 12px; }
+    .artifact-links { display: flex; flex-wrap: wrap; gap: 10px; margin: 14px 0; }
+    .artifact-links a {
+      padding: 7px 11px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+    details {
+      margin: 10px 0;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+    }
+    summary { cursor: pointer; padding: 11px 14px; font-weight: 600; }
+    details > div { padding: 0 14px 13px; color: #44403c; }
+    .term {
+      padding: .05em .38em;
+      border-radius: 4px;
+      border-bottom: 1px solid rgba(194,65,12, .3);
+      background: rgba(194,65,12, .12);
+      color: var(--orange);
+      font-size: .9em;
+      font-weight: 500;
+    }
+    .chapter-no { color: var(--blue); font-family: "Cascadia Code", monospace; font-size: 13px; }
+    .source-list code { color: #44403c; }
+    #lightbox {
+      position: fixed;
+      inset: 0;
+      z-index: 500;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 28px;
+      background: rgba(28,25,23, .88);
+    }
+    #lightbox.open { display: flex; }
+    #lightbox img { max-width: 100%; max-height: 100%; background: white; cursor: grab; user-select: none; }
+    #lightbox .lb-close {
+      position: absolute;
+      top: 16px;
+      right: 18px;
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      border: 1px solid rgba(28,25,23,.18);
+      background: rgba(255,253,248, .9);
+      color: #1c1917;
+      font-size: 16px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 1;
+    }
+    footer { margin-top: 55px; padding-top: 25px; border-top: 1px solid var(--border); color: var(--muted); }
+    @media (max-width: 1050px) {
+      :root { --sidebar: 238px; }
+      main { padding: 40px 34px 80px; }
+      .grid.three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 760px) {
+      header { padding: 0 15px; }
+      .header-meta { display: none; }
+      .layout { display: block; }
+      aside { display: none; }
+      main { padding: 30px 18px 70px; }
+      .grid, .grid.three { grid-template-columns: 1fr; }
+      .detail-docs { grid-template-columns: 1fr; }
+      h1 { font-size: 36px; }
+    }
+    /* ===== 顶部 Tab 栏（与 trae_agent_architecture 对齐） ===== */
+    .project-tabs { position: fixed; top: 0; left: 0; right: 0; z-index: 300; height: 48px; display: flex; align-items: center; padding: 0 1.25rem; background: #fffdf8; border-bottom: 1px solid var(--border); box-shadow: 0 1px 8px rgba(28,25,23,.5); }
+    .project-tabs .tab-home { color: var(--blue); font-size: .88rem; font-weight: 600; text-decoration: none; margin-right: 2rem; white-space: nowrap; padding: .32rem .85rem; border: 1px solid var(--border); border-radius: 8px; transition: all .25s; }
+    .project-tabs .tab-home:hover { background: var(--blue); color: var(--bg); border-color: var(--blue); text-decoration: none; transform: translateY(-1px); }
+    .project-tabs .tab-btn { background: none; border: none; cursor: pointer; font-family: inherit; font-size: .95rem; font-weight: 600; color: var(--muted); padding: .95rem 1.25rem; position: relative; transition: color .2s; }
+    .project-tabs .tab-btn:hover { color: var(--text); }
+    .project-tabs .tab-btn.active { color: var(--blue); }
+    .project-tabs .tab-btn.active::after { content: ''; position: absolute; bottom: -1px; left: 1.25rem; right: 1.25rem; height: 3px; background: var(--blue); border-radius: 2px 2px 0 0; }
+    .spanel { display: none; }
+    .spanel.active { display: block; }
+    body.tab-embed { padding: 48px 0 0; overflow: hidden; }
+    .spanel > iframe { width: 100%; height: calc(100vh - 48px); border: 0; display: block; background: var(--bg); }
+    #panel-flow { max-width: 1250px; margin: 0 auto; padding: 76px 40px 70px; }
+    @media (max-width: 640px) {
+      .project-tabs { padding: 0 .35rem; overflow-x: auto; overflow-y: hidden; }
+      .project-tabs .tab-home { margin-right: .15rem; padding: .3rem .5rem; font-size: .8rem; }
+      .project-tabs .tab-btn { padding: .95rem .5rem; font-size: .8rem; white-space: nowrap; }
+      .project-tabs .tab-btn.active::after { left: .5rem; right: .5rem; }
+      #panel-flow { padding: 64px 14px 50px; }
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+    /* ===== 站点标准知识组件：与全站卡片保持同一套语义与视觉 ===== */
+    .arch-diagram {
+      overflow-x: auto;
+      margin: 15px 0;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      color: #4338ca;
+      font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.55;
+      white-space: pre;
+    }
+    .intuition-box {
+      margin: 15px 0;
+      padding: 14px 18px;
+      border: 1px solid var(--green);
+      border-radius: 8px;
+      background: rgba(21,128,61, .06);
+    }
+    .intuition-box::before {
+      content: "⚡ 一句话直觉";
+      display: block;
+      margin-bottom: 4px;
+      color: var(--green);
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+    .intuition-box p { margin: 0; color: var(--text); font-style: italic; }
+    .highlight { margin: 15px 0; padding-left: 15px; border-left: 3px solid var(--blue); color: #44403c; }
+    .practice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 18px 0; }
+    .practice-grid .do { padding: 14px 16px; border: 1px solid var(--green); border-radius: 8px; background: rgba(21,128,61, .08); }
+    .practice-grid .do::before { content: "✅ Do"; display: block; margin-bottom: 5px; color: var(--green); font-weight: 700; }
+    .practice-grid .dont { padding: 14px 16px; border: 1px solid var(--red); border-radius: 8px; background: rgba(185,28,28, .08); }
+    .practice-grid .dont::before { content: "❌ Don't"; display: block; margin-bottom: 5px; color: var(--red); font-weight: 700; }
+    .practice-grid ul { margin: 4px 0 0; padding-left: 18px; }
+    .practice-grid li { margin: 5px 0; }
+    @media (max-width: 980px) {
+      .practice-grid { grid-template-columns: 1fr; }
+      .arch-diagram { padding: 10px; font-size: 11px; }
+    }
+    @media print {
+      .project-tabs { display: none; }
+      header, aside { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      body { color: #111; background: white; }
+      section + section { border-top-color: #ddd; }
+      .card, td, th, pre, details { color: #111; background: white; border-color: #ccc; }
+      .muted { color: #555; }
+    }
+  </style>
+</head>
+<body>
+<div class="project-tabs">
+    <a class="tab-home" href="../../index.html">⌂ 首页</a>
+    <button class="tab-btn" data-tab="guide">📖 入门指南</button>
+    <button class="tab-btn active" data-tab="docs">📋 架构文档</button>
+  </div>
+
+  <div id="panel-guide" class="spanel"><iframe src="software_agent_architecture_guide.html" loading="lazy" title="Software Agent SDK 架构入门指南"></iframe></div>
+
+  <div id="panel-docs" class="spanel active">
+  <header>
+    <div class="brand">OpenHands · Software Agent SDK</div>
+    <div class="header-right">
+      <a class="guide-entry" href="software_agent_architecture_guide.html" title="面向新手的易读版架构入门指南（约 40 分钟）">📖 入门指南</a>
+      <div class="header-meta">代码基线 1.42.1 · 架构主文档 · 2026-08</div>
+    </div>
+  </header>
+  <div class="layout">
+    <aside>
+      <h2>目录</h2>
+      <nav id="toc">
+        <a href="#overview">00 阅读约定与核心结论</a>
+        <a href="#positioning">01 项目定位与设计原则</a>
+        <a href="#monorepo">02 四包分层与依赖边界</a>
+        <a href="#mental-model">03 核心运行时心智模型</a>
+        <a href="#lifecycle">04 端到端执行主链 <span class="subdoc-tag">子文档</span></a>
+        <a href="#state-events">05 状态机、事件树与恢复 <span class="subdoc-tag">子文档</span></a>
+        <a href="#context">06 上下文工程：View、Prompt Sections 与 Skills <span class="subdoc-tag">子文档</span></a>
+        <a href="#llm">07 LLM 抽象与调用管道 <span class="subdoc-tag">子文档</span></a>
+        <a href="#recovery">08 Condenser 与分层恢复策略 <span class="subdoc-tag">子文档</span></a>
+        <a href="#tools">09 工具协议、注册表与并行执行 <span class="subdoc-tag">子文档</span></a>
+        <a href="#security">10 安全分析、确认策略与 Hooks <span class="subdoc-tag">子文档</span></a>
+        <a href="#workspace">11 Workspace、远程执行与 Git Worktree <span class="subdoc-tag">子文档</span></a>
+        <a href="#mcp">12 MCP：配置模型与 FastMCP 边界 <span class="subdoc-tag">子文档</span></a>
+        <a href="#extensions">13 Skills、Plugins、Subagents 与 Marketplace <span class="subdoc-tag">子文档</span></a>
+        <a href="#server">14 Agent Server：远程运行时与控制面 <span class="subdoc-tag">子文档</span></a>
+        <a href="#remote">15 RemoteConversation：状态镜像与终止竞态 <span class="subdoc-tag">子文档</span></a>
+        <a href="#settings">16 Settings、Secrets 与兼容性 <span class="subdoc-tag">子文档</span></a>
+        <a href="#engineering">17 测试、构建、发布与可观测性 <span class="subdoc-tag">子文档</span></a>
+        <a href="#patterns">18 设计模式、关键权衡与二次开发 <span class="subdoc-tag">子文档</span></a>
+        <a href="#learning">19 学习路线与组内分享</a>
+        <a href="#appendix">附录 术语与事实索引</a>
+      </nav>
+    </aside>
+    <main>
+      <div class="hero">
+        <div class="eyebrow">ARCHITECTURE DEEP DIVE</div>
+        <h1>Software Agent SDK<br>深度架构解析</h1>
+        <p class="lead">
+          从代码事实出发，解释 OpenHands Software Agent SDK 如何把模型调用、上下文工程、
+          工具执行、工作区与可选隔离、事件持久化及远程服务组合成一个可恢复、可扩展、可部署的软件智能体运行时。
+        </p>
+        <div class="meta-row">
+          <span class="badge fact">实现事实：当前主干代码</span>
+          <span class="badge optional">可选能力：按配置启用</span>
+          <span class="badge deploy">部署能力：服务端/远程模式</span>
+          <span class="badge rule">工程约束：兼容与质量门禁</span>
+          <a class="badge fact" href="https://proceedings.mlsys.org/paper_files/paper/2026/hash/8ae9cf363ea625161f885b798c1f1f78-Abstract-Conference.html" target="_blank" rel="noopener noreferrer">官方论文：MLSys 2026</a>
+        </div>
+        <p style="margin-top:16px;font-size:14px">
+          第一次接触这个项目？建议先从易读版
+          <a href="software_agent_architecture_guide.html">📖 架构入门指南</a>
+          开始（约 40 分钟，故事驱动、零源码粘贴），再回到本文逐章深读。
+        </p>
+      </div>
+
+      <section id="overview">
+        <div class="chapter-no">CHAPTER 00</div>
+        <h2>阅读约定与核心结论</h2>
+        <p>
+          本文不是 API 清单，也不逐文件复述实现。它以一次 Agent 运行的真实主链为骨架，
+          再把状态、上下文、工具、安全、远程执行和工程治理放回这条主链中解释。类名和方法名用于
+          定位实现边界，而不是替代源码。
+        </p>
+        <div class="callout">
+          <strong>一句话心智模型</strong>
+          <div>
+            SDK 定义协议与编排，Tools 提供能力，Workspace 提供执行环境，Agent Server
+            提供远程运行时；无状态的 <code>Agent</code> 驱动有状态的
+            <code>Conversation</code>，所有可恢复语义落在事件树和状态快照上。
+          </div>
+        </div>
+        <div class="grid three">
+          <div class="card">
+            <h3>Agent 是配置</h3>
+            <p>Agent 的 Pydantic 字段被冻结，持有 LLM、工具规格、Condenser、Context 与策略；会话事实不写入 Agent 字段。</p>
+          </div>
+          <div class="card">
+            <h3>Conversation 是运行时</h3>
+            <p>拥有状态、事件树、Workspace、回调、插件生命周期、锁和中断任务。</p>
+          </div>
+          <div class="card">
+            <h3>Event 是事实</h3>
+            <p>消息、Action、Observation、压缩、Hooks 与状态更新都通过事件表达和传播。</p>
+          </div>
+        </div>
+        <h3>四条主线</h3>
+        <ol>
+          <li><strong>控制线：</strong>Conversation 状态机决定什么时候继续、暂停、确认、结束或报错。</li>
+          <li><strong>数据线：</strong>活跃事件分支经 View 与 Condenser 转成 LLM Messages。</li>
+          <li><strong>执行线：</strong>LLM tool call 变成 Action，经 PreToolUse、安全与确认后，由 ToolExecutor 在当前执行环境中产生副作用；具体工具不保证经 Workspace API 转发。</li>
+          <li><strong>传播线：</strong>事件写入本地 EventLog，或经 EventService 通过 WebSocket 镜像到远程客户端。</li>
+        </ol>
+        <h3>模块详细文档索引</h3>
+        <div class="detail-docs">
+          <a class="detail-doc-card" href="docs/software-agent-sdk/04-lifecycle.html"><strong>04 · 端到端执行主链</strong><span>Conversation 初始化、消息、run/arun、Agent.step 与响应分派。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/05-state-events.html"><strong>05 · 状态机、事件树与恢复</strong><span>执行状态、活跃分支、Action–Observation、持久化与恢复。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/06-context.html"><strong>06 · 上下文工程</strong><span>View、Prompt Sections、AgentContext 与 Skills 渐进披露。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/07-llm.html"><strong>07 · LLM 调用管道</strong><span>Chat/Responses、模型能力、LiteLLM、流式回调与指标。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/08-recovery.html"><strong>08 · Condenser 与分层恢复</strong><span>重试、回退、纠正、压缩、历史修复与硬失败。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/09-tools.html"><strong>09 · 工具体系与并行执行</strong><span>工具协议、注册、资源锁、内置工具与失败语义。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/10-security.html"><strong>10 · 安全、确认与 Hooks</strong><span>风险分析、两阶段确认、生命周期钩子与拒绝语义。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/11-workspace.html"><strong>11 · Workspace 与 Git</strong><span>本地/远程工作区、容器后端、路径语义与 worktree。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/12-mcp.html"><strong>12 · MCP 集成边界</strong><span>MCPServer 配置、FastMCP 边界、OAuth 与动态工具。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/13-extensions.html"><strong>13 · 扩展生态</strong><span>Skills、Plugins、Subagents、Marketplace 与注册优先级。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/14-server.html"><strong>14 · Agent Server</strong><span>FastAPI、服务分层、鉴权、延迟初始化、租约与持久化。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/15-remote.html"><strong>15 · RemoteConversation</strong><span>REST/WS 状态镜像、完成屏障、竞态与中断链。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/16-settings.html"><strong>16 · Settings、Secrets 与兼容</strong><span>配置模型、迁移链、密钥序列化与四类兼容表面。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/17-engineering.html"><strong>17 · 测试、构建与发布</strong><span>测试分层、CI 门禁、发布资产、供应链与可观测性。</span></a>
+          <a class="detail-doc-card" href="docs/software-agent-sdk/18-patterns.html"><strong>18 · 模式、权衡与二次开发</strong><span>横切设计模式、真实权衡、推荐扩展点与反模式。</span></a>
+        </div>
+      </section>
+
+      <section id="positioning">
+        <div class="chapter-no">CHAPTER 01</div>
+        <h2>项目定位与设计原则</h2>
+        <p>
+          这个仓库不是面向最终用户的完整 IDE 产品，而是可复用的 Agent 基础设施。
+          它需要同时服务本地脚本、容器化工作区、远程 SaaS、CLI 和其他下游应用，因此核心代码刻意保持
+          产品中立：SDK 的 Settings schema 描述结构与语义，但不承载 GUI 排序、图标和交互组件。
+        </p>
+        <div class="callout">
+          <strong>官方论文与证据优先级</strong>
+          <div>
+            直接描述本仓库 V1 架构的是 MLSys 2026 论文
+            <a href="https://arxiv.org/abs/2511.03690" target="_blank" rel="noopener noreferrer"><em>The OpenHands Software Agent SDK: A Composable and Extensible Foundation for Production Agents</em></a>。
+            ICLR 2025 的
+            <a href="https://arxiv.org/abs/2407.16741" target="_blank" rel="noopener noreferrer">OpenHands 平台论文</a>
+            描述旧 V0，ICML 2024 的
+            <a href="https://proceedings.mlr.press/v235/wang24h.html" target="_blank" rel="noopener noreferrer">CodeAct 论文</a>
+            解释代码动作思想；后两者只能用于理解历史，不是当前 API、类结构或部署契约。
+            本文仍按“当前源码与测试 ＞ Schema/协议 ＞ 官方论文 ＞ 既有文章”的顺序裁决冲突。
+          </div>
+        </div>
+        <h3>从 V0 问题到 V1 原则</h3>
+        <div class="grid">
+          <div class="card">
+            <h4>强制沙箱 → 可选隔离</h4>
+            <p>默认本地同进程便于开发和 MCP 接入；需要安全或资源边界时再切换 Docker、Cloud 或其他远端 Workspace。</p>
+          </div>
+          <div class="card">
+            <h4>配置蔓延 → 状态集中</h4>
+            <p>Agent 配置与 Conversation 会话事实分离，以 EventLog 与状态快照支撑恢复；但“不可变”不能扩写到整个嵌套对象图。</p>
+          </div>
+          <div class="card">
+            <h4>核心与应用混杂 → 关注点分离</h4>
+            <p>CLI、GUI、SaaS 和评测不再把产品分支塞进 Agent 核心，而是共同消费 SDK 边界。</p>
+          </div>
+          <div class="card">
+            <h4>单体扩展 → 双层组合</h4>
+            <p>部署层组合 SDK、Tools、Workspace、Server；能力层替换 Tool、LLM、Context、安全策略与 Agent。</p>
+          </div>
+        </div>
+        <div class="grid">
+          <div class="card">
+            <h3>协议与实现分离</h3>
+            <p><code>Tool</code> 是可持久化规格，具体实现通过 registry 延迟解析；SDK 不反向依赖工具包。</p>
+            <p><code>RemoteWorkspace</code> 定义远端协议，Docker/Cloud/Apptainer 等后端在独立包实现。</p>
+          </div>
+          <div class="card">
+            <h3>可变状态集中</h3>
+            <p>Agent 字段被冻结；事件、HEAD、secrets、执行状态与待确认动作集中在 ConversationState。</p>
+            <p>LLM 当前不是 frozen 模型，还持有 Metrics、运行时元数据缓存和 fallback 临时状态；它不属于会话事实，但也不能被描述为深度不可变对象。</p>
+          </div>
+          <div class="card">
+            <h3>同步/异步对称</h3>
+            <p>关键路径都有 sync/async 版本；基类通常允许异步方法委托同步实现，自定义扩展不必一次实现两套。</p>
+          </div>
+          <div class="card">
+            <h3>兼容性优先</h3>
+            <p>公共 Python API、REST、Settings 持久化和历史事件分别有清晰的演进策略与 CI 门禁。</p>
+          </div>
+        </div>
+        <div class="callout design">
+          <strong>设计洞察</strong>
+          <div>
+            “稳定”不是靠禁止变化，而是把变化限制在明确边界：模型差异进入 feature registry，
+            工具差异进入 registry，持久化变化进入 migration，部署差异进入 Workspace。
+          </div>
+        </div>
+        <h3>论文第 4 章与本文模块映射</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>论文小节</th><th>本文对应章节</th><th>阅读边界</th></tr></thead>
+            <tbody>
+              <tr><td>§4.1 四包设计</td><td>02、17</td><td>论文解释拆分动机；当前依赖与发布规则以仓库为准</td></tr>
+              <tr><td>§4.2 Event-Sourced State</td><td>05、18</td><td>当前实现已包含事件树、View 与双路径持久化，不能把 replay 理解为重放外部副作用</td></tr>
+              <tr><td>§4.3 LLM</td><td>07、08</td><td>论文覆盖双 API、非原生工具调用与路由；当前 LLM 具有独立运行态</td></tr>
+              <tr><td>§4.4 Tool</td><td>09、12</td><td>typed Action–Execution–Observation 仍成立，具体工具与 MCP 已继续演进</td></tr>
+              <tr><td>§4.5 Agent</td><td>04、06、13</td><td>Agent 仍是逐步事件处理器；当前委派能力不等于完整多 Agent 调度系统</td></tr>
+              <tr><td>§4.6–4.9</td><td>08、10、16</td><td>Condenser、SecretRegistry、安全分析与确认按当前源码补充失败语义</td></tr>
+              <tr><td>§4.10 部署</td><td>11、14、15</td><td>论文给出统一模型；当前 REST/WS、竞态与后端生命周期更细</td></tr>
+              <tr><td>§5–7 证据与讨论</td><td>17、18</td><td>实验数字是特定时间、样本和版本的快照，不是 SLA</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>论文与当前实现的一处重要差异</strong>
+          <div>
+            论文把 Agent、Tool、LLM 等概括为 immutable components；当前源码只保证 Agent 的
+            Pydantic 字段冻结。LLM 没有 <code>frozen=True</code>，RouterLLM 的
+            <code>active_llm</code>、Metrics、缓存和 fallback 都会变化。本文保留源码级边界，
+            不为了贴合论文而把设计目标写成不存在的深度不可变性。
+          </div>
+        </div>
+      </section>
+
+      <section id="monorepo">
+        <div class="chapter-no">CHAPTER 02</div>
+        <h2>四包分层与依赖边界</h2>
+        <p>
+          根目录是单一 <code>uv</code> workspace，四个发行包共享 <code>openhands.*</code>
+          PEP 420 namespace，当前版本统一为 1.42.1。共用 lockfile 保证开发期依赖一致，
+          独立包则允许下游只安装所需能力。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>发行包</th><th>核心职责</th><th>主要依赖方向</th><th>不应承担</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>openhands-sdk</code></td>
+                <td>Agent、LLM、Conversation、Event、Tool 协议、Settings、MCP、Context、本地/远程 Workspace 接口</td>
+                <td>最底层核心</td>
+                <td>具体终端、浏览器、容器、FastAPI 服务实现</td>
+              </tr>
+              <tr>
+                <td><code>openhands-tools</code></td>
+                <td>Terminal、File Editor、Grep、Glob、Browser、Task、Workflow 等工具实现与 presets</td>
+                <td>依赖 SDK</td>
+                <td>部署编排和服务端状态管理</td>
+              </tr>
+              <tr>
+                <td><code>openhands-agent-server</code></td>
+                <td>FastAPI、REST/WS、会话托管、持久化、bash/git、deferred init、远程控制面</td>
+                <td>依赖 SDK 与 Tools</td>
+                <td>Docker/Cloud Workspace 客户端后端</td>
+              </tr>
+              <tr>
+                <td><code>openhands-workspace</code></td>
+                <td>Docker、Apptainer、Cloud、API Remote 等工作区后端</td>
+                <td>依赖 SDK；打包层可使用 Server 构建能力</td>
+                <td>Agent 核心编排</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <pre>Downstream App / CLI / SaaS
+        │ Python API                      │ REST + WebSocket
+        ▼                                 ▼
+openhands-workspace ───────► openhands-agent-server
+        │                              │
+        └──────────────┬───────────────┘
+                       ▼
+                openhands-tools
+                       │
+                       ▼
+                 openhands-sdk</pre>
+        <div class="callout warning">
+          <strong>易混边界</strong>
+          <div>
+            <code>openhands.sdk.workspace</code> 是接口、本地实现和远程客户端；
+            <code>openhands.workspace</code> 是 Docker/Cloud 等具体后端。包依赖与源码导入规则也不是完全同一概念。
+          </div>
+        </div>
+      </section>
+
+      <section id="mental-model">
+        <div class="chapter-no">CHAPTER 03</div>
+        <h2>核心运行时心智模型</h2>
+        <div class="intuition-box"><p>Agent 是「怎么想」的声明（模型、工具规格、策略），ConversationState 是「发生过什么」的事实（事件树、进度、预算）。SDK 的大部分复杂度都来自坚持这条分界线——因为只有事实是可序列化、可恢复的。</p></div>
+        <div class="arch-diagram">Conversation(...)   ← 唯一公共入口，按 Workspace 类型分流
+        │
+   ┌────┴──────────────────────────┐
+   ▼                               ▼
+LocalConversation            RemoteConversation
+（进程内执行 Agent）          （HTTP/WS 代理到 agent-server）
+   │                               │  状态是镜像，不是本体
+   │                               └─ WS 事件流 + REST 状态，最终 reconcile
+   ▼
+┌─ Agent（声明层，可序列化，跨会话复用）──────────────────────┐
+│  LLM + model features + retry/fallback                       │
+│  Tool 规格（Tool(name, params)，还不是可执行体）             │
+│  Condenser · AgentContext · Critic · 提示词安全策略          │
+└───────────────────────────┬──────────────────────────────────┘
+                            │  AgentBase._initialize —— 两者的接缝
+                            │  把规格解析成绑定当前 State 的 ToolDefinition
+                            │  并把运行期 MCP 工具并入 tools_map
+                            ▼
+┌─ ConversationState（事实层，落盘，恢复的唯一依据）──────────┐
+│  EventLog（全部事件）+ leaf_event_id（当前 HEAD）            │
+│  活跃 View = path_to_root(leaf)                              │
+│  execution_status · 迭代 · 预算 · 统计                       │
+│  workspace · secrets · SecurityAnalyzer · ConfirmationPolicy │
+│  pending / blocked actions · 持久化回调                      │
+└──────────────────────────────────────────────────────────────┘
+
+  落盘形状：base_state.json（快照） + events/event-NNNNN-id.json（逐事件）
+  恢复：读快照 + 重放事件 → 重建 View → agent.verify 校验类型与工具兼容</div>
+        <h3>3.1 Conversation 工厂</h3>
+        <p>
+          公共入口 <code>Conversation(...)</code> 根据 Workspace 类型选择实现：
+          本地 Workspace 对应 <code>LocalConversation</code>，远程 Workspace 对应
+          <code>RemoteConversation</code>。调用者面对相似接口，但真正执行 Agent 的位置不同。
+        </p>
+        <div class="flow">
+          <div class="step">Conversation 工厂</div><div class="arrow">→</div>
+          <div class="step">LocalWorkspace<br><span class="muted">进程内执行</span></div>
+          <div class="arrow">或</div>
+          <div class="step">RemoteWorkspace<br><span class="muted">HTTP/WS 代理</span></div>
+        </div>
+        <h3>3.2 Agent 与 State 的边界</h3>
+        <div class="grid">
+          <div class="card">
+            <h4>Agent / LLM：声明、模型与策略</h4>
+            <ul>
+              <li>LLM 及其模型能力、重试和 fallback</li>
+              <li>工具规格、过滤规则、内置工具</li>
+              <li>Condenser、AgentContext、Critic</li>
+              <li>Agent 提示词安全策略与工具准入声明</li>
+            </ul>
+          </div>
+          <div class="card">
+            <h4>ConversationState：事实与进度</h4>
+            <ul>
+              <li>事件树、当前 leaf/HEAD、活跃 View</li>
+              <li>执行状态、迭代、预算、统计</li>
+              <li>workspace、secrets、agent_state</li>
+              <li>SecurityAnalyzer 与 ConfirmationPolicy 运行时引用</li>
+              <li>待执行/被阻止动作与持久化回调</li>
+            </ul>
+          </div>
+        </div>
+        <p>
+          <code>AgentBase._initialize</code> 是两者的接缝：它把可序列化的工具规格解析成绑定当前
+          ConversationState 的实际工具定义，并把运行期 MCP 工具加入 Agent 的 tools map。
+        </p>
+      </section>
+
+      <section id="lifecycle">
+        <div class="chapter-no">CHAPTER 04</div>
+        <h2>从用户消息到完成：端到端执行主链 <a class="doc-link" href="docs/software-agent-sdk/04-lifecycle.html" title="打开端到端执行主链详细设计">子文档</a></h2>
+        <h3>4.1 初始化不是构造时一次性完成</h3>
+        <p>
+          LocalConversation 构造时创建或恢复 State，并组装事件回调链；插件、文件型 agents、MCP
+          与 hooks 则在第一次 <code>send_message()</code> 或 <code>run()</code> 时懒加载。
+          这样构造对象本身不必完成网络或磁盘扩展发现，也能保存 plugin 的解析结果用于确定性恢复。
+        </p>
+        <pre>Conversation(...)
+  → ConversationState.create()          新建或恢复 base_state + EventLog
+  → 组装 _on_event 回调链
+
+send_message(...)
+  → 确保 Agent/Plugins 已准备
+  → 可选追加 user message skill suffix
+  → MessageEvent(source="user")
+  → hooks / callbacks / append_event
+
+run() 或 arun()
+  → execution_status = RUNNING
+  → while:
+      → Agent.step() / Agent.astep()
+      → 根据响应产生事件或执行工具
+      → 检查确认、预算、迭代、卡住和终止条件</pre>
+        <h3>4.2 Agent 的一步</h3>
+        <div class="flow">
+          <div class="step">检查未匹配 Action</div><div class="arrow">→</div>
+          <div class="step">View + Condenser</div><div class="arrow">→</div>
+          <div class="step">LLM Completion</div><div class="arrow">→</div>
+          <div class="step">响应分类</div><div class="arrow">→</div>
+          <div class="step">Event / Tool Batch</div>
+        </div>
+        <p>
+          一步开始时优先处理历史中尚未得到 Observation 的 Action。这是恢复与确认机制的关键：
+          Action 已经持久化，但执行可能因用户确认、进程重启或中断而延后。只有没有 pending action 时才发起新 LLM 调用。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>响应分类</th><th>处理</th><th>状态结果</th></tr></thead>
+            <tbody>
+              <tr><td><code>TOOL_CALLS</code></td><td>解析并写 ActionEvent，经过 Hooks/确认后并行执行</td><td>继续、等待确认或 Finish</td></tr>
+              <tr><td><code>CONTENT</code></td><td>写 Agent MessageEvent</td><td>通常 FINISHED</td></tr>
+              <tr><td><code>REASONING_ONLY</code></td><td>保留消息并注入环境提示，要求给出可执行动作</td><td>继续</td></tr>
+              <tr><td><code>EMPTY</code></td><td>注入纠正性反馈</td><td>继续或达到上限</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>4.3 同步与异步</h3>
+        <pre>sync : LocalConversation.run  → Agent.step  → LLM.completion/responses
+async: LocalConversation.arun → Agent.astep → LLM.acompletion/aresponses
+                                             → LiteLLM async transport</pre>
+        <p>
+          async 不是简单在线程池包住整个同步循环：LLM、Condenser、工具批处理和 token callback 都有异步通道。
+          Tenacity 能原生包装 coroutine，所以重试逻辑没有另造一条“async retry”实现。
+        </p>
+      </section>
+
+      <section id="state-events">
+        <div class="chapter-no">CHAPTER 05</div>
+        <h2>状态机、事件树与恢复 <a class="doc-link" href="docs/software-agent-sdk/05-state-events.html" title="打开状态与事件详细设计">子文档</a></h2>
+        <h3>5.1 执行状态机</h3>
+        <pre>IDLE ── run ──► RUNNING ──┬──► FINISHED
+                           ├──► WAITING_FOR_CONFIRMATION
+                           ├──► PAUSED
+                           ├──► ERROR
+                           └──► STUCK
+
+FINISHED / STUCK ── send_message ──► IDLE
+删除生命周期：DELETING
+is_terminal = FINISHED | ERROR | STUCK     （IDLE 不是终态）</pre>
+        <p>
+          <code>FINISHED</code> 表示当前任务完成，不等于 Conversation 永久关闭；新的用户消息可以让会话回到
+          IDLE。<code>WAITING_FOR_CONFIRMATION</code> 是显式中间态，下一次 run 才执行已确认的 pending actions。
+        </p>
+        <div class="intuition-box"><p>把事件记成树而不是列表，换来的是一个很实际的能力：可以退回某一步换个走法，而不丢掉原来那条路的记录。代价是「历史」从此有两个含义——磁盘上的全部事件，和当前分支上模型能看到的那部分。</p></div>
+        <div class="arch-diagram">              e1 ── e2 ── e3 ── e4 ── e5      ← 原分支（仍在磁盘上）
+                          │
+                          └── e3' ── e4'          ← fork 后的新分支
+                                      ▲
+                              leaf_event_id（当前 HEAD）
+
+  path_to_root(leaf) = [e1, e2, e3', e4']   ← 这才是发给 LLM 的活跃分支
+  navigate / fork 只改 HEAD，从不删除旁支
+
+  ┌─ 事件的两个人群 ───────────────────────────────────────────┐
+  │ LLM 可见：SystemPrompt · Message · Action · Observation     │
+  │           AgentError · UserReject   → 可转成 Messages       │
+  │ 仅运行时：Interrupt · Pause · Condensation · HookExecution  │
+  │           ConversationStateUpdate   → 服务客户端与观测       │
+  └─────────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+  <span class="term">View</span>：从活跃分支派生的只读投影，额外维持 provider 要求的结构
+        · Observation 唯一性      · 批次原子性
+        · tool_call ↔ tool_result 配对   · tool loop 原子性
+
+  Action–Observation 配对不变量
+    未匹配的 Action = 「还有活没干完」的判定依据
+    中断时给未执行的调用补 AgentErrorEvent
+    ——否则下次发给严格 provider 的 tool history 结构直接畸形，400 起步</div>
+        <h3>5.2 事件不是列表，而是树</h3>
+        <p>
+          每个事件带 <code>parent_id</code>。State 的 <code>leaf_event_id</code> 指向当前 HEAD，
+          <code>path_to_root(leaf)</code> 形成活跃分支；fork 和 navigate 不会删除旁支，只改变当前 HEAD。
+          发给 LLM 的 View 来自活跃分支，而不是磁盘上全部事件。
+        </p>
+        <div class="grid">
+          <div class="card">
+            <h4>LLM 可见事件</h4>
+            <p>SystemPrompt、Message、Action、Observation、AgentError、UserReject 等可转换为 Messages。</p>
+          </div>
+          <div class="card">
+            <h4>控制与观测事件</h4>
+            <p>Interrupt、Pause、Condensation、HookExecution、ConversationStateUpdate 等服务运行时与客户端。</p>
+          </div>
+        </div>
+        <h3>5.3 Action–Observation 配对不变量</h3>
+        <p>
+          每个可执行 Action 最终都应有对应 Observation。确认前、执行中断或崩溃恢复时，
+          未匹配 Action 是系统判断“还有工作待完成”的依据。中断会给尚未执行的调用补
+          AgentErrorEvent，避免下一次发给严格 provider 的 tool history 结构畸形。
+        </p>
+        <h3>5.4 持久化形状</h3>
+        <ul>
+          <li><code>base_state.json</code>：Agent、执行状态、secrets、HEAD 等状态快照。</li>
+          <li><code>events/event-NNNNN-id.json</code>：独立事件文件组成 EventLog。</li>
+          <li>恢复时读取快照和事件，重建 View，并通过 <code>agent.verify</code> 检查类型和工具兼容。</li>
+        </ul>
+        <div class="callout danger">
+          <strong>历史事件兼容是永久义务</strong>
+          <div>
+            公共 API 可以在完整弃用窗口后移除，但已经持久化的旧事件必须始终可加载；
+            deprecated field handler 不能按普通技术债清理。
+          </div>
+        </div>
+      </section>
+
+      <section id="context">
+        <div class="chapter-no">CHAPTER 06</div>
+        <h2>上下文工程：View、Prompt Sections 与 Skills <a class="doc-link" href="docs/software-agent-sdk/06-context.html" title="打开上下文工程详细设计">子文档</a></h2>
+        <h3>6.1 View 是受约束的 LLM 历史</h3>
+        <p>
+          View 是从活跃事件分支派生的只读模型，并通过属性系统维持 provider 需要的结构：
+          Observation 唯一性、批次原子性、tool call matching 和 tool loop 原子性。
+          这层约束把“事件记录正确”与“LLM 历史合法”分离，恢复时可以重建和修复 View。
+        </p>
+        <div class="intuition-box"><p>System Prompt 拆成 STATIC 与 DYNAMIC 两个 cache tier，不是为了代码整洁，而是为了让缓存断点落在一个真正稳定的位置——所有随会话变化的内容（仓库信息、skills catalog、日期）都必须排在静态段之后，否则前缀每次都不同，缓存等于没有。</p></div>
+        <h3>6.2 Prompt Registry</h3>
+        <p>
+          System Prompt 不是单个巨型模板，而由 <code>PromptSection</code> 注册表组合。
+          每个 section 有 guard 与 render，并标记 STATIC 或 DYNAMIC cache tier。
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>层</th><th>典型内容</th><th>目的</th></tr></thead>
+            <tbody>
+              <tr><td>Static</td><td>Agent 能力边界、工具使用原则、通用行为指令</td><td>跨会话稳定，利于 prompt cache</td></tr>
+              <tr><td>Dynamic</td><td>仓库信息、skills catalog、secrets 名称、日期、memory、用户 suffix</td><td>随会话与环境变化</td></tr>
+              <tr><td>User suffix</td><td>触发后的 skill 正文、任务特定附加上下文</td><td>按需披露，避免常驻 token 成本</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>6.3 Progressive Disclosure</h3>
+        <p>
+          AgentSkills 先以名称和不超过 1024 字符的 description 出现在
+          <code>&lt;available_skills&gt;</code> 中；只有触发器命中或模型调用
+          <code>invoke_skill</code> 后，完整内容才进入上下文。Skill location 故意不直接暴露，
+          以维持统一调用入口和可观测性。
+        </p>
+        <p>
+          这个机制叫 <span class="term">Progressive Disclosure</span>（渐进披露：能力目录常驻上下文，正文按需加载）。
+          它把「模型知道有这个能力」和「模型手上有这个能力的完整说明」拆成两件事——前者是每轮都要付的固定成本，
+          后者只在真正用到时才付。技能库越大，这个拆分省下的 token 越多。
+        </p>
+        <div class="highlight">
+          <strong>示例场景：</strong>一个装了 40 个 Skill 的 Agent，如果把所有 <code>SKILL.md</code> 正文都塞进 system prompt，
+          按每篇约 1,200 token 计就是 48k 常驻开销，且每一轮都要重付。改用渐进披露后，常驻部分只剩 40 条
+          「名称 + ≤1024 字符描述」，约 6k token；一次任务平均只会触发 1–2 个 Skill 正文加载，实际峰值在 9k 上下。
+          省下的不只是钱：注意力不再被 38 篇无关文档稀释，工具选择的准确率也跟着回升。
+          代价是多一次 <code>invoke_skill</code> 往返，以及必须把 description 写到「光看这一句就能判断该不该用」的程度。
+        </div>
+        <div class="callout design">
+          <strong>上下文工程的目标</strong>
+          <div>
+            不是把所有信息塞给模型，而是在结构合法、token 可控、缓存友好和任务相关之间做可恢复的选择。
+          </div>
+        </div>
+      </section>
+
+      <section id="llm">
+        <div class="chapter-no">CHAPTER 07</div>
+        <h2>LLM 抽象与调用管道 <a class="doc-link" href="docs/software-agent-sdk/07-llm.html" title="打开 LLM 管道详细设计">子文档</a></h2>
+        <h3>7.1 双 API 门面</h3>
+        <p>
+          <code>LLM</code> 同时支持 Chat Completions 与 Responses API。
+          <code>api_mode=auto</code> 时根据 model features 选择；消息、tools、reasoning、token budget
+          和 streaming options 在进入 transport 前规范化。
+        </p>
+        <pre>Agent
+  → prepare_llm_messages(View, Condenser)
+  → make_llm_completion(...)
+  → LLM.completion / responses
+  → select_chat_options / select_responses_options
+  → RetryMixin
+  → LiteLLM transport
+  → Telemetry / Metrics
+  → LLMResponse</pre>
+        <h3>7.2 Transport 与 Capability 分离</h3>
+        <p>
+          LiteLLM-facing provider 负责把模型名变成实际调用参数；<code>model_features.py</code>
+          负责“这个模型支持什么”。能力优先级依次是显式 overrides、LiteLLM model info 和 SDK 规则表。
+          Provider 特例应优先进入能力注册表或聚焦 helper，而不是散落在 LLM 主链。
+        </p>
+        <ul>
+          <li>对外 OpenHands 模型保持 <code>openhands/&lt;model&gt;</code>。</li>
+          <li>仅在 LiteLLM 边界转为 <code>litellm_proxy/&lt;model&gt;</code> 并设置代理 base URL。</li>
+          <li>Bedrock IAM/SigV4 模式不能把普通 <code>LLM.api_key</code> 当 bearer token 转发。</li>
+        </ul>
+        <h3>7.3 Function Calling</h3>
+        <p>
+          原生支持时直接传 JSON tool schema；不原生支持时，NonNativeToolCallingMixin
+          把工具协议编码进 prompt，再把文本响应转换回标准 tool calls。Agent 端仍会做参数 JSON 修复、
+          tool name 恢复与 Pydantic schema 校验。
+        </p>
+        <h3>7.4 Streaming、回调与 Metrics</h3>
+        <ul>
+          <li>Chat 与 Responses 都会聚合流式片段为完整响应，同时把 token/chunk 发给回调。</li>
+          <li>async 路径允许同步或异步 token callback，由统一 dispatcher 透明处理。</li>
+          <li>Telemetry 记录延迟、token usage、cache/reasoning token、成本和错误。</li>
+          <li>Condenser 使用同一 usage identity，摘要调用成本仍归入当前会话。</li>
+        </ul>
+      </section>
+
+      <section id="recovery">
+        <div class="chapter-no">CHAPTER 08</div>
+        <h2>Condenser 与分层恢复策略 <a class="doc-link" href="docs/software-agent-sdk/08-recovery.html" title="打开分层恢复详细设计">子文档</a></h2>
+        <h3>8.1 Condenser 是 View 转换器</h3>
+        <p>
+          <code>CondenserBase.condense</code> 接收 View，返回新的 View 或一条 Condensation。
+          RollingCondenser 区分 soft/hard 策略；LLMSummarizingCondenser 根据事件数、token 或显式
+          CondensationRequest 调用独立摘要 LLM；PipelineCondenser 可以组合多个阶段。
+        </p>
+        <div class="intuition-box"><p><span class="term">Condenser</span> 的定位很克制：它是一个 View → View 的转换器，不碰 EventLog。所以压缩失败最坏也只是这一轮 View 没变短，磁盘上的事实一个字都没丢。</p></div>
+        <p>
+          下面这张阶梯表最值得记住的是它的排序逻辑：<strong>越靠上的手段越便宜、越不改变历史</strong>。
+          遇到一次 provider 报错时，正确的反应顺序是先问「这是不是瞬时故障」（retry），
+          再问「换个模型行不行」（fallback），然后才是「要不要往历史里写点东西」（nudge / condensation）。
+          直接跳到压缩，既贵又会不可逆地丢掉细节。
+        </p>
+        <h3>8.2 错误恢复阶梯</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>层级</th><th>触发</th><th>动作</th><th>是否改变历史</th></tr></thead>
+            <tbody>
+              <tr><td>Transport retry</td><td>连接、限流、超时、服务不可用、空响应</td><td>Tenacity 指数退避；确定性空响应可调整 temperature</td><td>否</td></tr>
+              <tr><td>Fallback</td><td>主模型失败且配置备用策略</td><td>选择备用 LLM，合并成本</td><td>否</td></tr>
+              <tr><td>Soft nudge</td><td>函数参数错误、内容策略、无动作</td><td>写纠正性用户消息，继续循环</td><td>新增事件</td></tr>
+              <tr><td>Condensation</td><td>上下文超限或历史畸形</td><td>重建 View，发 CondensationRequest，摘要/裁剪</td><td>产生压缩事件</td></tr>
+              <tr><td>Hard error</td><td>无法恢复或没有合适 condenser</td><td>状态 ERROR，ConversationErrorEvent</td><td>记录失败</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>Malformed history 不等于 context overflow</strong>
+          <div>
+            两者都可能通过压缩恢复，但错误类型独立，便于识别 tool_result 缺失、重复等事件流问题，
+            不应把所有 provider 400 都归因于 token 超限。
+          </div>
+        </div>
+      </section>
+
+      <section id="tools">
+        <div class="chapter-no">CHAPTER 09</div>
+        <h2>工具协议、注册表与并行执行 <a class="doc-link" href="docs/software-agent-sdk/09-tools.html" title="打开工具体系详细设计">子文档</a></h2>
+        <h3>9.1 从规格到执行器</h3>
+        <pre>Tool(name, params)                  可序列化规格
+  → registry.resolve_tool()
+  → ToolDefinition.create(state)   一个规格可展开为 ToolSet
+  → Agent.tools_map
+  → ActionEvent
+  → ToolExecutor(action, conversation)
+  → Observation / AgentError
+  → ObservationEvent</pre>
+        <p>
+          <code>ToolDefinition</code> 描述名称、输入 Action schema、输出 Observation 类型、
+          annotations 与 executor；<code>ToolExecutor</code> 承担实际 I/O。工具实现通常在
+          <code>definition.py</code> 注册，在 <code>impl.py</code> 执行。
+        </p>
+        <div class="intuition-box"><p>并行执行工具的真正难点不是并发本身，而是「两个工具会不会踩到同一个东西」。SDK 的答案是让工具自己申报要用的资源，不申报的一律按工具名整体互斥——保守，但绝不会错。</p></div>
+        <div class="arch-diagram">一次模型响应里的 4 个 tool calls
+   ┌──────────┬──────────┬───────────────┬──────────────┐
+   │ grep     │ glob     │ str_replace   │ bash         │
+   │ 声明 {}  │ 声明 {}  │ 声明          │ 未声明资源   │
+   │          │          │ {file:a.py}   │              │
+   └────┬─────┴────┬─────┴───────┬───────┴──────┬───────┘
+        │          │             │              │
+        ▼          ▼             ▼              ▼
+   <span class="term">DeclaredResources</span> 决定谁能和谁同时跑
+        │          │             │              │
+     无锁并行   无锁并行     锁 file:a.py    锁 tool:bash（整工具互斥）
+        └────┬─────┘             │              │
+             ▼                   ▼              ▼
+        ParallelToolExecutor 按锁分组调度
+             │
+             ▼
+   Observation 严格按原 tool call 顺序发出
+   （执行可以乱序，历史必须有序 —— 否则同一份输入重放不出同一段历史）
+
+  三种申报方式的语义差别
+    未声明        → tool:<name> 互斥。安全但保守，同名工具永远串行
+    声明空集合    → 允许无锁并行。适合只读 grep、独立终端池
+    声明具体 key  → 按文件路径 / 终端 session 等粒度加锁，粒度最细
+
+  特例：Finish 会截断同批次后续调用 —— 它改的是控制流，不是资源</div>
+        <h3>9.2 并行工具与资源锁</h3>
+        <p>
+          一次模型响应可以包含多个 tool calls。ParallelToolExecutor 并发执行，但通过
+          DeclaredResources 避免冲突：
+        </p>
+        <ul>
+          <li>工具未声明资源：按 <code>tool:&lt;name&gt;</code> 互斥，安全但保守。</li>
+          <li>声明空资源集合：允许无锁并行，适合只读 grep 或独立终端池。</li>
+          <li>声明具体 key：按文件路径、终端 session 等粒度加锁。</li>
+          <li>Observation 按原 tool call 顺序发出，使历史稳定、可复现。</li>
+        </ul>
+        <h3>9.3 内置能力与失败语义</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>能力</th><th>关键实现</th><th>失败如何进入 Agent</th></tr></thead>
+            <tbody>
+              <tr><td>Terminal</td><td>持久会话、tmux/subprocess/PowerShell、中断</td><td>Observation error 或取消 AgentError</td></tr>
+              <tr><td>File Editor</td><td>view/create/replace/insert/undo；本机绝对路径语义</td><td>结构化编辑错误</td></tr>
+              <tr><td>Grep / Glob</td><td>优先 rg，按平台回退系统工具/Python</td><td>is_error Observation，结果有上限</td></tr>
+              <tr><td>Browser ToolSet</td><td>按 Chromium 可用性展开多个工具</td><td>初始化失败贡献 0 个工具，不拖垮会话</td></tr>
+              <tr><td>Finish / Think</td><td>SDK builtins；Finish 截断同批次后续调用</td><td>直接改变控制流</td></tr>
+              <tr><td>Task / Workflow</td><td>子会话或编排能力</td><td>结果包装成父 Agent 的 Observation</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="security">
+        <div class="chapter-no">CHAPTER 10</div>
+        <h2>安全分析、确认策略与 Hooks <a class="doc-link" href="docs/software-agent-sdk/10-security.html" title="打开安全与确认详细设计">子文档</a></h2>
+        <div class="intuition-box"><p>SecurityAnalyzer 回答「这件事有多危险」，<span class="term">ConfirmationPolicy</span> 回答「多危险才需要问人」。两个问题分开，就能在不改分析逻辑的前提下，让同一个 Agent 在开发机上一路放行、在生产环境上逢写必问。</p></div>
+        <h3>10.1 两阶段工具执行</h3>
+        <pre>LLM tool_calls
+  → 构造 ActionEvent
+  → PreToolUse Hook
+      └─ 拒绝：不写入 EventLog
+  → 放行的 ActionEvent 持久化
+  → SecurityAnalyzer 评估风险
+  → ConfirmationPolicy.should_confirm(risk)
+      ├─ 否：执行
+      └─ 是：WAITING_FOR_CONFIRMATION
+              ├─ 用户确认 → 下次 run 执行 pending action
+              └─ 用户拒绝 → UserRejectObservation</pre>
+        <p>
+          SecurityAnalyzer 与 ConfirmationPolicy 分责：前者判断风险，后者决定哪些风险必须确认。
+          分析器异常时倾向 HIGH 风险，属于 fail-safe；但默认 policy 是 NeverConfirm，因此分析失败并不自动阻断。
+          单独的 Finish/Think 调用通常不要求确认。
+        </p>
+        <h3>10.2 Hooks 是生命周期控制面</h3>
+        <p>
+          Hooks 可介入 UserPromptSubmit、PreToolUse、PostToolUse、SessionStart、SessionEnd 和 Stop。
+          PreToolUse block 与用户拒绝共享 Observation 语义，但带不同 rejection source；Stop hook
+          甚至可以拒绝 Agent 结束，把状态从 FINISHED 拉回 RUNNING 并注入反馈。
+        </p>
+        <div class="callout danger">
+          <strong>execute_tool 的边界</strong>
+          <div>
+            直接调用 Conversation 的工具执行旁路不会经过完整 Agent loop 与确认流程。
+            它适合受控程序化调用，不应被误认为与模型发起工具调用拥有相同安全语义。
+          </div>
+        </div>
+        <div class="highlight">
+          <strong>示例场景：</strong>一个团队把 SDK 接进 CI 做自动修复，验收时发现「安全分析明明标了 HIGH，动作还是执行了」。
+          根因不是分析器失灵，而是默认 <code>ConfirmationPolicy</code> 是 <code>NeverConfirm</code>——
+          分析器 fail-safe 地把异常判为 HIGH 是一回事，有没有人拦是另一回事，这两层默认值恰好一松一紧。
+          修法是给 CI 环境显式换成按风险等级确认的 policy，并把无人值守场景的「确认」实现为直接拒绝而不是无限等待
+          （否则 pipeline 会挂在 <code>WAITING_FOR_CONFIRMATION</code> 直到超时）。
+          这里的一般规律是：<strong>fail-safe 的默认值只在有人看着的时候才成立</strong>，自动化场景必须重新审一遍每一层默认。
+        </div>
+        <div class="practice-grid">
+          <div class="do">
+            <ul>
+              <li>把风险判定（SecurityAnalyzer）和拦截阈值（ConfirmationPolicy）分开配置，按环境切换后者而不是改前者。</li>
+              <li>工具尽量声明精确的 DeclaredResources，把并行粒度交给运行时决定。</li>
+              <li>用 Hooks 表达组织级规则（禁止 <code>force push</code>、写操作前必须跑测试），而不是把它们塞进 system prompt。</li>
+              <li>新增 provider 特例优先进 <code>model_features</code> 能力注册表，别散落进 LLM 主链的 if 分支。</li>
+            </ul>
+          </div>
+          <div class="dont">
+            <ul>
+              <li>不要用 <code>execute_tool</code> 旁路替代正常工具调用，它绕过了 Hook 与确认，两者安全语义完全不同。</li>
+              <li>不要把所有 provider 400 都当成上下文超限去压缩——malformed history 是独立错误类型，压缩治不了它的根因。</li>
+              <li>不要清理已持久化事件的 deprecated field handler，旧事件必须永远可加载，这条兼容义务没有弃用窗口。</li>
+              <li>不要在 Bedrock IAM/SigV4 模式下把 <code>LLM.api_key</code> 当 bearer token 转发，认证方式不同，只会得到难查的 403。</li>
+              <li>不要假设 <code>FINISHED</code> 意味着会话结束，Stop hook 可以把它拉回 RUNNING，客户端状态机要能接住这种回退。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section id="workspace">
+        <div class="chapter-no">CHAPTER 11</div>
+        <h2>Workspace、远程执行与 Git Worktree <a class="doc-link" href="docs/software-agent-sdk/11-workspace.html" title="打开 Workspace 详细设计">子文档</a></h2>
+        <h3>11.1 统一工作区接口</h3>
+        <p>
+          BaseWorkspace 为显式调用方提供 working directory、命令、文件和 Git 能力；具体 ToolExecutor
+          通常由 Agent 在当前进程直接调用，并不保证通过 Workspace 方法执行。
+          LocalWorkspace 的显式 API 直接操作主机；RemoteWorkspace 把相应命令、文件和 Git 请求映射到 agent-server。
+          Docker/Cloud 等后端的职责是启动或获得一个远端执行环境，再复用 RemoteWorkspace 协议。
+        </p>
+        <h3>11.2 路径有两种语义</h3>
+        <ul>
+          <li><strong>Source/Wire：</strong><code>is_absolute_path_source</code> 识别 POSIX 和 Windows 形式；远程 URL 使用 slash-normalized path。</li>
+          <li><strong>Host filesystem：</strong>本地写盘和 File Editor 必须遵循当前主机原生绝对路径语义。</li>
+        </ul>
+        <p>
+          这一区分防止 POSIX 主机把 <code>C:\...</code> 当成可创建的本地路径，也防止 Windows
+          反斜杠泄漏到远程 Git API query。
+        </p>
+        <h3>11.3 Conversation Worktree</h3>
+        <p>
+          服务端可为 Git workspace 创建
+          <code>/tmp/conversation-worktrees/&lt;conversation_id&gt;/&lt;repo_name&gt;</code>。
+          如果初始 workspace 指向仓库子目录，工作树内保留同样相对路径。这样每个会话拥有隔离分支，
+          又不必复制整个仓库对象库。
+        </p>
+      </section>
+
+      <section id="mcp">
+        <div class="chapter-no">CHAPTER 12</div>
+        <h2>MCP：配置模型与 FastMCP 边界 <a class="doc-link" href="docs/software-agent-sdk/12-mcp.html" title="打开 MCP 集成详细设计">子文档</a></h2>
+        <p>MCP 在系统中有三种表示，不应混用：</p>
+        <ol>
+          <li>插件或外部文件可能使用 <code>{"mcpServers": {...}}</code> 形状。</li>
+          <li>SDK Settings 的规范形状是扁平 <code>dict[str, MCPServer]</code>。</li>
+          <li>仅在连接边界把 SDK 模型转换为 FastMCP 的 typed config。</li>
+        </ol>
+        <pre>Agent / Plugin mcp_config
+  → enabled_mcp_servers
+  → secret 展开 + auth/OAuth 规范化
+  → to_fastmcp_mcp_config
+  → FastMCP Client.connect / list_tools
+  → MCPToolDefinition + MCPToolExecutor
+  → Agent.add_runtime_tools</pre>
+        <p>
+          MCP 工具是运行时发现的，server 的 <code>tools/list_changed</code> 可触发重新协调。
+          执行器处理参数校验、超时、断线重连和 secret 遮罩，并把业务失败转换为
+          <code>MCPToolObservation(is_error=True)</code>，通常不让异常穿透整个 Agent loop。
+        </p>
+        <div class="callout">
+          <strong>边界原则</strong>
+          <div>
+            FastMCP 是连接实现细节，不应进入持久化 Settings 公共模型；否则第三方库的形状变化会直接污染 SDK 契约。
+          </div>
+        </div>
+      </section>
+
+      <section id="extensions">
+        <div class="chapter-no">CHAPTER 13</div>
+        <h2>Skills、Plugins、Subagents 与 Marketplace <a class="doc-link" href="docs/software-agent-sdk/13-extensions.html" title="打开扩展生态详细设计">子文档</a></h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>扩展机制</th><th>解决的问题</th><th>物化时机</th><th>关键规则</th></tr></thead>
+            <tbody>
+              <tr><td>Skill</td><td>向模型披露领域知识和操作指南</td><td>目录发现；按 trigger/invoke 注入</td><td>description 最长 1024；progressive disclosure</td></tr>
+              <tr><td>Plugin</td><td>打包 skills、hooks、agents、commands、MCP</td><td>首次交互懒加载</td><td>格式适配层与内存模型分离</td></tr>
+              <tr><td>Subagent</td><td>用专用 Agent/独立上下文完成委派任务</td><td>注册后由 TaskTool 创建子 LocalConversation</td><td>first registration wins</td></tr>
+              <tr><td>Marketplace</td><td>远端发现和解析可复用插件</td><td>按名称/marketplace 懒加载</td><td>名称歧义时要求显式限定</td></tr>
+              <tr><td>Hook</td><td>生命周期治理和组织策略</td><td>会话初始化后挂入事件链</td><td>可阻止消息、动作和停止</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>Subagent 不是 Conversation 子类</h3>
+        <p>
+          委派时 TaskManager 根据 subagent type 找到 Agent factory，创建或恢复一个独立
+          LocalConversation，发送任务并运行；子结果最终作为父 Agent 的工具 Observation 返回。
+          独立会话带来上下文、预算、事件和 Metrics 隔离，并形成独立权限配置边界；
+          子会话默认可共享父会话 working directory，真正的文件系统、进程或 OS 权限隔离仍依赖 Workspace 与部署配置。
+        </p>
+        <h3>注册优先级</h3>
+        <p>
+          编程注册优先于插件，插件优先于项目文件，项目文件优先于用户文件；
+          同级目录中 <code>.agents</code> 优先于 <code>.openhands</code>。first-wins
+          让更高优先级来源无法被后续扫描悄悄覆盖。
+        </p>
+      </section>
+
+      <section id="server">
+        <div class="chapter-no">CHAPTER 14</div>
+        <h2>Agent Server：远程运行时与控制面 <a class="doc-link" href="docs/software-agent-sdk/14-server.html" title="打开 Agent Server 详细设计">子文档</a></h2>
+        <h3>14.1 服务分层</h3>
+        <pre>FastAPI create_app / routers / auth
+                │
+                ▼
+ConversationService                会话目录、hydrate、worktree、lease、eviction
+                │ 1 : N
+                ▼
+EventService                       单会话 run task、PubSub、webhook、状态快照
+                │
+                ▼
+LocalConversation + LocalWorkspace 真正执行 Agent</pre>
+        <p>
+          ConversationService 管理会话集合和磁盘 catalog；每个活跃会话由 EventService 包装，
+          后者持有真正的 LocalConversation，并把同步事件回调桥接到异步 PubSub。
+        </p>
+        <h3>14.2 API 与鉴权</h3>
+        <ul>
+          <li><code>/api/*</code>：会话、事件、bash、文件、Git、MCP 等 REST 控制面，使用 Session API Key。</li>
+          <li><code>/sockets/events/{id}</code>：事件流，推荐首帧发送 auth；query key 已弃用。</li>
+          <li><code>/alive</code>、<code>/health</code>、<code>/ready</code>、<code>/server_info</code>：运行与能力探针。</li>
+          <li>无 session key 时，进程禁止绑定 wildcard address，避免默认暴露无鉴权服务。</li>
+        </ul>
+        <h3>14.3 Deferred Init / Warm Pool</h3>
+        <p>
+          <code>OH_DEFERRED_INIT</code> 让进程先以 dormant 状态启动，编排器再通过
+          <code>POST /api/init</code> 注入用户配置。状态为 dormant → initializing → ready，
+          初始化失败回滚 dormant；未 ready 的 <code>/api/*</code> 返回 503。
+        </p>
+        <div class="callout warning">
+          <strong>探测只看状态码</strong>
+          <div>5xx handler 可能重写响应 detail；warm-pool 编排器应把 HTTP 503 作为权威信号。</div>
+        </div>
+        <h3>14.4 并发与资源生命周期</h3>
+        <ul>
+          <li>Conversation lease 防止共享存储上多实例同时拥有同一会话。</li>
+          <li>Idle eviction 卸载无 run、无外部 WS 的内存对象，下次请求再 hydrate。</li>
+          <li>若恢复时状态仍是 RUNNING，视为前进程异常退出，转 ERROR 并修补 orphan actions。</li>
+          <li>异步路由不能在 event loop 上直接等待 ConversationState 的同步 FIFO lock，应移入 worker thread。</li>
+        </ul>
+      </section>
+
+      <section id="remote">
+        <div class="chapter-no">CHAPTER 15</div>
+        <h2>RemoteConversation：状态镜像与终止竞态 <a class="doc-link" href="docs/software-agent-sdk/15-remote.html" title="打开远程会话详细设计">子文档</a></h2>
+        <h3>15.1 远程路径</h3>
+        <pre>RemoteConversation
+  → POST /api/conversations
+  → WebSocket connect + auth + initial full state
+  → POST /events                    send_message
+  → POST /run                       server EventService.run
+       → LocalConversation.arun
+       → events via PubSub / WS
+  ← RemoteEventsList + RemoteState
+  ← post-run FULL_STATE snapshot    authoritative completion</pre>
+        <p>
+          远程客户端不执行 Hooks、LLM 或工具，只保存服务端状态的镜像。REST 用于命令和补偿式查询，
+          WebSocket 用于低延迟事件传播；结束前会 reconcile 事件列表，弥补断线或分页差异。
+        </p>
+        <h3>15.2 为什么第一次 FINISHED 不可信</h3>
+        <p>
+          Agent step 可以先把状态设为 FINISHED；run 循环随后才执行 Stop hooks。
+          若 Stop hook 拒绝停止，状态会回到 RUNNING 并再跑一轮。因此字段级 WS 或 REST 看到的
+          FINISHED 只是 hint，不是 run task 已退出的证明。
+        </p>
+        <ol>
+          <li>客户端在 POST /run 后才 arm completion gate，忽略连接时的初始快照。</li>
+          <li>EventService 等 arun 结束并 flush pending events 后发布完整状态快照。</li>
+          <li>armed 后收到的 post-run FULL_STATE 且状态非 RUNNING，才是权威完成信号。</li>
+          <li>ERROR/STUCK 仍可立即抛错。</li>
+          <li>若 WS 丢失，REST 连续报告终态 30 秒后启用 hard fallback，防止永久挂起。</li>
+        </ol>
+        <h3>15.3 Interrupt 全链路</h3>
+        <pre>RemoteConversation.interrupt
+  → REST interrupt
+  → ConversationService
+  → EventService.interrupt
+  → LocalConversation.interrupt
+      → CancellationToken.cancel()
+      → asyncio Task.cancel()
+  → CancelledError 沿 LLM/Agent 传播
+  → arun 捕获：PAUSED + InterruptEvent + orphan action 修补
+  → post-run full state</pre>
+        <p>
+          Pause 只是请求在当前 step 自然结束后暂停；Interrupt 取消在途 async task，并通知可中断工具，
+          因而语义和成本不同。
+        </p>
+      </section>
+
+      <section id="settings">
+        <div class="chapter-no">CHAPTER 16</div>
+        <h2>Settings、Secrets 与兼容性 <a class="doc-link" href="docs/software-agent-sdk/16-settings.html" title="打开设置与兼容详细设计">子文档</a></h2>
+        <h3>16.1 Settings 是规范配置面</h3>
+        <p>
+          <code>AgentSettings</code> 与 <code>export_settings_schema()</code> 是程序化配置的规范表面。
+          AgentSettings union 覆盖 OpenHands、LLM compatibility 和 ACP 类型；
+          ConversationSettings 直接拥有 confirmation_mode 与 security_analyzer，并通过 metadata
+          在导出 schema 中归入 verification 分组。
+        </p>
+        <h3>16.2 持久化迁移</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模型</th><th>当前 schema version</th><th>演进要求</th></tr></thead>
+            <tbody>
+              <tr><td>AgentSettings</td><td>5</td><td>不兼容形状变化需 bump、逐版本 migration、历史 golden fixture</td></tr>
+              <tr><td>ConversationSettings</td><td>1</td><td>同一 migration 框架；保持顶层会话控制字段</td></tr>
+              <tr><td>Persisted events</td><td>事件类型自身兼容</td><td>旧字段处理器永久保留</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          持久化 payload 采用直接 <code>model_dump()</code> 形状并在顶层带 schema_version，
+          不增加无必要 wrapper。CI 会用历史 golden 和最新 PyPI baseline 验证迁移。
+        </p>
+        <h3>16.3 Secrets</h3>
+        <p>
+          Pydantic secret 的序列化、解密和 redaction 统一由
+          <code>pydantic_secrets.py</code> 完成。没有 cipher 时不应假装能恢复明文；
+          LookupSecret 的 hostless URL 由 agent-server 注入的
+          <code>OH_INTERNAL_SERVER_URL</code> 解析到当前实例。
+        </p>
+        <h3>16.4 四种兼容表面</h3>
+        <ul>
+          <li><strong>Python API：</strong>公共导出和类成员移除需弃用，移除版本至少晚 5 个 minor；破坏变化至少 MINOR bump。</li>
+          <li><strong>Pydantic Field default：</strong>作为行为兼容变化单独报告并要求 release note。</li>
+          <li><strong>REST/OpenAPI：</strong>不兼容替换同样需要 5 minor runway；优先 additive 或 versioned contract。</li>
+          <li><strong>Event persistence：</strong>比 API 更严格——历史数据必须永久可加载。</li>
+        </ul>
+      </section>
+
+      <section id="engineering">
+        <div class="chapter-no">CHAPTER 17</div>
+        <h2>测试、构建、发布与可观测性 <a class="doc-link" href="docs/software-agent-sdk/17-engineering.html" title="打开工程化详细设计">子文档</a></h2>
+        <h3>17.1 测试分层</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>目录</th><th>覆盖</th><th>边界</th></tr></thead>
+            <tbody>
+              <tr><td><code>tests/sdk</code></td><td>纯 SDK 单元与契约</td><td>不应 import tools</td></tr>
+              <tr><td><code>tests/tools</code></td><td>内置工具行为与 fallback</td><td>按工具域组织</td></tr>
+              <tr><td><code>tests/workspace</code></td><td>容器/远程后端</td><td>平台差异明确</td></tr>
+              <tr><td><code>tests/agent_server</code></td><td>服务、API、并发、持久化</td><td>stress 默认排除，需 <code>-m stress</code></td></tr>
+              <tr><td><code>tests/cross</code></td><td>跨包、真实 FastAPI + WS</td><td>验证 RemoteConversation 端到端</td></tr>
+              <tr><td><code>tests/integration</code></td><td>真 LLM 集成、行为、Condenser、畸形历史</td><td>按 label 触发</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>17.2 工程门禁</h3>
+        <ul>
+          <li>Ruff、pycodestyle、Pyright、YAML format、import rules、tool registration。</li>
+          <li>SDK API breakage、deprecation deadlines、persisted settings compatibility、REST oasdiff。</li>
+          <li>仓库政策要求第三方 GitHub Actions 使用完整 SHA；当前 <code>tests.yml</code> 的 stress job 仍有两处可变标签，是待修复的门禁缺口。uv 已配置 workspace-wide exclude-newer 与安全 constraints。</li>
+        </ul>
+        <h3>17.3 发布与部署资产</h3>
+        <p>
+          四包版本同步发布。Agent Server 同时产出 PyInstaller 二进制和多架构 Docker 镜像。
+          PyInstaller 必须收集四包 distribution metadata 和运行时模板/JS，否则
+          <code>/server_info</code> 会显示 unknown 或运行时缺资源。Docker tags 由
+          <code>docker/build.py</code> 集中生成，workflow 负责构建编排并显式传入 Git SHA/ref。
+        </p>
+        <h3>17.4 可观测性</h3>
+        <p>
+          运行时可观测性来自事件流、LLM completion log、token callback、Metrics/Cost、
+          HookExecutionEvent、服务端 WebSocket 和 server_info。它们都围绕同一 conversation identity
+          组织，便于把一次模型决策追到工具 Observation 与最终状态。
+        </p>
+        <h3>17.5 论文提供的系统与能力证据</h3>
+        <p>
+          MLSys 2026 论文 §5 报告：在一次 15 天 V0/V1 并行生产 rollout 中，排除外部 LLM provider
+          错误后，system-attributable error 从每千会话 78.0 降至 30.0，下降 61%；基于 433 个
+          SWE-Bench Verified 会话、39,870 个事件的实验显示事件持久化通常为亚毫秒级。论文还用
+          程序化测试、真实 LLM 测试和 benchmark 三层证据，并在 14 个模型、五类任务上验证能力。
+          <a href="https://arxiv.org/abs/2511.03690" target="_blank" rel="noopener noreferrer">论文原文 §5</a>
+        </p>
+        <div class="callout warning">
+          <strong>这些数字不是 SDK 的 SLA。</strong>
+          <div>
+            它们只描述论文给定时间窗、部署环境、trace 样本与评测版本。当前仓库可复现脚本与论文表格
+            还存在统计口径差异；部署容量、延迟和成功率必须在目标环境重新测量。竞品能力表同样只是
+            2025 年 10 月的版本快照，不能用于判断 2026 年的实时能力。
+          </div>
+        </div>
+      </section>
+
+      <section id="patterns">
+        <div class="chapter-no">CHAPTER 18</div>
+        <h2>设计模式、关键权衡与二次开发 <a class="doc-link" href="docs/software-agent-sdk/18-patterns.html" title="打开模式与二次开发详细设计">子文档</a></h2>
+        <h3>18.1 可识别的架构模式</h3>
+        <div class="grid">
+          <div class="card"><h4>Event Sourcing Lite</h4><p>事件是可恢复事实，但仍保留 base_state 快照加速加载，不追求纯事件溯源。</p></div>
+          <div class="card"><h4>Ports and Adapters</h4><p>LLM transport、Workspace、ToolExecutor、SecurityAnalyzer 都通过边界接口替换。</p></div>
+          <div class="card"><h4>Registry / Plugin</h4><p>工具、prompt sections、subagents、marketplace 用注册与发现扩展，核心主链保持稳定。</p></div>
+          <div class="card"><h4>State Machine</h4><p>运行、确认、暂停、终止和删除都有显式状态，避免靠散落布尔值推断。</p></div>
+          <div class="card"><h4>Bulkhead</h4><p>子 Agent 独立 Conversation；并行工具按资源锁隔离；server lease 防双 owner。</p></div>
+          <div class="card"><h4>Layered Recovery</h4><p>retry、fallback、nudge、condensation、hard error 各处理不同故障域。</p></div>
+        </div>
+        <h3>18.2 关键权衡</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>选择</th><th>获得</th><th>代价</th></tr></thead>
+            <tbody>
+              <tr><td>Agent 字段冻结</td><td>配置替换显式、会话状态边界清晰</td><td>嵌套 LLM 并非深度冻结，仍需管理 Metrics、缓存和 fallback 临时状态</td></tr>
+              <tr><td>事件文件逐条持久化</td><td>增量写入、分支与恢复自然</td><td>大量会话需要 catalog/cache/eviction 优化</td></tr>
+              <tr><td>工具批次并行</td><td>降低多只读操作延迟</td><td>必须声明资源，否则只能保守互斥</td></tr>
+              <tr><td>懒加载插件</td><td>构造轻、可解析远端来源</td><td>首次交互前扩展状态尚未物化</td></tr>
+              <tr><td>REST + WS 双通道</td><td>控制可靠、事件低延迟</td><td>需要 reconcile、arming 和终止竞态处理</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>18.3 二次开发入口</h3>
+        <ol>
+          <li><strong>加工具：</strong>定义 Action/Observation、ToolDefinition/Executor、资源声明并注册。</li>
+          <li><strong>换模型策略：</strong>优先扩 model features、RouterLLM 或 FallbackStrategy。</li>
+          <li><strong>加上下文：</strong>用 PromptSection、Skill 或 AgentContext suffix，不直接拼巨型 system prompt。</li>
+          <li><strong>加安全策略：</strong>实现 SecurityAnalyzer/ConfirmationPolicy 或 lifecycle hooks。</li>
+          <li><strong>加执行后端：</strong>实现 BaseWorkspace/RemoteWorkspace，而不是让工具感知容器厂商。</li>
+          <li><strong>加远程产品：</strong>消费 Agent Server REST/WS，保留 full-state completion 语义。</li>
+        </ol>
+      </section>
+
+      <section id="learning">
+        <div class="chapter-no">CHAPTER 19</div>
+        <h2>模块化学习路线与组内分享提纲</h2>
+        <h3>19.1 推荐学习顺序</h3>
+        <ol>
+          <li><strong>第 1 讲：核心对象。</strong>从公共 API 和 hello world 建立 Agent / Conversation / Workspace 心智模型。</li>
+          <li><strong>第 2 讲：运行循环。</strong>跟踪 send_message → run → step → LLM → tool → event。</li>
+          <li><strong>第 3 讲：状态与恢复。</strong>画状态机，理解事件树、View、Action/Observation 与 persistence。</li>
+          <li><strong>第 4 讲：上下文与模型。</strong>Prompt Sections、Skills、Condenser、LiteLLM、streaming 和错误恢复。</li>
+          <li><strong>第 5 讲：工具与安全。</strong>写一个 custom tool，再观察确认、hooks、资源锁和失败事件。</li>
+          <li><strong>第 6 讲：远程架构。</strong>启动 Agent Server，比较 Local/RemoteConversation，抓 REST/WS 事件。</li>
+          <li><strong>第 7 讲：扩展生态。</strong>Plugin、MCP、Subagent、Marketplace 与权限继承。</li>
+          <li><strong>第 8 讲：工程化。</strong>Settings migration、API compatibility、CI、Docker/PyInstaller 和 release。</li>
+        </ol>
+        <h3>19.2 每次分享的固定结构</h3>
+        <div class="grid three">
+          <div class="card"><h4>Why</h4><p>模块解决什么真实问题，如果不存在会出现什么故障。</p></div>
+          <div class="card"><h4>Boundary</h4><p>输入、输出、状态所有权、依赖方向和不变量。</p></div>
+          <div class="card"><h4>Trace</h4><p>用一条真实调用链或事件序列串起实现。</p></div>
+          <div class="card"><h4>Failure</h4><p>至少演示一个失败、重试、恢复或中断场景。</p></div>
+          <div class="card"><h4>Extension</h4><p>指出推荐扩展点和不推荐侵入核心的位置。</p></div>
+          <div class="card"><h4>Takeaway</h4><p>用三条不变量结束，形成可复用评审标准。</p></div>
+        </div>
+      </section>
+
+      <section id="appendix">
+        <div class="chapter-no">APPENDIX</div>
+        <h2>术语、关键不变量与事实索引</h2>
+        <h3>关键不变量</h3>
+        <ol>
+          <li>Agent 的 Pydantic 字段被冻结，ConversationState 承载会话事实；LLM 当前不是 frozen 模型，拥有独立运行时状态。</li>
+          <li>LLM 上下文来自事件树活跃分支的 View，不是全量事件列表。</li>
+          <li>可执行 Action 最终必须匹配 Observation；中断和恢复需要修补 orphan action。</li>
+          <li>确认发生在 ActionEvent 持久化之后、ToolExecutor 执行之前。</li>
+          <li>Stop hook 可以推翻 FINISHED；远程完成以 post-run full-state snapshot 为准。</li>
+          <li>历史事件兼容处理器永久保留；Settings 不兼容变化走显式版本迁移。</li>
+          <li>MCP 的公共配置是 SDK MCPServer map，FastMCP 只存在于连接边界。</li>
+          <li>本地文件路径按 host-native 语义，wire path 按跨平台 slash-normalized 语义。</li>
+        </ol>
+        <h3>术语速查</h3>
+        <details><summary>View 与 EventLog 有什么区别？</summary><div>EventLog 保存全部事件树；View 是当前 leaf 到 root 的活跃分支经过属性约束后的 LLM 输入视图。</div></details>
+        <details><summary>Pause 与 Interrupt 有什么区别？</summary><div>Pause 等当前 step 自然结束；Interrupt 取消在途 async task 和可中断工具，最终都进入 PAUSED，但响应速度与副作用不同。</div></details>
+        <details><summary>ToolSet 与 MCP Tool 有什么区别？</summary><div>ToolSet 是一个本地工具规格展开多个 ToolDefinition 的模式；MCP Tool 来自远端 MCP server 动态发现，但最终也适配为 ToolDefinition/Executor。</div></details>
+        <details><summary>为什么 RemoteConversation 不能只轮询 REST？</summary><div>REST 状态可能先于 Stop hook 完成显示 FINISHED，也不能保证最终事件已通过 WS 到达；完整状态快照和 reconcile 提供结束屏障。</div></details>
+        <details><summary>为什么 Agent 的字段被冻结，而 LLM 不是？</summary><div>Agent 是「声明」，冻结它可以保证一次会话期间模型、工具规格和策略不会被悄悄改掉，恢复时也能凭同一份声明重建可执行体。LLM 之所以不是深度冻结，是因为它必须携带运行期状态：Metrics 累计、prompt cache 命中信息、fallback 当前落在哪个候选上。把这些塞进冻结对象会逼出一堆重建开销。实践上的含义是：改配置要替换整个 Agent 对象，而不是原地改字段；但读 LLM 上的统计数据是安全的，它本来就在变。</div></details>
+        <details><summary>并行工具执行会不会破坏历史的可复现性？</summary><div>不会，因为执行顺序和记录顺序是两件事。ParallelToolExecutor 可以按 DeclaredResources 分组并发跑，但 Observation 严格按原始 tool call 顺序写入事件树。这样同一份输入重放时得到的历史是一致的，View 里 tool_call 与 tool_result 的配对关系也稳定。真正的风险在别处：如果工具没有正确申报资源，两个并发写同一文件的调用会互相覆盖——那是数据竞争，不是历史顺序问题，得靠资源声明而不是靠排序解决。</div></details>
+        <details><summary>什么时候该写一个新工具，什么时候该写一个 Skill？</summary><div>判断标准是「模型缺的是能力还是知识」。缺能力——运行时根本没有办法做这件事（访问某个内部系统、操作某种文件格式）——才写工具，代价是每次请求都要携带它的 schema。缺知识——工具都在，只是不知道该按什么顺序、遵守什么约定去组合——那就写 Skill，它通过渐进披露只在触发时才进入上下文，常驻成本接近于零。一个实用的反问：如果把这段内容读给一个熟练工程师听，他能用现有工具做出来吗？能，就是 Skill。</div></details>
+        <h3>代码事实入口</h3>
+        <ul class="source-list">
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py</code> — 本地运行循环、插件与中断。</li>
+          <li><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py</code> — REST/WS 客户端与完成屏障。</li>
+          <li><code>openhands-sdk/openhands/sdk/conversation/state.py</code> — 状态机、事件 HEAD、View 与持久化。</li>
+          <li><code>openhands-sdk/openhands/sdk/agent/agent.py</code> — 一步决策、响应分派、确认和工具批处理。</li>
+          <li><code>openhands-sdk/openhands/sdk/llm/llm.py</code> — Chat/Responses、transport、streaming 与 telemetry。</li>
+          <li><code>openhands-sdk/openhands/sdk/context/</code> — Prompt、View、Condenser、Skills 与 AgentContext。</li>
+          <li><code>openhands-sdk/openhands/sdk/tool/</code> — Tool 协议、registry、schema 与 builtins。</li>
+          <li><code>openhands-sdk/openhands/sdk/mcp/</code> — MCPServer、FastMCP 边界与执行器。</li>
+          <li><code>openhands-tools/openhands/tools/</code> — 内置工具定义与实现。</li>
+          <li><code>openhands-agent-server/openhands/agent_server/</code> — FastAPI、ConversationService、EventService、routers 与 sockets。</li>
+          <li><code>openhands-workspace/openhands/workspace/</code> — Docker、Cloud、Apptainer 等后端。</li>
+          <li><code>tests/</code> 与 <code>.github/workflows/</code> — 行为契约、兼容门禁和发布流水线。</li>
+        </ul>
+        <h3>论文与历史来源</h3>
+        <ul class="source-list">
+          <li><a href="https://arxiv.org/abs/2511.03690" target="_blank" rel="noopener noreferrer">MLSys 2026 · Software Agent SDK</a> — 当前 V1 参考架构、可靠性与评测证据。</li>
+          <li><a href="https://arxiv.org/abs/2407.16741" target="_blank" rel="noopener noreferrer">ICLR 2025 · OpenHands Platform</a> — V0 平台、EventStream、强制 Runtime 与 AgentHub 的历史背景。</li>
+          <li><a href="https://proceedings.mlr.press/v235/wang24h.html" target="_blank" rel="noopener noreferrer">ICML 2024 · CodeAct</a> — 可执行代码动作与环境反馈的研究来源，不是 SDK 架构说明。</li>
+        </ul>
+        <footer>
+          本文依据仓库 1.42.1 代码基线编写，并以 MLSys 2026 SDK 论文解释设计动机。
+          后续架构变化应同步更新正文、全景图与事实索引；实现冲突始终以当前源码、Schema 和测试为准。
+        </footer>
+      </section>
+    </main>
+  </div>
+  </div><!-- /panel-docs -->
+
+  <script>
+    const links = [...document.querySelectorAll("#toc a")];
+    const sections = links
+      .map((link) => document.querySelector(link.getAttribute("href")))
+      .filter(Boolean);
+    // scrollspy：与全站卡片同一套实现——取最后一个越过 160px 线的章节作为当前章节
+    const spy = () => {
+      let current;
+      sections.forEach((section) => {
+        if (section.getBoundingClientRect().top < 160) current = section.id;
+      });
+      links.forEach((link) => {
+        link.classList.toggle("active", link.getAttribute("href") === `#${current}`);
+      });
+    };
+    window.addEventListener("scroll", spy, { passive: true });
+    spy();
+
+  </script>
+  <script>
+    // Tab 切换（入门指南 / 架构文档）
+    function switchSATab(name) {
+      localStorage.setItem("softwareAgentArchTab", name);
+      document.querySelectorAll(".spanel").forEach(function (p) { p.classList.remove("active"); });
+      document.querySelectorAll(".project-tabs .tab-btn").forEach(function (b) { b.classList.toggle("active", b.dataset.tab === name); });
+      document.getElementById("panel-" + name).classList.add("active");
+      document.body.classList.toggle("tab-embed", name === "guide");
+      window.scrollTo(0, 0);
+    }
+    document.querySelectorAll(".project-tabs .tab-btn").forEach(function (btn) {
+      btn.addEventListener("click", function () { switchSATab(btn.dataset.tab); });
+    });
+    (function () {
+      var tab = localStorage.getItem("softwareAgentArchTab");
+      if (tab && tab !== "docs" && document.getElementById("panel-" + tab)) switchSATab(tab);
+    })();
+  </script>
+</body>
+</html>

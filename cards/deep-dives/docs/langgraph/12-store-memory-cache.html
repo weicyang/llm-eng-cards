@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>十二、Store、Memory 与 Cache：长期记忆、结果复用与 Runtime 注入</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.72 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif;padding:58px 24px 40px 292px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .3rem;border-radius:4px;font-size:.9em}strong{color:var(--text)}
+.topbar{position:fixed;z-index:20;left:0;right:0;top:0;height:46px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:4px 10px}
+.sidebar{position:fixed;z-index:10;left:0;top:46px;bottom:0;width:270px;padding:16px 12px;overflow:auto;border-right:1px solid var(--border);background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}.sidebar strong{display:block;color:var(--blue);font-size:13px;margin:0 0 8px 7px}.sidebar a{display:block;color:var(--muted);font-size:12.5px;padding:4px 7px;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1120px;margin:auto}h1{text-align:center;font-size:2.15rem;color:var(--blue);line-height:1.25;margin:20px 0 5px}.subtitle{text-align:center;color:var(--muted);margin:0 0 22px}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:25px 29px;margin:0 0 18px;scroll-margin-top:56px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section h2{font-size:1.42rem;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:8px;margin:0 0 15px}.section h3{font-size:1.1rem;color:var(--blue2);margin:20px 0 7px}.section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.meta,.grid2,.grid3{display:grid;gap:12px;margin:12px 0}.meta,.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px}.card strong{display:block;color:var(--blue2);margin-bottom:3px}.badges{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.badge{font-size:12px;border:1px solid;border-radius:999px;padding:1px 8px;font-weight:700}.fact{color:var(--green)}.optional{color:var(--yellow)}.gap{color:var(--red)}.remote{color:var(--blue)}
+.insight,.warn,.boundary{padding:14px 17px;border-radius:8px;margin:14px 0;background:var(--surface2)}.insight{border:1px solid var(--green)}.warn{border:1px solid var(--red);background:rgba(185,28,28,.04)}.boundary{border:1px dashed var(--yellow)}.insight:before,.warn:before,.boundary:before{display:block;font-weight:700}.insight:before{content:"核心结论";color:var(--green)}.warn:before{content:"风险 / 易错点";color:var(--red)}.boundary:before{content:"事实边界";color:var(--yellow)}
+.table-wrap{overflow-x:auto;margin:12px 0}table{width:100%;border-collapse:collapse;font-size:13.5px;min-width:720px}th{color:var(--blue);background:#e8e1d4}th,td{text-align:left;vertical-align:top;border:1px solid var(--border);padding:8px 10px}tr:nth-child(even){background:rgba(244,241,234,.42)}ul,ol{padding-left:22px}li{margin:4px 0}.mono{white-space:pre-wrap;overflow-wrap:anywhere;background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:14px;color:var(--blue2);font:13px/1.55 Consolas,"Cascadia Code",monospace}.source{font-size:12.5px;color:var(--muted);border-left:3px solid var(--border);padding-left:10px;margin:10px 0}.footer{text-align:center;color:#78716c;padding:20px}
+@media(max-width:960px){body{padding-left:18px}.sidebar{display:none}.meta,.grid3{grid-template-columns:1fr 1fr}}@media(max-width:620px){body{padding:54px 10px 18px}.section{padding:18px 14px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.meta,.grid2,.grid3{grid-template-columns:1fr}h1{font-size:1.62rem}.topbar{padding:0 10px}.mono{font-size:11px}}
+</style>
+</head>
+<body>
+<header class="topbar"><a href="../../langgraph_architecture.html#s12">返回 LangGraph 架构总览 · 第十二章</a></header>
+<nav class="sidebar" aria-label="本文目录">
+<strong>Store / Memory / Cache</strong>
+<a href="#position">1. 模块定位</a>
+<a href="#system">2. 系统位置与依赖</a>
+<a href="#concepts">3. 核心概念</a>
+<a href="#architecture">4. 架构组成</a>
+<a href="#flows">5. 完整运行流程</a>
+<a href="#data-model">6. 数据与状态模型</a>
+<a href="#interfaces">7. 接口、协议与事件</a>
+<a href="#configuration">8. 配置与默认行为</a>
+<a href="#concurrency">9. 并发、性能与资源</a>
+<a href="#security">10. 安全与信任边界</a>
+<a href="#failure">11. 失败、恢复与兼容</a>
+<a href="#troubleshooting">12. 可观测性与排障</a>
+<a href="#testing">13. 测试与验证</a>
+<a href="#extension">14. 开发与扩展指南</a>
+<a href="#tradeoffs">15. 设计权衡与已知限制</a>
+<a href="#source-index">16. 源码索引与进一步阅读</a>
+<a href="#glossary">17. 术语表</a>
+</nav>
+<main class="container">
+<h1 id="chapter-title">十二、Store、Memory 与 Cache</h1>
+<p class="subtitle">把跨 thread 长期记忆、执行恢复与节点结果复用拆成三个可审计契约，并沿 Runtime/ToolRuntime 跟踪真实注入链。</p>
+<div class="meta">
+<div class="card"><strong>事实基线</strong><code>langgraph 1.2.11</code><br><code>langgraph-checkpoint 4.2.0</code><br>SQLite 3.1.1 / Postgres 3.1.2 / prebuilt 1.1.0</div>
+<div class="card"><strong>证据状态</strong>当前工作区源码、公共类型和聚焦测试已审计；Git SHA 因当前命令环境无可用 <code>git</code> 而未取得。</div>
+<div class="card"><strong>Owner / 读者</strong><code>libs/checkpoint/langgraph/store/</code>、<code>cache/</code>、Pregel 与 prebuilt ToolNode；面向运行时、持久化和 Agent 工具开发者。</div>
+</div>
+<div class="badges"><span class="badge fact">当前事实</span><span class="badge optional">向量与 TTL 为可选能力</span><span class="badge remote">远程 Server 不在本文实现面</span><span class="badge gap">同步缓存失败写守卫存在证据缺口</span></div>
+
+<section class="section" id="position">
+<h2>1. 模块定位：三种“记忆”不可互换</h2>
+<p><strong>Store</strong> 是跨 thread、跨会话的业务数据平面；<strong>Cache</strong> 是按节点输入复用节点 writes 的执行优化；<strong>Checkpointer</strong> 是 Pregel 超级步与 task 写的恢复协议。三者都可能“保存东西”，但身份、生命周期和失败语义完全不同。</p>
+<div class="table-wrap"><table><thead><tr><th>机制</th><th>身份键</th><th>保存内容</th><th>生命周期</th><th>明确不负责</th></tr></thead><tbody>
+<tr><td>Checkpointer</td><td><code>thread_id + checkpoint_ns + checkpoint_id</code></td><td>Channel 值/版本、<code>versions_seen</code>、pending writes</td><td>执行线程与历史分支</td><td>用户语义检索、通用 KV</td></tr>
+<tr><td><code>BaseStore</code></td><td><code>namespace + key</code></td><td>业务 <code>dict</code>、时间戳，可选向量与 TTL</td><td>由应用、租户和适配器管理</td><td>恢复节点调度位置</td></tr>
+<tr><td><code>BaseCache</code></td><td>内部 namespace + 输入摘要</td><td>成功节点的 writes 与秒级 TTL</td><td>可随时清除、命中失败可重算</td><td>业务真相、授权、跨版本兼容</td></tr>
+</tbody></table></div>
+<p>Checkpointer 的公共说明明确把 checkpoint 定义为图状态快照并区分 <code>put_writes</code> 与 <code>put</code>；Store 则声明为可跨 thread 共享的 namespace KV。<span class="evidence"><code>libs/checkpoint/README.md:17-33</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:708-724</code></span></p>
+<div class="insight">设计评审时先问“这是恢复执行、保存业务事实，还是省一次计算？”答案分别落到 Checkpointer、Store、Cache。不要用一个模糊的 <code>memory</code> 变量掩盖所有权。</div>
+</section>
+
+<section class="section" id="system">
+<h2>2. 系统位置与依赖：从 compile 到数据库/缓存后端</h2>
+<div class="mono">StateGraph / @entrypoint
+  └─ compile(store=?, cache=?, checkpointer=?)
+      └─ Pregel.stream / astream
+          ├─ Checkpointer ─► checkpoint 与 pending writes
+          ├─ BaseStore ─► Runtime.store ─► Node / ToolRuntime / InjectedStore
+          └─ BaseCache ◄─ CachePolicy(input) ─► cached task writes
+
+BaseStore 兄弟实现：InMemoryStore / SqliteStore / AsyncSqliteStore /
+                    PostgresStore / AsyncPostgresStore
+BaseCache 兄弟实现：InMemoryCache / SqliteCache / RedisCache</div>
+<p>核心包生产依赖 checkpoint、prebuilt 与 SDK；SQLite 额外依赖 <code>aiosqlite</code>、<code>sqlite-vec</code>，Postgres 依赖 <code>psycopg</code> 与连接池。版本与依赖声明见 <span class="evidence"><code>libs/langgraph/pyproject.toml:26-33</code></span>、<span class="evidence"><code>libs/checkpoint-sqlite/pyproject.toml:14-18</code></span>、<span class="evidence"><code>libs/checkpoint-postgres/pyproject.toml:14-19</code></span>。</p>
+<div class="grid3">
+<div class="card"><strong>上游入口</strong><code>StateGraph.compile(store, cache)</code>、Functional API entrypoint/task、Pregel 配置覆盖。</div>
+<div class="card"><strong>下游副作用</strong>内存 dict、SQLite 文件、Postgres 表、Redis key，以及 embedding provider 网络调用。</div>
+<div class="card"><strong>进程边界</strong>本地 Store/Cache 不自动提供 Auth 或租户授权；SDK Store 客户端和托管 Server 属远程执行面。</div>
+</div>
+</section>
+
+<section class="section" id="concepts">
+<h2>3. 核心概念：Batch、Namespace、TTL、Vector 与 Writes</h2>
+<h3>3.1 <code>batch/abatch</code> 是 Store 的最小实现面</h3>
+<p><code>BaseStore</code> 只要求适配器实现有序的 <code>batch(Iterable[Op])</code> 与 <code>abatch</code>；<code>get/search/put/delete/list_namespaces</code> 及其异步版本都把单次调用规范化为 <code>GetOp</code>、<code>SearchOp</code>、<code>PutOp</code>、<code>ListNamespacesOp</code>。结果必须与输入操作按位置对应。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:708-754</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:756-777</code></span></p>
+<h3>3.2 Namespace 是层级作用域，不是授权系统</h3>
+<p>namespace 为 <code>tuple[str, ...]</code>，搜索使用前缀，枚举可组合 prefix/suffix、通配符、深度和分页。公共 <code>put/aput</code> 拒绝空 namespace、空标签、含句点标签及保留根 <code>"langgraph"</code>；但直接调用适配器 <code>batch/abatch</code> 可绕过公共入口校验，因此自定义适配器不能把它当安全边界。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:1263-1283</code></span>；绕过行为由 <span class="evidence"><code>libs/checkpoint/tests/test_store.py:429-480</code></span> 固化。</p>
+<h3>3.3 两套 TTL 单位不同</h3>
+<ul>
+<li>Store 的 <code>PutOp.ttl</code> 与 <code>TTLConfig</code> 使用<strong>分钟</strong>，读取可刷新过期时间，物理删除是 best effort。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:526-575</code></span></li>
+<li>Cache 的 <code>CachePolicy.ttl</code> 使用<strong>秒</strong>，传入 <code>BaseCache.set/aset</code>。<span class="evidence"><code>libs/langgraph/langgraph/types.py:520-529</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/cache/base/__init__.py:24-38</code></span></li>
+</ul>
+<h3>3.4 Vector search 是可选索引，不改变 KV 身份</h3>
+<p><code>IndexConfig</code> 提供 <code>dims</code>、embedding 函数/对象/provider 字符串和字段路径；未配置时语义搜索禁用，<code>index</code> 参数被忽略。<code>index=False</code> 仅不建向量，条目仍可 <code>get</code> 和结构化 <code>search</code>。字段路径支持嵌套、数组索引和 <code>[*]</code>。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:490-534</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:578-705</code></span></p>
+</section>
+
+<section class="section" id="architecture">
+<h2>4. 架构组成：公共协议与兄弟实现</h2>
+<div class="table-wrap"><table><thead><tr><th>组件</th><th>状态/同步</th><th>扩展点</th><th>失败隔离</th></tr></thead><tbody>
+<tr><td><code>InMemoryStore</code></td><td>进程内 <code>_data/_vectors</code>；无显式锁</td><td>可选 embeddings；NumPy 加速余弦相似度</td><td>进程退出即丢失；embedding 错误直接抛出</td></tr>
+<tr><td><code>AsyncBatchedBaseStore</code></td><td>绑定创建时 event loop，队列聚合同 tick 操作</td><td>子类只需实现 <code>abatch</code></td><td>单项取消不破坏队列；后台 task 可重建</td></tr>
+<tr><td><code>SqliteStore</code></td><td>单连接、<code>threading.Lock</code>、事务批次</td><td><code>sqlite-vec</code>、TTL sweeper</td><td>单批事务失败向调用方传播</td></tr>
+<tr><td><code>PostgresStore</code></td><td>直连/pipe/pool；必要时锁住单连接</td><td>pgvector、连接池、TTL sweeper</td><td>数据库/embedding 失败传播；事务/pipe 负责批次边界</td></tr>
+<tr><td><code>InMemoryCache</code></td><td><code>RLock</code> 保护 dict</td><td>自定义 serde</td><td>反序列化失败传播；过期读取时删除</td></tr>
+<tr><td><code>SqliteCache</code></td><td>共享连接、<code>RLock</code>、WAL</td><td>文件路径、serde</td><td>DB/serde 错误传播</td></tr>
+<tr><td><code>RedisCache</code></td><td>MGET 与 pipeline；异步方法委托同步客户端</td><td>Redis prefix、serde</td><td>连接和损坏值 fail-open 为 miss</td></tr>
+</tbody></table></div>
+<p><code>InMemoryStore.batch/abatch</code> 先准备读/搜/写，批量生成 query/document embeddings，再应用 puts；同一批次中读基于写前快照，同键多个 put 最终只保留最后一个。<span class="evidence"><code>libs/checkpoint/langgraph/store/memory/__init__.py:206-234</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/memory/__init__.py:375-416</code></span></p>
+<p>SQLite Store 的批次在锁内开启事务并按操作类型执行，结果写回原索引；同步类的 <code>abatch</code> 明确拒绝，要求使用 <code>AsyncSqliteStore</code>。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/store/sqlite/base.py:1236-1275</code></span>；<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/store/sqlite/base.py:1475-1480</code></span></p>
+<p>Postgres 同步实现按类型分组、保留结果索引，<code>abatch</code> 仅把同步 batch 放进 executor；真正异步实现使用 <code>AsyncPostgresStore</code> 与 <code>asyncio.Lock</code>。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/store/postgres/base.py:982-1013</code></span>；<span class="evidence"><code>libs/checkpoint-postgres/langgraph/store/postgres/base.py:1112-1120</code></span>；<span class="evidence"><code>libs/checkpoint-postgres/langgraph/store/postgres/aio.py:133-173</code></span></p>
+</section>
+
+<section class="section" id="flows">
+<h2>5. 完整运行流程：成功、拒绝与恢复/降级</h2>
+<h3>5.1 成功路径：Store 写入并由 ToolRuntime 读取</h3>
+<ol>
+<li>应用以租户与用户组成 namespace，例如 <code>("tenant", tenant_id, "user", user_id, "memory")</code>；调用 <code>put</code> 时公共入口校验 namespace，并生成 <code>PutOp</code>。</li>
+<li>适配器 <code>batch</code> 按类型分组；若启用索引，提取字段并批量调用 embedding；数据库实现将业务值、TTL 与向量写入事务。</li>
+<li><code>compile(store=store)</code> 将 Store 放入 Pregel；每个 task 准备时，Runtime 被 override 为当前 <code>store</code> 和 <code>ExecutionInfo</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:688-701</code></span></li>
+<li>ToolNode 为每个 tool call 构造独立 <code>ToolRuntime</code>，转发 context/store/writer/执行身份；同步工具走 executor，异步工具由 <code>asyncio.gather</code> 并发。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:793-858</code></span></li>
+<li>注入阶段移除模型伪造的隐藏参数，再注入可信 store/runtime；工具按 namespace <code>get/search</code>，返回 ToolMessage/Command，最终成为普通节点 writes。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1407-1429</code></span></li>
+</ol>
+<h3>5.2 拒绝路径：配置、namespace 与注入 fail-closed</h3>
+<ol>
+<li>空 namespace、非法标签或保留根在公共 <code>put/aput</code> 前抛 <code>InvalidNamespaceError</code>，没有 Store 写。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:919-935</code></span></li>
+<li>适配器未声明 <code>supports_ttl</code> 且调用者给非空 TTL 时抛 <code>NotImplementedError</code>；不会悄悄接受一个无法执行的过期承诺。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:919-924</code></span></li>
+<li>工具声明 <code>InjectedStore</code> 但图未提供 Store 时，在工具执行前抛 <code>ValueError</code>；不会把 <code>None</code> 交给工具继续副作用。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1407-1415</code></span></li>
+</ol>
+<h3>5.3 缓存成功、miss 与降级路径</h3>
+<ol>
+<li>task 准备阶段选择节点级 policy，否则使用图级 policy；<code>key_func(input)</code> 的结果经 xxh3-128 摘要，namespace 包含内部 writes 标识、节点 runnable identity 与节点名。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:663-687</code></span></li>
+<li>Loop 只为“有 cache key 且当前没有 writes”的 task 批量查询缓存；命中后把缓存的 writes 扩展进 task，节点不执行，<code>updates</code> stream 带 <code>{"cached": true}</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1549-1562</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1416-1466</code></span></li>
+<li>miss 时正常执行节点；成功提交后缓存的是 <code>task.writes</code>，不是节点返回对象、整图 state 或 checkpoint。同步与异步写回见 <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1609-1625</code></span>、<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1864-1883</code></span>。</li>
+<li>Redis 不可用或值损坏时读返回空映射、写静默丢弃，图降级为重算；这是 cache 的 fail-open，不适用于 Store 或 Checkpointer。<span class="evidence"><code>libs/checkpoint/langgraph/cache/redis/__init__.py:52-78</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/cache/redis/__init__.py:84-108</code></span></li>
+</ol>
+</section>
+
+<section class="section" id="data-model">
+<h2>6. 数据与状态模型：所有者、生命周期和清理</h2>
+<div class="table-wrap"><table><thead><tr><th>对象</th><th>关键字段</th><th>所有者</th><th>清理/迁移</th></tr></thead><tbody>
+<tr><td><code>Item</code></td><td>namespace、key、value、created_at、updated_at</td><td>Store 适配器</td><td><code>delete</code> 转成 value=None 的 <code>PutOp</code></td></tr>
+<tr><td><code>SearchItem</code></td><td>Item + 可空 score</td><td>搜索实现</td><td>分页不保证跨并发写的快照稳定，依赖后端事务</td></tr>
+<tr><td><code>PutOp</code></td><td>value、index、分钟 TTL</td><td>BaseStore 调用契约</td><td>TTL 到期可先逻辑隐藏、后物理 sweep</td></tr>
+<tr><td><code>CacheKey</code></td><td>namespace、摘要 key、秒 TTL</td><td>Pregel task 准备</td><td><code>clear_cache(nodes)</code> 按节点 namespace 清除</td></tr>
+<tr><td>cached value</td><td><code>deque[(channel, value)]</code> 形态的 writes</td><td>Pregel Loop + BaseCache</td><td>TTL、按 namespace 清除或后端淘汰</td></tr>
+</tbody></table></div>
+<p>默认 cache key 先递归冻结 mapping/sequence，使 mapping key 顺序不影响结果，再以 pickle protocol 5 序列化；最终仍会被 xxh3 摘要。包含不可稳定 pickle 对象、运行时句柄或深层可变对象时，应提供显式 <code>key_func</code>。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_cache.py:7-31</code></span></p>
+<p>Store TTL 的默认值来自 <code>TTLConfig.default_ttl</code>；<code>refresh_on_read</code> 默认解析为 true，但数据库实现只有在配置存在且适配器消费该选项时刷新。<code>omit_expired</code> 默认 false，意味着 sweep 前的过期行仍可能被读到。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:545-575</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:1286-1304</code></span></p>
+<div class="warn">Store TTL 是保留策略，不是权限撤销。默认 <code>omit_expired=False</code> 时，过期与物理删除之间存在窗口；敏感数据访问必须另做授权与显式删除。</div>
+</section>
+
+<section class="section" id="interfaces">
+<h2>7. 接口、协议与事件：注入面与可见性</h2>
+<h3>7.1 Runtime 与 ToolRuntime</h3>
+<p><code>Runtime[ContextT]</code> 注入图节点和 middleware，包含 context、store、stream_writer、previous、execution_info 等，但不含 <code>RunnableConfig</code>；节点需要 config 时应显式声明。<span class="evidence"><code>libs/langgraph/langgraph/runtime.py:124-141</code></span>；字段定义见 <span class="evidence"><code>libs/langgraph/langgraph/runtime.py:198-238</code></span>。</p>
+<p><code>ToolRuntime</code> 是工具专用注入对象，增加 state、config、tool_call_id、tools，并共享 context/store/writer。参数只需类型标注为 <code>ToolRuntime</code>；<code>InjectedStore</code> 则用于只注入 Store 的 <code>Annotated</code> 参数。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1662-1685</code></span>；<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1829-1900</code></span></p>
+<h3>7.2 模型 schema 与信任边界</h3>
+<p>InjectedState、InjectedStore 和 ToolRuntime 参数由系统识别，不属于模型应控制的普通参数；执行前还会剥离 tool call 中同名伪造值，再覆盖可信值。缺 Store 或缺必需 state 字段时在工具调用前拒绝。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1315-1348</code></span>；<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1363-1429</code></span></p>
+<h3>7.3 缓存事件</h3>
+<p>缓存命中不会产生真实 task 完成事件；<code>updates</code> 会带 cached metadata，而普通 cache API 没有命中率、错误或 eviction 事件协议。需要指标时应在自定义 <code>BaseCache</code> 包装器记录 get/set/miss/error/latency，不应从节点调用次数反推全部原因。</p>
+</section>
+
+<section class="section" id="configuration">
+<h2>8. 配置与默认行为：单位、优先级和生效边界</h2>
+<div class="table-wrap"><table><thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为</th><th>来源</th></tr></thead><tbody>
+<tr><td><code>CachePolicy.key_func</code></td><td>输入 → str/bytes</td><td>freeze + pickle</td><td>节点 policy 优先图级 policy</td><td>节点 task 身份</td><td>异常使 task 准备失败</td><td><code>libs/langgraph/langgraph/types.py:517-529</code></td></tr>
+<tr><td><code>CachePolicy.ttl</code></td><td>int 秒或 None</td><td>None，不到期</td><td>随有效 policy</td><td>cache entry</td><td>后端负责解释</td><td><code>libs/langgraph/langgraph/types.py:520-529</code></td></tr>
+<tr><td><code>IndexConfig.fields</code></td><td>JSON path 列表</td><td><code>["$"]</code></td><td>单次 <code>put(index=...)</code> 可覆盖</td><td>向量索引</td><td>未配置 index 时忽略</td><td><code>libs/checkpoint/langgraph/store/base/__init__.py:670-705</code></td></tr>
+<tr><td><code>PutOp.ttl</code></td><td>float 分钟、None、未提供</td><td>继承 default_ttl；无配置为 None</td><td>单条值优先默认值</td><td>Store item</td><td>不支持时拒绝非空值</td><td><code>libs/checkpoint/langgraph/store/base/__init__.py:856-935</code></td></tr>
+<tr><td><code>refresh_on_read</code></td><td>bool</td><td>Base 层解析为 true</td><td>操作 <code>refresh_ttl</code> 显式值优先</td><td>get/search</td><td>后端不支持则忽略</td><td><code>libs/checkpoint/langgraph/store/base/__init__.py:1286-1293</code></td></tr>
+<tr><td><code>omit_expired</code></td><td>bool</td><td>false</td><td>适配器 TTL config</td><td>get/search/list</td><td>false 时 sweep 前可能可见</td><td><code>libs/checkpoint/langgraph/store/base/__init__.py:555-562</code></td></tr>
+<tr><td><code>sweep_interval_minutes</code></td><td>分钟或 None</td><td>启动 sweeper 后回退 5</td><td>启动参数优先 config</td><td>后台线程/task</td><td>未启动则不自动 sweep</td><td><code>libs/checkpoint-postgres/langgraph/store/postgres/base.py:850-885</code></td></tr>
+<tr><td>Redis <code>prefix</code></td><td>str</td><td><code>langgraph:cache:</code></td><td>构造参数</td><td>Redis key 空间</td><td>冲突会污染/误清理</td><td><code>libs/checkpoint/langgraph/cache/redis/__init__.py:13-34</code></td></tr>
+</tbody></table></div>
+<div class="boundary"><code>compile(store=...)</code> 与 <code>compile(cache=...)</code> 是能力注入，不自动启用节点缓存；节点仍需 <code>CachePolicy</code>。反之，有 policy 但没有 BaseCache 时不会命中或写回。</div>
+</section>
+
+<section class="section" id="concurrency">
+<h2>9. 并发、性能与资源：锁、队列、批次和背压</h2>
+<h3>9.1 Store 并发模型</h3>
+<ul>
+<li><code>AsyncBatchedBaseStore</code> 在构造时绑定 running loop，以无界 <code>asyncio.Queue</code> 收集同一 tick 操作；重复 get/search 去重，同键 put 后者覆盖，结果再映射回每个 Future。取消 Future 会在入批前或回填时跳过。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/batch.py:58-101</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/base/batch.py:283-366</code></span></li>
+<li>在该 Store 所属主 event loop 内调用同步方法会抛 <code>asyncio.InvalidStateError</code>，防止 <code>run_coroutine_threadsafe(...).result()</code> 自锁；异步代码必须使用 <code>await store.a*</code>。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/batch.py:33-53</code></span></li>
+<li>SQLite 同步 Store 用单把 lock 串行化共享连接并把整个 batch 放进事务；高并发不会变成并行 DB 操作。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/store/sqlite/base.py:1039-1058</code></span></li>
+<li>Postgres 可使用 pool 并发借连接；单连接 pipeline/transaction 路径在需要时加 lock，异步实现使用 <code>asyncio.Lock</code>。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/store/postgres/base.py:960-980</code></span>；<span class="evidence"><code>libs/checkpoint-postgres/langgraph/store/postgres/aio.py:142-160</code></span></li>
+</ul>
+<h3>9.2 Cache 并发模型</h3>
+<p>InMemoryCache 用 <code>RLock</code> 将 get/set/clear 原子化到单进程临界区；SqliteCache 用共享连接、<code>RLock</code> 和 WAL，并用 <code>asyncio.to_thread</code> 提供异步包装。<span class="evidence"><code>libs/checkpoint/langgraph/cache/memory/__init__.py:11-31</code></span>；<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/cache/sqlite/__init__.py:13-44</code></span>；<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/cache/sqlite/__init__.py:74-114</code></span></p>
+<p>RedisCache 的 <code>aget/aset/aclear</code> 直接调用同步方法，并非真正异步 Redis I/O；若传入慢同步客户端，会阻塞 event loop。其 clear 使用 <code>KEYS</code> 扫 prefix，keyspace 较大时可能造成服务端停顿；生产扩展应评估 SCAN 或版本化 prefix。<span class="evidence"><code>libs/checkpoint/langgraph/cache/redis/__init__.py:80-112</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/cache/redis/__init__.py:114-144</code></span></p>
+<h3>9.3 Embedding 与背压</h3>
+<p>InMemoryStore 同步查询会为不同 query 启动 ThreadPoolExecutor，异步查询用 <code>gather</code>；数据库适配器也会在批次内调用 embedding provider。代码未定义并发上限、重试或速率限制，调用者必须在 embeddings 包装层实现预算与背压。<span class="evidence"><code>libs/checkpoint/langgraph/store/memory/__init__.py:268-300</code></span></p>
+</section>
+
+<section class="section" id="security">
+<h2>10. 安全与信任边界：多租户、注入与副作用</h2>
+<h3>10.1 多租户 namespace 设计</h3>
+<p>推荐把不可伪造的服务端 tenant/user identity 放在 namespace 最前部，并由可信 Runtime context 构造，而不是接受模型或请求正文给出的完整 namespace。例如 <code>("tenant", tenant_id, "user", user_id, "memories", schema_version)</code>。Store 自身只匹配 tuple，不验证“当前用户是否拥有该前缀”；本地 Runtime 也不自动提供 Auth。</p>
+<div class="warn">禁止把所有用户写进 <code>("memories",)</code> 后仅靠 value filter 隔离。filter 是检索条件，不是行级安全；漏传 filter 或向量搜索实现差异都可能跨租户泄露。</div>
+<h3>10.2 Tool 注入防伪</h3>
+<p>ToolNode 先去除调用方提供的 injected 参数，再加入可信 Runtime 值，避免 LLM 在 tool args 中伪造 Store、state 或 runtime。该保护只覆盖注入参数；普通参数仍由模型控制，工具必须校验资源 ID、操作类型和权限。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1421-1429</code></span></p>
+<h3>10.3 序列化与 Secret</h3>
+<p>BaseCache 默认 <code>JsonPlusSerializer(pickle_fallback=False)</code>，减少缓存反序列化退回任意 pickle 的风险；但缓存和 Store 内容仍可能落到 SQLite/Postgres/Redis，不能写入明文 API key、访问令牌或无保留期限的敏感 prompt。<span class="evidence"><code>libs/checkpoint/langgraph/cache/base/__init__.py:15-22</code></span></p>
+<h3>10.4 副作用节点误缓存</h3>
+<p>缓存命中直接恢复 writes，节点函数不再执行。因此“发送邮件、扣款、写外部 DB、审计记录、权限检查、读取当前时间/随机数”的节点若被缓存，会跳过副作用或返回过期授权结果。安全默认是：副作用节点不配置 CachePolicy；纯计算与只读检索节点才缓存，并让 key 包含影响结果的租户、权限版本、模型/提示版本与数据版本。</p>
+</section>
+
+<section class="section" id="failure">
+<h2>11. 失败、恢复与兼容：哪些可重算，哪些不能</h2>
+<div class="table-wrap"><table><thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead><tbody>
+<tr><td>Redis 不可用</td><td>节点重新执行、cache 指标报错</td><td>get miss；set/clear 静默失败</td><td>业务 state 正常，性能退化</td><td>允许重算；恢复 Redis 后自然再填充</td><td>监控连接错误，避免静默长期失效</td></tr>
+<tr><td>Redis 损坏值</td><td>该 key miss</td><td>跳过损坏 entry</td><td>节点重算</td><td>重算覆盖或清 namespace</td><td>调查 serde/version 漂移</td></tr>
+<tr><td>SQLite/Postgres 未 setup/迁移失败</td><td>首操作 DB 异常</td><td>Store 操作失败</td><td>业务记忆未写入</td><td>完成迁移后按幂等键重试</td><td>部署前执行并验证 setup</td></tr>
+<tr><td>embedding provider 失败</td><td>put/search 抛异常</td><td>批次失败</td><td>事务实现通常不提交；外部调用可能已计费</td><td>按 provider 语义限次重试</td><td>记录模型、维度、批次大小</td></tr>
+<tr><td>namespace/TTL 拒绝</td><td>类型化 ValueError/NotImplementedError</td><td>写前终止</td><td>无 Store write</td><td>修正输入/适配器，不盲重试</td><td>审计调用方构造</td></tr>
+<tr><td>TTL sweeper 迭代失败</td><td>exception log</td><td>循环继续</td><td>过期行滞留</td><td>下一轮重试</td><td>检查 DB 与 sweeper 生命周期</td></tr>
+<tr><td>误缓存副作用节点</td><td>stream 显示 cached、外部动作缺失</td><td>恢复旧 writes，不执行函数</td><td>图内 state 看似成功，外部世界未变化</td><td>清缓存后只能谨慎补偿，不可盲重跑</td><td>移除 policy，拆分纯计算/副作用节点</td></tr>
+</tbody></table></div>
+<p>TTL sweeper 需显式启动；同步实现使用 daemon thread，单轮 sweep 异常被记录后继续，stop 支持超时。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/store/sqlite/base.py:1145-1229</code></span>。Postgres 也明确要求显式启动与停止。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/store/postgres/base.py:734-741</code></span></p>
+<div class="boundary">Checkpoint 恢复不回滚 Store、Cache 或外部系统。节点在 checkpoint 前已完成 Store put 而后续失败时，恢复可能再次 put；应用需要稳定 key、版本检查、upsert 语义或 outbox，而不是期待 Pregel 自动分布式事务。</div>
+</section>
+
+<section class="section" id="troubleshooting">
+<h2>12. 可观测性与排障：从现象回到所有权</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead><tbody>
+<tr><td>相同输入仍执行节点</td><td>节点是否有 policy、图是否有 cache、key 是否稳定</td><td>只有 policy/只有 cache；Runtime 句柄进入默认 key；TTL 到期</td><td>同时配置两端，提供版本化 key_func</td></tr>
+<tr><td>stream 输出旧值</td><td><code>updates.__metadata__.cached</code></td><td>cache 命中，key 缺少租户/权限/数据版本</td><td>修 key，按节点 clear cache</td></tr>
+<tr><td>工具报无法注入 Store</td><td>compile 是否传 store；直接 ToolNode 调用 config 是否含 Runtime</td><td><code>InjectedStore</code> 但 store=None</td><td>在图编译或可信 Runtime 中提供 Store</td></tr>
+<tr><td>异步请求卡死/延迟尖峰</td><td>是否在 event loop 调同步 Store/Redis cache</td><td>错误调用同步桥；Redis async 方法实际同步</td><td>使用真正异步适配器或线程卸载</td></tr>
+<tr><td>过期 Store 数据仍可读</td><td><code>omit_expired</code>、sweeper 是否启动</td><td>默认逻辑可见且未物理清理</td><td>启用 omit、启动 sweeper、敏感数据显式 delete</td></tr>
+<tr><td>向量结果排序突变</td><td>embedding 模型/dims/fields/index override</td><td>索引版本漂移、字段路径变化、部分条目 index=False</td><td>namespace 加 schema/index version，重建向量</td></tr>
+<tr><td>多租户串数据</td><td>namespace 首段与 key_func 输入</td><td>共享 namespace 或 cache key 未含租户</td><td>可信身份前缀；清污染 namespace/cache</td></tr>
+</tbody></table></div>
+<h3>审计发现：sync/async 缓存失败写守卫不对称</h3>
+<p>当前异步 Loop 在缓存写回前显式跳过首 write 为 <code>INTERRUPT</code> 或 <code>ERROR</code> 的任务；同步 Loop 的对应方法没有此守卫，而 Runner 会在普通异常时把 <code>ERROR</code> 追加到 task writes 后调用 <code>put_writes</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1864-1883</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1609-1625</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:574-613</code></span></p>
+<div class="warn">不能据此承诺同步失败一定会被安全排除，也不能直接断言所有错误都会形成可命中的污染项；需要新增聚焦回归测试确认 task writes 形态和下次运行行为。在修复或证明前，副作用/高风险节点不应依赖“只缓存成功”作为安全控制。</div>
+</section>
+
+<section class="section" id="testing">
+<h2>13. 测试与验证：现有证明与并发安全扩展</h2>
+<div class="table-wrap"><table><thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead><tbody>
+<tr><td>同 tick async 调用合批且保序</td><td><code>libs/checkpoint/tests/test_store.py:140-190</code></td><td>单元</td><td>两个 aget 进入一次 abatch，结果回原顺序</td><td>未压测无界队列背压</td></tr>
+<tr><td>取消不破坏 batcher，后台 task 可恢复</td><td><code>libs/checkpoint/tests/test_store.py:36-69</code>、<code>193-227</code></td><td>异步单元</td><td>单 Future 取消和后台任务取消后的恢复</td><td>缺少关闭时 drain 契约</td></tr>
+<tr><td>namespace 公共校验与 batch 绕过</td><td><code>libs/checkpoint/tests/test_store.py:429-508</code></td><td>单元</td><td>非法公共 put 拒绝、底层 batch 不代行校验</td><td>多租户授权不在协议内</td></tr>
+<tr><td>SQLite 向量、过滤与注入防护</td><td><code>libs/checkpoint-sqlite/tests/test_store.py:452-772</code>、<code>1052-1116</code></td><td>集成</td><td>索引/搜索/过滤和参数化值安全</td><td>依赖 sqlite-vec 环境</td></tr>
+<tr><td>Postgres 直连/pipe/pool 与 batch 保序</td><td><code>libs/checkpoint-postgres/tests/test_store.py:37-93</code>、<code>99-139</code></td><td>集成</td><td>三连接形态执行同一 Store 契约</td><td>需真实 Postgres</td></tr>
+<tr><td>TTL sweep、override 与分钟单位</td><td><code>libs/checkpoint-sqlite/tests/test_ttl.py:92-125</code>、<code>128-177</code></td><td>时间集成</td><td>显式 sweeper、单项覆盖、永久项</td><td>时间测试有抖动</td></tr>
+<tr><td>过期逻辑隐藏与不复活</td><td><code>libs/checkpoint-postgres/tests/test_store.py:1019-1087</code></td><td>集成</td><td>omit_expired 覆盖 get/search/list，refresh 不复活</td><td>SQLite 同等矩阵需持续对照</td></tr>
+<tr><td>Redis TTL、namespace 与 fail-open</td><td><code>libs/checkpoint/tests/test_redis_cache.py:36-147</code>、<code>221-284</code></td><td>集成</td><td>秒 TTL、隔离、不可用/损坏降级</td><td>依赖本地 Redis；async 只测同步委托</td></tr>
+<tr><td>节点缓存恢复 writes 与 stream 标记</td><td><code>libs/langgraph/tests/test_pregel.py:2852-2914</code>、<code>libs/langgraph/tests/test_pregel_async.py:4694-4757</code></td><td>运行时</td><td>sync/async 命中跳过执行并输出 cached metadata</td><td>失败写对称性未覆盖</td></tr>
+<tr><td>interrupt 恢复与 Functional task cache</td><td><code>libs/langgraph/tests/test_pregel.py:5745-5800</code></td><td>恢复</td><td>跨 thread cache 复用且可按 task 清除</td><td>副作用不应缓存仅靠设计约束</td></tr>
+<tr><td>Runtime 与 Tool 注入</td><td><code>libs/langgraph/tests/test_runtime.py:25-67</code>、<code>libs/prebuilt/tests/test_tool_node.py:1432-1499</code></td><td>单元/集成</td><td>节点注入、Store 注入和图编译链</td><td>权限由应用负责</td></tr>
+</tbody></table></div>
+<h3>建议补齐的并发与失败测试</h3>
+<ol>
+<li><strong>sync/async failed-task cache parity：</strong>同一带 policy 节点首次抛异常，第二次相同输入必须真正执行；分别覆盖普通异常、GraphInterrupt、error handler，并断言 cache 无失败 writes。</li>
+<li><strong>side-effect anti-cache：</strong>用外部计数器证明命中会跳过函数，作为文档化危险测试；再证明拆分“纯计算节点 + 幂等副作用节点”不会漏执行。</li>
+<li><strong>tenant collision：</strong>相同业务输入、不同 tenant context；错误 key 应复现串值，修正 key 后必须隔离，同时验证 Store namespace 和 Cache key 两层。</li>
+<li><strong>AsyncBatchedBaseStore 背压/关闭：</strong>大量 producer、部分取消、底层 abatch 阻塞与异常，验证每个 Future 有终态且后台 task 无泄漏。</li>
+<li><strong>SQLite lock/transaction：</strong>多线程混合 get/search/put，注入 embedding 失败后断言业务值与向量没有部分提交。</li>
+<li><strong>Redis clear 并发：</strong>set 与 namespace clear 交错，记录弱一致性边界；大 keyspace 基准证明是否需要 SCAN 替代 KEYS。</li>
+</ol>
+</section>
+
+<section class="section" id="extension">
+<h2>14. 开发与扩展指南：改哪里、同步证明什么</h2>
+<div class="table-wrap"><table><thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>新增 Store Op</td><td><code>store/base</code> 类型与 BaseStore</td><td>内存、SQLite sync/async、Postgres sync/async、SDK/远程边界（若公开）</td><td>输入顺序、结果类型、事务、取消、版本兼容</td></tr>
+<tr><td>新增 TTL 行为</td><td><code>TTLConfig</code> 与各适配器</td><td>get/search/list、refresh、sweeper、文档单位</td><td>未 sweep 可见性、不复活、覆盖默认值、资源关闭</td></tr>
+<tr><td>变更向量字段语法</td><td><code>embed.py</code>、IndexConfig</td><td>三 Store、迁移/重建策略</td><td>维度、空字段、多向量 max-pooling、index=False</td></tr>
+<tr><td>新增 BaseCache 后端</td><td><code>BaseCache</code></td><td>sync/async、serde、clear namespace</td><td>TTL 秒、批量命中、损坏值、不可用降级、并发</td></tr>
+<tr><td>变更缓存 key</td><td><code>CachePolicy</code>、<code>_algo.py</code></td><td>Graph/Functional/PUSH/PULL、clear_cache</td><td>身份稳定、版本失效、多租户、旧 entry 不误命中</td></tr>
+<tr><td>变更 Tool 注入</td><td>ToolNode / ToolRuntime</td><td>schema 过滤、动态工具、sync/async</td><td>模型不可伪造、无 Store 拒绝、state 字段错误</td></tr>
+</tbody></table></div>
+<h3>最小自定义 Store 原则</h3>
+<ul>
+<li>把 <code>batch/abatch</code> 当公共一致性核心：结果长度和顺序必须严格对应输入；未知 Op 显式失败。</li>
+<li>明确支持能力：未支持 TTL 时保留 <code>supports_ttl=False</code>；未配置向量时不要伪造 score。</li>
+<li>批次原子性、同批读写可见顺序、重复 Put 规则必须写测试，不能从“batch”一词推断事务。</li>
+<li>同步与异步不是简单函数名复制：检查 event-loop 阻塞、连接池、锁、取消和清理。</li>
+</ul>
+<p>修改任何库后，应在对应 <code>libs/*</code> 目录运行 <code>make format</code>、<code>make lint</code>、<code>make test</code>；本文只创建文档，未修改库代码。仓库约束见 <span class="evidence"><code>AGENTS.md:3-17</code></span>。</p>
+</section>
+
+<section class="section" id="tradeoffs">
+<h2>15. 设计权衡与已知限制</h2>
+<div class="grid2">
+<div class="card"><strong>Batch-first API</strong>收益是后端可分组查询与批量 embedding；成本是同批读写顺序不一定等价逐条调用，适配器必须明确快照与覆盖语义。</div>
+<div class="card"><strong>Writes cache</strong>收益是 Graph/Functional API 共享同一恢复形态；成本是缓存与 Channel 写格式耦合，代码/节点 identity 漂移需要失效策略。</div>
+<div class="card"><strong>Fail-open Redis</strong>收益是缓存故障不阻断图；成本是异常被吞，若无指标会长期退化且难发现。</div>
+<div class="card"><strong>显式 TTL sweeper</strong>收益是生命周期由应用控制；成本是遗漏启动造成过期数据滞留，遗漏停止造成资源泄漏。</div>
+<div class="card"><strong>Namespace 灵活</strong>收益是可表达任意租户/用户/版本层级；成本是协议不含授权，错误前缀会直接变成隔离漏洞。</div>
+<div class="card"><strong>同步/异步兄弟类</strong>收益是匹配不同驱动；成本是能力与错误语义可能漂移，必须用 parity 测试约束。</div>
+</div>
+<h3>当前限制与证据缺口</h3>
+<ul>
+<li>本仓库没有为 Store namespace 提供本地统一 Auth/RBAC；远程 Server 的租户与授权不能推导为本地默认能力。</li>
+<li>BaseStore 不声明批次全局原子性、分页快照隔离或跨后端一致 score；这些由适配器和数据库决定。</li>
+<li>RedisCache 的异常降级无日志/指标，async 接口也不提供非阻塞 I/O 保证。</li>
+<li>同步/异步缓存失败写守卫存在实现不对称，需回归测试和维护者决策。</li>
+<li>Cache 不参与 checkpoint 事务；命中结果与外部数据新鲜度只由 key、TTL 和主动清除控制。</li>
+</ul>
+</section>
+
+<section class="section" id="source-index">
+<h2>16. 源码索引与进一步阅读</h2>
+<div class="table-wrap"><table><thead><tr><th>角色</th><th>符号/内容</th><th>仓库相对位置</th></tr></thead><tbody>
+<tr><td>公共协议</td><td><code>BaseStore</code>、Op、Item、TTLConfig、IndexConfig</td><td><code>libs/checkpoint/langgraph/store/base/__init__.py:157-728</code></td></tr>
+<tr><td>公共便捷 API</td><td>sync/async get/search/put/delete/list</td><td><code>libs/checkpoint/langgraph/store/base/__init__.py:732-1260</code></td></tr>
+<tr><td>异步合批</td><td><code>AsyncBatchedBaseStore</code>、去重、取消、后台 loop</td><td><code>libs/checkpoint/langgraph/store/base/batch.py:33-371</code></td></tr>
+<tr><td>内存 Store</td><td>KV、过滤、向量、同步/异步 embedding</td><td><code>libs/checkpoint/langgraph/store/memory/__init__.py:136-592</code></td></tr>
+<tr><td>缓存协议/实现</td><td>Base / memory / Redis</td><td><code>libs/checkpoint/langgraph/cache/base/__init__.py:15-48</code>；<code>libs/checkpoint/langgraph/cache/memory/__init__.py:11-73</code>；<code>libs/checkpoint/langgraph/cache/redis/__init__.py:10-144</code></td></tr>
+<tr><td>SQLite</td><td>Store、TTL、向量、Cache</td><td><code>libs/checkpoint-sqlite/langgraph/store/sqlite/base.py:787-1480</code>；<code>libs/checkpoint-sqlite/langgraph/cache/sqlite/__init__.py:13-120</code></td></tr>
+<tr><td>Postgres sync</td><td>Store、pipe/pool、TTL、batch</td><td><code>libs/checkpoint-postgres/langgraph/store/postgres/base.py:667-1120</code></td></tr>
+<tr><td>Postgres async</td><td>AsyncBatchedBaseStore、async lock/pipe/pool</td><td><code>libs/checkpoint-postgres/langgraph/store/postgres/aio.py:42-173</code></td></tr>
+<tr><td>缓存 policy/key</td><td>CachePolicy、默认冻结/pickle、CacheKey</td><td><code>libs/langgraph/langgraph/types.py:517-529</code>；<code>libs/langgraph/langgraph/_internal/_cache.py:7-31</code>；<code>libs/langgraph/langgraph/types.py:655-675</code></td></tr>
+<tr><td>task 组装</td><td>输入 key、namespace、Runtime.store 注入</td><td><code>libs/langgraph/langgraph/pregel/_algo.py:663-759</code></td></tr>
+<tr><td>命中/写回</td><td>sync 与 async cache get/set</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:1549-1625</code>；<code>libs/langgraph/langgraph/pregel/_loop.py:1804-1883</code></td></tr>
+<tr><td>运行入口</td><td>Store/Cache 解析与 Runtime 构造</td><td><code>libs/langgraph/langgraph/pregel/main.py:2579-2613</code>；<code>libs/langgraph/langgraph/pregel/main.py:2866-2905</code></td></tr>
+<tr><td>节点 Runtime</td><td>Runtime 字段、merge/override/get_runtime</td><td><code>libs/langgraph/langgraph/runtime.py:124-310</code></td></tr>
+<tr><td>工具注入</td><td>ToolRuntime、InjectedStore、可信参数覆盖</td><td><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:793-860</code>；<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1315-1429</code>；<code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1662-1900</code></td></tr>
+</tbody></table></div>
+<p>进一步阅读：<a href="../../langgraph_architecture.html#s12">LangGraph 架构总览第十二章</a>；<a href="11-interrupt-hitl-timetravel.html">第 11 章 Interrupt / HITL / Time-travel</a>；<a href="13-streaming.html">第 13 章 Streaming</a>。</p>
+</section>
+
+<section class="section" id="glossary">
+<h2>17. 术语表</h2>
+<div class="table-wrap"><table><thead><tr><th>术语</th><th>本文含义</th></tr></thead><tbody>
+<tr><td>Batch / Abatch</td><td>Store 的同步/异步最小批处理契约；结果按输入位置对应，不天然等于跨所有后端的原子事务。</td></tr>
+<tr><td>CachePolicy</td><td>节点/task 的缓存策略，定义输入 key 函数和秒级 TTL；没有 BaseCache 时不产生实际复用。</td></tr>
+<tr><td>Cached writes</td><td>节点成功产生的 Pregel writes；命中时注入 task，跳过节点函数，不是整图快照。</td></tr>
+<tr><td>Checkpointer</td><td>保存 Channel 状态、版本和 pending writes 的执行恢复组件，与业务 Store 分离。</td></tr>
+<tr><td>Embedding</td><td>把文本转成固定维度向量的函数/模型；可能是外部网络副作用并受维度、模型与费用约束。</td></tr>
+<tr><td>Fail-open</td><td>依赖失败时继续主流程。本文 RedisCache 把连接/损坏值降级为 miss；Store 不采用该默认语义。</td></tr>
+<tr><td>InjectedStore</td><td>ToolNode 识别的隐藏工具参数标记，从可信 Runtime 注入 BaseStore，不暴露给模型控制。</td></tr>
+<tr><td>Item / SearchItem</td><td>Store 条目及带可选相似度 score 的搜索结果；身份由 namespace + key 决定。</td></tr>
+<tr><td>Namespace</td><td>层级字符串 tuple，用于数据组织和查询作用域；它本身不是 Auth/RBAC。</td></tr>
+<tr><td>Runtime</td><td>图节点的 run-scoped 依赖容器，携带 context、store、stream writer 和执行身份等。</td></tr>
+<tr><td>Semantic search</td><td>基于 embedding 相似度的语义检索；只有适配器配置 index 后才启用。</td></tr>
+<tr><td>Store</td><td>跨 thread/会话的业务 KV 与可选搜索能力；不保存 Pregel 调度位置。</td></tr>
+<tr><td>Sweeper</td><td>周期性物理删除过期 Store 条目的后台线程或 task；SQLite/Postgres 需要显式启动。</td></tr>
+<tr><td>TTL</td><td>Time-to-live，存活时间。Store 使用分钟，CachePolicy/BaseCache 使用秒，必须显式区分。</td></tr>
+<tr><td>ToolRuntime</td><td>工具专用 Runtime，增加 state、config、tool_call_id 和 tools，同时共享 context/store/writer。</td></tr>
+<tr><td>Vector index</td><td>namespace/key 条目的一个或多个字段向量；<code>index=False</code> 不影响普通 KV 可达性。</td></tr>
+</tbody></table></div>
+</section>
+<p class="footer">最近验证：2026-08-14 · 事实以当前工作区源码与测试为准</p>
+</main>
+<script>
+const links=[...document.querySelectorAll(".sidebar a")];
+const sections=links.map(a=>document.querySelector(a.getAttribute("href"))).filter(Boolean);
+const observer=new IntersectionObserver(entries=>{
+  const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];
+  if(!visible)return;
+  links.forEach(a=>a.classList.toggle("active",a.getAttribute("href")==="#"+visible.target.id));
+},{rootMargin:"-18% 0px -70% 0px"});
+sections.forEach(section=>observer.observe(section));
+</script>
+</body>
+</html>

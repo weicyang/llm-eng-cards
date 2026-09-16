@@ -2512,5 +2512,83 @@ window.CATALOG = {
         }
       ]
     }
+  ],
+  "deep": [
+    {
+      "label": "I · 专题指南 (Guides)",
+      "cards": [
+        {
+          "code": "TG01",
+          "title": "Cache 全景指南",
+          "tagline": "从 GPU 显存到业务层：KV Cache / Prompt Cache / Semantic Cache / Redis 缓存全链路解析，三层缓存体系、五大原则、生产案例汇总。",
+          "href": "./cards/deep-dives/cache_complete_guide.html"
+        },
+        {
+          "code": "TG02",
+          "title": "Prompt 全链路指南",
+          "tagline": "从基础认知到生产级 Prompt 工程：五层资产模型、场景化设计、Prompt vs Context 工程、高阶技巧、Agent Prompt 优化、安全与评估、Prompt 工程化管理方法论。",
+          "href": "./cards/deep-dives/prompt_complete_guide.html"
+        },
+        {
+          "code": "TG03",
+          "title": "AI 应用全链路性能评测指南",
+          "tagline": "四维评测模型 + 分模块评测（RAG/Agent/Prompt/系统层）+ 分段延迟采集 + MockLLM/RealLLM 双轨压测 + CI/CD 质量门禁 + 上线后持续评测模式，聚合 10 张知识卡片 + 6 篇社区文章。",
+          "href": "./cards/deep-dives/performance_evaluation_guide.html"
+        },
+        {
+          "code": "TG04",
+          "title": "AI Token 节省与优化完全指南",
+          "tagline": "从 Token 机制到系统级降本：Prompt 压缩（74%）/ 三级缓存（拦截 40%~60%）/ 推理加速（PagedAttention+量化）/ 上下文工程（Token 降 72%）/ 模型路由（降本 25%~70%）/ 预算熔断，六层优化体系全景解析，聚合 22 张知识卡片 + 4 篇社区文章。",
+          "href": "./cards/deep-dives/token_optimization_guide.html"
+        }
+      ]
+    },
+    {
+      "label": "II · 源码拆解 (Source Reading)",
+      "cards": [
+        {
+          "code": "SR01",
+          "title": "Trae Agent 架构全链路深度解析",
+          "tagline": "从 Agent 架构设计到全链路实现：核心组件、调度流程、工具编排、上下文管理、多 Agent 协作机制深度拆解，适合 AI Agent 开发者系统学习。",
+          "href": "./cards/deep-dives/trae_agent_architecture.html"
+        },
+        {
+          "code": "SR02",
+          "title": "OpenClaw 架构全链路深度解析",
+          "tagline": "以 Gateway 为单一控制面、持久 Session 为连续性主轴的个人 AI Assistant Runtime 源码级解析：五大运行平面、Channel 消息链、Agent Runtime、Context/Memory、工具安全与沙箱、Cron 自动化与跨设备 Node 执行，21 章 + Q&A。",
+          "href": "./cards/deep-dives/openclaw_architecture.html"
+        },
+        {
+          "code": "SR03",
+          "title": "LangGraph 架构深度解析",
+          "tagline": "从 StateGraph DSL、Channel 状态模型到 Pregel 超级步运行时，系统拆解 Durable Execution、Checkpoint、Interrupt/Resume、Streaming、ToolNode、SDK 与部署边界。",
+          "href": "./cards/deep-dives/langgraph_architecture.html"
+        },
+        {
+          "code": "SR04",
+          "title": "Software Agent SDK 架构深度解析",
+          "tagline": "OpenHands SDK 源码级拆解 · 事件树运行时 · 上下文工程 · Agent Server。",
+          "href": "./cards/deep-dives/software_agent_architecture.html"
+        },
+        {
+          "code": "SR05",
+          "title": "SWE-agent 架构深度解析",
+          "tagline": "Agent-Computer Interface · Retry/Reviewer 质量外环 · 轨迹可观测 · SWE-bench 批跑。",
+          "href": "./cards/deep-dives/swe_agent_architecture.html"
+        },
+        {
+          "code": "SR06",
+          "title": "Hermes Agent 架构深度解析",
+          "tagline": "窄腰多表面 Runtime · 长会话与记忆 · 自治任务 · 自进化闭环。",
+          "href": "./cards/deep-dives/hermes_agent_architecture_sharing.html"
+        },
+        {
+          "code": "SR07",
+          "title": "DeepSeek Harness 深度架构解析",
+          "tagline": "Cordis 插件内核 · Event-sourced Session · Turn/Step Agent Loop · 能力接缝 · 同核多产品面。",
+          "href": "./cards/deep-dives/deepseek_harness_architecture.html"
+        }
+      ]
+    }
   ]
 };

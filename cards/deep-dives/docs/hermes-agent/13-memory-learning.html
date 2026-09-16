@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Hermes Agent Memory、Skill Usage 与 Curator详细设计</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:66px}body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.72;padding:64px 20px 48px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .34rem;border-radius:4px;overflow-wrap:anywhere}h1{font-size:2.25rem;line-height:1.2;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}h2{color:var(--blue);font-size:1.45rem;border-bottom:1px solid var(--border);padding-bottom:.48rem}h3{color:var(--blue2);font-size:1.1rem}.topbar{position:fixed;top:0;left:0;right:0;height:48px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:12px;z-index:300}.topbar a{border:1px solid var(--border);border-radius:7px;padding:.26rem .7rem}.crumb{color:var(--muted);font-size:.84rem}.sidebar{position:fixed;left:0;top:48px;bottom:0;width:280px;border-right:1px solid var(--border);background:color-mix(in srgb, var(--bg) 88%, transparent);padding:1rem;overflow:auto;backdrop-filter:blur(12px)}.sidebar h2{font-size:.9rem;border:0;margin:.2rem 0 .5rem}.sidebar a{display:block;color:var(--muted);font-size:.78rem;padding:.23rem .45rem;border-left:2px solid transparent}.sidebar a.active,.sidebar a:hover{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}.container{max-width:1160px;margin:auto}.subtitle{color:var(--muted);font-size:1rem}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin:1rem 0 1.4rem}.meta>div,.card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:.8rem}.meta dt{color:var(--muted);font-size:.72rem;text-transform:uppercase}.meta dd{margin:.15rem 0 0}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.65rem 1.9rem;margin-bottom:1.25rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section span.evidence{display:inline;color:var(--muted);font-size:.82rem}.lead,.insight,.warning,.boundary{border-radius:8px;padding:.9rem 1rem;margin:.9rem 0}.lead{border:1px solid var(--green);background:rgba(21,128,61,.06)}.insight{border-left:4px solid var(--blue);background:rgba(67,56,202,.06)}.warning{border-left:4px solid var(--red);background:rgba(185,28,28,.06)}.boundary{border-left:4px solid var(--purple);background:rgba(109,40,217,.06)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}.card strong{display:block;color:var(--blue2)}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:720px;font-size:.87rem}th,td{border:1px solid var(--border);padding:.56rem .66rem;text-align:left;vertical-align:top}th{color:var(--blue);background:#e8e1d4}.flow{white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:1rem;color:var(--blue2);font-family:"Cascadia Code",Consolas,monospace;font-size:.82rem}.badge{display:inline-block;border:1px solid;border-radius:99px;padding:.03rem .42rem;margin-right:.3rem;font-size:.7rem}.fact{color:var(--green)}.optional{color:var(--yellow)}.owner{color:var(--purple)}.source-list{columns:2;column-gap:2rem}.source-list li{break-inside:avoid}.footer{text-align:center;color:var(--muted);font-size:.78rem;margin:2rem}.back-top{position:fixed;right:18px;bottom:18px;border:1px solid var(--border);background:var(--surface);border-radius:50%;width:38px;height:38px;text-align:center;line-height:36px}
+@media(max-width:980px){body{padding:62px 12px 32px}.sidebar{display:none}.meta,.grid{grid-template-columns:1fr}.section{padding:1.2rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.source-list{columns:1}h1{font-size:1.75rem}.crumb{display:none}}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../hermes_agent_architecture_sharing.html#s13">← 返回架构总览</a><span class="crumb">第 13 章 · Memory、Skill Usage 与 Curator · 源码审计版</span></div>
+<aside class="sidebar" aria-label="页面目录"><h2>Memory、Skill Usage 与 Curator</h2><a href="#position">1. 模块定位</a><a href="#context">2. 系统位置与依赖</a><a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a><a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态模型</a><a href="#interfaces">7. 接口、协议与事件</a><a href="#config">8. 配置与默认行为</a><a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a><a href="#failure">11. 失败、恢复与兼容</a><a href="#operations">12. 可观测性与排障</a><a href="#tests">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a><a href="#tradeoffs">15. 设计权衡与限制</a><a href="#sources">16. 源码索引</a><a href="#glossary">17. 术语表</a></aside>
+<main class="container">
+<header id="top">
+<h1>Hermes Agent Memory、Skill Usage 与 Curator详细设计</h1>
+<p class="subtitle">分离会话上下文、长期记忆 Provider、使用遥测和 Agent-created Skill 生命周期。</p>
+<div class="meta">
+<div><dl><dt>源码基线</dt><dd>工作副本；Git SHA 未验证</dd></dl></div>
+<div><dl><dt>证据状态</dt><dd>已核对当前源码、配置、测试路径与总览</dd></dl></div>
+<div><dl><dt>主要所有者</dt><dd><code>agent/memory_manager.py；agent/memory_provider.py；tools/skill_usage.py；agent/curator.py</code></dd></dl></div>
+<div><dl><dt>目标读者</dt><dd>架构、运行时、扩展、测试与运维开发者</dd></dl></div>
+<div><dl><dt>最近验证</dt><dd>2026-08-14</dd></dl></div>
+<div><dl><dt>事实标签</dt><dd><span class="badge fact">当前事实</span><span class="badge optional">可选能力</span><span class="badge owner">所有者边界</span></dd></dl></div>
+</div>
+<div class="lead"><strong>一句话目标：</strong>在 Turn 前召回、Turn 后同步长期记忆，并用非内容型 Skill Usage 驱动 Curator；不把 Memory 当作 Session Transcript 的替代。</div>
+</header>
+
+<section class="section" id="position"><h2>1. 模块定位</h2>
+<p>在 Turn 前召回、Turn 后同步长期记忆，并用非内容型 Skill Usage 驱动 Curator；不把 Memory 当作 Session Transcript 的替代。 <span class="evidence">证据：<code>agent/memory_provider.py:104-177</code>、<code>agent/memory_provider.py:201-260</code></span></p>
+<div class="table-wrap"><table><thead><tr><th>边界</th><th>本模块负责</th><th>委托/不负责</th></tr></thead><tbody>
+<tr><td>输入</td><td>接收相邻模块已经规范化的请求、配置或状态。</td><td>不复制入口鉴权和上游 Session 路由。</td></tr>
+<tr><td>核心</td><td>在 Turn 前召回、Turn 后同步长期记忆，并用非内容型 Skill Usage 驱动 Curator；不把 Memory 当作 Session Transcript 的替代。</td><td>具体业务副作用归真正 Owner。</td></tr>
+<tr><td>输出</td><td>产生结构化结果、状态变化、事件或下一阶段输入。</td><td>Surface 呈现和跨平台传输由适配层处理。</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>边界原则：</strong>以代码所有权而不是文件名直觉划分模块；公共门面可能只做 Forward，状态真相源可能位于独立 Store。</div>
+</section>
+
+<section class="section" id="context"><h2>2. 系统位置与依赖</h2>
+<div class="flow">Surface / Scheduler / Parent
+  → 输入规范化与 Session Context
+  → Memory、Skill Usage 与 Curator
+  → Provider / Tool / Store / Worker
+  → Event、持久化与 Surface 投影</div>
+<div class="table-wrap"><table><thead><tr><th>证据项</th><th>结论</th><th>决定性表面</th></tr></thead><tbody>
+<tr><td>Owner</td><td>agent/memory_manager.py；agent/memory_provider.py；tools/skill_usage.py；agent/curator.py</td><td><code>agent/memory_provider.py:104-177</code>、<code>agent/memory_provider.py:201-260</code>、<code>agent/memory_manager.py:364-426</code></td></tr>
+<tr><td>调用方</td><td>来自 Agent Core、Gateway、CLI 或后台调度器的真实路径。</td><td><code>agent/memory_manager.py:364-426</code>、<code>agent/memory_manager.py:525-600</code></td></tr>
+<tr><td>被调用方</td><td>下游执行、持久化或协议适配由专属组件完成。</td><td><code>run_agent.py:4211-4234</code>、<code>hermes_cli/config_defaults.py:1729-1751</code></td></tr>
+<tr><td>兄弟实现</td><td>不同 Surface、Provider 或同步/异步路径共享不变量，但不共享全部状态。</td><td><code>tools/skill_usage.py:1-23</code>、<code>tools/skill_usage.py:853-905</code></td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="concepts"><h2>3. 核心概念</h2><div class="grid"><div class="card"><strong>MemoryProvider</strong>长期召回与同步的可插拔后端契约。</div><div class="card"><strong>MemoryManager</strong>内置记忆与至多一个外部 Provider 的生命周期编排。</div><div class="card"><strong>Skill Usage</strong>view/use/patch 等计数 Sidecar，不记录完整对话内容。</div><div class="card"><strong>Curator</strong>只对 Agent-created Skill 做 stale/archive/可选 consolidation 的后台维护。</div></div>
+<div class="insight"><strong>阅读要点：</strong>术语表示不同所有权或生命周期时必须保留区分，不能为了简化图示合并成单一“Agent 状态”。</div></section>
+
+<section class="section" id="components"><h2>4. 架构组成</h2>
+<div class="table-wrap"><table><thead><tr><th>组成</th><th>职责</th><th>状态/隔离</th><th>扩展规则</th></tr></thead><tbody>
+<tr><td>入口/Facade</td><td>校验、规范化并把调用送到 Owner。</td><td>不复制权威状态。</td><td>公共签名保持兼容。</td></tr>
+<tr><td>Core Owner</td><td>在 Turn 前召回、Turn 后同步长期记忆，并用非内容型 Skill Usage 驱动 Curator；不把 Memory 当作 Session Transcript 的替代。</td><td>会话、进程或持久化边界明确。</td><td>扩展现有 Strategy/Registry/ABC。</td></tr>
+<tr><td>State/Store</td><td>保存恢复与可观测所需最小事实。</td><td>短事务、可重建缓存、Profile 隔离。</td><td>变更提供 Migration 和恢复测试。</td></tr>
+<tr><td>Adapter</td><td>连接 Provider、Surface、Environment 或外部服务。</td><td>依赖失败局部隔离。</td><td>不得把厂商分支写回核心 Loop。</td></tr>
+</tbody></table></div>
+<p class="evidence">组件证据：<code>agent/memory_provider.py:201-260</code>、<code>agent/memory_manager.py:364-426</code>、<code>agent/memory_manager.py:525-600</code>、<code>run_agent.py:4211-4234</code></p></section>
+
+<section class="section" id="flows"><h2>5. 完整运行流程</h2>
+<h3>5.1 正常成功路径</h3><div class="flow">Session 初始化 → MemoryManager.initialize → prefetch(query) → 将结果放入 Turn Context → 模型执行 → sync_turn → queue next prefetch；Skill 使用更新 sidecar → Curator 空闲扫描</div>
+<p>成功不仅是返回文本，还必须完成规定的状态提交、资源清理与事件发布。<span class="evidence">证据：<code>agent/memory_manager.py:364-426</code>、<code>agent/memory_manager.py:525-600</code>、<code>run_agent.py:4211-4234</code></span></p>
+<h3>5.2 拒绝或提前结束</h3><div class="flow">Provider 不可用、Prefetch 超时、第二外部 Provider、非 Primary Context 写入、Pinned/被 Cron 引用的 Skill → 跳过或拒绝，不阻塞核心对话</div>
+<p>拒绝应发生在目标副作用之前，并保留可诊断原因；已发生副作用时不得用无条件重试伪装原子性。</p>
+<h3>5.3 恢复与降级</h3><div class="flow">外部 Recall 失败仍保留内置记忆；Curator 先 Backup，再 Archive；用户可 Restore/Rollback；Dry-run 只报告</div>
+<p>恢复策略必须有预算、所有权和终止条件。<span class="evidence">证据：<code>hermes_cli/config_defaults.py:1729-1751</code>、<code>tools/skill_usage.py:1-23</code>、<code>tools/skill_usage.py:853-905</code></span></p></section>
+
+<section class="section" id="state"><h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table><thead><tr><th>状态类别</th><th>权威位置</th><th>生命周期</th><th>恢复语义</th></tr></thead><tbody>
+<tr><td>会话状态</td><td>SessionDB 或 AIAgent 会话对象</td><td>跨 Turn</td><td>按 Session ID/Profile 恢复。</td></tr>
+<tr><td>运行状态</td><td>Owner 内存、ContextVar、Queue/Lease</td><td>一次 Turn/Run</td><td>中断后形成明确终态；非耐久状态不假装可续跑。</td></tr>
+<tr><td>缓存</td><td>进程级有界 Map/TTL</td><td>可重建</td><td>Generation、配置或显式 Invalidate 失效。</td></tr>
+<tr><td>持久化状态</td><td>Profile-aware SQLite/JSON/Sidecar</td><td>跨进程</td><td>Migration、Probe、Rebuild 或 Reclaim。</td></tr>
+</tbody></table></div>
+<div class="warning"><strong>身份规则：</strong>Durable Session、Runtime Key、Compression Lineage、Gateway Routing 和 Background Delivery ID 不可互换。</div></section>
+
+<section class="section" id="interfaces"><h2>7. 接口、协议与事件</h2>
+<div class="table-wrap"><table><thead><tr><th>接口面</th><th>契约</th><th>错误/顺序语义</th></tr></thead><tbody>
+<tr><td>Python / Registry</td><td>稳定公共门面把实现委托给 Owner。</td><td>异常被归一化；不可恢复错误保留类型。</td></tr>
+<tr><td>Tool / Hook</td><td>结构化参数与 JSON/事件结果。</td><td>Pre Hook 可拒绝；Post Hook 不应覆盖核心终态。</td></tr>
+<tr><td>Surface Protocol</td><td>CLI Callback、JSON-RPC、WS、HTTP/SSE 按表面适配。</td><td>流式 Delta 不等于业务终态。</td></tr>
+<tr><td>Persistence</td><td>短事务写入；Sidecar 仅保存其自身权威数据。</td><td>至少一次投递需要幂等消费。</td></tr>
+</tbody></table></div>
+<p class="evidence">接口证据：<code>agent/memory_provider.py:104-177</code>、<code>agent/memory_provider.py:201-260</code>、<code>agent/memory_manager.py:364-426</code>、<code>agent/memory_manager.py:525-600</code>、<code>run_agent.py:4211-4234</code></p></section>
+
+<section class="section" id="config"><h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table><thead><tr><th>配置/选择</th><th>当前默认</th><th>语义与优先级</th></tr></thead><tbody><tr><td>memory_enabled</td><td>true</td><td>provider 为空仍可使用内置记忆</td></tr><tr><td>write_approval</td><td>false</td><td>可显式要求记忆写批准</td></tr><tr><td>Curator interval / idle</td><td>168h / 2h</td><td>后台低频运行</td></tr><tr><td>stale / archive</td><td>30d / 90d</td><td>Pinned 免疫</td></tr><tr><td>consolidate</td><td>false</td><td>默认不调用 LLM 合并技能</td></tr></tbody></table></div>
+<p>行为配置属于 <code>config.yaml</code>；环境变量只承载 Secret 或兼容桥。构造默认、产品配置默认和调用方覆盖必须分别记录。</p></section>
+
+<section class="section" id="concurrency"><h2>9. 并发、性能与资源</h2>
+<ul>
+<li>锁的粒度跟随权威状态：Session、SQLite、Compression、Cron、Board 和 Registry 不共享一个全局锁。</li>
+<li>后台完成经 Queue/Watcher 排空，通知关闭不等于停止 Drain。</li>
+<li>Provider Client、Tool Definition 和 Probe 结果有界复用；Generation 或配置变化使缓存失效。</li>
+<li>Timeout 必须覆盖清理，迟到 Worker 不得提交过期结果。</li>
+<li>性能数字只采用源码默认或实测值；本文不推断吞吐与 SLA。</li>
+</ul>
+<p class="evidence">并发证据：<code>agent/memory_manager.py:525-600</code>、<code>run_agent.py:4211-4234</code>、<code>hermes_cli/config_defaults.py:1729-1751</code>、<code>tools/skill_usage.py:1-23</code></p></section>
+
+<section class="section" id="security"><h2>10. 安全与信任边界</h2>
+<ol>
+<li>Surface 鉴权、Session Source 和 Toolset 先决定可见能力；Prompt/Skill 不能授予权限。</li>
+<li>副作用前经过参数校验、Hook、Approval、Policy 与 Environment 边界。</li>
+<li>Secret 不写入普通配置、日志、Trace、Skill Usage 或架构报告。</li>
+<li>Profile、Board、Workspace 和 Remote Backend 各自是不同隔离维度。</li>
+<li>Fallback 不能跨越凭据信任边界，也不能在已提交副作用后无条件重放。</li>
+</ol></section>
+
+<section class="section" id="failure"><h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table><thead><tr><th>故障/现象</th><th>即时行为</th><th>恢复</th></tr></thead><tbody>
+<tr><td>Memory 等同 Transcript</td><td>重复权威和重放污染</td><td>SessionDB 与 Provider 各守边界</td></tr><tr><td>Curator enabled 等同自动合并</td><td>成本和行为描述错误</td><td>默认仅规则迁移，consolidate 关闭</td></tr><tr><td>Cron 写用户记忆</td><td>后台任务污染长期人格</td><td>Cron 默认 skip_memory</td></tr>
+</tbody></table></div>
+<p>瞬时故障、权限拒绝、配置错误、取消、中断和数据损坏必须分型；只有瞬时且副作用安全的路径适合自动重试。</p></section>
+
+<section class="section" id="operations"><h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>先检查</th><th>修复方向</th></tr></thead><tbody>
+<tr><td>入口成功但没有终态</td><td>Session Key、Queue/Lease、Lifecycle、Background Work。</td><td>区分仍在运行、等待超时和执行超时。</td></tr>
+<tr><td>能力不可见</td><td>Toolset、Session Source、check_fn、Plugin/MCP Registration。</td><td>不要只检查 Registry 中是否存在名字。</td></tr>
+<tr><td>恢复后重复结果</td><td>Delivery ID、Consumed、Claim Owner、已提交副作用。</td><td>按至少一次投递做幂等处理。</td></tr>
+<tr><td>成本或延迟突增</td><td>Prompt Cache、Tool Schema、Compression、Fallback、Usage。</td><td>先验证稳定前缀和有效 Provider，再调参数。</td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="tests"><h2>13. 测试与验证</h2>
+<div class="table-wrap"><table><thead><tr><th>测试路径</th><th>类型</th><th>能证明</th><th>证据缺口</th></tr></thead><tbody><tr><td><code>tests/agent/test_memory_manager.py</code></td><td>行为/集成测试</td><td>验证本模块关键路径与不变量</td><td>真实外部服务和长时间压力需独立执行</td></tr><tr><td><code>tests/agent/test_curator.py</code></td><td>行为/集成测试</td><td>验证本模块关键路径与不变量</td><td>真实外部服务和长时间压力需独立执行</td></tr><tr><td><code>tests/tools/test_memory_tool.py</code></td><td>行为/集成测试</td><td>验证本模块关键路径与不变量</td><td>真实外部服务和长时间压力需独立执行</td></tr></tbody></table></div>
+<div class="warning"><strong>测试纪律：</strong>Python 测试使用 <code>scripts/run_tests.sh</code>；不读取源码文本，不冻结可变化目录/版本/模型列表，跨 OS 行为在真实 OS Lane 运行。</div></section>
+
+<section class="section" id="development"><h2>14. 开发与扩展指南</h2>
+<p>新增 Memory Backend 必须作为独立插件仓库实现 ABC；修改 Curator 要证明仅 Agent-created、Pinned 免疫、先备份、永不自动删除。</p>
+<div class="table-wrap"><table><thead><tr><th>变更目标</th><th>正确动作</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>扩展现有能力</td><td>修改真实 Owner，通过 Facade/Registry 接入。</td><td>成功、拒绝、恢复和兄弟路径。</td></tr>
+<tr><td>新增边缘能力</td><td>按 Footprint Ladder 选择 Skill、Plugin 或 MCP。</td><td>禁用时零 Schema/依赖成本。</td></tr>
+<tr><td>改变状态或协议</td><td>提供 Migration、兼容默认和文档。</td><td>旧数据/客户端重放与并发。</td></tr>
+</tbody></table></div></section>
+
+<section class="section" id="tradeoffs"><h2>15. 设计权衡与已知限制</h2>
+<p>多层记忆提高跨会话连续性，但召回质量和外部依赖不稳定；Manager 采用局部失败隔离，保持核心 Turn 可用。</p>
+<div class="insight"><strong>重评条件：</strong>当当前边界导致三个以上平行实现、无法维持缓存/角色不变量，或恢复协议已经跨越多个独立 Owner 时，应先设计共享 ABC/Orchestrator，而不是继续复制分支。</div></section>
+
+<section class="section" id="sources"><h2>16. 源码索引与进一步阅读</h2>
+<ul class="source-list"><li><code>agent/memory_provider.py:104-177</code></li><li><code>agent/memory_provider.py:201-260</code></li><li><code>agent/memory_manager.py:364-426</code></li><li><code>agent/memory_manager.py:525-600</code></li><li><code>run_agent.py:4211-4234</code></li><li><code>hermes_cli/config_defaults.py:1729-1751</code></li><li><code>tools/skill_usage.py:1-23</code></li><li><code>tools/skill_usage.py:853-905</code></li><li><code>agent/curator.py:1-20</code></li><li><code>agent/curator.py:306-379</code></li><li><code>agent/curator.py:1496-1553</code></li><li><code>agent/curator.py:2001-2019</code></li></ul>
+<h3>相邻模块</h3><p><a href="12-session-storage.html">← SessionDB、FTS 与 Profile 隔离</a> · <a href="14-delegation-background.html">Delegation 与 Background Processes →</a></p>
+<h3>主文档</h3><p><a href="../../hermes_agent_architecture_sharing.html#s13">Hermes Agent 架构深度解析 · 第 13 章</a></p>
+<div class="boundary"><strong>证据边界：</strong>本文基于当前工作副本静态审计与仓库测试契约；未调用真实付费 Provider、远程执行后端或所有消息平台做 Live Turn。默认值以列出的当前源码为准。</div></section>
+
+<section class="section" id="glossary"><h2>17. 术语表</h2>
+<div class="table-wrap"><table><thead><tr><th>术语</th><th>本模块含义</th></tr></thead><tbody>
+<tr><td>MemoryProvider</td><td>长期召回与同步的可插拔后端契约。</td></tr><tr><td>MemoryManager</td><td>内置记忆与至多一个外部 Provider 的生命周期编排。</td></tr><tr><td>Skill Usage</td><td>view/use/patch 等计数 Sidecar，不记录完整对话内容。</td></tr><tr><td>Curator</td><td>只对 Agent-created Skill 做 stale/archive/可选 consolidation 的后台维护。</td></tr>
+<tr><td>Owner</td><td>对状态、协议和生命周期拥有最终修改责任的模块。</td></tr>
+<tr><td>Surface</td><td>CLI、Gateway、TUI、Dashboard、Desktop、ACP 或 API 等用户/客户端接入面。</td></tr>
+<tr><td>Fallback</td><td>主依赖失败时的有界替代路径，不等于永久修改用户选择。</td></tr>
+<tr><td>Invariant</td><td>所有兄弟实现和恢复路径都必须保持的行为关系。</td></tr>
+</tbody></table></div></section>
+
+<div class="footer">Hermes Agent Architecture Module 13 · Memory、Skill Usage 与 Curator<br>基于当前源码、配置、测试与开发约束交叉核验</div>
+</main>
+<a class="back-top" href="#top" aria-label="返回顶部">↑</a>
+<script>(function(){const links=[...document.querySelectorAll('.sidebar a')];const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);const activate=()=>{let current=sections[0];for(const section of sections){if(section.getBoundingClientRect().top<=92)current=section}links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current.id))};document.addEventListener('scroll',activate,{passive:true});activate()})();</script>
+</body>
+</html>

@@ -1,0 +1,342 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>08 调度、Send 与子图｜LangGraph 架构开发文档</title>
+  <style>
+    :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--panel2:#e8e1d4;--fg:#1c1917;--muted:#78716c;--line:rgba(28,25,23,.12);--blue:#4338ca;--green:#15803d;--yellow:#c2410c;--red:#b91c1c;--code:#44403c}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--fg);font:15px/1.75 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:Consolas,"SFMono-Regular",monospace;color:var(--code);background:var(--panel2);border-radius:4px;padding:.08em .35em}
+    .layout{display:grid;grid-template-columns:270px minmax(0,1fr);max-width:1500px;margin:auto}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;border-right:1px solid var(--line);padding:24px 18px;background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
+    .sidebar strong{display:block;margin-bottom:12px}.sidebar a{display:block;padding:4px 8px;border-left:2px solid transparent;color:var(--muted)}.sidebar a.active{color:var(--fg);border-left-color:var(--blue);background:rgba(67,56,202,.06)}
+    main{min-width:0;padding:40px clamp(24px,5vw,72px) 80px}.back{display:inline-block;margin-bottom:18px}.eyebrow{color:var(--blue);font-weight:700;letter-spacing:.08em}h1{font-size:clamp(2rem,5vw,3.4rem);line-height:1.15;margin:.2em 0}h2{margin-top:2.6em;padding-bottom:.35em;border-bottom:1px solid var(--line);font-size:1.55rem}h3{margin-top:1.7em;font-size:1.15rem}
+    .lead{font-size:1.12rem;color:#44403c;max-width:980px}.meta,.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.card,.note,.flow{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:16px}.meta .card b{display:block;color:var(--muted);font-size:.82rem}.tag{display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;border:1px solid var(--line);border-radius:999px;font-size:.8rem}.ok{color:var(--green)}.warn{color:#a16207}.danger{color:#b91c1c}
+    .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.evidence{color:var(--muted);font-size:.92em}.key{border-left:4px solid var(--blue);background:rgba(67,56,202,.06);padding:12px 16px;margin:16px 0}.risk{border-left-color:var(--yellow)}.error{border-left-color:var(--red)}
+    .table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px}table{width:100%;border-collapse:collapse;min-width:760px;background:var(--panel)}th,td{padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;text-align:left}th{background:var(--panel2);color:#1c1917}tr:last-child td{border-bottom:0}
+    pre{overflow:auto;padding:16px;border:1px solid var(--line);border-radius:8px;background:#f0ebe0;color:#44403c;line-height:1.55}.flow{font-family:Consolas,monospace;white-space:pre-wrap}.small{color:var(--muted);font-size:.9rem}ul,ol{padding-left:1.35rem}
+    @media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);columns:2}.sidebar strong{column-span:all}main{padding:28px 18px 64px}}@media(max-width:540px){.sidebar{columns:1}.meta,.grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="本文目录">
+    <strong>08 · 调度、Send 与子图</strong>
+    <a href="#position">1. 模块定位</a><a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a><a href="#architecture">4. 架构组成</a>
+    <a href="#flow">5. 完整运行流程</a><a href="#state-model">6. 数据与状态模型</a>
+    <a href="#interfaces">7. 接口、协议与事件</a><a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a><a href="#observability">12. 可观测性与排障</a>
+    <a href="#testing">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与已知限制</a><a href="#sources">16. 源码索引与进一步阅读</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+  <main>
+    <a class="back" href="../../langgraph_architecture.html#s8">← 返回 LangGraph 架构总览第 8 章</a>
+    <div class="eyebrow">LANGGRAPH INTERNALS · CHAPTER 08</div>
+    <h1>调度、Send 与子图：从触发到可恢复任务身份</h1>
+    <p class="lead">本文建立一套开发级心智模型：Pregel 如何把 Channel/Edge 触发变成 PULL task，把动态 <code>Send</code> 与 Functional API 调用变成 PUSH task；这些任务如何获得稳定身份、跨 checkpoint 恢复，并在 waiting edge、嵌套 namespace 与 <code>Command.PARENT</code> 中保持边界清晰。</p>
+    <div class="meta">
+      <div class="card"><b>版本基线</b><code>langgraph 1.2.11</code><br><span class="small">Git SHA：当前环境未取得</span></div>
+      <div class="card"><b>证据状态</b><span class="ok">决定性源码与 sync/async 测试已审计</span></div>
+      <div class="card"><b>主要 Owner</b><code>libs/langgraph/langgraph/pregel/_algo.py</code><br><code>pregel/_call.py</code>、<code>types.py</code></div>
+      <div class="card"><b>目标读者 / 验证日</b>Runtime、Graph、持久化与 Agent 开发者<br>2026-08-14</div>
+    </div>
+    <p><span class="tag">当前事实</span><span class="tag">默认行为</span><span class="tag">可选持久化</span><span class="tag">恢复语义</span><span class="tag">本地 Runtime</span><span class="tag warn">SHA 证据缺口</span></p>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>本模块拥有“下一超级步有哪些 task、每个 task 的输入和身份是什么”的决策。<code>prepare_next_tasks</code> 明确返回 PUSH 与 PULL 的并集；它消费 TASKS Channel 中的动态包，同时根据 Channel version 与节点 trigger 生成订阅任务。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_algo.py:392-435</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:441-513</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>职责</th><th>本模块负责</th><th>委托对象</th><th>明确不负责</th></tr></thead>
+        <tbody>
+          <tr><td>任务选择</td><td>PULL/PUSH 生成、输入装配、稳定 task id</td><td>Loop 提供 checkpoint、step、pending writes</td><td>节点业务逻辑和 reducer 实现</td></tr>
+          <tr><td>动态扇出</td><td><code>Send(node,arg)</code> 转 PUSH task</td><td>Runner 并发执行；Channel 在屏障合并</td><td>跨机器队列和服务端调度</td></tr>
+          <tr><td>静态汇合</td><td>waiting edge 编译为 NamedBarrier Channel</td><td>Channel 保存 seen set</td><td>任意动态 fan-out 的自动计数 join</td></tr>
+          <tr><td>嵌套执行</td><td>task namespace、父 checkpoint 映射、bubble-up 路由</td><td>Checkpointer 持久化；子图自身执行</td><td>Store 记忆、Cache 命中和远程 Server</td></tr>
+        </tbody>
+      </table></div>
+      <div class="key">边界要点：调度不是修改一份共享 Python dict。兄弟 task 读取同一超级步的稳定 Channel 快照，各自积累 writes，屏障后才统一合并。</div>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <div class="flow">StateGraph.compile
+  ├─ attach_edge / attach_branch → trigger Channel、TASKS writes
+  └─ Pregel.stream / invoke
+       → PregelLoop.tick
+          → prepare_next_tasks
+             ├─ PULL: Channel version > versions_seen
+             └─ PUSH: TASKS 中 Send / Call
+          → PregelRunner.tick（并发执行）
+          → apply_writes（稳定排序、屏障合并）
+          → checkpoint / 下一超级步
+
+嵌套节点 → 子图 PregelLoop → GraphInterrupt / ParentCommand
+                         └─ GraphBubbleUp 向父层传播</div>
+      <p>PULL 的上游是静态 Edge/Branch 生成的 trigger Channel；PUSH 的上游是 <code>Send</code> write 或 Functional API 的 <code>Call</code>。下游统一成为 <code>PregelExecutableTask</code>，由 Runner 执行并提交 writes。Runner 的职责定义包括并发执行、提交 writes、输出让步及必要时中断其他任务。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_runner.py:135-180</code>。</span></p>
+      <p>当前包要求 Python ≥3.10，并依赖 <code>langgraph-checkpoint</code>、<code>langchain-core</code> 与 <code>xxhash</code>；稳定 task id 的新 checkpoint 版本使用 XXH3。<span class="evidence">证据：<code>libs/langgraph/pyproject.toml:5-32</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:548-550</code>。</span></p>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>概念</th><th>准确含义</th><th>容易混淆之处</th></tr></thead>
+        <tbody>
+          <tr><td>PULL task</td><td>节点订阅的至少一个 trigger Channel 出现未见版本后，按节点名拉取当前快照输入</td><td>不是线程“拉队列”，也不是每轮无条件运行</td></tr>
+          <tr><td>PUSH task</td><td>带显式参数的动态调用；来源是 <code>Send</code> 或 Functional <code>Call</code></td><td>不是普通 Edge 的别名</td></tr>
+          <tr><td>task id</td><td>checkpoint id、namespace、step、节点、任务类型及稳定路径部件的确定性摘要</td><td>稳定指同一 checkpoint/路径重建一致，不是跨不同 checkpoint 永久不变</td></tr>
+          <tr><td>waiting edge</td><td><code>add_edge([A,B], C)</code>：A、B 均到达后 C 才可触发</td><td>与 Send fan-out 后“等任意数量任务”不是同一能力</td></tr>
+          <tr><td>namespace</td><td>嵌套图/节点/task 的 checkpoint 路径，task id 以 <code>:</code> 附着在 frame 上</td><td>不同于用户业务 Store namespace</td></tr>
+          <tr><td>GraphBubbleUp</td><td>中断、drain、父命令等控制流异常的共同基类</td><td>不是应交给普通 node error handler 的业务错误</td></tr>
+        </tbody>
+      </table></div>
+      <p><code>Send</code> 的参数状态可以不同于主图状态，典型用途是 map-reduce：同一节点接收多份参数并行执行，结果写回带 reducer 的主图 Channel。<span class="evidence">证据：<code>libs/langgraph/langgraph/types.py:704-747</code>。</span></p>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <div class="grid">
+        <div class="card"><h3>prepare_next_tasks</h3><p>先按 TASKS Channel 顺序枚举 Send，再扫描被更新 Channel 对应的候选节点；候选集合有映射时排序，最后以 task id 为 key 返回。</p><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:437-513</code></span></div>
+        <div class="card"><h3>prepare_single_task</h3><p>按路径首项分派 Functional PUSH、Send PUSH 或 PULL，并注入 task id、read/send 函数、Runtime、checkpoint map 与 namespace。</p><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:524-595</code></span></div>
+        <div class="card"><h3>NamedBarrierValue</h3><p>保存预期 names 与 seen set；seen 等于 names 才 available，consume 后清空，以支持下一轮汇合。</p><span class="evidence"><code>libs/langgraph/langgraph/channels/named_barrier_value.py:13-81</code></span></div>
+        <div class="card"><h3>ParentCommand 路由</h3><p>子图 writer 发现 <code>Command.PARENT</code> 后抛 <code>ParentCommand</code>；retry 层按 namespace 逐层重写目标，直到最近父图消费。</p><span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1756-1772</code>、<code>libs/langgraph/langgraph/pregel/_retry.py:618-631</code></span></div>
+      </div>
+      <h3>稳定 task id 的组成</h3>
+      <ul>
+        <li>PULL：<code>checkpoint_id + checkpoint_ns + step + node + PULL + sorted(triggers)</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:597-624</code></span></li>
+        <li>Send PUSH：<code>checkpoint_id + checkpoint_ns + step + target node + PUSH + Send index</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:961-997</code></span></li>
+        <li>Functional PUSH：再纳入父 task path 的规范字符串与该父 task 的 PUSH write 序号。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:800-843</code></span></li>
+      </ul>
+      <p>checkpoint v1 使用基于 SHA-1 的 UUID 形状摘要，v2 以后使用 XXH3-128；二者都把 namespace bytes 与稳定 parts 拼接为 UUID 形状字符串。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_algo.py:1395-1409</code>。</span></p>
+    </section>
+
+    <section class="section" id="flow">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 正常路径：Send fan-out → reducer 聚合</h3>
+      <ol>
+        <li>条件路由返回多个 <code>Send("worker", arg)</code>；branch writer 将它们写入 TASKS Channel。</li>
+        <li>屏障后，下一次 <code>prepare_next_tasks</code> 按 TASKS 中的 index 创建多个 PUSH task；每个 task 的输入是自己的 <code>packet.arg</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:441-466</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:961-970</code></span></li>
+        <li>Runner 并发执行这些 task；task 只向本地 writes deque 写入，<code>deque.extend</code> 被用于线程安全提交。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:1060-1082</code></span></li>
+        <li>超级步结束后 <code>apply_writes</code> 合并结果；目标 state key 必须使用能处理多写的 reducer，否则并发更新会失败。Send 自身只负责 fan-out，不负责 reduce。</li>
+        <li>下一个 PULL 节点看到聚合 Channel 的新版本后被触发。</li>
+      </ol>
+      <h3>5.2 正常路径：Functional task</h3>
+      <p><code>@task</code> 调用从当前 Runnable config 取出 <code>CONFIG_KEY_CALL</code>，返回可同步等待也可 <code>await</code> 的 future；调度器将 <code>Call</code> 识别为 Functional PUSH，运行函数后把结果写到 RETURN。同步 task 不支持 timeout 时会在调用边界拒绝。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_call.py:200-242</code>、<code>libs/langgraph/langgraph/pregel/_call.py:253-298</code>。</span></p>
+      <h3>5.3 拒绝与提前结束路径</h3>
+      <ul>
+        <li>PULL 节点不存在、checkpoint 无可比较版本、trigger 未前进或输入不可用时，任务不生成；这是无工作，不是错误。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:597-646</code></span></li>
+        <li>Send index 越界、TASKS 不可用或目标进程无 runnable 时直接忽略；非法 packet 类型、未知节点名和非法 PUSH path 记录 warning 后忽略。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:961-1000</code></span></li>
+        <li>Functional callable 无名称时抛 <code>ValueError</code>，同步 task 配 timeout 时抛不支持错误。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:826-830</code>、<code>libs/langgraph/langgraph/pregel/_call.py:276-287</code></span></li>
+        <li>根图收到 <code>Command.PARENT</code> 没有父层可路由，输入映射直接抛 <code>InvalidUpdateError("There is no parent graph")</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_io.py:56-72</code></span></li>
+      </ul>
+      <h3>5.4 恢复与错误路径</h3>
+      <p>恢复时同一 checkpoint 与 task path 会重建相同 id，使 pending writes 能归属到原 task，已经成功的 fan-out 不必因兄弟 task 中断而重复副作用。Send 去重恢复由 sync/async 用例覆盖。<span class="evidence">证据：<code>libs/langgraph/tests/test_large_cases.py:4645-4683</code>、<code>libs/langgraph/tests/test_pregel_async.py:2530-2565</code>。</span></p>
+      <p>普通异常按 RetryPolicy 匹配重试，每次尝试前清空旧 writes；<code>ParentCommand</code> 和其他 <code>GraphBubbleUp</code> 不进入普通重试匹配，而是作为控制流上抛。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_retry.py:600-682</code>。</span></p>
+    </section>
+
+    <section class="section" id="state-model">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>对象</th><th>所有者</th><th>生命周期与持久化</th><th>关键不变量</th></tr></thead>
+        <tbody>
+          <tr><td>Channel map</td><td>PregelLoop</td><td>超级步间由 checkpoint 保存值和版本</td><td>兄弟 task 读取稳定快照</td></tr>
+          <tr><td>TASKS Channel</td><td>Graph writer / Loop</td><td>保存待消费的 Send 包；下步转 PUSH</td><td>索引参与 task id，顺序变化会改变身份</td></tr>
+          <tr><td>task writes</td><td>PregelExecutableTask</td><td>执行期在本地 deque；配置持久化时按 task id 写 pending writes</td><td>失败尝试的 writes 在重试前清空</td></tr>
+          <tr><td>versions_seen</td><td>Checkpoint</td><td>记录每节点已见 Channel version</td><td>PULL 只在 trigger 有未见版本时生成</td></tr>
+          <tr><td>NamedBarrier seen</td><td>Barrier Channel</td><td>checkpoint 为 set；消费后重置</td><td>只接受预声明 name，否则 InvalidUpdateError</td></tr>
+          <tr><td>checkpoint namespace</td><td>Loop / task config</td><td>父 namespace、节点 frame、task id、同 frame 调用序号组成</td><td>定位嵌套 checkpoint 与 ParentCommand 路由</td></tr>
+        </tbody>
+      </table></div>
+      <p>普通 waiting edge 编译为 <code>join:A+B:C</code> Channel；A、B 分别写自己的名字，C 订阅该 Channel。defer 节点使用 <code>NamedBarrierValueAfterFinish</code>，除 names 全到齐外还必须等 <code>finish()</code> 标记。<span class="evidence">证据：<code>libs/langgraph/langgraph/graph/state.py:1551-1575</code>、<code>libs/langgraph/langgraph/channels/named_barrier_value.py:84-167</code>。</span></p>
+      <p>嵌套 Loop 通过 scratchpad 的 <code>subgraph_counter()</code> 为同一父 task 内的后续子图调用追加数字 selector；同时 checkpoint map 将父 namespace 映射到父 checkpoint id。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_loop.py:325-370</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:737-746</code>。</span></p>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>接口</th><th>输入</th><th>输出/事件</th><th>错误语义</th></tr></thead>
+        <tbody>
+          <tr><td><code>Send(node,arg,timeout=...)</code></td><td>目标节点名、自定义参数、可选 timeout</td><td>下一超级步 PUSH task</td><td>未知目标在准备阶段 warning 并忽略</td></tr>
+          <tr><td><code>Command(goto=...)</code></td><td>节点名、Send 或其序列</td><td>branch Channel 或 TASKS write</td><td>goto 不是 str/Send 时 TypeError</td></tr>
+          <tr><td><code>Command(graph=PARENT,...)</code></td><td>父图 update/goto</td><td>ParentCommand 控制流</td><td>根图无父层时 InvalidUpdateError</td></tr>
+          <tr><td><code>@task</code> call</td><td>args/kwargs、retry/cache/timeout</td><td>future；RETURN write</td><td>同步 timeout 不支持；函数异常按 task policy</td></tr>
+          <tr><td>debug/tasks stream</td><td>已生成 task</td><td>id、name、input、triggers、result/error/interrupt</td><td>观测不改变调度顺序</td></tr>
+        </tbody>
+      </table></div>
+      <p><code>Command.goto</code> 的公共契约接受节点名、<code>Send</code> 或序列；<code>graph=None</code> 指当前图，<code>Command.PARENT</code> 指最近父图。<span class="evidence">证据：<code>libs/langgraph/langgraph/types.py:798-848</code>。</span></p>
+      <p>sync 与 async 的 ParentCommand 路由逻辑对称：匹配当前 namespace 时由当前 task writers 消费；仍为 PARENT 时改写为真实父 namespace 再上抛。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_retry.py:618-631</code>、<code>libs/langgraph/langgraph/pregel/_retry.py:753-772</code>。</span></p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为</th><th>来源</th></tr></thead>
+        <tbody>
+          <tr><td>subgraph checkpointer</td><td><code>None | False | True | BaseCheckpointSaver</code></td><td><code>None</code></td><td>显式 saver/布尔值覆盖继承语义</td><td>子图 persistence</td><td>其他类型 TypeError</td><td><code>libs/langgraph/langgraph/types.py:100-119</code></td></tr>
+          <tr><td>Send timeout</td><td>秒、timedelta、TimeoutPolicy、None</td><td><code>None</code></td><td>Send task 的 timeout 优先于目标节点 policy</td><td>单个 PUSH task</td><td>转换失败或运行超时</td><td><code>libs/langgraph/langgraph/types.py:717-776</code></td></tr>
+          <tr><td>task retry</td><td>RetryPolicy 序列或 None</td><td>继承 task/node/graph policy</td><td>Call policy → task policy → graph policy</td><td>Functional PUSH / 普通 task</td><td>无匹配 policy 或耗尽即上抛</td><td><code>libs/langgraph/langgraph/pregel/_algo.py:856-932</code></td></tr>
+          <tr><td>checkpoint namespace</td><td>内部字符串</td><td>根图空字符串</td><td>task frame 与 subgraph counter 逐层追加</td><td>嵌套执行</td><td>用户不应手工伪造</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:325-370</code></td></tr>
+        </tbody>
+      </table></div>
+      <p><code>None</code>、<code>False</code>、<code>True</code> 不能简化成同一个“是否有 saver”：<code>False</code> 明确禁用；<code>None</code> 继承父 checkpointer 以支持当前嵌套调用的 interrupt/resume，但独立调用间状态重置；<code>True</code> 为子图建立可跨调用累积的持久 namespace。该差异由专门的 sync/async persistence 测试锁定。<span class="evidence">证据：<code>libs/langgraph/tests/test_subgraph_persistence.py:1-9</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:27-38</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:227-250</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:291-325</code>。</span></p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <p>并发单位是当前超级步的 task 集合，不是任意时刻对 state 的并发 mutation。PUSH 与 PULL 可以处于同一集合，Runner 负责并发执行；task 的 writes 隔离到各自 deque，屏障后合并。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_runner.py:135-180</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:706-759</code>。</span></p>
+      <ul>
+        <li><strong>确定性：</strong>候选 PULL 节点在优化路径排序；trigger 也排序；PUSH identity 使用持久顺序 index 或父 path+index，避免线程完成先后影响身份。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:475-492</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:613-623</code></span></li>
+        <li><strong>取消：</strong>任一未处理失败可令 Runner 取消仍在 flight 的 future 并重抛；异步取消是协作式，外部副作用仍需幂等。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:650-685</code></span></li>
+        <li><strong>背压：</strong>本地调度器不定义分布式队列容量；大量 Send 会直接扩大下一超级步 task 数。应在路由前分批、限制输入规模或把外部工作移交有容量控制的系统。</li>
+        <li><strong>资源：</strong>input cache 在一次 task preparation 中复用节点输入读取；它不是跨 step Cache。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:437-465</code></span></li>
+      </ul>
+      <div class="key risk">Send 顺序是恢复身份的一部分。对同一逻辑输入若恢复时生成不同顺序或数量，会得到不同 PUSH id；动态路由函数必须确定性，或把决定结果持久化为独立节点输出。</div>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <p><code>Send.node</code> 与 <code>Command.goto</code> 是本地图内路由能力，不是授权系统。运行时会拒绝/忽略不存在的节点，但不会判断调用者是否有业务权限；把用户输入直接作为目标名之前，应用必须用 allowlist 映射到已批准节点。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_algo.py:971-984</code>、<code>libs/langgraph/langgraph/pregel/_io.py:56-72</code>。</span></p>
+      <ul>
+        <li>有 checkpointer 时，Send arg、Functional task 输入/输出及 Channel writes 必须可由配置 serializer 安全处理；本模块不提供 Auth 或 Encryption。</li>
+        <li><code>checkpoint_ns</code> 是内部定位符，不应作为租户隔离边界或接受外部直接写入。</li>
+        <li>fan-out 会放大外部 API、Tool 与数据库副作用；在路由前做数量、成本、权限和参数校验，失败默认应 fail-closed。</li>
+        <li><code>GraphBubbleUp</code> 是可信控制流。普通 error handler 不应吞掉它；Runner 也显式排除这类异常的 error-handler 路由。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:221-228</code>、<code>libs/langgraph/langgraph/pregel/_runner.py:296-303</code></span></li>
+      </ul>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+        <tbody>
+          <tr><td>Send 目标拼错</td><td>warning：unknown node</td><td>该 PUSH 不生成</td><td>其结果缺失，其他任务继续</td><td>修复路由并从合适 checkpoint/fork 重跑</td><td>告警 unknown node 日志</td></tr>
+          <tr><td>waiting edge 永不齐</td><td>seen set 少 name，目标节点不触发</td><td>图可能在无可运行 task 时结束</td><td>barrier checkpoint 保留 seen</td><td>修正条件路径，避免声明不可达前驱</td><td>查看 state history 与 trigger</td></tr>
+          <tr><td>fan-out 中一个 task 异常</td><td>task_result error / ERROR pending write</td><td>未处理失败令 run panic，其他 in-flight 尝试取消</td><td>成功 task writes 可已持久化</td><td>稳定 id 使恢复匹配成功项；失败项重试</td><td>确认副作用幂等后 resume</td></tr>
+          <tr><td>子图 interrupt</td><td>GraphInterrupt</td><td>向父层 bubble；根 Loop 转为 interrupt 输出</td><td>namespace 下 pending state 被保存</td><td>同 thread + Command(resume=...)</td><td>不得无 checkpointer resume</td></tr>
+          <tr><td>Command.PARENT 在根图</td><td>InvalidUpdateError</td><td>拒绝执行</td><td>无父 update/goto</td><td>改为当前图 Command 或真正嵌套调用</td><td>检查调用层级</td></tr>
+          <tr><td>版本升级后 task id 算法变化</td><td>checkpoint v 决定 UUID5/XXH3</td><td>旧 checkpoint 继续走旧算法</td><td>兼容既有 pending writes</td><td>不要手工改 checkpoint version</td><td>迁移测试覆盖历史格式</td></tr>
+        </tbody>
+      </table></div>
+      <p><code>GraphInterrupt</code>、<code>GraphDrained</code> 与 <code>ParentCommand</code> 都继承 <code>GraphBubbleUp</code>；前两者分别表达可恢复暂停/协作式提前结束，后者表达跨图控制转移。<span class="evidence">证据：<code>libs/langgraph/langgraph/errors.py:50-64</code>、<code>libs/langgraph/langgraph/errors.py:102-133</code>。</span></p>
+    </section>
+
+    <section class="section" id="observability">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>现象</th><th>先检查</th><th>常见原因</th><th>修复</th></tr></thead>
+        <tbody>
+          <tr><td>节点没有运行</td><td>debug/tasks 中 triggers；checkpoint channel_versions/versions_seen</td><td>PULL trigger 未前进、input unavailable、Send 被拒绝</td><td>检查 Edge 编译、Channel write 与目标名</td></tr>
+          <tr><td>同节点运行多次</td><td>task path、id、PUSH index</td><td>多个 Send 本来就是独立 task；或路由不确定</td><td>区分合法 fan-out 与恢复身份漂移</td></tr>
+          <tr><td>join 提前/延后</td><td><code>join:A+B:C</code> 的 seen、是否 defer</td><td>另有普通 edge 可独立触发 C；AfterFinish 需图 finish</td><td>删除冲突 edge 或明确接受多次触发</td></tr>
+          <tr><td>resume 后副作用重复</td><td>task id 是否一致、pending writes 是否落盘</td><td>无 checkpointer、路由顺序变化、故障发生在外部副作用后</td><td>使用稳定输入与幂等键；拆分副作用节点</td></tr>
+          <tr><td>父跳转未生效</td><td>Command.graph、当前 checkpoint_ns</td><td>根图使用 PARENT，或 goto 节点不属于最近父图</td><td>让最近父图拥有目标节点并返回 PARENT</td></tr>
+        </tbody>
+      </table></div>
+      <p>task metadata 包含 step、node、triggers、path 与 checkpoint namespace；Runtime 的 <code>ExecutionInfo</code> 还包含 checkpoint id、task id、thread id 与 run id，可作为日志关联字段和外部幂等键来源。<span class="evidence">证据：<code>libs/langgraph/langgraph/pregel/_algo.py:654-700</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:1006-1054</code>。</span></p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+        <tbody>
+          <tr><td>PULL/PUSH path 字符串稳定排序</td><td><code>libs/langgraph/tests/test_algo.py:6-67</code></td><td>单元</td><td>空任务准备与嵌套 PUSH path 规范化</td><td>该文件不覆盖完整 id 输入矩阵</td></tr>
+          <tr><td>waiting edge 等全部前驱</td><td><code>libs/langgraph/tests/test_pregel.py:2111-2157</code></td><td>sync 集成</td><td>两个 retriever 都完成后 qa 读取聚合 docs</td><td>不证明分布式执行</td></tr>
+          <tr><td>barrier 可与普通 edge 并存并重复触发</td><td><code>libs/langgraph/tests/test_pregel.py:2739-2800</code></td><td>sync 恢复</td><td>waiting 与普通 edge 是独立 trigger，interrupt 后可续跑</td><td>无性能上限</td></tr>
+          <tr><td>Send 恢复去重</td><td><code>libs/langgraph/tests/test_large_cases.py:4645-4683</code></td><td>sync persistence</td><td>兄弟 PUSH 中断后恢复不重复已完成 Send</td><td>依赖 saver fixture 的共同契约</td></tr>
+          <tr><td>Send + nested graph + reducer</td><td><code>libs/langgraph/tests/test_large_cases.py:5750-5756</code></td><td>sync 集成</td><td>动态多个输入可进入子图并聚合</td><td>此引用只覆盖用例入口，完整断言在后续行</td></tr>
+          <tr><td>Command.PARENT 最近父层跳转</td><td><code>libs/langgraph/tests/test_parent_command.py:9-53</code></td><td>sync</td><td>两个嵌套调用点均可提前离开当前节点并跳父节点</td><td>无持久化场景</td></tr>
+          <tr><td>Command.PARENT async 对称</td><td><code>libs/langgraph/tests/test_parent_command_async.py:13-57</code></td><td>async</td><td><code>ainvoke</code> 具有同样 bubble 路由</td><td>无远程图</td></tr>
+          <tr><td>None/False/True 子图 persistence</td><td><code>libs/langgraph/tests/test_subgraph_persistence.py:27-38</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:227-250</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:291-325</code></td><td>sync persistence</td><td>继承、禁用、stateful 三种生命周期不同</td><td>数据库差异由 saver conformance 而非本章拥有</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+        <tbody>
+          <tr><td>新增 task identity 部件</td><td><code>pregel/_algo.py</code></td><td>旧 checkpoint 算法分支、pending write 匹配、sync/async snapshots</td><td>恢复前后 id 相同；旧 checkpoint 可读</td></tr>
+          <tr><td>扩展 Send 属性</td><td><code>types.py</code>、<code>prepare_push_task_send</code></td><td>序列化、repr/eq/hash、cache/retry/timeout precedence</td><td>多 fan-out、resume、未知 target</td></tr>
+          <tr><td>改变 Functional task</td><td><code>pregel/_call.py</code>、<code>prepare_push_task_functional</code></td><td>future、RETURN、parent path、sync/async timeout</td><td>嵌套 task 与中断恢复不重跑成功项</td></tr>
+          <tr><td>修改 waiting edge</td><td><code>graph/state.py</code>、NamedBarrier Channel</td><td>checkpoint/copy/from_checkpoint、defer finish</td><td>循环、多轮 consume、非法 name、恢复</td></tr>
+          <tr><td>改变子图 persistence</td><td><code>types.py</code>、Loop config/namespace</td><td>None/False/True、checkpoint map、state history</td><td>sync/async 与不同 saver conformance</td></tr>
+          <tr><td>改变父命令路由</td><td><code>graph/state.py</code>、<code>pregel/_retry.py</code></td><td>namespace recast、RemoteGraph adapter、error handler 排除</td><td>多层嵌套、最近父层、根拒绝</td></tr>
+        </tbody>
+      </table></div>
+      <p>禁止捷径：不要用随机 UUID 替换稳定 task id；不要把动态 Send 数量硬塞进静态 NamedBarrier；不要通过捕获所有 <code>Exception</code> 吞掉 <code>GraphBubbleUp</code>；不要把 checkpoint namespace 当公开业务 API。</p>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+        <tbody>
+          <tr><td>恢复时识别同一工作</td><td>内容与路径派生的稳定 id</td><td>可关联 pending writes、去重成功 task</td><td>路由顺序必须确定；算法受 checkpoint version 约束</td><td>需要跨实现统一 identity 协议</td></tr>
+          <tr><td>动态并行</td><td>Send 写 TASKS，下一超级步执行</td><td>符合 BSP，输入隔离清晰</td><td>不是即时递归调用；大 fan-out 占资源</td><td>需要容量感知或分布式队列</td></tr>
+          <tr><td>静态 join</td><td>NamedBarrier seen set</td><td>可 checkpoint、可多轮消费</td><td>只适用于编译期已知 names</td><td>需要动态 fan-in 原语</td></tr>
+          <tr><td>父图控制</td><td>异常 bubble + namespace 重写</td><td>无需让子图持有父图实例</td><td>广泛捕获异常可能破坏控制流</td><td>引入显式 effect/command transport</td></tr>
+          <tr><td>子图持久化</td><td>None/False/True 三态</td><td>覆盖暂态调用、禁用和长期状态</td><td>语义比布尔开关复杂</td><td>公共 API 可表达更明确生命周期时</td></tr>
+        </tbody>
+      </table></div>
+      <div class="key risk">已知边界：本文描述仓库内 Python 本地 Pregel Runtime。它不证明 LangGraph API Server 的队列、公平性、租户隔离、网络重试或分布式 exactly-once；这些属于远程执行面。</div>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <ul>
+        <li><strong>核心入口：</strong><code>prepare_next_tasks</code> 与 task 分派，<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:392-595</code></span></li>
+        <li><strong>PULL：</strong>trigger、input、task id、Runtime/config 注入，<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:597-761</code></span></li>
+        <li><strong>Functional PUSH：</strong><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:800-935</code>、<code>libs/langgraph/langgraph/pregel/_call.py:200-298</code></span></li>
+        <li><strong>Send PUSH：</strong><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:938-1089</code></span></li>
+        <li><strong>公共类型：</strong><code>Send</code>、<code>Command</code>、Checkpointer 三态，<span class="evidence"><code>libs/langgraph/langgraph/types.py:100-119</code>、<code>libs/langgraph/langgraph/types.py:704-848</code></span></li>
+        <li><strong>Waiting edge：</strong><span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:928-980</code>、<code>libs/langgraph/langgraph/graph/state.py:1551-1575</code></span></li>
+        <li><strong>Barrier Channel：</strong><span class="evidence"><code>libs/langgraph/langgraph/channels/named_barrier_value.py:13-167</code></span></li>
+        <li><strong>Namespace 与 checkpoint map：</strong><span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:325-370</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:737-746</code></span></li>
+        <li><strong>Bubble-up 与父命令：</strong><span class="evidence"><code>libs/langgraph/langgraph/errors.py:50-64</code>、<code>libs/langgraph/langgraph/errors.py:102-133</code>、<code>libs/langgraph/langgraph/pregel/_retry.py:573-634</code></span></li>
+        <li><strong>主要测试：</strong><span class="evidence"><code>libs/langgraph/tests/test_algo.py:1-67</code>、<code>libs/langgraph/tests/test_parent_command.py:9-53</code>、<code>libs/langgraph/tests/test_parent_command_async.py:13-57</code>、<code>libs/langgraph/tests/test_subgraph_persistence.py:1-38</code></span></li>
+      </ul>
+      <p>相邻阅读：<a href="07-pregel-runtime.html">第 07 章 Pregel Runtime</a>；<a href="09-checkpoint-durable-execution.html">第 09 章 Checkpoint 与 Durable Execution</a>。全局上下文见<a href="../../langgraph_architecture.html#s8">架构总览第 8 章</a>。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>术语</th><th>本文含义</th></tr></thead>
+        <tbody>
+          <tr><td>BSP / Bulk Synchronous Parallel</td><td>批量同步并行：同一超级步读取稳定快照，并行计算后在屏障统一合并。</td></tr>
+          <tr><td>PULL</td><td>由 Channel/Edge 版本触发、按节点订阅读取输入的 task。</td></tr>
+          <tr><td>PUSH</td><td>由 Send 或 Functional Call 携带显式参数创建的 task。</td></tr>
+          <tr><td>Send</td><td>指定目标节点、自定义参数和可选 timeout 的动态调度包。</td></tr>
+          <tr><td>fan-out / fan-in</td><td>把一份工作展开为多 task / 汇总多 task 的结果；fan-in 通常依赖 reducer 或静态 barrier。</td></tr>
+          <tr><td>Functional task</td><td><code>@task</code> 包装的函数调用，在 Pregel 内核中编码为带 Call 的 PUSH task。</td></tr>
+          <tr><td>task id</td><td>从 checkpoint、namespace、step、节点和路径稳定派生的任务身份。</td></tr>
+          <tr><td>waiting edge</td><td>多个静态前驱全部完成后才触发目标节点的边。</td></tr>
+          <tr><td>NamedBarrierValue</td><td>保存预期 names 与已见 names、全部到齐才可读的 Channel。</td></tr>
+          <tr><td>reducer</td><td>定义同一 Channel 多个 update 如何聚合的函数；Send 不替代 reducer。</td></tr>
+          <tr><td>checkpoint namespace</td><td>区分嵌套图、task frame 与重复子图调用的持久化路径。</td></tr>
+          <tr><td>pending writes</td><td>绑定 checkpoint 与 task id 的中间写，用于错误、中断和恢复去重。</td></tr>
+          <tr><td>GraphBubbleUp</td><td>需要跨 task/子图边界传播、不能作为普通业务错误处理的控制流异常基类。</td></tr>
+          <tr><td>Command.PARENT</td><td>把 update/goto 发送到最近父图的目标标记。</td></tr>
+          <tr><td>ParentCommand</td><td>承载父图 Command 并逐层重写 namespace 的 GraphBubbleUp 子类。</td></tr>
+          <tr><td>superstep / 超级步</td><td>一次 task 选择、并行执行、屏障合并和 checkpoint 推进周期。</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </main>
+</div>
+<script>
+  const links=[...document.querySelectorAll('.sidebar a')];
+  const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  const observer=new IntersectionObserver(entries=>{
+    const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top)[0];
+    if(!visible)return;
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+visible.target.id));
+  },{rootMargin:'-15% 0px -70% 0px'});
+  sections.forEach(section=>observer.observe(section));
+</script>
+</body>
+</html>

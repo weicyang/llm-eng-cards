@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae Agent Runtime 核心开发文档</title>
+<style>
+:root{
+  --bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);
+  --text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;
+  --green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.7;padding:64px 24px 48px 292px;overflow-x:hidden}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+code{background:rgba(194,65,12,.11);color:var(--orange);padding:.08rem .3rem;border-radius:4px;font-size:.88em;overflow-wrap:anywhere;word-break:break-word}
+.topbar{position:fixed;inset:0 0 auto 0;height:48px;z-index:20;display:flex;align-items:center;gap:1rem;min-width:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.2rem}
+.topbar a{font-size:.88rem;font-weight:650;white-space:nowrap}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.86rem}
+.sidebar{position:fixed;top:48px;bottom:0;left:0;width:268px;overflow:auto;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;backdrop-filter:blur(12px)}
+.sidebar strong{display:block;color:var(--blue);margin-bottom:.7rem}
+.sidebar a{display:block;color:var(--text);opacity:.74;font-size:.79rem;padding:.2rem .35rem;border-left:2px solid transparent}
+.sidebar a:hover{opacity:1;border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1080px;margin:0 auto}
+h1{font-size:2rem;margin:.2rem 0 .35rem;overflow-wrap:anywhere;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{color:var(--blue);font-size:1.35rem;margin:0 0 1rem;border-bottom:1px solid var(--border);padding-bottom:.45rem}
+h3{color:var(--blue2);font-size:1.08rem;margin:1.25rem 0 .55rem}
+p{margin:.55rem 0}
+ul,ol{margin:.55rem 0 .65rem 1.35rem;padding:0}
+li{margin:.25rem 0}
+.subtitle{color:var(--muted);margin:0 0 1.2rem}
+.section{min-width:0;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.55rem;margin:0 0 1.25rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.meta-grid,.card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.meta,.card{min-width:0;overflow-wrap:anywhere;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.85rem}
+.meta b,.card b{display:block;color:var(--blue2);font-size:.82rem;margin-bottom:.2rem}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:.05rem .45rem;margin:.1rem .3rem .1rem 0;font-size:.72rem;font-weight:700}
+.fact{color:var(--green)}.optional{color:var(--yellow)}.roadmap{color:var(--muted)}.risk{color:var(--red)}
+.callout{border-left:3px solid var(--blue);background:rgba(67,56,202,.06);padding:.8rem 1rem;margin:.8rem 0}
+.warning{border-left-color:var(--red);background:rgba(185,28,28,.06)}
+.good{border-left-color:var(--green);background:rgba(21,128,61,.06)}
+.diagram{display:flex;align-items:stretch;gap:.45rem;overflow-x:auto;padding:.85rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+.node{min-width:132px;flex:1;border:1px solid var(--blue);border-radius:8px;padding:.7rem;text-align:center;background:rgba(67,56,202,.05)}
+.node strong{display:block;color:var(--blue2)}
+.node small{display:block;color:var(--muted);margin-top:.2rem}
+.arrow{align-self:center;color:var(--purple);font-size:1.25rem;font-weight:700}
+.sequence{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem 1rem;overflow:auto}
+.sequence .step{display:grid;grid-template-columns:2.1rem minmax(130px,.8fr) minmax(240px,2fr);gap:.6rem;border-bottom:1px dashed var(--border);padding:.45rem 0}
+.sequence .step:last-child{border-bottom:0}
+.n{width:1.7rem;height:1.7rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue);color:var(--bg);font-size:.75rem;font-weight:800}
+table{width:100%;max-width:100%;border-collapse:collapse;margin:.7rem 0;font-size:.84rem;display:block;overflow-x:auto}
+th,td{border:1px solid var(--border);padding:.5rem .62rem;vertical-align:top;min-width:110px}
+th{background:#e8e1d4;color:var(--blue);text-align:left}
+tr:nth-child(even){background:rgba(244,241,234,.45)}
+.path{white-space:nowrap}
+.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}
+.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;box-decoration-break:clone}
+.source-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.55rem 0}
+.source-card b{color:var(--purple)}
+.source-note{font-size:.82rem;color:var(--muted);border-left:3px solid var(--border);padding-left:.8rem;margin:.7rem 0}
+.footer{text-align:center;color:var(--muted);font-size:.78rem;padding:1rem}
+@media(max-width:900px){body{padding:64px 14px 36px}.sidebar{display:none}.meta-grid,.card-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.topbar .title{display:none}.topbar{padding:0 .8rem}h1{font-size:1.45rem}.section{padding:1rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.diagram{flex-direction:column}.arrow{transform:rotate(90deg);text-align:center}.sequence .step{grid-template-columns:2rem 1fr}.sequence .step div:last-child{grid-column:2}}
+.chapter-nav{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;margin:1.5rem 0 .5rem}
+.chapter-nav a{flex:1 1 16rem;min-width:0;max-width:100%;border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;background:var(--surface2);overflow-wrap:anywhere}
+.chapter-nav .prev{margin-right:auto}.chapter-nav .next{margin-left:auto;text-align:right}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="../../trae_agent_architecture.html">← 返回 Trae Agent 架构总览</a>
+  <span class="title">模块 03 / Agent Runtime 核心</span>
+</header>
+
+<nav class="sidebar" aria-label="页面目录">
+  <strong>Agent Runtime</strong>
+  <a href="#position">1. 模块定位</a>
+  <a href="#context">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念与术语</a>
+  <a href="#components">4. 架构组成</a>
+  <a href="#flow">5. 完整运行流程</a>
+  <a href="#state">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口与事件</a>
+  <a href="#config">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发与资源</a>
+  <a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败与恢复</a>
+  <a href="#observability">12. 可观测性与排障</a>
+  <a href="#tests">13. 测试与验证</a>
+  <a href="#extension">14. 开发与扩展</a>
+  <a href="#tradeoffs">15. 权衡与限制</a>
+  <a href="#sources">16. 源码索引</a>
+  <a href="#glossary">附录 · 术语对照表</a>
+</nav>
+
+<main class="container">
+  <h1>Trae Agent Runtime 核心开发文档</h1>
+  <p class="subtitle">从 <code>trae-cli</code> 入口到 Agent Loop、Tool 执行、Trajectory 与资源清理的源码级契约。</p>
+
+  <section class="section" aria-label="文档元数据">
+    <div class="meta-grid">
+      <div class="meta"><b>一句话目标</b>解释单任务如何被装配、执行、判定完成并释放资源。</div>
+      <div class="meta"><b>源码快照</b>工作区源码快照；<code>pyproject.toml</code> 版本 <code>0.1.0</code>，当前目录无可用 <code>.git/HEAD</code>。</div>
+      <div class="meta"><b>证据状态</b><span class="badge fact">已验证</span>主运行链路与关键分支已直接核对源码；真实 Provider/Docker 集成未执行。</div>
+      <div class="meta"><b>所有者路径</b><code>trae_agent/cli.py</code>、<code>trae_agent/agent/</code></div>
+      <div class="meta"><b>目标读者</b>Agent Runtime 学习者、工具/Provider 扩展开发者、故障排查人员。</div>
+      <div class="meta"><b>最近验证</b>2026-07-27</div>
+    </div>
+    <p>
+      <span class="badge fact">源码事实</span>
+      <span class="badge optional">可选能力：MCP / Docker / Lakeview</span>
+      <span class="badge roadmap">Roadmap：HTTP Server / 通用 SDK / 多 Agent 编排</span>
+    </p>
+  </section>
+
+  <section class="section" id="position">
+    <h2>1. 模块定位</h2>
+    <div class="callout good"><strong>Runtime 的核心职责：</strong>把已经解析的配置、任务、Provider 和工具组合成受最大步数约束的 Agent Loop，并产出 <code>AgentExecution</code>。</div>
+    <table>
+      <tr><th>边界</th><th>负责</th><th>不负责</th></tr>
+      <tr>
+        <td>CLI</td>
+        <td>输入互斥校验、配置解析、工作目录、Console 与 Docker 参数装配、进程退出码。</td>
+        <td>不拥有逐步推理和 Tool Loop。<span class="evidence"><code>trae_agent/cli.py:126-411</code></span></td>
+      </tr>
+      <tr>
+        <td><code>Agent</code> 门面</td>
+        <td>创建 Trajectory、实例化具体 Agent、启动任务、初始化 MCP、保证 MCP 清理。</td>
+        <td>不实现完成协议和单步状态机。<span class="evidence"><code>trae_agent/agent/agent.py:14-100</code></span></td>
+      </tr>
+      <tr>
+        <td><code>BaseAgent</code></td>
+        <td>LLM/Tool 循环、步数预算、Token 累加、步骤记录、Tool 与 Docker 清理。</td>
+        <td>不定义软件工程任务 Prompt，也不决定 Trae 的 Patch 完成条件。<span class="evidence"><code>trae_agent/agent/base_agent.py:24-200</code></span></td>
+      </tr>
+      <tr>
+        <td><code>TraeAgent</code></td>
+        <td>初始消息、默认工具、<code>task_done</code> 协议、<code>must_patch</code>、Patch 输出和 MCP Client。</td>
+        <td>不实现通用 Provider 协议或具体工具副作用。<span class="evidence"><code>trae_agent/agent/trae_agent.py:30-258</code></span></td>
+      </tr>
+    </table>
+  </section>
+
+  <section class="section" id="context">
+    <h2>2. 系统位置与依赖</h2>
+    <div class="diagram" role="img" aria-label="Agent Runtime 组件链">
+      <div class="node"><strong>trae-cli</strong><small>Click 命令与参数</small></div><div class="arrow">→</div>
+      <div class="node"><strong>Config</strong><small>YAML / Legacy JSON / CLI / ENV</small></div><div class="arrow">→</div>
+      <div class="node"><strong>Agent</strong><small>门面与生命周期</small></div><div class="arrow">→</div>
+      <div class="node"><strong>TraeAgent</strong><small>任务特化</small></div><div class="arrow">→</div>
+      <div class="node"><strong>BaseAgent</strong><small>LLM ↔ Tool Loop</small></div>
+    </div>
+    <div class="card-grid">
+      <div class="card"><b>上游入口</b><code>pyproject.toml:44-45</code> 将 <code>trae-cli</code> 注册到 <code>trae_agent.cli:main</code>；Click 暴露 <code>run</code>、<code>interactive</code>、<code>show-config</code>、<code>tools</code>。</div>
+      <div class="card"><b>下游执行</b><code>LLMClient.chat()</code> 负责 Provider 适配；<code>ToolExecutor</code> 或 <code>DockerToolExecutor</code> 负责副作用。</div>
+      <div class="card"><b>旁路能力</b>Trajectory 接收 LLM 交互和 Agent Step；CLI Console 接收状态；Lakeview 只挂在 Console。</div>
+      <div class="card"><b>外部边界</b>MCP 可启动外部 <code>stdio</code> 进程；Docker 可创建或附着容器；Provider 发起网络请求。</div>
+    </div>
+    <p>Agent Runtime 与评估目录 <code>evaluation/patch_selection/</code> 没有主调用链关系；后者是独立评估外环。</p>
+  </section>
+
+  <section class="section" id="concepts">
+    <h2>3. 核心概念与术语</h2>
+    <table>
+      <tr><th>术语</th><th>准确含义</th><th>不要混淆为</th></tr>
+      <tr><td>Agent Loop</td><td>每步调用 LLM，随后完成判定或执行 Tool，再进入下一步。</td><td>多 Agent 调度器。</td></tr>
+      <tr><td>Step</td><td>一次 LLM 响应及其可能产生的一批 Tool Call。<span class="evidence"><code>trae_agent/agent/agent_basics.py:38-56</code></span></td><td>单个 Tool Call。</td></tr>
+      <tr><td>完成协议</td><td>Trae 路径要求响应包含名为 <code>task_done</code> 的 Tool Call；可再受 <code>must_patch</code> 限制。</td><td>文本中出现 “done”。</td></tr>
+      <tr><td>Reflection</td><td><code>BaseAgent</code> 提供失败反思 Hook；<code>TraeAgent</code> 固定返回 <code>None</code>。</td><td>默认 Trae 主链必经阶段。</td></tr>
+      <tr><td>Agent Hook</td><td>这里特指 <code>BaseAgent</code> 的模板方法覆写点，例如完成检测、Patch 校验和 Reflection。</td><td>仓库中不存在独立的通用 Hook 注册/事件系统。</td></tr>
+      <tr><td>消息历史</td><td>每轮传给 <code>LLMClient.chat</code> 的增量消息由各 Provider Client 追加到自己的 <code>message_history</code>。</td><td><code>BaseAgent</code> 中的统一历史数组。</td></tr>
+      <tr><td>Trajectory</td><td>增量写入的审计与调试 JSON。</td><td>可检索长期 Memory 或 Context Compression。</td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="components">
+    <h2>4. 架构组成</h2>
+    <h3>4.1 CLI 装配层</h3>
+    <p><code>run</code> 先检查 Docker 参数互斥、任务输入和配置，再创建 Console、Agent 和任务参数，最后使用 <code>asyncio.run(agent.run(...))</code> 进入异步 Runtime。<span class="evidence"><code>trae_agent/cli.py:225-382</code></span></p>
+    <h3>4.2 Agent 门面</h3>
+    <p>构造时总会创建 TrajectoryRecorder；没有指定路径时自动生成文件。它把 Recorder 同时注入 Agent 与底层 LLM Client。<span class="evidence"><code>trae_agent/agent/agent.py:28-57</code></span></p>
+    <h3>4.3 BaseAgent 循环内核</h3>
+    <p>构造时选择本地或 Docker Executor，清理旧 CKG 数据；执行时维护 <code>AgentExecution</code>、步数、Token Usage 与 Tool 生命周期。<span class="evidence"><code>trae_agent/agent/base_agent.py:29-81</code></span></p>
+    <h3>4.4 TraeAgent 任务特化</h3>
+    <p><code>new_task</code> 要求 <code>project_path</code>，组装 System/User 消息并启动 Trajectory；<code>execute_task</code> 在父循环正常返回后 finalize Trajectory 并可选写出 Patch。<span class="evidence"><code>trae_agent/agent/trae_agent.py:102-170</code></span></p>
+    <h3>4.5 依赖组件</h3>
+    <table>
+      <tr><th>组件</th><th>输入</th><th>输出/副作用</th><th>隔离方式</th></tr>
+      <tr><td>LLM Client</td><td>增量消息、ModelConfig、Tool Schema</td><td><code>LLMResponse</code>，并更新 Provider 内部历史</td><td>Factory 按 Provider 选择 Adapter。<code>trae_agent/utils/llm_clients/llm_client.py:27-80</code></td></tr>
+      <tr><td>Tool Executor</td><td><code>ToolCall[]</code></td><td><code>ToolResult[]</code> 与工作区副作用</td><td>Tool 异常被转换为失败 Result。<code>trae_agent/tools/base.py:205-244</code></td></tr>
+      <tr><td>Docker Manager</td><td>镜像/容器/Dockerfile/镜像文件</td><td>容器、挂载、持久 Shell</td><td>只在 Docker 配置存在时创建。<code>trae_agent/agent/docker_manager.py:18-123</code></td></tr>
+      <tr><td>CLI Console</td><td>AgentStep / AgentExecution</td><td>Simple 或 Rich UI</td><td>抽象接口，不参与完成判定。<code>trae_agent/utils/cli/cli_console.py:19-123</code></td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="flow">
+    <h2>5. 完整运行流程</h2>
+    <h3>5.1 单任务成功路径</h3>
+    <div class="sequence">
+      <div class="step"><span class="n">1</span><strong>CLI 校验</strong><div>解析任务、配置、工作目录与可选 Docker 参数；创建 Console。<code>trae_agent/cli.py:225-350</code></div></div>
+      <div class="step"><span class="n">2</span><strong>构造 Runtime</strong><div><code>Agent</code> 创建 TrajectoryRecorder 和 <code>TraeAgent</code>，注入 Console/Recorder。<code>trae_agent/agent/agent.py:14-57</code></div></div>
+      <div class="step"><span class="n">3</span><strong>初始化任务</strong><div><code>new_task</code> 选择工具、构造初始消息、记录任务元数据。<code>trae_agent/agent/trae_agent.py:102-153</code></div></div>
+      <div class="step"><span class="n">4</span><strong>可选 MCP</strong><div>只初始化 Allowlist 中的 Server，并把发现的 Tool 追加到共享工具列表。<code>trae_agent/agent/agent.py:67-70</code>；<code>trae_agent/agent/trae_agent.py:65-100</code></div></div>
+      <div class="step"><span class="n">5</span><strong>进入循环</strong><div>创建 <code>AgentExecution(RUNNING)</code>，每步调用 LLM。Docker 模式在此前启动容器。<code>trae_agent/agent/base_agent.py:147-166</code></div></div>
+      <div class="step"><span class="n">6</span><strong>执行工具</strong><div>若没有完成信号，按配置并行或串行调用 Tool，并把 Result 变成下一轮用户消息。<code>trae_agent/agent/base_agent.py:314-352</code></div></div>
+      <div class="step"><span class="n">7</span><strong>完成判定</strong><div>LLM 发出 <code>task_done</code>；若 <code>must_patch=true</code>，还需存在非测试 Patch。通过后置为 <code>COMPLETED/success=true</code>。<code>trae_agent/agent/base_agent.py:225-233</code>；<code>trae_agent/agent/trae_agent.py:228-249</code></div></div>
+      <div class="step"><span class="n">8</span><strong>收尾</strong><div>关闭 Tool，按配置停止 Docker，清理 MCP，更新 Console；父循环返回后 finalize Trajectory、可选写 Patch。<code>trae_agent/agent/base_agent.py:186-200</code>；<code>trae_agent/agent/trae_agent.py:155-170</code></div></div>
+    </div>
+    <div class="callout"><code>task_done</code> 是完成协议，不是普通业务工具：判定通过后函数直接返回，不会进入 <code>ToolExecutor.execute_tool_call()</code>。</div>
+
+    <h3>5.2 拒绝与提前结束路径</h3>
+    <table>
+      <tr><th>触发</th><th>终止位置</th><th>结果</th></tr>
+      <tr><td>同时传 Task 与 <code>--file</code>、文件不存在、没有任务</td><td>CLI 输入校验</td><td>打印错误并 <code>sys.exit(1)</code>。<code>trae_agent/cli.py:277-292</code></td></tr>
+      <tr><td>多个 Docker Source 同时设置</td><td>CLI Docker 校验</td><td>进 Agent 前退出。<code>trae_agent/cli.py:225-240</code></td></tr>
+      <tr><td>配置缺 Provider/Model/Agent，或 Lakeview 开启但无配置</td><td><code>Config.create</code></td><td>抛出 <code>ConfigError</code>。<code>trae_agent/utils/config.py:215-300</code></td></tr>
+      <tr><td>缺少 <code>project_path</code></td><td><code>TraeAgent.new_task</code></td><td>抛出 <code>AgentError</code>，此时 Agent.run 的执行期 finally 尚未建立。<code>trae_agent/agent/trae_agent.py:125-130</code></td></tr>
+      <tr><td>达到 <code>max_steps</code></td><td><code>BaseAgent.execute_task</code></td><td><code>success=false</code>、<code>agent_state=ERROR</code>，并设置最大步数错误文本。<code>trae_agent/agent/base_agent.py:179-181</code></td></tr>
+    </table>
+
+    <h3>5.3 重试、恢复与降级</h3>
+    <ul>
+      <li>Tool 异常由 <code>ToolExecutor</code> 转换为失败 <code>ToolResult</code>，下一轮仍可继续；默认 TraeAgent 不额外生成 Reflection。<span class="evidence"><code>trae_agent/tools/base.py:219-236</code></span></li>
+      <li><code>must_patch</code> 未满足时，Runtime 向 Provider 追加 “Patch is empty” 用户消息，而不是结束任务。<span class="evidence"><code>trae_agent/agent/base_agent.py:225-233</code></span></li>
+      <li>MCP 单 Server 初始化失败会清理该 Client 并继续发现其他 Server。<span class="evidence"><code>trae_agent/agent/trae_agent.py:72-100</code></span></li>
+      <li>Docker 持久 Shell 死亡时，下次执行尝试重启。<span class="evidence"><code>trae_agent/agent/docker_manager.py:204-211</code></span></li>
+      <li>Provider 级重试由各 Adapter 使用 <code>max_retries</code> 实现；Runtime 没有跨 Provider 自动 Failover。</li>
+    </ul>
+  </section>
+
+  <section class="section" id="state">
+    <h2>6. 数据与状态模型</h2>
+    <table>
+      <tr><th>模型</th><th>关键字段</th><th>所有者与生命周期</th></tr>
+      <tr><td><code>AgentExecution</code></td><td>task、steps、final_result、success、total_tokens、execution_time、agent_state</td><td>每次 <code>execute_task</code> 新建，返回给 Agent 门面。<code>trae_agent/agent/agent_basics.py:66-84</code></td></tr>
+      <tr><td><code>AgentStep</code></td><td>step_number、state、tool_calls/results、llm_response、reflection、error</td><td>每轮新建，finalize 后追加到 Execution。<code>trae_agent/agent/agent_basics.py:38-63</code></td></tr>
+      <tr><td>Provider History</td><td>Provider 原生消息对象数组</td><td>由具体 Client 在 <code>reuse_history=true</code> 时累积；不是 BaseAgent 状态。</td></tr>
+      <tr><td>Trajectory JSON</td><td>task、时间、Provider、LLM 交互、Agent 步骤、成功标志、最终结果</td><td>TrajectoryRecorder 每次更新都重写文件。<code>trae_agent/utils/trajectory_recorder.py:20-75,220-230</code></td></tr>
+      <tr><td>MCP Clients</td><td><code>mcp_clients[]</code>、<code>mcp_tools[]</code></td><td>TraeAgent Task 生命周期；结束时逐个 cleanup 并清空。<code>trae_agent/agent/trae_agent.py:52-59,251-258</code></td></tr>
+    </table>
+    <p class="source-note"><code>AgentStep.thought</code> 与 <code>AgentStep.llm_usage</code> 虽存在于数据类，但当前 Agent 主循环没有赋值点；Token 只累加到 <code>AgentExecution.total_tokens</code>。<span class="evidence"><code>trae_agent/agent/agent_basics.py:47-56</code></span>；<span class="evidence"><code>trae_agent/agent/base_agent.py:291-299</code></span></p>
+    <h3>状态转换</h3>
+    <table>
+      <tr><th>层级</th><th>实际转换</th><th>说明</th></tr>
+      <tr><td>Agent</td><td><code>IDLE → RUNNING → COMPLETED | ERROR</code></td><td>正常完成或最大步数明确写终态；部分异常路径只设置错误文本。</td></tr>
+      <tr><td>Step</td><td><code>THINKING → CALLING_TOOL → [REFLECTING] → COMPLETED</code></td><td><code>REFLECTING</code> 是可选 Hook；TraeAgent 默认跳过。</td></tr>
+    </table>
+    <div class="callout warning"><strong>实现细节：</strong>单步异常分支先把 Step 设为 <code>ERROR</code>，随后调用 <code>_finalize_step</code>；该函数会无条件改成 <code>COMPLETED</code>。因此已记录 Step 可能是 <code>state=completed</code> 但同时带有 <code>error</code>。这是当前源码行为，不应在文档中美化为稳定错误状态。<span class="evidence"><code>trae_agent/agent/base_agent.py:173-178,238-244</code></span></div>
+  </section>
+
+  <section class="section" id="interfaces">
+    <h2>7. 接口、协议与事件</h2>
+    <table>
+      <tr><th>接口</th><th>输入</th><th>输出/约束</th></tr>
+      <tr><td><code>Agent.run(task, extra_args, tool_names)</code></td><td>任务文本、至少含 project_path 的上下文、可选工具名</td><td>异步返回 <code>AgentExecution</code>；保证执行期 MCP cleanup。<code>trae_agent/agent/agent.py:59-100</code></td></tr>
+      <tr><td><code>TraeAgent.new_task</code></td><td>task、project_path、issue、must_patch、base_commit、patch_path</td><td>构造两条初始消息并启动记录。<code>trae_agent/agent/trae_agent.py:102-153</code></td></tr>
+      <tr><td><code>LLMClient.chat</code></td><td>增量消息、ModelConfig、Tool[]、reuse_history</td><td>同步返回统一 <code>LLMResponse</code>。<code>trae_agent/utils/llm_clients/llm_client.py:72-80</code></td></tr>
+      <tr><td><code>ToolExecutor</code></td><td><code>ToolCall[]</code></td><td>并行或串行返回等长 Result 列表；未知 Tool 返回失败 Result。<code>trae_agent/tools/base.py:205-244</code></td></tr>
+      <tr><td>完成协议</td><td>LLM 响应中的 <code>task_done</code> Tool Call</td><td>先判定完成；<code>must_patch</code> 可拒绝。<code>trae_agent/agent/trae_agent.py:228-249</code></td></tr>
+    </table>
+    <p>Runtime 的外部可见事件主要是 Console 状态更新、Trajectory 文件更新、Tool 副作用、可选 Patch 文件和进程退出码；没有独立事件总线。</p>
+  </section>
+
+  <section class="section" id="config">
+    <h2>8. 配置与默认行为</h2>
+    <table>
+      <tr><th>配置项</th><th>类型/值</th><th>默认/示例</th><th>优先级</th><th>生效时机</th><th>失败行为</th></tr>
+      <tr><td><code>max_steps</code></td><td>int</td><td>示例 YAML 为 200；interactive Click 默认 20</td><td>CLI &gt; YAML</td><td>创建 Config 时</td><td>耗尽后 Execution=ERROR</td></tr>
+      <tr><td>Provider API Key/Base URL</td><td>string</td><td>Provider 必须存在</td><td>CLI &gt; ENV &gt; YAML</td><td>Config resolve 时</td><td>新 Provider 无 API Key 抛 ConfigError</td></tr>
+      <tr><td><code>parallel_tool_calls</code></td><td>bool</td><td>示例为 true</td><td>YAML Model</td><td>每步 Tool 调用</td><td>Docker 模式仍强制串行</td></tr>
+      <tr><td><code>enable_lakeview</code></td><td>bool</td><td>Dataclass true；示例 true</td><td>YAML Agent</td><td>Agent/Console 构造</td><td>开启但无 Lakeview Model 时 ConfigError</td></tr>
+      <tr><td><code>docker_keep</code></td><td>Click bool</td><td>true</td><td>CLI</td><td>BaseAgent finally</td><td>false 才停止自管容器</td></tr>
+      <tr><td><code>must_patch</code></td><td>CLI flag → 字符串</td><td>false</td><td>CLI</td><td>完成判定</td><td>无非测试 Patch 时继续循环</td></tr>
+    </table>
+    <div class="callout warning"><code>run --max-steps</code> 默认是 <code>None</code>，因此保留 YAML 值；<code>interactive --max-steps</code> 的 Click 默认值是 <code>20</code>，即使用户未显式传参也会覆盖 YAML 的 200。<span class="evidence"><code>trae_agent/cli.py:133,425</code></span></div>
+    <p>决定性实现：<span class="evidence"><code>trae_agent/utils/config.py:66-116,174-181,302-322,394-410</code></span>；CLI 默认：<span class="evidence"><code>trae_agent/cli.py:126-212,414-450</code></span>。</p>
+    <div class="callout warning"><strong>文档漂移：</strong>README 当前写“CLI &gt; 配置文件 &gt; 环境变量 &gt; 默认值”（<code>README.md:123</code>），但 <code>resolve_config_value</code> 的实际顺序是“CLI &gt; 环境变量 &gt; 配置文件”。本页面以源码为准。</div>
+    <p>配置没有热加载；每次 CLI 命令或交互会话启动时解析。Legacy JSON 通过 <code>resolve_config_file</code>/<code>create_from_legacy_config</code> 兼容。</p>
+  </section>
+
+  <section class="section" id="concurrency">
+    <h2>9. 并发、性能与资源</h2>
+    <ul>
+      <li><strong>LLM：</strong>主 Loop 每步只有一次同步 <code>chat</code> 调用；它运行在 async 函数内，但不是 awaitable。</li>
+      <li><strong>Tool：</strong><code>parallel_tool_calls=true</code> 时本地 Executor 使用 <code>asyncio.gather</code>；否则逐一 await。<span class="evidence"><code>trae_agent/agent/base_agent.py:331-335</code></span></li>
+      <li><strong>Docker：</strong><code>parallel_tool_call</code> 明确转发到串行实现。<span class="evidence"><code>trae_agent/tools/docker_tool_executor.py:57-75</code></span></li>
+      <li><strong>Console：</strong><code>Agent.run</code> 可把 Console.start 作为 Task 与 Agent 执行并行；simple interactive 外层又创建 Console 与 execution 两个 Task。<span class="evidence"><code>trae_agent/agent/agent.py:86-98</code></span>；<span class="evidence"><code>trae_agent/cli.py:575-584</code></span></li>
+      <li><strong>资源清理：</strong>Tool close、Docker stop、MCP cleanup 分布在 BaseAgent、TraeAgent 与 Agent 门面三层；MCP cleanup 是幂等式重复保护。</li>
+    </ul>
+    <div class="callout warning">当前没有全局任务队列、跨任务并发控制、背压或通用 Timeout Budget。<code>max_steps</code> 是步数上限，不是时间上限；Docker 单命令默认 Timeout 为 300 秒。</div>
+  </section>
+
+  <section class="section" id="security">
+    <h2>10. 安全与信任边界</h2>
+    <table>
+      <tr><th>边界</th><th>当前能力</th><th>风险/限制</th></tr>
+      <tr><td>Host Tool</td><td>Bash 和编辑工具可直接操作工作目录。</td><td>Runtime 没有内建 Approval 或命令 Allowlist；Prompt 不是安全边界。</td></tr>
+      <tr><td>Docker</td><td>把 Host Workspace 以 <code>rw</code> 挂载到 <code>/workspace</code>。<code>trae_agent/agent/docker_manager.py:89-109</code></td><td>隔离容器进程，但不隔离被挂载工作区；源码未配置只读、网络关闭、非 Root 或能力削减。</td></tr>
+      <tr><td>MCP</td><td>只连接 <code>allow_mcp_servers</code> 中的配置项。</td><td>外部命令与环境变量属于独立信任边界；当前仅 stdio 实现。</td></tr>
+      <tr><td>Provider Secret</td><td>API Key 来自 CLI、ENV 或 YAML。</td><td><code>show-config</code> 只显示首尾字符，但 Trajectory 会记录完整消息和 Tool 结果。</td></tr>
+      <tr><td>Patch</td><td><code>must_patch</code> 排除测试目录后检查非空。</td><td>它只证明存在 Diff，不证明正确、安全或测试通过。</td></tr>
+    </table>
+  </section>
+
+  <section class="section" id="failure">
+    <h2>11. 失败、恢复与兼容</h2>
+    <table>
+      <tr><th>故障/现象</th><th>检测方式</th><th>即时行为</th><th>状态影响</th><th>恢复</th></tr>
+      <tr><td>LLM/单步内部异常</td><td>Step.error、Console、Trajectory</td><td>捕获后结束 Loop</td><td>Agent=ERROR；Step 最终可能被标成 COMPLETED</td><td>修复 Provider/输入后重新运行</td></tr>
+      <tr><td>Tool 未找到/执行异常</td><td>失败 ToolResult</td><td>结果回传 LLM</td><td>任务继续</td><td>LLM 可改名/参数后重试</td></tr>
+      <tr><td>空 Patch</td><td><code>must_patch</code> 检查</td><td>追加错误消息</td><td>RUNNING</td><td>继续生成 Patch，受 max_steps 限制</td></tr>
+      <tr><td>MCP Server 连接失败</td><td>初始化异常</td><td>清理该 Client 并跳过</td><td>主任务可降级继续</td><td>修复命令/环境后重启任务</td></tr>
+      <tr><td>Docker 启动失败</td><td>DockerException/启动输出</td><td>向上抛至 CLI</td><td>通常没有 AgentExecution 返回</td><td>检查 daemon、镜像、权限</td></tr>
+      <tr><td>用户 Ctrl+C</td><td>KeyboardInterrupt</td><td>CLI 打印中断和 Partial Trajectory 路径，退出 1</td><td>Trajectory 是否 finalize 取决于中断点</td><td>读取已有增量 JSON 后重新运行</td></tr>
+      <tr><td>最大步数</td><td>final_result 固定文本</td><td>正常收尾资源</td><td>ERROR / success=false</td><td>改进 Prompt/工具或提高 max_steps</td></tr>
+    </table>
+    <div class="callout warning"><strong>清理缺口：</strong><code>docker_manager.start()</code> 位于 BaseAgent 主 try/finally 之前；若启动中途失败，BaseAgent 的 Docker stop 和 Tool close 不会执行。<code>Agent.run</code> 的 finally 只兜底 MCP。<span class="evidence"><code>trae_agent/agent/base_agent.py:147-158</code></span>；<span class="evidence"><code>trae_agent/agent/agent.py:90-95</code></span></div>
+    <div class="callout warning"><strong>终态缺口：</strong>BaseAgent 外层 <code>except Exception</code> 只设置 <code>final_result</code>，没有统一写入 <code>agent_state=ERROR</code>。若状态仍为 <code>RUNNING</code>，依赖终态退出的 Simple Console 可能持续等待。<span class="evidence"><code>trae_agent/agent/base_agent.py:183-184</code></span>；<span class="evidence"><code>trae_agent/utils/cli/simple_console.py:73-87</code></span></div>
+  </section>
+
+  <section class="section" id="observability">
+    <h2>12. 可观测性与排障</h2>
+    <table>
+      <tr><th>现象</th><th>优先检查</th><th>可能原因</th><th>修复方向</th></tr>
+      <tr><td>启动即退出</td><td>CLI 输出、配置文件路径</td><td>输入冲突、ConfigError、工作目录错误</td><td>先运行 <code>trae-cli show-config</code>，核对 YAML 与 ENV</td></tr>
+      <tr><td>一直调用工具但不结束</td><td>Trajectory 的 llm_interactions/tool_calls</td><td>模型未发 <code>task_done</code>、空 Patch、工具失败</td><td>检查 Tool Schema、System Prompt、must_patch</td></tr>
+      <tr><td>Step 显示 completed 但有错误</td><td>Trajectory 的 <code>error</code> 字段</td><td><code>_finalize_step</code> 覆盖 StepState</td><td>以 error 与 AgentState 为准；修复状态覆盖逻辑</td></tr>
+      <tr><td>Docker 任务仍占容器</td><td><code>docker ps</code>、<code>--docker-keep</code></td><td>默认 keep=true，或启动期异常绕过 stop</td><td>显式 false 或人工清理自管容器</td></tr>
+      <tr><td>MCP 工具缺失</td><td>Allowlist、Server 配置、初始化输出</td><td>未允许、连接失败或 Transport 未实现</td><td>核对名称、stdio command、env/cwd</td></tr>
+    </table>
+    <p>Trajectory 在任务开始、每次 LLM Interaction、每个 Agent Step 和 finalize 时增量写盘，因此异常前通常仍保留部分证据。<span class="evidence"><code>trae_agent/utils/trajectory_recorder.py:54-75,77-128,130-230</code></span></p>
+  </section>
+
+  <section class="section" id="tests">
+    <h2>13. 测试与验证</h2>
+    <table>
+      <tr><th>契约/不变量</th><th>测试证据</th><th>能证明什么</th><th>缺口</th></tr>
+      <tr><td>Task 字符串与 <code>--file</code> 语义</td><td><code>tests/test_cli.py:18-102,145-177</code></td><td>长字符串、文件读取、互斥和文件名样式字符串</td><td>未覆盖 Docker 参数互斥、KeyboardInterrupt、interactive</td></tr>
+      <tr><td>工作目录失败</td><td><code>tests/test_cli.py:109-138</code></td><td><code>os.chdir</code> 失败会产生用户可见错误</td><td>测试通过 Mock，不证明平台路径兼容</td></tr>
+      <tr><td>任务初始化</td><td><code>tests/agent/test_trae_agent.py:49-65</code></td><td>缺参数抛 AgentError、字段和默认工具被设置</td><td>未断言初始 Message 内容与 Trajectory start</td></tr>
+      <tr><td>Patch 完成条件</td><td><code>tests/agent/test_trae_agent.py:67-98</code></td><td>Git Diff、测试 Patch 过滤、空/非空 Patch 判定</td><td>“valid patch” 非真实 unified diff，未覆盖 base_commit</td></tr>
+      <tr><td>Tool 初始化与只读属性</td><td><code>tests/agent/test_trae_agent.py:100-147</code></td><td>四个工具和公开属性约束</td><td>未覆盖动态 MCP Tool 和 Executor 缓存</td></tr>
+      <tr><td>Legacy Config、Lakeview 与 MCP 解析</td><td><code>tests/utils/test_config.py:14-70,194-232</code></td><td>Base URL、Legacy 默认 Provider、Lakeview 开关和 MCP 配置解析</td><td>未覆盖 YAML <code>Config.create</code>、CLI/ENV/Config 优先级和 interactive 默认覆盖</td></tr>
+    </table>
+    <p><strong>核心证据缺口：</strong>没有直接覆盖 <code>BaseAgent.execute_task</code> 成功/异常/最大步数状态机、Agent 门面 MCP cleanup、Trajectory finalize、Docker 生命周期及 simple/rich interactive 多任务行为的聚焦测试。</p>
+  </section>
+
+  <section class="section" id="extension">
+    <h2>14. 开发与扩展指南</h2>
+    <table>
+      <tr><th>变更目标</th><th>所有者表面</th><th>必要证明</th></tr>
+      <tr><td>新增 Agent 类型</td><td><code>AgentType</code>、<code>Agent.__init__</code>、新 BaseAgent 子类、CLI Choice</td><td>构造、任务初始化、完成协议、清理和配置测试</td></tr>
+      <tr><td>修改 Loop 或状态</td><td><code>BaseAgent.execute_task/_run_llm_step/_finalize_step</code></td><td>成功、Tool 失败、LLM 异常、最大步数、取消测试；Trajectory/Console 一致</td></tr>
+      <tr><td>修改完成条件</td><td><code>TraeAgent.llm_indicates_task_completed/_is_task_completed</code></td><td><code>task_done</code>、空 Patch、测试-only Patch、无 Git 环境</td></tr>
+      <tr><td>新增 Runtime 旁路</td><td><code>Agent</code> 门面负责装配，<code>BaseAgent</code> 只暴露最小 Hook</td><td>旁路失败不污染主 Context/终态，资源总能清理</td></tr>
+      <tr><td>新增 Console</td><td><code>CLIConsole</code>、<code>ConsoleFactory</code></td><td>RUN/INTERACTIVE 生命周期、停止条件、无 Console 模式</td></tr>
+    </table>
+    <div class="callout"><strong>禁止捷径：</strong>不要在 CLI 中复制 Agent Loop；不要在 Tool 内直接修改 AgentState；不要把 Lakeview 摘要写回主 Provider Context；不要仅靠 Prompt 声称实现权限控制。</div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <h2>15. 设计权衡与已知限制</h2>
+    <table>
+      <tr><th>选择</th><th>收益</th><th>成本/失败模式</th><th>重新评估条件</th></tr>
+      <tr><td>同步 Provider Chat 包在 async Loop 中</td><td>Adapter 简单统一</td><td>网络调用会阻塞事件循环，Console/并发任务响应受影响</td><td>需要真正流式 UI 或多任务并发时</td></tr>
+      <tr><td><code>task_done</code> 作为协议</td><td>比文本关键词更明确</td><td>Tool Call 不实际执行；模型不调用就无法完成</td><td>引入结构化终态或 Provider 无 Tool Calling 时</td></tr>
+      <tr><td>Provider 持有历史</td><td>适配原生消息格式</td><td>Runtime 难以统一压缩、审计和迁移历史</td><td>实现通用 Context Engine 时</td></tr>
+      <tr><td>三层重复清理保护</td><td>MCP 泄漏概率降低</td><td>所有权分散，其他资源仍有启动期缺口</td><td>引入统一 AsyncExitStack/生命周期管理器时</td></tr>
+      <tr><td>Trajectory 每次全量重写</td><td>实现直观，异常前可留证据</td><td>长任务 I/O 随历史增长，记录包含敏感内容</td><td>轨迹规模或隐私要求提高时</td></tr>
+    </table>
+    <h3>当前限制</h3>
+    <ul>
+      <li>没有通用 Context Compaction、跨任务持久 Memory、跨 Provider Failover 或多 Agent Scheduler。</li>
+      <li>Runtime 没有统一 Cancel Token、任务级 Timeout、重启恢复或 Checkpoint Resume。</li>
+      <li>Interactive Simple 模式复用同一个 Agent 和 Trajectory 路径；每次 <code>start_recording</code> 会重置该文件中的交互与步骤数组。<span class="evidence"><code>trae_agent/cli.py:516-596</code></span>；<span class="evidence"><code>trae_agent/utils/trajectory_recorder.py:54-75</code></span></li>
+      <li>同一 Interactive Agent 也复用 Provider Client；<code>new_task</code> 没有清空 Provider <code>message_history</code>，因此后续任务可能串接前序历史，当前无测试证明任务隔离。<span class="evidence"><code>trae_agent/agent/trae_agent.py:102-153</code></span>；例如 <span class="evidence"><code>trae_agent/utils/llm_clients/openai_client.py:34-75</code></span></li>
+      <li>Interactive 每次 <code>Agent.run</code> 都会重新初始化 MCP，但 <code>mcp_tools</code> 与 <code>_tools</code> 不清空，可能重复注册动态工具。<span class="evidence"><code>trae_agent/agent/agent.py:65-70</code></span>；<span class="evidence"><code>trae_agent/agent/trae_agent.py:65-70</code></span></li>
+      <li>Simple Interactive 外层创建一次 <code>cli_console.start()</code>，<code>Agent.run</code> 内又会创建一次；当前 Console 生命周期存在双重启动风险。<span class="evidence"><code>trae_agent/cli.py:575-584</code></span>；<span class="evidence"><code>trae_agent/agent/agent.py:86-98</code></span></li>
+      <li>HTTP Server 目录不能证明已形成与 CLI 等价的稳定 Runtime 入口。</li>
+    </ul>
+  </section>
+
+  <section class="section" id="sources">
+    <h2>16. 源码索引与进一步阅读</h2>
+    <div class="source-card"><b>入口与装配</b><code>pyproject.toml:44-45</code>；<code>trae_agent/cli.py:119-411</code>；<code>trae_agent/cli.py:414-611</code></div>
+    <div class="source-card"><b>Agent 门面</b><code>trae_agent/agent/agent.py:10-100</code></div>
+    <div class="source-card"><b>循环内核</b><code>trae_agent/agent/base_agent.py:24-352</code></div>
+    <div class="source-card"><b>Trae 特化</b><code>trae_agent/agent/trae_agent.py:21-258</code></div>
+    <div class="source-card"><b>状态与返回模型</b><code>trae_agent/agent/agent_basics.py:19-100</code></div>
+    <div class="source-card"><b>配置</b><code>trae_agent/utils/config.py:16-181</code>；<code>trae_agent/utils/config.py:194-410</code>；<code>trae_config.yaml.example:1-44</code></div>
+    <div class="source-card"><b>LLM、Tool 与 Docker</b><code>trae_agent/utils/llm_clients/llm_client.py:15-86</code>；<code>trae_agent/utils/llm_clients/llm_basics.py:10-52</code>；<code>trae_agent/tools/base.py:182-244</code>；<code>trae_agent/tools/docker_tool_executor.py:9-163</code>；<code>trae_agent/agent/docker_manager.py:10-242</code></div>
+    <div class="source-card"><b>记录与 UI</b><code>trae_agent/utils/trajectory_recorder.py:20-265</code>；<code>trae_agent/utils/cli/cli_console.py:19-171</code></div>
+    <div class="source-card"><b>测试</b><code>tests/test_cli.py:9-177</code>；<code>tests/agent/test_trae_agent.py:14-147</code>；<code>tests/utils/test_config.py:14-232</code></div>
+    <div class="source-card"><b>次级文档</b><code>README.md:1-234</code>；<code>docs/TRAJECTORY_RECORDING.md</code>；<code>docs/tools.md</code>；<code>docs/roadmap.md</code></div>
+  </section>
+
+  <section class="section" id="glossary">
+    <h2>附录 · 术语对照表</h2>
+    <table>
+      <tr><th>英文术语</th><th>中文</th><th>一句话解释</th></tr>
+      <tr><td>Agent Runtime</td><td>代理运行时</td><td>Agent 的核心执行引擎，管理生命周期与状态</td></tr>
+      <tr><td>Agent Loop</td><td>代理循环</td><td>思考→行动→观察的核心工作循环</td></tr>
+      <tr><td>State Machine</td><td>状态机</td><td>管理 Agent 生命周期各阶段转换的机制</td></tr>
+      <tr><td>Timeout Budget</td><td>超时预算</td><td>分配给任务的最大执行时间</td></tr>
+      <tr><td>Approval</td><td>审批</td><td>危险操作需要人类确认才能执行</td></tr>
+      <tr><td>Allowlist</td><td>允许列表</td><td>白名单机制，仅允许列表中的项目通过</td></tr>
+      <tr><td>Capability Drop</td><td>能力削减</td><td>移除容器的特定 Linux 权限</td></tr>
+      <tr><td>Cancel Token</td><td>取消令牌</td><td>用于协作式取消正在执行的操作的信号</td></tr>
+      <tr><td>Checkpoint Resume</td><td>检查点恢复</td><td>从保存的状态快照恢复执行</td></tr>
+      <tr><td>Scheduler</td><td>调度器</td><td>管理和分配多 Agent 任务的组件</td></tr>
+    </table>
+  </section>
+
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a class="next" href="04-tool-framework.html">04 工具框架 →</a>
+  </nav>
+  <footer class="footer">Trae Agent 架构模块文档 · 03 Agent Runtime · 基于工作区源码快照</footer>
+</main>
+</body>
+</html>

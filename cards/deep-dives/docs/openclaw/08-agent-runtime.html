@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>OpenClaw Agent Runtime 详细设计</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth;scroll-padding-top:68px}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.75;padding:64px 22px 48px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .35rem;border-radius:4px;font-size:.9em;overflow-wrap:anywhere}h1{font-size:2.35rem;line-height:1.2;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:.5rem 0 .65rem}h2{color:var(--blue);font-size:1.5rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem}h3{color:var(--blue2);font-size:1.16rem;margin:1.45rem 0 .55rem}.topbar{position:fixed;top:0;left:0;right:0;height:48px;background:#fffdf8;border-bottom:1px solid var(--border);display:flex;align-items:center;z-index:300;padding:0 18px;gap:12px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:.28rem .72rem;font-size:.84rem}.topbar .crumb{border:0;color:var(--muted);padding:0}.sidebar{position:fixed;left:0;top:48px;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.15rem 1rem 2rem;overflow-y:auto;z-index:200;backdrop-filter:blur(12px)}.sidebar h2{font-size:.92rem;border:0;margin:0 0 .55rem;padding:0}.sidebar a{display:block;color:var(--muted);font-size:.79rem;padding:.24rem .45rem;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}.container{max-width:1160px;margin:auto}.subtitle{color:var(--muted);font-size:1.02rem;margin-bottom:1.2rem}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin:1rem 0 1.5rem}.meta>div{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:.72rem .85rem}.meta dt{color:var(--muted);font-size:.74rem;text-transform:uppercase}.meta dd{font-size:.88rem;margin-top:.15rem}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem 2rem;margin:0 0 1.4rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section p{margin:.58rem 0}.section ul,.section ol{margin:.55rem 0 .55rem 1.35rem}.section li{margin:.28rem 0}.table-wrap{overflow-x:auto;margin:1rem 0}table{width:100%;border-collapse:collapse;font-size:.88rem;min-width:760px}th,td{border:1px solid var(--border);padding:.58rem .7rem;text-align:left;vertical-align:top}th{background:#e8e1d4;color:var(--blue)}tr:nth-child(even){background:rgba(244,241,234,.25)}.lead,.insight,.warning,.boundary,.evidence{border-radius:8px;padding:.92rem 1.08rem;margin:.9rem 0}.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;color:var(--muted);font-size:.82rem;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;-webkit-box-decoration-break:clone;box-decoration-break:clone}.lead{background:rgba(21,128,61,.06);border:1px solid var(--green)}.lead strong{color:var(--green)}.insight{background:rgba(67,56,202,.06);border-left:4px solid var(--blue)}.warning{background:rgba(185,28,28,.06);border-left:4px solid var(--red)}.boundary{background:rgba(109,40,217,.06);border-left:4px solid var(--purple)}.evidence{background:#f4f1ea;border:1px solid var(--border);color:var(--muted);font-size:.83rem}.badge{display:inline-block;border:1px solid;border-radius:99px;padding:.04rem .45rem;margin-right:.32rem;font-size:.72rem;font-weight:700}.fact{color:var(--green)}.optional{color:var(--yellow)}.owner{color:var(--purple)}.gap{color:var(--red)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:.9rem 0}.card{background:#f4f1ea;border:1px solid var(--border);border-radius:9px;padding:1rem}.card strong{display:block;color:var(--blue2);margin-bottom:.25rem}.flow{font-family:"Cascadia Code",Consolas,monospace;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem;white-space:pre-wrap;color:var(--blue2);font-size:.82rem;line-height:1.58;margin:.8rem 0;overflow:auto}.diagram{display:grid;grid-template-columns:repeat(5,minmax(145px,1fr));gap:.65rem;min-width:880px}.diagram-wrap{overflow-x:auto;margin:1rem 0}.node{background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:.75rem;text-align:center;font-size:.8rem;position:relative}.node strong{display:block;color:var(--blue2)}.node:not(:last-child):after{content:"→";position:absolute;right:-.57rem;top:42%;color:var(--muted)}.steps{counter-reset:step;list-style:none!important;margin-left:0!important}.steps>li{counter-increment:step;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:.72rem .85rem .72rem 3.25rem;position:relative;margin:.55rem 0}.steps>li:before{content:counter(step);position:absolute;left:.9rem;top:.72rem;width:1.55rem;height:1.55rem;border-radius:50%;background:var(--blue);color:#f4f1ea;font-weight:800;text-align:center;line-height:1.55rem}.status-good{color:var(--green)}.status-warn{color:var(--yellow)}.source-list{columns:2;column-gap:2rem}.source-list li{break-inside:avoid}.footer{text-align:center;color:var(--muted);font-size:.8rem;margin:2rem 0}.back-top{position:fixed;right:18px;bottom:18px;border:1px solid var(--border);background:var(--surface);border-radius:50%;width:38px;height:38px;text-align:center;line-height:36px}
+@media(max-width:980px){body{padding:62px 13px 32px}.sidebar{display:none}.meta,.grid{grid-template-columns:1fr}.section{padding:1.25rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.source-list{columns:1}h1{font-size:1.82rem}.topbar .crumb{display:none}}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../openclaw_architecture.html">← 返回架构总览</a><span class="crumb">第 8 章 · Agent Runtime · 开发级详细设计</span></div>
+<aside class="sidebar" aria-label="页面目录">
+<h2>Agent Runtime</h2>
+<a href="#position">1. 模块定位</a><a href="#context">2. 系统位置与依赖</a><a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a><a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态模型</a><a href="#interfaces">7. 接口、协议与事件</a><a href="#config">8. 配置与默认行为</a><a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a><a href="#failure">11. 失败、恢复与兼容</a><a href="#operations">12. 可观测性与排障</a><a href="#tests">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a><a href="#tradeoffs">15. 设计权衡与限制</a><a href="#sources">16. 源码索引</a>
+</aside>
+<main class="container">
+<header id="top">
+<h1>OpenClaw Agent Runtime 详细设计</h1>
+<p class="subtitle">追踪 Gateway/CLI 入口、Embedded 外层恢复循环、agent-core 内层 Tool Loop、Harness、Prompt、Stream、Reply、Compaction、Retry 与统一终态。</p>
+<div class="meta">
+<div><dl><dt>源码基线</dt><dd>OpenClaw 2026.7.2 工作副本；当前环境无法调用 Git，SHA 未验证</dd></dl></div>
+<div><dl><dt>证据状态</dt><dd><span class="status-good">已验证</span>：源码、内部依赖、测试与官方文档；外部 Harness Live 受限</dd></dl></div>
+<div><dl><dt>主要所有者</dt><dd><code>src/agents/</code>、<code>packages/agent-core/</code></dd></dl></div>
+<div><dl><dt>目标读者</dt><dd>Runtime、Harness、Tool、Gateway、Context 与 Channel 开发者</dd></dl></div>
+<div><dl><dt>最近验证</dt><dd>2026-07-27</dd></dl></div>
+<div><dl><dt>事实标签</dt><dd><span class="badge fact">当前事实</span><span class="badge optional">可选 Harness</span><span class="badge owner">边界事实</span></dd></dl></div>
+</div>
+<div class="lead"><strong>一句话目标：</strong>Agent Runtime 把已准入、已路由的请求准备为可执行 turn：外层 Embedded loop 负责 Harness、认证、上下文恢复、重试、Compaction、终态和资源收束；内层 agent-core loop 负责模型流、Tool batch、steering/follow-up 与事件顺序；Gateway 和 Channel 只承载入口与最终投递。</div>
+</header>
+
+<section class="section" id="position">
+<h2>1. 模块定位</h2>
+<p>“Agent Runtime”不是单一循环，而是三层所有权：Gateway/CLI 入口准备与接纳；OpenClaw Embedded 外层恢复循环；<code>@openclaw/agent-core</code> 内层模型/工具循环。Harness 决定具体执行 Runtime，Channel delivery 仍由 OpenClaw 所有。<span class="evidence">证据：<code>src/gateway/server-methods/agent-run-handler.ts:29-101</code>、<code>src/agents/embedded-agent-runner/run-loop.ts:56-170</code>、<code>packages/agent-core/src/agent-loop.ts:267-450</code>。</span></p>
+<div class="table-wrap"><table><thead><tr><th>层</th><th>负责</th><th>明确不负责</th></tr></thead><tbody>
+<tr><td>Gateway / CLI</td><td>参数校验、scope、session/route、idempotency、admission、异步执行、等待/取消。</td><td>不实现 provider tool loop。</td></tr>
+<tr><td>Agent 命令</td><td>session work admission、model/harness/auth plan、delivery context、restart recovery claim。</td><td>不直接实现 transport stream parser。</td></tr>
+<tr><td>嵌入式外层循环</td><td>prepared runtime、Harness、lanes、locks、Prompt assembly、fallback、Compaction、retry、terminal shaping。</td><td>不拥有 Channel SDK 或外部平台发送。</td></tr>
+<tr><td>agent-core 内层循环</td><td>LLM request、assistant stream、Tool validation/execution、steer/follow-up、Agent 事件。</td><td>provider-agnostic；runtime stream function由 host 注入。</td></tr>
+<tr><td>Harness</td><td>一次 prepared turn 的具体执行和 native runtime 契约。</td><td>不自动获得 OpenClaw 所有 hook/tool/context 等价性。</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>排除：</strong>第 7 章解释 Session key/SQLite；第 9 章解释 provider/model/auth fallback 候选；第 10 章解释 Context Engineering；第 12/13 章解释 Tool 能力和审批/沙箱。本文只说明这些输入如何进入并结束一次运行。</div>
+</section>
+
+<section class="section" id="context">
+<h2>2. 系统位置与依赖</h2>
+<div class="diagram-wrap"><div class="diagram"><div class="node"><strong>Gateway / CLI</strong>agent RPC<br>openclaw agent</div><div class="node"><strong>Agent 命令</strong>session/model<br>delivery/admission</div><div class="node"><strong>嵌入式外层循环</strong>Harness<br>recovery/retry</div><div class="node"><strong>agent-core 内层循环</strong>stream ↔ tools<br>steer/follow-up</div><div class="node"><strong>Projection</strong>Transcript/events<br>reply + agent.wait</div></div></div>
+<div class="table-wrap"><table><thead><tr><th>证据地图项</th><th>已核验表面</th><th>结论</th></tr></thead><tbody>
+<tr><td>入口</td><td>Gateway <code>agent</code>/<code>agent.wait</code>；CLI Gateway-first 与 <code>--local</code></td><td>默认 CLI 经 Gateway；local 显式进入 agentCommand。</td></tr>
+<tr><td>所有者</td><td><code>src/agents/</code>、<code>packages/agent-core/</code></td><td>host orchestration 与 provider-agnostic loop 分离。</td></tr>
+<tr><td>调用方</td><td>Gateway run handler、Channel reply flow、CLI、Cron/Task</td><td>不同 ingress 共享 agentCommand/embedded owner。</td></tr>
+<tr><td>被调用方</td><td>Harness、Context Engine、Session accessor、LLM runtime、Tools</td><td>边界都通过准备好的 typed contract。</td></tr>
+<tr><td>兄弟实现</td><td>OpenClaw embedded、plugin Harness、CLI backend、ACP</td><td>终态汇聚，但 loop/thread/compaction owner 可不同。</td></tr>
+<tr><td>直接依赖</td><td><code>@openclaw/agent-core</code> → workspace <code>@openclaw/ai</code>/<code>@openclaw/llm-core</code></td><td>已直接检查 EventStream 与 LLM runtime 源码，无外部 API 假设。</td></tr>
+</tbody></table></div>
+<p class="evidence">依赖声明：<code>packages/agent-core/package.json:65-70</code>；stream contract：<code>packages/llm-core/src/utils/event-stream.ts:8-112</code>；runtime dispatch：<code>packages/ai/src/stream.ts:14-57</code>。</p>
+</section>
+
+<section class="section" id="concepts">
+<h2>3. 核心概念与术语</h2>
+<div class="grid">
+<div class="card"><strong>Run</strong>一个 runId 下从接纳到统一 terminal outcome 的执行；可含多个 recovery/fallback attempts。</div>
+<div class="card"><strong>Attempt</strong>一次具体 Harness/provider/model/auth 组合的执行；可能因重试或 Compaction 被下一次替代。</div>
+<div class="card"><strong>Harness</strong>实现 Agent Runtime 的插件/内建契约。内建 <code>openclaw</code> Harness 调用 <code>runEmbeddedAttempt</code>。</div>
+<div class="card"><strong>外层恢复循环</strong>跨 Attempt 保存 replay safety、Compaction 计数、usage、profile/failover 和终态状态。</div>
+<div class="card"><strong>内层工具循环</strong>一次 Agent.prompt/continue 内不断执行 model→tool batch→toolResult→model，直到无 tool/queue。</div>
+<div class="card"><strong>流桥</strong>把 agent-core/Harness 事件投影为 assistant/tool/thinking/lifecycle、block reply 和最终 payload。</div>
+<div class="card"><strong>回复整形</strong>去标签、去 reasoning、处理 directive/media、抑制 NO_REPLY 和 message-tool 重复。</div>
+<div class="card"><strong>终端结果</strong>completed/hard_timeout/timed_out/cancelled/aborted/blocked/abandoned/failed 的统一粘性结果。</div>
+</div>
+</section>
+
+<section class="section" id="components">
+<h2>4. 架构组成</h2>
+<div class="table-wrap"><table><thead><tr><th>组件</th><th>职责</th><th>隔离/状态</th><th>决定性源码</th></tr></thead><tbody>
+<tr><td>Gateway agent 处理器</td><td>preflight→routing→reset→session persist→delivery→admission→start execution。</td><td>失败点在副作用前返回；dedupe 跟随 runId。</td><td><code>src/gateway/server-methods/agent-run-handler.ts:29-535</code></td></tr>
+<tr><td>CLI 分发器</td><td>Gateway-first，显式 <code>--local</code> 才 lazy-load agentCommand；signal 尝试取消 accepted run。</td><td>连接丢失视为执行不确定，警告先核验。</td><td><code>src/commands/agent-via-gateway.ts:644-948</code></td></tr>
+<tr><td>agentCommand</td><td>session work owner、runtime/model/harness 计划、执行和 delivery finalization。</td><td>同 session CAS；restart recovery claim 在 finally 清理。</td><td><code>src/agents/agent-command.ts:61-516</code></td></tr>
+<tr><td>运行编排器</td><td>session/global lane、prepared runtime generation、plugin/hook、Harness dispatch。</td><td>prepared lease 与 run lifecycle generation 绑定。</td><td><code>src/agents/embedded-agent-runner/run-orchestrator.ts:71-359</code></td></tr>
+<tr><td>外层循环</td><td>bounded attempts、normalization、overflow/timeout/auth/retry、terminal shaping。</td><td>跨 attempt 累积 replay/usage/recovery state。</td><td><code>src/agents/embedded-agent-runner/run-loop.ts:56-714</code></td></tr>
+<tr><td>Attempt 组装</td><td>skills/bootstrap/tools/system prompt/session lock/history/stream/timeout。</td><td>所有 early-exit 资源在 finally 回收。</td><td><code>src/agents/embedded-agent-runner/run/attempt.ts:47-502</code></td></tr>
+<tr><td>AgentSession</td><td>Prompt、extension hooks、retry、Compaction、queue 和 Transcript manager。</td><td>一次 prompt 可触发多次 agent.continue。</td><td><code>src/agents/sessions/agent-session-prompting.ts:25-82</code>、<code>src/agents/sessions/agent-session-prompting.ts:101-243</code></td></tr>
+<tr><td>agent-core</td><td>provider-agnostic stream 与 tool batch loop。</td><td>只依赖注入的 streamSimple；不加载 OpenClaw host。</td><td><code>packages/agent-core/src/agent-loop.ts:267-450</code>、<code>packages/agent-core/src/agent-loop.ts:456-611</code></td></tr>
+<tr><td>Stream/reply 桥</td><td>事件投影、文本清洗、chunk、media、duplicate suppression、Compaction retry wait。</td><td>Attempt 级 mutable presentation state。</td><td><code>src/agents/embedded-agent-subscribe.ts:165-249</code>、<code>src/agents/embedded-agent-subscribe.ts:1274-1387</code></td></tr>
+<tr><td>终态/等待</td><td>统一 outcome merge；缓存 lifecycle/dedupe snapshots；RPC wait。</td><td>hard timeout/cancel 粘性；error 有 15s retry grace。</td><td><code>src/agents/agent-run-terminal-outcome.ts:106-237</code>、<code>src/gateway/server-methods/agent-job.ts:180-317</code></td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="flows">
+<h2>5. 完整运行流程</h2>
+<h3>5.1 正常成功路径</h3>
+<div class="flow">CLI / Gateway agent RPC
+  → 校验 + 授权 + 去重
+  → 解析 route/session/reset/delivery
+  → 获取 Gateway/session work 准入
+  → 返回已受理 / 异步运行
+  → agentCommand 准备 model、Harness、auth、skills 快照
+  → session lane → 全局 lane
+  → 获取预备运行时 + Transcript 锁
+  → 组装 bootstrap/tools/system prompt/history
+  → Harness.runAttempt
+     → AgentSession.prompt
+        → agent-core 流式模型
+        → assistant toolUse
+        → 校验/策略 → 执行工具批次
+        → 追加 toolResults → 下次模型调用
+        → 无 tools/queues → agent_end
+  → 流桥整形最终 payload
+  → 持久化 Transcript/session/delivery
+  → 生命周期终态事件
+  → agent.wait 解析 canonical 快照</div>
+<ol class="steps">
+<li>Gateway 在执行前完成 preflight、route、reset、session persist、delivery 与 work admission；准备失败不启动 run。<span class="evidence"><code>src/gateway/server-methods/agent-run-handler.ts:29-101</code>、<code>src/gateway/server-methods/agent-run-handler.ts:207-464</code></span></li>
+<li>Agent 命令 重新验证 session identity/archived state，准备 delivery 与 restart claim。<span class="evidence"><code>src/agents/agent-command.ts:170-338</code></span></li>
+<li>Orchestrator 先串行 session，再进入 global concurrency；等待期间重新检查 lifecycle generation、Harness 和 placement。<span class="evidence"><code>src/agents/embedded-agent-runner/run-orchestrator.ts:124-181</code>、<code>src/agents/embedded-agent-runner/run/lane-controller.ts:98-181</code></span></li>
+<li>Attempt 依次组装 skills、core/plugin/MCP tools、bootstrap、system prompt、Transcript lock、session/history/stream/timeout。<span class="evidence"><code>src/agents/embedded-agent-runner/run/attempt.ts:147-319</code>、<code>src/agents/embedded-agent-runner/run/attempt.ts:327-446</code></span></li>
+<li>agent-core 每轮转换 context、调用注入的 stream function，消费 start/delta/done/error，再执行 Tool batch。<span class="evidence"><code>packages/agent-core/src/agent-loop.ts:456-557</code>、<code>packages/agent-core/src/agent-loop.ts:563-611</code></span></li>
+<li>Bridge 将事件投影并塑形；最终 lifecycle 和 dedupe snapshot 汇聚到 agent.wait。<span class="evidence"><code>src/agents/embedded-agent-subscribe.ts:276-398</code>、<code>src/gateway/server-methods/agent-job.ts:278-317</code></span></li>
+</ol>
+
+<h3>5.2 Inner Tool Loop 与并行/串行语义</h3>
+<div class="flow">assistant 消息 stopReason=toolUse
+  → 按来源顺序收集 toolCall 块
+  → 解析延迟 tools + 准备参数 + schema 校验 + beforeToolCall
+  → 若 config 为 sequential 或任一解析出的 tool 的 executionMode=sequential：
+       prepare → execute → afterToolCall → end → result，逐个执行
+    else:
+       准备阶段串行执行
+       被允许的调用并发执行
+       tool_execution_end 遵循完成顺序
+       toolResult 消息按 assistant 来源顺序发出
+  → 追加已排序的 toolResults
+  → 下次模型调用</div>
+<p>一个 batch 中只要存在一个强制 sequential tool，整个 batch 都串行。Parallel 不是“所有 preflight 也并行”：工具解析、参数准备、校验和 policy 顺序执行，只有通过准备的执行函数并发；abort 后尚未启动的 prepared tool 不会启动。<span class="evidence">证据：<code>packages/agent-core/src/agent-loop.ts:563-611</code>、<code>packages/agent-core/src/agent-loop.ts:636-800</code>、<code>packages/agent-core/src/agent-loop.ts:1008-1067</code>；契约：<code>packages/agent-core/src/types.ts:27-35</code>、<code>packages/agent-core/src/types.ts:255-264</code>、<code>packages/agent-core/src/types.ts:458-488</code>。</span></p>
+
+<h3>5.3 拒绝与提前结束</h3>
+<div class="table-wrap"><table><thead><tr><th>拒绝点</th><th>条件</th><th>结果</th><th>副作用边界</th></tr></thead><tbody>
+<tr><td>Gateway schema/scope</td><td>非法 params、权限不足、目标不存在</td><td>结构化 RPC error</td><td>run 未接纳</td></tr>
+<tr><td>Session 准入</td><td>session 重置/重绑定/归档</td><td>要求重试或明确拒绝</td><td>模型和 Tool 未启动</td></tr>
+<tr><td>Harness 准入</td><td>显式 runtime 不可用/不支持</td><td>fail-closed 选择错误</td><td>不静默回 OpenClaw（仅 auto 可 fallback）</td></tr>
+<tr><td>before_agent_reply</td><td>plugin 已处理</td><td>合成 reply 或 silent 结果</td><td>跳过模型调用</td></tr>
+<tr><td>Tool 预检</td><td>工具不存在、参数非法、beforeToolCall block</td><td>错误 toolResult</td><td>工具 execute 未运行</td></tr>
+<tr><td>Hook before_agent_run</td><td>hook 阻断/抛出</td><td>blocked 终态结果</td><td>不进入正常模型循环</td></tr>
+<tr><td>Abort</td><td>signal、/stop、yield、restart</td><td>中断事件/终态；清理后释放 lane/lock</td><td>已发生 Tool 副作用不回滚</td></tr>
+</tbody></table></div>
+
+<h3>5.4 Compaction、Retry 与恢复</h3>
+<div class="flow">attempt 终态/异常
+  → 归一化 attempt + 重放安全
+  → 恢复决策
+     ├─ context 溢出
+     │   ├─ 压缩活跃 Transcript（最多 3 次外层 attempt）
+     │   ├─ 可选 tool-result 截断
+     │   └─ 重建当前/已压缩 prompt → 重试
+     ├─ 可压缩压力下运行超时
+     │   └─ 有界超时压缩恢复 → 重试
+     ├─ auth/限流/idle 超时
+     │   └─ 有界 profile/同模型重试或模型回退
+     ├─ 重放安全的 Codex app-server 失败
+     │   └─ 至多一次恢复重试
+     └─ 不可恢复 / 副作用不安全
+         → 暴露 blocked/failed/timeout 终态
+  → 每次重试都重新进入完整的预备 Attempt 循环</div>
+<p>外层循环 的 attempt 上限由 profile candidate 数计算；context recovery state 跨 attempt 保存 overflow/timeout Compaction 次数和 tool-result truncation 是否已尝试。Overflow 最多三轮；耗尽后返回 blocked 指引，不偷偷换 sessionId。<span class="evidence">证据：<code>src/agents/embedded-agent-runner/run-loop.ts:170-187</code>、<code>src/agents/embedded-agent-runner/run-loop.ts:274-371</code>；<code>src/agents/embedded-agent-runner/run/context-recovery-state.ts:3-11</code>；<code>src/agents/embedded-agent-runner/run/overflow-context-recovery.ts:41-59</code>、<code>src/agents/embedded-agent-runner/run/overflow-context-recovery.ts:176-207</code>、<code>src/agents/embedded-agent-runner/run/overflow-context-recovery.ts:437-456</code>。</span></p>
+<p>Compaction retry 会清空 attempt presentation buffer/tool summary，保留已提交副作用 truth；否则重试可能重复投递或把 mutating failure 当成功。<span class="evidence">证据：<code>src/agents/embedded-agent-subscribe.ts:1274-1325</code>。</span></p>
+
+<h3>5.5 统一终态与 agent.wait</h3>
+<div class="flow">生命周期/去重观测
+  → 构建终端结果
+     hard timeout &gt; blocked &gt; aborted &gt; cancelled &gt; abandoned
+     &gt; wait timeout &gt; failed &gt; completed
+  → 合并粘滞结果
+     cancelled 始终粘滞
+     hard_timeout 粘滞，除非更晚的 completion 证明 endedAt ≤ timeout endedAt
+  → 按 runId/source 缓存
+  → agent.wait:
+       终态快照 → 返回
+       截止前无快照 → 仅等待超时（底层运行继续）</div>
+<p><code>agent.wait</code> 默认 30 秒，只等待终态，不取消 run。找不到 snapshot 时根据 Gateway 活动注册给出 <code>gateway_draining</code> 或 <code>queue</code> timeoutPhase；这与 provider hard timeout 不同。<span class="evidence">证据：<code>src/gateway/server-methods/agent-wait.ts:10-62</code>。</span></p>
+</section>
+
+<section class="section" id="state">
+<h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table><thead><tr><th>状态</th><th>Owner</th><th>生命周期</th><th>持久性</th></tr></thead><tbody>
+<tr><td>runId / lifecycle generation</td><td>Gateway/agent 事件</td><td>接纳到 terminal；restart 可旋转 generation</td><td>主要进程内，restart recovery 另有 Session claim</td></tr>
+<tr><td>AgentRunContext</td><td>Agent 事件运行时</td><td>排队后重新 claim；run finally 清除</td><td>进程内</td></tr>
+<tr><td>预备模型运行时租约</td><td>Agent 预备运行时</td><td>进入 global lane 后 acquire，finally release</td><td>generation 快照</td></tr>
+<tr><td>Attempt 执行状态</td><td>嵌入式 attempt</td><td>一次 Attempt；记录 abort/timeout/compaction/tool 状态</td><td>内存</td></tr>
+<tr><td>外层恢复状态</td><td>嵌入式运行循环</td><td>跨 attempts，直到 run terminal</td><td>内存；Transcript/Session 保存必要结果</td></tr>
+<tr><td>Agent 状态</td><td>agent-core Agent</td><td>messages/tools/model/streaming/pending tools</td><td>由 SessionManager 事件持久化 Transcript</td></tr>
+<tr><td>Transcript</td><td>Session 访问器/SessionManager</td><td>每条 message/tool/compaction append</td><td>per-agent SQLite</td></tr>
+<tr><td>流桥状态</td><td>subscription</td><td>Attempt 内 text/tool/media/reasoning/reply buffer</td><td>内存；最终投影到事件/Transcript</td></tr>
+<tr><td>Agent job 快照</td><td>Gateway agent-job</td><td>10 分钟 TTL，最多 5000 run；有 waiter 时不优先淘汰</td><td>进程内</td></tr>
+<tr><td>终端结果</td><td>共享归一化器</td><td>多来源 observation merge</td><td>投影到 wait/dedupe/lifecycle</td></tr>
+</tbody></table></div>
+<p class="evidence">Attempt state：<code>src/agents/embedded-agent-runner/run/attempt.ts:69-90</code>；Agent 状态：<code>packages/agent-core/src/agent.ts:60-99</code>、<code>packages/agent-core/src/agent.ts:195-251</code>；job cache：<code>src/gateway/server-methods/agent-job.ts:17-93</code>。</p>
+</section>
+
+<section class="section" id="interfaces">
+<h2>7. 接口、协议与事件</h2>
+<div class="table-wrap"><table><thead><tr><th>接口/事件</th><th>契约</th><th>顺序/错误语义</th></tr></thead><tbody>
+<tr><td>Gateway <code>agent</code></td><td>请求经 schema/scope/session/admission；idempotencyKey 成为 run identity。</td><td>可先 accepted，最终 result/event 异步产生。</td></tr>
+<tr><td><code>agent.wait</code></td><td>runId + optional timeoutMs；返回 ok/error/timeout 及 attribution。</td><td>deadline timeout 不终止底层 run。</td></tr>
+<tr><td>Agent Harness</td><td><code>supports</code>、<code>runAttempt</code>、可选 <code>finalizeSettledTurn</code>。</td><td>显式 Harness 不可用 fail-closed。</td></tr>
+<tr><td>agent-core StreamFn</td><td>不得以 throw/reject 表达正常 request/model failure；返回 event stream，最终 AssistantMessage stopReason=error/aborted。</td><td>done/error 是 stream terminal。</td></tr>
+<tr><td>Agent 事件</td><td>agent_start/end、turn_start/end、message_start/update/end、tool_execution_start/update/end。</td><td>agent_end 是最后事件，但 awaited listener 结算后才 idle。</td></tr>
+<tr><td>Gateway 流</td><td>assistant、thinking、tool、lifecycle、usage 等。</td><td>Chat final 依赖 lifecycle terminal，不依赖任意文本 delta。</td></tr>
+<tr><td>Tool hooks</td><td>beforeToolCall 可 block；afterToolCall 按字段替换 content/details/isError/terminate。</td><td>Tool error转 error result；不使整个 loop 直接 throw。</td></tr>
+</tbody></table></div>
+<p class="evidence">Harness：<code>src/agents/harness/builtin-openclaw.ts:67-81</code>；StreamFn：<code>packages/agent-core/src/types.ts:16-25</code>；Agent 事件：<code>packages/agent-core/src/types.ts:501-547</code>；idle：<code>packages/agent-core/src/agent.ts:276-285</code>、<code>packages/agent-core/src/agent.ts:361-368</code>。</p>
+</section>
+
+<section class="section" id="config">
+<h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table><thead><tr><th>配置/选择</th><th>当前默认</th><th>优先级/语义</th><th>失败行为</th><th>来源</th></tr></thead><tbody>
+<tr><td>Agent 运行时</td><td><code>auto</code> 未命中回 OpenClaw；Codex harness 已注册且 runtime 为 <code>auto</code> 时可 claim <code>openai</code> provider</td><td>exact model → wildcard model → provider → auto claim → compatibility OpenClaw；显式 <code>openclaw</code> 不进入 plugin candidate</td><td>显式 id 不存在/不支持时拒绝，不静默降级</td><td><code>src/agents/harness/selection.ts:298-317</code>、<code>src/agents/harness/selection.ts:402-456</code>、<code>extensions/codex/harness.ts:15-17</code></td></tr>
+<tr><td>Tool 执行</td><td>parallel</td><td>Agent default；per-tool sequential 可把整个 batch 强制串行</td><td>preflight error 成为 toolResult</td><td><code>packages/agent-core/src/agent.ts:250-273</code>、<code>packages/agent-core/src/agent-loop.ts:563-611</code></td></tr>
+<tr><td>steering/follow-up 排空</td><td>一次一个</td><td>可改 all；steering 在 turn 后，follow-up 在本应结束后</td><td>活动 prompt 再 prompt 直接拒绝，须 steer/followUp</td><td><code>packages/agent-core/src/agent.ts:158-193</code>、<code>packages/agent-core/src/agent.ts:253-273</code></td></tr>
+<tr><td>运行时超时</td><td>Embedded/Gateway runtime 默认 48 小时；CLI 在 config 未设置时使用 600 秒入口 fallback</td><td>run-specific → agent config → runtime default；0 表示无限 run budget sentinel，LLM idle watchdog 仍生效</td><td>Abort 并统一 timeout attribution</td><td><code>src/agents/timeout.ts:12-28</code>、<code>src/commands/agent-via-gateway.ts:255-273</code></td></tr>
+<tr><td><code>agent.wait</code></td><td>30s</td><td>RPC timeoutMs 覆盖，floor 且不小于 0</td><td>只返回 timeout，不 abort</td><td><code>src/gateway/server-methods/agent-wait.ts:26-47</code></td></tr>
+<tr><td>溢出 Compaction 次数</td><td>固定 3</td><td>outer recovery state 跨 attempt 计数</td><td>耗尽 surface blocked/context_overflow</td><td><code>src/agents/embedded-agent-runner/run/overflow-context-recovery.ts:41-59</code></td></tr>
+<tr><td>终态重试宽限</td><td>15s</td><td>生命周期 error/timeout 等待可能复用同 runId 的 retry/fallback</td><td>grace 后提交 terminal snapshot</td><td><code>src/agents/agent-run-terminal-outcome.ts:63-66</code>、<code>src/gateway/server-methods/agent-job.ts:180-220</code></td></tr>
+</tbody></table></div>
+<p class="warning"><strong>默认值分层：</strong><code>src/agents/timeout.ts</code> 拥有 Embedded/Gateway 运行时默认值 172800 秒；<code>agent-via-gateway</code> 的 600 秒只是在 CLI 未显式传参且 config 未设置时生成请求参数的入口 fallback。排障时必须区分 CLI 请求预算、有效 agent config 与最终 runtime params。</p>
+</section>
+
+<section class="section" id="concurrency">
+<h2>9. 并发、性能与资源</h2>
+<div class="table-wrap"><table><thead><tr><th>机制</th><th>语义</th><th>资源/背压</th></tr></thead><tbody>
+<tr><td>Session lane</td><td>同 sessionKey 串行，防 Transcript/Tool 竞态。</td><td>foreground 优先；排队期间可报告 lane wait。</td></tr>
+<tr><td>全局 lane</td><td>限制整个 Agent workload；Cron 内层用 cron-nested。</td><td>Gateway reload 可调整 main/subagent/cron concurrency。</td></tr>
+<tr><td>Session work 准入</td><td>reset/archive/restart 与活动 run 协调；开始前重验 identity。</td><td>被 reset interrupt 时 abort active owner。</td></tr>
+<tr><td>Transcript 写锁</td><td>跨进程保护 SessionManager/SQLite transcript target。</td><td>lock timeout/stale/hold watchdog 有界。</td></tr>
+<tr><td>Tool 并行度</td><td>preflight 串行，execute 并行，result 保持模型源顺序。</td><td>Promise.all 等全部已启动工具；abort 阻止未启动工具。</td></tr>
+<tr><td>Provider 流</td><td>AsyncIterable 事件队列 + 最终结果 promise。</td><td>host 另有 idle/run timeout；EventStream 本身是内存队列。</td></tr>
+<tr><td>预备运行时</td><td>一个 run 复用同 generation 的 model/auth/catalog facts。</td><td>lease finally release；避免 hot path 重新全量 discovery。</td></tr>
+<tr><td>Cleanup</td><td>Context Engine、MCP/LSP、subscription、lock、timers 分阶段 finally。</td><td>单步 cleanup 有界/告警，不应替换已完成结果。</td></tr>
+</tbody></table></div>
+<p class="evidence">Lane：<code>src/agents/embedded-agent-runner/run/lane-controller.ts:25-191</code>；Tool：<code>packages/agent-core/src/agent-loop.ts:714-800</code>；EventStream：<code>packages/llm-core/src/utils/event-stream.ts:8-87</code>；cleanup：<code>src/agents/embedded-agent-runner/run-loop.ts:666-713</code>。</p>
+</section>
+
+<section class="section" id="security">
+<h2>10. 安全与信任边界</h2>
+<ol>
+<li><strong>Ingress 权限在 Runtime 前。</strong>Gateway schema、Role/Scope、session owner、model override 权限和 idempotency 在模型调用前完成。<span class="evidence"><code>src/gateway/server-methods/agent-run-handler.ts:29-101</code></span></li>
+<li><strong>Harness 选择 fail-closed。</strong>显式 Runtime 不可用时不回落到能力不同的 OpenClaw；只有 auto 未 claim 才 compatibility fallback。<span class="evidence"><code>docs/concepts/agent-runtimes.md:129-155</code></span></li>
+<li><strong>Tool 先校验再执行。</strong>工具解析、prepareArguments、Schema validation、beforeToolCall 均在副作用前；未知/非法/blocked 生成 error result。<span class="evidence"><code>packages/agent-core/src/agent-loop.ts:855-1005</code></span></li>
+<li><strong>并行 batch 保持 abort 边界。</strong>如果后续 preflight 触发 abort，之前已 prepared 但未启动的 side-effectful tool 不启动。<span class="evidence"><code>packages/agent-core/src/agent-loop.ts:1008-1022</code></span></li>
+<li><strong>跨 Runtime fallback 看副作用。</strong>command-rpc 已提交媒体等副作用后禁止 fallback；replay state 缺证据时按潜在副作用处理。<span class="evidence"><code>src/agents/embedded-agent-runner/run-entry.ts:189-276</code>、<code>src/agents/embedded-agent-runner/replay-state.ts:1-50</code></span></li>
+<li><strong>Completion handoff 不继承 requester tools。</strong>冻结子 Agent 输出时禁用工具，防止把文本当作新特权指令。<span class="evidence"><code>src/agents/command/attempt-execution.ts:517-525</code></span></li>
+<li><strong>Stream/Reply 脱敏与分层。</strong>reasoning、final tags、directives、NO_REPLY、message-tool-only 在 bridge/delivery 层过滤；审计不复制 prompt/tool args/result。<span class="evidence"><code>src/agents/embedded-agent-subscribe.ts:808-1021</code>、<code>docs/concepts/agent-loop.md:118-121</code></span></li>
+</ol>
+</section>
+
+<section class="section" id="failure">
+<h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table><thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>重试/恢复</th><th>终态</th></tr></thead><tbody>
+<tr><td>Tool 不存在/参数非法/policy block</td><td>preflight</td><td>不执行，产生 错误 toolResult</td><td>模型可在下一轮修正</td><td>通常 run 继续</td></tr>
+<tr><td>短窗 rate limit / idle timeout</td><td>assistant 失败分类器</td><td>记录 attempt</td><td>有界同模型 retry，再 profile/model fallback</td><td>成功或 failed</td></tr>
+<tr><td>Context 溢出</td><td>prompt 错误/assistant 停止 + token 预算</td><td>Compaction 或 tool result truncation</td><td>最多 3 次 outer overflow recovery</td><td>blocked context_overflow/compaction_failure</td></tr>
+<tr><td>Compaction 自身失败</td><td>压缩结果/抛出</td><td>不声称成功；保留 pre-compaction state</td><td>按剩余恢复策略/上限</td><td>blocked/failed</td></tr>
+<tr><td>运行时超时</td><td>运行看门狗 + 阶段归因</td><td>abort attempt，等待有界清理</td><td>仅在安全且可 compact/retry 时恢复</td><td>hard_timeout</td></tr>
+<tr><td>用户/stop/restart cancel</td><td>AbortSignal stopReason</td><td>中止 tool/model/session，flush/清理</td><td>不当普通 provider error fallback</td><td>cancelled 或 aborted</td></tr>
+<tr><td>agent.wait 截止</td><td>等待器 timer</td><td>返回 timeout snapshot</td><td>客户端可再次 wait</td><td>底层 run 仍可能 pending</td></tr>
+<tr><td>Lifecycle error 后立即 retry</td><td>同 runId 15s grace</td><td>先挂 pending terminal</td><td>后续 end/timeout merge</td><td>避免过早 final</td></tr>
+<tr><td>Gateway/CLI 连接丢失</td><td>typed 传输关闭/超时</td><td>状态不确定</td><td>先查 Gateway/transcript，避免盲重发</td><td>与 run terminal 独立</td></tr>
+<tr><td>Cleanup 失败</td><td>警告/诊断</td><td>继续其他 cleanup</td><td>下次 owner retirement/运维处理</td><td>不替换已完成业务结果</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="operations">
+<h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>先检查</th><th>可能原因</th><th>修复方向</th></tr></thead><tbody>
+<tr><td>RPC accepted 但没有 final</td><td>runId 的 lifecycle、agent.wait、session lane</td><td>仍排队、provider/tool 长运行、wait-only timeout</td><td>再次 wait；不要把 wait timeout 当 run timeout</td></tr>
+<tr><td>模型输出有 delta 但最终失败</td><td>终态 stopReason/timeoutPhase/providerStarted</td><td>partial 后 hard timeout/abort/compaction failure</td><td>以统一 terminal 为准，不以最后 delta 判成功</td></tr>
+<tr><td>Tool 看似“乱序”</td><td>start/end 与 toolResult 两种顺序</td><td>parallel end 按完成序，result 按模型源序</td><td>消费正确事件语义，不自行重排 Transcript</td></tr>
+<tr><td>同 Session 第二条消息不运行</td><td>session lane 快照、活跃运行、锁所有者</td><td>前一 run 未 settle/cleanup 或真实 lock contention</td><td>观察 progress/timeout；不要 reset lane 除非 recovery owner 已 abort</td></tr>
+<tr><td>反复 Compaction/retry</td><td>overflow diag attempt、token budget、oversized tool result、replayInvalid</td><td>Context 仍超限、summary 无效、Tool 输出过大</td><td>检查 3 次 cap 和 blocked 指引；必要时 /reset/更大模型</td></tr>
+<tr><td>明明取消却显示 timeout</td><td>stopReason + timeoutPhase + providerStarted + endedAt</td><td>多来源 snapshot merge/旧客户端错误投影</td><td>使用 shared terminal normalizer，不自行推导优先级</td></tr>
+<tr><td>Runtime 与模型标签不一致</td><td>provider/model 与 agentRuntime policy</td><td>Harness 是执行层，不是 provider</td><td>按 exact/wildcard/provider/auto 顺序排查</td></tr>
+<tr><td>最终回复重复</td><td>message tool 回执、block 回复、assistant 文本</td><td>bridge 未识别 committed send 或重试 presentation state</td><td>保留 delivery evidence；勿只按文本 pending 推断</td></tr>
+</tbody></table></div>
+<p>关键事件面：<code>lifecycle</code> 判断 run；<code>assistant</code>/<code>thinking</code> 看流；<code>tool</code> 看执行；lane wait/stage timing 看排队和启动；overflow/compaction diag 看恢复。官方 <code>docs/concepts/agent-loop.md:112-146</code> 给出面向运维的事件和 stuck 分类。</p>
+</section>
+
+<section class="section" id="tests">
+<h2>13. 测试与验证</h2>
+<div class="table-wrap"><table><thead><tr><th>契约/不变量</th><th>测试</th><th>类型</th><th>证明</th><th>缺口</th></tr></thead><tbody>
+<tr><td>Inner loop event/tool 顺序</td><td><code>packages/agent-core/src/agent-loop.test.ts</code></td><td>单元</td><td>stream、steer/follow-up、parallel/sequential、abort</td><td>真实 provider SDK</td></tr>
+<tr><td>Agent 空闲/队列状态</td><td><code>packages/agent-core/src/agent-loop.test.ts</code></td><td>单元</td><td>listener settlement、prompt/continue/reset 相关 loop 行为</td><td>host 清理</td></tr>
+<tr><td>外层重试限制/恢复</td><td><code>src/agents/embedded-agent-runner/run.overflow-compaction.loop.test.ts</code></td><td>集成/故障注入</td><td>3 次 Compaction、4 attempts、side-effect safety</td><td>Live 长上下文成本</td></tr>
+<tr><td>超时 Compaction</td><td><code>run.timeout-triggered-compaction.test.ts</code></td><td>故障注入</td><td>timeout/retry cap 跨 profile 保持</td><td>真实慢 provider</td></tr>
+<tr><td>Stream/reply 桥</td><td><code>src/agents/embedded-agent-subscribe.handlers.messages.test.ts</code>、<code>src/agents/embedded-agent-subscribe.handlers.compaction.test.ts</code></td><td>单元</td><td>延迟/重复事件、tags、重复发送、compaction 等待</td><td>Channel 平台渲染</td></tr>
+<tr><td>Harness 选择</td><td><code>src/agents/harness/builtin-openclaw.test.ts</code>、runtime selection tests</td><td>单元</td><td>OpenClaw registration、显式/auto policy</td><td>第三方 Harness 完整 parity</td></tr>
+<tr><td>Gateway agent 入口</td><td><code>src/gateway/server-methods/agent.test.ts</code> 及拆分 tests</td><td>RPC 集成</td><td>预检/session/reset/delivery/admission</td><td>真实远程 client</td></tr>
+<tr><td>agent.wait/终态合并</td><td><code>agent-wait-dedupe.test.ts</code>、<code>src/agents/agent-run-terminal-outcome.test.ts</code></td><td>单元</td><td>宽限、粘滞 timeout/cancel、等待截止</td><td>进程重启后 wait cache</td></tr>
+<tr><td>Gateway/CLI 路径</td><td><code>src/commands/agent-via-gateway.test.ts</code></td><td>命令/RPC</td><td>Gateway-first、signal abort、连接不确定警告</td><td>本次未运行 Windows CLI</td></tr>
+<tr><td>Live Harness</td><td><code>src/gateway/gateway-codex-harness.live.test.ts</code>、<code>gateway-acp-bind.live.test.ts</code></td><td>Live</td><td>agent.wait 与 native Harness 路径</td><td>本次未执行；Codex 上游未直接审计</td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="development">
+<h2>14. 开发与扩展指南</h2>
+<div class="table-wrap"><table><thead><tr><th>变更目标</th><th>正确所有者</th><th>同时修改</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>新增 Gateway Agent 参数</td><td>协议 schema + Gateway 预检</td><td>scope、CLI/SDK、幂等、docs</td><td>非法/未授权/成功/旧 client</td></tr>
+<tr><td>新增 Harness</td><td>Plugin AgentHarness 契约</td><td>supports/selection、runtime artifact、docs parity 表</td><td>显式 fail-closed、auto、tools/hooks/context/compaction/terminal</td></tr>
+<tr><td>改变内层 Tool 调度</td><td><code>packages/agent-core</code></td><td>types、事件顺序、host bridge 测试</td><td>并行完成/来源顺序、abort、sequential 覆盖</td></tr>
+<tr><td>新增 retry/recovery</td><td>外层循环分类器/恢复所有者</td><td>重放安全、副作用门控、attempt 上限、终态</td><td>成功、耗尽、cancel、已提交副作用</td></tr>
+<tr><td>改变 Prompt assembly</td><td>Attempt system prompt/context 所有者</td><td>缓存排序、bootstrap/tools、快照</td><td>determinism、fallback/retry 不重复 user turn</td></tr>
+<tr><td>改变流/回复</td><td>嵌入式订阅/reply payload 所有者</td><td>Channel presentation、NO_REPLY、reasoning、media</td><td>delta/延迟事件/重试/重复发送</td></tr>
+<tr><td>改变 timeout/cancel</td><td>看门狗 + 共享终态归一化器</td><td>agent.wait、SDK、chat final、tests</td><td>阶段归因、粘滞合并、仅等待超时</td></tr>
+</tbody></table></div>
+<div class="warning"><strong>禁止捷径：</strong>不要在 Gateway/SDK/Channel 各自重推 timeout/cancel 优先级；不要让 Harness 名称替代 provider/model；不要把 provider stream error 当 throw contract；不要在 retry 时重复持久化 user turn；不要让 parallel Tool 绕过 sequential preflight/policy；不要用收到文本 delta 代替 lifecycle terminal。</div>
+</section>
+
+<section class="section" id="tradeoffs">
+<h2>15. 设计权衡与已知限制</h2>
+<div class="table-wrap"><table><thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/限制</th><th>重评条件</th></tr></thead><tbody>
+<tr><td>恢复能力</td><td>外层恢复 + 内层工具循环</td><td>Context/auth/provider 恢复不污染核心 Tool 状态机</td><td>层次多、终态需统一</td><td>所有 Runtime 原生提供同等恢复协议</td></tr>
+<tr><td>Runtime 可插拔</td><td>Harness 契约 + 预备计划</td><td>OpenClaw/Codex/ACP/CLI 可共享入口和投递</td><td>能力 parity 不是自动的</td><td>可形成版本化统一 runtime protocol</td></tr>
+<tr><td>Tool 性能</td><td>默认并行，任何 sequential tool 强制整批串行</td><td>安全默认明确，结果顺序稳定</td><td>一个串行 tool 降低整批并发</td><td>可证明依赖图级调度不会破坏 policy/order</td></tr>
+<tr><td>错误恢复</td><td>有界 retry/Compaction/fallback</td><td>瞬时故障自动恢复，阻止成本失控</td><td>计数和 replay safety 复杂</td><td>provider 提供事务化 resume/side-effect receipt</td></tr>
+<tr><td>事件终态</td><td>多来源 snapshot + sticky merge + grace</td><td>兼容 lifecycle、dedupe、chat 与 retry</td><td>进程内 cache，推导较复杂</td><td>Gateway protocol 拥有单一耐久 run ledger</td></tr>
+<tr><td>流式体验</td><td>实时 delta，但最终以 lifecycle 为准</td><td>低延迟展示且终态正确</td><td>partial 可能随后失败/被抑制</td><td>客户端只消费事务化 committed chunks</td></tr>
+</tbody></table></div>
+<div class="warning"><strong>当前限制：</strong><code>run-loop.ts</code>、<code>agent-loop.ts</code>、<code>embedded-agent-subscribe.ts</code> 都是大型 owner 文件。拆分应围绕明确阶段/状态机，而不是复制控制流。Native Harness 的工具、Hook、Compaction 和 canonical thread owner 可能不同；不能把 OpenClaw embedded 行为写成所有 Harness 的保证。</div>
+</section>
+
+<section class="section" id="sources">
+<h2>16. 源码索引与进一步阅读</h2>
+<ul class="source-list">
+<li><code>src/gateway/server-methods/agent-run-handler.ts:29-535</code> — Gateway 入口。</li>
+<li><code>src/gateway/server-methods/agent-wait.ts:10-62</code> — agent.wait。</li>
+<li><code>src/gateway/server-methods/agent-job.ts:170-317</code>、<code>src/gateway/server-methods/agent-job.ts:516-581</code> — run snapshot/wait。</li>
+<li><code>src/commands/agent-via-gateway.ts:644-948</code> — CLI Gateway-first。</li>
+<li><code>src/agents/agent-command.ts:61-516</code> — Agent 命令 owner。</li>
+<li><code>src/agents/command/run-embedded-attempt.ts:59-624</code> — fallback/live switch wrapper。</li>
+<li><code>src/agents/command/attempt-execution.ts:451-1001</code> — CLI/embedded/Harness dispatch。</li>
+<li><code>src/agents/embedded-agent-runner/run-orchestrator.ts:71-359</code> — run orchestration。</li>
+<li><code>src/agents/embedded-agent-runner/run-loop.ts:56-714</code> — outer recovery loop。</li>
+<li><code>src/agents/embedded-agent-runner/run/attempt.ts:47-502</code> — Attempt 组装。</li>
+<li><code>src/agents/embedded-agent-runner/run/attempt-recovery.ts:36-371</code> — 恢复决策。</li>
+<li><code>src/agents/embedded-agent-runner/run/overflow-context-recovery.ts:41-456</code> — overflow/Compaction。</li>
+<li><code>src/agents/embedded-agent-runner/run/lane-controller.ts:25-191</code> — lanes。</li>
+<li><code>src/agents/harness/builtin-openclaw.ts:67-81</code> — built-in Harness。</li>
+<li><code>src/agents/sessions/agent-session-prompting.ts:25-82</code>、<code>src/agents/sessions/agent-session-prompting.ts:101-243</code> — Prompt/continue。</li>
+<li><code>src/agents/sessions/agent-session-compaction.ts:227-420</code> — inner Compaction。</li>
+<li><code>src/agents/sessions/agent-session-execution.ts:17-107</code> — inner retry。</li>
+<li><code>src/agents/embedded-agent-subscribe.ts:165-249</code>、<code>src/agents/embedded-agent-subscribe.ts:1274-1568</code> — stream/reply bridge。</li>
+<li><code>src/agents/agent-run-terminal-outcome.ts:106-237</code> — terminal normalization。</li>
+<li><code>packages/agent-core/src/agent-loop.ts:267-450</code> — inner loop。</li>
+<li><code>packages/agent-core/src/agent-loop.ts:456-611</code>、<code>packages/agent-core/src/agent-loop.ts:636-800</code> — model stream/Tool batch。</li>
+<li><code>packages/agent-core/src/agent.ts:201-368</code> — stateful Agent。</li>
+<li><code>packages/agent-core/src/types.ts:16-35</code>、<code>packages/agent-core/src/types.ts:501-547</code> — contracts/events。</li>
+<li><code>packages/llm-core/src/utils/event-stream.ts:8-112</code> — EventStream dependency。</li>
+<li><code>packages/ai/src/stream.ts:14-57</code> — LLM runtime dependency。</li>
+<li><code>packages/agent-core/src/agent-loop.test.ts</code> — Tool loop tests。</li>
+<li><code>src/agents/embedded-agent-runner/run.overflow-compaction.loop.test.ts</code> — recovery tests。</li>
+<li><code>docs/concepts/agent-loop.md:13-161</code> — 官方运行与运维契约。</li>
+<li><code>docs/concepts/agent-runtimes.md:10-155</code> — Runtime/Harness 边界。</li>
+</ul>
+<h3>官方进一步阅读</h3>
+<ul>
+<li><a href="https://docs.openclaw.ai/concepts/agent-loop">Agent loop</a></li>
+<li><a href="https://docs.openclaw.ai/concepts/agent-runtimes">Agent 运行时s</a></li>
+<li><a href="https://docs.openclaw.ai/concepts/compaction">Compaction</a></li>
+<li><a href="https://docs.openclaw.ai/concepts/queue">Command queue</a></li>
+<li><a href="https://docs.openclaw.ai/concepts/streaming">Streaming</a></li>
+</ul>
+<div class="evidence"><strong>证据缺口：</strong>当前 shell 找不到 Git、pnpm，无法绑定 SHA、执行 <code>pnpm docs:list</code>、聚焦测试或 <code>git diff --check</code>。本次未做真实 provider、Channel、Codex app-server、ACP 或 CLI backend Live turn。虽然仓库包含 Codex Harness 源码/测试，依规则若要对 Codex 上游协议或运行时作确定性 verdict，必须直接检查 sibling <code>../codex</code>；本文没有展开该依赖契约，只把 Codex 标为可选 Harness 并引用 OpenClaw 当前边界。CLI timeout 的可见 fallback 与官方 runtime 默认叙述存在层级差异，已在配置节保留为证据缺口，没有合并猜测。</div>
+</section>
+<div class="footer">OpenClaw Architecture Module 08 · Agent Runtime<br>开发级子文档 · 基于源码、内部依赖、测试与官方文档交叉核验</div>
+</main>
+<a class="back-top" href="#top" aria-label="返回顶部">↑</a>
+<script>
+(function(){const links=[...document.querySelectorAll('.sidebar a')];const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);const activate=()=>{let current=sections[0];for(const section of sections){if(section.getBoundingClientRect().top<=92)current=section}links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current.id))};document.addEventListener('scroll',activate,{passive:true});activate()})();
+</script>
+</body>
+</html>

@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae Agent 评估侧 Patch Selection 开发文档</title>
+<style>
+:root{
+  --bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);
+  --text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;
+  --green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.7;padding:64px 24px 48px 292px;overflow-x:hidden}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+code{background:rgba(194,65,12,.11);color:var(--orange);padding:.08rem .3rem;border-radius:4px;font-size:.88em;overflow-wrap:anywhere;word-break:break-word}
+.topbar{position:fixed;inset:0 0 auto 0;height:48px;z-index:20;display:flex;align-items:center;gap:1rem;min-width:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.2rem}
+.topbar a{font-size:.88rem;font-weight:650;white-space:nowrap}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.86rem}
+.sidebar{position:fixed;top:48px;bottom:0;left:0;width:268px;overflow:auto;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;backdrop-filter:blur(12px)}
+.sidebar strong{display:block;color:var(--blue);margin-bottom:.7rem}
+.sidebar a{display:block;color:var(--text);opacity:.72;font-size:.79rem;padding:.2rem .35rem;border-left:2px solid transparent}
+.sidebar a:hover,.sidebar a.active{opacity:1;border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1120px;margin:0 auto}
+h1{font-size:2rem;margin:.2rem 0 .35rem;overflow-wrap:anywhere;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{color:var(--blue);font-size:1.35rem;margin:0 0 1rem;border-bottom:1px solid var(--border);padding-bottom:.45rem}
+h3{color:var(--blue2);font-size:1.08rem;margin:1.25rem 0 .55rem}
+p{margin:.55rem 0}
+ul,ol{margin:.55rem 0 .65rem 1.35rem;padding:0}
+li{margin:.25rem 0}
+.subtitle{color:var(--muted);margin:0 0 1.2rem}
+.section{min-width:0;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.55rem;margin:0 0 1.25rem;scroll-margin-top:62px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.meta-grid,.card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.meta,.card{min-width:0;overflow-wrap:anywhere;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.85rem}
+.meta b,.card b{display:block;color:var(--blue2);font-size:.82rem;margin-bottom:.2rem}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:.05rem .45rem;margin:.1rem .3rem .1rem 0;font-size:.72rem;font-weight:700}
+.fact{color:var(--green)}.eval{color:var(--purple)}.optional{color:var(--yellow)}.roadmap{color:var(--muted)}.risk{color:var(--red)}
+.callout{border-left:3px solid var(--blue);background:rgba(67,56,202,.06);padding:.8rem 1rem;margin:.8rem 0}
+.warning{border-left-color:var(--red);background:rgba(185,28,28,.06)}
+.good{border-left-color:var(--green);background:rgba(21,128,61,.06)}
+.evalbox{border-left-color:var(--purple);background:rgba(109,40,217,.07)}
+.diagram{display:flex;align-items:stretch;gap:.45rem;overflow-x:auto;padding:.85rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+.node{min-width:145px;flex:1;border:1px solid var(--blue);border-radius:8px;padding:.7rem;text-align:center;background:rgba(67,56,202,.05)}
+.node.external{border-style:dashed;border-color:var(--yellow)}
+.node.evalnode{border-color:var(--purple);background:rgba(109,40,217,.05)}
+.node.no{border-color:var(--red);background:rgba(185,28,28,.04)}
+.node strong{display:block;color:var(--blue2)}
+.node small{display:block;color:var(--muted);margin-top:.2rem}
+.arrow{align-self:center;color:var(--purple);font-size:1.25rem;font-weight:700}
+.sequence{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem 1rem;overflow:auto}
+.sequence .step{display:grid;grid-template-columns:2.1rem minmax(145px,.8fr) minmax(260px,2fr);gap:.6rem;border-bottom:1px dashed var(--border);padding:.45rem 0}
+.sequence .step:last-child{border-bottom:0}
+.n{width:1.7rem;height:1.7rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--purple);color:var(--bg);font-size:.75rem;font-weight:800}
+.table-wrap{max-width:100%;overflow-x:auto;margin:.7rem 0}
+table{width:100%;border-collapse:collapse;font-size:.84rem;min-width:720px}
+th,td{border:1px solid var(--border);padding:.5rem .62rem;vertical-align:top}
+th{background:#e8e1d4;color:var(--blue);text-align:left}
+tr:nth-child(even){background:rgba(244,241,234,.45)}
+.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}
+.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;box-decoration-break:clone}
+.source-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.55rem 0}
+.source-card b{color:var(--purple)}
+.source-note{font-size:.82rem;color:var(--muted);border-left:3px solid var(--border);padding-left:.8rem;margin:.7rem 0}
+.footer{text-align:center;color:var(--muted);font-size:.78rem;padding:1rem}
+@media(max-width:900px){body{padding:64px 14px 36px}.sidebar{display:none}.meta-grid,.card-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.topbar .title{display:none}.topbar{padding:0 .8rem}h1{font-size:1.45rem}.section{padding:1rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.diagram{flex-direction:column}.arrow{transform:rotate(90deg);text-align:center}.sequence .step{grid-template-columns:2rem 1fr}.sequence .step div:last-child{grid-column:2}.table-wrap{overscroll-behavior-inline:contain}}
+.chapter-nav{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;margin:1.5rem 0 .5rem}
+.chapter-nav a{flex:1 1 16rem;min-width:0;max-width:100%;border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;background:var(--surface2);overflow-wrap:anywhere}
+.chapter-nav .prev{margin-right:auto}.chapter-nav .next{margin-left:auto;text-align:right}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="../../trae_agent_architecture.html">← 返回 Trae Agent 架构总览</a>
+  <span class="title">模块 09 / 评估侧 Patch Selection</span>
+</header>
+
+<nav class="sidebar" aria-label="页面目录">
+  <strong>Patch Selection 补丁选择</strong>
+  <a href="#position">1. 模块定位</a>
+  <a href="#context">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念与术语</a>
+  <a href="#components">4. 架构组成</a>
+  <a href="#flow">5. 完整运行流程</a>
+  <a href="#state">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口、协议与事件</a>
+  <a href="#config">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发、性能与资源</a>
+  <a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败、恢复与兼容</a>
+  <a href="#observability">12. 可观测性与排障</a>
+  <a href="#tests">13. 测试与验证</a>
+  <a href="#extension">14. 开发与扩展指南</a>
+  <a href="#tradeoffs">15. 设计权衡与限制</a>
+  <a href="#sources">16. 源码索引</a>
+  <a href="#glossary">附录 · 术语对照表</a>
+</nav>
+
+<main class="container">
+  <h1>评估侧 Patch Selection 开发文档</h1>
+  <p class="subtitle">审计“外部候选 → 标签/回归过滤 → 去重 → Docker 内 Selector → 分组产物与统计”的真实契约，并把它与单 Agent CLI Runtime 严格隔离。</p>
+
+  <section class="section" aria-label="文档元数据">
+    <div class="meta-grid">
+      <div class="meta"><b>一句话目标</b>帮助研究与评测开发者安全运行、恢复和扩展候选 Patch 选择实验，而不把它误接成在线多 Agent Runtime。</div>
+      <div class="meta"><b>源码快照</b>工作区源码快照；<code>pyproject.toml</code> 版本 <code>0.1.0</code>；工作区无可用 Git 元数据/CLI，未取得 SHA。</div>
+      <div class="meta"><b>证据状态</b><span class="badge fact">静态审计已验证</span><span class="badge risk">端到端受外部镜像、py312 与 LLM 凭证阻塞</span></div>
+      <div class="meta"><b>所有者路径</b><code>evaluation/patch_selection/</code>；只复用 <code>trae_agent/utils/llm_clients/</code>、配置、Tool Schema 与 Trajectory。</div>
+      <div class="meta"><b>目标读者</b>SWE-bench 评测、候选生成、Selector、Docker 基础设施、实验复现与安全审计开发者。</div>
+      <div class="meta"><b>最近验证</b>2026-07-27</div>
+    </div>
+    <p>
+      <span class="badge eval">评估侧：独立批处理外环</span>
+      <span class="badge optional">外部前置：候选与回归结果</span>
+      <span class="badge risk">风险：标签泄漏 / 特权 Docker</span>
+      <span class="badge roadmap">未实现：在线 GPS / 组间最终汇总</span>
+    </p>
+  </section>
+
+  <section class="section" id="position">
+    <h2>1. 模块定位</h2>
+    <div class="callout evalbox"><strong>硬边界：</strong>这是一条从独立 Python 脚本启动的评估流水线，不是 <code>trae-cli</code> 子命令，不由 <code>Agent</code>/<code>TraeAgent</code>/<code>BaseAgent</code> 调度，也不是线上多 Agent 协作或 BaseAgent 内置 GPS。</div>
+    <div class="table-wrap"><table>
+      <tr><th>边界</th><th>当前负责</th><th>委托/输入</th><th>明确不负责</th></tr>
+      <tr><td>Generator</td><td>仓库内没有生成器实现。</td><td>外部系统产生多次轨迹/候选 Patch，并写 JSONL。</td><td>不由主 CLI 并行启动多个 Agent；不保证候选来源、独立性或多样性。</td></tr>
+      <tr><td>“Pruner”</td><td><code>run_instance_by_group()</code> 内联执行空 Patch 跳过、回归字段过滤与 cleaned Patch 去重。</td><td><code>regressions</code> 来自外部 Agentless 等流程；<code>success_id</code> 来自评测标签。</td><td>没有独立 Pruner 类或 Agent；不会在此处运行回归测试。<span class="evidence"><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:168-203</code></span></td></tr>
+      <tr><td>Selector</td><td>在 SWE-bench Docker 镜像内查看仓库、运行命令/编辑临时文件，并由 LLM 选择一个已有 Patch。</td><td>复用主项目 <code>LLMClient</code>、Tool Schema、<code>TrajectoryRecorder</code>。</td><td>Prompt 禁止创建新 Patch；不把选择结果提交回主 Runtime。</td></tr>
+      <tr><td>Reporter</td><td>写 Patch、统计 JSON、原始输出、轨迹与汇总 CSV。</td><td><code>analysis.py</code> 离线扫描 statistics。</td><td>不计算通用 Pass@1，不验证最终 Patch 实际应用成功，也不提供服务 API。</td></tr>
+    </table></div>
+    <p class="source-note">目录 README 把研究范式称为生成/剪枝/选择，但决定性源码只覆盖候选消费、内联过滤和选择。<span class="evidence"><code>evaluation/patch_selection/README.md:1-18,20-72</code></span></p>
+  </section>
+
+  <section class="section" id="context">
+    <h2>2. 系统位置与依赖</h2>
+    <div class="diagram" role="img" aria-label="Patch Selection 上下文图">
+      <div class="node external"><strong>外部 Generator</strong><small>多次运行/轨迹/patch JSONL</small></div><div class="arrow">→</div>
+      <div class="node evalnode"><strong>selector.py</strong><small>读实例、候选、模型配置</small></div><div class="arrow">→</div>
+      <div class="node evalnode"><strong>内联剪枝</strong><small>标签短路、回归字段、去重</small></div><div class="arrow">→</div>
+      <div class="node evalnode"><strong>SelectorAgent</strong><small>独立 LLM + Docker 工具循环</small></div><div class="arrow">→</div>
+      <div class="node evalnode"><strong>文件产物</strong><small>补丁/日志/输出/统计</small></div>
+    </div>
+    <div class="diagram" role="img" aria-label="与主 Runtime 隔离">
+      <div class="node"><strong>trae-cli</strong><small>单 TraeAgent 主链</small></div>
+      <div class="node no"><strong>没有调用边</strong><small>无 CLI 注册、无 BaseAgent Hook</small></div>
+      <div class="node evalnode"><strong>evaluation/</strong><small>单独 python selector.py</small></div>
+    </div>
+    <div class="card-grid">
+      <div class="card"><b>入口</b><code>evaluation/patch_selection/selector.py:14-102</code> 自建 argparse、目录和 <code>SelectorEvaluation</code>。</div>
+      <div class="card"><b>上游数据</b>SWE-bench instances JSON 提供 <code>instance_id</code>、<code>base_commit</code>、<code>problem_statement</code>；候选 JSONL 提供 patches、labels、regressions。</div>
+      <div class="card"><b>下游基础设施</b>Docker Engine、预构建 <code>sweb.eval.x86_64.*</code> 镜像、宿主 <code>docker cp</code>、下载的 Python 3.12 工具包和外部 LLM API。</div>
+      <div class="card"><b>复用而非继承</b><code>SelectorAgent</code> 不继承 <code>BaseAgent</code>；它直接构造 <code>LLMClient</code> 和自己的 while-loop。<span class="evidence"><code>evaluation/patch_selection/trae_selector/selector_agent.py:153-242</code></span></div>
+    </div>
+  </section>
+
+  <section class="section" id="concepts">
+    <h2>3. 核心概念与术语</h2>
+    <div class="table-wrap"><table>
+      <tr><th>术语</th><th>本模块准确含义</th><th>容易误写成</th></tr>
+      <tr><td>候选补丁（Candidate Patch）</td><td>外部 JSONL 中的 unified diff 字符串；运行时包装为 <code>CandidatePatch</code>，保留原始 Patch、清洗键、回归状态与正确性标签。</td><td>Selector 在容器内生成的新修复。</td></tr>
+      <tr><td>生成器（Generator）</td><td>仓库外部/上游过程；当前目录只定义其结果文件契约。</td><td>Trae CLI 内置的多个并行 Agent。</td></tr>
+      <tr><td>Regression</td><td>每个 Patch 对应的测试名列表；空列表表示上游宣称通过。Selector 只消费，不执行该筛选过程。</td><td>Selector 在调用前自动跑完整测试。</td></tr>
+      <tr><td>Pruning</td><td>有通过回归的候选时丢弃非空 regression 候选，再按去注释/空白后的 diff 内容去重。</td><td>独立 Pruner Agent 或学习排序器。</td></tr>
+      <tr><td><code>success_id</code></td><td>0/1 ground-truth 正确性标签，用于全对/全错组短路和选择后计分。</td><td>可供无标签生产流量使用的预测。</td></tr>
+      <tr><td>多数投票（Majority Voting）</td><td>对同一候选组重复运行 Selector，按原 candidate id 计票；达到严格过半可提前停。</td><td>多个不同专业 Agent 协商或模型集成。</td></tr>
+      <tr><td>分组（Group）</td><td>候选数组按 <code>group_size</code> 顺序切片；每组独立输出一个 Patch。</td><td>已有自动的“组冠军再决赛”实现。</td></tr>
+    </table></div>
+  </section>
+
+  <section class="section" id="components">
+    <h2>4. 架构组成</h2>
+    <div class="table-wrap"><table>
+      <tr><th>组件</th><th>职责与状态</th><th>故障隔离/扩展点</th><th>证据</th></tr>
+      <tr><td><code>selector.py</code></td><td>解析参数，创建四类输出目录，加载实例 JSON/候选 JSONL，解析 <code>ModelConfig</code>。</td><td>输入 Schema 无显式校验；适合在此增加预检。</td><td><code>evaluation/patch_selection/selector.py:14-98</code></td></tr>
+      <tr><td><code>SelectorEvaluation</code></td><td>按 instance 启动进程任务；每个 instance 再串行处理 groups。</td><td>跨 instance 进程隔离；单 instance 内重试。</td><td><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:18-144,300-389</code></td></tr>
+      <tr><td>内联过滤器</td><td>空 Patch 跳过；若至少一个回归列表为空，只保留这些候选；按 <code>clean_patch</code> 去重。</td><td><code>unidiff.PatchSet</code> 解析失败进入整组 retry。</td><td><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:168-203</code></td></tr>
+      <tr><td><code>SelectorAgent</code></td><td>构造含全部候选的 Prompt，循环 LLM/tool，正则解析 <code>Status/Result/Analysis</code>。</td><td>最多 <code>max_turn</code>；无合法输出时回退组内第一项。</td><td><code>evaluation/patch_selection/trae_selector/selector_agent.py:23-58,153-242</code></td></tr>
+      <tr><td><code>Sandbox</code></td><td>启动特权容器、挂载宿主 <code>/tmp</code>、复制工具、checkout base commit、提供 pexpect shell。</td><td>每次 retry 新容器；异常路径尝试 stop/remove。</td><td><code>evaluation/patch_selection/trae_selector/sandbox.py:8-123</code></td></tr>
+      <tr><td>工具桥</td><td>模型看到主工具 Registry 的 bash/edit Schema；实际执行转为容器中独立 <code>execute_*.py</code>。</td><td>只接受两个名称；字典参数拒绝；工具输出经固定文件转交。</td><td><code>evaluation/patch_selection/trae_selector/selector_agent.py:61-150,174-179</code></td></tr>
+      <tr><td><code>utils.py</code></td><td>构建去重键、生成唯一轨迹/Patch 文件名、覆盖写统计 checkpoint。</td><td>文件粒度，无事务或锁。</td><td><code>evaluation/patch_selection/trae_selector/utils.py:11-143</code></td></tr>
+      <tr><td><code>analysis.py</code></td><td>扫描 statistics，打印 Rich 表并覆盖写 <code>analysis.csv</code>。</td><td>可在任务进行中运行；默认总实例数硬编码 500。</td><td><code>evaluation/patch_selection/analysis.py:10-155</code></td></tr>
+    </table></div>
+  </section>
+
+  <section class="section" id="flow">
+    <h2>5. 完整运行流程</h2>
+    <h3>5.1 正常成功路径</h3>
+    <div class="sequence">
+      <div class="step"><span class="n">1</span><strong>外部生成</strong><div>同一 <code>instance_id</code> 的多个轨迹/patch 由仓库外部产生；回归测试也由外部流程执行并编码为 <code>regressions</code>。</div></div>
+      <div class="step"><span class="n">2</span><strong>加载与关联</strong><div>入口把 candidates 按 <code>instance_id</code> 覆盖写入字典，再按 instances 列表逐项索引；候选内 <code>issue</code> 不用于最终 Prompt，Prompt 使用 instance 的 <code>problem_statement</code>。</div></div>
+      <div class="step"><span class="n">3</span><strong>分组</strong><div>只遍历前 <code>num_candidate</code> 范围形成顺序切片；每组串行处理。<span class="evidence"><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:34-63</code></span></div></div>
+      <div class="step"><span class="n">4</span><strong>标签短路</strong><div>组内 <code>success_id</code> 全 0 或全 1 时不调用 Selector，直接保存第一项和统计；这是有标签评测优化，也是泄漏边界。</div></div>
+      <div class="step"><span class="n">5</span><strong>过滤与去重</strong><div>丢弃空 Patch；若存在回归列表为空的候选，则只保留这些候选；随后用清洗后的修改行内容去重。</div></div>
+      <div class="step"><span class="n">6</span><strong>沙箱准备</strong><div>按 instance 构造硬编码 SWE-bench 镜像名，启动容器、复制工具并 checkout <code>base_commit</code>。</div></div>
+      <div class="step"><span class="n">7</span><strong>选择</strong><div>Selector 获得 issue 与所有候选原文，可用 bash/edit 在原始仓库上调查或写测试；它并不会先把每个候选逐一 apply 到仓库。</div></div>
+      <div class="step"><span class="n">8</span><strong>投票与落盘</strong><div>可选重复选择，按 candidate id 多数票取结果；写 Patch 和标签统计，停止容器。每个 group 得到独立结果。</div></div>
+    </div>
+    <h3>5.2 拒绝/提前结束路径</h3>
+    <ul>
+      <li>缺模型、模型名不存在或 YAML 无效，在并发启动前抛错。<span class="evidence"><code>evaluation/patch_selection/selector.py:52-60</code></span></li>
+      <li>统计文件已存在且非空，整组视为完成并跳过；不会核对 Patch/trajectory/output 是否齐全或配置是否一致。</li>
+      <li>全成功/全失败标签组直接短路。全失败仍保存第一 Patch，但统计标记失败。</li>
+      <li>正则未得到合法结果并耗尽 <code>max_turn</code> 时，<code>SelectorAgent</code> 返回第一候选，Trajectory 却以 <code>success=true</code> finalize；“Agent 完成”与“Patch 正确”是两套状态。</li>
+    </ul>
+    <h3>5.3 重试与恢复路径</h3>
+    <p>组执行异常后停止当前容器并重建，最多 <code>max_retry</code> 次；重试没有指数退避、错误分类或跨 Provider failover。进程重启时，仅以非空 statistics JSON 作为 checkpoint。Patch 已写而 statistics 未写会在重试时产生带递增后缀的额外 Patch；耗尽重试则没有终态统计，下一次全量运行会再次尝试。<span class="evidence"><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:87-97,146-297</code></span></p>
+    <div class="callout warning"><strong>未实现的阶段：</strong>README 建议候选很多时先分组、再从各组赢家中继续选择，但源码没有自动收集组赢家并执行最终决赛。当前产物是每组一个 Patch，不是 instance 唯一 Best Patch。<span class="evidence"><code>evaluation/patch_selection/README.md:70-72</code></span></div>
+  </section>
+
+  <section class="section" id="state">
+    <h2>6. 数据与状态模型</h2>
+    <h3>6.1 输入文件契约</h3>
+    <div class="table-wrap"><table>
+      <tr><th>文件/字段</th><th>类型与用途</th><th>约束与缺口</th></tr>
+      <tr><td>instances JSON</td><td>JSON array；至少消费 <code>instance_id</code>、<code>base_commit</code>、<code>problem_statement</code>。</td><td>无本地 Schema；镜像必须已存在并与 instance 匹配。</td></tr>
+      <tr><td>candidate JSONL</td><td>每行一个 object，以 <code>instance_id</code> 建字典。</td><td>重复 id 后者静默覆盖；空行/坏 JSON 直接失败；编码未显式指定。</td></tr>
+      <tr><td><code>patches</code></td><td><code>list[str]</code>，原始 unified diff。</td><td>与 labels/regressions 长度必须一致但不预检；空串在过滤阶段跳过。</td></tr>
+      <tr><td><code>regressions</code></td><td><code>list[list]</code>；缺失时补成与 patches 等长的空列表。</td><td>“缺失”因此被解释为“全部通过”，不是“未知”。</td></tr>
+      <tr><td><code>success_id</code></td><td><code>list[0|1]</code>，评测 ground truth。</td><td>实际上是必需字段；参与控制流和计分，不适用于盲测/生产选择。</td></tr>
+      <tr><td><code>issue</code></td><td>候选文件中的 issue 文本。</td><td>分组时复制但 Selector Prompt 使用 instances 的 <code>problem_statement</code>，两者漂移不会被检测。</td></tr>
+    </table></div>
+    <h3>6.2 中间状态与输出契约</h3>
+    <div class="table-wrap"><table>
+      <tr><th>路径</th><th>内容</th><th>写入/恢复语义</th></tr>
+      <tr><td><code>output/group_N/{instance}.log</code></td><td>该组 retry、容器、Selector stdout/stderr。</td><td>每次整组运行以 <code>w</code> 覆盖；异常详情写这里。</td></tr>
+      <tr><td><code>log/group_N/*_voting_V_trail_T.json</code></td><td>Selector LLM 交互轨迹。</td><td>唯一文件名递增；未调用 <code>start_recording</code>，task/provider/model/max_steps 保持 Recorder 初值，仅 interaction 与 finalize 字段可信。</td></tr>
+      <tr><td><code>patch/group_N/{instance}_T.patch</code></td><td>选中的原始 Patch 文本。</td><td>永不覆盖，trial 后缀递增；不记录配置哈希或候选集哈希。</td></tr>
+      <tr><td><code>statistics/group_N/{instance}.json</code></td><td><code>patch_id</code>、<code>is_success</code>、全成/全败标志。</td><td>固定路径覆盖写；非空即成为恢复 checkpoint。</td></tr>
+      <tr><td><code>analysis.csv</code></td><td>按 group 汇总完成率、选择准确率等。</td><td>每次 analysis 覆盖；无文件锁，运行中读取可能见到部分结果。</td></tr>
+    </table></div>
+    <p class="source-note">没有数据库、事务、manifest、实验 ID、配置快照、候选哈希、随机种子、租户或保留策略。所有状态都是共享目录中的普通文件。<span class="evidence"><code>evaluation/patch_selection/trae_selector/utils.py:77-143</code></span></p>
+  </section>
+
+  <section class="section" id="interfaces">
+    <h2>7. 接口、协议与事件</h2>
+    <div class="table-wrap"><table>
+      <tr><th>接口/协议</th><th>请求</th><th>响应/确认</th><th>错误语义</th></tr>
+      <tr><td>脚本 CLI</td><td>instances、candidate、result、模型配置及预算参数。</td><td>无结构化 stdout 响应；以目录产物表达结果。</td><td>部分预检抛异常；日志目录创建失败打印后 <code>exit()</code>。</td></tr>
+      <tr><td>Selector Prompt</td><td>System 声明候选数、Issue、每个 Patch 全文。</td><td><code>### Status: succeed</code>、<code>### Result: Patch-x</code>、<code>### Analysis:</code>。</td><td>正则不匹配则继续工具循环；合法状态但非法编号回退第一项并结束。</td></tr>
+      <tr><td>Tool Call 桥</td><td><code>bash</code> 或 <code>str_replace_based_edit_tool</code> 及 arguments。</td><td>读取容器内 <code>log.out</code>，解析 <code>Tool Call Status</code>，构造 <code>LLMMessage.tool_result</code>。</td><td>未知工具、dict 参数、脚本状态 -1 转失败 ToolResult。</td></tr>
+      <tr><td>Docker Session</td><td>任意 shell command。</td><td>pexpect 等待 shell prompt，返回去首尾后的文本。</td><td>固定约 60 秒 TIMEOUT 返回字符串 Observation，不抛异常。</td></tr>
+      <tr><td>统计 checkpoint</td><td>成功选择或标签短路。</td><td>单个 JSON 文件非空即确认完成。</td><td>没有原子 rename、checksum 或产物一致性确认。</td></tr>
+    </table></div>
+    <p>幂等性是局部且不完整的：statistics 防止重复 LLM/Docker 工作，但 Patch 与 trajectory 使用唯一后缀，失败重跑会累积；配置变化也不会使旧 checkpoint 失效。</p>
+  </section>
+
+  <section class="section" id="config">
+    <h2>8. 配置与默认行为</h2>
+    <div class="table-wrap"><table>
+      <tr><th>配置项</th><th>类型/默认</th><th>消费位置</th><th>失败/成本行为</th><th>来源</th></tr>
+      <tr><td><code>instances_path</code></td><td>path；<code>swe_bench/swebench-verified.json</code></td><td>入口 JSON load</td><td>不存在/坏 JSON 直接终止。</td><td><code>selector.py:16-20,52-53</code></td></tr>
+      <tr><td><code>candidate_path</code>/<code>result_path</code></td><td>必需 path</td><td>入口与四类目录</td><td>候选解析失败终止；输出目录可创建。</td><td><code>selector.py:21-22,42-50,62-70</code></td></tr>
+      <tr><td><code>num_candidate</code></td><td>int；10</td><td>分组上界、投票次数</td><td>未校验正数/长度；开启投票时每组最多执行该数目的 Selector。</td><td><code>selector.py:23-25</code></td></tr>
+      <tr><td><code>group_size</code></td><td>int；10</td><td><code>range(..., step)</code></td><td>0 会失败；大于候选数形成单组。</td><td><code>selector.py:27-29</code></td></tr>
+      <tr><td><code>max_workers</code></td><td>int；10</td><td><code>ProcessPoolExecutor</code></td><td>同时放大 Docker、LLM、CPU、文件和网络压力。</td><td><code>selector.py:26</code></td></tr>
+      <tr><td><code>max_retry</code></td><td>int；3</td><td>整组异常循环</td><td>每次可重建容器并重做投票；无退避。</td><td><code>selector.py:30-32</code></td></tr>
+      <tr><td><code>max_turn</code></td><td>int；50</td><td>单次 Selector LLM/tool loop</td><td>耗尽时回退第一候选。</td><td><code>selector.py:33-35</code></td></tr>
+      <tr><td><code>majority_voting</code></td><td>BooleanOptionalAction；未给出时 <code>None</code>（falsy）</td><td>选择分支</td><td>README 命令显式启用；类/函数内部默认 true，但 CLI 默认实际关闭。</td><td><code>selector.py:36,94</code></td></tr>
+      <tr><td><code>config_file</code>/<code>model_name</code></td><td><code>config.yaml</code>/<code>default_model</code></td><td>主项目 Config/ModelConfig</td><td>模型必须存在；API key/base URL 可由 Provider 环境变量覆盖。</td><td><code>selector.py:37-40,54-60</code></td></tr>
+    </table></div>
+    <p>配置优先级只适用于模型字段：显式调用参数 &gt; Provider 环境变量 &gt; YAML 值；Selector CLI 没有 provider/model/api-key 覆盖参数。<span class="evidence"><code>trae_agent/utils/config.py:66-116,394-410</code></span></p>
+    <div class="callout warning">README 示例使用 <code>max_retry=20</code>、<code>max_turn=200</code>，与 argparse 默认 3/50 不同；文档示例不是默认值。README 还要求从 Google Drive 手工下载 <code>py312</code>，该二进制环境未被 lockfile 或 checksum 固定。<span class="evidence"><code>evaluation/patch_selection/README.md:16-18,53-72</code></span></div>
+  </section>
+
+  <section class="section" id="concurrency">
+    <h2>9. 并发、性能与资源</h2>
+    <ul>
+      <li><strong>并发层级：</strong>instances 由 <code>ProcessPoolExecutor(max_workers)</code> 并行；同一 instance 的 groups 串行；同一 group 的投票串行，不是模型请求并发。源码 docstring 错称 ThreadPool。<span class="evidence"><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:331-370</code></span></li>
+      <li><strong>调用上界：</strong>在没有提前多数、没有标签短路且每轮只产生一个最终响应的理想化上界下，每组最多 <code>num_candidate × max_turn</code> 次 LLM 调用；发生整组异常重试时再乘 <code>max_retry</code>。这只是源码预算上界，不是实测成本。</li>
+      <li><strong>容器资源：</strong>每个并发 instance 同时最多持有一个容器；源码没有 CPU、内存、PID、磁盘、网络配额，也没有全局 Docker/Provider 背压。</li>
+      <li><strong>Prompt 成本：</strong>每次投票把该组所有原始 Patch 全文重新发送；LLM Client 默认复用单次 Selector 内历史。多数投票新建 Client，因此不会共享 KV/对话状态。</li>
+      <li><strong>I/O：</strong>stdout/stderr 被进程级重定向到每组日志；Trajectory 每轮全量重写 JSON；<code>analysis.py</code> 可与写入并发但无锁。</li>
+      <li><strong>超时：</strong><code>Session.execute(timeout=60)</code> 参数未传给 expect，内部固定 60 秒；外层工具命令还使用各自 120 秒逻辑，但桥接 shell 可先超时。<span class="evidence"><code>evaluation/patch_selection/trae_selector/sandbox.py:61-104</code></span></li>
+    </ul>
+    <p class="source-note">仓库只记录 token usage，不把模型单价换算成货币成本；本文不提供吞吐、延迟或费用数字。</p>
+  </section>
+
+  <section class="section" id="security">
+    <h2>10. 安全与信任边界</h2>
+    <div class="table-wrap"><table>
+      <tr><th>边界/资产</th><th>当前机制</th><th>风险与结论</th><th>建议控制</th></tr>
+      <tr><td>Docker Host</td><td>容器以 <code>privileged=True</code> 启动，并把宿主 <code>/tmp</code> 读写挂载到容器。</td><td><span class="badge risk">非强沙箱</span>特权容器可显著扩大逃逸和宿主访问面。</td><td>仅在隔离评测节点运行；移除 privileged，改为最小 capabilities/只读根文件系统/独立临时卷。</td></tr>
+      <tr><td>宿主工具目录</td><td>宿主执行 <code>chmod -R 777</code>，再以 <code>shell=True</code> 调用 <code>docker cp</code>。</td><td>修改工作区权限；路径/容器名未经 shell quote；工具供应链来自外部下载。</td><td>固定 artifact hash，避免 shell=True，复制到隔离 staging，不修改源码树权限。</td></tr>
+      <tr><td>网络</td><td>Docker run 未配置 network mode。</td><td>默认网络行为由 Docker 环境决定，源码不能证明断网；恶意测试/仓库可外联。</td><td>默认 <code>network=none</code>，按测试需求显式 allowlist。</td></tr>
+      <tr><td>候选与 Issue</td><td>完整文本发给配置的 LLM Provider，并写入 Prompt/Trajectory/日志。</td><td>可能包含私有代码、路径、Prompt Injection、许可证或个人数据；无脱敏。</td><td>只处理获准数据；Provider 数据协议审查；预扫描 Secret；设置保留与删除策略。</td></tr>
+      <tr><td>API Key</td><td>Key 在宿主 ModelConfig 中解析并用于 Provider SDK；未显式传入容器。</td><td>容器默认拿不到模型 Key是有限隔离，但宿主日志/进程仍是信任面。</td><td>短期凭证、最小权限、避免写配置文件、隔离 worker 身份。</td></tr>
+      <tr><td>命令/文件工具</td><td>Selector 可执行任意 bash、读取/编辑容器绝对路径。</td><td>Prompt 约束不是访问控制；容器内任意代码和测试都不可信。</td><td>命令策略、路径根限制、资源配额、seccomp/AppArmor、只读输入快照。</td></tr>
+      <tr><td>评测标签</td><td><code>success_id</code> 参与短路和结果计分。</td><td><span class="badge risk">评测泄漏</span>若用于算法选择、调参或报告全量表现，ground truth 已进入控制流。</td><td>盲测路径完全移除标签；评分在选择结果冻结后由独立进程关联。</td></tr>
+    </table></div>
+    <div class="callout warning"><strong>Fail-open 行为：</strong>如果所有候选都有非空 regression，过滤器不会淘汰任何一个，而是保留全部；缺失 regressions 则被补为空列表，相当于全部通过。安全或质量门禁不能依赖这一字段过滤。<span class="evidence"><code>evaluation/patch_selection/selector.py:66-69</code></span>；<span class="evidence"><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:184-190</code></span></div>
+  </section>
+
+  <section class="section" id="failure">
+    <h2>11. 失败、恢复与兼容</h2>
+    <div class="table-wrap"><table>
+      <tr><th>故障/现象</th><th>检测与即时行为</th><th>状态影响</th><th>恢复/运维操作</th></tr>
+      <tr><td>instance 无候选</td><td><code>candidate_dic[id]</code> KeyError，可能在 futures 构造阶段终止整个 run。</td><td>未启动或部分已启动任务；无该实例统计。</td><td>启动前做集合差和重复 id 检查。</td></tr>
+      <tr><td>字段长度不一致/空候选集</td><td>索引错误或 <code>candidate_list[0]</code> 错误，进入整组 retry。</td><td>重复建容器，耗尽后无 checkpoint。</td><td>Schema 预检 patches/success_id/regressions 等长且过滤后非空。</td></tr>
+      <tr><td>malformed diff</td><td><code>PatchSet</code> 抛错，整组 retry。</td><td>确定性坏输入被无退避重复。</td><td>并发前单次解析并隔离坏 candidate，不应重试确定性错误。</td></tr>
+      <tr><td>镜像不存在/checkout 失败</td><td>Docker 抛异常会重试；checkout 返回值只打印、不检查 exit code。</td><td>可能在错误 commit 上继续选择。</td><td>预拉镜像；校验 exec exit_code 和 HEAD。</td></tr>
+      <tr><td>LLM/Provider 失败</td><td>底层 Client 自身 <code>max_retries</code> 后异常，再触发整组 retry。</td><td>形成嵌套重试，成本放大。</td><td>区分限流、认证、格式、确定性错误；认证失败应停止而非重建容器。</td></tr>
+      <tr><td>Tool TIMEOUT</td><td>返回含 <code>seconds. Partial output</code> 的文本；Selector 替换 shell session。</td><td>容器保留，未自动回滚已发生的副作用；下一 Selector 构造/结束会 hard reset tracked files。</td><td>检查 untracked/process 状态；需要全新容器才能获得强恢复。</td></tr>
+      <tr><td>非法 Patch 编号</td><td>状态正则匹配但编号越界，静默选第一项并 break。</td><td>Trajectory 标成功，统计可能失败。</td><td>将格式错误视为可重试响应，不要静默默认。</td></tr>
+      <tr><td>统计已存在但其它产物缺失</td><td>非空统计文件触发 skip。</td><td>不一致状态被当作完成。</td><td>使用 manifest/原子提交，并校验 config/candidate hash 和全部产物。</td></tr>
+      <tr><td>耗尽 retry</td><td>finally 只打印 finished。</td><td>无显式 failed statistics，run_all future 可正常返回 None。</td><td>写失败终态与最后异常；批处理退出码应反映未完成数。</td></tr>
+    </table></div>
+    <p>兼容面有限：输入/输出都没有 <code>schema_version</code>；镜像命名硬编码 <code>x86_64</code> 与字符串替换规则；README 要求 Python 3.12 工具包。Windows 宿主还依赖可用的 Docker CLI 与 pexpect 对交互 TTY 的兼容，当前没有平台测试证据。</p>
+  </section>
+
+  <section class="section" id="observability">
+    <h2>12. 可观测性与排障</h2>
+    <div class="table-wrap"><table>
+      <tr><th>现象</th><th>先检查</th><th>可能原因</th><th>修复</th></tr>
+      <tr><td>进度条结束但实例没统计</td><td><code>output/group_N/{instance}.log</code> 最后一次 Error/traceback。</td><td>重试耗尽后未写失败终态；future 返回 None。</td><td>修复输入/镜像/凭证后删除不完整产物并重跑；保留日志证据。</td></tr>
+      <tr><td>选择总是第一 Patch</td><td>轨迹中的最终文本与 Result 正则；候选过滤后数量。</td><td>max_turn 耗尽、非法编号、全标签短路、只剩一个去重候选。</td><td>修 Prompt/解析器并增加显式状态，不要只看 patch 文件。</td></tr>
+      <tr><td>大量额外 Patch 文件</td><td>同一 group/instance 的 trial 后缀与 statistics 是否存在。</td><td>Patch 写成功、统计写失败或手工删除 checkpoint 后重跑。</td><td>按实验 manifest 清理；改为临时文件+原子整体提交。</td></tr>
+      <tr><td>容器残留</td><td>Docker containers、组日志中的 start/stop。</td><td>进程强杀、宿主崩溃或 stop/remove 自身失败。</td><td>按实验 label 清理；当前容器未设置 label，需谨慎人工识别。</td></tr>
+      <tr><td>completion_rate 异常</td><td><code>analysis.py</code> 的分母。</td><td>默认固定 500，不是 instances 文件实际长度。</td><td>显式传入/计算总实例数；当前脚本无 CLI 参数，需扩展。</td></tr>
+      <tr><td>回归过滤没有生效</td><td>候选 JSONL 的 regressions 是否缺失/全部非空。</td><td>缺失会补空；全部失败时 fail-open 保留全部。</td><td>引入三态 pass/fail/unknown，并定义 fail-closed 策略。</td></tr>
+    </table></div>
+    <p>四个观察面不能互相替代：output 是 Python/容器原始日志；log 是 LLM trajectory；patch 是选择产物；statistics 是带 ground truth 的评分 checkpoint。Trajectory 的 <code>success=true</code> 只表示 Selector loop finalize，不证明选择正确。<span class="evidence"><code>evaluation/patch_selection/trae_selector/selector_agent.py:238-242</code></span></p>
+  </section>
+
+  <section class="section" id="tests">
+    <h2>13. 测试与验证</h2>
+    <div class="table-wrap"><table>
+      <tr><th>契约/不变量</th><th>当前测试证据</th><th>能证明什么</th><th>证据缺口</th></tr>
+      <tr><td>JSONL 示例字段</td><td><code>evaluation/patch_selection/example/example.jsonl:1</code></td><td>展示一个 10 候选、含 labels、无 regressions 的输入。</td><td>Fixture 不是自动测试；未覆盖坏 JSON、长度错配、重复 id。</td></tr>
+      <tr><td>过滤/去重</td><td>无 repository test 命中 Selector 符号。</td><td>只能由源码静态推导。</td><td>缺 <code>clean_patch</code>、回归 fail-open、空候选、等价 Patch 单测。</td></tr>
+      <tr><td>Result 解析/回退</td><td>无自动测试。</td><td>正则与第一候选 fallback 可由实现审计。</td><td>缺格式变体、非法编号、空 tool_calls、max_turn 测试。</td></tr>
+      <tr><td>恢复/checkpoint</td><td>无自动测试。</td><td>非空 statistics skip 由源码证明。</td><td>缺中断点故障注入和产物一致性测试。</td></tr>
+      <tr><td>Docker 生命周期</td><td>无 evaluation 集成/平台测试。</td><td>实现调用 stop/remove。</td><td>缺镜像缺失、checkout 失败、强杀残留、网络/权限隔离测试。</td></tr>
+      <tr><td>评测指标</td><td><code>analysis.py:110-151</code> 计算 group 级汇总。</td><td>定义 completion/selection rates。</td><td>默认分母 500；没有论文实验 manifest、seed、模型快照、原始结果或可复现 Pass@1 测试。</td></tr>
+    </table></div>
+    <p><code>pyproject.toml</code> 的 pytest <code>testpaths</code> 只有 <code>tests/</code>，coverage source 只有 <code>trae_agent</code>；因此默认单元测试和覆盖率都不包含 <code>evaluation/</code>。evaluation 依赖被放在可选 extra 中。<span class="evidence"><code>pyproject.toml:29-42,54-69</code></span></p>
+    <div class="callout warning"><strong>本页验证范围：</strong>已执行 HTML 静态解析、引用路径/行号抽查、Python 语法编译与局部纯函数验证，并以桌面/移动浏览器实际渲染。未运行真实 Selector E2E，因为它需要 SWE-bench 镜像、Docker、外部 py312 artifact、数据集与 LLM 凭证；不得用静态检查冒充算法效果验证。</div>
+  </section>
+
+  <section class="section" id="extension">
+    <h2>14. 开发与扩展指南</h2>
+    <div class="table-wrap"><table>
+      <tr><th>变更目标</th><th>所有者表面</th><th>必要证明</th><th>禁止捷径</th></tr>
+      <tr><td>接入新 Generator</td><td>仓库外生成器 + candidate JSONL adapter</td><td>候选来源、轨迹关联、独立性、顺序、失败记录和数据许可。</td><td>不要塞进 <code>BaseAgent</code>；不要宣称现有 CLI 已多 Agent 编排。</td></tr>
+      <tr><td>强化输入 Schema</td><td><code>selector.py</code> 前置验证层</td><td>字段类型、等长、唯一 id、候选上限、diff 可解析、instance 集合一致。</td><td>不要让确定性坏输入消耗 Docker/LLM retry。</td></tr>
+      <tr><td>实现真实 Pruner</td><td>独立 evaluation 组件</td><td>回归执行来源、三态结果、超时、环境、缓存键、盲测隔离。</td><td>不要继续把外部字段消费写成“这里执行回归”。</td></tr>
+      <tr><td>新增排序/Selector</td><td><code>SelectorAgent</code> 或新策略接口</td><td>输出 Schema、无候选/无正确答案语义、确定性、成本和对照实验。</td><td>不要依赖 <code>success_id</code> 做选择控制。</td></tr>
+      <tr><td>实现组间决赛</td><td><code>SelectorEvaluation</code> 上层聚合</td><td>组赢家 ID 映射、最终唯一产物、重复/失败组语义、恢复 checkpoint。</td><td>不要把多个 <code>group_N</code> Patch 当成已经得到全局 Best Patch。</td></tr>
+      <tr><td>安全化 Sandbox</td><td><code>sandbox.py</code></td><td>非特权、网络策略、资源限额、只读输入、临时卷、镜像 digest、清理故障测试。</td><td>不要用“Docker”一词替代实际隔离证明。</td></tr>
+      <tr><td>可靠实验记录</td><td><code>utils.py</code>/manifest/reporting</td><td>schema version、config/candidate/image/model hash、seed、原子 commit、失败终态。</td><td>不要只用“statistics 非空”判断可复现实验完成。</td></tr>
+      <tr><td>生产化服务</td><td>新外层服务/队列（当前不存在）</td><td>身份、配额、租户隔离、取消、幂等、审计与数据删除。</td><td>不要直接把当前特权批处理脚本暴露为在线 API。</td></tr>
+    </table></div>
+    <p>若只需复用主项目模型适配，继续通过 <code>ModelConfig</code>/<code>LLMClient</code>；若修改 Selector 状态机，应保持它在 <code>evaluation/</code> 的独立所有权，并为输入、过滤、投票、恢复和评分新增 evaluation 专属测试。</p>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <h2>15. 设计权衡与已知限制</h2>
+    <div class="table-wrap"><table>
+      <tr><th>选择</th><th>收益</th><th>成本/失败模式</th><th>何时重评</th></tr>
+      <tr><td>文件式 JSON/JSONL 流水线</td><td>简单、可离线检查、易接不同生成器。</td><td>无 Schema/version/事务；共享目录并发和恢复脆弱。</td><td>多实验并发、长期运行或需要严格复现时。</td></tr>
+      <tr><td>先分组再选择</td><td>控制单次 Prompt 候选规模。</td><td>组间没有自动决赛；分组顺序影响问题；每组都重复 Issue/代码调查。</td><td>候选数大、需唯一全局结果或比较分组策略时。</td></tr>
+      <tr><td>LLM Agent 而非静态 scorer</td><td>能阅读仓库和主动运行测试。</td><td>高 token/时间成本、非确定性、工具副作用、格式解析脆弱。</td><td>可用更可靠的可执行测试/形式化规则或预算受限时。</td></tr>
+      <tr><td>Majority Voting</td><td>可能降低单次随机选择波动。</td><td>最多按 <code>num_candidate</code> 重复整个 Selector；同模型同 Prompt 的相关误差不等于独立投票。</td><td>应先量化增益、方差和边际 token 成本。</td></tr>
+      <tr><td>回归字段优先</td><td>可利用上游测试信号缩小空间。</td><td>缺失即通过、全失败则保留全部；测试选择偏差可误删正确候选。</td><td>引入可验证三态结果和可信测试 provenance 时。</td></tr>
+      <tr><td>cleaned diff 去重</td><td>忽略注释与空白差异，减少近重复候选。</td><td>可能合并语义上不同的注释、字符串边缘或格式敏感修改；不考虑文件路径/上下文行。</td><td>观察到碰撞或多语言 Patch 时。</td></tr>
+      <tr><td>Ground truth 短路</td><td>有标签评测中避免无信息的全对/全错选择。</td><td>标签进入算法控制流，不能作为盲测或部署路径；也改变成本统计。</td><td>报告可泛化效果、做 leaderboard 盲测或生产使用时必须移除。</td></tr>
+    </table></div>
+    <h3>当前限制与证据缺口</h3>
+    <ul>
+      <li>没有仓库内 Generator、生成轨迹到 candidate JSONL 的转换脚本或生成成本统计。</li>
+      <li>没有自动回归执行；README 指向外部 Agentless，版本、命令和结果 provenance 未锁定。</li>
+      <li>没有 evaluation 自动测试、CI job、E2E fixture 或支持平台矩阵。</li>
+      <li>没有论文结果对应的配置、模型快照、候选集、随机种子、完整统计和成本，因此不能从当前源码独立复现报告数字。</li>
+      <li>没有验证 <code>success_id</code> 的来源/时间点，也没有盲评隔离；评测泄漏风险必须在实验设计中单独审计。</li>
+      <li>没有容器镜像 digest、外部 py312 artifact checksum、SBOM、网络策略或资源配额证据。</li>
+      <li>Roadmap 把高级多 Agent 协调列为未来能力；不能用 Patch Selection 反证主 Runtime 已实现在线多 Agent。<span class="evidence"><code>docs/roadmap.md:68-83</code></span></li>
+    </ul>
+  </section>
+
+  <section class="section" id="sources">
+    <h2>16. 源码索引与进一步阅读</h2>
+    <div class="source-card"><b>入口与文档</b><code>evaluation/patch_selection/selector.py:14-102</code>；<code>evaluation/patch_selection/README.md:1-102</code>；<code>evaluation/patch_selection/example/example.jsonl:1</code></div>
+    <div class="source-card"><b>评估编排与恢复</b><code>evaluation/patch_selection/trae_selector/selector_evaluation.py:18-144,146-297,300-389</code></div>
+    <div class="source-card"><b>Selector 状态机与 Prompt</b><code>evaluation/patch_selection/trae_selector/selector_agent.py:14-58,61-150,153-242</code></div>
+    <div class="source-card"><b>Docker/Shell 边界</b><code>evaluation/patch_selection/trae_selector/sandbox.py:8-123</code></div>
+    <div class="source-card"><b>去重与文件产物</b><code>evaluation/patch_selection/trae_selector/utils.py:11-74,77-143</code></div>
+    <div class="source-card"><b>容器内独立工具</b><code>evaluation/patch_selection/trae_selector/tools/tools/bash.py:8-122</code>；<code>evaluation/patch_selection/trae_selector/tools/tools/edit.py:11-244</code>；<code>evaluation/patch_selection/trae_selector/tools/tools/execute_bash.py:8-44</code>；<code>evaluation/patch_selection/trae_selector/tools/tools/execute_str_replace_editor.py:13-68</code>；<code>evaluation/patch_selection/trae_selector/tools/tools/run.py:4-36</code></div>
+    <div class="source-card"><b>统计分析</b><code>evaluation/patch_selection/analysis.py:10-155</code></div>
+    <div class="source-card"><b>复用的主项目契约</b><code>trae_agent/utils/config.py:16-116,194-300,394-410</code>；<code>trae_agent/utils/llm_clients/llm_client.py:15-86</code>；<code>trae_agent/utils/trajectory_recorder.py:20-230</code>；<code>trae_agent/tools/__init__.py</code></div>
+    <div class="source-card"><b>依赖与测试边界</b><code>pyproject.toml:1-45,54-69</code>；<code>Makefile:18-44</code>；<code>CONTRIBUTING.md:16-37</code></div>
+    <div class="source-card"><b>相邻模块</b><a href="03-agent-runtime.html">03 · Agent Runtime</a>（证明主 CLI 单 Agent 所有权）；<a href="04-tool-framework.html">04 · Tool Framework</a>（复用的 Tool Schema 与不同执行实现）；<a href="12-trajectory.html">12 · Trajectory</a>（记录契约）；<a href="13-llm-provider-abstraction.html">13 · LLM Provider</a>（模型配置与重试）。</div>
+    <p class="source-note">论文链接由仓库 README 提供：arXiv:2507.23370。论文指标属于其特定数据、候选生成和评测时点；当前源码证据不足以把它们归因于任意一次 <code>selector.py</code> 或 <code>trae-cli run</code>。<span class="evidence"><code>README.md:1-15,270-281</code></span></p>
+  </section>
+
+  <section class="section" id="glossary">
+    <h2>附录 · 术语对照表</h2>
+    <div class="table-wrap"><table>
+      <tr><th>英文术语</th><th>中文</th><th>一句话解释</th></tr>
+      <tr><td>Patch Selection</td><td>补丁选择</td><td>从多个候选补丁中选出最优解的流程</td></tr>
+      <tr><td>Candidate Patch</td><td>候选补丁</td><td>由生成器产生的待评估代码修改方案</td></tr>
+      <tr><td>Generator</td><td>生成器</td><td>产生候选补丁的组件或模型</td></tr>
+      <tr><td>Regression</td><td>回归</td><td>修改后导致原有功能失效的问题</td></tr>
+      <tr><td>Pruning</td><td>剪枝</td><td>提前排除明显不合格的候选方案</td></tr>
+      <tr><td>Majority Voting</td><td>多数投票</td><td>多个候选结果中取出现最多的作为最终答案</td></tr>
+      <tr><td>Group</td><td>分组</td><td>将候选补丁按策略分类的集合</td></tr>
+      <tr><td>Test-time Scaling</td><td>测试时扩展</td><td>在推理阶段投入更多计算资源以提升质量</td></tr>
+      <tr><td>Inline Pruning</td><td>内联剪枝</td><td>在生成过程中即时过滤不合格结果</td></tr>
+    </table></div>
+  </section>
+
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a class="prev" href="08-memory.html">← 08 Memory</a>
+    <a class="next" href="10-prompt-engineering.html">10 Prompt Engineering →</a>
+  </nav>
+  <div class="footer">Trae Agent 架构模块 09 · 仅评估侧补丁选择 · 工作区源码静态审计</div>
+</main>
+
+<script>
+(function(){
+  const links=[...document.querySelectorAll('.sidebar a')];
+  const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  if(!('IntersectionObserver' in window)) return;
+  const observer=new IntersectionObserver(entries=>{
+    const visible=entries.filter(e=>e.isIntersecting).sort((a,b)=>a.boundingClientRect.top-b.boundingClientRect.top);
+    if(!visible.length) return;
+    const id='#'+visible[0].target.id;
+    links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')===id));
+  },{rootMargin:'-70px 0px -72% 0px',threshold:[0,.1]});
+  sections.forEach(s=>observer.observe(s));
+})();
+</script>
+</body>
+</html>

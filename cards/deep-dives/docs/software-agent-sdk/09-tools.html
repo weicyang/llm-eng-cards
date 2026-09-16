@@ -1,0 +1,767 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>09 工具协议、装配与并行执行｜Software Agent SDK 架构</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --red: #b91c1c;
+      --purple: #6d28d9;
+      --code: #b91c1c;
+      --sidebar: 18rem;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 15px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code, pre {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+        monospace;
+    }
+    code { color: var(--code); }
+    .sidebar {
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: var(--sidebar);
+      padding: 1.25rem 1rem;
+      overflow-y: auto;
+      border-right: 1px solid var(--border);
+      background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
+    .sidebar strong { display: block; margin-bottom: .75rem; }
+    .sidebar a {
+      display: block;
+      padding: .3rem .55rem;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: .88rem;
+    }
+    .sidebar a.active {
+      border-left-color: var(--blue);
+      color: var(--text);
+      background: rgba(67,56,202, .08);
+    }
+    main {
+      width: min(76rem, calc(100% - var(--sidebar)));
+      margin-left: var(--sidebar);
+      padding: 2rem clamp(1rem, 4vw, 4rem) 5rem;
+    }
+    .back { display: inline-block; margin-bottom: 1.25rem; }
+    h1 { margin: 0 0 .35rem; font-size: clamp(2rem, 4vw, 3rem); }
+    h2 {
+      margin-top: 3.25rem;
+      padding-bottom: .4rem;
+      border-bottom: 1px solid var(--border);
+      scroll-margin-top: 1rem;
+    }
+    h3 { margin-top: 1.8rem; }
+    .lede { max-width: 62rem; color: var(--muted); font-size: 1.08rem; }
+    .meta, .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+      gap: .8rem;
+      margin: 1.5rem 0;
+    }
+    .card, .callout {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .card b { display: block; color: var(--muted); font-size: .82rem; }
+    .tag {
+      display: inline-block;
+      margin: .15rem .25rem .15rem 0;
+      padding: .08rem .48rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .tag.current { color: var(--green); border-color: rgba(21,128,61,.5); }
+    .tag.optional { color: var(--purple); border-color: rgba(109,40,217,.5); }
+    .tag.deploy { color: var(--blue); border-color: rgba(67,56,202,.5); }
+    .tag.gap { color: var(--yellow); border-color: rgba(194,65,12,.5); }
+    .callout.warning { border-left: 4px solid var(--yellow); }
+    .callout.danger { border-left: 4px solid var(--red); }
+    .callout.info { border-left: 4px solid var(--blue); }
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+    table { width: 100%; border-collapse: collapse; min-width: 50rem; }
+    th, td {
+      padding: .65rem .75rem;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); }
+    pre {
+      overflow-x: auto;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      line-height: 1.55;
+    }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence::before { content: "〔"; color: var(--muted); }
+    .section span.evidence::after { content: "〕"; color: var(--muted); }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      color: var(--muted);
+      font-size: .86em;
+    }
+    .flow { border-left: 3px solid var(--blue); padding-left: 1rem; }
+    .flow li { margin: .45rem 0; }
+    .muted { color: var(--muted); }
+    @media (max-width: 860px) {
+      .sidebar {
+        position: static;
+        width: auto;
+        max-height: 16rem;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      main { width: auto; margin-left: 0; padding: 1.25rem; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <nav class="sidebar" aria-label="本页目录">
+    <strong>09 工具体系</strong>
+    <a href="#position">1. 模块定位</a>
+    <a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a>
+    <a href="#architecture">4. 架构组成</a>
+    <a href="#flows">5. 完整运行流程</a>
+    <a href="#data">6. 数据与状态模型</a>
+    <a href="#interfaces">7. 接口、协议与事件</a>
+    <a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a>
+    <a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a>
+    <a href="#operations">12. 可观测性与排障</a>
+    <a href="#testing">13. 测试与验证</a>
+    <a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与已知限制</a>
+    <a href="#sources">16. 源码索引与进一步阅读</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+
+  <main>
+    <a class="back" href="../../software_agent_architecture.html#tools">← 返回架构总览：工具协议、注册表与并行执行</a>
+    <header>
+      <h1>工具协议、装配与并行执行</h1>
+      <p class="lede">
+        本章从可持久化的 <code>Tool</code> 规格出发，追踪 registry、运行期
+        <code>ToolDefinition</code>、<code>ToolExecutor</code>、Action/Observation
+        事件配对和资源锁，并说明 Terminal、File Editor、Grep、Glob、Browser、
+        Finish 与 Task 的真实能力边界。
+      </p>
+      <div class="meta">
+        <div class="card"><b>源码版本</b>工作区当前快照；环境中 Git 命令不可用，SHA 未取得</div>
+        <div class="card"><b>证据状态</b>SDK、Tools 实现与聚焦测试已审计；未执行浏览器 Live/E2E</div>
+        <div class="card"><b>主要所有者</b><code>openhands-sdk/openhands/sdk/tool/</code>、<code>openhands-tools/openhands/tools/</code></div>
+        <div class="card"><b>目标读者</b>工具作者、Agent/Conversation 开发者、并发与故障排查人员</div>
+        <div class="card"><b>最近验证</b>2026-08-14</div>
+        <div class="card"><b>事实分类</b>
+          <span class="tag current">当前</span>
+          <span class="tag optional">可选</span>
+          <span class="tag deploy">部署相关</span>
+          <span class="tag gap">证据缺口</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>
+        工具体系把“模型可见的函数契约”和“会产生副作用的运行时对象”分开：
+        SDK 拥有规格、Schema、registry、Agent 编排与事件协议；Tools 包依赖 SDK，
+        提供终端、文件、搜索、浏览器和子 Agent 等具体实现。SDK 的默认工具只保存名称，
+        不反向导入 Tools 包。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/defaults.py:1-11</code></span>
+        <span class="evidence"><code>openhands-tools/openhands/tools/AGENTS.md:5-11</code></span>
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>边界</th><th>本模块负责</th><th>委托或明确不负责</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>声明</td>
+              <td><code>Tool(name, params)</code> 是 Agent 中的可序列化初始化规格。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/spec.py:12-31</code></span></td>
+              <td>不等同于已绑定 Workspace 的执行器，也不自行执行 I/O。</td>
+            </tr>
+            <tr>
+              <td>运行时</td>
+              <td><code>ToolDefinition</code> 绑定 Action、Observation、annotations 与可选 executor；<code>ToolExecutor</code> 实施副作用。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:283-327</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:347-407</code></span></td>
+              <td>Workspace 后端、浏览器进程和子 Conversation 各由其相邻模块管理。</td>
+            </tr>
+            <tr>
+              <td>编排</td>
+              <td>Agent 把模型 tool call 规范化、校验、持久化为 Action，再批量执行并按原顺序发 Observation。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1199-1342</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:312-339</code></span></td>
+              <td>确认策略、SecurityAnalyzer 与 Hooks 的详细规则属于安全模块。</td>
+            </tr>
+            <tr>
+              <td>恢复</td>
+              <td>未匹配 Action 可在下一步先执行；中断会补错误结果，保持历史合法。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:643-653</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2529-2557</code></span></td>
+              <td>EventLog、View 与持久化恢复的完整机制由状态/恢复模块负责。</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        相邻章节：先读 <a href="08-recovery.html">08 Condenser 与分层恢复</a> 理解畸形
+        tool history 的恢复，再读 <a href="10-security.html">10 安全、确认与 Hooks</a>
+        理解 Action 持久化之后、执行之前的准入。
+      </p>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <pre aria-label="工具调用链">LLM tool_calls
+  → Agent._get_action_event：JSON 解析、名称规范化、Pydantic 校验
+  → ActionEvent（先进入 Conversation 事件链）
+  → 确认 / PreToolUse Hook
+  → _ActionBatch → ParallelToolExecutor
+  → DeclaredResources → ResourceLockManager
+  → ToolDefinition.__call__ → ToolExecutor.__call__
+  → ObservationEvent / AgentErrorEvent / UserRejectObservation
+  → callback → ConversationState.append_event → 下一轮 View</pre>
+      <p>
+        注册方向是 Tools 包在模块导入时调用 SDK 的 <code>register_tool()</code>；解析方向则由
+        Agent 初始化时使用规格名称查询 registry，再把当前 <code>ConversationState</code>
+        传给工具类的 <code>create()</code>。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/definition.py:357-358</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:149-167</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:538-563</code></span>
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>表面</th><th>所有者</th><th>依赖方向与进程边界</th></tr></thead>
+          <tbody>
+            <tr><td>Tool/Action/Observation 协议</td><td>SDK <code>tool/</code></td><td>供 Agent、MCP、Tools 和客户端工具共同依赖；Schema 默认 frozen 且拒绝额外字段。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/schema.py:182-185</code></span></td></tr>
+            <tr><td>registry 与装配</td><td>SDK <code>tool/registry.py</code>、<code>agent/base.py</code></td><td>进程内全局 registry；materialized tools 是 Agent 私有运行期映射。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:31-34</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:303-306</code></span></td></tr>
+            <tr><td>并行调度与锁</td><td>SDK <code>agent/parallel_executor.py</code>、<code>conversation/resource_lock_manager.py</code></td><td>同一进程线程池；异步路径仍在线程中调用同步 executor。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:128-153</code></span></td></tr>
+            <tr><td>具体副作用</td><td><code>openhands-tools</code></td><td>本地文件/进程、Chromium/CDP 或嵌套 LocalConversation；RemoteConversation 的真正工具执行仍落到服务端 LocalConversation。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:287-302</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <div class="grid">
+        <div class="card"><b>Tool</b>只含注册名称和传给 <code>create()</code> 的参数；JSON 模式下，Pydantic response schema 会序列化成 JSON Schema。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/spec.py:18-31</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/spec.py:47-60</code></span></div>
+        <div class="card"><b>ToolDefinition</b>冻结的运行时定义；类名默认转 snake_case 并去掉 <code>_tool</code> 后缀。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:379-403</code></span></div>
+        <div class="card"><b>ToolExecutor</b>同步可调用对象，另有生命周期 <code>close()</code> 和跨线程 <code>interrupt()</code> 默认空实现。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:283-327</code></span></div>
+        <div class="card"><b>Action / Observation</b>冻结 Pydantic Schema；Observation 用 <code>content</code> 与 <code>is_error</code> 表示对模型可见的成功或工具级失败。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/schema.py:331-338</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/schema.py:363-378</code></span></div>
+        <div class="card"><b>ToolSet</b>不是另一套基类。仓库中的 Browser/Task ToolSet 都是 <code>ToolDefinition</code> 子类，其 <code>create()</code> 返回一个或多个实际 ToolDefinition；ToolSet 自身不进入 tools map。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:776-871</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/definition.py:198-258</code></span></div>
+        <div class="card"><b>DeclaredResources</b><code>declared=False</code> 表示未知并退化为工具级互斥；<code>declared=True, keys=()</code> 表示明确无需锁。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:250-280</code></span></div>
+      </div>
+      <div class="callout info">
+        <strong>annotations 是提示，不是权限系统</strong>
+        <div>
+          <code>ToolAnnotations</code> 默认 <code>readOnlyHint=False</code>、
+          <code>destructiveHint=True</code>、<code>idempotentHint=False</code>、
+          <code>openWorldHint=True</code>；它们会进入工具描述并影响是否给模型附加风险字段，
+          但不能替代确认、Hook 或 Workspace 隔离。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:215-247</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:690-712</code></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <h3>4.1 Registry 与运行时装配</h3>
+      <p>
+        registry 接受“带 executor 的固定 ToolDefinition 实例”或“实现具体
+        <code>create()</code> 的 ToolDefinition 子类”。固定实例拒绝 params；类 resolver
+        要求返回 <code>Sequence[ToolDefinition]</code>，所以一个规格可展开多个工具。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:37-92</code></span>
+      </p>
+      <p>
+        注册、查询和可用性表由进程级 <code>RLock</code> 保护。重复名称当前只警告并覆盖，
+        不是 first-registration-wins；可用性检查异常按不可用处理。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:31-34</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:103-110</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:139-146</code></span>
+      </p>
+      <h3>4.2 ToolDefinition 调用边界</h3>
+      <p>
+        <code>action_from_arguments()</code> 先拆出可选 structured response，再由 Action
+        类型校验；执行后，若声明 Observation 类型则接受实例或按类型校验返回值，否则只接受
+        Observation、BaseModel 或 dict 并包装成基础 Observation。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:523-556</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:607-636</code></span>
+      </p>
+      <p>
+        直接调用单工具的 <code>acall()</code> 会把同步调用放入默认线程池；Agent 内部异步批处理
+        不调用这个 hook，而由 ParallelToolExecutor 统一调度。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:638-651</code></span>
+      </p>
+      <h3>4.3 Schema 出口</h3>
+      <p>
+        同一 ToolDefinition 可导出 MCP、Chat Completions 与 Responses API 工具形状；
+        Agent 侧始终把 <code>summary</code> 元字段加入模型可见输入 schema，并只对非只读工具
+        可选加入 <code>security_risk</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:653-712</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:737-797</code></span>
+      </p>
+      <h3>4.4 具体工具边界</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>工具</th><th>真实能力</th><th>资源/生命周期</th><th>明确边界</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>Terminal</td>
+              <td>一个 Action 执行一个 shell 命令，支持输入、timeout、reset；Windows 用 PowerShell，Unix 可选 tmux 池或 subprocess。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/definition.py:86-114</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/terminal/definition.py:283-337</code></span></td>
+              <td>tmux 池明确无框架锁；单 session 使用 <code>terminal:session</code>。中断发送 Ctrl+C，close 清理池/会话。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/definition.py:271-280</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:581-604</code></span></td>
+              <td>软超时可返回 <code>exit_code=-1</code>；tmux 消失时重建池但不自动重试原命令，避免重复副作用。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/definition.py:146-165</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:42-50</code></span></td>
+            </tr>
+            <tr>
+              <td>File Editor</td>
+              <td><code>view/create/str_replace/insert/undo_edit</code>，Action 要求 path；具体参数组合由 editor 校验。<span class="evidence"><code>openhands-tools/openhands/tools/file_editor/definition.py:26-66</code></span></td>
+              <td>所有命令含 view 都锁规范化后的 <code>file:&lt;resolved path&gt;</code>，同文件串行、不同文件可并行。<span class="evidence"><code>openhands-tools/openhands/tools/file_editor/definition.py:193-206</code></span></td>
+              <td>执行器可限制可编辑文件；限制不阻止 view，ToolError 转为 <code>is_error</code> Observation。<span class="evidence"><code>openhands-tools/openhands/tools/file_editor/impl.py:25-73</code></span></td>
+            </tr>
+            <tr>
+              <td>Grep</td>
+              <td>大小写不敏感的内容 regex 搜索，返回含匹配内容的文件路径，按 mtime 降序并截断到 100 个。<span class="evidence"><code>openhands-tools/openhands/tools/grep/impl.py:174-224</code></span></td>
+              <td>明确无共享资源锁；依次选择 ripgrep、系统 grep、Python。<span class="evidence"><code>openhands-tools/openhands/tools/grep/definition.py:70-79</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/grep/impl.py:28-57</code></span></td>
+              <td>默认隐藏 dotfile/dotdir；显式 include 可露出根下隐藏文件，但仍不递归隐藏目录。<span class="evidence"><code>openhands-tools/openhands/tools/grep/impl.py:147-165</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/grep/impl.py:281-306</code></span></td>
+            </tr>
+            <tr>
+              <td>Glob</td>
+              <td>文件名 glob，返回文件而非目录，按 mtime 降序、最多 100 个。<span class="evidence"><code>openhands-tools/openhands/tools/glob/impl.py:136-183</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/glob/impl.py:185-231</code></span></td>
+              <td>ripgrep 后端无锁；Python fallback 因使用进程级 <code>os.chdir()</code> 而退化为工具级互斥。<span class="evidence"><code>openhands-tools/openhands/tools/glob/definition.py:68-82</code></span></td>
+              <td>支持从绝对 pattern 拆出搜索目录；Python fallback 刻意不 resolve 最终 symlink 路径。<span class="evidence"><code>openhands-tools/openhands/tools/glob/impl.py:215-229</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/glob/impl.py:233-297</code></span></td>
+            </tr>
+            <tr>
+              <td>Browser ToolSet</td>
+              <td>一个规格展开 navigate/click/state/content/type/scroll/tab/storage/recording 共 14 个工具，共用 Chromium/CDP executor。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:835-871</code></span></td>
+              <td>父/子 Agent 跨 create 调用复用类级共享 executor；初始化失败返回空列表，不使整会话失败。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:786-850</code></span></td>
+              <td>需要已存在 Chromium；allowed_domains、headless、action timeout 属于 executor 配置。root 下禁用 Chromium sandbox，隔离减弱。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/impl.py:283-324</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/browser_use/impl.py:326-400</code></span></td>
+            </tr>
+            <tr>
+              <td>Finish</td>
+              <td>Action 携带最终消息，executor 只回传 FinishObservation；annotations 标为只读、幂等、closed world。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/builtins/finish.py:21-66</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/builtins/finish.py:69-106</code></span></td>
+              <td>本身无外部资源。</td>
+              <td>同一模型响应中 Finish 后的 tool calls 被丢弃；Finish 被 Hook 阻止时不进入 FINISHED。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:201-227</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:341-372</code></span></td>
+            </tr>
+            <tr>
+              <td>Task ToolSet</td>
+              <td>展开一个阻塞式 task 工具，用独立 LocalConversation 执行/恢复子 Agent。<span class="evidence"><code>openhands-tools/openhands/tools/task/definition.py:169-258</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/impl.py:20-66</code></span></td>
+              <td>TaskManager 管理 task map、锁和持久化目录；TaskTool 声明无共享锁，让多个 task 调用可由外层并行。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:95-110</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/definition.py:169-173</code></span></td>
+              <td>子会话共享父 workspace 路径但拥有独立 Agent、事件和预算；非 FINISHED 终态包装成错误并附可得的 partial result。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:295-330</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:380-431</code></span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="flows">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 正常成功路径</h3>
+      <ol class="flow">
+        <li>Agent 初始化并行解析显式 <code>Tool</code> 规格，再加入不受 regex 过滤的 SDK built-ins，检查 materialized name 唯一后写入私有 tools map。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:547-627</code></span></li>
+        <li>LLM 返回 tool calls；每个调用解析 JSON、规范化名称、修补参数、提取 risk/summary，再由 Action schema 校验。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1215-1278</code></span></li>
+        <li>Agent 先发出 <code>ActionEvent</code>。这一步发生在执行前，是确认、Hook 和恢复可见的事实。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1317-1342</code></span></li>
+        <li>无需确认时，_ActionBatch 先在 Finish 处截断，再分离 Hook 已阻止动作，余下调用交给 ParallelToolExecutor。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:229-266</code></span></li>
+        <li>执行器根据 DeclaredResources 获取锁，调用 ToolDefinition，再得到 Observation 或错误事件。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:275-335</code></span></li>
+        <li>并行完成顺序不直接进入事件链；_ActionBatch 按原 Action 顺序发结果，ObservationEvent 用 <code>action_id</code> 和 <code>tool_call_id</code> 配对。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:312-339</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1400-1406</code></span></li>
+      </ol>
+      <h3>5.2 拒绝与提前结束路径</h3>
+      <p>
+        若确认策略要求确认，ActionEvent 已存在，但本轮不执行，Conversation 进入
+        <code>WAITING_FOR_CONFIRMATION</code>；下次 run 先取 unmatched Actions 执行。
+        用户拒绝则为每个 pending Action 写 <code>UserRejectObservation</code>，恢复配对。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/response_dispatch.py:143-184</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1025-1066</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2489-2527</code></span>
+      </p>
+      <p>
+        PreToolUse Hook 阻止的动作不会交给 executor；emit 阶段生成
+        <code>rejection_source="hook"</code> 的 UserRejectObservation，其他动作仍可执行。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:243-259</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:317-339</code></span>
+      </p>
+      <p>
+        Finish 是批次内控制流边界：后续 calls 在执行前被丢弃；其 Observation 发出后，
+        iterative refinement 可注入用户 follow-up，否则才把状态置 FINISHED。之后 Stop Hook
+        仍可拒绝停止并把状态拉回 RUNNING。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:341-372</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1897-1925</code></span>
+      </p>
+      <h3>5.3 中断、恢复与降级路径</h3>
+      <p>
+        async batch 的 worker thread 已启动后，取消 asyncio task 会调用当前工具 executor 的
+        <code>interrupt()</code>，随后继续传播 CancelledError；线程仍需自行结束。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:193-253</code></span>
+        Conversation 捕获取消后，用 AgentErrorEvent 补齐仍 unmatched 的 Action，再置 PAUSED
+        并发 InterruptEvent。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2444-2452</code></span>
+      </p>
+      <p>
+        工具级降级不必终止 run：Browser 启动失败使 ToolSet 展开为空；Grep 从 rg 降到系统
+        grep 再到 Python；Glob 从 rg 降到 Python 并改变锁策略；Terminal 的 tmux 池丢失时
+        重建池并返回错误 Observation，请模型决定是否重试。
+        <span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:840-850</code></span>
+        <span class="evidence"><code>openhands-tools/openhands/tools/grep/impl.py:52-57</code></span>
+        <span class="evidence"><code>openhands-tools/openhands/tools/glob/definition.py:68-82</code></span>
+        <span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:531-539</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="data">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>数据/状态</th><th>权威所有者</th><th>身份与生命周期</th><th>持久化/清理</th></tr></thead>
+          <tbody>
+            <tr><td>Tool 规格</td><td>冻结 Agent 字段 <code>tools: list[Tool]</code></td><td>按注册名称和 params 描述初始化；可随 Agent 状态持久化。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:100-126</code></span></td><td>恢复时运行期 Agent 不得删除已向历史 LLM 暴露的工具，可新增。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:670-736</code></span></td></tr>
+            <tr><td>materialized tools map</td><td>Agent 私有 <code>_tools</code></td><td>名称唯一，值绑定当前 ConversationState/Workspace；读取返回 copy。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:619-627</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:1014-1024</code></span></td><td>executor 是 runtime-only，ToolDefinition dump 排除它；Conversation close 调 executor close。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:400-407</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:823-830</code></span></td></tr>
+            <tr><td>Action/Observation</td><td>Conversation 事件链</td><td>ActionEvent.id 与 tool_call_id；ObservationEvent.action_id 回指 Action。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1317-1330</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1400-1405</code></span></td><td>属于事件恢复契约，不存入 registry 或 executor。</td></tr>
+            <tr><td>资源锁</td><td>每个 ParallelToolExecutor 的 ResourceLockManager</td><td>key 对应 FIFO lock，引用计数防止等待/持有时清理。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:46-77</code></span></td><td>最后引用释放且未锁定时移除内存 lock，无磁盘状态。</td></tr>
+            <tr><td>Browser 会话</td><td>BrowserToolSet 类级共享 executor</td><td>父/子 Agent 可共享一个 Chromium/CDP 实例。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:786-832</code></span></td><td>close 与共享引用拆除有专门锁；截图/长输出写入 env observation persistence dir，录制默认在 <code>.agent_tmp/browser_observations</code>。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:33-35</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/browser_use/impl.py:710-766</code></span></td></tr>
+            <tr><td>Task 状态</td><td>TaskManager <code>_tasks</code></td><td><code>task_########</code> 与子 Conversation UUID；resume 通过 task ID 找回。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:150-155</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:203-241</code></span></td><td>父会话持久化时放其 <code>subagents/</code>；否则临时目录在 manager close 时删除。<span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:129-139</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/task/manager.py:480-496</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        工具框架自身不保存 Secret。Terminal 在每次非 input 命令前按命令从 Conversation 的
+        SecretRegistry 取环境变量，并在 Observation 返回前遮蔽输出；两处异常都被吞掉，因此
+        Secret 注入/遮蔽失败是 best-effort 而不是 fail-closed。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:320-358</code></span>
+        <span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:360-384</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="interfaces">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>接口</th><th>输入</th><th>输出/错误</th><th>顺序与幂等语义</th></tr></thead>
+          <tbody>
+            <tr><td><code>register_tool(name, factory)</code></td><td>固定 ToolDefinition 或子类</td><td>无返回；非法 factory/抽象 create 抛 TypeError。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:67-92</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:113-130</code></span></td><td>全局注册顺序保留；重复名覆盖并警告。</td></tr>
+            <tr><td><code>resolve_tool(spec, state)</code></td><td>Tool 规格、ConversationState</td><td>Sequence[ToolDefinition]；未注册为 KeyError；response_schema 要求恰好展开一个工具。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:149-167</code></span></td><td>fixed instance 每次返回同一对象；class 可按 state 新建。</td></tr>
+            <tr><td><code>ToolDefinition.__call__</code></td><td>已校验 Action、可选 LocalConversation</td><td>Observation；无 executor 为 NotImplementedError；executor 其他异常原样冒泡到调度层。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:607-636</code></span></td><td>框架不宣称幂等；参考 annotations 与具体工具语义。</td></tr>
+            <tr><td><code>ParallelToolExecutor.execute_batch/aexecute_batch</code></td><td>ActionEvent 序列、同步 runner、tools map、cancel token</td><td>与输入等长的 event-list 列表；单调用错误局部转 AgentErrorEvent。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:67-91</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:313-335</code></span></td><td>内部可乱序完成，返回及 emit 恢复输入顺序。</td></tr>
+            <tr><td><code>Conversation.execute_tool</code></td><td>tool name、调用者构造的 Action</td><td>直接返回 Observation；找不到工具为 KeyError。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2958-2999</code></span></td><td>不产生标准 Action/Observation 事件对，不经过 Agent loop、确认和 analyzer。</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        工具级失败有两种表示：executor 正常返回 <code>Observation(is_error=True)</code>，或调度层把
+        ValueError/其他异常转换成 <code>AgentErrorEvent</code>。二者都可作为 tool result 与原
+        Action 配对；不应把 <code>is_error=True</code> 误认为 Conversation 必然进入 ERROR。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/schema.py:363-397</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:313-335</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+          <tbody>
+            <tr><td><code>Agent.tools</code></td><td><code>list[Tool]</code></td><td>空列表</td><td>显式规格先解析；之后加入 SDK built-ins</td><td>初始化后固定；MCP 有专用 runtime refresh</td><td>未注册名称在 resolve 时 KeyError</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:124-135</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:547-627</code></span></td></tr>
+            <tr><td><code>include_default_tools</code></td><td>built-in 类名列表</td><td><code>BUILT_IN_TOOLS</code> 的类名</td><td>不受 <code>filter_tools_regex</code> 过滤</td><td>新 Agent 配置生效</td><td>未知类名 ValueError</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:159-169</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:569-609</code></span></td></tr>
+            <tr><td><code>filter_tools_regex</code></td><td><code>str | None</code></td><td><code>None</code></td><td>显式与 MCP/runtime tools 过滤；built-ins 豁免</td><td>新 Agent 配置生效</td><td>regex 编译异常向初始化调用者冒泡</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:152-158</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:563-570</code></span></td></tr>
+            <tr><td><code>tool_concurrency_limit</code></td><td><code>int</code>，最小 1</td><td>1</td><td>直接构造每 Agent 的 ParallelToolExecutor</td><td>新 Agent 实例生效</td><td>&lt;1 被 Pydantic 拒绝</td><td><span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:292-301</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:416-424</code></span></td></tr>
+            <tr><td>Browser executor</td><td>headless、allowed_domains、session/init/action timeout 等</td><td>headless true；domains 空；session/init 30；action timeout 常量</td><td>首次共享 executor 的配置获胜；后续配置被忽略并 warning</td><td>重建共享 executor 才生效</td><td>非正 action timeout ValueError；启动失败 ToolSet 返回空</td><td><span class="evidence"><code>openhands-tools/openhands/tools/browser_use/impl.py:326-406</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:799-850</code></span></td></tr>
+            <tr><td>Terminal backend</td><td><code>tmux/subprocess/powershell/None</code></td><td><code>None</code> 自动探测</td><td>显式值覆盖平台探测</td><td>create/reset 后生效</td><td>工作目录非法 ValueError</td><td><span class="evidence"><code>openhands-tools/openhands/tools/terminal/definition.py:283-331</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        SDK 的确定性默认 exec tool names 是 terminal、file_editor、task_tracker；browser
+        因环境依赖默认关闭，由了解运行环境的 serving layer 注入；task_tool_set 由
+        <code>enable_sub_agents</code> 控制。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/defaults.py:17-55</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <p>
+        默认并发上限为 1，此时多 Action 在调用线程严格顺序执行；上限大于 1 时，每个批次建立专用
+        ThreadPoolExecutor。同步和异步路径均使用线程执行同步 tool runner，async 只负责不阻塞事件循环
+        与传播取消。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:98-126</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:128-191</code></span>
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>DeclaredResources 结果</th><th>锁行为</th><th>适用示例</th><th>风险</th></tr></thead>
+          <tbody>
+            <tr><td><code>declared=False</code> 或 Action 未解析</td><td><code>tool:&lt;name&gt;</code> FIFO mutex</td><td>默认工具、Python Glob fallback</td><td>不同资源也串行，安全但保守。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:337-357</code></span></td></tr>
+            <tr><td><code>declared=True, keys=()</code></td><td>不加锁</td><td>Grep、Task、tmux pane pool</td><td>声明错误会让共享状态竞争；框架信任工具作者。</td></tr>
+            <tr><td><code>declared=True, keys=(...)</code></td><td>按排序后的去重 key 获取 FIFO locks</td><td>File Editor 文件 path、单 Terminal session</td><td>锁超时变为该调用的 AgentErrorEvent，不回滚已发生的外部副作用。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:84-117</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        ResourceLockManager 内置前缀 timeout：file 30 秒、terminal/browser/mcp 300 秒、
+        tool 60 秒，未知前缀 30 秒；这是资源锁等待预算，不是工具执行 timeout。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:21-28</code></span>
+      </p>
+      <div class="callout warning">
+        <strong>Browser 的当前并发声明需谨慎</strong>
+        <div>
+          14 个浏览器 ToolDefinition 共享一个 executor，但这些具体工具没有覆盖
+          <code>declared_resources()</code>，因此每个工具只按各自 <code>tool:&lt;name&gt;</code>
+          互斥；不同 browser tool names 不共享同一资源 key。AsyncExecutor 的锁只保护 portal
+          懒初始化，不证明浏览器状态操作彼此串行。开启 <code>tool_concurrency_limit &gt; 1</code>
+          时，不应假设混合 browser calls 具有确定性顺序。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:513-521</code></span>
+          <span class="evidence"><code>openhands-tools/openhands/tools/browser_use/definition.py:786-790</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/utils/async_executor.py:17-61</code></span>
+        </div>
+      </div>
+      <p>
+        并行执行不会按完成时间发事件：future 结果按提交顺序收集，_ActionBatch 再按 Action
+        顺序 emit。因此可观察历史稳定，但较早的慢调用会延迟较晚已完成结果的可见性。
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:110-126</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:312-339</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <ul>
+        <li><strong>输入校验：</strong>Action/Observation schema 默认 <code>extra="forbid"</code> 且 frozen；Agent 在 executor 前做 JSON、名称和 Pydantic 校验。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/schema.py:182-185</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1223-1315</code></span></li>
+        <li><strong>风险提示：</strong>只读 annotation 会阻止给模型注入 security_risk 字段，但 annotation 是工具作者声明；真正确认由 SecurityAnalyzer 与 ConfirmationPolicy 决定。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:697-705</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1047-1066</code></span></li>
+        <li><strong>路径边界：</strong>FileEditor executor 由 workspace root 构造，并可额外限制可编辑文件；其本地写入语义由具体 editor 校验，而不是 Tool registry。<span class="evidence"><code>openhands-tools/openhands/tools/file_editor/definition.py:208-266</code></span> <span class="evidence"><code>openhands-tools/openhands/tools/file_editor/impl.py:25-55</code></span></li>
+        <li><strong>命令边界：</strong>Terminal 能执行任意 shell 副作用，annotations 明确 destructive/open world；框架不会把 readOnlyHint 当沙箱。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/definition.py:340-353</code></span></li>
+        <li><strong>网络边界：</strong>Browser 可用 <code>allowed_domains</code> 约束 executor；root 运行时为使 Chromium 启动会禁用 sandbox，并记录安全 warning。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/impl.py:326-389</code></span></li>
+        <li><strong>程序化旁路：</strong><code>execute_tool()</code> 自动初始化工具但绕过 Agent loop、确认和 analyzer；调用者必须自行施加保护。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2958-2999</code></span></li>
+      </ul>
+      <div class="callout danger">
+        <strong>副作用后失败不可盲目重试</strong>
+        <div>
+          ParallelToolExecutor 把异常包装成结果，但没有事务或回滚协议。Terminal、File Editor、
+          Browser、Task 可能在错误出现前已经改变外部状态；只有具体工具明确证明幂等时才可自动重试。
+          ToolAnnotations 的 <code>idempotentHint</code> 默认也是 false。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/tool.py:240-247</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:313-335</code></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+          <tbody>
+            <tr><td>工具名不存在或参数无效</td><td>Agent 名称查询/Pydantic 校验</td><td>先发不可执行 ActionEvent，再发 AgentErrorEvent。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1235-1253</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1279-1315</code></span></td><td>通常继续下一轮，不直接 ERROR</td><td>模型可根据错误纠正调用</td><td>检查注册名、LLM schema 与 aliases</td></tr>
+            <tr><td>executor ValueError</td><td>单工具 runner 或并行 wrapper</td><td>转 AGENT_OUTCOME AgentErrorEvent。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1387-1398</code></span></td><td>同批其他工具保留</td><td>无框架自动重试</td><td>检查参数组合与具体工具日志</td></tr>
+            <tr><td>资源锁超时</td><td>FIFOLock acquire 返回 false</td><td>抛 ResourceLockTimeout，外层按 unexpected exception 包 INTERNAL AgentErrorEvent。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:95-112</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:323-335</code></span></td><td>该调用失败，批次继续</td><td>下一轮由模型决定</td><td>查同 key 长调用、锁声明和 timeout 前缀</td></tr>
+            <tr><td>Browser 连续 timeout</td><td>只统计 timeout，不统计普通 selector 错误</td><td>达到阈值后 best-effort cleanup、置未初始化，下一 Action 重启。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/impl.py:409-482</code></span></td><td>错误 Observation，不直接终止 Conversation</td><td>提示调用者重试</td><td>检查 Chromium、CDP、domain 与 action timeout</td></tr>
+            <tr><td>tmux server/session 消失</td><td>限定 libtmux 异常类型和消息 marker</td><td>关闭旧池、清 session cache、重建池，返回错误 Observation。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:151-180</code></span></td><td>会话可继续</td><td>原命令不自动重试</td><td>避免 top-level exit；人工判断副作用后重跑</td></tr>
+            <tr><td>async 中断</td><td>CancelledError/cancel token</td><td>interrupt executor；未开始 calls 返回 synthetic AgentError；最终补 orphan。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:215-273</code></span></td><td>Conversation PAUSED</td><td>后续 run 用合法配对历史恢复</td><td>确认具体 executor 实现 thread-safe interrupt</td></tr>
+            <tr><td>恢复时删除工具</td><td><code>Agent.verify()</code> 比较持久化/运行时 names</td><td>抛 ValueError 拒绝恢复。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/base.py:670-736</code></span></td><td>旧会话不能用该配置恢复</td><td>恢复原工具或新建会话</td><td>公共工具移除遵循 SDK 兼容策略</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        兼容面至少有三层：公开 SDK symbols 由 <code>openhands.sdk.tool.__all__</code> 导出；
+        Tool name/参数/output schema 是模型、持久化 settings/profile 与客户端依赖的 wire contract；
+        历史 Action/Observation 事件必须保持可加载。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/__init__.py:40-66</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/tool/defaults.py:1-7</code></span>
+        <span class="evidence"><code>openhands-tools/openhands/tools/AGENTS.md:19-23</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="operations">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+          <tbody>
+            <tr><td>配置了工具但 LLM 看不到</td><td>registry 的 registered/usable names、Agent 初始化日志、tools_map</td><td>实现模块未导入注册、is_usable false、regex 过滤、ToolSet 展开为空</td><td>加载定义模块；检查环境能力与 filter。registry 记录模块 qualname 可辅助定位。<span class="evidence"><code>openhands-sdk/openhands/sdk/tool/registry.py:170-208</code></span></td></tr>
+            <tr><td>多个工具“并行配置了却仍串行”</td><td><code>tool_concurrency_limit</code>、DeclaredResources、resource key</td><td>默认 limit=1、未声明资源触发 tool mutex、同文件/terminal session 冲突</td><td>只在证明线程安全后声明准确资源；不要为了性能填空 keys。</td></tr>
+            <tr><td>结果到达晚但顺序稳定</td><td>Action 顺序与最慢的早期调用</td><td>批次等待全部 future，并按输入顺序 emit</td><td>缩短慢调用或拆批；不要依赖完成顺序。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:110-126</code></span></td></tr>
+            <tr><td>工具错误但 Conversation 未 ERROR</td><td>Observation.is_error、AgentErrorEvent.classification</td><td>工具级失败被建模为可供 Agent 自纠的 result</td><td>读取事件内容和 tool_call_id，不只看 Conversation status。</td></tr>
+            <tr><td>中断后 provider 报缺 tool_result</td><td>active branch 中 unmatched Actions 与 InterruptEvent 前后的 AgentErrorEvent</td><td>自定义中断路径未补 orphan，或事件落盘/回放缺失</td><td>沿 <code>_emit_orphaned_action_errors()</code> 核对 Action–result 配对。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2529-2557</code></span></td></tr>
+            <tr><td>Browser 工具整体消失</td><td>Chromium 检测、BrowserToolSet warning</td><td>Chromium 不可用或 executor 启动失败</td><td>按错误信息安装 Chromium；重启并重新 materialize tools。<span class="evidence"><code>openhands-tools/openhands/tools/browser_use/impl.py:256-324</code></span></td></tr>
+            <tr><td>Terminal 输出泄露或缺 Secret</td><td>SecretRegistry env selection 与 mask 日志</td><td>变量名无效、registry 异常、命令未触发 Secret、best-effort masking 失败</td><td>修复 Secret 配置并避免把敏感值显式回显；不能只依赖遮蔽。<span class="evidence"><code>openhands-tools/openhands/tools/terminal/impl.py:288-358</code></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Tool 调用启用 observability 时产生 TOOL span，metadata 带 tool_call_id；无论成功、拒绝或取消，
+        编排路径会调用 <code>record_tool_result</code> 记录输入输出。<span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:1370-1383</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/agent.py:329-336</code></span>
+        <span class="evidence"><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:255-273</code></span>
+      </p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+          <tbody>
+            <tr><td>registry 类型、params 与 usability</td><td><code>tests/sdk/tool/test_registry.py:96-154</code></td><td>SDK 单元</td><td>拒绝 callable factory、固定实例拒 params、class create 消费 params、不可用工具被过滤</td><td>进程插件复杂导入顺序未覆盖</td></tr>
+            <tr><td>ToolDefinition schema/调用/annotations</td><td><code>tests/sdk/tool/test_tool_definition.py:113-246</code>、<code>552-708</code></td><td>SDK 单元</td><td>命名、executor、MCP schema、风险字段与字段顺序</td><td>第三方 provider 的全部 schema 方言不在此证明</td></tr>
+            <tr><td>并发上限、顺序、错误隔离</td><td><code>tests/sdk/agent/test_parallel_executor.py:12-240</code></td><td>SDK 单元</td><td>默认 1、线程池并发、输入顺序、异常包装、嵌套 executor 不死锁</td><td>真实高负载吞吐未量化</td></tr>
+            <tr><td>DeclaredResources 三态</td><td><code>tests/sdk/agent/test_parallel_executor_locking.py:46-173</code></td><td>SDK 集成</td><td>undeclared/tool mutex、空 keys 无锁、具体 key、无 tools map 兼容路径</td><td>该测试部分只检查结果数，锁公平由 ResourceLockManager 测试补充</td></tr>
+            <tr><td>Action batch 截断、拒绝、emit、finish</td><td><code>tests/sdk/agent/test_action_batch.py:27-230</code></td><td>SDK 单元</td><td>Finish 截断先于 blocked partition；结果/拒绝按原序；blocked Finish 不结束</td><td>真实 Hook 命令由 hooks 测试覆盖</td></tr>
+            <tr><td>Agent 端并行全链</td><td><code>tests/sdk/agent/test_parallel_execution_integration.py:132-427</code></td><td>SDK 集成</td><td>并行、默认顺序语义、Finish 后调用不执行、失败不抹掉兄弟结果、配置校验</td><td>时间阈值测试受宿主调度影响</td></tr>
+            <tr><td>File Editor 文件锁</td><td><code>tests/tools/file_editor/test_file_editor_tool.py:230-263</code></td><td>Tools 单元</td><td>所有命令同路径同 key，不同路径不同 key</td><td>跨 symlink alias 的锁等价性未在该段证明</td></tr>
+            <tr><td>Grep fallback 与并发</td><td><code>tests/tools/grep/test_grep_executor.py:28-55</code>、<code>156-209</code>、<code>260-322</code></td><td>Tools 单元</td><td>rg→grep→Python、隐藏路径一致性、并发读取</td><td>超大仓库性能无基准</td></tr>
+            <tr><td>Glob fallback/symlink/并发</td><td><code>tests/tools/glob/test_glob_executor.py:236-259</code>、<code>357-411</code></td><td>Tools 单元</td><td>强制 Python fallback 保留 symlink；rg 后端并发</td><td>Python fallback 并发依赖框架锁，executor 独立调用不安全</td></tr>
+            <tr><td>Browser ToolSet 展开与降级</td><td><code>tests/tools/browser_use/test_browser_toolset.py:66-128</code>、<code>151-187</code>、<code>442-473</code></td><td>Tools 单元</td><td>14 工具、共享 executor、子 Agent 复用、启动失败返回空</td><td>本次未运行 Live Chromium/E2E</td></tr>
+            <tr><td>Browser timeout 恢复</td><td><code>tests/tools/browser_use/test_browser_executor.py:230-296</code></td><td>Tools 单元/本地 HTTP</td><td>timeout 包装、连续失败触发 session reset</td><td>真实网页/CDP 崩溃仅由 E2E 补充</td></tr>
+            <tr><td>Task 委托、恢复和错误</td><td><code>tests/tools/task/test_task_tool_set.py:79-208</code>、<code>212-338</code></td><td>Tools 集成</td><td>子 Agent 结果回传、task resume、未知 Agent/子 LLM 异常转错误 Observation</td><td>多进程和远程子 Agent 不属于当前实现</td></tr>
+            <tr><td><code>execute_tool</code> 旁路</td><td><code>tests/sdk/conversation/local/test_execute_tool.py:127-190</code>、<code>193-264</code></td><td>SDK 单元</td><td>run 前初始化、直接返回、not found、传 Conversation context</td><td>测试不应被解读为安全准入证明</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+          <tbody>
+            <tr><td>新增具体工具</td><td>Tools 子包 <code>definition.py</code> + <code>impl.py</code></td><td>Action/Observation、ToolDefinition.create、executor、register_tool、包公开出口、对应 tests/tools</td><td>名称一致、schema 可导出、成功/工具错误、close/interrupt（若长运行）、注册门禁</td></tr>
+            <tr><td>新增 ToolSet</td><td>Tools definition</td><td>让 <code>create()</code> 返回 Sequence[ToolDefinition]；共享 executor 生命周期与失败降级</td><td>展开名称唯一、0/1/N 工具行为、共享资源并发、初始化失败不泄漏</td></tr>
+            <tr><td>启用并行</td><td>具体 ToolDefinition.<code>declared_resources()</code></td><td>选择稳定 canonical key；考虑读取与写入冲突、symlink、共享 executor</td><td>同资源串行、不同资源并行、中断、锁 timeout；不能只改 <code>tool_concurrency_limit</code></td></tr>
+            <tr><td>修改 Tool name/参数/output</td><td>SDK/Tools 公共与 wire schema</td><td>aliases/兼容加载、settings/profile、事件、文档、cross consistency tests</td><td>旧事件与旧配置可加载；公共 API 变更遵守弃用窗口</td></tr>
+            <tr><td>新增恢复逻辑</td><td>具体 executor 或 Agent 调度</td><td>区分可重试的执行前失败与可能已有副作用的执行后失败</td><td>错误分类、Observation 配对、无重复副作用、中断后可 resume</td></tr>
+            <tr><td>改变默认工具</td><td>SDK <code>tool/defaults.py</code> 与 Tools preset</td><td>cross/default name tests、settings schema/产品注入层</td><td>确定性默认与环境能力分离，browser 不因机器差异悄然成为 SDK 默认</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        推荐最小实现顺序：定义 frozen Action/Observation → 实现同步 ToolExecutor →
+        在 <code>create(conv_state)</code> 中绑定 Workspace/资源 → 提供准确 annotations 与
+        DeclaredResources → 注册 → 写聚焦测试。不要让 SDK 导入 Tools，也不要用
+        <code>execute_tool()</code> 代替需要事件、确认与 Hook 的 Agent 调用链。
+      </p>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+          <tbody>
+            <tr><td>协议与实现解耦</td><td>字符串规格 + 进程 registry + 延迟 materialize</td><td>SDK 不依赖具体工具；规格可持久化</td><td>实现模块未导入时运行期才报未注册；重复注册会覆盖</td><td>需要跨进程强类型插件发现或隔离加载</td></tr>
+            <tr><td>ToolSet 表达</td><td>复用 ToolDefinition factory，create 返回序列</td><td>无需第二套协议；一个规格展开 N 工具</td><td>ToolSet 本身不是运行时工具，名称语义对新人不直观</td><td>需要 ToolSet 独立生命周期/权限/schema 时</td></tr>
+            <tr><td>同步 executor + async bridge</td><td>异步 Agent 把同步工具放线程池</td><td>一个实现服务 sync/async，自定义工具简单</td><td>取消不能强杀线程，依赖 executor.interrupt；共享 Conversation 需要线程安全</td><td>大量原生 async 工具使线程 bridge 成为瓶颈时</td></tr>
+            <tr><td>资源声明可信</td><td>默认保守 mutex，允许工具声明细粒度 key 或无锁</td><td>兼顾兼容、安全与并行</td><td>错误空声明可产生竞态；框架无法自动推断真实副作用</td><td>出现跨工具共享资源冲突或需要读写锁语义时</td></tr>
+            <tr><td>稳定事件顺序</td><td>并行执行、按输入顺序收集/emit</td><td>历史确定、Action/result 对齐简单</td><td>head-of-line blocking，已完成结果不能提前可见</td><td>需要流式工具结果且能维护 provider 合法顺序时</td></tr>
+            <tr><td>工具错误作为结果</td><td>Observation.is_error 或 AgentErrorEvent，通常继续 Agent</td><td>模型可自纠，兄弟调用不丢失</td><td>副作用后错误无事务；错误分类依赖抛出方式</td><td>引入明确事务、补偿或 retry contract 时</td></tr>
+            <tr><td>共享 Browser executor</td><td>类级跨父/子 Agent 复用</td><td>避免 CDP 端口冲突，保留共享浏览状态</td><td>配置 first-created wins；不同 browser tool names 未声明共享 resource key</td><td>并行 browser calls 需要确定顺序或会话隔离时</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        当前证据没有证明框架提供跨工具事务、通用自动重试、进程隔离、统一权限模型或浏览器操作全局串行；
+        这些能力不能从类名、annotations 或资源前缀推断。
+      </p>
+    </section>
+
+    <section class="section" id="sources">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>类别</th><th>决定性表面</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td>规格与公共出口</td><td><code>openhands-sdk/openhands/sdk/tool/spec.py:12-60</code><br><code>openhands-sdk/openhands/sdk/tool/__init__.py:1-66</code></td><td>可持久化 Tool 与公开 API</td></tr>
+            <tr><td>Schema</td><td><code>openhands-sdk/openhands/sdk/tool/schema.py:182-240</code><br><code>openhands-sdk/openhands/sdk/tool/schema.py:331-425</code></td><td>Action/Observation、MCP schema、错误内容</td></tr>
+            <tr><td>定义与执行协议</td><td><code>openhands-sdk/openhands/sdk/tool/tool.py:215-327</code><br><code>openhands-sdk/openhands/sdk/tool/tool.py:347-651</code></td><td>annotations、DeclaredResources、ToolDefinition/Executor</td></tr>
+            <tr><td>Registry</td><td><code>openhands-sdk/openhands/sdk/tool/registry.py:31-208</code></td><td>注册、解析、可用性、锁和模块来源</td></tr>
+            <tr><td>Agent 装配</td><td><code>openhands-sdk/openhands/sdk/agent/base.py:524-627</code><br><code>openhands-sdk/openhands/sdk/agent/base.py:1014-1024</code></td><td>规格 materialize 与 tools map</td></tr>
+            <tr><td>Action 批次</td><td><code>openhands-sdk/openhands/sdk/agent/agent.py:185-372</code><br><code>openhands-sdk/openhands/sdk/agent/agent.py:1199-1406</code></td><td>截断、拒绝、校验、执行、事件顺序</td></tr>
+            <tr><td>并行与锁</td><td><code>openhands-sdk/openhands/sdk/agent/parallel_executor.py:51-357</code><br><code>openhands-sdk/openhands/sdk/conversation/resource_lock_manager.py:21-117</code></td><td>sync/async 调度、取消、资源锁</td></tr>
+            <tr><td>Conversation 边界</td><td><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:1856-2020</code><br><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2430-2557</code><br><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2958-2999</code></td><td>run、Stop Hook、中断补配对、execute_tool 旁路</td></tr>
+            <tr><td>Terminal</td><td><code>openhands-tools/openhands/tools/terminal/definition.py:86-165</code><br><code>openhands-tools/openhands/tools/terminal/definition.py:268-358</code><br><code>openhands-tools/openhands/tools/terminal/impl.py:63-180</code><br><code>openhands-tools/openhands/tools/terminal/impl.py:434-604</code></td><td>输入输出、后端、池恢复、中断</td></tr>
+            <tr><td>File Editor</td><td><code>openhands-tools/openhands/tools/file_editor/definition.py:29-68</code><br><code>openhands-tools/openhands/tools/file_editor/definition.py:193-272</code><br><code>openhands-tools/openhands/tools/file_editor/impl.py:22-73</code></td><td>命令 schema、文件锁、限制与错误</td></tr>
+            <tr><td>Grep / Glob</td><td><code>openhands-tools/openhands/tools/grep/impl.py:28-306</code><br><code>openhands-tools/openhands/tools/glob/impl.py:23-297</code></td><td>后端优先级、过滤、截断和 fallback</td></tr>
+            <tr><td>Browser</td><td><code>openhands-tools/openhands/tools/browser_use/definition.py:776-874</code><br><code>openhands-tools/openhands/tools/browser_use/impl.py:272-482</code></td><td>ToolSet、共享 executor、可用性与 timeout 恢复</td></tr>
+            <tr><td>Finish / Task</td><td><code>openhands-sdk/openhands/sdk/tool/builtins/finish.py:21-106</code><br><code>openhands-tools/openhands/tools/task/definition.py:37-263</code><br><code>openhands-tools/openhands/tools/task/manager.py:95-496</code></td><td>完成控制流、子 Agent 委托与恢复</td></tr>
+            <tr><td>相邻文档</td><td><a href="08-recovery.html">08 Condenser 与分层恢复</a><br><a href="10-security.html">10 安全、确认与 Hooks</a></td><td>malformed history 恢复与执行前准入</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <dl>
+        <dt><code>Tool</code></dt><dd>可持久化的工具初始化规格，仅含注册名称和参数；不是执行器。</dd>
+        <dt><code>ToolDefinition</code></dt><dd>模型可见 schema、annotations、Action/Observation 类型与运行期 executor 的冻结组合。</dd>
+        <dt><code>ToolExecutor</code></dt><dd>接收 Action 并真正执行 I/O 或副作用的同步可调用对象；可实现 close/interrupt。</dd>
+        <dt><code>ToolSet</code></dt><dd>本仓库的约定名称：一个 ToolDefinition 子类充当 factory，create 时展开多个或一个实际工具；没有独立 ToolSet 基类。</dd>
+        <dt><code>Action</code></dt><dd>工具输入的冻结 Schema；在标准 Agent 路径中由 ActionEvent 持久化后才执行。</dd>
+        <dt><code>Observation</code></dt><dd>工具输出 Schema；<code>is_error</code> 表示工具级失败，未必等于 Conversation ERROR。</dd>
+        <dt><code>ActionEvent</code></dt><dd>包含 tool_call、规范化 Action、risk 与 summary 的事件，是后续结果配对的起点。</dd>
+        <dt><code>ObservationEvent</code></dt><dd>包装 Observation，并通过 action_id/tool_call_id 关联原 ActionEvent 的事件。</dd>
+        <dt><code>AgentErrorEvent</code></dt><dd>不可执行调用、executor 异常、取消等路径产生的错误型 tool result，可补齐 Action 配对。</dd>
+        <dt><code>DeclaredResources</code></dt><dd>工具针对单个 Action 声明的共享资源 key 与“是否已明确分析”标志。</dd>
+        <dt><code>ResourceLockManager</code></dt><dd>按资源 key 管理 FIFO 互斥锁、timeout 和引用清理的进程内组件。</dd>
+        <dt><code>FIFO</code></dt><dd>First In, First Out，先进先出；此处用于锁等待公平性。</dd>
+        <dt><code>CDP</code></dt><dd>Chrome DevTools Protocol，Browser executor 与 Chromium 交互所依赖的协议。</dd>
+        <dt><code>MCP</code></dt><dd>Model Context Protocol；ToolDefinition 能导出 MCP tool schema，但 MCP 连接与动态发现属于独立模块。</dd>
+        <dt><code>structured output</code></dt><dd>附加到工具参数 schema 的结构化响应字段；Agent 在构造 Action 时拆出并校验。</dd>
+        <dt><code>wire contract</code></dt><dd>跨配置、持久化、模型或客户端传递的稳定数据契约，例如工具名称和参数 schema。</dd>
+        <dt><code>head-of-line blocking</code></dt><dd>队首阻塞；较早的慢调用让较晚已完成结果因顺序发射策略而延迟可见。</dd>
+        <dt><code>fail-closed / fail-open</code></dt><dd>故障时默认拒绝/默认继续。registry usability 异常按不可用是 fail-closed；Terminal Secret 注入/遮蔽异常被忽略是 best-effort，并非 fail-closed。</dd>
+      </dl>
+    </section>
+  </main>
+
+  <script>
+    const links = [...document.querySelectorAll(".sidebar a")];
+    const sections = links
+      .map((link) => document.querySelector(link.getAttribute("href")))
+      .filter(Boolean);
+    const observer = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (!visible) return;
+      links.forEach((link) => {
+        link.classList.toggle(
+          "active",
+          link.getAttribute("href") === `#${visible.target.id}`
+        );
+      });
+    }, { rootMargin: "-15% 0px -70% 0px", threshold: [0, .1, .5] });
+    sections.forEach((section) => observer.observe(section));
+  </script>
+</body>
+</html>

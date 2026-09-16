@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LangGraph 第 11 章：Interrupt、HITL 与 Time-travel 开发指南</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.72 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif;padding:58px 22px 36px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .3rem;border-radius:4px;font-size:.91em}strong{color:var(--text)}
+.topbar{position:fixed;z-index:20;left:0;right:0;top:0;height:46px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:4px 10px}
+.sidebar{position:fixed;z-index:10;left:0;top:46px;bottom:0;width:280px;padding:16px 13px;overflow:auto;border-right:1px solid var(--border);background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}.sidebar strong{display:block;color:var(--blue);margin:0 6px 8px}.sidebar a{display:block;color:var(--muted);font-size:12.5px;padding:4px 7px;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1120px;margin:auto}h1{text-align:center;font-size:2.05rem;color:var(--blue);line-height:1.25;margin:18px 0 6px}.subtitle{text-align:center;color:var(--muted);margin:0 0 20px}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:24px 28px;margin:0 0 18px;scroll-margin-top:56px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section h2{font-size:1.4rem;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:8px;margin:0 0 15px}.section h3{font-size:1.12rem;color:var(--blue2);margin:20px 0 7px}.section h4{color:var(--purple);margin:14px 0 5px}.lead{font-size:1.04rem}
+.meta,.grid2,.grid3{display:grid;gap:11px;margin:12px 0}.meta,.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:13px}.card strong{display:block;color:var(--blue2);margin-bottom:3px}.badges{display:flex;flex-wrap:wrap;gap:7px}.badge{font-size:12px;border:1px solid;border-radius:999px;padding:1px 8px;font-weight:700}.fact{color:var(--green)}.default{color:var(--blue2)}.optional{color:var(--yellow)}.migration{color:var(--purple)}.gap{color:var(--red)}
+.key,.warn,.boundary{padding:14px 17px;border-radius:8px;margin:13px 0;background:var(--surface2)}.key{border-left:3px solid var(--blue)}.warn{border:1px solid var(--red);background:rgba(185,28,28,.04)}.warn:before{content:"风险";display:block;color:var(--red);font-weight:700}.boundary{border:1px dashed var(--yellow)}.boundary:before{content:"边界";display:block;color:var(--yellow);font-weight:700}
+.table-wrap{overflow-x:auto;margin:12px 0}table{width:100%;border-collapse:collapse;font-size:13.25px;min-width:720px}th{color:var(--blue);background:#e8e1d4}th,td{text-align:left;vertical-align:top;border:1px solid var(--border);padding:8px 9px}tr:nth-child(even){background:rgba(244,241,234,.42)}ul,ol{padding-left:22px}li{margin:4px 0}.mono{white-space:pre;overflow:auto;background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:14px;color:var(--blue2);font:13px/1.55 Consolas,"Cascadia Code",monospace}
+.section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.evidence{color:var(--muted);font-size:12.5px}.footer{text-align:center;color:#78716c;padding:20px}
+@media(max-width:1000px){body{padding-left:18px}.sidebar{display:none}.meta,.grid3{grid-template-columns:1fr 1fr}}@media(max-width:650px){body{padding:52px 9px 18px}.section{padding:17px 14px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.meta,.grid2,.grid3{grid-template-columns:1fr}h1{font-size:1.58rem}.topbar{overflow:auto}.mono{font-size:11px}}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../langgraph_architecture.html#s11">返回 LangGraph 架构总览 · 第 11 章</a></div>
+<aside class="sidebar" id="sidebar">
+  <strong>Interrupt / HITL / Time-travel</strong>
+  <a href="#position">1. 模块定位</a>
+  <a href="#dependencies">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念</a>
+  <a href="#architecture">4. 架构组成</a>
+  <a href="#flows">5. 完整运行流程</a>
+  <a href="#state-model">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口、协议与事件</a>
+  <a href="#configuration">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发、性能与资源</a>
+  <a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败、恢复与兼容</a>
+  <a href="#troubleshooting">12. 可观测性与排障</a>
+  <a href="#testing">13. 测试与验证</a>
+  <a href="#development">14. 开发与扩展指南</a>
+  <a href="#tradeoffs">15. 设计权衡与限制</a>
+  <a href="#source-index">16. 源码索引</a>
+  <a href="#glossary">17. 术语表</a>
+</aside>
+<main class="container">
+<h1>第 11 章：Interrupt、HITL 与 Time-travel</h1>
+<p class="subtitle">开发级目标：把暂停、恢复、人工决策与历史分叉实现为可审计的 checkpoint 协议，而不是“暂停 Python 栈帧”。</p>
+
+<section class="section" id="metadata">
+<div class="meta">
+  <div class="card"><strong>事实基线</strong><code>langgraph 1.2.11</code><br>2026-08-14 工作区源码</div>
+  <div class="card"><strong>证据状态</strong>已验证：公共类型、Pregel Loop、scratchpad、状态 API、sync/async 测试</div>
+  <div class="card"><strong>主要 Owner</strong><code>libs/langgraph/langgraph/types.py</code><br><code>pregel/_loop.py</code>、<code>pregel/_algo.py</code></div>
+  <div class="card"><strong>目标读者</strong>工作流开发者、Runtime 维护者、HITL 平台与故障排查人员</div>
+  <div class="card"><strong>最近验证</strong>2026-08-14</div>
+  <div class="card"><strong>适用进程边界</strong>本地 Python Pregel；远程审批传输与鉴权由 API Server / SDK 另行拥有</div>
+</div>
+<div class="badges"><span class="badge fact">当前代码事实</span><span class="badge default">默认行为</span><span class="badge optional">显式可选</span><span class="badge migration">迁移兼容</span></div>
+</section>
+
+<section class="section" id="position">
+<h2>1. 模块定位</h2>
+<p class="lead">本模块负责在 Pregel 可恢复边界上表达“现在暂停、向调用者暴露什么、以后用哪个值继续”，以及从历史 checkpoint 重放或分叉。它依赖 Checkpointer 保存 Channel 状态和 pending writes；不保存函数调用栈，也不替业务系统提供审批权限、审计签名或外部事务的 exactly-once。</p>
+<div class="table-wrap"><table><thead><tr><th>范围</th><th>负责</th><th>委托 / 明确不负责</th></tr></thead><tbody>
+<tr><td>静态中断</td><td><code>interrupt_before</code>/<code>interrupt_after</code> 在节点边界暂停</td><td>不携带动态问题值，不使用节点内 scratchpad index</td></tr>
+<tr><td>动态中断</td><td><code>interrupt(value)</code>、<code>Interrupt.id</code>、<code>Command(resume=...)</code></td><td>审批身份、授权、输入净化由应用或远程服务负责</td></tr>
+<tr><td>恢复</td><td>pending <code>INTERRUPT</code>/<code>RESUME</code>、任务重建、旧 resume 清理</td><td>外部副作用幂等由节点/基础设施负责</td></tr>
+<tr><td>时间旅行</td><td><code>get_state_history</code>、指定 <code>checkpoint_id</code>、<code>update_state</code> 与 fork</td><td>历史保留能力由具体 Saver 决定；Store 不是执行历史</td></tr>
+</tbody></table></div>
+<p>公共 <code>Interrupt</code> 只保留 <code>value</code> 与 <code>id</code>；<code>StateSnapshot</code> 同时暴露待执行任务和聚合后的 pending interrupts。<span class="evidence"><code>libs/langgraph/langgraph/types.py:575-618</code>、<code>libs/langgraph/langgraph/types.py:683-701</code></span></p>
+<div class="boundary">相邻第 9 章负责 Checkpoint/Durable Execution，第 7 章负责 Pregel 超级步，第 13 章负责 stream 传输。本章只解释这些机制怎样承载暂停、恢复与分叉，不把远程 Server 的队列、Auth 或 UI 当成本地 Runtime 内建能力。</div>
+</section>
+
+<section class="section" id="dependencies">
+<h2>2. 系统位置与依赖</h2>
+<div class="mono">应用 / 审批 UI
+  │  input 或 Command(resume / update)
+  ▼
+Pregel.stream / invoke
+  ├─ SyncPregelLoop / AsyncPregelLoop：判定静态暂停、恢复、fork
+  ├─ PregelRunner：捕获 GraphInterrupt，写 INTERRUPT / RESUME
+  ├─ prepare_next_tasks + _scratchpad：重建 task、index 与 resume 列表
+  ├─ Channel map：业务 State 与版本
+  └─ BaseCheckpointSaver：checkpoint + task pending writes
+       ▲
+get_state / get_state_history / update_state
+</div>
+<div class="table-wrap"><table><thead><tr><th>组件</th><th>方向</th><th>职责与边界</th><th>证据</th></tr></thead><tbody>
+<tr><td><code>types.py</code></td><td>公共入口</td><td><code>Interrupt</code>、<code>Command</code>、<code>interrupt()</code> 契约</td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:799-848</code>、<code>libs/langgraph/langgraph/types.py:851-974</code></span></td></tr>
+<tr><td><code>_loop.py</code></td><td>Owner</td><td>静态中断、resume 准入、多 pending 校验、replay/fork 清理</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:818-975</code></span></td></tr>
+<tr><td><code>_algo.py</code></td><td>下游</td><td>用 pending writes 与 id map 构造每 task scratchpad</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:1280-1345</code></span></td></tr>
+<tr><td><code>_runner.py</code></td><td>下游副作用</td><td>把 <code>GraphInterrupt</code> 转成 task 级持久写</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:574-613</code></span></td></tr>
+<tr><td>Checkpointer</td><td>依赖</td><td>保存 checkpoint 与特殊写；<code>RESUME</code> 有稳定负索引</td><td><span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:788-795</code></span></td></tr>
+</tbody></table></div>
+<p>同步与异步图共享核心算法并分别走 Saver 的 sync/async API；相同契约由 <code>test_time_travel.py</code> 与 <code>test_time_travel_async.py</code> 成对覆盖。核心包声明 Python ≥3.10，并依赖 <code>langgraph-checkpoint</code>。<span class="evidence"><code>libs/langgraph/pyproject.toml:5-33</code></span></p>
+</section>
+
+<section class="section" id="concepts">
+<h2>3. 核心概念</h2>
+<div class="grid2">
+<div class="card"><strong>静态 interrupt</strong>图编译或本次 stream 配置的节点边界断点。Loop 在任务执行前或本步 apply/checkpoint 后检查，不生成带业务 <code>value</code> 的动态 Interrupt。</div>
+<div class="card"><strong>动态 <code>interrupt(value)</code></strong>节点代码主动请求输入。无 resume 时抛 <code>GraphInterrupt</code>；恢复后节点从头调用，按 scratchpad index 取回值。</div>
+<div class="card"><strong>HITL</strong>Human-in-the-loop（人在回路）：应用读取 <code>Interrupt(value,id)</code>，执行授权/审批，再提交 <code>Command(resume=...)</code>。</div>
+<div class="card"><strong>Time-travel</strong>读取历史 checkpoint，并从该历史点 replay；如继续产生执行记录，则创建保留旧分支的新 fork。</div>
+</div>
+<div class="table-wrap"><table><thead><tr><th>易混点</th><th>正确区分</th></tr></thead><tbody>
+<tr><td>暂停位置</td><td>静态 before/after 是超级步任务边界；动态 interrupt 是节点内部表达，但恢复仍从节点入口开始。</td></tr>
+<tr><td>index 与 id</td><td>index 是单 task 内按调用顺序递增的位置；id 是 checkpoint namespace 的 xxh3-128 hash，用于跨 pending task 定向 resume。</td></tr>
+<tr><td>resume list 与 resume map</td><td>list 是 scratchpad 内某 task 已消费值的顺序记录；map 是客户端的 <code>{Interrupt.id: value}</code> 定向输入。</td></tr>
+<tr><td>replay 与 retry</td><td>replay 主动选择历史 checkpoint 创建新执行分支；retry 是同一 task 失败策略，不等于时间旅行。</td></tr>
+<tr><td>update 与原地修改</td><td><code>update_state</code> 模拟某节点写入并创建新 checkpoint；旧 checkpoint 保留。</td></tr>
+</tbody></table></div>
+<h3>3.1 从离散步骤到长期等待</h3>
+<p>LangChain 官方设计长文把“结构化为离散步骤”视为 checkpoint 与 HITL 的前提：单个大循环或活着的 generator continuation 难以保存为可移植状态；Pregel/BSP 则把执行组织为带屏障的超级步，使 Channel 值、版本和已见版本可以序列化。Google Pregel 提供的是超级步、消息传递与屏障这一基础计算模型；LangGraph 在其上增加 checkpoint、动态 interrupt 和 resume 协议。当前 Loop 确实在任务规划后执行节点，并在超级步 writes 合并后保存 checkpoint。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:599-724</code></span></p>
+<p>因此“等待数天或数月”不是让 Python 调用栈、worker 或某台机器一直挂起：持久化边界完成后本次运行可以退出，之后任意合适进程用同一持久线程重新载入状态。映射到当前 API，就是图必须配置可持久化 <code>checkpointer</code>，调用必须带稳定 <code>thread_id</code>；恢复端再次调用图并提交 <code>Command(resume=...)</code>，Loop 才会把回答写入恢复协议。无 checkpointer 的 resume 会被明确拒绝。<span class="evidence"><code>libs/langgraph/langgraph/types.py:862-871</code>、<code>libs/langgraph/langgraph/pregel/_loop.py:851-920</code></span></p>
+<div class="warn"><code>types.py</code> 的当前公共契约是：恢复从<strong>节点开头</strong>重新执行全部逻辑，不是从 <code>interrupt()</code> 所在行继续，也没有恢复 Python 栈帧。重建 task 时，scratchpad 从 index 0 重新匹配已持久化的 task-scoped resume list；所以 interrupt 调用顺序必须稳定，中断前副作用必须幂等、可去重，或拆到审批后的独立节点。<span class="evidence"><code>libs/langgraph/langgraph/types.py:858-871</code>、<code>libs/langgraph/langgraph/types.py:950-974</code></span></div>
+<div class="boundary">结构化执行让 tracing、UI 和审批工作流更容易集成，但本地 <code>interrupt()</code> 自动提供的只是暂停值、checkpoint 恢复与 resume 路由。Tracing/可视化属于 LangSmith、Studio 或其他观测集成；审批策略、身份认证、授权、租户隔离和通知属于应用或平台，不能从本地 interrupt 推导为已自动具备。</div>
+</section>
+
+<section class="section" id="architecture">
+<h2>4. 架构组成</h2>
+<h3>4.1 静态边界判定器</h3>
+<p><code>should_interrupt</code> 先比较 <code>checkpoint.channel_versions</code> 与 <code>versions_seen[INTERRUPT]</code>，确认自上次暂停后存在版本推进，再筛选命中的可见 task；<code>"*"</code> 会排除带 hidden tag 的 task。这避免仅用 <code>invoke(None)</code> 继续时原地再次暂停。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:155-185</code></span></p>
+<p>Loop 在执行前检查 <code>interrupt_before</code>，在 apply writes、清 pending writes、保存 checkpoint 后检查 <code>interrupt_after</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:667-724</code></span></p>
+
+<h3>4.2 动态 interrupt 与 scratchpad</h3>
+<p><code>PregelScratchpad</code> 持有原子式 <code>interrupt_counter</code>、task-scoped <code>resume</code> list 与一次性 <code>get_null_resume</code>。每次 task 重建都会重新从 index 0 计数，而已保存的 resume list 让前序调用直接返回。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_scratchpad.py:8-19</code>、<code>libs/langgraph/langgraph/pregel/_algo.py:1333-1345</code></span></p>
+<p><code>interrupt()</code> 依次尝试：按 index 读取 task resume list；消费单值 null-task resume 并追加到 list；都不存在时基于 checkpoint namespace 生成 <code>Interrupt.id</code> 并抛出。<span class="evidence"><code>libs/langgraph/langgraph/types.py:950-974</code></span></p>
+
+<h3>4.3 Runner 与持久写</h3>
+<p>Runner 捕获 <code>GraphInterrupt</code> 后，将 <code>INTERRUPT</code> 以及 task 已产生的 <code>RESUME</code> 一并交给 <code>put_writes</code>；根图抑制该控制异常并向调用者暴露 interrupt，子图则可沿 <code>GraphBubbleUp</code> 上抛。<span class="evidence"><code>libs/langgraph/langgraph/errors.py:102-107</code>、<code>libs/langgraph/langgraph/pregel/_runner.py:584-603</code></span></p>
+
+<h3>4.4 历史视图与状态更新</h3>
+<p><code>get_state</code> 读取一个 checkpoint 并组装 <code>StateSnapshot</code>；未显式给 <code>checkpoint_id</code> 时可应用当前 pending writes。<code>get_state_history</code> 委托 Saver 的 <code>list</code> 并把每项还原为 snapshot。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:1392-1434</code>、<code>libs/langgraph/langgraph/pregel/main.py:1480-1531</code></span></p>
+<p><code>update_state</code> 是单超级步的 <code>bulk_update_state</code> 包装；必须有 checkpointer，拒绝空 supersteps，并可以把请求委托给 namespace 对应的子图。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:1590-1638</code>、<code>libs/langgraph/langgraph/pregel/main.py:2515-2541</code></span></p>
+</section>
+
+<section class="section" id="flows">
+<h2>5. 完整运行流程</h2>
+<h3>路径 A：静态 <code>interrupt_before/after</code> 成功暂停与继续</h3>
+<ol>
+<li><strong>输入与校验：</strong><code>StateGraph.compile</code> 把空值规范化为列表，并验证列出的节点存在；<code>"*"</code> 是特殊全选值。未知节点在编译时拒绝。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1129-1174</code>、<code>libs/langgraph/langgraph/graph/state.py:1256-1267</code></span></li>
+<li><strong>调度：</strong>Loop 准备当前超级步 tasks；before 在节点运行前检查，after 在本步 writes 应用并 checkpoint 后检查。</li>
+<li><strong>状态变化：</strong>暂停标记由 <code>versions_seen[INTERRUPT]</code> 与 Channel 版本共同控制；恢复时将当前版本记为已见，避免同一边界立即再次命中。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:945-951</code></span></li>
+<li><strong>输出与最终状态：</strong>执行返回暂停状态；持久线程用同一 <code>thread_id</code> 再次 <code>invoke(None, config)</code>，进入下一个可运行边界。无 state key 更新的 noop 节点也可按边界逐步暂停。<span class="evidence"><code>libs/langgraph/tests/test_interruption.py:11-50</code></span></li>
+</ol>
+
+<h3>路径 B：动态 interrupt 的提前结束、拒绝与恢复</h3>
+<ol>
+<li><strong>触发：</strong>节点调用 <code>interrupt(question)</code>；首次无 resume，抛 <code>GraphInterrupt((Interrupt(...),))</code>。</li>
+<li><strong>持久化：</strong>Runner 写 task 级 <code>INTERRUPT</code>；snapshot 汇总 task interrupts，stream/invoke 向客户端暴露 <code>__interrupt__</code>。</li>
+<li><strong>准入：</strong>客户端提交 <code>Command(resume=value)</code>。若无 checkpointer，Loop 直接报错；若当前有多个未恢复 interrupt，单值 resume 被拒绝，必须用 id map。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:902-928</code></span></li>
+<li><strong>恢复：</strong>节点从头运行。第一个 interrupt 的 index 0 返回已保存值；若函数随后到达第二个 interrupt 且尚无值，再次暂停。两个顺序 interrupt 的测试展示了“两次 resume、三次节点进入”的语义。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:4838-4906</code></span></li>
+<li><strong>最终状态：</strong>最后一个 resume 被消费后，节点返回 partial update，进入普通 Channel 合并和后续节点。</li>
+</ol>
+<div class="warn">恢复绝不是从 <code>interrupt()</code> 下一行继续。中断前的计费、发信、数据库 insert、HTTP POST、文件写入都会再次执行。把不可逆副作用拆成审批后的独立节点，或使用由 thread/task/业务对象组成的稳定幂等键，并让外部系统支持 upsert/dedup。</div>
+
+<h3>路径 C：历史 replay、update_state 与 fork</h3>
+<ol>
+<li><strong>选择历史：</strong><code>get_state_history(config)</code> 返回带 <code>configurable.checkpoint_id</code>、<code>next</code>、values、tasks、interrupts 和 parent 的 snapshots。</li>
+<li><strong>只重放：</strong>把历史 snapshot 的 config 传给 <code>invoke(None, historical_config)</code>。历史点之前的节点不重跑，<code>next</code> 指向的节点重新执行。若该节点调用 interrupt，旧 RESUME 不应被复用，问题重新触发。<span class="evidence"><code>libs/langgraph/tests/test_time_travel.py:226-282</code></span></li>
+<li><strong>修改并分叉：</strong><code>update_state(historical_config, values, as_node=...)</code> 按图 writer/Channel 语义生成新 checkpoint config；随后从新 config invoke，后继节点读取修改后的分支状态。<span class="evidence"><code>libs/langgraph/tests/test_time_travel.py:143-179</code></span></li>
+<li><strong>清理旧控制写：</strong>Loop 识别真正 time-travel 时删除旧 <code>RESUME</code>；创建 replay fork 前还删除旧 <code>INTERRUPT</code>，避免新 task id 与旧 pending 控制写混杂。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:874-900</code>、<code>libs/langgraph/langgraph/pregel/_loop.py:952-971</code></span></li>
+<li><strong>最终状态：</strong>新 checkpoint 的 parent 指向分支点，旧分支仍可列出；新 resume 只推进新分支。完整测试验证 <code>source=fork</code> 与新旧回答并存。<span class="evidence"><code>libs/langgraph/tests/test_time_travel.py:285-392</code></span></li>
+</ol>
+</section>
+
+<section class="section" id="state-model">
+<h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table><thead><tr><th>数据</th><th>Owner / 作用域</th><th>生命周期与清理</th><th>关键语义</th></tr></thead><tbody>
+<tr><td>Channel values / versions</td><td>Checkpoint；thread + namespace + id</td><td>由 Saver 保留、裁剪或删除</td><td>业务 State 与静态中断“有新版本”判据</td></tr>
+<tr><td><code>versions_seen[INTERRUPT]</code></td><td>Checkpoint</td><td>resume 时推进</td><td>避免静态断点原地重复</td></tr>
+<tr><td><code>INTERRUPT</code> pending write</td><td>checkpoint + task id</td><td>task 恢复/新 fork 时按路径处理</td><td>保存 <code>Interrupt(value,id)</code></td></tr>
+<tr><td><code>RESUME</code> pending write</td><td>null task 或具体 task</td><td>消费、追加；time-travel 清理旧值</td><td>单值 resume 或 task 顺序 resume list</td></tr>
+<tr><td>resume map</td><td>本次运行 config</td><td>本次 task 重建期间</td><td><code>Interrupt.id → value</code>，定向多个 pending interrupts</td></tr>
+<tr><td>StateSnapshot</td><td>查询视图</td><td>按需构造</td><td><code>values/next/config/metadata/parent/tasks/interrupts</code></td></tr>
+</tbody></table></div>
+<p>scratchpad 会先找 null-task 的全局 resume，再找 task-specific <code>RESUME</code>；后者兼容单值并规范化为 list。若 id map 中存在当前 namespace hash，则把映射值追加到该 task 的 resume list。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:1289-1318</code></span></p>
+<p><code>Interrupt.id</code> 由 checkpoint namespace 的 xxh3-128 hash 生成；旧版 <code>ns/when/resumable</code> 字段已移除，<code>interrupt_id</code> 属性也迁移为 <code>id</code>。旧 namespace 反序列化仍保持 id 不变。<span class="evidence"><code>libs/langgraph/langgraph/types.py:580-628</code>、<code>libs/langgraph/tests/test_interrupt_migration.py:11-50</code></span></p>
+<div class="boundary">Checkpoint 存可序列化 Channel/版本/pending writes，不存 Python frame、局部变量、数据库事务或 Secret vault。Interrupt <code>value</code> 会进入持久化/stream 边界，必须按可见数据处理。</div>
+</section>
+
+<section class="section" id="interfaces">
+<h2>7. 接口、协议与事件</h2>
+<div class="table-wrap"><table><thead><tr><th>接口</th><th>输入</th><th>输出 / 事件</th><th>错误与幂等语义</th></tr></thead><tbody>
+<tr><td><code>interrupt(value)</code></td><td>任意可序列化提示值</td><td>首次抛控制异常；恢复时返回 resume value</td><td><code>None</code> 不能作为可区分的 null resume；节点会重跑</td></tr>
+<tr><td><code>Command(resume=...)</code></td><td>单值或 id map</td><td>转为 <code>RESUME</code> writes / config map</td><td>无 checkpointer 报错；多 pending + 单值报错</td></tr>
+<tr><td><code>Command(update=..., resume=...)</code></td><td>可同时提交 state update 与回答</td><td>null-task update 与 resume 进入同次恢复</td><td>update 仍受 State writer/reducer 约束</td></tr>
+<tr><td><code>get_state(config)</code></td><td>thread/ns/可选 checkpoint_id</td><td>一个 <code>StateSnapshot</code></td><td>无 checkpointer 报 <code>ValueError</code></td></tr>
+<tr><td><code>get_state_history(...)</code></td><td>filter/before/limit</td><td>snapshot iterator</td><td>能力、排序与保留受 Saver 合约影响</td></tr>
+<tr><td><code>update_state(...)</code></td><td>values、可选 as_node/task_id</td><td>新 checkpoint config</td><td>不原地覆盖；as_node 歧义或非法更新会失败</td></tr>
+</tbody></table></div>
+<p><code>Command</code> 还可携带 <code>goto</code> 与目标 <code>graph</code>，但 resume 的含义只是在当前可恢复执行线上提供 interrupt 值；它不是任意远程消息队列协议。<span class="evidence"><code>libs/langgraph/langgraph/types.py:799-848</code></span></p>
+<p>事件顺序是：节点抛动态 interrupt → Runner <code>put_writes(INTERRUPT[,RESUME])</code> → root run 输出 <code>__interrupt__</code> / lifecycle interrupt → 后续 <code>Command(resume)</code> 触发 resume lifecycle → task 重建并从节点入口执行。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:584-591</code>、<code>libs/langgraph/langgraph/pregel/_loop.py:1075-1079</code></span></p>
+</section>
+
+<section class="section" id="configuration">
+<h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table><thead><tr><th>配置项</th><th>类型 / 可选值</th><th>默认值</th><th>优先级</th><th>生效边界</th><th>失败行为 / 来源</th></tr></thead><tbody>
+<tr><td><code>compile(interrupt_before)</code></td><td>节点名列表或 <code>"*"</code></td><td><code>[]</code></td><td>本次 stream 的非空参数可覆盖图值</td><td>节点执行前</td><td>未知显式节点编译失败；<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1177-1218</code></span></td></tr>
+<tr><td><code>compile(interrupt_after)</code></td><td>节点名列表或 <code>"*"</code></td><td><code>[]</code></td><td>同上</td><td>本步 apply/checkpoint 后</td><td>未知显式节点编译失败</td></tr>
+<tr><td><code>configurable.thread_id</code></td><td>可转字符串的线程标识</td><td>无</td><td>调用 config</td><td>可恢复执行线</td><td>启用 checkpointer 却无可配置键会失败；<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2587-2593</code></span></td></tr>
+<tr><td><code>configurable.checkpoint_id</code></td><td>历史 checkpoint 标识</td><td>最新点</td><td>显式 config 优先</td><td>读取 / replay / fork 起点</td><td>由 Saver 决定不存在时的读取结果</td></tr>
+<tr><td><code>Command.resume</code></td><td>单值、<code>{id:value}</code>、或 <code>None</code></td><td><code>None</code></td><td>本次输入</td><td>pending dynamic interrupts</td><td>多 pending 必须 id map；<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:904-920</code></span></td></tr>
+<tr><td><code>subgraphs</code>（状态查询）</td><td><code>bool</code></td><td><code>False</code></td><td>查询参数</td><td>是否递归组装子图 snapshot</td><td>namespace 不匹配时报错；<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:1392-1416</code></span></td></tr>
+</tbody></table></div>
+<p><code>Pregel._defaults</code> 使用“本次参数若 truthy，否则编译图配置”的合并；因此空列表不能临时关闭编译时已有静态断点。若需要不同策略，应使用独立编译图或明确设计调用层配置。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:2563-2570</code></span></p>
+</section>
+
+<section class="section" id="concurrency">
+<h2>9. 并发、性能与资源</h2>
+<ul>
+<li><strong>超级步：</strong>多个兄弟 task 可同时动态 interrupt；它们读取同一稳定 Channel 快照，各自拥有 task id、namespace、scratchpad 和 resume list。</li>
+<li><strong>多 pending：</strong>Loop 扫描 pending writes，建立 task id → interrupt id，并排除已有 task-specific RESUME 的项；剩余集合决定是否要求 id map。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:818-846</code></span></li>
+<li><strong>原子计数：</strong>scratchpad 使用 <code>LazyAtomicCounter</code> 生成 interrupt index，避免普通 <code>+=1</code> 的线程安全问题；但业务函数必须保持 interrupt 调用顺序稳定。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:1333-1341</code></span></li>
+<li><strong>部分恢复：</strong>id map 可以一次回答全部 pending，也可只回答部分；未命中的 task 继续保持 interrupt，已命中 task 可完成并产生 writes。并发子图测试验证逐个恢复与缓存成功结果。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:7577-7732</code></span></li>
+<li><strong>资源成本：</strong>历史查询的时间/空间取决于 Saver 保留的 checkpoint 数、values 大小和 pending writes；本模块没有固定容量、TTL 或 SLA。</li>
+</ul>
+<div class="warn">不要在条件分支中改变同一节点内 interrupt 的数量或顺序后，仍期望旧 resume list 正确配对。index 是“调用序号”，不是语义字段名；代码升级应通过迁移测试保护既有暂停线程。</div>
+</section>
+
+<section class="section" id="security">
+<h2>10. 安全与信任边界</h2>
+<div class="table-wrap"><table><thead><tr><th>边界</th><th>风险</th><th>必须由谁控制</th></tr></thead><tbody>
+<tr><td><code>Interrupt.value</code> 出站</td><td>提示中泄露 PII、Secret、内部 tool 参数</td><td>节点在调用 interrupt 前最小化/脱敏；stream 与 Saver 按敏感数据保护</td></tr>
+<tr><td><code>Command.resume</code> 入站</td><td>未授权审批、类型混淆、prompt/tool 注入</td><td>应用/API Server 做身份、租户、thread 所有权、schema 与业务策略校验</td></tr>
+<tr><td>id map</td><td>跨 thread 猜测/重放 id</td><td>不能只凭 hash id 授权；必须同时绑定用户、thread、namespace 和当前 pending 集</td></tr>
+<tr><td>time-travel</td><td>绕过已发生审批、读取旧敏感状态、重复外部动作</td><td>运维权限、审计日志、分支政策和副作用幂等由应用平台负责</td></tr>
+<tr><td>checkpoint serde</td><td>不可信对象反序列化</td><td>Checkpointer/Serde allowlist 与存储访问控制；本模块不提供 Auth</td></tr>
+</tbody></table></div>
+<p><code>Interrupt.id</code> 是 namespace hash，用于路由而非安全令牌；公共类型没有签名、过期时间或 principal 字段。<span class="evidence"><code>libs/langgraph/langgraph/types.py:593-618</code></span></p>
+<div class="boundary">本地 OSS Runtime 的 fail-closed 只体现在结构性拒绝（例如多 pending 禁止单值 resume、无 checkpointer 禁止动态 resume）。谁有权回答、回答内容是否合法、是否需要四眼审批，不在该代码路径内。</div>
+</section>
+
+<section class="section" id="failure">
+<h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table><thead><tr><th>故障 / 现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试 / 恢复</th><th>运维操作</th></tr></thead><tbody>
+<tr><td>动态 resume 无 checkpointer</td><td><code>RuntimeError</code></td><td>拒绝 Command</td><td>无新 writes</td><td>启用 Saver，并使用固定 thread_id 重跑</td><td>检查图 compile 配置</td></tr>
+<tr><td>多个 pending 却传单值</td><td>明确错误消息</td><td>fail-closed</td><td>pending 保留</td><td>查询 snapshot.interrupts，构造 id map</td><td>核对 UI 是否丢失 interrupt id</td></tr>
+<tr><td>节点恢复后重复副作用</td><td>外部系统出现重复记录</td><td>Runtime 仍按契约重跑节点</td><td>checkpoint 可能正常</td><td>业务幂等、补偿或拆节点</td><td>按 thread/task/业务键去重</td></tr>
+<tr><td>time-travel 复用了旧回答</td><td>历史分支未重新提问</td><td>应视为控制写清理缺陷</td><td>错误分支值</td><td>验证 replay 路径清除 RESUME</td><td>运行 time-travel 回归测试</td></tr>
+<tr><td>interrupt 调用顺序升级后变化</td><td>回答与问题错配</td><td>按旧 index 返回</td><td>业务 state 污染风险</td><td>保持兼容顺序或迁移/终止旧线程</td><td>版本化节点和审批 schema</td></tr>
+<tr><td>历史 Saver 不保留旧点</td><td>checkpoint_id 读取不到</td><td>无法 replay/fork</td><td>当前 head 不受影响</td><td>使用支持历史的 Saver/保留策略</td><td>不要把 shallow/latest-only 当全历史</td></tr>
+<tr><td>旧 Interrupt 序列化数据</td><td>含 <code>ns/when/resumable</code></td><td>兼容构造并派生稳定 id</td><td>值/id 保留</td><td>升级后做 round-trip 验证</td><td>保留 migration fixture</td></tr>
+</tbody></table></div>
+<p>多 pending 单值拒绝及 map 成功由 sync 测试直接覆盖。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:8906-8951</code></span> 迁移测试证明旧 namespace 与复杂 namespace 的序列化 round-trip 不破坏 id。<span class="evidence"><code>libs/langgraph/tests/test_interrupt_migration.py:24-50</code></span></p>
+</section>
+
+<section class="section" id="troubleshooting">
+<h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead><tbody>
+<tr><td>恢复后同一静态节点立即再次停</td><td>checkpoint 的 Channel versions 与 <code>versions_seen[INTERRUPT]</code></td><td>用了新输入推进版本，或载入了错误 checkpoint</td><td>确认是 <code>invoke(None)</code> continuation，并核对 thread/ns/id</td></tr>
+<tr><td>动态问题重复出现</td><td>节点调用次数、pending <code>RESUME</code>、是否显式历史 checkpoint</td><td>正常节点重跑、time-travel 清旧 resume，或 resume 未写到对应 id</td><td>区分正常重入与路由错误；用 snapshot.interrupts 构造 map</td></tr>
+<tr><td>回答进了错误并发 task</td><td>每个 Interrupt.id 与 value、当前 pending 集</td><td>客户端用单值、旧 id 或只按显示顺序配对</td><td>始终按当前 <code>{id:value}</code> 提交</td></tr>
+<tr><td>fork 后读到旧分支</td><td>返回的新 config、checkpoint_id、parent_config、metadata.source</td><td>后续 invoke 仍用了 thread head 或旧 config</td><td>用 <code>update_state</code> 返回 config 推进分支</td></tr>
+<tr><td>history 中 task 已有结果却又运行</td><td>pending writes 的 task id、是否 replay 产生新 id</td><td>fork 任务身份变化或控制写被有意清理</td><td>比较分支 parent 与 task path，不只比较节点名</td></tr>
+<tr><td>子图 interrupt 看不到</td><td><code>get_state(..., subgraphs=True)</code>、checkpoint namespace</td><td>只查询父图浅层状态或 namespace 不匹配</td><td>递归查询并保留返回的子图 config</td></tr>
+</tbody></table></div>
+<p>推荐固定顺序：①确认 <code>thread_id/checkpoint_ns/checkpoint_id</code>；②查看 <code>get_state().interrupts/tasks/next</code>；③查看 history 的 <code>metadata.source</code> 与 parent；④再检查节点内 interrupt 顺序和外部幂等日志。snapshot 从 task writes 聚合 interrupts 的位置可用于理解查询结果。<span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:1250-1266</code></span></p>
+</section>
+
+<section class="section" id="testing">
+<h2>13. 测试与验证</h2>
+<div class="table-wrap"><table><thead><tr><th>契约 / 不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead><tbody>
+<tr><td>静态 after 可跨 noop 边界继续</td><td><code>libs/langgraph/tests/test_interruption.py:11-92</code></td><td>sync/async + durability</td><td>无业务 state update 也能按图边界暂停</td><td>不覆盖远程传输</td></tr>
+<tr><td>同一节点多 interrupt 按序恢复</td><td><code>libs/langgraph/tests/test_pregel.py:4838-4906</code></td><td>集成</td><td>单值/map、update 与 resume list 的组合</td><td>不证明业务 schema 安全</td></tr>
+<tr><td>并发 pending 必须 id map</td><td><code>libs/langgraph/tests/test_pregel.py:8906-8951</code></td><td>拒绝 + 成功</td><td>单值 fail-closed，map 同次完成</td><td>不覆盖恶意授权</td></tr>
+<tr><td>Send/子图多 interrupt 定向恢复</td><td><code>libs/langgraph/tests/test_pregel.py:6193-6266</code></td><td>并发集成</td><td>多个 namespace id 与聚合结果</td><td>特定 Saver 性能未量化</td></tr>
+<tr><td>resume 节点确实重跑</td><td><code>libs/langgraph/tests/test_time_travel.py:226-282</code></td><td>行为回归</td><td>call_count 证明中断节点恢复/重放重入</td><td>不验证外部副作用补偿</td></tr>
+<tr><td>旧 RESUME 清理与 fork</td><td><code>libs/langgraph/tests/test_time_travel.py:285-392</code></td><td>历史分支</td><td>source=fork、新回答、新旧历史共存</td><td>Saver prune 策略另测</td></tr>
+<tr><td>update_state 分叉独立</td><td><code>libs/langgraph/tests/test_time_travel.py:143-218</code></td><td>状态 API</td><td>两条 fork 不相互污染</td><td>不覆盖所有 reducer</td></tr>
+<tr><td>旧 Interrupt id 兼容</td><td><code>libs/langgraph/tests/test_interrupt_migration.py:11-50</code></td><td>migration</td><td>旧 ns 与序列化 fixture id 稳定</td><td>更早未知格式不在 fixture 内</td></tr>
+</tbody></table></div>
+<p>异步兄弟文件 <code>libs/langgraph/tests/test_time_travel_async.py:240-659</code> 覆盖 replay、fork、顺序与单节点多 interrupt；对 runtime 变更，sync 与 async 都必须保留同一契约。</p>
+</section>
+
+<section class="section" id="development">
+<h2>14. 开发与扩展指南</h2>
+<div class="table-wrap"><table><thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>改变 <code>interrupt()</code> 匹配规则</td><td><code>types.py</code>、<code>_scratchpad.py</code>、<code>_algo.py</code></td><td>公共文档、serde/migration、Graph 与 Functional API</td><td>单 task 多次、并发 task、子图、sync/async</td></tr>
+<tr><td>改变多 pending resume</td><td><code>_loop._pending_interrupts/_first</code></td><td>SDK/Server 协议消费者、错误文案</td><td>部分 map、全部 map、单值拒绝、旧 RESUME</td></tr>
+<tr><td>改变 replay/fork</td><td><code>_loop._first</code>、<code>main.update_state/history</code></td><td>checkpoint parent/source、子图 replay state</td><td>旧分支保留、interrupt 重触发、三层子图</td></tr>
+<tr><td>新增 HITL 业务节点</td><td>应用 StateGraph node</td><td>审批 schema、授权、幂等键、审计事件</td><td>拒绝、超时、重复提交、恢复重跑、分叉</td></tr>
+<tr><td>自研 Saver</td><td>BaseCheckpointSaver</td><td>特殊写负索引、list/history、copy/prune 能力</td><td>INTERRUPT/RESUME round-trip 与并发写一致性</td></tr>
+</tbody></table></div>
+<h3>推荐节点拆分</h3>
+<div class="mono">prepare_request（纯计算）
+  → request_approval：decision = interrupt(redacted_request)
+  → validate_decision（schema + policy）
+  → execute_side_effect（idempotency_key = thread + operation）
+  → record_result
+</div>
+<p>禁止捷径：不要捕获并吞掉 <code>GraphInterrupt</code>；不要把 interrupt id 当授权凭证；不要在 interrupt 前执行不可去重的副作用；不要绕过 <code>update_state</code> 直接改 Saver 记录；不要仅按 UI 列表位置给并发问题分配答案。</p>
+</section>
+
+<section class="section" id="tradeoffs">
+<h2>15. 设计权衡与已知限制</h2>
+<div class="table-wrap"><table><thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本 / 失败模式</th><th>重评条件</th></tr></thead><tbody>
+<tr><td>跨进程暂停</td><td>保存状态与 writes，节点从头重跑</td><td>不依赖 Python 栈，可跨时间/进程</td><td>中断前逻辑重复，要求幂等</td><td>若引入可序列化 continuation，需重新评估复杂度与安全</td></tr>
+<tr><td>长期 HITL 等待</td><td>离散步骤边界 + 持久 checkpoint；等待时释放本次进程/机器</td><td>大量暂停线程不必各自占住活 worker，可在以后由其他进程恢复</td><td>必须有耐久 Saver、稳定 <code>thread_id</code> 与恢复调度；本地库不自动提供队列、通知或审批 SLA</td><td>若运行环境不能长期保存 checkpoint，或恢复必须保留进程内资源时</td></tr>
+<tr><td>多个调用匹配</td><td>task 内按调用 index</td><td>API 简单，普通顺序代码自然</td><td>条件分支/代码升级改变顺序会错配</td><td>需要长期版本迁移时可考虑显式业务 key 协议</td></tr>
+<tr><td>并发定向恢复</td><td>namespace hash id map</td><td>一次或部分恢复多个 task</td><td>id 不是认证信息，fork 后身份可变</td><td>远程协议需额外签名/租户绑定时由 Server 扩展</td></tr>
+<tr><td>历史修改</td><td>append-only fork，而非原地覆盖</td><td>保留审计与旧分支</td><td>存储增长、查询/保留策略更复杂</td><td>受限 Saver 可只保 head，但会失去完整 time-travel</td></tr>
+<tr><td>静态断点重复抑制</td><td>Channel 版本与 <code>versions_seen</code></td><td>无须额外 UI token</td><td>新输入会合法地再次命中</td><td>若业务需要一次性全局断点，应在应用层建策略状态</td></tr>
+</tbody></table></div>
+<p>当前限制：本地 Runtime 没有内建 tracing 后端或可视化 UI，也没有审批 TTL、撤销、角色模型、身份认证/授权、双人复核、外部事务协调或 exactly-once；这些属于观测集成、应用协议或 LangGraph Platform / LangSmith 等平台表面，不能写成 <code>Interrupt/Command</code> 自动能力。完整历史也不是所有 Saver 的必然能力。</p>
+</section>
+
+<section class="section" id="source-index">
+<h2>16. 源码索引与进一步阅读</h2>
+<div class="table-wrap"><table><thead><tr><th>类别</th><th>符号 / 内容</th><th>仓库相对证据</th></tr></thead><tbody>
+<tr><td>公共类型</td><td><code>Interrupt</code>、<code>StateSnapshot</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:570-701</code></span></td></tr>
+<tr><td>公共入口</td><td><code>Command</code>、<code>interrupt()</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:799-974</code></span></td></tr>
+<tr><td>scratchpad Schema</td><td><code>PregelScratchpad</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/_internal/_scratchpad.py:8-19</code></span></td></tr>
+<tr><td>静态判定</td><td><code>should_interrupt</code></td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:155-185</code></span></td></tr>
+<tr><td>scratchpad 构造</td><td><code>_scratchpad</code>、resume list/map</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:1280-1345</code></span></td></tr>
+<tr><td>Pregel Loop</td><td>pending ids、resume 准入、旧 RESUME 清理、fork</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:818-1079</code></span></td></tr>
+<tr><td>Runner</td><td><code>GraphInterrupt</code> commit</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:574-613</code></span></td></tr>
+<tr><td>状态查询</td><td>snapshot、get_state/history</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:1145-1266</code>、<code>libs/langgraph/langgraph/pregel/main.py:1392-1531</code></span></td></tr>
+<tr><td>状态修改</td><td>bulk/update_state、copy/fork</td><td><span class="evidence"><code>libs/langgraph/langgraph/pregel/main.py:1590-1878</code>、<code>libs/langgraph/langgraph/pregel/main.py:2515-2541</code></span></td></tr>
+<tr><td>静态测试</td><td>sync/async interruption</td><td><span class="evidence"><code>libs/langgraph/tests/test_interruption.py:11-92</code></span></td></tr>
+<tr><td>动态/并发测试</td><td>多 interrupt、id map、并发子图</td><td><span class="evidence"><code>libs/langgraph/tests/test_pregel.py:4838-4906</code>、<code>libs/langgraph/tests/test_pregel.py:6193-6266</code>、<code>libs/langgraph/tests/test_pregel.py:8906-8951</code></span></td></tr>
+<tr><td>时间旅行测试</td><td>replay、update、fork、旧分支</td><td><span class="evidence"><code>libs/langgraph/tests/test_time_travel.py:143-218</code>、<code>libs/langgraph/tests/test_time_travel.py:226-392</code>、<code>libs/langgraph/tests/test_time_travel.py:3205-3299</code></span></td></tr>
+</tbody></table></div>
+<h3>官方设计与基础来源</h3>
+<div class="table-wrap"><table><thead><tr><th>来源</th><th>本章采用的观点</th><th>使用边界</th></tr></thead><tbody>
+<tr><td><a href="https://www.langchain.com/blog/building-langgraph">LangChain：Building LangGraph: Designing an Agent Runtime from first principles</a></td><td>历史设计意图是让 checkpoint 不依赖原进程或内存继续存活，并以同一持久化机制承载 HITL 中断。</td><td>不是对任意机器、代码版本、serde、存储或保留时长的当前保证；当前细节仍以本仓库 <code>types.py</code>、Pregel Loop 与测试为准。文章同时把 tracing、task queue 分别连接到 LangSmith/OTEL 与 Platform，不能归入本地 interrupt。</td></tr>
+<tr><td><a href="https://docs.langchain.com/oss/python/langgraph/overview">LangGraph 官方 Overview</a>；<a href="https://docs.langchain.com/oss/python/langgraph/interrupts">官方 Interrupts 指南</a></td><td>LangGraph 是长期、有状态工作流的低层编排 Runtime；interrupt 依赖 checkpointer 与 <code>thread_id</code>，恢复时节点从开头重跑。</td><td>持久化暂停不要求原进程持续等待；实际可保留多久取决于 saver、数据保留与运维策略。Overview 把 LangSmith tracing、部署平台与 LangGraph Runtime 分层。</td></tr>
+<tr><td><a href="https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/">Google Research：Pregel: a system for large-scale graph processing</a></td><td>超级步、并行计算、消息传递与同步屏障是理解 LangGraph Pregel/BSP 命名的历史概念参照。</td><td>只用于解释基础计算模型；Google Pregel 本身不证明 LangGraph 的 <code>interrupt()</code>、scratchpad、checkpoint Schema 或平台能力。</td></tr>
+</tbody></table></div>
+<p>进一步阅读：<a href="../../langgraph_architecture.html#s11">架构总览第 11 章</a>；<a href="09-checkpoint-durable-execution.html">第 09 章 Checkpoint 与 Durable Execution</a>；<a href="10-sqlite-postgres-serde.html">第 10 章 SQLite / Postgres / Serde</a>；<a href="12-store-memory-cache.html">第 12 章 Store / Memory / Cache</a>。</p>
+</section>
+
+<section class="section" id="glossary">
+<h2>17. 术语表</h2>
+<div class="table-wrap"><table><thead><tr><th>术语</th><th>本章含义</th></tr></thead><tbody>
+<tr><td>HITL</td><td>Human-in-the-loop，人在回路；执行暂停并由人类或治理系统提供决策。</td></tr>
+<tr><td>Static interrupt</td><td>通过 <code>interrupt_before/after</code> 配置的节点边界暂停，不等同于节点内 <code>interrupt(value)</code>。</td></tr>
+<tr><td>Dynamic interrupt</td><td>节点调用 <code>interrupt(value)</code> 产生的可恢复控制异常与业务提示。</td></tr>
+<tr><td>Interrupt id</td><td>由 checkpoint namespace 派生的稳定 hash，用于把 resume 定向到 pending interrupt；不是授权令牌。</td></tr>
+<tr><td>Scratchpad</td><td>单个 Pregel task 执行期的运行辅助对象，保存调用计数器、resume list 与父级 resume 访问器。</td></tr>
+<tr><td>Interrupt index</td><td>同一 task 内 <code>interrupt()</code> 的调用序号，用来匹配顺序 resume 值。</td></tr>
+<tr><td>Resume map</td><td><code>{Interrupt.id: value}</code>，用于一次定向恢复一个或多个并发 pending interrupts。</td></tr>
+<tr><td>Pending write</td><td>绑定 checkpoint 与 task id 的中间写；本章关键类型是 <code>INTERRUPT</code> 与 <code>RESUME</code>。</td></tr>
+<tr><td>Replay</td><td>从显式历史 checkpoint 重新执行该点之后的任务。</td></tr>
+<tr><td>Fork</td><td>从历史点创建新 checkpoint 分支并保留旧分支；metadata source 可标记为 <code>fork</code>。</td></tr>
+<tr><td>Time-travel</td><td>历史查询、选择 checkpoint、replay/update/fork 的统称，不表示回滚外部世界。</td></tr>
+<tr><td>Idempotency</td><td>幂等性；同一操作重复执行仍得到等价外部结果，是 interrupt 重跑前置副作用的业务责任。</td></tr>
+<tr><td>Checkpoint namespace</td><td>区分父图、子图与具体 task 路径的持久化命名空间，也是动态 interrupt id 的输入。</td></tr>
+<tr><td>Source</td><td>checkpoint metadata 的来源标签，如 <code>input</code>、<code>loop</code>、<code>update</code>、<code>fork</code>。</td></tr>
+</tbody></table></div>
+</section>
+
+<div class="footer">LangGraph 架构模块文档 · Interrupt / HITL / Time-travel · 源码审计版</div>
+</main>
+<script>
+(function(){
+  const links=[...document.querySelectorAll('.sidebar a')];
+  const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function mark(){let id='';for(const section of sections){if(section.getBoundingClientRect().top<90)id=section.id}for(const link of links)link.classList.toggle('active',link.hash==='#'+id)}
+  addEventListener('scroll',mark,{passive:true});mark();
+})();
+</script>
+</body>
+</html>

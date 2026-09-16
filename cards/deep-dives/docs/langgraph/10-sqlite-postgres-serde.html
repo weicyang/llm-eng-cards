@@ -1,0 +1,392 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 10 章：SQLite、Postgres、Serde 与 Conformance｜LangGraph 架构开发文档</title>
+  <style>
+    :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--panel2:#e8e1d4;--text:#44403c;--muted:#78716c;--line:rgba(28,25,23,.12);--blue:#4338ca;--green:#15803d;--yellow:#c2410c;--red:#b91c1c;--code:#fffdf8}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:20px}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.75 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--code);border:1px solid var(--line);border-radius:4px;padding:.08em .32em;color:#1c1917}
+    .layout{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1500px;margin:auto}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:22px 18px;border-right:1px solid var(--line);background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
+    .sidebar strong{display:block;color:#1c1917;margin-bottom:10px}.sidebar a{display:block;padding:5px 9px;border-left:2px solid transparent;color:var(--muted);font-size:13px}.sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+    main{min-width:0;padding:34px clamp(22px,5vw,72px) 80px}.back{display:inline-block;margin-bottom:18px}.hero,.section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,3vw,34px);margin-bottom:22px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+    h1{font-size:clamp(28px,4vw,44px);line-height:1.2;color:#1c1917;margin:0 0 14px}h2{font-size:24px;color:#1c1917;border-bottom:1px solid var(--line);padding-bottom:9px;margin:0 0 18px}h3{font-size:18px;color:#1c1917;margin:24px 0 8px}
+    p,ul,ol{margin:8px 0 14px}.subtitle{font-size:18px;color:var(--muted)}.meta,.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:20px}.meta div,.card{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:12px}.meta b,.card b{display:block;color:#1c1917}
+    .tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 9px;margin:2px 3px 2px 0;font-size:12px}.current{color:var(--green)}.optional{color:var(--yellow)}.migration{color:#6d28d9}.risk{color:#b91c1c}
+    .flow{white-space:pre-wrap;background:var(--code);border:1px solid var(--line);border-radius:7px;padding:14px;overflow:auto}.note,.warn,.danger{border-left:4px solid var(--blue);background:rgba(67,56,202,.07);padding:11px 14px;margin:14px 0}.warn{border-color:var(--yellow);background:rgba(194,65,12,.08)}.danger{border-color:var(--red);background:rgba(185,28,28,.08)}
+    .table-wrap{overflow-x:auto;margin:12px 0 18px}table{width:100%;border-collapse:collapse;min-width:720px}th,td{border:1px solid var(--line);padding:9px 11px;vertical-align:top;text-align:left}th{background:var(--panel2);color:#1c1917}
+    .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+    .evidence{color:var(--muted);font-size:.92em}.ok{color:var(--green)}.no{color:var(--red)}dl{display:grid;grid-template-columns:minmax(130px,220px) 1fr;gap:8px 16px}dt{font-weight:700;color:#1c1917}dd{margin:0}
+    @media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.sidebar strong{grid-column:1/-1}.sidebar a{font-size:12px}main{padding:22px 14px 60px}.hero,.section{padding:20px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}dl{grid-template-columns:1fr}dd{margin-bottom:8px}}
+    @media print{.sidebar{display:none}.layout{display:block}main{padding:0}.hero,.section{break-inside:avoid;background:#fff;color:#111;border-color:#bbb;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}body{background:#fff;color:#111}code{color:#111;background:#eee}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" aria-label="本章目录">
+    <strong>第 10 章目录</strong>
+    <a href="#position">1. 模块定位</a><a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a><a href="#architecture">4. 架构组成</a>
+    <a href="#flows">5. 完整运行流程</a><a href="#data-model">6. 数据与状态模型</a>
+    <a href="#apis">7. 接口、协议与事件</a><a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a><a href="#troubleshooting">12. 可观测性与排障</a>
+    <a href="#testing">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与已知限制</a><a href="#source-index">16. 源码索引与进一步阅读</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+  <main>
+    <a class="back" href="../../langgraph_architecture.html#s10">← 返回 LangGraph 架构总览 · 第 10 章</a>
+    <header class="hero">
+      <h1>SQLite、Postgres、Serde 与 Conformance</h1>
+      <p class="subtitle">从 checkpoint 落盘、类型恢复和 Delta 祖先链，到自定义 saver 的可验证能力边界。</p>
+      <div><span class="tag current">当前事实</span><span class="tag optional">可选能力</span><span class="tag migration">迁移契约</span><span class="tag risk">安全边界</span></div>
+      <div class="meta">
+        <div><b>版本基线</b>checkpoint 4.2.0<br>SQLite 3.1.1 · Postgres 3.1.2</div>
+        <div><b>证据状态</b><span class="ok">已完成源码与测试静态审计</span><br>Git SHA 因本机 Git 不可用未记录</div>
+        <div><b>主要 Owner</b><code>libs/checkpoint/</code><br><code>libs/checkpoint-sqlite/</code><br><code>libs/checkpoint-postgres/</code></div>
+        <div><b>目标读者</b>saver 实现者、持久化开发者、迁移与故障排查人员</div>
+        <div><b>最近验证</b>2026-08-14</div>
+      </div>
+    </header>
+
+    <section class="section" id="position">
+      <h2>1. 模块定位</h2>
+      <p>本模块位于 Pregel durable execution（耐久执行）与数据库之间：它接收 <code>Checkpoint</code>、metadata 和 task 级 pending writes，将其编码并持久化，再按 <code>thread_id + checkpoint_ns + checkpoint_id</code> 恢复为 <code>CheckpointTuple</code>。基础接口明确要求 put、put_writes、get_tuple、list、delete_thread；异步执行还要求对应的 async 方法。<span class="evidence"><code>libs/checkpoint/README.md:52-67</code></span></p>
+      <div class="table-wrap"><table>
+        <thead><tr><th>范围</th><th>负责</th><th>明确不负责</th></tr></thead>
+        <tbody>
+          <tr><td>checkpoint 基础包</td><td>协议、公共类型、JsonPlus/Encrypted serde、默认兼容行为</td><td>选择何时 checkpoint、节点重试、业务副作用幂等</td></tr>
+          <tr><td>SQLite saver</td><td>单 SQLite 连接上的 sync/async checkpoint 与 writes 落盘、WAL、Delta history</td><td>多写者横向扩展、远程数据库服务能力</td></tr>
+          <tr><td>Postgres saver</td><td>表迁移、历史 checkpoint、blob 复用、pending writes、sync/async/pool/pipeline</td><td>数据库运维、备份、租户授权和连接 Secret 管理</td></tr>
+          <tr><td>Conformance</td><td>按方法覆盖检测并运行公共行为规范</td><td>替代真实数据库集成测试、性能测试或故障注入</td></tr>
+        </tbody>
+      </table></div>
+      <p>Checkpoint 保存 Channel 值、版本、<code>versions_seen</code> 与 pending writes；它不是 Python 栈帧或事务日志。成功 task 的中间 writes 与超级步 checkpoint 是两个持久化动作，不能把 <code>put_writes</code> 当成 <code>put</code>。数据库 saver 只实现存取契约，何时调用由上游 Runtime 所有。</p>
+    </section>
+
+    <section class="section" id="dependencies">
+      <h2>2. 系统位置与依赖</h2>
+      <div class="flow">StateGraph / Functional API
+        │ compile(checkpointer=...)
+        ▼
+Pregel Runtime ── put_writes / aput_writes ──► task 级 writes
+        │
+        └──────── put / aput ────────────────► 超级步 checkpoint
+                                                   │
+                 ┌─────────────────────────────────┼──────────────────────────┐
+                 ▼                                 ▼                          ▼
+          SQLiteSaver                       PostgresSaver                  Serde
+       checkpoints+writes       checkpoints+blobs+writes+migrations   type tag + bytes
+                 └─────────────────────────────────┴──────────────────────────┘
+                                                   ▼
+                                 get_tuple / list / Delta history</div>
+      <p><code>langgraph-checkpoint</code> 依赖 <code>langchain-core</code> 与 <code>ormsgpack</code>；SQLite 包额外依赖 <code>aiosqlite</code>，Postgres 包依赖 <code>psycopg</code> 与连接池。版本约束显示两个数据库包都要求 checkpoint 4.1–4.x。<span class="evidence"><code>libs/checkpoint/pyproject.toml:5-17</code>；<code>libs/checkpoint-sqlite/pyproject.toml:5-18</code>；<code>libs/checkpoint-postgres/pyproject.toml:5-19</code></span></p>
+      <div class="cards">
+        <div class="card"><b>上游调用方</b>Pregel 通过 <code>BaseCheckpointSaver</code> 协议调用；图只依赖协议，不依赖具体数据库。</div>
+        <div class="card"><b>下游副作用</b>SQLite 文件/内存数据库，或 Postgres connection/pool 上的 SQL 与事务。</div>
+        <div class="card"><b>兄弟实现</b>sync 与 async 类分离；InMemorySaver 提供无外部数据库的参考实现。</div>
+        <div class="card"><b>进程边界</b>本章全部是本地 Python 客户端与数据库；API Server 的鉴权、队列和托管加密不在此模块。</div>
+      </div>
+    </section>
+
+    <section class="section" id="concepts">
+      <h2>3. 核心概念</h2>
+      <dl>
+        <dt>Checkpoint</dt><dd>超级步边界状态快照，包含 channel values、channel versions、versions_seen 等；数据库行还关联 metadata 与父 checkpoint。</dd>
+        <dt>Pending write</dt><dd>某 task 已产生但尚未并入下一超级步 checkpoint 的写，主键包含 task 与 idx，支持失败后跳过已成功 task。</dd>
+        <dt>Serde</dt><dd>serialization/deserialization（序列化/反序列化）。协议输出 <code>(type, bytes)</code>，type tag 决定恢复分支。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/base.py:14-26</code></span></dd>
+        <dt>Blob 复用</dt><dd>Postgres 以 <code>(thread, namespace, channel, version)</code> 为 blob 主键；checkpoint JSONB 记录版本，通过版本关联复杂 Channel 值。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:47-76</code></span></dd>
+        <dt>Delta history</dt><dd>为 DeltaChannel 返回最近祖先 seed 与从 seed 到目标父节点之间、按时间正序排列的 writes；目标 checkpoint 自己的 pending writes 不属于历史。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_delta_channel_history.py:17-75</code></span></dd>
+        <dt>Shallow saver</dt><dd>每个 thread/namespace 只保留最新 checkpoint 的历史压缩实现；当前已 deprecated，推荐常规 PostgresSaver 配合 <code>durability='exit'</code>。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/shallow.py:169-197</code></span></dd>
+        <dt>Conformance</dt><dd>公共能力规范，不是声明字段；框架通过 async 方法是否覆盖基础实现来检测能力。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/capabilities.py:52-96</code></span></dd>
+      </dl>
+    </section>
+
+    <section class="section" id="architecture">
+      <h2>4. 架构组成</h2>
+      <h3>4.1 SQLite：整包 BLOB 与自动 setup</h3>
+      <p><code>SqliteSaver</code> 保存 checkpoints 与 writes 两张表；checkpoint、pending write 均经 typed serde 成为 type+BLOB，metadata 单独 JSON 编码。首次 cursor 自动调用 setup，执行 <code>PRAGMA journal_mode=WAL</code> 与幂等建表，再由同一实例锁串行 cursor。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:129-189</code></span></p>
+      <p>同步类面向轻量、同步场景，源码明确说明不扩展到多线程吞吐；<code>check_same_thread=False</code> 只是允许连接跨线程使用，真正互斥仍由实例的 <code>threading.Lock</code> 提供。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:45-53</code>；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:85-125</code></span></p>
+      <h3>4.2 Async SQLite：同一模型，不同调度约束</h3>
+      <p><code>AsyncSqliteSaver</code> 通过 <code>aiosqlite</code> 和 <code>asyncio.Lock</code> 实现相同 schema；setup 自动连接、建表并 commit。同步桥只允许从不同线程调用，在创建 saver 的事件循环线程上同步调用会抛 <code>asyncio.InvalidStateError</code>，避免把该 loop 等死。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/aio.py:115-145</code>；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/aio.py:161-175</code>；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/aio.py:305-344</code></span></p>
+      <h3>4.3 Postgres：JSONB 元数据、版本化 blob 与 writes</h3>
+      <p>常规 Postgres saver 建立 <code>checkpoint_migrations</code>、<code>checkpoints</code>、<code>checkpoint_blobs</code>、<code>checkpoint_writes</code>。primitive（<code>None/str/int/float/bool</code>）留在 checkpoint JSONB；复杂值按 Channel version 外置到 blob，读时按 channel_versions join 回来，因此相同版本不会重复插入 blob。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:43-91</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:295-345</code></span></p>
+      <p><code>setup()</code> 不会由普通读写自动触发：它读取最大 migration 版本、按列表顺序执行未应用 SQL，并写入 migration 表。应用首次部署必须显式执行。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:85-110</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/aio.py:90-117</code></span></p>
+      <h3>4.4 JsonPlus 与 EncryptedSerializer</h3>
+      <p>JsonPlus 对 null、bytes、bytearray 使用专用 tag，其余优先 msgpack；编码失败只有在显式 <code>pickle_fallback=True</code> 时才退到 pickle，否则抛原编码错误。未知 type tag 直接 <code>NotImplementedError</code>。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:258-290</code></span></p>
+      <p>EncryptedSerializer 先由内层 serde 编码，再用 <code>CipherProtocol</code> 加密，并把 tag 写成 <code>原类型+密码名</code>；读取无 “+” 的旧数据会回退到未加密内层 serde，从而支持渐进迁移。AES helper 默认 EAX，要求显式 key 或 <code>LANGGRAPH_AES_KEY</code>，长度必须为 16/24/32 bytes。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/encrypted.py:8-36</code>；<code>libs/checkpoint/langgraph/checkpoint/serde/encrypted.py:38-80</code></span></p>
+    </section>
+
+    <section class="section" id="flows">
+      <h2>5. 完整运行流程</h2>
+      <h3>5.1 正常成功：Postgres 写入后恢复</h3>
+      <ol>
+        <li><b>输入：</b>Runtime 传入含 thread/ns/父 checkpoint id 的 config、checkpoint、metadata 与 <code>new_versions</code>。</li>
+        <li><b>规范化：</b>saver 复制 checkpoint；primitive 留在 JSONB，复杂值从 <code>channel_values</code> 移出，按新版本生成 typed blob。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:295-323</code></span></li>
+        <li><b>状态写入：</b>先对 blob 执行冲突忽略，再 upsert checkpoint；返回的新 config 把 checkpoint id 指向本次 id。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:131-159</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:321-345</code></span></li>
+        <li><b>task writes：</b><code>put_writes</code> 以 task_id+idx 持久化；特殊 Channel 可覆盖，普通 write 冲突时保持首次结果。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:347-379</code></span></li>
+        <li><b>恢复：</b><code>get_tuple</code> 精确取 id，或按 id 倒序取最新；SQL join blob 并聚合 writes，最后恢复 checkpoint、metadata、parent config 与 pending writes。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:93-118</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:227-261</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:559-599</code></span></li>
+      </ol>
+      <h3>5.2 拒绝/提前结束</h3>
+      <ol>
+        <li>把 pipeline 与 <code>ConnectionPool</code> 同时传入 saver 会立即 <code>ValueError</code>；pipeline 只允许单 connection。async 版本执行相同拒绝。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:45-60</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/aio.py:45-61</code></span></li>
+        <li>在 Async saver 的所属事件循环线程调用同步 get/list/delete 会抛 <code>InvalidStateError</code>，而不是阻塞等待自身 loop。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/aio.py:567-617</code></span></li>
+        <li>严格 msgpack 遇到未登记类型时不 import/构造该类型；扩展 hook 返回原始参数或 dict，并发出 warning/event。方法调用只允许固定安全集合，未允许方法同样被拒绝。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:559-631</code>；<code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:633-690</code></span></li>
+        <li>查询不存在的 checkpoint 返回 <code>None</code>；Delta history 若无目标则为每个请求 Channel 返回空 writes，而不是伪造 seed。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:237-244</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:464-474</code></span></li>
+      </ol>
+      <h3>5.3 恢复/迁移：Delta 祖先链</h3>
+      <ol>
+        <li>从目标 checkpoint 的父节点开始回溯，目标自己的 writes 明确排除。</li>
+        <li>每个 Channel 独立寻找最近 seed；找到 <code>_DeltaSnapshot</code> 或 pre-delta 普通值后停止该 Channel 的祖先 walk。</li>
+        <li>Postgres 第一阶段分页只读取 checkpoint 的版本、blob 存在性与 inline primitive；第二阶段按 Channel 独立 UNION ALL 读取路径 writes 和 seed blob。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:444-557</code></span></li>
+        <li>SQLite 没有独立 blob 表，第一阶段逐行反序列化祖先 checkpoint，跳过 sibling branch；第二阶段只取相应 Channel/链的 writes。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/_delta.py:68-124</code>；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:503-583</code></span></li>
+        <li>结果以 seed（可缺省）加 oldest→newest writes 表达。seed 祖先自己的 write 必须重放，因为 checkpoint value 是“进入该 checkpoint 的状态”；比 seed 更老的 write 才已被 seed 吸收。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_delta_channel_history.py:202-267</code></span></li>
+      </ol>
+      <div class="danger">祖先链断裂、parent id 不存在或排序/id 假设被第三方 saver 破坏时，恢复可能提前到“无 seed，从空状态重放”，甚至漏写。Conformance 能证明规范样例，不能替代对损坏链和并发删除的故障注入。</div>
+    </section>
+
+    <section class="section" id="data-model">
+      <h2>6. 数据与状态模型</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>实现/表</th><th>主键</th><th>内容与生命周期</th></tr></thead>
+        <tbody>
+          <tr><td>SQLite <code>checkpoints</code></td><td>thread_id, checkpoint_ns, checkpoint_id</td><td>parent id、type、整包 checkpoint BLOB、metadata BLOB；保留完整历史直到 delete_thread。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:141-151</code></span></td></tr>
+          <tr><td>SQLite <code>writes</code></td><td>thread/ns/checkpoint/task/idx</td><td>Channel、type、value BLOB；与 checkpoint 没有数据库外键，删除由 saver 显式执行。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:152-162</code></span></td></tr>
+          <tr><td>Postgres <code>checkpoints</code></td><td>thread/ns/checkpoint</td><td>parent id、checkpoint JSONB、metadata JSONB；复杂 Channel 值被移出。</td></tr>
+          <tr><td>Postgres <code>checkpoint_blobs</code></td><td>thread/ns/channel/version</td><td>typed BYTEA；同一 Channel version 被多个 checkpoint 引用，upsert 冲突不覆盖。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:57-65</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:131-135</code></span></td></tr>
+          <tr><td>Postgres <code>checkpoint_writes</code></td><td>thread/ns/checkpoint/task/idx</td><td>task_path、Channel、type、blob；特殊 write 可幂等更新，普通 write 保留首次写入。</td></tr>
+          <tr><td>Shallow <code>checkpoints</code></td><td>thread/ns</td><td>覆盖最新 checkpoint，无 parent 历史；blob 主键也去掉 version。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/shallow.py:39-82</code></span></td></tr>
+        </tbody>
+      </table></div>
+      <p>Postgres 普通 saver 的 blob 复用收益来自 Channel version，而不是内容哈希：只有上游把未变化 Channel 的 version 保持不变，多个 checkpoint 才引用同一 blob。SQLite 则始终序列化整包 checkpoint，空间模型不同。</p>
+      <p><code>delete_thread</code> 分别删除 checkpoint、blob、writes；当前 schema 没有外键级 cascade，任一步数据库失败都可能留下残留，需要事务/运维核查。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:381-402</code>；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:484-501</code></span></p>
+    </section>
+
+    <section class="section" id="apis">
+      <h2>7. 接口、协议与事件</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>API</th><th>输入</th><th>输出/顺序</th><th>错误语义</th></tr></thead>
+        <tbody>
+          <tr><td><code>put/aput</code></td><td>config、Checkpoint、metadata、new_versions</td><td>返回指向新 checkpoint id 的 config</td><td>serde 或数据库异常向上传播</td></tr>
+          <tr><td><code>put_writes/aput_writes</code></td><td>checkpoint config、(channel,value) 序列、task_id/path</td><td>无返回；按 idx 建立稳定 task 内顺序</td><td>普通重复写忽略，特殊 write 更新</td></tr>
+          <tr><td><code>get_tuple/aget_tuple</code></td><td>thread/ns，可选 checkpoint id</td><td>命中返回 <code>CheckpointTuple</code>，否则 None</td><td>反序列化失败不会被 saver 吞掉</td></tr>
+          <tr><td><code>list/alist</code></td><td>可选 config/filter/before/limit</td><td>checkpoint id 倒序；Postgres metadata 用 JSONB containment</td><td>非法数据库类型或连接错误向上传播</td></tr>
+          <tr><td><code>get_delta_channel_history</code></td><td>目标 config 与 Channel 列表</td><td>每 Channel 的可选 seed + oldest-first writes</td><td>空 Channel 列表返回空 mapping</td></tr>
+          <tr><td><code>delete_thread</code></td><td>thread_id</td><td>删除该 thread 所有 namespace 数据</td><td>不是软删除，无内建撤销</td></tr>
+        </tbody>
+      </table></div>
+      <p>JsonPlus 的安全路径会发送 serde event：默认宽松模式对未登记类型发 <code>msgpack_unregistered_allowed</code>，严格模式发 <code>msgpack_blocked</code>，未允许的方法发 <code>msgpack_method_blocked</code>；这些事件是进程内 hook，不等于持久化审计日志。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:566-609</code>；<code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:611-631</code></span></p>
+      <p>Conformance 的基础能力是 PUT、PUT_WRITES、GET_TUPLE、LIST、DELETE_THREAD；DELETE_FOR_RUNS、COPY_THREAD、PRUNE、DELTA_CHANNEL_HISTORY 是扩展能力。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/capabilities.py:15-50</code></span></p>
+    </section>
+
+    <section class="section" id="configuration">
+      <h2>8. 配置与默认行为</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>配置项</th><th>类型/值</th><th>默认值</th><th>生效边界</th><th>失败行为/来源</th></tr></thead>
+        <tbody>
+          <tr><td><code>serde</code></td><td>SerializerProtocol</td><td>JsonPlusSerializer</td><td>一个 saver 实例</td><td>不满足 typed protocol 时基础层做旧接口兼容；<code>libs/checkpoint/langgraph/checkpoint/serde/base.py:29-48</code></td></tr>
+          <tr><td><code>LANGGRAPH_STRICT_MSGPACK</code></td><td>环境开关</td><td>当前默认宽松：warning 后允许</td><td>JsonPlus 构造时读取的模块级状态</td><td>严格时仅安全类型/显式 allowlist；<code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:97-125</code></td></tr>
+          <tr><td><code>allowed_msgpack_modules</code></td><td>精确 (module,name)/type 集合、True、None</td><td>由 strict 环境决定</td><td>单 serializer，可 clone 合并</td><td>未允许类型降为原始参数/dict并记录；<code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:128-158</code></td></tr>
+          <tr><td><code>pickle_fallback</code></td><td>bool</td><td>false</td><td>JsonPlus 编码失败路径</td><td>false 抛 MsgpackEncodeError；true 使用 pickle，扩大信任面；<code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:258-290</code></td></tr>
+          <tr><td><code>LANGGRAPH_AES_KEY</code></td><td>16/24/32-byte 文本</td><td>无</td><td>AES helper 构造</td><td>缺失或长度错误直接 ValueError；<code>libs/checkpoint/langgraph/checkpoint/serde/encrypted.py:50-63</code></td></tr>
+          <tr><td>SQLite journal</td><td>WAL</td><td>setup 强制设置</td><td>数据库文件/连接</td><td>由 SQLite 返回实际 journal 模式；代码未实现降级确认；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:139-166</code></td></tr>
+          <tr><td>Postgres <code>pipeline</code></td><td>bool</td><td>false</td><td>from_conn_string/单 connection</td><td>pool + pipeline 拒绝；不支持 pipeline 时回退 transaction；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:404-442</code></td></tr>
+          <tr><td>Postgres connection</td><td>autocommit + dict_row</td><td>factory 自动设置</td><td>手工传 connection 时由调用者负责</td><td>setup 未提交或按 tuple 取列失败；<code>libs/checkpoint-postgres/README.md:34-53</code></td></tr>
+        </tbody>
+      </table></div>
+      <div class="warn">严格 msgpack 当前不是默认。新应用应显式启用严格模式或精确 allowlist，不能把“未来会阻止”误写成“当前默认已阻止”。<span class="evidence"><code>libs/checkpoint/README.md:45-50</code></span></div>
+    </section>
+
+    <section class="section" id="concurrency">
+      <h2>9. 并发、性能与资源</h2>
+      <h3>9.1 SQLite 锁与 WAL</h3>
+      <p>sync saver 用单 <code>threading.Lock</code> 包住 setup、cursor 使用与 commit；async saver用单 <code>asyncio.Lock</code> 包住连接操作。WAL 改善读写重叠，不会消除 SQLite 单文件写竞争，也不会让一个 saver 连接并行执行多条 SQL。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:181-189</code>；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/aio.py:360-428</code></span></p>
+      <p>Async SQLite 连接必须关闭；源码警告未关闭的 aiosqlite worker 会让进程看似挂住，优先使用 <code>async with</code>。该实现也明确不推荐用于高写入生产负载。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/aio.py:53-72</code></span></p>
+      <h3>9.2 Postgres connection、pool 与 pipeline</h3>
+      <p>常规 sync/async saver 都先获取实例锁，再从单 connection 或 pool 取得连接；即使 psycopg pipeline 可跨线程/协程共享 connection，同一时刻仍只使用一个 cursor。pipeline 请求在客户端不支持时回退事务 context，而不是失去原子边界。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:404-442</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/aio.py:363-403</code></span></p>
+      <h3>9.3 Delta history 读取成本</h3>
+      <p>Postgres ancestor scan 以 1024 行内部页读取，找到所有 Channel seed 或链耗尽即停止；页大小当前不是公共配置。SQLite 流式处理每个祖先 BLOB，目标是只保留一个反序列化 checkpoint 的峰值内存。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:21-23</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:490-528</code>；<code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/_delta.py:1-19</code></span></p>
+      <p>不要从源码注释中的局部 benchmark 推导生产 SLA；数据库大小、网络、索引、Channel 数、seed 间距和 serde 类型都会改变成本。</p>
+    </section>
+
+    <section class="section" id="security">
+      <h2>10. 安全与信任边界</h2>
+      <h3>10.1 数据库内容必须视为可执行输入面</h3>
+      <p>宽松 JsonPlus 可以依据 checkpoint 内的 module/name import 并构造 Python 类型；源码明确警告：攻击者若能直接写 checkpoint 数据库，反序列化可能触发代码执行。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:82-95</code></span></p>
+      <ul>
+        <li>生产新应用启用 strict msgpack，并为业务类型使用精确 symbol allowlist；不支持 prefix allowlist。</li>
+        <li>保持 <code>pickle_fallback=False</code>；pickle 只能用于完全可信、受访问控制的数据。</li>
+        <li>数据库账号按最小权限配置；saver 本身不提供租户授权，<code>thread_id</code> 也不是访问控制。</li>
+        <li>SQL 中 Channel 名和 filter 值使用参数绑定；动态 Delta SQL只插入受长度约束的数字 alias，而不插入 Channel 文本。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:255-263</code></span></li>
+      </ul>
+      <h3>10.2 加密边界</h3>
+      <p>EncryptedSerializer 只加密 typed bytes：SQLite 的 checkpoint/write BLOB 与 Postgres 的 blob/write BYTEA 会加密；Postgres checkpoint JSONB 中保留的 primitive、metadata、thread/ns/id、版本和表结构仍可见。因此它不是“整个数据库透明加密”。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/encrypted.py:17-36</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:309-343</code></span></p>
+      <p>AES EAX 对 ciphertext 做认证，错误 key/tag 会在 <code>decrypt_and_verify</code> 失败并拒绝恢复；没有 key rotation、key id 路由或 Secret 存储实现，这些必须由应用/平台设计。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/encrypted.py:61-80</code></span></p>
+      <div class="danger">EncryptedSerializer 的“可读取无加密旧数据”是迁移能力，也是策略边界：它不会强制数据库中所有行都加密。若要求 fail-closed，需在包装层拒绝没有 “+cipher” 的 type tag，并提供迁移审计。</div>
+    </section>
+
+    <section class="section" id="failure">
+      <h2>11. 失败、恢复与兼容</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为与状态影响</th><th>恢复/运维操作</th></tr></thead>
+        <tbody>
+          <tr><td>Postgres 未 setup</td><td>relation does not exist</td><td>首个读写失败，无自动迁移</td><td>以正确 autocommit 权限执行 sync/async <code>setup()</code>；核查 migration 表。</td></tr>
+          <tr><td>错误 row_factory</td><td>tuple 下标 TypeError</td><td>读取/迁移无法按列名访问</td><td>使用 <code>dict_row</code>；factory 自动设置，手工连接必须自行设置。<span class="evidence"><code>libs/checkpoint-postgres/README.md:37-53</code></span></td></tr>
+          <tr><td>async loop 内调用 sync API</td><td><code>InvalidStateError</code></td><td>操作被拒绝，避免死锁；数据未写</td><td>改用 await async API；只有其他线程可用 sync bridge。</td></tr>
+          <tr><td>SQLite 锁竞争</td><td>database is locked/延迟上升</td><td>实例内串行；跨连接/进程仍可能冲突</td><td>缩短事务、确认 WAL、降低并发；持续高写负载迁移 Postgres。</td></tr>
+          <tr><td>Serde 类型被 strict 拒绝</td><td>warning + <code>msgpack_blocked</code> event</td><td>返回原始参数/dict 或 None，不构造目标类型</td><td>评审类型后精确加入 allowlist；不要全局设 True 作为快捷修复。</td></tr>
+          <tr><td>AES key 缺失/错误</td><td>构造 ValueError 或认证失败</td><td>新 saver 无法启动或旧数据无法恢复</td><td>恢复正确 key；rotation 采用双读/重写方案并保留回滚。</td></tr>
+          <tr><td>祖先链断裂</td><td>Delta state 缺值、walk 无 seed、历史异常短</td><td>可能从空状态重放现存 writes；缺失祖先无法由 saver创造</td><td>冻结删除/prune，核查 parent id 与 writes；从备份恢复完整链。</td></tr>
+          <tr><td>旧 checkpoint v&lt;4 pending sends</td><td>读取时版本检查</td><td>从父 checkpoint 的 TASKS writes 合成 pending_sends 与版本</td><td>读取路径自动兼容；测试同时覆盖 get/list。<span class="evidence"><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:164-190</code>；<code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:246-261</code></span></td></tr>
+          <tr><td>Shallow 历史请求</td><td>list 仅一项、旧 id 无法定位</td><td>旧 checkpoint 已覆盖，时间旅行不可恢复</td><td>不能事后重建；迁移常规 PostgresSaver 并提前确定保留策略。</td></tr>
+        </tbody>
+      </table></div>
+      <p>BinaryOperatorAggregate → DeltaChannel 迁移要求把 pre-delta plain value 当 seed。Postgres 必须同时探测 inline primitive 与 blob plain value；仅检查一处会漏 seed。版本提升但没有 value 时不得错误截断 walk。<span class="evidence"><code>libs/checkpoint-postgres/tests/test_delta_plain_value_seed.py:58-79</code>；<code>libs/checkpoint-postgres/tests/test_delta_plain_value_seed.py:98-150</code></span></p>
+      <p>SQLite 真实图测试覆盖 sync/async 历史读取与迁移后继续折叠 delta，而不是只测 helper。<span class="evidence"><code>libs/checkpoint-sqlite/tests/test_delta_channel_migration.py:101-149</code>；<code>libs/checkpoint-sqlite/tests/test_delta_channel_migration.py:152-170</code></span></p>
+    </section>
+
+    <section class="section" id="troubleshooting">
+      <h2>12. 可观测性与排障</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>现象</th><th>先检查</th><th>常见原因</th><th>修复</th></tr></thead>
+        <tbody>
+          <tr><td>总是读到空状态</td><td>thread_id、checkpoint_ns、checkpoint_id；表中是否存在对应行</td><td>namespace/id 不匹配，或 setup/写事务未提交</td><td>打印最终 saver config；手工 connection 确认 autocommit 与 dict_row。</td></tr>
+          <tr><td>进程完成后不退出</td><td>AsyncSqliteSaver context 是否退出</td><td>aiosqlite worker connection 未关闭</td><td>使用 <code>async with from_conn_string</code>。<span class="evidence"><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/aio.py:58-72</code></span></td></tr>
+          <tr><td>恢复后自定义类型变 dict</td><td>serde warning/event、strict 开关、allowlist exact symbol</td><td>类型被安全策略阻止或 class 路径已迁移</td><td>迁移数据到稳定 schema；只在评审后加入精确 allowlist。</td></tr>
+          <tr><td>Delta 恢复越来越慢</td><td>最近 seed 距离、祖先链长度、每 Channel chain 深度</td><td>长期无 snapshot，或迁移 seed 未被识别</td><td>核查 plain value/blob/inline 探测；制定 snapshot 与历史保留策略。</td></tr>
+          <tr><td>pending write 重复/缺失</td><td>task_id、idx、Channel 是否属于 WRITES_IDX_MAP</td><td>普通 write 冲突忽略；特殊 write 使用固定负 idx 覆盖</td><td>保持稳定 task id 与顺序；不要把 task writes 当 checkpoint upsert。</td></tr>
+          <tr><td>setup 卡住或失败</td><td>migration version、DDL 权限、并发 setup、CREATE INDEX CONCURRENTLY</td><td>权限/连接模式/锁等待</td><td>将 setup 作为部署步骤单独运行并记录版本，不在流量峰值临时执行。</td></tr>
+          <tr><td>AES 数据部分可读部分失败</td><td>type tag 是否含 cipher、key 代际</td><td>混合明文/密文或 key rotation 不完整</td><td>按 tag 与 key id 做离线盘点；验证后批量重写，保留旧 key 到迁移完成。</td></tr>
+        </tbody>
+      </table></div>
+      <p>JsonPlus 对未登记类型的 warning 有进程级去重上限，且并发线程可能各记录一次；不能依赖 warning 数量当精确攻击计数。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:51-79</code></span></p>
+    </section>
+
+    <section class="section" id="testing">
+      <h2>13. 测试与验证</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>契约/不变量</th><th>真实测试路径</th><th>类型</th><th>能证明什么 / 不能证明什么</th></tr></thead>
+        <tbody>
+          <tr><td>SQLite sync 基础 saver</td><td><code>libs/checkpoint-sqlite/tests/test_sqlite.py:16-18</code></td><td>单元/数据库</td><td>put/get/list/writes 基本行为；不证明多进程高并发。</td></tr>
+          <tr><td>SQLite async 基础 saver</td><td><code>libs/checkpoint-sqlite/tests/test_aiosqlite.py:15-18</code></td><td>async 单元</td><td>async 对等接口；不证明生产吞吐。</td></tr>
+          <tr><td>Delta migration 真实图</td><td><code>libs/checkpoint-sqlite/tests/test_delta_channel_migration.py:101-170</code></td><td>集成</td><td>pre-delta state 与迁移后追加写；核心包缺失时模块会 skip。</td></tr>
+          <tr><td>Postgres sync/async/pool/pipeline</td><td><code>libs/checkpoint-postgres/tests/test_sync.py:33-75</code>；<code>libs/checkpoint-postgres/tests/test_async.py:36-83</code></td><td>真实 Postgres 集成</td><td>连接形态与 setup；需要外部 Postgres 环境。</td></tr>
+          <tr><td>旧 pending sends 迁移</td><td><code>libs/checkpoint-postgres/tests/test_sync.py:284-322</code>；<code>libs/checkpoint-postgres/tests/test_async.py:296-334</code></td><td>迁移集成</td><td>get/list 对 v&lt;4 的兼容。</td></tr>
+          <tr><td>strict/allowlist</td><td><code>libs/checkpoint/tests/test_jsonplus.py:850-920</code></td><td>安全回归</td><td>默认、strict、allowlist 的恢复结果与日志。</td></tr>
+          <tr><td>加密仍保持 allowlist</td><td><code>libs/checkpoint/tests/test_encrypted.py:161-215</code></td><td>安全/组合</td><td>加密包装不绕过 strict；不证明 key 管理。</td></tr>
+          <tr><td>明文向加密兼容</td><td><code>libs/checkpoint/tests/test_encrypted.py:406-422</code></td><td>迁移回归</td><td>EncryptedSerializer 可读旧明文 typed payload。</td></tr>
+          <tr><td>Delta 公共规范</td><td><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_delta_channel_history.py:17-279</code></td><td>Conformance</td><td>顺序、最近 seed、目标排除、多 Channel、无 seed、plain seed。</td></tr>
+          <tr><td>能力检测与逐项报告</td><td><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/validate.py:45-128</code></td><td>规范 runner</td><td>fresh saver 逐能力运行并报告 skipped/failed；方法覆盖不自动证明实现正确。</td></tr>
+        </tbody>
+      </table></div>
+      <p>本次文档验证包含 HTML validator、源码行号、唯一 id、回链和绝对路径检查；未运行三个库完整测试套件，因为只新增外部文档且本环境 Git/Python 可执行能力需以验证结果为准。</p>
+    </section>
+
+    <section class="section" id="development">
+      <h2>14. 开发与扩展指南</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+        <tbody>
+          <tr><td>新增 saver</td><td><code>BaseCheckpointSaver</code> 子类</td><td>sync/async 方法、版本策略、生命周期 fixture、conformance 注册</td><td>五项基础能力全部通过；明确 optional capability。</td></tr>
+          <tr><td>新增 Postgres migration</td><td><code>MIGRATIONS</code> 列表末尾</td><td>sync/async 共用 base；setup 幂等与旧版本升级测试</td><td>不可重排/删除旧 migration；从真实旧 schema 升级。</td></tr>
+          <tr><td>修改表/主键</td><td>SELECT/UPSERT/delete/Delta SQL</td><td>普通与 shallow、sync 与 async、索引、迁移</td><td>pending writes 幂等、历史查询、并发 setup 与回滚。</td></tr>
+          <tr><td>支持新 serde 类型</td><td>JsonPlus ext encoder/hook 与 safe set</td><td>strict、宽松、allowlist、encrypted wrapper、旧 JSON</td><td>正常 roundtrip、拒绝后降级值、恶意 method/type 测试。</td></tr>
+          <tr><td>修改 Delta history</td><td>SQLite <code>_delta.py</code> / Postgres base+saver</td><td>sync/async、plain/primitive/snapshot seed、多 Channel、根与断链</td><td>公共 conformance + 各数据库真实集成 + 迁移图测试。</td></tr>
+          <tr><td>淘汰 Shallow</td><td><code>shallow.py</code> 与导出</td><td>deprecation 窗口、迁移说明、durability='exit' 对照</td><td>确认使用方不依赖 shallow schema 或“仅最新”行为。</td></tr>
+        </tbody>
+      </table></div>
+      <h3>自定义 saver 最低实现顺序</h3>
+      <ol>
+        <li>先固定 namespace 与主键模型，确保 get/put 可精确往返 parent config。</li>
+        <li>再实现 <code>put_writes</code> 的 task_id/idx 幂等和稳定顺序；禁止把 writes 合并进 checkpoint BLOB 后丢失 task 边界。</li>
+        <li>实现 list 的 filter/before/limit 和 delete_thread 的全表清理。</li>
+        <li>提供 async 原生实现或明确不支持；不要在事件循环线程做阻塞 sync bridge。</li>
+        <li>最后声明并实现 copy/prune/delta 等扩展能力，运行 conformance 与后端集成测试。</li>
+      </ol>
+      <div class="note">仓库规则要求修改任一 library 后在该 library 目录运行 <code>make format</code>、<code>make lint</code>、<code>make test</code>。本次只创建外部 HTML，没有修改 library。<span class="evidence"><code>AGENTS.md:3-17</code></span></div>
+    </section>
+
+    <section class="section" id="tradeoffs">
+      <h2>15. 设计权衡与已知限制</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+        <tbody>
+          <tr><td>SQLite 整包 BLOB + WAL</td><td>schema 小、部署简单、serde 行为统一</td><td>每个 checkpoint 重写整包；单文件写锁、缺少 JSONB 查询</td><td>多进程写竞争、历史/文件持续增长或需要服务级 HA。</td></tr>
+          <tr><td>Postgres JSONB + 版本 blob</td><td>primitive 可查询；复杂大值按 Channel version 复用</td><td>schema/migration/join 更复杂；元数据与 primitive 不被 EncryptedSerializer 覆盖</td><td>敏感 primitive 需全字段加密，或 blob join 成为瓶颈。</td></tr>
+          <tr><td>显式 Postgres setup</td><td>迁移时机和 DDL 权限可控</td><td>遗漏会在运行时失败；并发部署需要编排</td><td>平台拥有独立 migration job，可进一步禁止应用账号 DDL。</td></tr>
+          <tr><td>Shallow 只保留最新</td><td>历史空间最小、读模型简单</td><td>丢失时间旅行/旧恢复点，且当前已 deprecated</td><td>新项目不应采用；现有项目迁移常规 saver + exit durability。</td></tr>
+          <tr><td>JsonPlus 当前默认宽松</td><td>旧 checkpoint 与任意业务类型兼容</td><td>数据库被篡改时 import/构造攻击面更大</td><td>新部署应立即显式 strict；全局默认改变前验证历史类型矩阵。</td></tr>
+          <tr><td>EncryptedSerializer 可读明文</td><td>支持无停机渐进迁移</td><td>不提供全密文保证，缺少 key id/rotation</td><td>合规要求 fail-closed 时增加策略 wrapper 与离线重写。</td></tr>
+          <tr><td>Delta 祖先回放</td><td>减少每步完整 Channel snapshot 写放大</td><td>读成本依赖 seed 距离；prune/断链/迁移更复杂</td><td>长链读延迟或恢复风险超过写入收益时增加 snapshot。</td></tr>
+        </tbody>
+      </table></div>
+      <p>当前事实不能扩展成性能承诺：SQLite README 只将其定位于本地开发、测试和轻量部署；Postgres README 将其定位于 durable long-running workflow，但没有给出 SLA。<span class="evidence"><code>libs/checkpoint-sqlite/README.md:17-23</code>；<code>libs/checkpoint-postgres/README.md:17-25</code></span></p>
+    </section>
+
+    <section class="section" id="source-index">
+      <h2>16. 源码索引与进一步阅读</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>角色</th><th>路径与行号</th><th>阅读重点</th></tr></thead>
+        <tbody>
+          <tr><td>协议</td><td><code>libs/checkpoint/langgraph/checkpoint/serde/base.py:14-64</code></td><td>typed serde 与 CipherProtocol</td></tr>
+          <tr><td>默认 serde</td><td><code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:82-158</code></td><td>strict 默认、allowlist clone</td></tr>
+          <tr><td>反序列化安全</td><td><code>libs/checkpoint/langgraph/checkpoint/serde/jsonplus.py:546-744</code></td><td>安全类型、拒绝与降级</td></tr>
+          <tr><td>加密包装</td><td><code>libs/checkpoint/langgraph/checkpoint/serde/encrypted.py:8-80</code></td><td>tag、明文兼容、AES EAX</td></tr>
+          <tr><td>SQLite sync</td><td><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/__init__.py:45-189</code></td><td>定位、WAL、表、锁</td></tr>
+          <tr><td>SQLite async</td><td><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/aio.py:115-175</code></td><td>loop 所有权与 sync bridge</td></tr>
+          <tr><td>SQLite Delta</td><td><code>libs/checkpoint-sqlite/langgraph/checkpoint/sqlite/_delta.py:29-172</code></td><td>祖先 walk、sibling 跳过、写顺序</td></tr>
+          <tr><td>Postgres schema</td><td><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/base.py:39-159</code></td><td>migration、表、SELECT/UPSERT</td></tr>
+          <tr><td>Postgres sync</td><td><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:40-110</code></td><td>连接、setup</td></tr>
+          <tr><td>Postgres put/read</td><td><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:192-379</code></td><td>blob 分拆、pending writes</td></tr>
+          <tr><td>Postgres Delta</td><td><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/__init__.py:444-599</code></td><td>两阶段、多 Channel、tuple 重建</td></tr>
+          <tr><td>Shallow</td><td><code>libs/checkpoint-postgres/langgraph/checkpoint/postgres/shallow.py:169-257</code></td><td>弃用与最新点 schema</td></tr>
+          <tr><td>Conformance 能力</td><td><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/capabilities.py:15-96</code></td><td>基础/扩展能力与检测</td></tr>
+          <tr><td>Conformance runner</td><td><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/validate.py:31-128</code></td><td>fresh instance、skip 与报告</td></tr>
+          <tr><td>Delta spec</td><td><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_delta_channel_history.py:17-307</code></td><td>seed、顺序、迁移与目标排除</td></tr>
+        </tbody>
+      </table></div>
+      <p>相邻主题请返回总览阅读第 9 章 Checkpoint/Durable Execution 与第 11 章 Interrupt/Time-travel；当前未添加相邻子文档链接，因为这些文件在输出目录中尚不存在。</p>
+    </section>
+
+    <section class="section" id="glossary">
+      <h2>17. 术语表</h2>
+      <dl>
+        <dt>WAL</dt><dd>Write-Ahead Logging，预写日志。SQLite journal 模式，可改善读写并发，但不消除单文件写者约束。</dd>
+        <dt>Serde</dt><dd>Serializer/Deserializer，序列化与反序列化。本模块以 <code>(type, bytes)</code> 为持久化边界。</dd>
+        <dt>Checkpoint</dt><dd>超级步边界的 Channel 状态、版本和消费进度快照，不包含 Python 调用栈。</dd>
+        <dt>Pending write</dt><dd>task 级中间写；用于部分成功后的恢复，与超级步 checkpoint 分开持久化。</dd>
+        <dt>Namespace</dt><dd><code>checkpoint_ns</code>，同一 thread 下隔离子图或持久化空间的键。</dd>
+        <dt>Blob</dt><dd>Binary Large Object。Postgres saver 中按 Channel/version 外置的 typed bytes。</dd>
+        <dt>JSONB</dt><dd>Postgres 二进制 JSON 类型；保存 checkpoint 结构、primitive Channel 值与 metadata。</dd>
+        <dt>Pipeline</dt><dd>Psycopg 将多条命令减少往返的模式；不等于同一 cursor 并发执行，也不与 connection pool 同时作为 saver 参数使用。</dd>
+        <dt>Shallow saver</dt><dd>只保留 thread/namespace 最新 checkpoint 的已弃用 Postgres 实现，不支持完整时间旅行。</dd>
+        <dt>Strict msgpack</dt><dd>仅允许内建安全类型和显式 allowlist 类型被构造的反序列化模式。</dd>
+        <dt>Allowlist</dt><dd>允许清单；这里使用精确 module/name 或 type，不接受模糊 prefix。</dd>
+        <dt>CipherProtocol</dt><dd>加密/解密协议，返回 cipher name 与 ciphertext；由 EncryptedSerializer 包装 typed serde。</dd>
+        <dt>AES-EAX</dt><dd>带认证的 AES 模式；本仓库 pycryptodome helper 的默认模式。</dd>
+        <dt>Delta history</dt><dd>某 Delta Channel 最近祖先 seed 与后续 writes 的恢复材料。</dd>
+        <dt>Seed</dt><dd>祖先链上最近的完整 Channel 值，可能是 <code>_DeltaSnapshot</code> 或迁移前 plain value。</dd>
+        <dt>Ancestor chain</dt><dd>由 <code>parent_checkpoint_id</code> 连接的 checkpoint 祖先链；Delta 恢复依赖其完整性。</dd>
+        <dt>Conformance</dt><dd>一致性规范套件，用相同测试验证不同 saver 的公共与扩展能力。</dd>
+        <dt>Time-travel</dt><dd>选择旧 checkpoint 查看或从历史点分叉执行；Shallow saver 因覆盖历史而不支持完整能力。</dd>
+      </dl>
+      <p><a href="../../langgraph_architecture.html#s10">返回 LangGraph 架构总览 · s10</a></p>
+    </section>
+  </main>
+</div>
+<script>
+  (() => {
+    const links = [...document.querySelectorAll('.sidebar a')];
+    const sections = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+    const update = () => {
+      let current = sections[0];
+      for (const section of sections) if (section.getBoundingClientRect().top <= 80) current = section;
+      links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + current.id));
+    };
+    addEventListener('scroll', update, {passive:true}); update();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>第 16 章：Settings、Secrets 与兼容性</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --text: #44403c;
+      --muted: #78716c;
+      --border: rgba(28,25,23,.12);
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --red: #b91c1c;
+      --purple: #6d28d9;
+      --code: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      color: var(--text);
+      font: 16px/1.72 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      color: var(--code);
+      background: rgba(120,113,108, .18);
+      border-radius: 5px;
+      padding: .12em .35em;
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: .9em;
+    }
+    pre {
+      overflow-x: auto;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      color: #1c1917;
+    }
+    pre code { color: inherit; background: none; padding: 0; }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 1.3rem 1rem;
+      border-right: 1px solid var(--border);
+      background: var(--panel);
+    }
+    aside strong { display: block; margin: .8rem .5rem; color: #1c1917; }
+    aside a {
+      display: block;
+      margin: .12rem 0;
+      padding: .38rem .55rem;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: .9rem;
+    }
+    aside a.active { background: var(--panel-2); color: var(--blue); }
+    main { width: min(1120px, 100%); padding: 2rem 3rem 5rem; }
+    .back { display: inline-block; margin-bottom: 1.4rem; }
+    h1, h2, h3 { color: #1c1917; line-height: 1.3; }
+    h1 { font-size: clamp(1.9rem, 4vw, 3rem); margin: .3rem 0 .6rem; }
+    h2 {
+      margin-top: 3.2rem;
+      padding-bottom: .45rem;
+      border-bottom: 1px solid var(--border);
+      scroll-margin-top: 1rem;
+    }
+    h3 { margin-top: 1.8rem; }
+    .lead { color: var(--muted); font-size: 1.1rem; }
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .7rem;
+      margin: 1.5rem 0;
+    }
+    .meta div, .card, .callout {
+      padding: .85rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+    .meta dt { color: var(--muted); font-size: .82rem; }
+    .meta dd { margin: .15rem 0 0; color: #1c1917; }
+    .tags { display: flex; flex-wrap: wrap; gap: .45rem; margin: 1rem 0; }
+    .tag {
+      padding: .18rem .55rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    .tag.current { color: var(--green); border-color: #15803d; }
+    .tag.legacy { color: var(--yellow); border-color: #a16207; }
+    .tag.deploy { color: var(--purple); border-color: #6d28d9; }
+    .tag.gap { color: var(--red); border-color: #b91c1c; }
+    .callout { margin: 1rem 0; border-left: 4px solid var(--blue); }
+    .callout.warn { border-left-color: var(--yellow); }
+    .callout.danger { border-left-color: var(--red); }
+    .callout strong { color: #1c1917; }
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: collapse;
+      background: var(--panel);
+    }
+    th, td {
+      padding: .68rem .78rem;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--panel-2); color: #1c1917; }
+    ul, ol { padding-left: 1.45rem; }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .flow {
+      white-space: pre-wrap;
+      border-left: 3px solid var(--purple);
+    }
+    footer { margin-top: 3rem; color: var(--muted); }
+    @media (max-width: 850px) {
+      .layout { display: block; }
+      aside {
+        position: static;
+        width: auto;
+        height: auto;
+        max-height: 42vh;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      main { padding: 1.4rem 1rem 4rem; }
+      .meta { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside aria-label="本页目录">
+      <strong>第 16 章目录</strong>
+      <a href="#positioning">1. 模块定位</a>
+      <a href="#dependencies">2. 系统位置与依赖</a>
+      <a href="#concepts">3. 核心概念</a>
+      <a href="#architecture">4. 架构组成</a>
+      <a href="#flows">5. 完整运行流程</a>
+      <a href="#data-state">6. 数据与状态模型</a>
+      <a href="#interfaces">7. 接口、协议与事件</a>
+      <a href="#configuration">8. 配置与默认行为</a>
+      <a href="#concurrency">9. 并发、性能与资源</a>
+      <a href="#security">10. 安全与信任边界</a>
+      <a href="#failure">11. 失败、恢复与兼容</a>
+      <a href="#operations">12. 可观测性与排障</a>
+      <a href="#testing">13. 测试与验证</a>
+      <a href="#development">14. 开发与扩展指南</a>
+      <a href="#tradeoffs">15. 设计权衡与已知限制</a>
+      <a href="#source-index">16. 源码索引与进一步阅读</a>
+      <a href="#glossary">17. 术语表</a>
+    </aside>
+
+    <main>
+      <a class="back" href="../../software_agent_architecture.html#settings">← 返回架构总览：Settings</a>
+      <header>
+        <div>CHAPTER 16</div>
+        <h1>Settings、Secrets 与兼容性</h1>
+        <p class="lead">
+          解释配置如何从结构化 Pydantic 模型进入 Agent 与 Conversation，如何安全地持久化和按需解析 Secret，
+          以及四类互不等价的兼容契约如何分别演进。
+        </p>
+        <dl class="meta">
+          <div><dt>源码版本</dt><dd>当前工作区快照；本机 Git CLI 不可用，无法取得 SHA</dd></div>
+          <div><dt>证据状态</dt><dd>源码、测试、golden fixture 与 CI 脚本已验证；提交 SHA 受阻</dd></div>
+          <div><dt>主要所有者</dt><dd><code>openhands-sdk/openhands/sdk/settings/</code>、<code>secret/</code>、Agent Server persistence/settings router</dd></div>
+          <div><dt>目标读者</dt><dd>SDK 与 Agent Server 开发者、客户端集成者、发布与兼容性审查者</dd></div>
+          <div><dt>最近验证</dt><dd>2026-08-14</dd></div>
+          <div><dt>文档边界</dt><dd>Settings/Secrets/兼容门禁；不展开 LLM、MCP 连接和完整事件树实现</dd></div>
+        </dl>
+        <div class="tags" aria-label="结论分类">
+          <span class="tag current">当前事实</span>
+          <span class="tag deploy">部署能力</span>
+          <span class="tag legacy">遗留迁移</span>
+          <span class="tag gap">SHA 证据缺口</span>
+        </div>
+      </header>
+
+      <section class="section" id="positioning">
+        <h2>1. 模块定位</h2>
+        <p>
+          Settings 模块是程序化配置的规范结构层：它定义 Agent 变体、Conversation 级控制项、表单可消费的中立 schema、
+          持久化版本和迁移入口。当前代码中没有一个可直接实例化的公共单体 <code>AgentSettings</code> 类；
+          公共模型由 <code>AgentSettingsBase</code>、判别联合 <code>AgentSettingsConfig</code>、
+          <code>OpenHandsAgentSettings</code> 与 <code>ACPAgentSettings</code> 构成。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:476-512</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1862-1877</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>职责</th><th>本模块负责</th><th>委托或明确不负责</th></tr></thead>
+            <tbody>
+              <tr><td>Agent 配置</td><td>变体校验、默认值、构造 Agent、持久化迁移</td><td>Agent 运行状态归 Conversation；工具执行与 LLM 传输由相邻模块负责</td></tr>
+              <tr><td>Conversation 配置</td><td>最大迭代、确认模式、安全分析器及请求默认值</td><td>runtime-only 字段不持久化；状态与事件不存入 Settings 文件</td></tr>
+              <tr><td>导出 schema</td><td>字段类型、默认值、分组、依赖、敏感标记和变体标签</td><td>不规定客户端排序、图标、组件或 slash command 展示</td></tr>
+              <tr><td>Secret</td><td>遮蔽、明文/加密序列化、解密、懒查找引用</td><td>密钥材料、网络隔离和调用方授权由部署环境负责</td></tr>
+              <tr><td>兼容</td><td>Settings migration、Python/Field/REST/Event 四种政策的边界</td><td>四种契约不能用同一“兼容”规则替代</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          <code>ConversationSettings</code> 直接拥有 <code>confirmation_mode</code> 与
+          <code>security_analyzer</code>，但通过 metadata 在导出 schema 中归入 <code>verification</code>；
+          这不是持久化嵌套模型。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1010-1057</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="dependencies">
+        <h2>2. 系统位置与依赖</h2>
+        <pre class="flow"><code>下游应用 / RemoteWorkspace / Agent Server REST
+  ├─ export_agent_settings_schema() / ConversationSettings.export_schema()
+  ├─ validate_agent_settings() / ConversationSettings.from_persisted()
+  └─ GET/PATCH /api/settings
+          ↓
+SDK settings models ── create_agent() ──→ Agent / ACPAgent
+          │
+          ├─ create_request() ──→ StartConversationRequest
+          ├─ MCPServer map ──→ MCP / ACP 边界
+          └─ SecretSource ──→ StaticSecret 或 LookupSecret
+                                ↓ HTTP
+                         /api/settings/secrets/{name}
+
+Agent Server PersistedSettings
+  └─ 文件 Store + cipher + file lock</code></pre>
+        <p>
+          SDK 拥有共享 API 模型，Agent Server 可依赖 SDK，反向依赖被禁止；因此 REST 的请求/响应模型放在
+          <code>settings/api_models.py</code>，并刻意让 settings 字段保留 dict，以便服务器控制 Secret 的序列化 context。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/api_models.py:1-26</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>组件</th><th>所有者</th><th>输入/输出</th><th>边界</th></tr></thead>
+            <tbody>
+              <tr><td>Settings models/schema exporter</td><td>SDK</td><td>Pydantic model ↔ 结构化 schema</td><td>产品中立</td></tr>
+              <tr><td>Secret helpers/SecretSource</td><td>SDK</td><td>SecretStr、cipher context、HTTP lookup</td><td>不拥有凭据存储</td></tr>
+              <tr><td>PersistedSettings/Store</td><td>Agent Server</td><td>顶层 settings 文件、加密 context</td><td>部署持久化能力</td></tr>
+              <tr><td>Settings REST router</td><td>Agent Server</td><td>schema、GET/PATCH、secret CRUD</td><td>FastAPI/OpenAPI 公共面</td></tr>
+              <tr><td>兼容检查</td><td>仓库 CI</td><td>PyPI/tag/golden/current workspace</td><td>分别检查持久化、Python 与 REST</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="concepts">
+        <h2>3. 核心概念</h2>
+        <ul>
+          <li><strong>规范 Settings payload：</strong>模型 <code>model_dump()</code> 的直接形状，顶层含 <code>schema_version</code>，不增加 wrapper。</li>
+          <li><strong>判别联合：</strong><code>agent_kind</code> 选择 <code>openhands</code> 或 <code>acp</code>；缺失时按历史默认归为 <code>openhands</code>。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1845-1867</code></span></li>
+          <li><strong>导出 schema：</strong>面向设置界面的中立描述，不等于 Pydantic JSON Schema，也不含 <code>required</code>；可空性应从 Python typing 判断。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:102-143</code></span></li>
+          <li><strong>Runtime-only 字段：</strong><code>workspace</code>、<code>conversation_id</code>、plugins 等参与请求构造，但设置了 <code>exclude=True</code>，不进入持久化。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:940-1008</code></span></li>
+          <li><strong>Golden baseline：</strong>按 schema 版本保存的历史 JSON；<code>__expected__</code> 是检查元数据，不是运行时 payload，用 dotted path 防止迁移静默丢值。<span class="evidence"><code>.github/scripts/check_persisted_settings_compat.py:392-442</code></span></li>
+          <li><strong>PyPI baseline：</strong>从已发布版本生成真实 payload，再由当前 loader 加载；与只覆盖特定历史形状的 golden 互补。</li>
+          <li><strong>Redaction（遮蔽）：</strong>默认输出 <code>**********</code>，不可逆；它不是加密文本，也不能被当成有效 Secret 回写。</li>
+          <li><strong>LookupSecret：</strong>保存“到哪里取值”的引用与鉴权 header，值在使用时通过同步 HTTP 获取，不把远端明文提前搬入 SDK 客户端。</li>
+        </ul>
+      </section>
+
+      <section class="section" id="architecture">
+        <h2>4. 架构组成</h2>
+        <h3>4.1 Agent Settings 模型族</h3>
+        <p>
+          <code>AgentSettingsBase</code> 提供版本、schema 导出和构造接口；OpenHands 变体拥有 LLM、tools、MCP、
+          condenser、critic，ACP 变体把主执行委托给子进程。两者都在 v5 持久化版本下工作。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:472-512</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1167-1317</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1410-1423</code></span>
+        </p>
+        <h3>4.2 Conversation Settings</h3>
+        <p>
+          v1 模型把持久化控制项和请求构造期字段放在同一类型中，但通过 <code>exclude=True</code> 分隔；
+          <code>create_request()</code> 以显式 kwargs 为最高优先级，然后填入 settings 默认值。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1093-1153</code></span>
+        </p>
+        <h3>4.3 Schema exporter</h3>
+        <p>
+          exporter 只输出带 <code>openhands_settings</code> metadata 的字段；嵌套模型被摊平成
+          <code>section.field</code> key，排除字段跳过，SecretStr 类型被标记为 <code>secret</code>。
+          联合导出器合并两个 Agent 变体并附加 variant 标签，同时故意不输出 <code>agent_kind</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1991-2032</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:2065-2178</code></span>
+        </p>
+        <h3>4.4 持久化与 Secret 组件</h3>
+        <p>
+          Agent Server 的 <code>PersistedSettings</code> v2 嵌入 SDK 的 agent/conversation settings；
+          Store 在读取时传递 cipher context，模型 validator 再调用 SDK migration 入口。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/persistence/models.py:113-170</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/persistence/models.py:281-354</code></span>
+        </p>
+        <h3>4.5 SecretRegistry：会话运行态凭据注册表</h3>
+        <p>
+          论文 §4.8 把 <code>SecretRegistry</code> 作为独立架构组件：每个会话维护自己的注册表，
+          工具到执行时才解析凭据，并对输出中的已解析值做自动遮罩。当前源码把它直接放在
+          <code>ConversationState.secret_registry</code>，默认每个状态创建新实例；注册表保存
+          <code>name → SecretSource</code>，已解析值只进入私有缓存，用于把输出替换为
+          <code>&lt;secret-hidden&gt;</code>。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:197-201</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/secret_registry.py:21-47</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/secret_registry.py:143-179</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>论文 §4.8 能力</th><th>当前源码落点</th><th>边界</th></tr></thead>
+            <tbody>
+              <tr><td>按会话存在</td><td><code>ConversationState</code> 的 default factory</td><td>是会话状态，不是 Settings 全局注册表</td></tr>
+              <tr><td>延迟绑定</td><td><code>SecretSource.get_value()</code>；Terminal 只解析命令中出现的名称，MCP 可按名单查询</td><td><code>LookupSecret</code> 是同步 HTTP；ACP 等不透明消费者可显式解析整个 registry</td></tr>
+              <tr><td>输出遮罩</td><td>解析值进入 <code>_exported_values</code>，Terminal/MCP/ACP 输出调用 <code>mask_secrets_in_output()</code></td><td>按精确字符串替换；解析失败的未知值无法遮罩，失败 lookup 有 60 秒退避</td></tr>
+              <tr><td>序列化保护</td><td><code>SecretSource</code> 字段复用 <code>serialize_secret()</code>/<code>validate_secret()</code></td><td>有 cipher 时加密；无 cipher 的 Conversation snapshot 遮蔽并在恢复时丢失</td></tr>
+              <tr><td>运行中更新</td><td>Local/Remote <code>Conversation.update_secrets()</code>；Remote 转发到 Agent Server REST</td><td>同名覆盖；不是带版本、审批或租户角色的 IAM 轮换系统</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warn">
+          <strong>论文与当前类型的差异：</strong>论文文字提到 callable secret；当前
+          <code>SecretValue</code> 的规范类型是 <code>str | SecretSource</code>，动态刷新应实现
+          <code>SecretSource.get_value()</code>。当前提供 <code>StaticSecret</code> 和 HTTP
+          <code>LookupSecret</code>，可扩展来源接口不等于已经集成外部 secret store，更不构成完整 IAM。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/secret/secrets.py:35-45</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/secret/secrets.py:48-82</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/secret/secrets.py:135-136</code></span>
+          论文来源：<a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690</a>，
+          MLSys 2026 论文 §4.8。
+        </div>
+      </section>
+
+      <section class="section" id="flows">
+        <h2>5. 完整运行流程</h2>
+        <h3>5.1 正常成功：保存、重载并构造运行对象</h3>
+        <ol>
+          <li>客户端通过 Python 构造模型，或向 <code>PATCH /api/settings</code> 发送稀疏 diff；REST 请求由 <code>SettingsUpdateRequest</code> 校验。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/api_models.py:194-218</code></span></li>
+          <li>同变体 Agent diff 使用 RFC 7386 递归合并；切换 <code>agent_kind</code> 时从目标变体的新鲜 base 开始，避免混合两个模型的字段。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1915-1968</code></span></li>
+          <li><code>PersistedSettings.update()</code> 先同时验证 Agent 与 Conversation 新值，再修改内存对象；router 的 Store 更新由文件锁包围。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/persistence/models.py:183-279</code></span></li>
+          <li>落盘时 Secret 根据 context 加密；重载时顶层模型调用 <code>validate_agent_settings()</code> 与 <code>ConversationSettings.from_persisted()</code>。</li>
+          <li><code>OpenHandsAgentSettings.create_agent()</code> 解析默认 tools、subscription LLM、condenser 与 critic；<code>ConversationSettings.create_request()</code> 生成启动请求。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1316-1355</code></span></li>
+        </ol>
+
+        <h3>5.2 拒绝/提前结束：无效 payload 或缺少加密能力</h3>
+        <ol>
+          <li>未来版本 <code>schema_version</code> 高于当前版本时立即拒绝，不尝试猜测向后读取。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:529-576</code></span></li>
+          <li>迁移链缺步骤、版本不前进或类型不是整数时失败；无效 REST diff 被清理异常细节后返回 400，避免 Pydantic 错误泄露 Secret。</li>
+          <li>请求 <code>encrypted</code> 输出但 context 无 cipher 时抛出 <code>MissingCipherError</code>，服务器转换为服务不可用，而不是回退明文。<span class="evidence"><code>openhands-sdk/openhands/sdk/utils/pydantic_secrets.py:48-82</code></span></li>
+          <li>Secret 名称不符合字母开头、最长 64 位的规则时，secret REST 入口返回 422。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:89-108</code></span></li>
+        </ol>
+
+        <h3>5.3 恢复/迁移：旧 AgentSettings 进入 v5</h3>
+        <ol>
+          <li>缺版本视为 v0，v0→v1 补 <code>agent_kind</code>。</li>
+          <li>v1→v2 把历史 <code>llm</code> discriminator 规范化为 <code>openhands</code>。</li>
+          <li>v2→v3 从 Agent verification 删除已迁至 ConversationSettings 的确认字段。</li>
+          <li>v3→v4 把历史 OpenHands proxy LLM payload 规范化。</li>
+          <li>v4→v5 把 <code>{"mcpServers": ...}</code> wrapper、旧 transport/auth/OAuth cache 迁为 SDK 原生 server map。</li>
+          <li>每步必须更新版本；最终由判别联合验证，当前版本中仍带 <code>llm</code> tag 的 payload 也会无条件规范化。<span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:579-636</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:928-937</code></span> <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:1886-1912</code></span></li>
+        </ol>
+        <p>
+          ConversationSettings 当前只有 v0→v1：补写顶层版本后按现模型验证。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:920-937</code></span>
+        </p>
+        <h3>5.4 运行中更新：本地与远程 Secret 轮换</h3>
+        <ol>
+          <li>本地调用 <code>Conversation.update_secrets()</code>，把字符串包装为 <code>StaticSecret</code>，或直接保存调用方提供的 <code>SecretSource</code>；同名项覆盖。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/secret_registry.py:49-60</code></span></li>
+          <li>后续 Terminal/MCP/ACP 消费时再调用 source；<code>update_secrets()</code> 本身不清空旧遮罩值，因此新值首次解析前仍会遮罩上一值。新值成功解析后，同名缓存项会被覆盖；当前实现不保证同时遮罩同一名称的多代历史值。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/secret_registry.py:44-60,217-224</code></span></li>
+          <li>RemoteConversation 把可序列化 source 或字符串发送到 <code>POST /api/conversations/{conversation_id}/secrets</code>；服务端把同步 registry 更新放入 executor，避免阻塞事件循环。<span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1458-1481</code></span> <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_router.py:403-422</code></span> <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1591-1599</code></span></li>
+        </ol>
+      </section>
+
+      <section class="section" id="data-state">
+        <h2>6. 数据与状态模型</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>数据</th><th>规范形状/身份</th><th>生命周期</th><th>迁移与隐私</th></tr></thead>
+            <tbody>
+              <tr><td>AgentSettings</td><td>顶层 <code>schema_version=5</code> + <code>agent_kind</code></td><td>配置保存到构造 Agent</td><td>v0→v5 逐步迁移；Secret 按 context 处理</td></tr>
+              <tr><td>ConversationSettings</td><td>顶层 <code>schema_version=1</code></td><td>配置保存到构造启动请求</td><td>runtime-only 字段排除</td></tr>
+              <tr><td>PersistedSettings</td><td>Agent Server v2 顶层文件，嵌入两类 SDK settings</td><td>Store 读写</td><td>cipher 加密，嵌套模型各自迁移</td></tr>
+              <tr><td>Settings schema</td><td>model_name + sections + fields</td><td>进程内生成并缓存</td><td>不含 Secret 默认值；不是持久化数据</td></tr>
+              <tr><td>SecretRegistry</td><td>会话内 <code>dict[str, SecretSource]</code> + 私有已解析值缓存</td><td>ConversationState 生命周期；可运行中更新</td><td>source 随 base snapshot 序列化；私有遮罩缓存不序列化，恢复后按需重建</td></tr>
+              <tr><td>StaticSecret</td><td><code>SecretStr | None</code></td><td>随模型存在</td><td>默认遮蔽、可加密、可信后端可显式明文</td></tr>
+              <tr><td>LookupSecret</td><td>URL + headers + description</td><td>调用 <code>get_value()</code> 时取值</td><td>敏感 headers 分值加密/遮蔽；远端值不持久化在引用中</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          migration 总是先复制输入 mapping，避免原对象被逐步修改；未来版本被拒绝。Golden fixture 的
+          <code>__expected__</code> 在加载前从 payload 移除，再对 round-trip 结果按 dotted path 断言。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:518-576</code></span>
+          <span class="evidence"><code>.github/scripts/check_persisted_settings_compat.py:408-441</code></span>
+          <span class="evidence"><code>.github/scripts/check_persisted_settings_compat.py:492-515</code></span>
+        </p>
+        <div class="callout warn">
+          <strong>状态边界：</strong>Settings 文件不是 Conversation 的事件存储。历史事件由事件类型自身的反序列化兼容处理器保障；
+          不应通过提高 Settings schema version 来修复事件格式。
+        </div>
+      </section>
+
+      <section class="section" id="interfaces">
+        <h2>7. 接口、协议与事件</h2>
+        <h3>7.1 Python 接口</h3>
+        <ul>
+          <li><code>validate_agent_settings(data, context=...)</code>：唯一的 AgentSettings 持久化加载/规范化入口。</li>
+          <li><code>ConversationSettings.from_persisted(data)</code>：ConversationSettings 迁移入口。</li>
+          <li><code>export_settings_schema(model)</code> 与 <code>export_agent_settings_schema()</code>：单模型及联合 UI schema。</li>
+          <li><code>create_agent()</code>、<code>create_request()</code>：配置到运行对象的边界。</li>
+        </ul>
+        <h3>7.2 REST/OpenAPI</h3>
+        <ul>
+          <li><code>GET /api/settings/agent-schema</code> 与 <code>/conversation-schema</code> 返回缓存后的中立 schema。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:59-83</code></span></li>
+          <li><code>GET /api/settings</code> 返回 settings dict，可通过 <code>X-Expose-Secrets</code> 请求 encrypted/plaintext；缺省遮蔽。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:111-174</code></span></li>
+          <li><code>PATCH /api/settings</code> 接受稀疏 diff；嵌套 null 删除 key，顶层不可空字段的 null 仍交由校验失败。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:177-207</code></span></li>
+          <li><code>GET /api/settings/secrets/{name}</code> 返回 <code>text/plain</code>，供 LookupSecret 懒解析；404 使用通用消息抑制名称枚举信息。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:454-484</code></span></li>
+        </ul>
+        <h3>7.3 事件语义</h3>
+        <p>
+          设置读取、更新与 Secret 访问通过日志观测，不产生 Conversation Event。事件持久化是独立兼容面：
+          例如 <code>TextContent</code> 在 <code>extra="forbid"</code> 下仍永久移除历史
+          <code>enable_truncation</code> 字段，<code>Message</code> 也保留旧字段处理器。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/message.py:173-191</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/llm/message.py:218-261</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="configuration">
+        <h2>8. 配置与默认行为</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+            <tbody>
+              <tr><td><code>schema_version</code>（Agent）</td><td><code>int ≥ 1</code></td><td>5</td><td>loader 决定迁移</td><td>读取时</td><td>未来版本拒绝</td><td><code>settings/model.py:472-495</code></td></tr>
+              <tr><td><code>schema_version</code>（Conversation）</td><td><code>int ≥ 1</code></td><td>1</td><td>loader 决定迁移</td><td>读取时</td><td>未来版本拒绝</td><td><code>settings/model.py:940-942</code></td></tr>
+              <tr><td><code>agent_kind</code></td><td><code>openhands</code>/<code>acp</code>；<code>llm</code> 遗留</td><td><code>openhands</code></td><td>payload tag；缺失走默认</td><td>切换后新 Agent</td><td>未知 tag 校验失败</td><td><code>settings/model.py:1845-1867</code></td></tr>
+              <tr><td><code>tools</code></td><td><code>list[Tool] | None</code></td><td><code>None</code></td><td>显式 list；None 才解析默认工具集</td><td>新 Agent</td><td><code>[]</code> 是明确无工具</td><td><code>settings/model.py:1203-1219</code></td></tr>
+              <tr><td><code>tool_concurrency_limit</code></td><td><code>int ≥ 1</code></td><td>1</td><td>设置值</td><td>新 Agent</td><td>校验失败</td><td><code>settings/model.py:1246-1262</code></td></tr>
+              <tr><td><code>mcp_config</code></td><td><code>dict[str, MCPServer]</code></td><td><code>{}</code></td><td>变体设置值</td><td>新 Agent/ACP 会话</td><td>未知 server 字段拒绝</td><td><code>settings/model.py:1264-1274</code></td></tr>
+              <tr><td><code>max_iterations</code></td><td><code>int ≥ 1</code></td><td>500</td><td><code>create_request</code> 显式 kwargs 优先</td><td>新请求</td><td>校验失败</td><td><code>settings/model.py:1011-1023</code></td></tr>
+              <tr><td><code>confirmation_mode</code></td><td><code>bool</code></td><td><code>false</code></td><td>显式 kwargs 可覆盖生成 policy</td><td>新请求</td><td>类型校验失败</td><td><code>settings/model.py:1024-1037</code></td></tr>
+              <tr><td><code>security_analyzer</code></td><td><code>llm</code>/<code>none</code>/<code>null</code></td><td><code>llm</code></td><td>显式 kwargs 可覆盖实例</td><td>新请求</td><td>非支持值校验失败</td><td><code>settings/model.py:1038-1052</code></td></tr>
+              <tr><td><code>OH_INTERNAL_SERVER_URL</code></td><td>绝对 base URL</td><td><code>http://127.0.0.1:8000</code></td><td>环境变量优先</td><td>构造 LookupSecret 时读取</td><td>HTTP 获取时抛错</td><td><code>secret/secrets.py:22-32</code></td></tr>
+              <tr><td><code>X-Expose-Secrets</code></td><td>absent/encrypted/plaintext</td><td>absent（遮蔽）</td><td>plaintext 显式覆盖 cipher 模式</td><td>每请求</td><td>encrypted 无 cipher 失败</td><td><code>settings_router.py:118-141</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          schema exporter 会把 Secret 默认值规范化为 <code>null</code>，避免把凭据带入 UI schema。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/settings/model.py:2318-2333</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="concurrency">
+        <h2>9. 并发、性能与资源</h2>
+        <ul>
+          <li>模型迁移和 schema 导出是同步 CPU 操作；Agent Server 用 <code>lru_cache(maxsize=1)</code> 缓存两份 schema，避免每次请求遍历模型。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:59-83</code></span></li>
+          <li><code>PersistedSettings.update()</code> 自身不是线程安全容器；router 必须经 Store 的文件锁更新。它采用“先验证全部，再赋值”避免一半成功，但不宣称跨进程数据库事务。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/persistence/models.py:204-215</code></span></li>
+          <li><code>LookupSecret.get_value()</code> 是同步 <code>httpx.get</code>，超时固定为 30 秒。调用方若位于 async event loop，必须在线程边界执行，避免 loopback 请求自锁。<span class="evidence"><code>openhands-sdk/openhands/sdk/secret/secrets.py:79-82</code></span></li>
+          <li>Settings 模块没有队列、背压或自动重试。HTTP 错误通过 <code>raise_for_status()</code> 直接传播；是否重试由调用方决定。</li>
+          <li><code>tool_concurrency_limit</code> 是配置字段而非本模块并发机制；值大于 1 会让下游工具共享 Conversation 和文件系统，风险在 Agent 执行模块。</li>
+        </ul>
+      </section>
+
+      <section class="section" id="security">
+        <h2>10. 安全与信任边界</h2>
+        <h3>10.1 Secret 三态序列化</h3>
+        <p>
+          <code>resolve_expose_mode()</code> 把 context 解析为 plaintext、encrypted 或 redact：
+          显式 plaintext 优先；显式 encrypted 或存在 cipher 走加密；其他情况保持 Pydantic 的 SecretStr 遮蔽。
+          已加密且可由同一 cipher 解开的 token 不重复加密。<span class="evidence"><code>openhands-sdk/openhands/sdk/utils/pydantic_secrets.py:24-37</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/utils/pydantic_secrets.py:48-82</code></span>
+        </p>
+        <p>
+          反序列化把空白和 canonical redaction sentinel 变成 <code>None</code>；只对带 Fernet 前缀且提供 cipher 的值解密，
+          普通字符串保留为旧版明文或 PATCH 输入。<span class="evidence"><code>openhands-sdk/openhands/sdk/utils/pydantic_secrets.py:85-126</code></span>
+        </p>
+        <h3>10.2 LookupSecret 信任模型</h3>
+        <p>
+          hostless URL 在模型构造时相对 <code>OH_INTERNAL_SERVER_URL</code> 解析；Agent Server 启动时按实际 host/port 注入该变量，
+          wildcard bind 被改写为 loopback。<span class="evidence"><code>openhands-sdk/openhands/sdk/secret/secrets.py:22-32</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/__main__.py:51-71</code></span>
+        </p>
+        <p>
+          headers 仅对被 <code>is_secret_key()</code> 判断为敏感的值加密或遮蔽，普通 header 原样保存；
+          redacted 敏感 header 在反序列化时删除。<span class="evidence"><code>openhands-sdk/openhands/sdk/secret/secrets.py:84-132</code></span>
+        </p>
+        <div class="callout danger">
+          <strong>部署信任边界：</strong><code>GET /api/settings</code> 没有基于角色区分 plaintext/encrypted 权限。
+          配置 session API key 时，所有通过认证的客户端处于同一信任域；未配置时 <code>/api</code> 可开放。
+          因此生产环境必须使用鉴权与网络隔离，前端应使用 encrypted 或 redacted。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:123-141</code></span>
+        </div>
+        <h3>10.3 与 Settings/pydantic secret serialization 的分层</h3>
+        <p>
+          <code>SecretRegistry</code> 负责“本会话有哪些凭据、何时解析、哪些已解析值需要遮罩”；
+          <code>SecretSource</code> 负责“值从何处取得”；通用 pydantic helper 只负责模型边界上的
+          明文、密文与遮蔽三态。Settings 与 Agent Server store 可以复用同一 helper，但不因此拥有
+          Conversation 的运行时 registry。反过来，registry 也不负责用户身份、角色授权、外部 Vault
+          生命周期或租户级策略。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/utils/pydantic_secrets.py:24-82</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/utils/pydantic_secrets.py:85-126</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="failure">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+            <tbody>
+              <tr><td>未来 schema version</td><td>loader 比较版本</td><td>抛 ValueError</td><td>不修改设置</td><td>升级软件或使用支持版本</td><td>核对生产/客户端版本</td></tr>
+              <tr><td>迁移链缺步或不前进</td><td>migration loop invariant</td><td>加载失败</td><td>旧文件保留</td><td>补 migration 与 fixture</td><td>不要手改版本掩盖问题</td></tr>
+              <tr><td>PATCH 校验失败</td><td>Pydantic/variant validation</td><td>返回清理后的 400</td><td>两阶段更新不提交</td><td>修正字段后重试</td><td>查 server 日志，不回显 Secret</td></tr>
+              <tr><td>请求 encrypted 但无 cipher</td><td><code>MissingCipherError</code></td><td>服务不可用，不降级明文</td><td>无持久化变更</td><td>配置 Secret key 后重试</td><td>检查 <code>OH_SECRET_KEY</code></td></tr>
+              <tr><td>密文使用错误 cipher</td><td>解密失败日志</td><td>单值 helper 可保留密文；SecretStr 路径不能恢复明文</td><td>凭据不可用</td><td>恢复正确 key/重新录入</td><td>查 cipher mismatch/corruption 警告</td></tr>
+              <tr><td>LookupSecret 404/超时</td><td>HTTP status/30 秒 timeout</td><td>异常传播</td><td>引用仍在，值未取得</td><td>调用方决定是否重试</td><td>检查 URL、session key、server 可达性</td></tr>
+              <tr><td>redacted 值回传</td><td>sentinel 检测</td><td>按缺失值处理，敏感 header 删除</td><td>不会把星号当凭据</td><td>重新提交真实值</td><td>确认客户端使用 encrypted round-trip</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>11.1 四种兼容表面</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>兼容表面</th><th>基线与门禁</th><th>允许的演进</th><th>关键义务</th></tr></thead>
+            <tbody>
+              <tr><td>Python API</td><td>PyPI public exports/class members；Griffe breakage checker</td><td>先弃用后移除</td><td>移除目标至少晚 5 个 minor；breaking change 至少 MINOR bump。<span class="evidence"><code>.github/scripts/check_sdk_api_breakage.py:1-29</code></span></td></tr>
+              <tr><td>Pydantic Field default</td><td>PyPI baseline 用于报告，PR base ref 用于标签同步</td><td>不是结构移除，但会改变省略字段时的行为</td><td>报告为 <code>release-note-required</code>；metadata-only 变化忽略。<span class="evidence"><code>.github/scripts/check_sdk_api_breakage.py:471-477</code></span> <span class="evidence"><code>.github/scripts/check_sdk_api_breakage.py:748-771</code></span></td></tr>
+              <tr><td>REST/OpenAPI</td><td>PyPI 选版本、匹配 git tag 生成 OpenAPI、oasdiff</td><td>优先 additive、union 扩展或 versioned contract</td><td>不兼容替换/移除需 deprecated OpenAPI 标记和 5-minor runway。<span class="evidence"><code>.github/scripts/check_agent_server_rest_api_breakage.py:1-58</code></span></td></tr>
+              <tr><td>事件持久化</td><td>历史事件 fixture/反序列化测试</td><td>读取时永久丢弃已弃用字段</td><td>旧事件必须始终可加载；处理器永久保留。<span class="evidence"><code>openhands-sdk/openhands/sdk/llm/message.py:182-191</code></span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Settings persistence 是第五个具体机制，但属于“持久化配置兼容”而非上述 Python API：
+          当前代码以 golden + PyPI payload 运行 <code>from_persisted()</code>，形状不兼容时 bump schema、逐步迁移。
+          <span class="evidence"><code>.github/scripts/check_persisted_settings_compat.py:1-20</code></span>
+        </p>
+      </section>
+
+      <section class="section" id="operations">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+            <tbody>
+              <tr><td>设置页缺字段</td><td>GET 两个 schema endpoint；检查字段 metadata/exclude/variant</td><td>未添加 <code>openhands_settings</code>、字段属于另一变体</td><td>在所有者模型补中立 metadata 和 schema 测试</td></tr>
+              <tr><td>旧设置无法启动</td><td>查看 schema_version、migration 错误、golden check</td><td>漏 bump、漏 migration、未来版本</td><td>补逐版本 migration 与 fixture；不要下调文件版本</td></tr>
+              <tr><td>Secret 变成星号或 None</td><td>检查请求 header、serialization context、redaction sentinel</td><td>默认遮蔽结果被当作可回写明文</td><td>前端使用 encrypted；后端明确 plaintext</td></tr>
+              <tr><td>encrypted 请求返回 503</td><td>检查 cause chain 与 server cipher 配置</td><td>缺 <code>OH_SECRET_KEY</code></td><td>配置稳定 key 后重试</td></tr>
+              <tr><td>LookupSecret 卡住 30 秒</td><td>检查解析后的 URL、loopback、session header 和 server access log</td><td>内部 URL 错、event loop 自锁、网络不可达</td><td>修正注入；async 调用移至 worker thread</td></tr>
+              <tr><td>Secret 名称似乎存在但返回 404</td><td>查看“Secret access failed” warning 与名称规则</td><td>不存在；响应故意不泄露枚举细节</td><td>从 list endpoint 核对授权可见项并重新创建</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          GET settings 对 plaintext 使用 warning 日志，对其他模式使用 info，并记录 client host、expose mode 与是否配置 LLM key；
+          Secret value endpoint 对成功和不存在均记录访问，但不记录值。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:143-159</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/settings_router.py:470-484</code></span>
+        </p>
+        <p>当前证据未显示 Settings 专属 Metric、Audit event 或 Usage 计数；可观测面以结构化日志、HTTP 状态和兼容 CI 为主。</p>
+      </section>
+
+      <section class="section" id="testing">
+        <h2>13. 测试与验证</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr><td>schema 分组、默认值、Secret/variant 标记</td><td><code>tests/sdk/test_settings.py:51-223</code>、<code>341-397</code></td><td>SDK 单元</td><td>导出结构与两个 Agent 变体</td><td>不证明具体前端渲染</td></tr>
+              <tr><td>v0→v5、拒绝未来版本</td><td><code>tests/sdk/test_settings.py:445-779</code></td><td>SDK 单元</td><td>判别、各 migration、错误路径</td><td>不替代已发布 payload</td></tr>
+              <tr><td>各版本值不丢失</td><td><code>tests/sdk/persisted_settings_baselines/v1/</code> 至 <code>v5/</code></td><td>Golden</td><td><code>__expected__</code> dotted path 保存</td><td>fixture 只覆盖选定字段</td></tr>
+              <tr><td>golden + PyPI 双基线</td><td><code>.github/scripts/check_persisted_settings_compat.py:768-797</code></td><td>CI 契约</td><td>历史 fixture 和最新发布模型均可加载/重载</td><td>本次未联网执行 PyPI 环境</td></tr>
+              <tr><td>Secret 三态与解密</td><td><code>tests/sdk/utils/test_pydantic_secrets.py:39-155</code>、<code>208-240</code></td><td>SDK 单元</td><td>遮蔽、明文、加密、缺 cipher、空值</td><td>不证明生产 key 管理</td></tr>
+              <tr><td>LookupSecret header 与 URL</td><td><code>tests/sdk/conversation/test_secret_source.py:26-103</code>、<code>280-304</code></td><td>SDK 单元</td><td>敏感 header、加密 round-trip、内部 URL、30 秒调用参数</td><td>不证明真实网络 SLA</td></tr>
+              <tr><td>历史事件永久加载</td><td><code>tests/sdk/llm/test_message_backward_compatibility.py:28-119</code></td><td>SDK 单元</td><td>TextContent 与 Message 的版本化旧字段仍可加载</td><td>与 Settings fixture 是不同套件</td></tr>
+              <tr><td>REST contract</td><td><code>.github/scripts/check_agent_server_rest_api_breakage.py</code></td><td>OpenAPI CI</td><td>operation/schema breakage 与 runway</td><td>WS/SSE 不在 OpenAPI 范围</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="development">
+        <h2>14. 开发与扩展指南</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+            <tbody>
+              <tr><td>新增 Agent Settings 字段</td><td>对应变体 Pydantic model</td><td>metadata、构造消费点、导出测试；需要持久化则评估版本</td><td>缺省旧 payload 可加载，create_agent 传播正确</td></tr>
+              <tr><td>改变持久化形状</td><td>版本常量 + migration table</td><td>逐版本函数、vN golden、<code>__expected__</code></td><td>运行 persisted compatibility checker</td></tr>
+              <tr><td>改变公共 Field default</td><td>公共 Pydantic model</td><td>release note；检查 PyPI 与 PR-base 两视图</td><td>API breakage workflow 报告而非隐藏为 metadata</td></tr>
+              <tr><td>新增表单字段</td><td><code>json_schema_extra</code> settings metadata</td><td>label/prominence/depends_on/variant 测试</td><td>不把客户端 widget、图标或 required 塞入 SDK schema</td></tr>
+              <tr><td>新增 Secret-bearing 字段</td><td>SDK model + pydantic secret helper</td><td>validator/serializer、默认遮蔽、加密 round-trip</td><td>不得手写另一套 sentinel/cipher 逻辑</td></tr>
+              <tr><td>改变 Settings REST</td><td>SDK api_models + Agent Server router</td><td>OpenAPI、客户端、5-minor deprecation（若不兼容）</td><td>oasdiff；优先 additive/versioned</td></tr>
+              <tr><td>移除事件字段</td><td>事件所嵌套的 Pydantic 类型</td><td>永久 deprecated-field handler 与旧格式测试</td><td>旧事件序列必须持续可加载</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout">
+          <strong>禁止捷径：</strong>不要在下游 UI 做正常路径的反向 provider 映射；不要绕过
+          <code>validate_agent_settings()</code> 直接验证旧 payload；不要把 FastMCP config 当作 SDK 持久化形状；
+          不要因添加默认值就跳过行为兼容与 release note 审查。
+        </div>
+      </section>
+
+      <section class="section" id="tradeoffs">
+        <h2>15. 设计权衡与已知限制</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+            <tbody>
+              <tr><td>多 Agent 形状</td><td>判别联合 + 变体标签 schema</td><td>单一加载入口且保持类型精确</td><td>切换变体必须重建 base，schema 合并更复杂</td><td>出现需要独立发布的第三方变体协议</td></tr>
+              <tr><td>UI schema 所有权</td><td>SDK 只输出中立语义</td><td>多客户端可复用，不绑定组件库</td><td>required/nullability 需客户端读 typing 或另有契约</td><td>跨客户端确有稳定、产品中立的新语义</td></tr>
+              <tr><td>显式 settings migration</td><td>顶层版本 + 逐步函数</td><td>历史行为可审计、可测试</td><td>每次不兼容变化需维护 fixture 和链</td><td>迁移规模大到需要独立格式或离线工具</td></tr>
+              <tr><td>Secret context 序列化</td><td>同一模型按 context 输出三态</td><td>存储、后端、前端共用模型</td><td>错误 context 可能造成不可用或过度暴露</td><td>需要角色级 Secret 授权或独立 vault token 协议</td></tr>
+              <tr><td>LookupSecret 同步拉取</td><td>简单同步 HTTP + 30 秒 timeout</td><td>SecretSource 接口简单，值延迟获取</td><td>async loop 中可能阻塞；无内建重试</td><td>大量并发 lookup、异步 provider 或缓存/刷新需求</td></tr>
+              <tr><td>REST settings 使用 dict</td><td>运行时手动控制 Secret context，OpenAPI 用附加 contract</td><td>避免 FastAPI 自动序列化丢 context</td><td>运行时类型与 OpenAPI 描述需保持同步</td><td>框架可安全传递字段级 serialization context</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          当前限制还包括：Settings GET 的已认证客户端没有角色分级；LookupSecret 没有内建 retry/cache；
+          schema exporter 不表达 required；本次本机无 Git CLI，无法把工作区内容绑定到 SHA。
+          这些是已观察到的边界，不代表计划或完成度承诺。
+        </p>
+      </section>
+
+      <section class="section" id="source-index">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类别</th><th>符号/内容</th><th>仓库相对位置</th></tr></thead>
+            <tbody>
+              <tr><td>核心模型</td><td>Agent/Conversation settings、migration、schema exporter</td><td><code>openhands-sdk/openhands/sdk/settings/model.py:472-1153</code>、<code>1167-2180</code></td></tr>
+              <tr><td>Schema metadata</td><td>section/field metadata</td><td><code>openhands-sdk/openhands/sdk/settings/metadata.py:9-54</code></td></tr>
+              <tr><td>REST 公共模型</td><td>SettingsResponse/UpdateRequest/Secret API</td><td><code>openhands-sdk/openhands/sdk/settings/api_models.py:1-26</code>、<code>99-252</code></td></tr>
+              <tr><td>Secret helper</td><td>遮蔽、加密、解密、dict helper</td><td><code>openhands-sdk/openhands/sdk/utils/pydantic_secrets.py:10-208</code></td></tr>
+              <tr><td>SecretSource</td><td>StaticSecret/LookupSecret</td><td><code>openhands-sdk/openhands/sdk/secret/secrets.py:22-136</code></td></tr>
+              <tr><td>SecretRegistry</td><td>会话作用域、延迟解析、遮罩与运行中更新</td><td><code>openhands-sdk/openhands/sdk/conversation/secret_registry.py:21-252</code>、<code>openhands-sdk/openhands/sdk/conversation/state.py:197-201</code></td></tr>
+              <tr><td>Secret 更新入口</td><td>Local/Remote Conversation 与 Server REST</td><td><code>openhands-sdk/openhands/sdk/conversation/impl/local_conversation.py:2619-2636</code>、<code>openhands-sdk/openhands/sdk/conversation/impl/remote_conversation.py:1458-1481</code>、<code>openhands-agent-server/openhands/agent_server/conversation_router.py:403-422</code></td></tr>
+              <tr><td>服务端持久化</td><td>PersistedSettings v2、更新与嵌套迁移</td><td><code>openhands-agent-server/openhands/agent_server/persistence/models.py:113-354</code></td></tr>
+              <tr><td>REST 路由</td><td>schema、settings、MCP、secret endpoints</td><td><code>openhands-agent-server/openhands/agent_server/settings_router.py:42-220</code>、<code>270-519</code></td></tr>
+              <tr><td>Golden/PyPI gate</td><td>持久化兼容检查</td><td><code>.github/scripts/check_persisted_settings_compat.py:1-805</code></td></tr>
+              <tr><td>Python API gate</td><td>公共 API、Field default</td><td><code>.github/scripts/check_sdk_api_breakage.py:1-120</code>、<code>471-771</code></td></tr>
+              <tr><td>REST gate</td><td>OpenAPI/oasdiff/deprecation</td><td><code>.github/scripts/check_agent_server_rest_api_breakage.py:1-102</code></td></tr>
+              <tr><td>事件兼容示例</td><td>TextContent/Message 永久 handler</td><td><code>openhands-sdk/openhands/sdk/llm/message.py:173-191</code>、<code>218-261</code></td></tr>
+              <tr><td>官方论文</td><td>Secret Registry 架构描述（MLSys 2026 §4.8）</td><td><a href="https://arxiv.org/abs/2511.03690">arXiv:2511.03690</a></td></tr>
+              <tr><td>测试</td><td>Settings、Secret、golden checker</td><td><code>tests/sdk/test_settings.py:51-779</code>、<code>tests/sdk/conversation/test_secret_source.py:26-304</code>、<code>tests/cross/test_check_persisted_settings_compat.py</code></td></tr>
+              <tr><td>总览</td><td>第 16 章摘要</td><td><a href="../../software_agent_architecture.html#settings"><code>software_agent_architecture.html:960-999</code></a></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>相邻章节：<a href="15-remote.html">15 RemoteConversation</a> · <a href="17-engineering.html">17 测试、构建与发布</a>。</p>
+      </section>
+
+      <section class="section" id="glossary">
+        <h2>17. 术语表</h2>
+        <dl>
+          <dt><strong>ACP（Agent Client Protocol）</strong></dt>
+          <dd>Agent 客户端协议；本模块中的 ACP settings 构造委托给外部 ACP 子进程的 Agent。</dd>
+          <dt><strong>AgentSettingsConfig</strong></dt>
+          <dd>当前 Agent settings 的 Pydantic 判别联合；不是一个可直接实例化的模型类。</dd>
+          <dt><strong>Canonical shape（规范形状）</strong></dt>
+          <dd>当前模型序列化和运行时消费共同认可的唯一正常形状；旧形状只在 migration 边界接受。</dd>
+          <dt><strong>Discriminator（判别字段）</strong></dt>
+          <dd>用于选择联合成员的字段；这里是 <code>agent_kind</code>。</dd>
+          <dt><strong>Field default</strong></dt>
+          <dd>Pydantic 字段省略时采用的值；改变它不会移除 API，但会改变既有调用方行为。</dd>
+          <dt><strong>Golden baseline / fixture</strong></dt>
+          <dd>检入仓库的历史 JSON 样本，用来稳定重现特定 schema 版本的迁移。</dd>
+          <dt><strong>PyPI baseline</strong></dt>
+          <dd>从最新适用的已发布 Python 包实际构造出的比较基线。</dd>
+          <dt><strong>JSON Merge Patch（RFC 7386）</strong></dt>
+          <dd>对象递归合并、null 删除 key、其他值覆盖的补丁语义；Agent settings diff 在同变体内使用。</dd>
+          <dt><strong>Migration（迁移）</strong></dt>
+          <dd>把一个持久化 schema 版本确定性转换到下一版本的函数；必须推进版本且不能静默丢失约定值。</dd>
+          <dt><strong>OpenAPI / oasdiff</strong></dt>
+          <dd>REST 契约描述及其差异检查工具；不覆盖 WebSocket/SSE。</dd>
+          <dt><strong>Redaction（遮蔽）</strong></dt>
+          <dd>用固定 sentinel 隐藏 Secret 的不可逆显示方式；不同于可解密的 ciphertext。</dd>
+          <dt><strong>Runway（弃用缓冲期）</strong></dt>
+          <dd>从声明弃用到允许移除之间的版本窗口；公共 Python API 与 REST breaking removal 均要求至少 5 个 minor。</dd>
+          <dt><strong>SecretStr</strong></dt>
+          <dd>Pydantic 的敏感字符串类型，默认序列化表现为遮蔽值。</dd>
+          <dt><strong>LookupSecret</strong></dt>
+          <dd>持有 URL 与请求 header、在使用时才同步取回明文的 SecretSource。</dd>
+          <dt><strong>SecretRegistry</strong></dt>
+          <dd>ConversationState 拥有的会话作用域注册表；管理 SecretSource、延迟解析、已解析值遮罩和运行中更新，不等于 Settings、外部 Vault 或 IAM。</dd>
+          <dt><strong><code>__expected__</code></strong></dt>
+          <dd>Golden fixture 顶层的测试专用映射，以 dotted path 指定迁移后必须保留的值；不会传给运行时 loader。</dd>
+        </dl>
+      </section>
+
+      <footer>
+        <a href="../../software_agent_architecture.html#settings">返回 Software Agent SDK 架构总览第 16 章</a>
+      </footer>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll("aside a")];
+      const sections = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const observer = new IntersectionObserver((entries) => {
+        const visible = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
+        if (!visible) return;
+        links.forEach((link) => {
+          link.classList.toggle(
+            "active",
+            link.getAttribute("href") === `#${visible.target.id}`
+          );
+        });
+      }, { rootMargin: "-12% 0px -72% 0px" });
+      sections.forEach((section) => observer.observe(section));
+    })();
+  </script>
+</body>
+</html>

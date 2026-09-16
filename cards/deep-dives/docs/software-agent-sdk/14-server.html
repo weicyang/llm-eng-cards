@@ -1,0 +1,1060 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>14 Agent Server：远程运行时与控制面｜Software Agent SDK 架构</title>
+  <style>
+    :root {
+      color-scheme:light;
+      --bg: #f4f1ea;
+      --panel: #fffdf8;
+      --panel-2: #e8e1d4;
+      --border: rgba(28,25,23,.12);
+      --text: #1c1917;
+      --muted: #78716c;
+      --blue: #4338ca;
+      --green: #15803d;
+      --yellow: #c2410c;
+      --red: #b91c1c;
+      --purple: #6d28d9;
+      --code: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);
+      font: 16px/1.75 -apple-system, BlinkMacSystemFont, "Segoe UI",
+        "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      color: var(--code);
+      background: rgba(120,113,108, .18);
+      border-radius: 5px;
+      padding: .12em .35em;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: .92em;
+    }
+    pre {
+      margin: 1rem 0;
+      padding: 1rem;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #f0ebe0;
+      color: #44403c;
+      font: 14px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      padding: 1.25rem;
+      border-right: 1px solid var(--border);
+      background: #f0ebe0;
+    }
+    aside .back { display: block; margin-bottom: 1rem; font-weight: 650; }
+    aside .label {
+      margin: 1.25rem 0 .45rem;
+      color: var(--muted);
+      font-size: .75rem;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    nav a {
+      display: block;
+      margin: .12rem 0;
+      padding: .32rem .55rem;
+      border-left: 2px solid transparent;
+      border-radius: 4px;
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.35;
+    }
+    nav a.active {
+      border-left-color: var(--blue);
+      color: var(--text);
+      background: rgba(67,56,202, .1);
+    }
+    main { width: min(1120px, 100%); padding: 2rem 3rem 5rem; }
+    .hero {
+      padding: 2rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background:
+        radial-gradient(circle at top right, rgba(67,56,202, .16), transparent 42%),
+        var(--panel);
+    }
+    .eyebrow {
+      color: var(--blue);
+      font-size: .78rem;
+      font-weight: 750;
+      letter-spacing: .12em;
+    }
+    h1 { margin: .35rem 0 .6rem; font-size: clamp(2rem, 5vw, 3.4rem); line-height: 1.15; }
+    h2 { margin-top: 3.4rem; padding-bottom: .45rem; border-bottom: 1px solid var(--border); }
+    h3 { margin-top: 1.7rem; }
+    p, li { max-width: 88ch; }
+    .lead { color: #44403c; font-size: 1.08rem; }
+    .meta-grid, .cards {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: .85rem;
+      margin-top: 1rem;
+    }
+    .meta, .card {
+      padding: .9rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: rgba(244,241,234, .7);
+    }
+    .meta strong { display: block; color: var(--muted); font-size: .78rem; }
+    .badges { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 1rem; }
+    .badge {
+      padding: .18rem .55rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: .78rem;
+      font-weight: 650;
+    }
+    .fact { color: var(--green); }
+    .optional { color: var(--yellow); }
+    .deploy { color: var(--blue); }
+    .legacy { color: var(--purple); }
+    .gap { color: var(--red); }
+    .callout {
+      margin: 1.2rem 0;
+      padding: .85rem 1rem;
+      border-left: 4px solid var(--blue);
+      border-radius: 6px;
+      background: var(--panel);
+    }
+    .callout.warning { border-left-color: var(--yellow); }
+    .callout.danger { border-left-color: var(--red); }
+    .callout strong { display: block; margin-bottom: .2rem; }
+    .table-wrap { overflow-x: auto; margin: 1rem 0; }
+    table { width: 100%; min-width: 760px; border-collapse: collapse; }
+    th, td {
+      padding: .7rem .8rem;
+      border: 1px solid var(--border);
+      vertical-align: top;
+      text-align: left;
+    }
+    th { background: var(--panel-2); }
+    td { background: rgba(255,253,248, .48); }
+    .section span.evidence {
+      display: inline;
+      background: transparent;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      margin: 0;
+      line-height: inherit;
+      overflow-wrap: anywhere;
+    }
+    .section span.evidence code {
+      display: inline;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .evidence::before { content: "〔"; color: var(--muted); }
+    .evidence::after { content: "〕"; color: var(--muted); }
+    .flow { white-space: pre; }
+    .small { color: var(--muted); font-size: .9rem; }
+    dt { margin-top: .8rem; color: var(--blue); font-weight: 700; }
+    dd { margin-left: 0; color: #44403c; }
+    footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border); color: var(--muted); }
+    @media (max-width: 900px) {
+      .layout { display: block; }
+      aside {
+        position: relative;
+        width: 100%;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+      nav { columns: 2; }
+      main { padding: 1.3rem; }
+    }
+    @media (max-width: 620px) {
+      nav { columns: 1; }
+      .meta-grid, .cards { grid-template-columns: 1fr; }
+      .hero { padding: 1.2rem; }
+    }
+    @media (max-width: 640px) {
+      :not(pre) > code {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside>
+      <a class="back" href="../../software_agent_architecture.html#server">← 返回架构总览 · 第 14 章</a>
+      <div class="label">本页目录</div>
+      <nav id="toc">
+        <a href="#position">1. 模块定位</a>
+        <a href="#dependencies">2. 系统位置与依赖</a>
+        <a href="#concepts">3. 核心概念</a>
+        <a href="#components">4. 架构组成</a>
+        <a href="#flows">5. 完整运行流程</a>
+        <a href="#state">6. 数据与状态模型</a>
+        <a href="#interfaces">7. 接口、协议与事件</a>
+        <a href="#configuration">8. 配置与默认行为</a>
+        <a href="#concurrency">9. 并发、性能与资源</a>
+        <a href="#security">10. 安全与信任边界</a>
+        <a href="#failure">11. 失败、恢复与兼容</a>
+        <a href="#observability">12. 可观测性与排障</a>
+        <a href="#testing">13. 测试与验证</a>
+        <a href="#development">14. 开发与扩展指南</a>
+        <a href="#tradeoffs">15. 设计权衡与限制</a>
+        <a href="#source-index">16. 源码索引</a>
+        <a href="#glossary">17. 术语表</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <div class="eyebrow">CHAPTER 14 · AGENT SERVER</div>
+        <h1>远程运行时与控制面</h1>
+        <p class="lead">
+          解释 Agent Server 如何把 FastAPI 控制面、会话目录、单会话执行器、文件持久化、
+          跨实例租约和 WebSocket 事件传播组合成可恢复的远程 <code>LocalConversation</code> 托管进程。
+        </p>
+        <div class="meta-grid">
+          <div class="meta"><strong>源码版本</strong>当前工作区快照；Git 元数据与可执行程序不可用，无法取得 SHA</div>
+          <div class="meta"><strong>证据状态</strong>决定性实现、单元、stress 与 cross 测试已静态核对；未执行运行测试</div>
+          <div class="meta"><strong>主要所有者</strong><code>openhands-agent-server/openhands/agent_server/</code></div>
+          <div class="meta"><strong>目标读者</strong>服务端开发者、远程客户端开发者、部署与故障处理人员</div>
+          <div class="meta"><strong>最近验证</strong>2026-08-14</div>
+          <div class="meta"><strong>边界</strong>服务端托管真实 <code>LocalConversation</code>；远程状态镜像属于第 15 章</div>
+        </div>
+        <div class="badges">
+          <span class="badge fact">当前事实</span>
+          <span class="badge optional">可选：worktree / telemetry / eviction</span>
+          <span class="badge deploy">部署能力：deferred init / lease</span>
+          <span class="badge legacy">兼容：旧 WS 参数 / 旧 lease</span>
+          <span class="badge gap">缺口：未取得 SHA、未实跑测试</span>
+        </div>
+      </header>
+
+      <section id="position" class="section">
+        <h2>1. 模块定位</h2>
+        <p>
+          Agent Server 是 SDK 之上的部署适配层：它拥有 HTTP/WS 协议、服务生命周期、会话驻留策略、
+          元数据目录和共享存储协调；真正的 Agent 推理、工具编排、状态机与事件树仍由 SDK 的
+          <code>LocalConversation</code> 完成。<code>ConversationService</code> 管理“会话集合”，
+          <code>EventService</code> 管理“一个活跃会话”，两者都不是新的 Conversation 实现。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:620-650</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:109-155</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>表面</th><th>负责</th><th>委托</th><th>明确不负责</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>FastAPI 应用</td>
+                <td>路由组装、依赖鉴权、异常净化、CORS、lifespan</td>
+                <td>业务动作交给各 Service</td>
+                <td>不直接执行 Agent step</td>
+              </tr>
+              <tr>
+                <td><code>ConversationService</code></td>
+                <td>catalog、hydrate、lease 续期、idle eviction、worktree、全局并发池</td>
+                <td>单会话动作交给 <code>EventService</code></td>
+                <td>不实现 LLM/Tool 决策</td>
+              </tr>
+              <tr>
+                <td><code>EventService</code></td>
+                <td>单会话 run task、PubSub、租约写保护、状态快照、恢复修补</td>
+                <td>执行交给 <code>LocalConversation</code></td>
+                <td>不拥有跨会话查询</td>
+              </tr>
+              <tr>
+                <td>SDK</td>
+                <td>ConversationState、EventLog、Agent、Tool、Workspace 协议</td>
+                <td>具体部署边界交给 Server</td>
+                <td>不承担 FastAPI 路由</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>总览漂移修正</strong>
+          当前 CLI 在未配置 Session API Key 时默认绑定 <code>127.0.0.1</code>；但操作者若显式传入
+          wildcard host，代码只记录警告并继续，不会拒绝启动。部署审计不能把“安全默认值”误写成
+          “强制禁止”。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/__main__.py:275-296</code></span>
+        </div>
+      </section>
+
+      <section id="dependencies" class="section">
+        <h2>2. 系统位置与依赖</h2>
+        <pre class="flow">Remote client / browser / orchestrator
+       │ REST / WebSocket
+       ▼
+FastAPI create_app ─ auth / dormant gate / exception handlers
+       │
+       ├── ConversationService ─ catalog / hydrate / lease / eviction / worktree
+       │          │ 1:N
+       │          ▼
+       │    EventService ─ run task / PubSub / full-state snapshot
+       │          │
+       │          ▼
+       │    LocalConversation + LocalWorkspace ─ actual agent execution
+       │
+       └── Bash / File / Git / MCP / Settings / Workspace routers</pre>
+        <p>
+          <code>create_app()</code> 先创建带 lifespan 的 FastAPI 实例，将不可变 <code>Config</code>
+          放入 <code>app.state</code>，再安装路由、静态资源、CORS 和异常处理器。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:366-380</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:681-708</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>所有者路径</th><th>公共职责</th><th>关键下游</th><th>进程边界</th></tr></thead>
+            <tbody>
+              <tr><td><code>api.py</code></td><td>应用工厂与 lifespan</td><td>routers、services、telemetry</td><td>同一 ASGI 进程</td></tr>
+              <tr><td><code>conversation_service.py</code></td><td>会话集合与资源生命周期</td><td><code>EventService</code>、Git、stores</td><td>同进程；lease 协调其他进程</td></tr>
+              <tr><td><code>event_service.py</code></td><td>单会话控制与事件传播</td><td>SDK <code>LocalConversation</code></td><td>async loop 与 worker threads</td></tr>
+              <tr><td><code>sockets.py</code></td><td>WS 鉴权、重放与双向消息</td><td><code>EventService</code>/<code>BashEventService</code></td><td>网络客户端</td></tr>
+              <tr><td>SDK <code>conversation/</code></td><td>状态、锁、EventLog、执行</td><td>LLM、Tools、Workspace</td><td>被服务端进程内调用</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="concepts" class="section">
+        <h2>3. 核心概念</h2>
+        <dl>
+          <dt>Catalog（目录）</dt>
+          <dd>
+            启动时仅扫描每个会话的 <code>meta.json</code> 与 <code>base_state.json</code> 状态摘要，
+            不加载完整 EventLog；这是轻量查询层，不是另一个权威数据库。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:655-716</code></span>
+          </dd>
+          <dt>Hydrate（实例化恢复）</dt>
+          <dd>
+            首次需要实时能力时，由 catalog 的 <code>StoredConversation</code> 创建
+            <code>EventService</code>，后者再创建/恢复 SDK <code>LocalConversation</code>。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1029-1074</code></span>
+          </dd>
+          <dt>Lease（所有权租约）</dt>
+          <dd>
+            共享目录中的 <code>owner_lease.json</code> 记录 owner、generation、到期时间及可选 host/pid；
+            generation 是 takeover 后阻止旧 owner 写入的 fencing token（隔离令牌）。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_lease.py:18-37</code></span>
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_lease.py:101-164</code></span>
+          </dd>
+          <dt>PubSub（发布/订阅）</dt>
+          <dd>
+            进程内、每会话最多 50 个订阅者；每次发布快照订阅者列表并用
+            <code>asyncio.gather</code> 并发通知，单订阅者异常被隔离，但一次 publish 仍要等待所有通知完成。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/pub_sub.py:28-58</code></span>
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/pub_sub.py:81-108</code></span>
+          </dd>
+          <dt>FIFOLock</dt>
+          <dd>
+            SDK ConversationState 使用的同步、公平、按 OS thread id 重入的锁；它不是 asyncio 锁，
+            同一 event-loop 线程上的不同 coroutine 会被视为“重入”，等待它也可能阻塞整个事件循环。
+            <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/fifo_lock.py:14-43</code></span>
+          </dd>
+        </dl>
+      </section>
+
+      <section id="components" class="section">
+        <h2>4. 架构组成</h2>
+        <div class="cards">
+          <article class="card">
+            <h3>应用工厂与 lifespan</h3>
+            <p>
+              lifespan 设置进程专属 tmux 临时目录、清理旧 session、构建 telemetry，并发启动 VSCode、
+              desktop 和工具预加载；任一启动 coroutine 抛异常会阻止服务启动。
+              <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:149-223</code></span>
+            </p>
+          </article>
+          <article class="card">
+            <h3>ConversationService</h3>
+            <p>
+              维护 catalog、活跃 EventService map、lifecycle lock、全局 run executor、集中 lease 续期和
+              eviction task。启动只 eager-hydrate 磁盘状态为 RUNNING 的记录以执行崩溃恢复。
+              <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1891-1936</code></span>
+            </p>
+          </article>
+          <article class="card">
+            <h3>EventService</h3>
+            <p>
+              初始化租约、LocalWorkspace、Agent 副本、LocalConversation、回调与写保护；同时管理
+              run/goal/lease task 和关闭顺序。
+              <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:953-1086</code></span>
+            </p>
+          </article>
+          <article class="card">
+            <h3>InitService</h3>
+            <p>
+              用 <code>asyncio.Lock</code> 串行化一次性初始化，合并窄范围运行配置并将 Service 注入
+              <code>app.state</code>；失败回滚为 dormant 以便重试。
+              <span class="evidence"><code>openhands-agent-server/openhands/agent_server/init_router.py:189-278</code></span>
+            </p>
+          </article>
+          <article class="card">
+            <h3>ConversationLease</h3>
+            <p>
+              通过 <code>FileLock</code> 串行 claim/renew/release/guarded write；同 host 的死 PID
+              可在 TTL 未到期时接管，跨 host 或旧格式 lease 仅按 TTL 判断。
+              <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_lease.py:166-214</code></span>
+            </p>
+          </article>
+          <article class="card">
+            <h3>持久化 stores</h3>
+            <p>
+              Settings、Secrets 与 saved workspaces 是独立文件存储，采用平台文件锁、临时文件替换和
+              owner-only 权限；它们不同于 conversation 的 <code>meta + base_state + events</code>。
+              <span class="evidence"><code>openhands-agent-server/openhands/agent_server/persistence/store.py:143-235</code></span>
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section id="flows" class="section">
+        <h2>5. 完整运行流程</h2>
+        <h3>5.1 正常成功：创建、执行与发布</h3>
+        <ol>
+          <li>
+            <code>POST /api/conversations</code> 经父 router 的 Session API Key 与 initialized gate，
+            由请求模型校验后调用 <code>ConversationService.start_conversation()</code>。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:416-451</code></span>
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_router.py:203-228</code></span>
+          </li>
+          <li>
+            Service 解析 profile、可选 worktree 与动态工具，将请求规范化为
+            <code>StoredConversation</code>；加密请求必须有 cipher，否则立即失败。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1425-1480</code></span>
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1531-1579</code></span>
+          </li>
+          <li>
+            在 lifecycle lock 内启动 EventService；它先 claim lease，再恢复/创建
+            LocalConversation，注册内部 subscriber，保存 <code>meta.json</code>，最后加入活跃 map。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:2124-2202</code></span>
+          </li>
+          <li>
+            初始消息存在时，<code>send_message(..., run=True)</code> 把同步消息写入移到 executor，
+            随后创建后台 run task；有原生 async Agent 时调用 <code>arun()</code>，否则使用受限线程池。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:702-749</code></span>
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1129-1199</code></span>
+          </li>
+          <li>
+            SDK 事件先写 EventLog，再由 AsyncCallbackWrapper 桥接 PubSub。run 结束时最多等待 30 秒冲刷
+            pending callbacks，清空 run task，最后发布完整状态快照。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1208-1221</code></span>
+          </li>
+        </ol>
+
+        <h3>5.2 拒绝/提前结束</h3>
+        <ul>
+          <li>
+            鉴权失败：配置了 keys 但 header 不匹配时返回 401；空 key 列表代表禁用 REST 鉴权。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/dependencies.py:24-36</code></span>
+          </li>
+          <li>
+            deferred init 未完成：除 <code>/api/init</code> 外的 <code>/api/*</code> 返回 503；
+            5xx handler 会把 detail 改成通用文本，所以探针以状态码为准。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/init_router.py:324-339</code></span>
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:648-675</code></span>
+          </li>
+          <li>
+            run 冲突：状态或 task 已在运行时，<code>POST /run</code> 映射为 409；不存在会话为 404。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_router.py:284-312</code></span>
+          </li>
+          <li>
+            用户拒绝确认：EventService 调用 SDK <code>reject_pending_actions</code>，不启动 run。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1529-1551</code></span>
+          </li>
+          <li>
+            活租约冲突：hydrate 捕获 <code>ConversationLeaseHeldError</code> 并返回不可用，避免第二 owner。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1064-1074</code></span>
+          </li>
+        </ul>
+
+        <h3>5.3 恢复、降级与中断</h3>
+        <ol>
+          <li>
+            重启先建轻量 catalog，只主动 hydrate 原状态为 RUNNING 的会话；单个损坏会话仅记录错误，
+            不阻断其他会话启动。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1909-1928</code></span>
+          </li>
+          <li>
+            EventService claim 成功后若恢复状态仍为 RUNNING，将其设为 ERROR；若完整日志存在 unmatched
+            Action 且同 tool_call_id 尚无 Observation，则追加不可重试的 <code>AgentErrorEvent</code>。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1088-1127</code></span>
+          </li>
+          <li>
+            idle eviction 关闭内存 runtime 但保留 catalog 和运行时 credential bindings；下次访问重新 hydrate。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1975-2021</code></span>
+          </li>
+          <li>
+            interrupt 取消 LocalConversation 的 async run，最多等待 5 秒的 shielded cleanup，再发布 PAUSED
+            与最终状态；显式中断 generation 防止旧的自动 rerun 覆盖用户停止意图。
+            <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:1563-1589</code></span>
+          </li>
+        </ol>
+      </section>
+
+      <section id="state" class="section">
+        <h2>6. 数据与状态模型</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>载体</th><th>内容</th><th>权威性与生命周期</th><th>写保护</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>&lt;conversations&gt;/&lt;id&gt;/meta.json</code></td>
+                <td><code>StoredConversation</code>：标题、Agent 配置、Workspace、plugins 等</td>
+                <td>Server catalog 元数据；启动扫描</td>
+                <td>lease <code>guarded_write</code></td>
+              </tr>
+              <tr>
+                <td><code>base_state.json</code></td>
+                <td>不含 events 的 <code>ConversationState</code> 快照</td>
+                <td>执行状态、HEAD、stats、策略等恢复基线</td>
+                <td>FIFOLock 批量 autosave + lease write guard</td>
+              </tr>
+              <tr>
+                <td><code>events/event-NNNNN-id.json</code></td>
+                <td>每事件一个不可变 JSON 文件</td>
+                <td>EventLog；按索引连续扫描，事件事实来源</td>
+                <td>FileStore lock（30 秒）+ lease write guard</td>
+              </tr>
+              <tr>
+                <td><code>owner_lease.json</code></td>
+                <td>owner、generation、expires_at、host/pid</td>
+                <td>活跃 owner 协调；正常 close 删除</td>
+                <td><code>.owner_lease.lock</code></td>
+              </tr>
+              <tr>
+                <td>内存 catalog</td>
+                <td>StoredConversation、状态摘要、文件 signature、缓存 info</td>
+                <td>可重建；不是完整运行状态</td>
+                <td><code>_lifecycle_lock</code> 管 runtime 生命周期</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          SDK 明确把 base snapshot 与 EventLog 分开：快照序列化不包含 events；恢复时先读 base state，
+          再附加文件型 EventLog、重建 View 并校验 Agent/工具兼容性。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:420-442</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:500-553</code></span>
+        </p>
+        <p>
+          EventLog 的 append 在文件锁内同步磁盘长度、拒绝重复 ID 和不存在的显式 parent，然后写入单独文件。
+          注释明确提醒 LocalFileStore 的 <code>flock</code> 对 NFS/网络文件系统不可靠；Agent Server 的 lease
+          是额外 owner 协调，不能把底层文件系统原子性假设无限外推。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/event_store.py:30-41</code></span>
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/event_store.py:184-233</code></span>
+        </p>
+        <div class="callout warning">
+          <strong>Secret 恢复条件</strong>
+          ConversationState 没有 cipher 时会把 secret redacted，重启无法恢复；Settings store 则在无 cipher
+          时会明文保存并告警，两条持久化路径的安全语义不同，不能混写。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/state.py:421-436</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/persistence/store.py:350-383</code></span>
+        </div>
+      </section>
+
+      <section id="interfaces" class="section">
+        <h2>7. 接口、协议与事件</h2>
+        <h3>7.1 路由分组</h3>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>入口</th><th>鉴权/准入</th><th>语义</th><th>兼容注意</th></tr></thead>
+            <tbody>
+              <tr><td><code>/api/init</code></td><td>GET 无 init key；POST 用 <code>X-Init-API-Key</code></td><td>deferred 状态与初始化</td><td>非 deferred 为 404</td></tr>
+              <tr><td><code>/api/*</code></td><td><code>X-Session-API-Key</code> + initialized gate</td><td>公共 REST 控制面</td><td>OpenAPI 兼容表面</td></tr>
+              <tr><td><code>/api/conversations/.../workspace/*</code></td><td>header 或 workspace cookie</td><td>浏览器静态文件嵌入</td><td>cookie 只在此 router 有效</td></tr>
+              <tr><td><code>/sockets/events/{id}</code></td><td>首帧 auth 推荐；query/header legacy</td><td>事件重放、订阅、发送消息</td><td>不属于 OpenAPI gate</td></tr>
+              <tr><td><code>/alive /health /ready /server_info</code></td><td>无 Session API Key</td><td>进程、初始化、版本和能力探针</td><td><code>/ready</code> 在 dormant warm pool 也为 200</td></tr>
+              <tr><td><code>/v1/*</code></td><td>OpenAI bearer/session key dependency</td><td>OpenAI 兼容面</td><td>独立于 <code>/api/*</code> router</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          Workspace cookie 是 Session API Key 本身，使用 HttpOnly、SameSite=None，secure context 下追加
+          Partitioned，并限制 Path 为 <code>/api/conversations</code>；其目的只是让 iframe/img 无自定义
+          header 时读取 workspace 资产。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/auth_router.py:67-117</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/auth_router.py:120-167</code></span>
+        </p>
+        <h3>7.2 WebSocket 顺序与错误</h3>
+        <ol>
+          <li>有配置 key 且 URL/header 无 key 时，服务先 accept，再给客户端 10 秒发送 auth 首帧。</li>
+          <li>取得 EventService 后先注册 subscriber；注册立即发送一次 full-state update，初始推送上限 0.5 秒。</li>
+          <li>可选按 all/since 重放 EventLog，随后进入双向循环；输入被校验为 SDK <code>Message</code> 并触发 run。</li>
+          <li>业务异常尽量转成 <code>ServerErrorEvent</code>；断线 finally 必须 unsubscribe。</li>
+        </ol>
+        <p>
+          对应实现分别位于
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/sockets.py:127-223</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:790-819</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/sockets.py:279-383</code></span>。
+        </p>
+      </section>
+
+      <section id="configuration" class="section">
+        <h2>8. 配置与默认行为</h2>
+        <p>
+          JSON 配置文件先加载，随后 <code>OH_*</code> 环境变量覆盖；无有效数据时构造默认
+          <code>Config</code>。模型被冻结，deferred init 通过 <code>model_copy(update=...)</code> 构造新实例。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/config.py:426-456</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/config.py:389-410</code></span>
+        </p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>配置项</th><th>类型/可选值</th><th>默认值</th><th>优先级</th><th>热加载/重启</th><th>失败行为</th><th>来源</th></tr></thead>
+            <tbody>
+              <tr>
+                <td><code>session_api_keys</code></td><td><code>list[str]</code></td><td>环境 fallback；否则空</td>
+                <td>OH env &gt; JSON &gt; legacy env</td><td>deferred init 后请求时读取新 config</td>
+                <td>非空且不匹配：401；空：不鉴权</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:216-226</code>；<code>openhands-agent-server/openhands/agent_server/dependencies.py:24-36</code></td>
+              </tr>
+              <tr>
+                <td><code>conversations_path</code></td><td><code>Path</code></td><td><code>workspace/conversations</code></td>
+                <td>OH env &gt; JSON &gt; default</td><td>deferred init 可覆盖；否则重启</td>
+                <td>目录/文件错误可使 catalog 项跳过或启动失败</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:245-250</code></td>
+              </tr>
+              <tr>
+                <td><code>conversation_worktree_root</code></td><td><code>Path</code></td><td><code>/tmp/conversation-worktrees</code></td>
+                <td>OH env &gt; JSON &gt; default</td><td>deferred init 可覆盖</td>
+                <td>非 Git workspace 降级为原 workspace</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:257-264</code></td>
+              </tr>
+              <tr>
+                <td><code>max_concurrent_runs</code></td><td><code>int &gt;= 1</code></td><td>10</td>
+                <td>OH env &gt; JSON &gt; default</td><td>Service 创建时固定</td>
+                <td>无效值配置校验失败</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:322-330</code></td>
+              </tr>
+              <tr>
+                <td><code>secret_key</code></td><td><code>SecretStr | None</code></td><td>首个 session key 或 None</td>
+                <td>OH env &gt; JSON &gt; fallback</td><td>store singleton 首次创建后须重启换 key</td>
+                <td>Conversation secret 无 cipher 会 redacted；加密请求不可解</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:46-59</code>；<code>openhands-agent-server/openhands/agent_server/config.py:331-337</code></td>
+              </tr>
+              <tr>
+                <td><code>deferred_init</code></td><td><code>bool</code></td><td>false</td>
+                <td>OH env &gt; JSON &gt; default</td><td>启动模式</td>
+                <td>dormant 时受控 API 503</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:352-362</code></td>
+              </tr>
+              <tr>
+                <td><code>lease_ttl_seconds</code></td><td><code>float &gt;= 0</code></td><td>45.0 秒</td>
+                <td>OH env &gt; JSON &gt; default</td><td>Service 创建时固定</td>
+                <td>0 禁用；0–15 秒可能续期前已过期</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:363-375</code>；<code>openhands-agent-server/openhands/agent_server/conversation_lease.py:18-20</code></td>
+              </tr>
+              <tr>
+                <td><code>conversation_idle_ttl_seconds</code></td><td><code>float &gt; 0 | None</code></td><td>1200 秒</td>
+                <td>OH env &gt; JSON &gt; default</td><td>Service 创建时固定</td>
+                <td>None 禁用；忙会话/外部 subscriber 不驱逐</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:27-28</code>；<code>openhands-agent-server/openhands/agent_server/config.py:377-387</code></td>
+              </tr>
+              <tr>
+                <td><code>bash_events_retention_seconds</code></td><td><code>int &gt; 0 | None</code></td><td>None</td>
+                <td>OH env &gt; JSON &gt; default</td><td>lifespan 启动 task</td>
+                <td>None 永久保留；过短可令磁盘历史不完整</td>
+                <td><code>openhands-agent-server/openhands/agent_server/config.py:272-283</code></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="concurrency" class="section">
+        <h2>9. 并发、性能与资源</h2>
+        <h3>9.1 三类锁不可互换</h3>
+        <ul>
+          <li><code>asyncio.Lock</code>：<code>_lifecycle_lock</code> 串行 runtime map 变更；<code>_run_lock</code> 原子检查并创建 run task；InitService lock 串行初始化。</li>
+          <li><code>FIFOLock</code>：同步保护 ConversationState 与 autosave，不得在 event loop 上阻塞等待。</li>
+          <li>文件锁：EventLog、settings/secrets 和 lease 提供进程间写入互斥；其可靠性仍受文件系统影响。</li>
+        </ul>
+        <p>
+          读取执行状态、构造 full-state、更新 tags、发送消息及其他同步 Conversation 操作都跨
+          <code>run_in_executor</code>/<code>to_thread</code>；尤其 WS reconnect 的初始快照不能在 event loop
+          上等待 FIFOLock。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:631-667</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1683-1724</code></span>
+        </p>
+        <div class="callout danger">
+          <strong>FIFOLock 的 async 陷阱</strong>
+          锁按线程而非 task 标识 owner；同一 loop 上的另一个 coroutine 可能被当作重入，且直接同步等待会冻结
+          <code>/ready</code> 等无关请求。正确模式是在线程中完成“获取锁—快照/修改—释放锁”，锁释放后才 await 网络 I/O。
+          <span class="evidence"><code>openhands-sdk/openhands/sdk/conversation/fifo_lock.py:28-31</code></span>
+        </div>
+        <h3>9.2 任务、线程池与背压</h3>
+        <ul>
+          <li>每个 Service 一个 <code>ThreadPoolExecutor(max_workers=max_concurrent_runs)</code>，只用于 sync run fallback；原生 async Agent 不占该 worker。</li>
+          <li>所有活跃会话共用一个 15 秒 lease 续期 task，每次同步文件 I/O 通过 <code>to_thread</code>。</li>
+          <li>eviction 每 <code>max(60, ttl/2)</code> 秒扫描一次；只有无 run、goal、rerun 和外部 subscriber 的会话可卸载。</li>
+          <li>PubSub 并发通知 subscriber、逐订阅者隔离异常，但没有每订阅者持久队列；慢 subscriber 会延长该次 publish 完成时间。</li>
+          <li>首次状态推送硬限 0.5 秒，超时只丢本次初始推送且保留订阅；后续 publish 没有同样的 per-subscriber timeout。</li>
+        </ul>
+        <p>
+          以上资源事实来自
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1891-1899</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/conversation_service.py:1938-1973</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/event_service.py:82-85,790-817</code></span>。
+        </p>
+      </section>
+
+      <section id="security" class="section">
+        <h2>10. 安全与信任边界</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>边界</th><th>当前控制</th><th>Fail 行为</th><th>剩余责任</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>REST <code>/api/*</code></td>
+                <td>请求时从 <code>app.state.config</code> 精确匹配 Session API Key</td>
+                <td>配置 key 后 fail-closed 401；未配置则开放</td>
+                <td>部署者必须配置 key 或限制网络</td>
+              </tr>
+              <tr>
+                <td>Deferred bootstrap</td>
+                <td><code>X-Init-API-Key</code> 对比 dormant <code>secret_key</code></td>
+                <td>有 secret 时错误/缺失为 401；无 secret 时开放</td>
+                <td>warm-pool 必须保护 bootstrap secret</td>
+              </tr>
+              <tr>
+                <td>WebSocket</td>
+                <td>首帧 auth 避免 token 进入 URL；legacy query/header 仍可用</td>
+                <td>错误 close 4001；subscriber 满 close 1013</td>
+                <td>迁移客户端离开 query token</td>
+              </tr>
+              <tr>
+                <td>Workspace cookie</td>
+                <td>HttpOnly、SameSite=None、Path 限定，secure 时 Partitioned</td>
+                <td>只在 workspace router 接受</td>
+                <td>反向代理需正确设置可信 forwarded headers</td>
+              </tr>
+              <tr>
+                <td>输入错误</td>
+                <td>422 handler 对 raw input 做 secret sanitization</td>
+                <td>返回净化后的 validation detail</td>
+                <td>新 secret 字段需被统一 redaction helper 识别</td>
+              </tr>
+              <tr>
+                <td>持久化写入</td>
+                <td>lease generation fencing + EventLog/file locks</td>
+                <td>ownership lost 抛错，旧 owner 不得继续写</td>
+                <td>共享存储必须满足锁/rename 契约</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          FastAPI 的 422 默认会回显原始 input，Server 专门对其调用 <code>sanitize_dict</code>，避免 LLM key、
+          MCP env 等出现在响应；普通 5xx 只在 DEBUG 返回 traceback，但响应仍包含
+          <code>exception</code> 字符串，部署时应避免在异常文本中拼接 secret。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:507-573</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:575-632</code></span>
+        </p>
+        <div class="callout warning">
+          <strong>CORS 不是鉴权</strong>
+          CORSDispatcher 与 workspace cookie 路由有特殊跨站需求；Session API Key、cookie Path 和网络绑定才是能力边界。
+          空 <code>session_api_keys</code> 是明确的“无鉴权模式”，不能仅靠浏览器 CORS 保护服务。
+        </div>
+      </section>
+
+      <section id="failure" class="section">
+        <h2>11. 失败、恢复与兼容</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+            <tbody>
+              <tr><td>dormant 访问 API</td><td>HTTP 503</td><td>拒绝业务路由</td><td>InitState 不变</td><td>POST init 成功后重试</td><td>只依赖状态码探测</td></tr>
+              <tr><td>init 中途失败</td><td>500 + server log</td><td>异常转 HTTPException</td><td>回滚 dormant，记录 error</td><td>允许再次 POST</td><td>修正 payload/依赖后重试</td></tr>
+              <tr><td>活 lease 冲突</td><td>LeaseHeld</td><td>第二实例不 hydrate</td><td>原 owner 不变</td><td>等 TTL、正常 release 或同 host 死进程接管</td><td>检查 owner host/pid/expiry</td></tr>
+              <tr><td>lease takeover 后旧写</td><td>generation 不匹配</td><td>抛 OwnershipLost</td><td>新 owner 保持</td><td>旧实例必须停止写</td><td>排查 split-brain 与续期延迟</td></tr>
+              <tr><td>重启发现 RUNNING</td><td>catalog 状态</td><td>hydrate 并改 ERROR</td><td>补 orphan Action 错误事件</td><td>用户可发送后续消息/新 run</td><td>检查最后 Action 与进程崩溃</td></tr>
+              <tr><td>初始 WS 快照阻塞</td><td>0.5 秒 timeout log</td><td>丢初始推送，保留 subscriber</td><td>会话不变</td><td>客户端可 REST reconcile/重连</td><td>检查网络背压</td></tr>
+              <tr><td>run 初始化异常</td><td>background task exception</td><td>backstop 置 ERROR</td><td>避免伪 IDLE/RUNNING</td><td>修复配置后再 run</td><td>按 error_id 查日志</td></tr>
+              <tr><td>idle eviction</td><td>不在 active map</td><td>关闭 runtime、释放 lease</td><td>catalog 与磁盘保留</td><td>下一访问自动 hydrate</td><td>非数据丢失，无需恢复</td></tr>
+              <tr><td>meta/base state 损坏</td><td>启动日志或 hydrate validation</td><td>catalog 项跳过/加载失败</td><td>该会话不可用</td><td>无自动修复承诺</td><td>备份后检查 JSON 与 event 文件</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>REST 兼容表面</h3>
+        <p>
+          公共契约只取 <code>/api</code> 与 <code>/api/*</code> OpenAPI 路径，并裁剪未引用 schema；
+          WebSocket、健康端点和 <code>/v1</code> 不在该 OpenAPI 过滤面内。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/openapi.py:11-12</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/openapi.py:133-158</code></span>
+        </p>
+        <p>
+          不兼容 REST 变更必须先在 route decorator 设置 <code>deprecated=True</code>，docstring 写明
+          deprecated-in 与 scheduled-removal 版本，并保留至少 5 个 minor release；优先 additive field、
+          parallel contract 或 versioned endpoint。CI 以 PyPI 对应 release 的 OpenAPI baseline 配合 oasdiff
+          执行门禁。<span class="evidence"><code>openhands-agent-server/AGENTS.md:118-202</code></span>
+        </p>
+        <p>
+          WebSocket 的 <code>resend_all</code> 是当前兼容入口：从 OpenAPI 隐藏，仍映射到
+          <code>resend_mode=all</code>。这体现 WS 兼容需要独立人工与测试治理，不能假设 REST gate 会覆盖。
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/sockets.py:226-315</code></span>
+        </p>
+      </section>
+
+      <section id="observability" class="section">
+        <h2>12. 可观测性与排障</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>现象</th><th>检查</th><th>常见原因</th><th>修复</th></tr></thead>
+            <tbody>
+              <tr><td><code>/ready</code> 200 但 API 503</td><td><code>GET /api/init</code> 与状态码</td><td>warm-pool 已启动但仍 dormant</td><td>用正确 init key POST 配置；不要把 ready 当业务 ready</td></tr>
+              <tr><td>500 无上下文</td><td>响应 <code>error_id</code> 对应 server traceback</td><td>未处理异常</td><td>按 route template 与 error_id 定位；不要依赖生产 traceback 响应</td></tr>
+              <tr><td>会话重启后 ERROR</td><td>最后 Action/Observation、AgentErrorEvent、lease owner</td><td>进程在工具执行中崩溃</td><td>确认副作用后再决定是否重试工具</td></tr>
+              <tr><td>会话偶发不可 hydrate</td><td><code>owner_lease.json</code> host/pid/generation/expiry</td><td>另一实例持有、续期失败或共享存储异常</td><td>不要手工删活 lease；先确认 owner liveness</td></tr>
+              <tr><td>WS 首连没有状态</td><td>initial-state timeout log、REST state、subscriber 数</td><td>慢/阻塞客户端</td><td>REST reconcile 后重连，排查代理 TCP 背压</td></tr>
+              <tr><td>进程“整体挂住”</td><td><code>/health</code> 延迟、线程栈、FIFOLock 等待</td><td>async 路径直接等待同步锁或 I/O</td><td>把完整临界区移入 worker thread</td></tr>
+              <tr><td><code>/server_info</code> 版本 unknown</td><td>四包版本、build SHA/ref</td><td>PyInstaller metadata 或构建参数缺失</td><td>检查 spec 收集 distribution metadata 与镜像 build args</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          健康面区分 liveness、readiness 与能力信息：<code>/alive</code>/<code>/health</code> 只表示进程可响应；
+          <code>/ready</code> 依赖模块级初始化 Event；<code>/server_info</code> 返回四包版本、构建 SHA/ref、
+          可用工具及 timeout 能力。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/server_details_router.py:30-73</code></span>
+          <span class="evidence"><code>openhands-agent-server/openhands/agent_server/server_details_router.py:81-123</code></span>
+        </p>
+        <p>
+          未处理 5xx telemetry 使用 route template 而非包含真实 ID 的 raw path，并对异常归一化；telemetry
+          自身失败不会替换原始 500。<span class="evidence"><code>openhands-agent-server/openhands/agent_server/api.py:308-355</code></span>
+        </p>
+      </section>
+
+      <section id="testing" class="section">
+        <h2>13. 测试与验证</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+            <tbody>
+              <tr>
+                <td>deferred dormant→ready、503、init key、teardown</td>
+                <td><code>tests/agent_server/test_init_router.py:292-415,456-509</code></td>
+                <td>FastAPI lifespan/单元</td><td>状态转换、路由 gate、bootstrap auth</td><td>不证明真实 warm-pool 编排</td>
+              </tr>
+              <tr>
+                <td>idle eviction 后透明 hydrate</td>
+                <td><code>tests/agent_server/test_conversation_eviction.py:43-98,143-230</code></td>
+                <td>async 单元</td><td>忙会话/外部 subscriber 排除及 binding 保留</td><td>无长时内存实测结论</td>
+              </tr>
+              <tr>
+                <td>lease generation fencing</td>
+                <td><code>tests/agent_server/test_conversation_lease.py:34-137,154-248</code></td>
+                <td>文件级单元</td><td>claim/renew/takeover、dead PID、legacy lease</td><td>不证明特定网络文件系统可靠</td>
+              </tr>
+              <tr>
+                <td>共享存储旧 owner 不可写</td>
+                <td><code>tests/cross/test_conversation_lease_behavior.py:84-153</code></td>
+                <td>跨 Server/SDK</td><td>活 lease 防 split-brain，takeover 后 AgentError 与 fencing</td><td>同机临时目录，不是多机 NFS</td>
+              </tr>
+              <tr>
+                <td>FIFOLock 不阻塞订阅 I/O</td>
+                <td><code>tests/agent_server/test_event_service.py:2239-2362</code></td>
+                <td>并发单元</td><td>快照锁释放后再 await subscriber</td><td>mock state，不覆盖所有 route</td>
+              </tr>
+              <tr>
+                <td>同 conversation 并发 claim 只有一赢家</td>
+                <td><code>tests/agent_server/stress/test_lease_contention.py:56-151</code></td>
+                <td>stress</td><td>多 Service 竞争与部分写防护</td><td>仅进程内、多 Service</td>
+              </tr>
+              <tr>
+                <td>负载下 event loop 可响应</td>
+                <td><code>tests/agent_server/stress/test_event_loop_responsiveness.py:39-60,63-182</code></td>
+                <td>stress</td><td>长 bash、繁忙 listing 时 health 延迟预算</td><td>预算依赖测试环境，不是 SLA</td>
+              </tr>
+              <tr>
+                <td>真实 REST + WS 完整栈</td>
+                <td><code>tests/cross/test_remote_conversation_live_server.py:55-172</code></td>
+                <td>live cross</td><td>真实 uvicorn、HTTP/WS 与 patched LLM</td><td>测试进程内 daemon server</td>
+              </tr>
+              <tr>
+                <td>REST public contract filter/deprecation</td>
+                <td><code>tests/cross/test_check_agent_server_rest_api_breakage.py:66-157</code></td>
+                <td>CI 脚本单元</td><td>只比较 <code>/api/*</code>，deprecation flag 规则</td><td>OpenAPI 无法推断所有迁移策略</td>
+              </tr>
+              <tr>
+                <td>恢复时事件与 Agent 兼容</td>
+                <td><code>tests/cross/test_conversation_restore_behavior.py:221-280,387-470</code></td>
+                <td>跨包行为</td><td>恢复可继续、删除工具失败、增加工具成功</td><td>Windows 上相关终端测试跳过</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout warning">
+          <strong>测试注释漂移</strong>
+          <code>tests/agent_server/stress/test_slow_websocket_consumer.py:18-23,145-147</code> 仍描述 PubSub
+          “串行”通知；当前
+          <code>openhands-agent-server/openhands/agent_server/pub_sub.py:81-102</code>
+          已并发 gather。该测试仍可提供内存与订阅清理信号，
+          但其架构说明不能作为当前投递顺序证据，需后续单独修订测试文档。
+        </div>
+        <p class="small">
+          本次仅静态审计。仓库要求 stress 用 <code>uv run pytest -m stress</code>，live endpoint 变更用
+          <code>tests/cross/test_remote_conversation_live_server.py</code>；当前环境缺少可用 Git，且本任务禁止修改
+          其他文件，因此未安装依赖或执行测试。
+        </p>
+      </section>
+
+      <section id="development" class="section">
+        <h2>14. 开发与扩展指南</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>变更目标</th><th>所有者表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+            <tbody>
+              <tr><td>新增 REST endpoint</td><td>对应 router + models</td><td><code>api.py</code> router 组装、OpenAPI contract</td><td>router test；适合时加 live-server cross test；保持 additive</td></tr>
+              <tr><td>改变会话驻留策略</td><td><code>ConversationService</code></td><td>Config、eviction lifecycle、credential binding handoff</td><td>运行/goal/WS 不被驱逐；hydrate 等价</td></tr>
+              <tr><td>改变单会话执行</td><td><code>EventService</code></td><td>run task、callback flush、interrupt、full-state 发布</td><td>sync/async fallback、错误终态、WS 顺序</td></tr>
+              <tr><td>共享存储支持</td><td><code>conversation_lease.py</code> + SDK EventLog</td><td>generation write guard、续期、崩溃接管</td><td>lease contention stress 与 cross fencing；声明 FS 限制</td></tr>
+              <tr><td>新增 deferred 字段</td><td><code>InitRequest</code>/<code>_build_initialized_config</code></td><td>Config、初始化顺序、Secret 与 env 风险</td><td>未提供时继承、提供时覆盖、失败可重试</td></tr>
+              <tr><td>改变 Workspace 文件鉴权</td><td><code>auth_router.py</code>/<code>dependencies.py</code></td><td>CORS、cookie Path/Secure/Partitioned</td><td>header/cookie router 隔离与浏览器嵌入</td></tr>
+              <tr><td>改变 worktree</td><td><code>conversation_service.py</code></td><td>StartRequest、系统提示、清理/恢复边界</td><td>repo 子目录相对路径保持、非 Git 降级、基线选择</td></tr>
+              <tr><td>删除/修改 REST contract</td><td>route + schema</td><td>deprecation 文案、版本与 release notes</td><td>5 minor runway、oasdiff、PyPI baseline</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>禁止捷径</h3>
+        <ul>
+          <li>不要在 async route 上直接 <code>with conversation._state</code> 后等待网络 I/O。</li>
+          <li>不要绕过 <code>ConversationService</code> 直接构造第二个 EventService，从而跳过 catalog、lease 与 binding 管理。</li>
+          <li>不要把 <code>meta.json</code>、<code>base_state.json</code> 或 EventLog 单独称为完整恢复源。</li>
+          <li>不要用 SDK Python deprecation decorator 标记 FastAPI route；必须用 route 的 <code>deprecated=True</code>。</li>
+          <li>不要把 <code>/ready</code> 在 deferred 模式下的 200 解读为用户会话服务已初始化。</li>
+          <li>不要根据 stress budget 推导生产 SLA 或容量。</li>
+        </ul>
+      </section>
+
+      <section id="tradeoffs" class="section">
+        <h2>15. 设计权衡与已知限制</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/失败模式</th><th>重评条件</th></tr></thead>
+            <tbody>
+              <tr><td>大量历史会话启动成本</td><td>轻 catalog + 按需 hydrate</td><td>启动不加载全部 EventLog</td><td>首次实时访问有冷启动；损坏可能延迟暴露</td><td>catalog 扫描成为启动瓶颈</td></tr>
+              <tr><td>多实例共享存储</td><td>文件 lease + generation fencing</td><td>无需中心数据库</td><td>依赖锁/rename/时钟与 FS 契约</td><td>跨区域、多主或 NFS 语义不足</td></tr>
+              <tr><td>async 与同步 SDK 状态</td><td>worker thread 包裹同步临界区</td><td>保持 SDK sync API 与自定义实现兼容</td><td>线程切换与误用风险</td><td>SDK 提供 task-aware async state API</td></tr>
+              <tr><td>事件实时传播</td><td>内存 PubSub，无 durable per-client queue</td><td>简单、低延迟、subscriber 故障隔离</td><td>断线需重放/reconcile；慢 subscriber 延长 publish</td><td>需要跨进程 fan-out 或严格投递 QoS</td></tr>
+              <tr><td>warm pool 安全启动</td><td>健康端点可用，业务 API 503，独立 init key</td><td>镜像可预热后注入用户配置</td><td>无 secret 时 init endpoint 开放；ready 语义易误读</td><td>编排器需要更细 readiness contract</td></tr>
+              <tr><td>Git 会话隔离</td><td>可选独立 worktree，非 Git 静默降级</td><td>同 repo 并行分支且保持子目录</td><td>创建会 fetch/prune/删同名 branch；无完整 worktree 回收策略证据</td><td>长生命周期部署出现磁盘累积</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3>当前限制与证据缺口</h3>
+        <ul>
+          <li>lease 注释与测试只证明本地文件系统行为；EventLog 明示 NFS flock 不可靠，不能宣称任意共享存储安全。</li>
+          <li>PubSub 没有单订阅者 timeout（初始快照除外）或持久队列；当前仅有 subscriber 上限 50。</li>
+          <li><code>EventService._publish_state_update</code> 附近注释仍称 PubSub 顺序迭代，与当前 gather 实现漂移；以实现为准。</li>
+          <li>删除 conversation 只删除持久化目录并保留 workspace；独立 worktree 是否另行回收在所审计路径没有直接证据。</li>
+          <li>本工作区没有可读取的 <code>.git</code> 元数据且 shell 找不到 Git，文档只能标记为“当前快照”。</li>
+        </ul>
+      </section>
+
+      <section id="source-index" class="section">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>类别</th><th>符号/内容</th><th>路径与行号</th></tr></thead>
+            <tbody>
+              <tr><td>入口</td><td><code>create_app</code>、<code>api_lifespan</code></td><td><code>openhands-agent-server/openhands/agent_server/api.py:149-305,681-708</code></td></tr>
+              <tr><td>路由与鉴权</td><td>router groups、Session/cookie dependencies</td><td><code>openhands-agent-server/openhands/agent_server/api.py:403-466</code>；<code>openhands-agent-server/openhands/agent_server/dependencies.py:12-93</code></td></tr>
+              <tr><td>健康</td><td>alive、ready、server_info</td><td><code>openhands-agent-server/openhands/agent_server/server_details_router.py:17-123</code></td></tr>
+              <tr><td>集合 owner</td><td><code>ConversationService</code></td><td><code>openhands-agent-server/openhands/agent_server/conversation_service.py:620-788,1029-1074,1891-2202</code></td></tr>
+              <tr><td>单会话 owner</td><td><code>EventService</code></td><td><code>openhands-agent-server/openhands/agent_server/event_service.py:109-155,790-843,953-1276,1654-1708,1796-1882</code></td></tr>
+              <tr><td>传播</td><td><code>PubSub</code>、WebSocket</td><td><code>openhands-agent-server/openhands/agent_server/pub_sub.py:15-108</code>；<code>openhands-agent-server/openhands/agent_server/sockets.py:105-383</code></td></tr>
+              <tr><td>deferred init</td><td><code>InitService</code>、gate、router</td><td><code>openhands-agent-server/openhands/agent_server/init_router.py:48-186,189-373</code></td></tr>
+              <tr><td>lease</td><td>claim、renew、fencing、legacy read</td><td><code>openhands-agent-server/openhands/agent_server/conversation_lease.py:18-281</code></td></tr>
+              <tr><td>worktree</td><td>start point、路径保持、request 规范化</td><td><code>openhands-agent-server/openhands/agent_server/conversation_service.py:85-274</code></td></tr>
+              <tr><td>SDK 锁</td><td><code>FIFOLock</code></td><td><code>openhands-sdk/openhands/sdk/conversation/fifo_lock.py:14-163</code></td></tr>
+              <tr><td>SDK 持久化</td><td>snapshot、resume、autosave</td><td><code>openhands-sdk/openhands/sdk/conversation/state.py:420-624,728-749</code></td></tr>
+              <tr><td>SDK EventLog</td><td>文件索引、append lock、legacy parent</td><td><code>openhands-sdk/openhands/sdk/conversation/event_store.py:30-126,184-333</code></td></tr>
+              <tr><td>Server stores</td><td>Settings/Secrets/Workspaces 文件存储</td><td><code>openhands-agent-server/openhands/agent_server/persistence/store.py:119-235,292-420,423-702,724-786</code></td></tr>
+              <tr><td>REST contract</td><td>public OpenAPI filter</td><td><code>openhands-agent-server/openhands/agent_server/openapi.py:11-170</code></td></tr>
+              <tr><td>包级规则</td><td>async safety、stress、REST compatibility</td><td><code>openhands-agent-server/AGENTS.md:17-202</code></td></tr>
+              <tr><td>架构总览</td><td>第 14 章摘要</td><td><code>software_agent_architecture.html:869-911</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>
+          相邻主题请回到<a href="../../software_agent_architecture.html#workspace">总览第 11 章 Workspace 与 Git</a>、
+          <a href="../../software_agent_architecture.html#remote">总览第 15 章 RemoteConversation</a>和
+          <a href="../../software_agent_architecture.html#settings">总览第 16 章 Settings 与兼容性</a>。
+          相邻子文档：<a href="13-extensions.html">13 扩展生态</a> ·
+          <a href="15-remote.html">15 RemoteConversation</a>。
+        </p>
+      </section>
+
+      <section id="glossary" class="section">
+        <h2>17. 术语表</h2>
+        <dl>
+          <dt>ASGI</dt><dd>Asynchronous Server Gateway Interface，Python 异步 Web 应用与服务器之间的接口规范；FastAPI 应用由 ASGI server 托管。</dd>
+          <dt>Catalog</dt><dd>本文指 ConversationService 在内存中的轻量会话目录，只含元数据和状态摘要，不含完整 EventLog。</dd>
+          <dt>Deferred init</dt><dd>延迟初始化；进程和无状态服务先启动，业务 Service 等编排器注入用户运行配置后再创建。</dd>
+          <dt>Dormant</dt><dd>休眠态；deferred server 已能响应健康与 init 路由，但受 gate 保护的业务 API 返回 503。</dd>
+          <dt>EventLog</dt><dd>SDK 的追加式事件文件序列；每个事件单独持久化，并保留事件树 parent 关系。</dd>
+          <dt>Eviction</dt><dd>驱逐；卸载空闲会话的内存 runtime，但不删除磁盘记录，后续可 hydrate。</dd>
+          <dt>Fencing token</dt><dd>隔离令牌；lease generation 在 takeover 时递增，使旧 owner 的后续写入校验失败。</dd>
+          <dt>FIFOLock</dt><dd>按请求顺序公平获取、按 OS 线程重入的同步锁；不是 asyncio task-aware lock。</dd>
+          <dt>Full-state snapshot</dt><dd>由 <code>ConversationStateUpdateEvent.from_conversation_state</code> 产生的完整状态更新；与单字段 update 不同。</dd>
+          <dt>Hydrate</dt><dd>根据 catalog 与持久化文件重新构造 EventService 和 LocalConversation 的过程。</dd>
+          <dt>Lease</dt><dd>有期限的会话 owner 声明；用于共享存储环境避免两个 Agent Server 同时拥有同一会话。</dd>
+          <dt>Lifespan</dt><dd>FastAPI/ASGI 的应用启动与关闭上下文，负责 Service 初始化、后台任务和资源回收。</dd>
+          <dt>LocalConversation</dt><dd>SDK 中真正拥有可变状态并执行 Agent 的本地 Conversation 实现；Agent Server 在进程内托管它。</dd>
+          <dt>OpenAPI</dt><dd>REST API 的机器可读契约；本仓库的公开兼容 gate 只过滤 <code>/api</code> 路径。</dd>
+          <dt>PubSub</dt><dd>Publish/Subscribe，发布/订阅；EventService 用它把事件和状态更新分发给 WS、webhook、telemetry 等 subscriber。</dd>
+          <dt>Reconcile</dt><dd>对账；远程客户端用 REST/EventLog 补齐可能因断线或实时流丢失的事件。</dd>
+          <dt>Split-brain</dt><dd>脑裂；两个 Service 同时认为自己拥有同一会话并写共享状态，lease 与 fencing 用于阻止它。</dd>
+          <dt>Worktree</dt><dd>Git worktree；同一仓库的独立工作目录与分支，Server 可按会话创建并保持原 workspace 的仓库内相对路径。</dd>
+          <dt>WS</dt><dd>WebSocket，双向长连接协议；本模块用于事件推送、历史重放和消息输入。</dd>
+        </dl>
+      </section>
+
+      <footer>
+        <a href="../../software_agent_architecture.html#server">返回 Software Agent SDK 架构总览 · Agent Server</a>
+      </footer>
+    </main>
+  </div>
+  <script>
+    (() => {
+      const links = [...document.querySelectorAll("#toc a")];
+      const targets = links
+        .map((link) => document.querySelector(link.getAttribute("href")))
+        .filter(Boolean);
+      const activate = () => {
+        const marker = window.scrollY + 140;
+        let current = targets[0];
+        for (const target of targets) {
+          if (target.offsetTop <= marker) current = target;
+        }
+        links.forEach((link) => {
+          link.classList.toggle("active", link.getAttribute("href") === `#${current.id}`);
+        });
+      };
+      window.addEventListener("scroll", activate, { passive: true });
+      activate();
+    })();
+  </script>
+</body>
+</html>

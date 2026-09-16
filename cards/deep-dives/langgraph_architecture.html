@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LangGraph 架构深度解析：从 StateGraph 到 Pregel Durable Runtime</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.72 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif;padding:64px 24px 40px 310px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .3rem;border-radius:4px;font-size:.9em}strong{color:var(--text)}
+.topbar{position:fixed;z-index:200;left:0;right:0;top:0;height:48px;background:#fffdf8;border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 18px;gap:8px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:4px 10px}.tab{border:0;background:none;color:var(--muted);font:600 14px inherit;padding:14px 16px;cursor:pointer;border-bottom:3px solid transparent}.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.sidebar{position:fixed;z-index:100;left:0;top:48px;bottom:0;width:286px;padding:18px 14px;overflow:auto;border-right:1px solid var(--border);background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}.sidebar h2{font-size:14px;color:var(--blue);margin:0 0 10px}.sidebar a{display:block;color:var(--muted);font-size:12.5px;padding:4px 7px;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1120px;margin:auto}.panel{display:none}.panel.active{display:block}.panel>iframe{width:100%;height:calc(100vh - 48px);border:0;display:block;background:var(--bg)}h1{text-align:center;font-size:2.25rem;color:var(--blue);line-height:1.25;margin:18px 0 5px}.subtitle{text-align:center;color:var(--muted);margin:0 0 26px}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:26px 30px;margin:0 0 20px;scroll-margin-top:60px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}h2{font-size:1.45rem;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:8px;margin:0 0 16px}h3{font-size:1.15rem;color:var(--blue2);margin:22px 0 8px}h4{color:var(--purple);margin:15px 0 5px}.lead{font-size:1.05rem}.insight,.key,.warn,.boundary{padding:15px 18px;border-radius:8px;margin:14px 0;background:var(--surface2)}.insight{border:1px solid var(--green)}.insight:before{content:"核心洞察";display:block;color:var(--green);font-weight:700}.key{border-left:3px solid var(--blue)}.warn{border:1px solid var(--red);background:rgba(185,28,28,.04)}.warn:before{content:"边界 / 易错点";display:block;color:var(--red);font-weight:700}.boundary{border:1px dashed var(--yellow)}.boundary:before{content:"事实边界";display:block;color:var(--yellow);font-weight:700}
+.badges{display:flex;flex-wrap:wrap;gap:8px}.badge{font-size:12px;border:1px solid;border-radius:999px;padding:1px 8px;font-weight:700}.fact{color:var(--green)}.optional{color:var(--yellow)}.experimental{color:var(--purple)}.remote{color:var(--blue)}.deprecated{color:var(--red)}
+.grid2,.grid3,.learning{display:grid;gap:12px;margin:12px 0}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3,.learning{grid-template-columns:repeat(3,minmax(0,1fr))}.card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:14px}.card strong{display:block;color:var(--blue2);margin-bottom:4px}.learning{counter-reset:learn}.learning .card{counter-increment:learn}.learning .card:before{content:"模块 " counter(learn);display:block;color:var(--blue);font-size:12px;font-weight:700}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px}th{color:var(--blue);background:#e8e1d4}th,td{text-align:left;vertical-align:top;border:1px solid var(--border);padding:8px 10px}tr:nth-child(even){background:rgba(244,241,234,.42)}ul,ol{padding-left:22px}li{margin:4px 0}.mono{white-space:pre;overflow:auto;background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:15px;color:var(--blue2);font:13px/1.55 Consolas,"Cascadia Code",monospace}.formula{text-align:center;background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:12px;color:var(--orange);font-family:Consolas,monospace}.source{font-size:12.5px;color:var(--muted);border-left:3px solid var(--border);padding-left:10px;margin-top:10px}
+.flow{background:#fff;border:1px solid var(--border);border-radius:9px;overflow:hidden}.flow img{display:block;width:100%;cursor:zoom-in}.caption{background:#f4f1ea;color:var(--muted);font-size:13px;padding:10px 13px}.links{display:flex;gap:12px;margin:12px 0}.links a{border:1px solid var(--blue);border-radius:999px;padding:3px 10px}.diagram-panel{max-width:1480px;margin:auto}.diagram-panel h1{text-align:left}.lightbox{position:fixed;display:none;z-index:999;inset:0;background:rgba(28,25,23,.97);align-items:center;justify-content:center;padding:2vw;cursor:zoom-out}.lightbox.open{display:flex}.lightbox img{max-width:97vw;max-height:94vh;object-fit:contain;background:#fff;cursor:grab;user-select:none}.lb-close{position:absolute;top:14px;right:16px;width:34px;height:34px;border-radius:50%;border:1px solid rgba(28,25,23,.12);background:#fff;color:#78716c;font-size:15px;line-height:1;cursor:pointer;z-index:1}
+details{border-bottom:1px solid var(--border);padding:8px 0}summary{cursor:pointer;color:var(--blue2);font-weight:600}.footer{text-align:center;color:#78716c;padding:24px}.small{font-size:12px;color:var(--muted)}
+@media(max-width:1000px){body{padding-left:18px}.sidebar{display:none}.grid3,.learning{grid-template-columns:1fr 1fr}}@media(max-width:650px){body{padding:58px 10px 20px}.section{padding:18px 15px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.grid2,.grid3,.learning{grid-template-columns:1fr}h1{font-size:1.65rem}.topbar{overflow:auto}.tab{white-space:nowrap;padding:14px 8px}table{display:block;overflow:auto}.mono{font-size:11px}}
+</style>
+<style>
+.subdoc-tag{display:inline-block;margin-left:5px;padding:0 5px;border:1px solid var(--purple);border-radius:999px;color:var(--purple);font-size:10px;line-height:16px;vertical-align:1px}
+.doc-link{float:right;margin:2px 0 0 12px;padding:2px 9px;border:1px solid var(--purple);border-radius:999px;color:var(--purple);font-size:12px;font-weight:600;white-space:nowrap}
+.doc-link:hover{background:rgba(109,40,217,.1);text-decoration:none}
+.module-index{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.module-index a{display:block;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);color:var(--blue2)}
+.module-index a:hover{border-color:var(--blue);text-decoration:none}
+@media(max-width:1000px){.module-index{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.module-index{grid-template-columns:1fr}.doc-link{float:none;display:inline-block;margin:7px 0 0}}
+/* ===== 站点标准知识组件：与全站卡片保持同一套语义与视觉 ===== */
+.arch-diagram{white-space:pre;overflow:auto;background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:15px;margin:14px 0;color:var(--blue2);font:13px/1.55 Consolas,"Cascadia Code",monospace}
+.intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:14px 18px;margin:14px 0}
+.intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:4px;font-size:12.5px}
+.intuition-box p{margin:0;font-style:italic;color:var(--text)}
+.term{background:rgba(194,65,12,.12);color:var(--orange);padding:.06rem .38rem;border-radius:4px;font-size:.9em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
+.highlight{border-left:3px solid var(--blue);padding-left:14px;margin:14px 0;color:#44403c}
+.practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0}
+.practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:14px}
+.practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:5px}
+.practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:14px}
+.practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:5px}
+.practice-grid ul{margin:4px 0 0;padding-left:18px}.practice-grid li{margin:5px 0}
+@media (max-width: 980px){.practice-grid{grid-template-columns:1fr}.arch-diagram{font-size:11px;padding:10px}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a href="../../index.html">首页</a>
+  <button type="button" class="tab" data-tab="guide">📖 入门指南</button>
+  <button type="button" class="tab active" data-tab="docs">架构文档</button>
+</div>
+<aside class="sidebar" id="sidebar">
+  <h2>LangGraph 架构目录</h2>
+  <a href="#s0">阅读约定与学习路线</a><a href="#s1">一、定位与设计哲学</a><a href="#s2">二、Monorepo 与包边界</a>
+  <a href="#s3">三、核心心智模型</a><a href="#s4">四、StateGraph DSL <span class="subdoc-tag">子文档</span></a><a href="#s5">五、Compile 编译过程 <span class="subdoc-tag">子文档</span></a>
+  <a href="#s6">六、Channel 与状态合并 <span class="subdoc-tag">子文档</span></a><a href="#s7">七、Pregel 超级步运行时 <span class="subdoc-tag">子文档</span></a><a href="#s8">八、调度、并发与控制流 <span class="subdoc-tag">子文档</span></a>
+  <a href="#s9">九、Checkpoint 与 Durable Execution <span class="subdoc-tag">子文档</span></a><a href="#s10">十、SQLite / Postgres <span class="subdoc-tag">子文档</span></a>
+  <a href="#s11">十一、Interrupt、HITL 与 Time-travel <span class="subdoc-tag">子文档</span></a><a href="#s12">十二、Store、Memory 与 Cache <span class="subdoc-tag">子文档</span></a>
+  <a href="#s13">十三、Streaming <span class="subdoc-tag">子文档</span></a><a href="#s14">十四、Runtime、错误与韧性 <span class="subdoc-tag">子文档</span></a><a href="#s15">十五、Functional API <span class="subdoc-tag">子文档</span></a>
+  <a href="#s16">十六、Prebuilt ReAct 与 ToolNode <span class="subdoc-tag">子文档</span></a><a href="#s17">十七、RemoteGraph、SDK 与 CLI <span class="subdoc-tag">子文档</span></a>
+  <a href="#s18">十八、扩展与二次开发 <span class="subdoc-tag">子文档</span></a><a href="#s19">十九、测试、性能与排障</a><a href="#s20">二十、版本迁移与局限</a>
+  <a href="#qa">Q&amp;A</a><a href="#glossary">术语表</a><a href="#refs">参考与源码索引</a>
+</aside>
+
+<div id="guide" class="panel"><iframe src="langgraph_architecture_guide.html" loading="lazy" title="LangGraph 架构入门指南"></iframe></div>
+
+<main id="docs" class="panel active" aria-label="LangGraph 架构文档"><div class="container">
+<h1>LangGraph 架构深度解析</h1>
+<p class="subtitle">从 StateGraph DSL 到 Pregel Durable Runtime：面向学习、分享与二次开发的源码级指南<br>事实基线：langgraph 1.2.11 · checkpoint 4.2.0 · 2026-08-14 工作区快照</p>
+<p style="text-align:center;margin:14px 0 20px">
+  <a href="langgraph_architecture_guide.html" style="font-weight:600;border:1px solid var(--green);border-radius:999px;padding:8px 20px;color:var(--green)">第一次接触？建议先读《LangGraph 架构入门指南》→</a>
+</p>
+
+<section class="section" id="s0"><h2>阅读约定与分模块学习路线</h2>
+<div class="insight"><strong>LangGraph 不是“一个现成 Agent”，而是把状态、控制流、并发、持久化和人工介入组合成可恢复执行的底层编排内核。</strong>理解它的最快路径不是从 `create_react_agent` 开始，而是先建立 Channel 与 Pregel 超级步的心智模型，再回头看 ReAct 只是如何被编译成一张普通图。</div>
+<div class="badges"><span class="badge fact">代码事实</span><span class="badge optional">可选能力</span><span class="badge experimental">实验特性</span><span class="badge remote">远程服务边界</span><span class="badge deprecated">弃用 / 迁移</span></div>
+<p>本文用上述标记避免五类常见混淆：存在实现不代表默认启用；SDK 能调用的服务端能力不等于本地 OSS Runtime 自带；实验 API 不应视为稳定契约；兼容层仍可用不代表它是新项目首选；官方产品描述必须由当前代码确认。</p>
+<div class="learning">
+ <div class="card"><strong>图与状态</strong>`graph/state.py`、`channels/`：节点怎样读写共享状态。</div>
+ <div class="card"><strong>编译</strong>`StateGraph.compile()`：DSL 怎样变成 PregelNode、ChannelRead/Write 与触发关系。</div>
+ <div class="card"><strong>运行时</strong>`pregel/main.py`、`_loop.py`、`_algo.py`：超级步、任务调度、合并。</div>
+ <div class="card"><strong>持久化</strong>`checkpoint/`：版本向量、pending writes、恢复与时间旅行。</div>
+ <div class="card"><strong>控制与交互</strong>`types.py`：Send、Command、interrupt、stream modes。</div>
+ <div class="card"><strong>上层与远程</strong>`prebuilt/`、`sdk-py/`、`cli/`：Agent、Server 与部署边界。</div>
+</div>
+<h3>模块开发文档索引</h3>
+<div class="module-index">
+ <a href="docs/langgraph/04-stategraph-dsl.html">04 · StateGraph DSL</a>
+ <a href="docs/langgraph/05-compile-pregel.html">05 · Compile 到 Pregel</a>
+ <a href="docs/langgraph/06-channel-state-merge.html">06 · Channel 与状态合并</a>
+ <a href="docs/langgraph/07-pregel-runtime.html">07 · Pregel Runtime</a>
+ <a href="docs/langgraph/08-scheduling-send-subgraph.html">08 · 调度、Send 与子图</a>
+ <a href="docs/langgraph/09-checkpoint-durable-execution.html">09 · Checkpoint 与 Durable Execution</a>
+ <a href="docs/langgraph/10-sqlite-postgres-serde.html">10 · SQLite / Postgres / Serde</a>
+ <a href="docs/langgraph/11-interrupt-hitl-timetravel.html">11 · Interrupt / HITL / Time-travel</a>
+ <a href="docs/langgraph/12-store-memory-cache.html">12 · Store / Memory / Cache</a>
+ <a href="docs/langgraph/13-streaming.html">13 · Streaming</a>
+ <a href="docs/langgraph/14-runtime-errors-resilience.html">14 · Runtime / Error / Resilience</a>
+ <a href="docs/langgraph/15-functional-api.html">15 · Functional API</a>
+ <a href="docs/langgraph/16-prebuilt-react-toolnode.html">16 · Prebuilt ReAct / ToolNode</a>
+ <a href="docs/langgraph/17-remotegraph-sdk-cli.html">17 · RemoteGraph / SDK / CLI</a>
+ <a href="docs/langgraph/18-extension-development.html">18 · 扩展与二次开发</a>
+</div>
+<p class="source">建议组内拆成 6 次学习，每次都沿“公开 API → 内部数据结构 → 一次真实执行 → 失败与恢复 → 对应测试”讲解，而不是按目录逐文件朗读。</p>
+</section>
+
+<section class="section" id="s1"><h2>一、项目定位与设计哲学</h2>
+<p class="lead">LangGraph 的目标是为长时间、带状态、可中断的工作流和 Agent 提供低层基础设施。它借鉴 Pregel 的 Bulk Synchronous Parallel（BSP）执行模型、Apache Beam 的数据流思想和 NetworkX 的图构建接口，但把这些概念重构为适配 LLM 应用的 Python Runtime。</p>
+<div class="formula">LangGraph = Graph DSL + Channel State Model + Pregel Scheduler + Durable Checkpoint + Interrupt/Resume + Streaming</div>
+<div class="intuition-box"><p>LangGraph 解决的不是「怎么让模型调工具」，而是「一个跑了二十分钟、在第十九分钟崩掉的流程，怎么从第十八分钟接着跑」。所有让人觉得绕的设计——Channel、超级步、pending writes——都是为了让状态能被序列化、被重放。</p></div>
+<p>这里有个反直觉的地方值得先说清：LangGraph 明确<strong>不</strong>保存 Python 调用栈。一个中断后恢复的节点是从函数第一行重新执行的，而不是从 <code>interrupt()</code> 那一行继续。原因很实在——栈帧没法跨进程、跨机器、跨版本迁移，而一份只包含 <span class="term">Channel</span>（状态 key 的值容器，自带更新合并语义与单调版本号）值与版本号的快照可以。这个取舍决定了后面几乎所有 API 的形状。</p>
+<h3>1.1 从 Agent 风险反推运行能力</h3>
+<p class="source"><strong>外部设计来源：</strong>LangChain 官方长文 <a href="https://www.langchain.com/blog/building-langgraph">Building LangGraph: Designing an Agent Runtime from first principles</a> 将 Agent 与传统后端的差异归纳为高延迟、长任务失败后的重试昂贵，以及 LLM 输入输出开放且非确定；下表是该文的需求推导，不是对当前开源包的性能或服务等级承诺。</p>
+<table><thead><tr><th>问题</th><th>设计推导</th><th>解决的成本</th></tr></thead><tbody>
+<tr><td>LLM 调用和多步循环带来秒、分钟乃至更长延迟</td><td><strong>Parallelization</strong> 让无数据依赖的步骤并行；<strong>Streaming</strong> 持续输出 token、进度和关键动作</td><td>前者降低实际关键路径，后者降低用户感知延迟</td></tr>
+<tr><td>长任务越接近末尾失败，从头重做越昂贵</td><td><strong>Checkpoint</strong> 保存可恢复边界；<strong>Task queue</strong> 将请求生命周期与后台执行解耦并支持公平重试</td><td>Checkpoint 降低单次恢复成本，队列减少因请求断开等原因造成的整次重跑</td></tr>
+<tr><td>LLM 行为非确定，开发期测试不可能覆盖所有真实输入</td><td><strong>Human-in-the-loop（HITL）</strong> 在关键动作前暂停、审批或修改；<strong>Tracing</strong> 记录输入、轨迹、状态变化和输出</td><td>在风险点引入人类判断，并用生产轨迹发现未知失败模式</td></tr>
+</tbody></table>
+<p>本地 Runtime 把可安全并行的 task 提交到进程内线程池或当前 event loop，并以超级步屏障合并 writes；这解释了 parallelization 的实现边界，而不是跨机器 worker 调度。`libs/langgraph/langgraph/pregel/_executor.py:40-72,122-166`。Checkpoint 的持久本体是 Channel 值、版本和 `versions_seen`，task 结果另存为 pending writes；动态 HITL 恢复会从节点开头重新执行。`libs/checkpoint/langgraph/checkpoint/base/__init__.py:92-146`，`libs/langgraph/langgraph/types.py:851-970`。</p>
+<div class="grid2">
+ <div class="card"><strong>确定性骨架</strong>节点、边、条件分支、barrier 和 reducer 让业务控制流可以明确审计。</div>
+ <div class="card"><strong>Agentic 决策</strong>LLM 节点可以在运行时生成 tool calls、Command 或 Send，动态改变下一步。</div>
+ <div class="card"><strong>耐久执行</strong>Checkpointer 分别保存超级步边界上的 Checkpoint（Channel 快照与版本）和 task 级 pending writes，不保存 Python 栈帧。</div>
+ <div class="card"><strong>可组合运行</strong>同一编译图支持 sync/async、invoke/stream、子图、远程图和 Runnable 生态。</div>
+</div>
+<div class="boundary"><strong>产品边界：</strong>官方长文明示 task queue 超出 Python library 范围，由 LangGraph Platform 承担；官方 <a href="https://docs.langchain.com/oss/python/langgraph/overview">LangGraph overview</a> 则把 LangGraph 定位为 orchestration runtime，把 tracing/evaluation/deployment 归于 LangSmith 产品。开源本地 Runtime 可产生结构化 stream、callbacks 和 tracing 集成点，但托管 tracing 后端、durable task queue、多租户、鉴权和生产部署平台都不是本地 `Pregel` 内建。仓库中的 `RemoteGraph` 也只是调用 LangGraph Server API 的客户端。`libs/langgraph/langgraph/pregel/remote.py:118-150`。</div>
+</section>
+
+<section class="section" id="s2"><h2>二、Monorepo、Namespace Package 与依赖边界</h2>
+<table><thead><tr><th>库 / 当前版本</th><th>职责</th><th>关键边界</th></tr></thead><tbody>
+<tr><td>`langgraph 1.2.11`</td><td>StateGraph、Functional API、Pregel、Channel、Runtime、RemoteGraph</td><td>核心可执行对象是 `CompiledStateGraph(Pregel)`</td></tr>
+<tr><td>`langgraph-checkpoint 4.2.0`</td><td>Checkpointer / Store / Cache / Serde 合约与内存实现</td><td>多个 wheel 共同贡献 `langgraph.*` namespace</td></tr>
+<tr><td>`checkpoint-postgres 3.1.2`</td><td>生产级 sync/async、shallow saver、Postgres Store</td><td>需显式 `setup()` 迁移</td></tr>
+<tr><td>`checkpoint-sqlite 3.1.1`</td><td>本地轻量 saver/store/cache</td><td>sync/async 类分离，首次操作可自动 setup</td></tr>
+<tr><td>`prebuilt 1.1.0`</td><td>ReAct、ToolNode、工具注入与校验</td><td>`create_react_agent` 已迁往 `langchain.agents.create_agent`</td></tr>
+<tr><td>`sdk-py 0.4.2`</td><td>Assistants/Threads/Runs/Store 的 HTTP/SSE/WS 客户端</td><td>面向仓库外 API Server</td></tr>
+<tr><td>`cli 0.4.31`</td><td>`new/dev/up/build/dockerfile/validate/deploy`</td><td>把 `langgraph.json` 编译为本地或容器运行形态</td></tr>
+<tr><td>`sdk-js`</td><td>迁移说明</td><td>实现已迁往 langgraphjs，本仓库无 package.json</td></tr>
+</tbody></table>
+<div class="mono">应用代码
+  ├─ 本地执行 ─► StateGraph / @entrypoint ─► Pregel Runtime
+  │                                      ├─ Checkpointer / Store / Cache
+  │                                      └─ LangChain Runnable / Model / Tool
+  └─ 远程执行 ─► SDK / RemoteGraph ─HTTP/SSE/WS─► LangGraph API Server（仓库外）
+
+共同 namespace：langgraph + checkpoint + sqlite/postgres + prebuilt
+独立 namespace：langgraph_sdk、langgraph_cli</div>
+<div class="warn">仓库规则中的依赖图表达“下游影响关系”，不能直接当 wheel 的生产依赖图。当前核心包的 `pyproject.toml` 明确依赖 checkpoint、prebuilt 和 sdk；而 prebuilt 的生产声明只含 checkpoint 与 langchain-core，却在运行时导入核心 namespace。分析包边界必须同时看声明依赖、namespace 组装和真实 import。</div>
+</section>
+
+<section class="section" id="s3"><h2>三、核心心智模型：图只是表面，Channel 才是状态机</h2>
+<p>用户看到的是 Node 和 Edge，运行时看到的是“订阅哪些 Channel、被什么 Channel 版本变化触发、读什么输入、向哪些 Channel 写什么值”的 Process 集合。节点函数遵循 <code>State -&gt; Partial&lt;State&gt;</code>，返回的局部更新先成为 writes，直到当前超级步所有任务结束才统一应用。</p>
+<div class="mono">StateGraph Builder                         Pregel Runtime
+Node A ──edge──► Node B        compile       Process A: subscribe / read / write
+  │ reducer state schema        ─────►       Process B: triggers / channels
+  └ conditional / Send                       Channel versions + versions_seen
+
+超级步 n：读稳定快照 → 并行执行所有已触发任务 → 收集 writes
+屏障：     对 writes 确定性排序并按 reducer 合并 → checkpoint
+超级步 n+1：只有看见新 Channel 版本的订阅者才被调度</div>
+<div class="intuition-box"><p>Node 和 Edge 是给人看的，调度器眼里只有版本号：每个 Channel 有一个单调递增的 version，每个节点记着自己「消费到第几号」。两者不相等，节点就该跑；相等，就跳过。整个执行模型可以压缩成这一句话。</p></div>
+<div class="arch-diagram">超级步 n 开始
+  channel_versions   : {messages: 7, plan: 3, docs: 5}
+  versions_seen[node]: {agent: {messages: 7, plan: 3}, retriever: {messages: 5}}
+                                        ▲                              ▲
+                          agent 已消费最新 → 不触发     retriever 落后 2 版 → 触发
+
+  ┌── 调度：updated_channels → trigger_to_nodes 索引挑候选 ──┐
+  │   PULL task：由订阅的 Channel 版本变化触发                │
+  │   PUSH task：由 Send(node, arg) 或 @task 调用产生         │
+  └───────────────────────┬───────────────────────────────────┘
+                          ▼
+        并行执行（进程内线程池 / 当前 event loop）
+        每个 task 读的是超级步开始时的稳定快照
+        → 兄弟节点互相看不见对方本步的写入（这是特性，不是延迟）
+                          │
+                          ▼   writes 先落 pending_writes（task 粒度，可单独恢复）
+  ════════════ 屏障 barrier：所有 task 结束才继续 ════════════
+                          ▼
+        apply_writes：按 task path 稳定排序 → 按 Channel 分组
+          LastValue                → 同步内多写直接报 InvalidUpdateError
+          BinaryOperatorAggregate  → 逐个喂给 reducer
+          NamedBarrierValue        → 收齐命名前驱才放行
+          未被写的订阅 Channel      → 收到空更新以推进生命周期
+                          ▼
+        channel_versions 推进 → 写 checkpoint（按 durability 决定时机）
+                          ▼
+超级步 n+1：只有 versions_seen 落后的订阅者被调度
+
+  确定性来自：稳定的 task path 排序 + 可结合的 reducer
+  ——而不是「线程谁先跑完」。</div>
+<p>这解释了三个关键性质：</p><ol>
+<li><strong>同一超级步隔离：</strong>普通节点不会立即看到兄弟节点刚写的值，避免执行顺序造成隐式数据竞争。</li>
+<li><strong>并发写必须定义语义：</strong>LastValue 不允许同一步多个普通更新；`Annotated[T, reducer]` 生成聚合 Channel。</li>
+<li><strong>恢复发生在边界：</strong>Checkpoint 记录 Channel/版本和任务写；动态 interrupt 恢复时节点从头执行，而不是续接到 Python 函数某一行。</li></ol>
+</section>
+
+<section class="section" id="s4"><h2>四、StateGraph DSL：Schema、Node、Edge 与 Branch <a class="doc-link" href="docs/langgraph/04-stategraph-dsl.html">子文档</a></h2>
+<h3>4.1 Schema 是运行契约</h3>
+<p>`StateGraph[StateT, ContextT, InputT, OutputT]` 分离四种类型：可变共享 State、run-scoped 且不可由节点更新的 Context、外部 Input 和最终 Output。State 可由 TypedDict、Pydantic、dataclass 或 root schema 描述；每个 key 在构图时解析为 Channel 或 ManagedValue。</p>
+<table><tr><th>构件</th><th>语义</th><th>设计注意</th></tr>
+<tr><td>普通字段</td><td>默认 `LastValue`</td><td>同一步多写会触发 InvalidUpdateError</td></tr>
+<tr><td>`Annotated[value, reducer]`</td><td>`BinaryOperatorAggregate` 或 DeltaChannel</td><td>reducer 应满足结合性，最好满足交换性，避免并行结果依赖排序</td></tr>
+<tr><td>ManagedValue</td><td>运行时计算，不进入普通 checkpoint state</td><td>如 RemainingSteps / IsLastStep</td></tr>
+<tr><td>`context_schema`</td><td>每次 run 注入的只读上下文</td><td>替代逐步弃用的 `config_schema`</td></tr></table>
+<h3>4.2 控制流构件</h3>
+<ul><li>`add_node`：将 callable/Runnable 包装为 StateNodeSpec，可带 retry、cache、timeout、error handler。</li>
+<li>`add_edge`：普通边；多起点 waiting edge 用 NamedBarrier 等待所有前驱。</li>
+<li>`add_conditional_edges`：BranchSpec 在节点写入后读取 fresh state，返回目标名或 `Send`。</li>
+<li>`START` / `END`：保留控制节点；至少需要从 START 可达的入口。</li>
+<li>`Command`：一个返回值同时表达 state update、resume 和 goto；`Command.PARENT` 可把控制上抛父图。</li></ul>
+<div class="key">条件边读取的是“当前节点 writes 临时应用到 Channel 副本后的状态”，不是等到下一超级步才看见自己的输出；这由 `local_read(..., fresh=True)` 支持。它既保持兄弟隔离，又允许路由依赖本节点刚产生的更新。</div>
+</section>
+
+<section class="section" id="s5"><h2>五、Compile：从声明式图到可执行 Pregel <a class="doc-link" href="docs/langgraph/05-compile-pregel.html">子文档</a></h2>
+<p>`StateGraph` 是 builder，不能直接 invoke。`compile()` 首先校验 source/target/interrupt 节点，然后构建 `CompiledStateGraph`；后者继承 `Pregel`，因此获得 invoke、stream、batch、async、状态查询和更新能力。</p>
+<div class="mono">StateGraph.compile(checkpointer, cache, store, interrupt_*, transformers)
+  1. ensure_valid_checkpointer + 可选严格 msgpack allowlist
+  2. validate：入口、边、分支目标、interrupt 节点
+  3. 确定 input / output / stream channels
+  4. 合并全局与节点级 retry/cache/timeout/error handler
+  5. 创建 CompiledStateGraph(Pregel)
+  6. 注入 START: EphemeralValue(input_schema)
+  7. attach_node → PregelNode + ChannelRead + ChannelWrite
+  8. attach_edge / waiting edge / branch → trigger channels
+  9. validate compiled graph</div>
+<p>编译不会执行模型或工具，也不会把 Python 函数转成静态计划。它生成的是一个带触发关系和读写契约的运行图；动态分支、Command、Send、subgraph 和 interrupt 仍在运行时决定。</p>
+<div class="warn">`compile(checkpointer=None)` 对子图表示可继承父图 checkpointer；`False` 才是显式禁用；`True` 表示子图自行持久化。这不是简单的布尔开关。</div>
+</section>
+
+<section class="section" id="s6"><h2>六、Channel：值容器、合并策略与调度版本 <a class="doc-link" href="docs/langgraph/06-channel-state-merge.html">子文档</a></h2>
+<table><tr><th>Channel</th><th>核心语义</th><th>典型用途</th></tr>
+<tr><td>LastValue</td><td>保留最后一次值，每超级步最多一个普通更新</td><td>标量状态、唯一生产者</td></tr>
+<tr><td>BinaryOperatorAggregate</td><td>把本步每个 update 依次传入 reducer</td><td>消息列表、计数、集合合并</td></tr>
+<tr><td>EphemeralValue</td><td>只保留前一超级步的值，之后清空</td><td>START 输入、边触发信号</td></tr>
+<tr><td>Topic</td><td>收集一个或多个值，可配置累积</td><td>`Send` 任务队列、消息主题</td></tr>
+<tr><td>NamedBarrierValue</td><td>收齐命名值后可读</td><td>多前驱 join</td></tr>
+<tr><td>UntrackedValue</td><td>不跟踪 checkpoint 版本</td><td>无需耐久恢复的运行值</td></tr>
+<tr><td>DeltaChannel（beta）</td><td>大部分 checkpoint 只存 delta sentinel，沿祖先 writes 重放</td><td>大聚合状态降低快照写放大</td></tr></table>
+<h3>6.1 `apply_writes` 的一致性职责</h3>
+<p>任务按稳定 path 排序后，系统分组每个 Channel 的 writes，调用 Channel.update，推进 `channel_versions`；即使节点没有写某订阅 Channel，某些 Channel 仍会接收空更新以完成生命周期。`versions_seen[node][channel]` 让调度器判断“该节点是否已经消费这个版本”。</p>
+<h3>6.2 DeltaChannel 的空间—读取权衡</h3>
+<p>DeltaChannel 通过周期性 `_DeltaSnapshot` 加中间 pending writes 重建值；metadata 的 counters 同时按更新次数和超级步跨度触发快照，系统还有最大祖先步数界限。删除、复制、裁剪 checkpoint 时必须保留重建链，否则可能静默得到空状态，因此它要求 saver 实现 `get_delta_channel_history` 合约。</p>
+</section>
+
+<section class="section" id="s7"><h2>七、Pregel Runtime：一次 invoke/stream 如何运行 <a class="doc-link" href="docs/langgraph/07-pregel-runtime.html">子文档</a></h2>
+<h3>7.1 Loop 生命周期</h3>
+<div class="mono">Pregel.stream / astream
+  → 规范化 config、context、stream modes、durability
+  → SyncPregelLoop / AsyncPregelLoop.__enter__
+     → checkpointer.get_tuple(thread_id/ns/id)
+     → channels_from_checkpoint + pending_writes
+     → _first(input 或 Command)
+  → while loop.tick():
+       prepare_next_tasks(PUSH ∪ PULL)
+       interrupt_before?
+       PregelRunner.tick：执行所有未完成 task
+       loop.after_tick()
+         apply_writes → stream values → checkpoint → interrupt_after?
+  → status: done / interrupt / out_of_steps / draining / error
+  → 输出最终 channels；按 durability 完成持久化</div>
+<div class="intuition-box"><p><span class="term">超级步（Superstep）</span>是这套 Runtime 的时间单位：读快照、并行跑、屏障合并、落 checkpoint。所有「什么时候能看到别人的写」「什么时候能恢复」这类问题，答案都是同一个——超级步边界。</p></div>
+<h3>7.2 BSP 屏障为何重要</h3>
+<p>Runner 可并发运行本超级步的节点，但 `after_tick()` 只在它们完成后执行统一合并。这样“并发”不意味着共享 dict 的竞态；并发冲突被转化为 Channel reducer 的显式契约。确定性依赖任务 path 排序与 reducer 设计，不依赖线程完成顺序。</p>
+<h3>7.3 递归限制</h3>
+<p>`recursion_limit` 实际限制超级步数，不是 Python 递归深度。循环图正常存在；达到 stop 后抛 GraphRecursionError，通常说明终止条件没有收敛或 limit 与工作量不匹配。</p>
+</section>
+
+<section class="section" id="s8"><h2>八、调度、并发、Send 与子图 <a class="doc-link" href="docs/langgraph/08-scheduling-send-subgraph.html">子文档</a></h2>
+<h3>8.1 两类任务</h3>
+<table><tr><th>类型</th><th>来源</th><th>输入/身份</th></tr>
+<tr><td>PULL</td><td>边和 Channel 版本变化触发订阅节点</td><td>按 PregelNode 的 channel 订阅读取；task id 含 checkpoint、namespace、step、node、trigger</td></tr>
+<tr><td>PUSH</td><td>`Send(node,arg)` 或 Functional API `task` 调用</td><td>携带自定义 arg；同一节点可被扇出多次；按父 task path 和序号稳定标识</td></tr></table>
+<p>`prepare_next_tasks` 返回 PUSH 与 PULL 的并集。`Send` 是 map-reduce 的基础：条件路由返回多个 Send，下一超级步并发执行同一节点的不同输入，再通过 reducer 聚合。</p>
+<div class="intuition-box"><p>PULL 是「订阅到货就干活」，PUSH 是「点名指派带参数的活」。map-reduce 之所以能用一个普通节点表达，就是因为同一个节点可以被 PUSH 扇出成 N 个各自带输入的 task，最后靠 reducer 收口。</p></div>
+<div class="arch-diagram">           route 节点返回 [Send("worker", d) for d in docs]
+                              │
+     ┌────────────────────────┼────────────────────────┐
+     ▼                        ▼                        ▼
+  PUSH task                PUSH task              PUSH task        …共 N 个
+  worker(doc_0)            worker(doc_1)          worker(doc_2)
+  path=(父path, 0)         path=(父path, 1)       path=(父path, 2)   ← 稳定身份
+     │                        │                        │              = 可精确恢复
+     └────────────┬───────────┴────────────────────────┘
+                  ▼   同一超级步内并发；彼此看不见对方的写
+        ══════════ barrier ══════════
+                  ▼
+        results: Annotated[list, operator.add]   ← reducer 决定怎么合
+                  ▼
+           下一超级步：订阅 results 的 PULL 任务被触发
+
+  子图：每个嵌套任务生成自己的 checkpoint_ns
+    parent(thread=T, ns="")
+      └─ subgraph task ─► ns="node:uuid"     ← 子图有独立历史，可单独时间旅行
+           子图内 interrupt ──GraphBubbleUp──► 一路上抛到最外层调用方
+           （被 ToolNode 的通用 except 吞掉，人工介入就永远收不到）
+           Command(graph=Command.PARENT) ──► 更新／跳转最近的父图
+
+  Waiting edge ≠ Send 扇出：
+    多源边用 NamedBarrierValue 收齐所有前驱才触发（确定的 join 点）
+    动态 Send 没有天然 barrier，聚合完全依赖 reducer 与后续路由</div>
+<h3>8.2 子图 namespace</h3>
+<p>每个嵌套任务生成 checkpoint namespace；父图传入 checkpointer、store、stream 和 runtime。子图 interrupt 会以 GraphBubbleUp 上抛，不能被 ToolNode 的普通错误处理吞掉。`Command.PARENT` 允许子图更新或跳转到最近父图。</p>
+<h3>8.3 Waiting edge 与 barrier</h3>
+<p>多源边不是“任一到达就运行”，而是利用 NamedBarrierValue 收齐前驱标记后触发目标；动态 `Send` 则不天然形成固定 barrier，聚合依赖状态 reducer 和后续路由设计。</p>
+</section>
+
+<section class="section" id="s9"><h2>九、Checkpoint 与 Durable Execution <a class="doc-link" href="docs/langgraph/09-checkpoint-durable-execution.html">子文档</a></h2>
+<p>Checkpoint 是超级步边界的持久化协议。主键不是单一 id，而是 `thread_id + checkpoint_ns + checkpoint_id`；thread 表示一条持续会话/执行线，namespace 区分子图，checkpoint_id 选择该线上的具体历史点。</p>
+<table><tr><th>持久化对象/字段</th><th>作用</th></tr>
+<tr><td>`channel_values`</td><td>当前可持久化 Channel 的快照或 Delta sentinel</td></tr>
+<tr><td>`channel_versions`</td><td>每个 Channel 单调版本，判断数据是否变化</td></tr>
+<tr><td>`versions_seen`</td><td>每个节点已经消费到的 Channel 版本，决定下步触发</td></tr>
+<tr><td>`CheckpointTuple.pending_writes`</td><td>task 级中间写，包括结果、ERROR、INTERRUPT、RESUME、SCHEDULED；它不属于 `Checkpoint` TypedDict 本体</td></tr>
+<tr><td>`metadata`</td><td>source(input/loop/update/fork)、step、parents、run_id、Delta counters</td></tr></table>
+<div class="intuition-box"><p>只保存「整帧快照」的系统，一步里挂掉一个节点就得把整步重跑；LangGraph 额外保存 task 粒度的 <span class="term">pending writes</span>（单个任务已完成的中间写，绑定 checkpoint 与 task id），于是恢复时能精确跳过已经成功的那几个节点。</p></div>
+<div class="arch-diagram">主键：thread_id + checkpoint_ns + checkpoint_id
+        │            │              └─ 该线上的具体历史点（选它 = 时间旅行）
+        │            └─ 子图命名空间（嵌套图各有各的历史）
+        └─ 一条会话 / 执行线
+
+  超级步 n 执行中
+    task A ── 成功 ──► put_writes(checkpoint_n, task_A, [writes])   ← 立刻落盘
+    task B ── 成功 ──► put_writes(checkpoint_n, task_B, [writes])
+    task C ── 抛错 ──► put_writes(checkpoint_n, task_C, [ERROR, ERROR_SOURCE_NODE])
+                              │
+                        进程此刻崩溃 ✗
+                              │
+  ── 恢复 ──────────────────────────────────────────────────────
+    get_tuple(thread, ns) → checkpoint_n + 它的 pending_writes
+      A、B 的 writes 已存在 → 直接复用，节点不再执行（副作用不重复）
+      C 没有成功写         → 只重跑 C
+                              ▼
+    全部完成 → apply_writes → put(checkpoint_{n+1})   ← 整帧快照
+
+  持久化的四样东西（注意 pending_writes 不在 Checkpoint TypedDict 本体里）
+    channel_values   当前 Channel 快照，或 DeltaChannel 的 sentinel
+    channel_versions 每个 Channel 的单调版本
+    versions_seen    每个节点消费到哪一版 → 决定下一步谁被调度
+    metadata         source(input/loop/update/fork) · step · parents · run_id
+
+  durability 决定 put() 什么时候真正落盘：
+    sync  下一超级步开始前等它写完      恢复点最强，写延迟进主路径
+    async 与下一超级步重叠              吞吐高，灾难时可能落后一个边界
+    exit  图退出时统一写                运行中几乎没有恢复能力</div>
+<h3>9.1 为什么既有 `put_writes` 又有 `put`</h3>
+<p>`put_writes` 在 task 完成时保存中间写；`put` 在超级步结束后保存新的整体 checkpoint。若同一步部分节点成功、部分失败，恢复时可把成功节点的 pending writes 重新应用并跳过它们，只重跑失败/未完成任务。这比仅保存整帧更接近幂等的 durable execution。</p>
+<h3>9.2 Durability 模式</h3>
+<table><tr><th>模式</th><th>语义</th><th>取舍</th></tr>
+<tr><td>`sync`</td><td>下一超级步开始前等待 checkpoint 持久化</td><td>恢复点最强，写延迟进入主路径</td></tr>
+<tr><td>`async`</td><td>持久化与下一超级步重叠</td><td>吞吐更高，进程灾难时可能落后一个边界</td></tr>
+<tr><td>`exit`</td><td>图退出时统一持久化</td><td>运行中恢复能力最低；Delta writes 用锚点与退出累积处理</td></tr></table>
+<p><span class="term">Durability</span>（checkpoint 落盘时机）是这套系统里最容易被默认值带偏的一个旋钮：它不改变任何业务语义，只改变「崩溃时你丢多少进度」。短任务用 <code>exit</code> 无所谓，长扇出任务用 <code>exit</code> 等于放弃了 durable execution 的全部收益。</p>
+<div class="highlight"><strong>示例场景：</strong>一条文档处理流水线，用 <code>Send</code> 对 200 个分片扇出到同一个「抽取 + 写库」节点，单次全跑约 11 分钟。上线初期用 <code>durability="exit"</code>，结果每次中途失败都要从头重跑 200 个分片，其中已经写过库的分片再写一遍产生重复行。改成 <code>sync</code> 后，恢复只重跑失败的那 3 个 task，平均恢复耗时从 11 分钟降到 20 秒上下；代价是每个超级步多约 40ms 的写盘延迟。真正消除重复行的是另一步：给写库操作加上以 <code>ExecutionInfo</code> 里 task 身份派生的幂等键——因为 checkpoint 只保证「不重复调度」，不保证「外部副作用只发生一次」。</div>
+<div class="warn">无 checkpointer 时 durability 没有持久化对象；启用 checkpointer 却不传 `configurable.thread_id`，则无法建立可恢复线程。InMemorySaver 适合测试与调试，不是多进程生产存储。</div>
+</section>
+
+<section class="section" id="s10"><h2>十、SQLite、Postgres、Serde 与 Conformance <a class="doc-link" href="docs/langgraph/10-sqlite-postgres-serde.html">子文档</a></h2>
+<h3>10.1 SQLite</h3><p>`SqliteSaver` 使用 checkpoints/writes 两表，将 checkpoint 整包序列化为 BLOB；同步和异步分别由 `SqliteSaver` 与 `AsyncSqliteSaver` 提供。它轻量、易嵌入，适合本地开发和低并发；WAL 改善读写，但单文件锁模型不适合高并发服务。</p>
+<h3>10.2 Postgres</h3><p>`PostgresSaver` 把 checkpoints、checkpoint_blobs、checkpoint_writes 分表：标量可留在 JSONB，复杂值按 Channel/version 写 blob 并复用；读取时 join 版本与 blob，再聚合 pending writes。`setup()` 必须显式执行迁移。ShallowPostgresSaver 只保留 thread/namespace 最新点，节省空间但放弃完整时间旅行。</p>
+<h3>10.3 Serde 与安全</h3><p>默认 JsonPlusSerializer 支持常见 Python/LangChain 类型；EncryptedSerializer 可包装 CipherProtocol。严格 msgpack allowlist 限制可反序列化模块，减少把 checkpoint 当任意对象载入通道的攻击面。服务端 at-rest Encryption DSL 属于 SDK/API Server 层，不能与 saver serde 加密混为一谈。</p>
+<h3>10.4 Conformance</h3><p>`checkpoint-conformance` 用能力声明验证 PUT、LIST、DELETE、COPY、PRUNE、DELTA_HISTORY 等合约。自研 saver 应把 conformance 作为 CI，而非只实现 `get/put` 后依赖偶然通过的简单图测试。</p>
+</section>
+
+<section class="section" id="s11"><h2>十一、Interrupt、Human-in-the-loop 与 Time-travel <a class="doc-link" href="docs/langgraph/11-interrupt-hitl-timetravel.html">子文档</a></h2>
+<div class="intuition-box"><p><span class="term">Interrupt</span>（把当前可恢复状态交还调用方、等待 <code>Command(resume=...)</code> 的暂停协议）不是断点调试，更像「把这一节点整段重放一遍，只是这次那几个 interrupt 调用直接返回上次存好的答案」。所以危险的从来不是中断本身，而是中断之前那些已经发生过的副作用。</p></div>
+<h3>11.1 静态中断</h3><p>`interrupt_before` / `interrupt_after` 在 compile 或 stream 时指定。Loop 在任务执行前或 apply/checkpoint 后调用 `should_interrupt`；只有 Channel 自上次 interrupt 后发生版本更新且命中目标节点才暂停，防止原地恢复后立刻重复中断。</p>
+<h3>11.2 动态 `interrupt(value)`</h3><p>节点内部调用 `interrupt` 时，scratchpad 按调用顺序分配 index；没有可用 resume 值就抛 GraphInterrupt，并持久化带稳定 id 的 Interrupt。客户端以同一 thread 调用 `Command(resume=value)`；节点从头重跑，之前的 interrupt 调用按 index 返回已保存值。</p>
+<div class="warn">恢复不是从函数行号继续。中断之前的数据库写、HTTP 请求和文件副作用会再次执行，必须前移到独立节点、使用幂等键，或将副作用放在 interrupt 返回之后。多个 pending interrupt 时应传 `{interrupt_id: value}` 映射，单值恢复会被拒绝。</div>
+<div class="highlight"><strong>示例场景：</strong>一个退款审批流程把「创建退款单 → <code>interrupt()</code> 等人工确认 → 调支付网关打款」写在同一个节点里。测试环境每天审批量个位数，一直没发现问题；灰度到日均约 300 单后，财务发现当天有 12 笔重复退款单。根因就是恢复语义：审批人点确认后节点从头重跑，「创建退款单」这一句又执行了一遍。修法是把节点拆成三个——创建（幂等键 = 订单号 + 业务日期）、审批（节点体内只有 <code>interrupt()</code>，没有任何副作用）、打款——重复单据随即归零。判断标准很简单：一个包含 <code>interrupt()</code> 的节点，它前面的每一行都要能被安全地执行任意多次。</div>
+<h3>11.3 Command 的四个维度</h3><ul><li>`update`：按 State schema 写 Channel；</li><li>`resume`：向 pending interrupt 提供值；</li><li>`goto`：发往节点名或 Send；</li><li>`graph`：当前图或 `Command.PARENT`。</li></ul>
+<h3>11.4 Time-travel 与分叉</h3><p>指定历史 checkpoint_id 读取旧状态后继续执行属于 replay/fork。Runtime 会清理不应复用的旧 RESUME，必要时先写 fork checkpoint，避免后续 interrupt 仍挂到旧分支。`update_state` 也创建 source=update/fork 的历史节点，而非原地修改数据库记录。</p>
+</section>
+
+<section class="section" id="s12"><h2>十二、Store、Memory 与 Cache <a class="doc-link" href="docs/langgraph/12-store-memory-cache.html">子文档</a></h2>
+<table><tr><th>机制</th><th>作用域</th><th>身份与数据</th><th>不负责</th></tr>
+<tr><td>Checkpointer</td><td>thread / graph execution</td><td>Channel state、版本、任务写</td><td>跨 thread 语义检索</td></tr>
+<tr><td>BaseStore</td><td>跨 thread / 用户 / 应用</td><td>namespace + key + value，可选向量索引/TTL</td><td>恢复 Pregel 调度位置</td></tr>
+<tr><td>BaseCache</td><td>节点执行优化</td><td>namespace + input hash + TTL → writes</td><td>业务长期记忆</td></tr></table>
+<p>`Runtime.store` 把 Store 注入节点；ToolNode 的 InjectedStore/ToolRuntime 可把它注入工具且不暴露给模型 schema。Store 以 batch/abatch 为核心，get/put/search/delete/list_namespaces 是便捷封装。长期记忆应设计 namespace 隔离、租户授权、TTL 和 embedding 演进。</p>
+<h3>12.1 节点缓存</h3><p>CachePolicy 默认基于节点输入生成 key，并可设 TTL。命中时恢复缓存 writes，stream 标记 cached。缓存的是节点输出更新，不是整个图；包含时间、随机数、外部权限或副作用的节点必须谨慎定义 key 或禁用缓存。</p>
+</section>
+
+<section class="section" id="s13"><h2>十三、Streaming：数据平面而非日志开关 <a class="doc-link" href="docs/langgraph/13-streaming.html">子文档</a></h2>
+<table><tr><th>mode</th><th>输出</th><th>用途</th></tr>
+<tr><td>values</td><td>每步后的完整可见 state</td><td>状态视图；大 state 成本较高</td></tr>
+<tr><td>updates</td><td>节点产生的局部更新</td><td>UI 增量、轨迹</td></tr>
+<tr><td>messages</td><td>LLM message/token 事件及 metadata</td><td>聊天逐 token</td></tr>
+<tr><td>custom</td><td>节点通过 stream_writer 主动发送</td><td>进度、业务事件</td></tr>
+<tr><td>checkpoints</td><td>checkpoint 调试视图</td><td>恢复与时间旅行诊断</td></tr>
+<tr><td>tasks</td><td>任务开始/结果</td><td>调度与并发诊断</td></tr>
+<tr><td>debug</td><td>组合调试事件</td><td>开发期全景，数据量最大</td></tr></table>
+<h3>13.1 三代接口并存</h3><p>默认 `stream` 是 v1 tuple/dict 兼容表面；`version="v2"` 返回 typed `StreamPart` 并可把 Pydantic/dataclass state 映射回声明类型；`stream_events(version="v3")` 使用 StreamMux 和 per-run transformers 生成 GraphRunStream，当前仍属实验面。subgraphs=True 时 namespace 前缀保留嵌套来源。</p>
+<div class="intuition-box"><p>stream mode 不是「日志详细程度」的旋钮，而是在选订阅哪一条数据平面：<code>values</code> 每步给你整份状态，<code>updates</code> 只给增量，<code>tasks</code> 和 <code>checkpoints</code> 给的是调度与持久化事实。选错了，代价直接体现在传输量上——大 state 用 <code>values</code> 逐步全量推送，成本随状态体积线性上涨。</p></div>
+<h3>13.2 背压与生命周期</h3><p>同步/异步实现使用队列把 Loop 产生的 chunks 交给调用方；客户端消费速度、取消和生成器关闭会影响任务清理。远程 SDK 再把这些语义映射到 SSE/WS，并增加 cursor/reconnect buffer，不应把远程传输细节等同本地队列。</p>
+</section>
+
+<section class="section" id="s14"><h2>十四、Runtime 注入、错误处理与执行韧性 <a class="doc-link" href="docs/langgraph/14-runtime-errors-resilience.html">子文档</a></h2>
+<h3>14.1 Runtime</h3><p>`Runtime[ContextT]` 聚合 context、store、stream_writer、previous、ExecutionInfo、ServerInfo、user、heartbeat 和 RunControl。它不直接包含 RunnableConfig；需要 config 的节点应显式声明参数或使用 config API。ExecutionInfo 暴露 checkpoint/thread/run/node/attempt 等只读身份，便于幂等与观测。</p>
+<h3>14.2 Retry</h3><p>RetryPolicy 定义初始间隔、backoff、最大间隔、最大尝试、jitter 和 retry_on。Runner 以 task attempt 为单位重试；应只重试瞬时失败，业务校验错误或已发生不可逆副作用的操作不能盲目重试。</p>
+<h3>14.3 Timeout</h3><p>TimeoutPolicy 的 `run_timeout` 是单个 node attempt 的硬 wall-clock 上限，`idle_timeout` 是同一 attempt 的无进度窗口；每次 retry 都重新开始 attempt，当前没有覆盖所有重试的总 run budget。异步超时依赖协作式取消；阻塞 GIL 的 CPU 任务或 `time.sleep` 不能被及时打断，应移到进程池/外部作业。</p>
+<h3>14.4 Error handler node</h3><p>StateGraph 可配置节点级或默认 error handler。失败 task 的 ERROR 与 ERROR_SOURCE_NODE 先持久化，恢复时原节点被标记为已处理，再调度 handler PUSH task，避免崩溃窗口造成原副作用节点重跑。handler 自身不会递归捕获 handler 错误，缓存也默认不应用于 handler。</p>
+<h3>14.5 Cooperative drain</h3><p>RunControl.request_drain 让 Loop 在安全边界进入 draining，适合服务滚动退出；它不是立即 kill，长阻塞节点仍需 timeout/cancellation 配合。</p>
+</section>
+
+<section class="section" id="s15"><h2>十五、Functional API：另一种表面，同一个 Runtime <a class="doc-link" href="docs/langgraph/15-functional-api.html">子文档</a></h2>
+<p>`@entrypoint` 把普通函数包装为 Pregel；`@task` 调用产生 PUSH Call，结果可像 future 一样在 entrypoint 中等待。它适合控制流天然由代码表达的工作流，StateGraph 更适合需要可视化、显式路由和统一 state schema 的场景。</p>
+<table><thead><tr><th scope="col">维度</th><th scope="col">Graph API</th><th scope="col">Functional API</th></tr></thead><tbody>
+<tr><td>控制流</td><td>Node/Edge/Branch 声明</td><td>Python if/loop + task future</td></tr>
+<tr><td>状态</td><td>Channel schema + reducer</td><td>entrypoint input/output、previous、task writes</td></tr>
+<tr><td>运行内核</td><td colspan="2">同一 Pregel Loop、Checkpointer、Interrupt、Stream 与 Runtime</td></tr>
+<tr><td>适合</td><td>复杂可视化状态机、多 actor</td><td>函数式 orchestration、渐进迁移</td></tr></tbody></table>
+<div class="key">Functional API 不是“轻量但不可恢复”的旁路。它把 task 调用编码为 PUSH task，并使用相同 task id、checkpoint namespace 和 pending write 机制。</div>
+</section>
+
+<section class="section" id="s16"><h2>十六、Prebuilt ReAct 与 ToolNode <a class="doc-link" href="docs/langgraph/16-prebuilt-react-toolnode.html">子文档</a></h2>
+<div class="boundary"><span class="badge deprecated">迁移中</span> 当前 `langgraph.prebuilt.create_react_agent` 仍可构图，但已标记迁往 `langchain.agents.create_agent`。理解其内部结构仍有价值，因为它清楚展示了 Agent Loop 如何降解为普通 StateGraph。</div>
+<div class="mono">START → [pre_model_hook?] → agent(model)
+                                 │
+                          有 tool_calls?
+                    yes ─────────┴──────── no
+                     ▼                     ▼
+               ToolNode(tools)      structured response? → END
+                     │
+             return_direct / Command?
+                     └──────────────► agent（ReAct 循环）</div>
+<h3>16.1 Message state</h3><p>`messages: Annotated[Sequence[BaseMessage], add_messages]` 使用消息 id 做追加/替换；model 节点先验证每个 AIMessage tool_call 都有对应 ToolMessage，避免 provider 拒绝不完整历史。RemainingSteps 是 ManagedValue，用来在循环耗尽前输出合适终态。</p>
+<h3>16.2 ToolNode</h3><ul>
+<li>同步通过 executor.map、异步通过 asyncio.gather 并行 tool calls；每次调用生成独立 ToolRuntime。</li>
+<li>InjectedState、InjectedStore 和 ToolRuntime 在执行前注入，不进入 LLM 看到的工具 schema。</li>
+<li>`wrap_tool_call` / `awrap_tool_call` 可实现工具级重试、缓存、权限、参数改写和短路。</li>
+<li>普通异常可按类型转为 `ToolMessage(status="error")`；GraphInterrupt/GraphBubbleUp 必须上抛。</li>
+<li>工具可返回 ToolMessage 或 Command；多个 parent Send Command 会被合并。</li></ul>
+<div class="warn">ToolNode 的“并行”仍受工具副作用约束。两个工具同时写同一外部资源不会由 Channel reducer 保护；必须在工具层实现锁、幂等键或把依赖关系拆成不同图节点。</div>
+</section>
+
+<section class="section" id="s17"><h2>十七、RemoteGraph、SDK、CLI 与服务端边界 <a class="doc-link" href="docs/langgraph/17-remotegraph-sdk-cli.html">子文档</a></h2>
+<h3>17.1 RemoteGraph</h3><p>`RemoteGraph` 实现 PregelProtocol，把 invoke/stream/state API 转成 SDK 请求，因此远程图可作为节点或子图组合。它不复制远程执行器；checkpoint、队列和真正节点执行发生在 Server。远程流需要映射 mode、namespace 和 interrupt，协议错误与网络取消是额外失败面。</p>
+<h3>17.2 Python SDK</h3><p>`LangGraphClient` 聚合 assistants、threads、runs、crons、store。Runs 支持 create/stream/wait/cancel/join，Threads 支持 state/history/update，transport 包含 HTTP/SSE 和异步 WebSocket。异步客户端的 `url=None` 可尝试进程内 ASGI transport，但依赖另装的 `langgraph_api`；同步客户端省略 URL 时使用本地默认地址。</p>
+<h3>17.3 CLI 与 `langgraph.json`</h3><table><tr><th>命令</th><th>作用</th></tr><tr><td>new</td><td>创建模板项目</td></tr><tr><td>dev</td><td>热重载本地 API，依赖 inmem extra</td></tr><tr><td>validate</td><td>校验 graphs、依赖、auth、store、checkpointer 等配置</td></tr><tr><td>build / dockerfile / up</td><td>生成容器安装层、镜像和 compose 运行</td></tr><tr><td>deploy</td><td>对接托管后端的部署与 revisions/logs</td></tr></table>
+<p>`langgraph.json` 的 graphs 字段指向 `module.py:graph` 或工厂；还可配置 dependencies、env、store、custom checkpointer、auth、encryption、HTTP middleware。Auth/Encryption DSL 由 SDK 定义、Server 执行，不进入本地 Pregel Loop。</p>
+</section>
+
+<section class="section" id="s18"><h2>十八、扩展点与二次开发指南 <a class="doc-link" href="docs/langgraph/18-extension-development.html">子文档</a></h2>
+<table><tr><th>目标</th><th>扩展面</th><th>最低验证</th></tr>
+<tr><td>新增业务节点</td><td>callable/Runnable + 明确 input/state update</td><td>reducer 冲突、重试幂等、interrupt 重跑</td></tr>
+<tr><td>自定义 Channel</td><td>BaseChannel value/update/checkpoint contract</td><td>空更新、copy、checkpoint round-trip、并发写</td></tr>
+<tr><td>自定义 Saver</td><td>BaseCheckpointSaver sync/async API</td><td>checkpoint-conformance，尤其 pending writes 与 Delta</td></tr>
+<tr><td>长期记忆</td><td>BaseStore batch/abatch</td><td>namespace 多租户、TTL、搜索一致性</td></tr>
+<tr><td>节点缓存</td><td>BaseCache + CachePolicy</td><td>key 稳定性、TTL、无副作用假设</td></tr>
+<tr><td>工具治理</td><td>ToolNode wrapper / ToolRuntime</td><td>权限、审计、超时、幂等、GraphInterrupt 传播</td></tr>
+<tr><td>自定义流</td><td>stream_writer / StreamTransformer(v3)</td><td>背压、子图 namespace、取消清理</td></tr>
+<tr><td>远程部署扩展</td><td>Auth/Encryption/ServerRuntime/CLI config</td><td>本地与 Server 版本矩阵、协议集成测试</td></tr></table>
+<h3>18.1 推荐的工程分层</h3>
+<div class="mono">API / UI / Event Consumer
+        │
+Application Graph（业务状态、路由、HITL policy）
+        │
+Domain Nodes（LLM、检索、工具、审批、补偿）
+        │
+LangGraph Runtime（Pregel / Channel / Checkpoint）
+        │
+Infrastructure（Model / DB / Queue / Store / Observability）
+
+原则：把不可逆副作用做成独立、可幂等节点；把人类审批放在副作用之前；
+把跨 thread 知识放 Store；把执行位置放 Checkpointer；不要把二者混为一个“memory”。</div>
+<div class="practice-grid">
+  <div class="do">
+    <ul>
+      <li>并发写同一个 state key 时，显式声明 <code>Annotated[T, reducer]</code>，并保证 reducer 可结合、最好可交换。</li>
+      <li>把不可逆副作用（打款、发邮件、建资源）拆成独立节点，并用 <code>ExecutionInfo</code> 的 task 身份派生幂等键。</li>
+      <li>跨会话的用户事实放 <span class="term">Store</span>（跨 thread 的 namespace KV，可带向量索引与 TTL），执行位置放 Checkpointer，两者职责不要混。</li>
+      <li>自研 Saver 一律把 <code>checkpoint-conformance</code> 挂进 CI，重点覆盖 pending writes 与 Delta 历史。</li>
+    </ul>
+  </div>
+  <div class="dont">
+    <ul>
+      <li>不要在含 <code>interrupt()</code> 的节点里，把副作用写在中断之前——恢复会让它再执行一次。</li>
+      <li>不要把 Checkpointer 当长期记忆库用，它的生命周期绑定 thread，跨会话检索不是它的职责。</li>
+      <li>不要给带时间、随机数或外部权限的节点开缓存，CachePolicy 默认按输入生成 key，会稳定地返回过期结果。</li>
+      <li>不要在 <code>ToolNode</code> 的错误处理里吞掉 <code>GraphInterrupt</code> / <code>GraphBubbleUp</code>，那会让子图的人工介入永远等不到回应。</li>
+      <li>不要把官方博客里的 Big-O 表或本机 benchmark 当作生产 SLA，仓库本身没有给出可直接采用的延迟与吞吐承诺。</li>
+    </ul>
+  </div>
+</div>
+</section>
+
+<section class="section" id="s19"><h2>十九、测试地图、性能模型与排障</h2>
+<h3>19.1 源码测试地图</h3><table><tr><th>主题</th><th>主要测试</th></tr>
+<tr><td>Pregel sync/async</td><td>`test_pregel.py`、`test_pregel_async.py`、`test_algo.py`</td></tr>
+<tr><td>State / Channel</td><td>`test_state.py`、`test_channels.py`、`test_delta_channel_*`</td></tr>
+<tr><td>Interrupt / time travel</td><td>`test_interruption.py`、`test_interrupt_migration.py`、`test_time_travel*`</td></tr>
+<tr><td>子图持久化</td><td>`test_subgraph_persistence*`、`test_checkpoint_migration.py`</td></tr>
+<tr><td>Streaming</td><td>`test_stream_events_v3*`、transformer / messages 测试</td></tr>
+<tr><td>Prebuilt</td><td>`test_react_agent*`、`test_tool_node*`</td></tr>
+<tr><td>Saver</td><td>checkpoint 单测 + sqlite/postgres conformance</td></tr></table>
+<h3>19.2 当前源码可解释的复杂度与性能</h3>
+<p>以下只描述当前实现能直接解释的增长项。令 `A` 为本超级步 active tasks 数、`U` 为上一步 updated channels 数、`N` 为节点数、`C` 为 Channel 数、`W` 为本步 writes 数；节点内部 LLM、工具、网络和 reducer 自身成本另计。</p>
+<table><thead><tr><th>阶段</th><th>当前实现</th><th>可解释的成本与限制</th></tr></thead><tbody>
+<tr><td>规划下一步</td><td>优先用 `updated_channels → trigger_to_nodes` 索引收集候选节点；索引不可用时退化为扫描全部 processes，再为候选任务准备输入。`libs/langgraph/langgraph/pregel/_algo.py:392-513`</td><td>候选发现约随 `U` 及其触发集合增长，fallback 随 `N` 增长；还要叠加每个候选任务读取输入 Channel 的成本，不能笼统写成当前版本恒定 `O(1)`。</td></tr>
+<tr><td>执行 active tasks</td><td>单 task 有 fast path；多 task 提交进程内 executor 或 event-loop tasks，并等待完成/失败/超时。`libs/langgraph/langgraph/pregel/_runner.py:176-289`，`libs/langgraph/langgraph/pregel/_executor.py:40-72,122-166`</td><td>调度工作量至少随 `A` 增长；无依赖 task 的墙钟时间通常受最慢 task、`max_concurrency`、线程池、event loop、GIL 和外部服务容量共同约束，不能由 `A` 单独预测。</td></tr>
+<tr><td>屏障合并</td><td>先按 task path 排序，再扫描 triggers/writes 分组更新；每个有值 Channel 执行 reducer，并向本步未更新 Channel 发送空更新。`libs/langgraph/langgraph/pregel/_algo.py:232-345`</td><td>排序引入 `O(A log A)` 比较量，分组至少扫描 `W`，空更新路径扫描 `C`；真正耗时还取决于 reducer 是否复制大对象。</td></tr>
+<tr><td>Checkpoint / 恢复</td><td>普通进入路径读取指定或最新 `CheckpointTuple`；超级步按 durability 创建并提交新 checkpoint。`libs/langgraph/langgraph/pregel/_loop.py:1132-1179,1629-1679`</td><td>普通恢复不要求重放全部历史，但延迟和空间随当前快照、pending writes、序列化器及 saver 后端变化；DeltaChannel 还可能沿祖先 writes 重建，不能据“最新 checkpoint”推导固定延迟。</td></tr>
+</tbody></table>
+<h3>19.3 三类性能证据必须分开</h3>
+<ul>
+<li><strong>官方设计分析：</strong>官方长文给出了按 nodes、edges、channels、active nodes、history、threads 分解的 Big-O 表。它是作者对当时架构与优化的设计说明；当前源码已有 `updated_channels` 快路径、DeltaChannel、durability 等具体分支，因此该表只能作为设计背景，不能写成 `langgraph 1.2.11` 的 API 保证、回归阈值或生产 SLA。</li>
+<li><strong>仓库 benchmark：</strong>`libs/langgraph/bench/` 使用 pyperf 覆盖 fan-out/subgraph、ReAct、宽 State/dict、Pydantic State、长顺序图、首事件延迟、编译和 serde allowlist；另有 DeltaChannel 专项脚本测量多 Channel、快照频率、turn 深度、存储和 Python heap。它们是本地微基准/专项基准，不是远程平台、模型质量或生产 SLA。`libs/langgraph/bench/__main__.py:99-163`、`libs/langgraph/bench/__main__.py:467-520`、`libs/langgraph/tests/test_delta_channel_benchmark.py:1-18`。</li>
+<li><strong>实测 SLA：</strong>仓库没有给出可直接采用的 latency/throughput SLA。生产目标必须在自己的模型、状态大小、并发、saver、网络与部署拓扑下定义 percentile、错误率、恢复时间和成本预算，再以固定 workload 持续压测；不得把博客 Big-O 或一次本机 benchmark 数字替代 SLA。</li>
+</ul>
+<h3>19.4 故障定位顺序</h3><ol>
+<li>先看 thread/checkpoint_ns/checkpoint_id 是否命中预期历史。</li><li>看 `tasks` stream：哪个节点因哪些 trigger 被调度。</li>
+<li>看 pending writes：成功结果是否已持久化、失败是否有 ERROR_SOURCE_NODE。</li><li>看 Channel versions/versions_seen：为何节点没有再次触发或重复触发。</li>
+<li>再检查 reducer、Command goto、interrupt id 和 subgraph namespace。</li><li>最后区分本地 Runtime 异常与远程 transport/Server 异常。</li></ol>
+</section>
+
+<section class="section" id="s20"><h2>二十、版本迁移、设计权衡与当前局限</h2>
+<div class="grid2">
+<div class="card"><strong>Prebuilt 迁移</strong>`create_react_agent`、AgentState 和 HumanInterrupt 类型逐步迁往 LangChain agents；新代码应评估目标 API。</div>
+<div class="card"><strong>Streaming 并存</strong>v1 兼容、v2 typed、v3 experimental；对外协议要固定版本，不要依赖默认值永远不变。</div>
+<div class="card"><strong>DeltaChannel beta</strong>节省写放大但提高 saver、prune 和恢复复杂度；未压测前不要默认用于所有 reducer。</div>
+<div class="card"><strong>Config 演进</strong>`context_schema` 替代 `config_schema`；Runtime 与 RunnableConfig 的职责继续分离。</div>
+</div>
+<h3>20.1 经典 Pregel、官方设计与当前本地 Runtime</h3>
+<table><thead><tr><th>边界</th><th>经典 Google Pregel</th><th>LangGraph 官方设计说明</th><th>当前开源本地 Runtime</th></tr></thead><tbody>
+<tr><td>计算对象与同步</td><td>面向大规模图处理：vertex 在一系列全局 supersteps 中并行计算、收发 message，并在 barrier 同步；master/worker 负责分区与协调。来源：Malewicz et al., SIGMOD 2010。</td><td>把 Agent 拆为离散 nodes；node 订阅带版本的 Channels，同一步读取隔离状态，结束后按确定顺序应用 updates。来源：官方 Building LangGraph 长文。</td><td>PULL/PUSH tasks 读取 Channel 快照，`PregelRunner` 并发执行，`apply_writes` 在屏障排序并合并。`libs/langgraph/langgraph/pregel/_runner.py:135-138,176-289`，`libs/langgraph/langgraph/pregel/_algo.py:232-345,392-513`。</td></tr>
+<tr><td>分布式执行</td><td>论文系统是分布式 Pregel 集群，关注 worker 分区、机器间通信和故障恢复。</td><td>官方长文讨论 runtime 与 Platform，并明确 task queue 由 Platform 提供；不要因此推断 Python library 自带分布式 worker。</td><td><strong>不是分布式 Pregel 集群。</strong>同步任务使用当前进程的 executor，异步任务使用当前 event loop；`RemoteGraph` 是 Server API 客户端，不是本地 Loop 的跨机调度器。`libs/langgraph/langgraph/pregel/_executor.py:40-72,122-166`，`libs/langgraph/langgraph/pregel/remote.py:118-150`。</td></tr>
+<tr><td>恢复与交付语义</td><td>论文用 checkpoint 和 worker recovery 恢复图计算，但这不等于任意外部系统副作用的 exactly-once 事务。</td><td>官方设计目标是降低失败后的重试次数与重试成本，未把通用 exactly-once 声明为六项能力之一。</td><td><strong>不提供端到端 exactly-once。</strong>Runner 会把 task writes/ERROR/INTERRUPT 持久化，恢复可复用已记录结果；但“节点副作用 + saver 写入”没有跨外部 DB/HTTP/文件的原子事务，崩溃窗口和 retry 仍要求幂等键、去重或补偿。`libs/langgraph/langgraph/pregel/_runner.py:578-613,741-754`。</td></tr>
+<tr><td>暂停与 continuation</td><td>经典 Pregel 恢复的是分布式图计算状态/超级步，不是保存某个 Python 函数的调用栈。</td><td>官方长文明确拒绝依赖不可跨机器、跨时间移植的 live generator/subroutine state，选择可序列化 checkpoint。</td><td><strong>不是 Python continuation。</strong>Checkpoint schema 只记录 Channel 值、版本、`versions_seen`，pending writes 位于 `CheckpointTuple`；`interrupt()` resume 从节点开头重跑并按调用序号取 resume 值，不保存 frame、instruction pointer 或局部变量栈。`libs/checkpoint/langgraph/checkpoint/base/__init__.py:92-146`，`libs/langgraph/langgraph/types.py:851-970`。</td></tr>
+</tbody></table>
+<div class="boundary">因此，“受 Pregel 启发”准确描述了 superstep、并行计算和 barrier 合并的算法血缘，不意味着当前本地包复刻了 Google 的分布式集群，也不自动附带服务端队列、端到端 exactly-once 或语言级 continuation。</div>
+<div class="insight"><strong>LangGraph 最值得复用的不是某个 Agent 模板，而是把不确定的 LLM 决策约束在可版本化 State、显式 Channel 合并、可重放超级步和可审核 interrupt 协议中。</strong>它把“Agent 循环”提升为耐久状态机，但不会替你解决工具权限、业务幂等、上下文压缩、模型质量或外部系统一致性。</div>
+</section>
+
+<section class="section" id="qa"><h2>Q&amp;A</h2>
+<details><summary>StateGraph 与普通 DAG 引擎最本质的区别是什么？</summary><p>它允许循环、动态 Send/Command、Channel reducer、任务级 pending writes 和 interrupt/resume；调度依据 Channel 版本而不只是一次性拓扑排序。</p></details>
+<details><summary>为什么 resume 后节点会从头执行？</summary><p>Checkpoint 保存可序列化状态和任务写，不保存 Python 栈帧。重新进入节点并由 scratchpad 返回已记录的 resume 值，才能跨进程、跨时间恢复。</p></details>
+<details><summary>Checkpointer 能当长期记忆数据库吗？</summary><p>不应。它服务执行线程和恢复；跨会话用户事实应放 BaseStore，并由节点按 namespace 检索。</p></details>
+<details><summary>并行节点写同一 key 一定安全吗？</summary><p>只有该 key 的 Channel 明确定义允许多写的 reducer 才安全。LastValue 在同一步多写会报错；外部副作用不受 Channel 保护。</p></details>
+<details><summary>什么时候用 Functional API？</summary><p>控制流天然是 Python 函数、希望逐步引入 durable task 时。需要可视化路由、统一共享状态和多 actor 时优先 StateGraph。</p></details>
+<details><summary>本地 LangGraph 是否必须连接 LangSmith？</summary><p>不必须。本地核心可独立运行；LangSmith 提供可观测、评估和部署产品能力，是集成层而非 Pregel 的运行前提。</p></details>
+</section>
+
+<section class="section" id="glossary"><h2>附录 A：术语对照</h2>
+<table><tr><th>术语</th><th>本文含义</th></tr>
+<tr><td>Superstep / 超级步</td><td>读取稳定状态、并行执行已触发任务、屏障合并 writes 的一个周期</td></tr>
+<tr><td>Channel</td><td>状态 key 的值容器、更新合并和 checkpoint 协议</td></tr>
+<tr><td>PULL / PUSH</td><td>由 Channel/边触发的任务 / 由 Send 或 functional call 创建的任务</td></tr>
+<tr><td>Pending writes</td><td>绑定 checkpoint 与 task id 的中间写，用于恢复、错误、中断和避免重复执行</td></tr>
+<tr><td>Thread</td><td>由 thread_id 标识的一条持久执行/会话线</td></tr>
+<tr><td>Checkpoint namespace</td><td>区分嵌套子图和任务作用域的持久化路径</td></tr>
+<tr><td>Durability</td><td>sync / async / exit 三种 checkpoint 时机语义</td></tr>
+<tr><td>Interrupt</td><td>把当前可恢复状态交还客户端，等待 Command resume</td></tr>
+<tr><td>Store</td><td>跨 thread 的 namespace KV / semantic memory</td></tr>
+<tr><td>RemoteGraph</td><td>将 PregelProtocol 映射到远程 Server API 的客户端实现</td></tr></table>
+</section>
+
+<section class="section" id="refs"><h2>附录 B：参考资料与源码索引</h2>
+<h3>官方设计资料</h3>
+<ol>
+<li>Nuno Campos / LangChain Team，<a href="https://www.langchain.com/blog/building-langgraph">Building LangGraph: Designing an Agent Runtime from first principles</a>：六项需求的推导、BSP/Channel 执行设计、历史性能分析，以及 task queue 属于 Platform 的边界。</li>
+<li>LangChain Docs，<a href="https://docs.langchain.com/oss/python/langgraph/overview">LangGraph overview</a>：当前产品定位、durable execution、streaming、HITL，以及 LangGraph / LangSmith 的产品分工。</li>
+<li>仓库 README Acknowledgements：Pregel、Apache Beam 与 NetworkX 的灵感来源，并明确 LangGraph 可脱离 LangChain 使用。`README.md:80-82`。</li>
+</ol>
+<h3>学术基础</h3>
+<ol>
+<li>Grzegorz Malewicz, Matthew H. Austern, Aart J. C. Bik, James C. Dehnert, Ilan Horn, and Grzegorz Czajkowski. “Pregel: A System for Large-Scale Graph Processing.” <em>Proceedings of the 2010 ACM SIGMOD International Conference on Management of Data</em>, pp. 135–146, 2010. DOI: <a href="https://doi.org/10.1145/1807167.1807184">10.1145/1807167.1807184</a>；<a href="https://research.google/pubs/pregel-a-system-for-large-scale-graph-processing/">Google Research 书目页</a>。</li>
+<li><a href="https://beam.apache.org/">Apache Beam</a> 与 <a href="https://networkx.org/documentation/latest/">NetworkX</a>：README 所列的数据流与图构建接口灵感；它们不是 LangGraph 运行语义的替代规范。</li>
+</ol>
+<h3>当前源码事实基线</h3>
+<ol>
+<li>`libs/langgraph/langgraph/graph/state.py`：StateGraph、compile、CompiledStateGraph。</li>
+<li>`libs/langgraph/langgraph/pregel/main.py`：Pregel、invoke/stream、状态 API。</li>
+<li>`libs/langgraph/langgraph/pregel/_loop.py`：tick、after_tick、恢复、checkpoint、interrupt。</li>
+<li>`libs/langgraph/langgraph/pregel/_algo.py`：prepare_next_tasks、apply_writes、PUSH/PULL。</li>
+<li>`libs/langgraph/langgraph/pregel/_runner.py`、`_executor.py`：进程内 sync/async task 并发、writes 提交和错误传播。</li>
+<li>`libs/langgraph/langgraph/types.py`：Command、Send、interrupt、Durability、Retry/Timeout/Cache。</li>
+<li>`libs/langgraph/langgraph/channels/`：各类 Channel 与 Delta beta。</li>
+<li>`libs/checkpoint/langgraph/checkpoint/base/`：Checkpoint 与 Saver 合约。</li>
+<li>`libs/checkpoint-postgres/`、`libs/checkpoint-sqlite/`、`libs/checkpoint-conformance/`。</li>
+<li>`libs/prebuilt/langgraph/prebuilt/chat_agent_executor.py`、`tool_node.py`。</li>
+<li>`libs/sdk-py/`、`libs/cli/`：远程客户端与部署工具。</li>
+<li>`libs/langgraph/bench/`：pyperf Runtime/编译/serde 微基准；`libs/langgraph/tests/test_delta_channel_benchmark.py`：DeltaChannel 专项脚本。两者都不代表生产 SLA。</li>
+</ol>
+<p class="small"><strong>论文状态说明：</strong>截至当前工作区，仓库根没有 `CITATION` / `CITATION.cff`，README 只有 inspirations/acknowledgements，没有给出 LangGraph 官方学术论文、DOI 或推荐学术引用；因此本文不把任何第三方 arXiv 文章冒充官方论文，也不引用第三方 arXiv。`README.md:80-82`。本文以当前工作区源码为事实基线；外部服务能力和 API 会独立演进，生产设计应再次核对目标版本文档、release notes 与部署端版本矩阵。</p>
+</section>
+<div class="footer">LangGraph 架构深度解析 · 团队分享与开发文档版 · 2026-08-14</div>
+</div></main>
+
+<script>
+(function(){
+ const tabs=document.querySelectorAll('.tab'),panels=document.querySelectorAll('.panel'),side=document.getElementById('sidebar');
+ function show(name){tabs.forEach(x=>x.classList.toggle('active',x.dataset.tab===name));panels.forEach(x=>x.classList.toggle('active',x.id===name));side.style.display=name==='docs'?'':'none';if(name==='guide'){document.body.style.padding='48px 0 0'}else{document.body.style.padding='';document.body.style.paddingLeft=name==='docs'&&innerWidth>1000?'310px':'24px'}localStorage.setItem('langgraphArchTab',name)}
+ tabs.forEach(t=>t.onclick=()=>show(t.dataset.tab));show(localStorage.getItem('langgraphArchTab')||'docs');
+ const links=[...document.querySelectorAll('.sidebar a')],secs=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);addEventListener('scroll',()=>{let id='';secs.forEach(s=>{if(s.getBoundingClientRect().top<100)id=s.id});links.forEach(a=>a.classList.toggle('active',a.hash==='#'+id))});
+})();
+</script>
+</body>
+</html>

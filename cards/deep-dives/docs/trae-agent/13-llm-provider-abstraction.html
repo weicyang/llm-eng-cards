@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trae Agent LLM Provider 抽象层开发文档</title>
+<style>
+:root{
+  --bg:#f4f1ea;--surface:#fffdf8;--surface2:#f4f1ea;--border:rgba(28,25,23,.12);
+  --text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;
+  --green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;line-height:1.7;padding:64px 24px 48px 292px;overflow-x:hidden}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}
+code{background:rgba(194,65,12,.11);color:var(--orange);padding:.08rem .3rem;border-radius:4px;font-size:.88em;overflow-wrap:anywhere;word-break:break-word}
+.topbar{position:fixed;inset:0 0 auto 0;height:48px;z-index:20;display:flex;align-items:center;gap:1rem;min-width:0;background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.2rem}
+.topbar a{font-size:.88rem;font-weight:650;white-space:nowrap}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:.86rem}
+.sidebar{position:fixed;top:48px;bottom:0;left:0;width:268px;overflow:auto;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.2rem 1rem;backdrop-filter:blur(12px)}
+.sidebar strong{display:block;color:var(--blue);margin-bottom:.7rem}
+.sidebar a{display:block;color:var(--text);opacity:.74;font-size:.79rem;padding:.2rem .35rem;border-left:2px solid transparent}
+.sidebar a:hover,.sidebar a.active{opacity:1;border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1120px;margin:0 auto}
+h1{font-size:2rem;margin:.2rem 0 .35rem;overflow-wrap:anywhere;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+h2{color:var(--blue);font-size:1.35rem;margin:0 0 1rem;border-bottom:1px solid var(--border);padding-bottom:.45rem}
+h3{color:var(--blue2);font-size:1.08rem;margin:1.25rem 0 .55rem}
+p{margin:.55rem 0}
+ul,ol{margin:.55rem 0 .65rem 1.35rem;padding:0}
+li{margin:.25rem 0}
+.subtitle{color:var(--muted);margin:0 0 1.2rem}
+.section{min-width:0;overflow-wrap:anywhere;background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.55rem;margin:0 0 1.25rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
+.meta-grid,.card-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem}
+.meta,.card{min-width:0;overflow-wrap:anywhere;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.85rem}
+.meta b,.card b{display:block;color:var(--blue2);font-size:.82rem;margin-bottom:.2rem}
+.badge{display:inline-block;border:1px solid currentColor;border-radius:999px;padding:.05rem .45rem;margin:.1rem .3rem .1rem 0;font-size:.72rem;font-weight:700}
+.fact{color:var(--green)}.optional{color:var(--yellow)}.roadmap{color:var(--muted)}.risk{color:var(--red)}
+.callout{border-left:3px solid var(--blue);background:rgba(67,56,202,.06);padding:.8rem 1rem;margin:.8rem 0}
+.warning{border-left-color:var(--red);background:rgba(185,28,28,.06)}
+.good{border-left-color:var(--green);background:rgba(21,128,61,.06)}
+.diagram{display:flex;align-items:stretch;gap:.45rem;overflow-x:auto;padding:.85rem;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin:.8rem 0}
+.node{min-width:140px;flex:1;border:1px solid var(--blue);border-radius:8px;padding:.7rem;text-align:center;background:rgba(67,56,202,.05)}
+.node strong{display:block;color:var(--blue2)}
+.node small{display:block;color:var(--muted);margin-top:.2rem}
+.arrow{align-self:center;color:var(--purple);font-size:1.25rem;font-weight:700}
+.sequence{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.8rem 1rem;overflow:auto}
+.sequence .step{display:grid;grid-template-columns:2.1rem minmax(150px,.8fr) minmax(260px,2fr);gap:.6rem;border-bottom:1px dashed var(--border);padding:.45rem 0}
+.sequence .step:last-child{border-bottom:0}
+.n{width:1.7rem;height:1.7rem;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--blue);color:var(--bg);font-size:.75rem;font-weight:800}
+.table-wrap{max-width:100%;overflow-x:auto;margin:.7rem 0}
+table{width:100%;border-collapse:collapse;font-size:.83rem}
+th,td{border:1px solid var(--border);padding:.5rem .62rem;vertical-align:top;min-width:116px}
+th{background:#e8e1d4;color:var(--blue);text-align:left}
+tr:nth-child(even){background:rgba(244,241,234,.45)}
+.provider-table{min-width:1120px}
+.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}
+.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;box-decoration-break:clone}
+.source-card{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:.75rem;margin:.55rem 0}
+.source-card b{color:var(--purple)}
+.source-note{font-size:.82rem;color:var(--muted);border-left:3px solid var(--border);padding-left:.8rem;margin:.7rem 0}
+.footer{text-align:center;color:var(--muted);font-size:.78rem;padding:1rem}
+@media(max-width:900px){body{padding:64px 14px 36px}.sidebar{display:none}.meta-grid,.card-grid{grid-template-columns:1fr}}
+@media(max-width:640px){.topbar .title{display:none}.topbar{padding:0 .8rem}h1{font-size:1.45rem}.section{padding:1rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.diagram{flex-direction:column}.arrow{transform:rotate(90deg);text-align:center}.sequence .step{grid-template-columns:2rem 1fr}.sequence .step div:last-child{grid-column:2}}
+.chapter-nav{display:flex;flex-wrap:wrap;gap:.75rem;justify-content:space-between;margin:1.5rem 0 .5rem}
+.chapter-nav a{flex:1 1 16rem;min-width:0;max-width:100%;border:1px solid var(--border);border-radius:8px;padding:.75rem 1rem;background:var(--surface2);overflow-wrap:anywhere}
+.chapter-nav .prev{margin-right:auto}.chapter-nav .next{margin-left:auto;text-align:right}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="../../trae_agent_architecture.html">← 返回 Trae Agent 架构总览</a>
+  <span class="title">模块 13 / LLM Provider 抽象层</span>
+</header>
+
+<nav class="sidebar" aria-label="页面目录">
+  <strong>LLM Provider 抽象层</strong>
+  <a href="#position">1. 模块定位</a>
+  <a href="#context">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念与术语</a>
+  <a href="#components">4. 架构组成</a>
+  <a href="#flow">5. 完整运行流程</a>
+  <a href="#state">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口、协议与事件</a>
+  <a href="#config">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发、性能与资源</a>
+  <a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败、恢复与兼容</a>
+  <a href="#observability">12. 可观测性与排障</a>
+  <a href="#tests">13. 测试与验证</a>
+  <a href="#extension">14. 开发与扩展</a>
+  <a href="#tradeoffs">15. 权衡与限制</a>
+  <a href="#sources">16. 源码索引</a>
+  <a href="#glossary">附录 · 术语对照表</a>
+</nav>
+
+<main class="container">
+  <h1>Trae Agent LLM Provider 抽象层开发文档</h1>
+  <p class="subtitle">从配置解析、Factory 路由、Provider 原生消息历史到 Tool Schema、Usage、重试与 Trajectory 的源码级契约。</p>
+
+  <section class="section" aria-label="文档元数据">
+    <div class="meta-grid">
+      <div class="meta"><b>一句话目标</b>解释同一 Agent Loop 如何调用 7 种 Provider，并准确标出统一契约之下没有被抹平的差异。</div>
+      <div class="meta"><b>源码快照</b>工作区源码快照；<code>pyproject.toml</code> 版本 <code>0.1.0</code>。当前环境无法调用 Git，未取得 SHA。</div>
+      <div class="meta"><b>证据状态</b><span class="badge fact">已验证</span>已审计全部 Adapter、配置、Tool Schema、Agent 调用点与聚焦测试；未调用真实外部 API。</div>
+      <div class="meta"><b>所有者路径</b><code>trae_agent/utils/llm_clients/</code>、<code>trae_agent/utils/config.py</code></div>
+      <div class="meta"><b>目标读者</b>Provider Adapter 开发者、Agent Loop 维护者、配置与故障排查人员。</div>
+      <div class="meta"><b>最近验证</b>2026-07-27</div>
+    </div>
+    <p>
+      <span class="badge fact">源码事实：7 个 Provider</span>
+      <span class="badge optional">可选能力：外部 API / 本地 Ollama</span>
+      <span class="badge roadmap">未实现：通用流式响应 / 故障转移</span>
+      <span class="badge risk">敏感：消息与 Tool 结果进入 Trajectory</span>
+    </p>
+  </section>
+
+  <section class="section" id="position">
+    <h2>1. 模块定位</h2>
+    <div class="callout good"><strong>模块职责：</strong>把内部 <code>LLMMessage</code>、<code>Tool</code> 和 <code>ModelConfig</code> 转成 Provider SDK 请求，再把响应归一为 <code>LLMResponse</code>。它是协议 Adapter 层，不是模型路由平台。</div>
+    <div class="table-wrap"><table>
+      <tr><th>边界</th><th>负责</th><th>委托</th><th>明确不负责</th></tr>
+      <tr><td><code>LLMClient</code> 门面</td><td>把 Provider 字符串转成枚举并延迟构造具体 Client；转发统一方法。</td><td>具体格式转换与 API 调用委托给 Adapter。</td><td>不做动态模型选择、健康检查或跨 Provider Failover。<span class="evidence"><code>trae_agent/utils/llm_clients/llm_client.py:15-86</code></span></td></tr>
+      <tr><td><code>BaseLLMClient</code></td><td>保存凭证/Endpoint/Recorder，声明 <code>chat</code> 与历史替换接口。</td><td>Provider SDK 拥有 HTTP、认证和连接细节。</td><td>不规定统一原生历史结构，也没有 Streaming 接口。<span class="evidence"><code>trae_agent/utils/llm_clients/base_client.py:13-44</code></span></td></tr>
+      <tr><td>各 Adapter</td><td>消息、Tool Schema、响应、Usage、历史和 Trajectory 适配。</td><td>Tool 输入 Schema 委托给 <code>Tool.get_input_schema()</code>。</td><td>不拥有 Agent Step、完成判定或 Tool 执行。<span class="evidence"><code>trae_agent/tools/base.py:74-175</code></span></td></tr>
+      <tr><td>相邻模块</td><td>Agent Runtime 选择调用时机；Trajectory 保存审计记录。</td><td>详见已存在的 <a href="03-agent-runtime.html">模块 03：Agent Runtime</a>。</td><td>Provider History 不是长期 Memory，也不是 Trajectory 的回放源。</td></tr>
+    </table></div>
+  </section>
+
+  <section class="section" id="context">
+    <h2>2. 系统位置与依赖</h2>
+    <div class="diagram" role="img" aria-label="LLM Provider 调用链">
+      <div class="node"><strong>CLI + YAML/ENV</strong><small>选择并解析 ModelConfig</small></div><div class="arrow">→</div>
+      <div class="node"><strong>BaseAgent</strong><small>每步同步调用 chat</small></div><div class="arrow">→</div>
+      <div class="node"><strong>LLMClient</strong><small>7 路 Factory 门面</small></div><div class="arrow">→</div>
+      <div class="node"><strong>Adapter</strong><small>历史 + Schema + 归一化</small></div><div class="arrow">→</div>
+      <div class="node"><strong>Provider SDK/API</strong><small>网络或本地 Ollama</small></div>
+    </div>
+    <div class="card-grid">
+      <div class="card"><b>上游调用方</b><code>BaseAgent.__init__</code> 创建门面；<code>_run_llm_step</code> 每步传入“本轮新增消息”、共享 ModelConfig 和完整工具列表。<span class="evidence"><code>trae_agent/agent/base_agent.py:29-45,209-236</code></span></div>
+      <div class="card"><b>下游依赖</b>OpenAI/Azure/OpenRouter/Doubao 使用 <code>openai</code> SDK；Anthropic、Google、Ollama 使用各自 SDK。版本下界见 <code>pyproject.toml:7-25</code>。</div>
+      <div class="card"><b>共享兄弟实现</b>Azure、OpenRouter、Doubao 共享 <code>OpenAICompatibleClient</code>；OpenAI 自己使用 Responses API，不走该共享基类。</div>
+      <div class="card"><b>Host 边界</b>除 Ollama 默认指向本机 <code>localhost:11434</code> 外，Adapter 通常通过网络把消息、Schema 和 Tool 结果发送给外部服务。</div>
+    </div>
+    <p>Tool 实例在 Agent 构造时接收当前 Provider 名，因此 OpenAI 的 Tool Schema 可启用严格模式所需的 nullable 与 <code>additionalProperties:false</code> 规则。动态 MCP Tool 也会收到同一 Provider 值。<span class="evidence"><code>trae_agent/agent/base_agent.py:37-45</code></span>；<span class="evidence"><code>trae_agent/agent/trae_agent.py:72-86</code></span></p>
+  </section>
+
+  <section class="section" id="concepts">
+    <h2>3. 核心概念与术语</h2>
+    <div class="table-wrap"><table>
+      <tr><th>术语</th><th>当前含义</th><th>不要混淆为</th></tr>
+      <tr><td>统一消息</td><td><code>LLMMessage(role, content, tool_call, tool_result)</code> 是 Adapter 输入 DTO。<span class="evidence"><code>trae_agent/utils/llm_clients/llm_basics.py:10-17</code></span></td><td>Provider 侧完整消息历史。</td></tr>
+      <tr><td>Provider History</td><td>每个具体 Client 拥有的 Provider 原生对象数组；默认 <code>reuse_history=true</code> 时跨 Step 累积。</td><td><code>BaseAgent</code> 中的统一多轮历史；后者不存在。</td></tr>
+      <tr><td>Tool Schema</td><td>内部 <code>ToolParameter</code> 生成的 JSON Schema，再包成各 SDK 的 Function/Tool 声明。</td><td>Tool 参数执行期校验器；当前 Executor 直接把参数交给 Tool。</td></tr>
+      <tr><td>Usage 归一化</td><td>把 Provider 可用计数字段映射到 <code>LLMUsage</code> 五个计数。</td><td>货币 Cost、配额或账单。</td></tr>
+      <tr><td>Retry</td><td>同一 Adapter、同一请求在阻塞睡眠后重试。</td><td>切换 Provider、切换模型、请求排队或断点续传。</td></tr>
+      <tr><td>Streaming</td><td>本模块没有流式公共接口，各 SDK 调用等待完整响应。</td><td>Console 的动态刷新；Console 更新不等于 Token Streaming。</td></tr>
+    </table></div>
+  </section>
+
+  <section class="section" id="components">
+    <h2>4. 架构组成</h2>
+    <h3>4.1 Factory 与统一 DTO</h3>
+    <p><code>LLMProvider</code> 固定列出 openai、anthropic、azure、ollama、openrouter、doubao、google。枚举构造在任何 Adapter 导入前验证 Provider 字符串；未知值直接产生 <code>ValueError</code>。<span class="evidence"><code>trae_agent/utils/llm_clients/llm_client.py:15-62</code></span></p>
+    <p><code>LLMResponse</code> 统一 content、usage、model、finish_reason、tool_calls；其中只有 content 非可空。<code>LLMUsage</code> 可逐字段相加。<span class="evidence"><code>trae_agent/utils/llm_clients/llm_basics.py:20-52</code></span></p>
+
+    <h3>4.2 七种 Provider 的真实差异</h3>
+    <div class="table-wrap"><table class="provider-table">
+      <tr><th>Provider</th><th>SDK / API 面</th><th>系统消息与历史</th><th>Tool Schema / Tool Call</th><th>用量</th><th>端点 / 特例</th><th>决定性证据</th></tr>
+      <tr><td><strong>OpenAI</strong></td><td><code>OpenAI.responses.create</code></td><td>Responses <code>ResponseInputParam</code>；输入与 assistant message/function_call 追加到 Client 历史。</td><td><code>FunctionToolParam(strict=true)</code>；ToolCall 同时保留 <code>call_id</code> 与可选 <code>id</code>。</td><td>输入/输出 + 缓存输入 + 推理</td><td>o3/o4-mini/gpt-5 不传 temperature；使用 <code>max_output_tokens</code>。</td><td><code>trae_agent/utils/llm_clients/openai_client.py:27-164</code></td></tr>
+      <tr><td><strong>Anthropic</strong></td><td><code>Anthropic.messages.create</code></td><td>System 从 messages 中分离到 <code>system_message</code>；文本块与 tool_use 块分别追加 assistant 历史。</td><td>bash 与 editor 使用 Anthropic 内建 Tool 类型；其他 Tool 使用 JSON Schema；ToolResult 带 <code>is_error</code>。</td><td>输入/输出 + 缓存创建/读取</td><td>传 temperature、top_p、top_k；ToolCall 参数来自内容块输入。</td><td><code>trae_agent/utils/llm_clients/anthropic_client.py:19-220</code></td></tr>
+      <tr><td><strong>Google</strong></td><td><code>genai.Client.models.generate_content</code></td><td>System 分离为 <code>system_instruction</code>；角色映射为 user/model/tool；成功后才提交新历史。</td><td>每个内部 Tool 包一条 <code>FunctionDeclaration</code>；Provider 不返回 call_id，客户端生成 UUID；ToolResult 必须有 name。</td><td>提示/候选 + 缓存内容</td><td>构造 Client 时只显式传 api_key；当前代码不消费配置 base_url。</td><td><code>trae_agent/utils/llm_clients/google_client.py:21-229</code></td></tr>
+      <tr><td><strong>Ollama</strong></td><td><code>ollama.chat</code></td><td>请求前累积 OpenAI Responses 形状的输入；<strong>成功响应没有追加回历史</strong>。</td><td>先建严格 FunctionTool，再转成 Ollama function 字典；ToolCall 的 call_id/id 均由客户端生成。</td><td>固定为 <code>None</code></td><td>未配置时默认 <code>http://localhost:11434/v1</code>，但实际调用全局 <code>ollama_chat</code>，构造的 OpenAI Client 未用于请求。</td><td><code>trae_agent/utils/llm_clients/ollama_client.py:28-144</code></td></tr>
+      <tr><td><strong>Azure</strong></td><td><code>AzureOpenAI.chat.completions.create</code></td><td>共享 Chat Completions 历史。</td><td>共享 OpenAI-compatible FunctionDefinition；解析 JSON arguments。</td><td>提示/补全</td><td>base_url 必填并作为 azure_endpoint；透传 api_version；特定新模型可用 <code>max_completion_tokens</code>。</td><td><code>trae_agent/utils/llm_clients/azure_client.py:15-53</code>；<code>trae_agent/utils/config.py:48-64</code></td></tr>
+      <tr><td><strong>OpenRouter</strong></td><td><code>OpenAI.chat.completions.create</code></td><td>共享 Chat Completions 历史。</td><td>共享 OpenAI-compatible Schema；ProviderConfig 中的模型名能力判断没有被主 Agent 调用。</td><td>提示/补全</td><td>空 base_url 会原地改为 <code>https://openrouter.ai/api/v1</code>；可从 ENV 添加 HTTP-Referer/X-Title。</td><td><code>trae_agent/utils/llm_clients/openrouter_client.py:17-74</code></td></tr>
+      <tr><td><strong>Doubao</strong></td><td><code>OpenAI.chat.completions.create</code></td><td>共享 Chat Completions 历史。</td><td>共享 OpenAI-compatible Schema 与 ToolCall 解析。</td><td>提示/补全</td><td>不提供代码内默认 base_url，不增加额外请求头。</td><td><code>trae_agent/utils/llm_clients/doubao_client.py:15-46</code></td></tr>
+    </table></div>
+    <div class="callout warning"><strong>抽象并非“完全解耦”：</strong>Tool Schema 的严格程度、System 消息位置、Tool ID、历史提交方式、Usage 完整度和参数支持都由 Adapter 决定。Agent Loop 只依赖统一返回 DTO，并不意味着 Provider 行为等价。</div>
+
+    <h3>4.3 OpenAI-compatible 共享层</h3>
+    <p>Azure、OpenRouter、Doubao 只实现 Client 构造、服务名、Trajectory Provider 名、额外 Header 和一个能力判断方法；共享层负责历史、Schema、请求、Tool Call、Usage 与记录。<span class="evidence"><code>trae_agent/utils/llm_clients/openai_compatible_base.py:34-215</code></span></p>
+    <p class="source-note">共享层定义的 <code>ProviderConfig.supports_tool_calling(model_name)</code> 没有被 <code>OpenAICompatibleClient</code> 覆写转发；门面的调用最终落到 <code>BaseLLMClient.supports_tool_calling(ModelConfig)</code>，只返回配置布尔值。当前 Agent 主循环也不在发送 Tool 前检查它。<span class="evidence"><code>trae_agent/utils/llm_clients/base_client.py:42-44</code></span>；<span class="evidence"><code>trae_agent/utils/llm_clients/llm_client.py:82-86</code></span></p>
+  </section>
+
+  <section class="section" id="flow">
+    <h2>5. 完整运行流程</h2>
+    <h3>5.1 正常成功路径</h3>
+    <div class="sequence">
+      <div class="step"><span class="n">1</span><strong>解析配置</strong><div>YAML 创建 Provider、Model、Agent 引用图；CLI 覆盖值随后写回同一 <code>ModelConfig</code>。<code>trae_agent/utils/config.py:205-322</code></div></div>
+      <div class="step"><span class="n">2</span><strong>选择 Adapter</strong><div><code>BaseAgent</code> 构造 <code>LLMClient</code>；枚举匹配后延迟导入并实例化一个具体 Client。<code>trae_agent/agent/base_agent.py:29-45</code></div></div>
+      <div class="step"><span class="n">3</span><strong>生成 Schema</strong><div>Agent 用 Provider 名构造 Tool；Adapter 每次 chat 时从 Tool 动态生成 Provider 原生 Tool 声明。<code>trae_agent/tools/base.py:127-175</code></div></div>
+      <div class="step"><span class="n">4</span><strong>合并历史</strong><div>Adapter 把本轮新增 <code>LLMMessage[]</code> 转成原生对象；默认追加到自己的 <code>message_history</code>。</div></div>
+      <div class="step"><span class="n">5</span><strong>API 与重试</strong><div>同步 SDK 请求；任意异常最多再试 <code>max_retries</code> 次，每次阻塞等待随机 3–30 秒。<code>trae_agent/utils/llm_clients/retry_utils.py:13-53</code></div></div>
+      <div class="step"><span class="n">6</span><strong>归一响应</strong><div>解析文本、Tool Call、finish reason、model 和可用 Usage，生成 <code>LLMResponse</code>。</div></div>
+      <div class="step"><span class="n">7</span><strong>提交状态</strong><div>大多数 Adapter 把 assistant 响应写入原生历史；若存在 Recorder，则记录本轮增量输入、归一响应和可用 Tool 名。<code>trae_agent/utils/trajectory_recorder.py:77-128</code></div></div>
+      <div class="step"><span class="n">8</span><strong>返回 Runtime</strong><div>Agent 累加 Usage；若未完成则执行 Tool，并把 ToolResult 作为下一轮新增消息。<code>trae_agent/agent/base_agent.py:209-236,291-340</code></div></div>
+    </div>
+
+    <h3>5.2 配置拒绝与提前结束</h3>
+    <div class="table-wrap"><table>
+      <tr><th>触发</th><th>位置</th><th>行为</th><th>是否发起 API</th></tr>
+      <tr><td>YAML 同时以 file/string 提供，或两者都没有</td><td><code>Config.create</code></td><td><code>ConfigError</code></td><td>否</td></tr>
+      <tr><td>缺 model_providers、models、agents，或引用未知 Model/Provider</td><td>YAML 装配</td><td><code>ConfigError</code></td><td>否。<code>trae_agent/utils/config.py:231-299</code></td></tr>
+      <tr><td>CLI 指定 YAML 未登记的新 Provider，但没有 CLI API Key</td><td><code>ModelConfig.resolve_config_values</code></td><td><code>ConfigError</code>；此判断发生在读取该 Provider ENV Key 之前。</td><td>否。<code>trae_agent/utils/config.py:81-94</code></td></tr>
+      <tr><td>Provider 字符串不在 7 项枚举中</td><td><code>LLMClient.__init__</code></td><td>Python <code>ValueError</code></td><td>否</td></tr>
+      <tr><td>Azure 没有 base_url</td><td><code>AzureProvider.create_client</code></td><td><code>ValueError</code></td><td>否。<code>trae_agent/utils/llm_clients/azure_client.py:18-29</code></td></tr>
+      <tr><td>消息角色非法、必需文本为空、Tool arguments 非 JSON</td><td>Adapter parse/response parse</td><td><code>ValueError</code> 或 JSON decode 异常向上抛</td><td>输入错误通常否；响应 arguments 错误发生在 API 成功后。</td></tr>
+    </table></div>
+
+    <h3>5.3 重试与恢复路径</h3>
+    <p>SDK 调用被动态包装为 <code>max_retries + 1</code> 次尝试；每次失败打印 Provider 名、异常文本和完整 traceback，再同步休眠。最后一次原样重抛。重试不改变 Provider、模型、Endpoint、消息或 Tool Schema。<span class="evidence"><code>trae_agent/utils/llm_clients/retry_utils.py:30-53</code></span></p>
+    <div class="callout warning"><strong>没有通用降级：</strong>最终失败交给 <code>BaseAgent</code> 的 Step 异常分支，任务进入 ERROR 并停止。仓库没有 Provider 池、Fallback 顺序、断路器或跨 Provider 自动 Failover。<span class="evidence"><code>trae_agent/agent/base_agent.py:163-178</code></span></div>
+  </section>
+
+  <section class="section" id="state">
+    <h2>6. 数据与状态模型</h2>
+    <h3>6.1 消息历史所有权</h3>
+    <div class="table-wrap"><table>
+      <tr><th>状态</th><th>所有者</th><th>写入时机</th><th>生命周期/重建</th></tr>
+      <tr><td><code>message_history</code></td><td>具体 Provider Client；类型是对应 SDK 原生消息对象。</td><td>每次 <code>chat</code> 先处理本轮增量输入，成功后通常追加 assistant 输出。</td><td>随 Client/Agent 实例存在；无磁盘恢复。<code>set_chat_history</code> 可整段替换，但 BaseAgent 主链不调用它。</td></tr>
+      <tr><td>Anthropic system</td><td><code>AnthropicClient.system_message</code></td><td>解析 system role 时覆盖。</td><td>与 Client 同寿命。<code>trae_agent/utils/llm_clients/anthropic_client.py:28-34,155-188</code></td></tr>
+      <tr><td>Google system</td><td><code>GoogleClient.system_instruction</code></td><td>成功响应后提交当前有效 instruction；<code>set_chat_history</code> 可直接设置。</td><td>与 Client 同寿命。<code>trae_agent/utils/llm_clients/google_client.py:28-35,124-135</code></td></tr>
+      <tr><td>本轮消息</td><td><code>BaseAgent.execute_task</code> 局部变量</td><td>首轮是 system+user；之后通常只含 ToolResult 或未完成提示。</td><td>每个 Step 被下一轮结果替换；不是统一完整历史。<code>trae_agent/agent/base_agent.py:158-169,225-236</code></td></tr>
+      <tr><td>Trajectory LLM interaction</td><td><code>TrajectoryRecorder</code></td><td>每次 Adapter 成功归一响应后增量写盘。</td><td>记录传给 <code>chat</code> 的本轮 messages，不复制 Provider 的完整原生历史。<code>trae_agent/utils/trajectory_recorder.py:77-128</code></td></tr>
+    </table></div>
+    <div class="callout warning"><strong>Ollama 历史例外：</strong><code>chat</code> 会写入本轮输入，但返回 ToolCall 或文本后没有把 assistant 响应追加到 <code>message_history</code>。下一轮因此可能只有先前输入和 ToolResult，而缺少与 ToolResult 配对的 assistant ToolCall。<span class="evidence"><code>trae_agent/utils/llm_clients/ollama_client.py:82-144</code></span></div>
+
+    <h3>6.2 用量与响应状态</h3>
+    <p><code>LLMUsage</code> 的规范字段是 input、output、cache creation、cache read、reasoning。缺失能力用 0 或整个 usage=None 表达；这无法区分“Provider 确实为 0”和“Adapter 没采集”。Agent 将非空 Usage 逐步累加到 <code>AgentExecution.total_tokens</code>。<span class="evidence"><code>trae_agent/utils/llm_clients/llm_basics.py:20-41</code></span>；<span class="evidence"><code>trae_agent/agent/base_agent.py:291-299</code></span></p>
+    <p>模块没有事务、锁、共享缓存、历史压缩、保留期限或迁移协议。Client History 是内存中的可变列表；Trajectory 是相邻审计模块拥有的 JSON 文件。</p>
+  </section>
+
+  <section class="section" id="interfaces">
+    <h2>7. 接口、协议与事件</h2>
+    <div class="table-wrap"><table>
+      <tr><th>接口</th><th>输入</th><th>输出/约束</th><th>错误语义</th></tr>
+      <tr><td><code>LLMClient(ModelConfig)</code></td><td>Provider 名、凭证、Endpoint 与模型参数</td><td>持有且只持有一个 Adapter。</td><td>未知枚举、SDK Client 构造错误直接抛出。</td></tr>
+      <tr><td><code>chat(messages, model_config, tools, reuse_history=true)</code></td><td>本轮统一消息、模型配置、完整 Tool 列表</td><td>同步返回一个 <code>LLMResponse</code>；不是 async iterator。</td><td>SDK、解析、序列化错误向上抛；只有 SDK 请求调用位于通用重试包装内。</td></tr>
+      <tr><td><code>set_chat_history(messages)</code></td><td>完整统一消息列表</td><td>替换为 Provider 原生历史；Anthropic/Google 会分离 system。</td><td>非法 role/空文本按 Adapter 规则报错。</td></tr>
+      <tr><td><code>supports_tool_calling(ModelConfig)</code></td><td>配置对象</td><td>门面转发；默认仅返回 <code>supports_tool_calling</code> 配置布尔值。</td><td>主 Agent 当前不把 false 用作准入门禁。</td></tr>
+      <tr><td><code>set_trajectory_recorder</code></td><td>Recorder 或 None</td><td>控制成功 LLM Interaction 是否写盘。</td><td>Recorder 写盘错误没有 Adapter 级隔离。</td></tr>
+    </table></div>
+
+    <h3>7.1 Tool Schema 契约</h3>
+    <p><code>Tool.get_input_schema()</code> 从 <code>ToolParameter</code> 生成 object/properties/required/enum/items。Provider 为 openai 时，所有参数都进入 required，原本可选的参数类型增加 null，顶层和 object 参数增加 <code>additionalProperties:false</code>。<span class="evidence"><code>trae_agent/tools/base.py:62-175</code></span></p>
+    <p>OpenAI Responses Adapter 再声明 <code>strict=true</code>；Ollama 也先生成 strict FunctionTool，但最终转换后的 Ollama 字典不携带 strict 字段；Anthropic、Google 与 OpenAI-compatible 路径使用各自包装。Schema 转换不会证明 Provider 模型实际支持工具调用。</p>
+
+    <h3>7.2 事件顺序与确认</h3>
+    <ol>
+      <li>Provider API 成功返回；</li>
+      <li>Adapter 解析并通常更新内存历史；</li>
+      <li>若 Recorder 存在，立即记录 LLM Interaction；</li>
+      <li>返回 Agent，Agent 再更新 Usage、Console 和 Agent Step。</li>
+    </ol>
+    <p>没有事件总线、Ack、幂等 Key 或请求 ID 统一字段。因重试发生在 Provider 调用层，是否由上游服务重复计费或重复处理取决于 SDK/API；本项目没有显式幂等键。</p>
+  </section>
+
+  <section class="section" id="config">
+    <h2>8. 配置与默认行为</h2>
+    <div class="callout good"><strong>已验证优先级：</strong>对 API Key 与 Base URL，运行时实现是 <code>CLI &gt; ENV &gt; YAML</code>。README 当前写成“CLI &gt; 配置文件 &gt; ENV”，与源码冲突；本页以源码为准。<span class="evidence"><code>trae_agent/utils/config.py:96-116,394-410</code></span>；<span class="evidence"><code>README.md:95-125</code></span></div>
+    <div class="table-wrap"><table>
+      <tr><th>配置项</th><th>类型/值</th><th>默认值</th><th>真实优先级</th><th>生效</th><th>失败行为/来源</th></tr>
+      <tr><td><code>provider</code></td><td>7 项枚举字符串</td><td>必须由 YAML 已选 Model 给出</td><td>CLI &gt; YAML；不读取 Provider ENV</td><td>Agent 构造</td><td>未知值 ValueError。<code>trae_agent/utils/config.py:79-94</code></td></tr>
+      <tr><td><code>model</code></td><td>string</td><td>YAML 必填</td><td>CLI &gt; YAML；不读取 Model ENV</td><td>每次请求</td><td>Provider API 校验。<code>trae_agent/utils/config.py:35-46,79</code></td></tr>
+      <tr><td><code>api_key</code></td><td>string</td><td>YAML <code>ModelProvider</code> 构造必需，但可为空字符串</td><td><strong>CLI &gt; {PROVIDER}_API_KEY &gt; YAML</strong></td><td>Client 构造</td><td>新 CLI Provider 没 CLI Key 时提前 ConfigError；既有 Provider 的空 Key 多由 SDK/API 报错。<code>trae_agent/utils/config.py:81-113</code></td></tr>
+      <tr><td><code>base_url</code></td><td>string/null</td><td>通常 null；OpenRouter/Ollama Adapter 有内建默认</td><td><strong>CLI &gt; {PROVIDER}_BASE_URL &gt; YAML</strong></td><td>Client 构造</td><td>Azure 缺失立即 ValueError。<code>trae_agent/utils/config.py:100-116</code></td></tr>
+      <tr><td><code>api_version</code></td><td>string/null</td><td>null</td><td>YAML；没有 CLI/ENV resolve 路径</td><td>Azure Client 构造</td><td>由 Azure SDK/API 处理。<code>trae_agent/utils/config.py:17-26</code></td></tr>
+      <tr><td><code>temperature/top_p/top_k</code></td><td>float/float/int</td><td>YAML 必填</td><td>YAML</td><td>每次请求；Provider 支持面不同</td><td>SDK/API 错误；OpenAI 部分模型省略 temperature。</td></tr>
+      <tr><td><code>max_tokens</code></td><td>int/null</td><td>null；共享 Chat Completion 两项都空时回退 4096</td><td>YAML</td><td>每次请求</td><td>OpenAI/Anthropic/Google 直接使用 nullable 字段；共享层使用 helper。<code>trae_agent/utils/config.py:42-64</code></td></tr>
+      <tr><td><code>max_completion_tokens</code></td><td>int/null</td><td>null</td><td>YAML</td><td>Azure gpt-5/o3/o4-mini 共享路径</td><td>其他情况使用 max_tokens。</td></tr>
+      <tr><td><code>max_retries</code></td><td>int</td><td>YAML 必填，无 dataclass 默认</td><td>YAML</td><td>每个 chat</td><td>负值会导致循环不执行并抛通用 “Retry failed” 异常；没有范围校验。</td></tr>
+      <tr><td><code>supports_tool_calling</code></td><td>bool</td><td>true</td><td>YAML</td><td>仅显式查询接口</td><td>主 Loop 不据此禁用 Tools。<code>trae_agent/utils/config.py:40-45</code></td></tr>
+      <tr><td>Google 专属</td><td>candidate_count、stop_sequences</td><td>null</td><td>YAML</td><td>GenerateContentConfig</td><td>由 Google SDK/API 处理。<code>trae_agent/utils/llm_clients/google_client.py:67-76</code></td></tr>
+      <tr><td>OpenRouter Header</td><td>OPENROUTER_SITE_URL / SITE_NAME</td><td>不发送</td><td>ENV</td><td>每次请求</td><td>只影响 HTTP-Referer/X-Title。<code>trae_agent/utils/llm_clients/openrouter_client.py:34-46</code></td></tr>
+    </table></div>
+    <p>YAML 首先用 <code>yaml.safe_load</code> 解析，再把 Provider 名称、Model 名称与 Agent model 引用连成对象图。配置没有热加载；CLI 启动时 resolve 后，Adapter 与 Tool 已按该 Provider 构造。<span class="evidence"><code>trae_agent/utils/config.py:205-300</code></span></p>
+    <div class="callout warning"><strong>变更 Provider 的细节：</strong>若 CLI Provider 名已存在于 YAML <code>model_providers</code>，整个 <code>ModelProvider</code> 对象先切换，再应用 CLI/对应 ENV 的 key/base_url；若不存在，则必须同时传 CLI <code>--api-key</code> 才能临时登记，单独设置 <code>NEWPROVIDER_API_KEY</code> 不够。<span class="evidence"><code>trae_agent/utils/config.py:81-116</code></span></div>
+  </section>
+
+  <section class="section" id="concurrency">
+    <h2>9. 并发、性能与资源</h2>
+    <ul>
+      <li><strong>同步热路径：</strong><code>BaseAgent.execute_task</code> 虽是 async，Provider <code>chat</code> 是同步函数，SDK 网络等待和 retry sleep 会阻塞事件循环。<span class="evidence"><code>trae_agent/agent/base_agent.py:147-166,209-216</code></span></li>
+      <li><strong>无 Streaming：</strong>所有 Adapter 都调用非流式完整响应 API；统一接口只返回单个 <code>LLMResponse</code>。没有 chunk、背压、取消或有界 Buffer 契约。</li>
+      <li><strong>重试预算：</strong>最多调用 <code>max_retries+1</code> 次；每次失败间隔随机 3–30 秒。没有总时限、指数退避、Retry-After 处理或错误分类。<span class="evidence"><code>trae_agent/utils/llm_clients/retry_utils.py:34-50</code></span></li>
+      <li><strong>History 增长：</strong>除 Ollama 响应缺失例外，Client 原生历史随 Step 单调增长；没有 Token 预算预检、截断、压缩或摘要。</li>
+      <li><strong>资源清理：</strong>Adapter 没有统一 <code>close()</code>；Client 生命周期跟随 Agent，但没有显式关闭 SDK HTTP Client 的公共协议。</li>
+      <li><strong>线程安全：</strong>可变 <code>message_history</code> 没有锁，同一个 Client 不应被并发会话共享。当前单 Agent Loop 每步串行调用，因此主链不触发并发写。</li>
+    </ul>
+    <p class="source-note">不能从源码给出吞吐、延迟或容量数字。<code>parallel_tool_calls</code> 只控制 Tool 执行，不代表 LLM 请求并发或流式响应。</p>
+  </section>
+
+  <section class="section" id="security">
+    <h2>10. 安全与信任边界</h2>
+    <div class="table-wrap"><table>
+      <tr><th>边界</th><th>当前行为</th><th>风险/限制</th><th>开发要求</th></tr>
+      <tr><td>API Key</td><td>可来自 CLI、ENV 或 YAML，作为字符串保存在 ModelProvider 与 Client。</td><td>CLI 参数可能进入 shell history/进程列表；YAML 是静态 Secret；对象无主动清零。</td><td>优先使用环境变量；不要提交真实 Key，不要在异常或调试输出中打印配置对象。</td></tr>
+      <tr><td>网络 Endpoint</td><td>base_url 可被 CLI/ENV/YAML 覆盖。</td><td>恶意 Endpoint 可接收完整 Prompt、代码片段、Tool Schema 与 ToolResult；没有域名 Allowlist 或 TLS 策略层。</td><td>把自定义 Base URL 当作高信任配置，审计代理与证书终止。</td></tr>
+      <tr><td>消息与 ToolResult</td><td>发送给 Provider，并由 Trajectory 记录增量输入和完整归一响应。</td><td>可能包含源码、路径、命令输出、凭证与个人数据；当前 Recorder 无脱敏。<span class="evidence"><code>trae_agent/utils/trajectory_recorder.py:94-128</code></span></td><td>限制任务输入和 Tool 输出中的 Secret；保护 Trajectory 文件权限与保留周期。</td></tr>
+      <tr><td>Retry 日志</td><td>打印异常字符串和完整 traceback。</td><td>第三方 SDK 异常可能包含 URL、Header 摘要、请求片段或服务端敏感响应；代码没有脱敏。<span class="evidence"><code>trae_agent/utils/llm_clients/retry_utils.py:44-50</code></span></td><td>生产化前增加结构化、分类和脱敏日志。</td></tr>
+      <tr><td>Tool Schema</td><td>Schema 描述发送给模型，模型返回 arguments。</td><td>Schema 不是授权边界；Provider 输出仍是不可信输入。OpenAI strict 也不证明业务安全。</td><td>Tool/Executor 必须自行校验参数、路径和副作用权限。</td></tr>
+      <tr><td>Ollama 本地边界</td><td>默认 Endpoint 是 localhost。</td><td>“本地”不自动等于隔离；模型、服务监听地址与日志仍需独立审计。</td><td>确认服务绑定、模型来源和主机访问控制。</td></tr>
+    </table></div>
+    <div class="callout warning">本模块没有 Secret Vault、字段级脱敏、内容分类、Provider 数据驻留策略或 Prompt Injection 防护。Prompt/Tool Schema 约束不能替代 Tool 权限与网络信任控制。</div>
+  </section>
+
+  <section class="section" id="failure">
+    <h2>11. 失败、恢复与兼容</h2>
+    <div class="table-wrap"><table>
+      <tr><th>故障/现象</th><th>检测方式</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr>
+      <tr><td>认证、限流、网络、服务端或程序异常</td><td>stdout traceback；Agent Step.error</td><td>不分类地阻塞重试</td><td>最终失败使当前 Step/Agent ERROR</td><td>同 Provider 最多 max_retries 次；无 Failover</td><td>先识别 401/403、429、5xx、DNS/代理，再修配置重跑</td></tr>
+      <tr><td>未知 Provider</td><td>构造期 ValueError</td><td>不创建 Adapter</td><td>Agent 无法启动</td><td>不重试</td><td>使用 7 项枚举或完成新 Provider 注册</td></tr>
+      <tr><td>Azure 缺 Endpoint</td><td>明确 ValueError</td><td>Client 构造失败</td><td>Agent 无法启动</td><td>不重试</td><td>设置 AZURE_BASE_URL 或 YAML/CLI Base URL</td></tr>
+      <tr><td>Tool arguments 不是 JSON</td><td>JSONDecodeError</td><td>响应已返回后解析失败</td><td>Step ERROR；成功 API 调用不会由 retry wrapper 重试解析</td><td>Agent 主链停止</td><td>检查模型 Tool 能力和 Schema；增加解析测试/容错需改 Adapter</td></tr>
+      <tr><td>Google ToolResult 缺 name</td><td>AttributeError</td><td>请求前转换失败</td><td>Step ERROR</td><td>不进入 API retry</td><td>确保 Executor 返回 <code>ToolResult.name</code></td></tr>
+      <tr><td>Ollama 下一轮 Tool 上下文错误</td><td>Trajectory 与服务错误；检查 Client history</td><td>历史缺 assistant ToolCall</td><td>可能拒绝 ToolResult 或丢失上下文</td><td>通用 retry 只重复同一错误历史</td><td>修复 Adapter 的 assistant 响应历史提交</td></tr>
+      <tr><td>上下文超限</td><td>Provider 错误</td><td>按普通 Exception 重试相同历史</td><td>反复失败后 Agent ERROR</td><td>没有压缩/截断降级</td><td>减少 Tool 输出/步数，或实现显式 Context 策略</td></tr>
+      <tr><td>Trajectory 写盘失败</td><td>Recorder 异常</td><td>发生在 API 成功后、返回 Agent 前</td><td>可把成功 LLM 调用表现成 Step 失败</td><td>Recorder 调用不在 API retry 内</td><td>检查路径、权限、磁盘；评估是否需要旁路隔离</td></tr>
+    </table></div>
+    <p><strong>兼容面：</strong>Azure/OpenRouter/Doubao 共享 Chat Completions 适配，OpenAI 已独立使用 Responses API；不能假设两条 OpenAI 形状路径可无差异互换。Legacy JSON 由 <code>create_from_legacy_config</code> 转成同一 ModelConfig，但只保留默认 Provider。<span class="evidence"><code>trae_agent/utils/config.py:324-391</code></span></p>
+  </section>
+
+  <section class="section" id="observability">
+    <h2>12. 可观测性与排障</h2>
+    <div class="table-wrap"><table>
+      <tr><th>现象</th><th>优先检查</th><th>可能原因</th><th>修复方向</th></tr>
+      <tr><td>启动即报 Provider 错误</td><td>Provider 拼写、YAML 引用、Azure Endpoint</td><td>枚举外值、模型引用缺失、Azure base_url 为空</td><td>先校正配置，不要提高重试次数</td></tr>
+      <tr><td>认证仍使用旧 Key</td><td>CLI 参数、<code>{PROVIDER}_API_KEY</code>、YAML 的实际顺序</td><td>CLI 覆盖 ENV；Provider 切换后读取的是新 Provider 前缀</td><td>移除不需要的 CLI Key；仅检查变量是否存在，不输出值</td></tr>
+      <tr><td>请求卡住很久</td><td>stdout 的 retry sleep、max_retries</td><td>同步网络等待 + 每次 3–30 秒阻塞 sleep；无总 Timeout Budget</td><td>修网络/认证根因；降低合理重试预算；不要盲目等待</td></tr>
+      <tr><td>Token 总数一直为空/为 0</td><td>Provider 行与 Trajectory response.usage</td><td>Ollama usage=None；其他 Adapter 可能没有 Provider metadata</td><td>不要把缺失当零成本；按 Provider 补采集</td></tr>
+      <tr><td>ToolResult 被 Provider 拒绝</td><td>call_id/name、前一轮 assistant ToolCall 是否在历史</td><td>ID 配对错误；Ollama 未提交 assistant ToolCall；Google 缺 name</td><td>对照 Provider 原生历史转换，建立两轮 Tool 契约测试</td></tr>
+      <tr><td>某模型不支持工具仍收到 Tools</td><td><code>supports_tool_calling</code> 配置与 Agent 调用点</td><td>主 Loop 不执行能力准入；OpenRouter 模式判断没有接入</td><td>在明确所有者层添加准入并回归所有 Provider</td></tr>
+      <tr><td>Trajectory 看不到“完整上下文”</td><td>interaction.input_messages 与 Provider History</td><td>Recorder 只记录本轮传入的增量 messages</td><td>按 interaction 顺序重建内部消息；不能视为 Provider 原生请求的逐字快照</td></tr>
+    </table></div>
+    <p>Trajectory 的每条 LLM Interaction 包含 timestamp、provider、model、增量 input_messages、归一 response、Usage、ToolCall 和 tools_available。它不记录 API Key，但消息和 Tool 输出本身可能泄密。<span class="evidence"><code>trae_agent/utils/trajectory_recorder.py:77-128</code></span></p>
+    <p class="source-note">最小只读检查应使用 <code>trae-cli show-config</code> 观察脱敏配置；不要打印环境变量值或完整 ModelProvider。真实调用前先验证 Provider、模型、Endpoint 和工具能力的组合。</p>
+  </section>
+
+  <section class="section" id="tests">
+    <h2>13. 测试与验证</h2>
+    <div class="table-wrap"><table>
+      <tr><th>契约/不变量</th><th>测试路径</th><th>测试类型</th><th>能证明什么</th><th>证据缺口/漂移</th></tr>
+      <tr><td>OpenAI/Anthropic 自定义 Base URL</td><td><code>tests/utils/test_config.py:13-139</code></td><td>Mock 单元</td><td>Legacy Config 的 base_url 传播与 SDK Client 构造参数</td><td>不覆盖 YAML resolve 优先级、请求与响应</td></tr>
+      <tr><td>Google 历史、Tool、Usage 转换</td><td><code>tests/utils/test_google_client.py:84-293</code></td><td>Mock/转换测试</td><td>system 分离、函数调用、ToolResult、基础 Usage</td><td>patch 目标写成 <code>trae_agent.utils.google_client</code>，与实际模块路径不一致；部分环境 Key 期望也不由 BaseLLMClient 实现</td></tr>
+      <tr><td>Google 能力判断</td><td><code>tests/utils/test_google_client.py:295-311</code></td><td>单元</td><td>测试期望未知模型为 false</td><td>当前实现继承配置布尔值，改 model 名后仍为 true；测试与源码不一致</td></tr>
+      <tr><td>Ollama 初始化与真实 chat</td><td><code>tests/utils/test_ollama_client_utils.py:22-122</code></td><td>Live 倾向</td><td>有本地服务时可做烟测</td><td>默认不会跳过，依赖外部 Ollama；不断言响应、历史提交、Usage 或 Tool 两轮协议；能力测试与当前实现不一致</td></tr>
+      <tr><td>OpenRouter 初始化与真实 chat</td><td><code>tests/utils/test_openrouter_client_utils.py:23-118</code></td><td>Live 倾向</td><td>可验证默认 Endpoint 与基本连通</td><td>空 Key 时仍可能执行；chat 只断言可运行；能力测试调用的是 Base 实现，与模式判断未接线</td></tr>
+      <tr><td>Tool Schema 严格规则</td><td>无 Provider 聚焦测试</td><td>证据缺口</td><td>源码可证明生成规则</td><td>缺 OpenAI optional/null、nested object、各 SDK wrapper 契约测试</td></tr>
+      <tr><td>Factory 七路映射、重试与 Failover 缺失</td><td>无聚焦测试</td><td>证据缺口</td><td>源码可证明分支与 Retry 算法</td><td>缺 max_retries=0/负数、错误分类、阻塞 sleep、最终异常测试</td></tr>
+      <tr><td>消息历史所有权</td><td>仅 Google set_history 与弱 Ollama/OpenRouter 烟测</td><td>局部</td><td>部分 parse 行为</td><td>缺所有 7 Provider 的多轮成功/失败/reuse_history=false/Tool 配对测试</td></tr>
+    </table></div>
+    <div class="callout warning"><strong>测试结论边界：</strong>现有测试不能证明 7 个 Provider 都可用。Google/Ollama/OpenRouter 文件中存在导入 patch 路径、外部依赖和能力判断预期漂移；本页把它们作为“测试意图与缺口”证据，不用测试覆盖源码事实。</div>
+  </section>
+
+  <section class="section" id="extension">
+    <h2>14. 开发与扩展指南</h2>
+    <h3>14.1 新增 Provider 的安全步骤</h3>
+    <ol>
+      <li>在 <code>LLMProvider</code> 增加稳定枚举值，并在 <code>LLMClient.__init__</code> 添加延迟导入分支。</li>
+      <li>继承 <code>BaseLLMClient</code>；构造时只保存必要 SDK Client 与 Provider 原生 <code>message_history</code>。</li>
+      <li>实现 <code>set_chat_history</code> 和 <code>chat</code>，明确 system、assistant、ToolCall、ToolResult 与 <code>reuse_history=false</code> 的语义。</li>
+      <li>从 <code>Tool.get_input_schema()</code> 生成 Provider Tool 声明，不在 Adapter 复制工具参数定义；明确 strict/nullable/additionalProperties 差异。</li>
+      <li>把响应归一为 <code>LLMResponse</code>，对 Tool ID、空文本、多内容块、非法 arguments 和 finish reason 建立测试。</li>
+      <li>只映射 Provider 真正返回的 Usage；缺失字段不要伪造。接入 Trajectory 时使用新 Provider 稳定名。</li>
+      <li>定义可重试错误分类与 Timeout；若继续使用现有通用 retry，必须承认其会重试所有 Exception 且阻塞事件循环。</li>
+      <li>补齐 Config、ENV 前缀、README 示例、依赖声明与 Mock 契约测试；真实 API 测试必须显式 opt-in。</li>
+    </ol>
+    <div class="table-wrap"><table>
+      <tr><th>变更目标</th><th>所有者表面</th><th>必须同时证明</th></tr>
+      <tr><td>新增 Provider</td><td><code>llm_client.py</code>、新 Adapter、<code>pyproject.toml</code></td><td>Factory 构造、配置解析、历史两轮、Tool/ToolResult 配对、Usage、错误、Recorder、Secret</td></tr>
+      <tr><td>修改 Tool Schema</td><td><code>tools/base.py:get_input_schema</code> + 各 Adapter wrapper</td><td>OpenAI strict optional/null、嵌套 object、Anthropic 内建 Tool、Google/Ollama 可接受性</td></tr>
+      <tr><td>增加 Streaming</td><td>不能只改一个 Adapter；需新公共响应/事件契约、Agent 调用点与 Console/Trajectory</td><td>chunk 顺序、ToolCall 增量、Usage 终帧、取消、背压、重试边界、部分内容落盘</td></tr>
+      <tr><td>增加 Failover</td><td>应新增明确的路由/策略所有者，不塞进单一 Adapter</td><td>可重试分类、模型能力等价、历史转换、幂等/计费、审计记录、Secret/Endpoint 策略</td></tr>
+      <tr><td>修复历史语义</td><td>目标 Adapter 的 parse/commit 逻辑</td><td>文本、单/多 ToolCall、失败请求、reuse=false、set_history、两轮 ToolResult</td></tr>
+      <tr><td>增加 Usage 字段</td><td><code>llm_basics.py</code>、所有 Adapter、Agent 累加、Trajectory Schema</td><td>缺失值兼容、旧轨迹读取、序列化与总计不重复</td></tr>
+    </table></div>
+    <div class="callout warning"><strong>禁止捷径：</strong>不要在 <code>BaseAgent</code> 写 Provider SDK 分支；不要把 Provider 原生对象泄漏进 <code>LLMResponse</code>；不要把 Tool Schema 当权限控制；不要用静默切换 Provider 掩盖认证错误；不要声称只实现 <code>chat</code> 就完成扩展。</div>
+  </section>
+
+  <section class="section" id="tradeoffs">
+    <h2>15. 设计权衡与已知限制</h2>
+    <div class="table-wrap"><table>
+      <tr><th>选择</th><th>收益</th><th>成本/失败模式</th><th>何时重评</th></tr>
+      <tr><td>小型统一 DTO + Provider 原生历史</td><td>Agent Loop 简单，Adapter 可保留原生协议细节</td><td>历史语义不一致，无法直接序列化/迁移到另一 Provider</td><td>需要会话恢复、Provider 切换或统一 Context 治理时</td></tr>
+      <tr><td>Factory match + 延迟导入</td><td>依赖只在选中 Provider 时加载路径代码，映射直观</td><td>注册需改中心文件；无插件发现和能力元数据</td><td>Provider 数量增长或需要第三方插件时</td></tr>
+      <tr><td>OpenAI-compatible 共享层</td><td>Azure/OpenRouter/Doubao 复用请求与解析</td><td>可能掩盖 Endpoint、模型能力、Usage 和协议方言差异；ProviderConfig 能力方法当前未接线</td><td>方言分歧导致条件分支持续增长时</td></tr>
+      <tr><td>通用“捕获所有异常”重试</td><td>实现短小，对瞬时故障有机会恢复</td><td>认证、Schema、上下文超限也被重试；阻塞、无总预算、可能泄密日志</td><td>生产运行、多任务并发或成本敏感时</td></tr>
+      <tr><td>每轮重新生成 Tool Schema</td><td>动态 MCP Tool 可进入后续请求，逻辑直接</td><td>重复构造；能力不兼容直到 API 报错</td><td>Tool 数量大或 Provider 要求预注册/缓存时</td></tr>
+      <tr><td>同步非流式接口</td><td>Agent Step 与 Trajectory 原子响应模型简单</td><td>长请求无增量反馈、取消与背压；阻塞 async Loop</td><td>需要交互低延迟、并发任务或长推理模型时</td></tr>
+    </table></div>
+    <h3>当前已证实的限制</h3>
+    <ul>
+      <li>没有通用 Streaming、跨 Provider Failover、断路器、健康检查或统一 Timeout Budget。</li>
+      <li>没有统一历史压缩、上下文窗口预检、跨进程会话恢复或 Provider 间历史迁移。</li>
+      <li><code>supports_tool_calling</code> 不是主链准入门禁；共享 Provider 的模型模式判断未接入。</li>
+      <li>Ollama 不回写 assistant 响应，Usage/finish reason 为空；构造的 OpenAI Client 与默认 base_url 不参与实际 <code>ollama_chat</code> 调用。</li>
+      <li>Trajectory 记录的是内部增量消息与归一响应，不是 Provider 原生 HTTP 请求完整快照。</li>
+      <li>测试对 Provider 覆盖不均，多个 Live 倾向测试和当前实现存在漂移。</li>
+    </ul>
+    <p class="source-note">以上是当前工作区源码限制，不等于 Provider SDK 本身不支持这些能力，也不代表 Roadmap 承诺。</p>
+  </section>
+
+  <section class="section" id="sources">
+    <h2>16. 源码索引与进一步阅读</h2>
+    <div class="table-wrap"><table>
+      <tr><th>类别</th><th>路径 / 符号</th><th>用途</th></tr>
+      <tr><td>入口/调用方</td><td><code>trae_agent/agent/base_agent.py:29-45,147-236</code></td><td>Client 构造、每步同步 chat、Usage 与 Tool 回路</td></tr>
+      <tr><td>Factory</td><td><code>trae_agent/utils/llm_clients/llm_client.py:15-86</code></td><td>7 项枚举、延迟导入、统一转发</td></tr>
+      <tr><td>抽象基类</td><td><code>trae_agent/utils/llm_clients/base_client.py:13-44</code></td><td>凭证、Endpoint、Recorder、历史/chat 契约</td></tr>
+      <tr><td>统一类型</td><td><code>trae_agent/utils/llm_clients/llm_basics.py:10-52</code></td><td>LLMMessage、LLMUsage、LLMResponse</td></tr>
+      <tr><td>共享 Adapter</td><td><code>trae_agent/utils/llm_clients/openai_compatible_base.py:34-286</code></td><td>Azure/OpenRouter/Doubao 共用 Chat Completions 转换</td></tr>
+      <tr><td>七个实现</td><td><code>trae_agent/utils/llm_clients/openai_client.py:27-209</code>；<code>trae_agent/utils/llm_clients/anthropic_client.py:19-220</code>；<code>trae_agent/utils/llm_clients/google_client.py:21-229</code>；<code>trae_agent/utils/llm_clients/ollama_client.py:28-196</code>；<code>trae_agent/utils/llm_clients/azure_client.py:15-53</code>；<code>trae_agent/utils/llm_clients/openrouter_client.py:17-74</code>；<code>trae_agent/utils/llm_clients/doubao_client.py:15-46</code></td><td>Provider 协议差异</td></tr>
+      <tr><td>重试</td><td><code>trae_agent/utils/llm_clients/retry_utils.py:13-55</code></td><td>次数、随机阻塞等待、日志与最终异常</td></tr>
+      <tr><td>配置 Schema</td><td><code>trae_agent/utils/config.py:12-116,194-410</code></td><td>模型字段、YAML 对象图、CLI/ENV/YAML resolve、Legacy</td></tr>
+      <tr><td>CLI</td><td><code>trae_agent/cli.py:126-213,292-302</code></td><td>Provider/Model/Base URL/API Key 参数与 resolve 调用</td></tr>
+      <tr><td>Tool Schema</td><td><code>trae_agent/tools/base.py:33-175</code></td><td>ToolCall/Result/Parameter 与 OpenAI strict Schema</td></tr>
+      <tr><td>Trajectory</td><td><code>trae_agent/utils/trajectory_recorder.py:20-128</code></td><td>LLM Interaction 保存字段与增量写盘</td></tr>
+      <tr><td>依赖版本</td><td><code>pyproject.toml:1-25</code></td><td>Python、OpenAI、Anthropic、Google、Ollama、YAML 依赖范围</td></tr>
+      <tr><td>测试</td><td><code>tests/utils/test_config.py:13-139</code>；<code>tests/utils/test_google_client.py:20-311</code>；<code>tests/utils/test_ollama_client_utils.py:19-122</code>；<code>tests/utils/test_openrouter_client_utils.py:20-118</code></td><td>现有契约、Live 依赖与已知漂移</td></tr>
+      <tr><td>当前文档</td><td><code>README.md:95-125,142-169</code></td><td>ENV 与 Provider 使用示例；配置优先级文字与源码冲突</td></tr>
+      <tr><td>相邻子文档</td><td><a href="03-agent-runtime.html">03-agent-runtime.html</a></td><td>Agent Loop、终态与资源生命周期</td></tr>
+    </table></div>
+    <div class="source-card"><b>证据缺口</b>未访问 Provider 在线官方文档或真实 API，未验证 SDK 在具体服务版本下的隐式超时、连接池、环境变量回退和错误类型；因此本页只陈述 Trae Agent 显式传参和仓库内归一行为。</div>
+  </section>
+
+  <section class="section" id="glossary">
+    <h2>附录 · 术语对照表</h2>
+    <div class="table-wrap"><table>
+      <tr><th>英文术语</th><th>中文</th><th>一句话解释</th></tr>
+      <tr><td><code>LLM Provider</code></td><td>LLM 提供者</td><td>提供大语言模型 API 服务的厂商</td></tr>
+      <tr><td><code>Failover</code></td><td>故障转移</td><td>主模型失败时自动切换到备用模型</td></tr>
+      <tr><td><code>Streaming</code></td><td>流式传输</td><td>LLM 逐 Token 返回结果而非一次性返回</td></tr>
+      <tr><td><code>Adapter</code></td><td>适配器</td><td>将统一接口转换为特定 Provider API 格式的组件</td></tr>
+      <tr><td><code>Usage</code></td><td>用量</td><td>Token 消耗等资源使用统计</td></tr>
+      <tr><td><code>Endpoint</code></td><td>端点</td><td>API 服务的访问地址</td></tr>
+      <tr><td><code>Header</code></td><td>请求头</td><td>HTTP 请求中的元数据字段</td></tr>
+      <tr><td><code>Content Block</code></td><td>内容块</td><td>LLM 响应中的结构化内容单元</td></tr>
+      <tr><td><code>Prompt / Completion</code></td><td>提示 / 补全</td><td>LLM 的输入与输出</td></tr>
+      <tr><td><code>Cached Input</code></td><td>缓存输入</td><td>被缓存复用的输入 Token</td></tr>
+    </table></div>
+  </section>
+
+  <nav class="chapter-nav" aria-label="章节导航">
+    <a class="prev" href="12-trajectory.html">← 12 Trajectory</a>
+    <a class="next" href="14-mcp-integration.html">14 MCP 集成 →</a>
+  </nav>
+  <footer class="footer">Trae Agent 架构模块 13 · 基于工作区源码快照审计 · 2026-07-27</footer>
+</main>
+<script>
+const links=[...document.querySelectorAll('.sidebar a')];
+const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+const mark=()=>{let current=sections[0];for(const section of sections){if(section.getBoundingClientRect().top<=96)current=section}
+links.forEach(a=>a.classList.toggle('active',current&&a.getAttribute('href')==='#'+current.id));};
+document.addEventListener('scroll',mark,{passive:true});mark();
+</script>
+</body>
+</html>

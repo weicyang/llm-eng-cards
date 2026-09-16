@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>十五、LangGraph Functional API：@entrypoint、@task 与可恢复 PUSH Call</title>
+<style>
+:root{--bg:#f4f1ea;--panel:#fffdf8;--panel2:#f0ebe0;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--red:#b91c1c;--yellow:#c2410c;--purple:#6d28d9}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.72 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",Arial,sans-serif;padding:58px 22px 42px 292px}
+a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .3rem;border-radius:4px;font-size:.91em}
+.topbar{position:fixed;z-index:20;left:0;right:0;top:0;height:46px;display:flex;align-items:center;gap:10px;padding:0 18px;background:var(--panel);border-bottom:1px solid var(--border)}
+.topbar a{border:1px solid var(--border);border-radius:7px;padding:3px 10px}.sidebar{position:fixed;z-index:10;left:0;top:46px;bottom:0;width:270px;overflow:auto;padding:16px 12px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);backdrop-filter:blur(12px)}
+.sidebar strong{display:block;color:var(--blue);margin:0 7px 9px}.sidebar a{display:block;color:var(--muted);font-size:12.5px;padding:3px 7px;border-left:2px solid transparent}.sidebar a.active,.sidebar a:hover{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}
+.container{max-width:1120px;margin:auto}h1{font-size:2.05rem;line-height:1.3;color:var(--blue);margin:16px 0 5px}.subtitle{color:var(--muted);margin:0 0 18px}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:16px 0 20px}.meta div,.card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:11px 13px}.meta strong,.card strong{display:block;color:var(--blue2)}
+.badges{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0}.badge{border:1px solid;border-radius:999px;padding:1px 8px;font-size:12px;font-weight:700}.fact{color:var(--green)}.default{color:var(--blue)}.optional{color:var(--yellow)}.migration{color:var(--red)}
+.section{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:25px 29px;margin:0 0 18px;scroll-margin-top:56px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section h2{font-size:1.42rem;color:var(--blue);border-bottom:1px solid var(--border);padding-bottom:8px;margin:0 0 14px}.section h3{font-size:1.12rem;color:var(--blue2);margin:20px 0 7px}
+.section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.source{color:var(--muted);font-size:12.5px;border-left:3px solid var(--border);padding-left:10px;margin:8px 0 14px}
+.key,.warn,.boundary{padding:13px 16px;border-radius:8px;margin:13px 0;background:var(--panel2)}.key{border-left:3px solid var(--blue)}.warn{border:1px solid var(--red)}.boundary{border:1px dashed var(--yellow)}.key strong{color:var(--blue2)}.warn strong{color:var(--red)}.boundary strong{color:var(--yellow)}
+.grid2,.grid3{display:grid;gap:11px}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.table-wrap{overflow-x:auto;margin:11px 0}table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{text-align:left;vertical-align:top;border:1px solid var(--border);padding:8px 9px}th{color:var(--blue);background:#e8e1d4}tr:nth-child(even){background:rgba(244,241,234,.38)}
+.mono{white-space:pre;overflow:auto;background:#e8e1d4;border:1px solid var(--border);border-radius:8px;padding:14px;color:var(--blue2);font:13px/1.55 Consolas,"Cascadia Code",monospace}ul,ol{padding-left:22px}li{margin:4px 0}.footer{text-align:center;color:var(--muted);padding:22px}
+@media(max-width:950px){body{padding-left:18px}.sidebar{display:none}.meta{grid-template-columns:1fr 1fr}}@media(max-width:650px){body{padding:52px 9px 20px}.section{padding:18px 14px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.meta,.grid2,.grid3{grid-template-columns:1fr}h1{font-size:1.58rem}.topbar{overflow:auto;white-space:nowrap}.mono{font-size:11px}}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <a href="../../langgraph_architecture.html#s15">返回 LangGraph 架构总览 · s15</a>
+  <span>Functional API 开发级文档</span>
+</header>
+<nav class="sidebar" aria-label="本页目录">
+  <strong>十五、Functional API</strong>
+  <a href="#scope">1. 模块定位</a><a href="#position">2. 系统位置与依赖</a>
+  <a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a>
+  <a href="#flows">5. 完整运行流程</a><a href="#state-model">6. 数据与状态模型</a>
+  <a href="#interfaces">7. 接口、协议与事件</a><a href="#configuration">8. 配置与默认行为</a>
+  <a href="#concurrency">9. 并发、性能与资源</a><a href="#security">10. 安全与信任边界</a>
+  <a href="#failure">11. 失败、恢复与兼容</a><a href="#observability">12. 可观测性与排障</a>
+  <a href="#testing">13. 测试与验证</a><a href="#development">14. 开发与扩展指南</a>
+  <a href="#tradeoffs">15. 设计权衡与限制</a><a href="#source-index">16. 源码索引</a>
+  <a href="#glossary">17. 术语表</a>
+</nav>
+<main class="container">
+<h1>十五、Functional API：从 Python 控制流到可恢复 PUSH Call</h1>
+<p class="subtitle">面向工作流开发、运行时维护和故障排查：解释 <code>@entrypoint</code>、<code>@task</code> 如何复用同一个 Pregel、Checkpoint、Interrupt 与 Streaming 内核。</p>
+<div class="badges"><span class="badge fact">当前事实</span><span class="badge default">默认行为</span><span class="badge optional">可选能力</span><span class="badge migration">迁移边界</span></div>
+<div class="meta">
+  <div><strong>事实基线</strong><code>langgraph 1.2.11</code>；工作区快照 2026-08-14</div>
+  <div><strong>证据状态</strong>源码、公共类型和 sync/async 测试已审计；Git SHA 因本机 Git 命令不可用未记录</div>
+  <div><strong>主要 Owner</strong><code>libs/langgraph/langgraph/func/__init__.py</code><br><code>libs/langgraph/langgraph/pregel/_call.py</code></div>
+  <div><strong>运行时 Owner</strong><code>pregel/_runner.py</code>、<code>_algo.py</code>、<code>_loop.py</code></div>
+  <div><strong>目标读者</strong>应用开发者、Runtime 维护者、测试与运维人员</div>
+  <div><strong>明确边界</strong>本地 Python Runtime；不把 API Server、远程队列或鉴权视为内建能力</div>
+</div>
+
+<section class="section" id="scope">
+<h2>1. 模块定位</h2>
+<p>Functional API 是 LangGraph 的编排表面：开发者用普通 Python 的 <code>if</code>、循环、函数调用和 future 等待表达控制流，装饰器把入口转换成真正的 <code>Pregel</code>，把 task 调用转换成由 Runner 调度的 PUSH 任务。它不是脱离图运行时的“快捷执行器”。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:516-620</code></span></p>
+<div class="table-wrap"><table>
+<thead><tr><th>负责</th><th>委托</th><th>明确不负责</th></tr></thead>
+<tbody>
+<tr><td>装饰入口、推断输入/输出类型、创建 START/END/PREVIOUS Channel</td><td>执行、并发、retry、cache、timeout 给 Pregel Runner</td><td>定义 StateGraph 的 Node/Edge/Reducer DSL</td></tr>
+<tr><td>把 task 调用参数封装为 <code>Call</code> 并返回 future</td><td>task id、pending writes、恢复给 Loop/Checkpointer</td><td>提供跨机器队列、鉴权或 exactly-once 外部副作用</td></tr>
+<tr><td>通过 <code>entrypoint.final</code> 分离调用返回值与下次 <code>previous</code></td><td>interrupt/stream/config/runtime 注入给共享公共协议</td><td>自动补偿已经提交的数据库、HTTP 或文件副作用</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>选择边界：</strong>控制流天然由代码表达、希望把耗时步骤变成 durable task 时使用 Functional API；需要显式状态 Schema、reducer、可视化路由、多 actor 或声明式审计时优先 Graph API。两者可互相嵌套，但共享 Runtime 不等于共享同一种状态建模方式。</div>
+</section>
+
+<section class="section" id="position">
+<h2>2. 系统位置与依赖</h2>
+<div class="mono">调用方
+  invoke / stream / ainvoke / astream
+                 │
+                 ▼
+@entrypoint ──► Pregel(START → entrypoint node → END + PREVIOUS)
+                                    │ CONFIG_KEY_CALL
+                                    ▼
+@task(...) ─► _call_with_options ─► Runner _call / _acall
+                                    │
+                                    ▼
+                  Call ─► functional PUSH task ─► RETURN write
+                                    │
+                    Checkpointer / Cache / Store / Stream</div>
+<p><code>@entrypoint</code> 构造的对象直接是 <code>Pregel</code>，所以它天然获得 Runnable 调用、state API、checkpoint、stream 与 interrupt 能力；<code>@task</code> 只导出装饰后的 callable，其执行依赖当前 Runnable config 内部注入的 <code>CONFIG_KEY_CALL</code>。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:576-609</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_call.py:276-298</code></span></p>
+<div class="grid2">
+  <div class="card"><strong>上游</strong>应用代码、Graph node 或 Functional entrypoint；task 文档明确只允许从 entrypoint 或 StateGraph 的运行上下文调用。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:144-169</code></span></div>
+  <div class="card"><strong>下游</strong>Runner 注入 call 实现并负责 future、取消、重试与提交；Loop 接受新 PUSH 并重放成功 writes。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:201-220</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:550-587</code></span></div>
+  <div class="card"><strong>兄弟实现</strong>同步走 <code>_call</code> 与 <code>concurrent.futures.Future</code>；异步走 <code>_acall</code>，根据调用上下文返回 asyncio 或 concurrent future。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:700-786</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:789-841</code></span></div>
+  <div class="card"><strong>依赖</strong>核心包要求 Python ≥3.10，并依赖 langchain-core、checkpoint、sdk、prebuilt、xxhash、pydantic。异步 Functional task 的公开说明要求 Python ≥3.11。<span class="evidence"><code>libs/langgraph/pyproject.toml:5-33</code></span> <span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:144-149</code></span></div>
+</div>
+</section>
+
+<section class="section" id="concepts">
+<h2>3. 核心概念</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>概念</th><th>精确定义</th><th>易混点</th></tr></thead>
+<tbody>
+<tr><td><code>entrypoint</code></td><td>类形态装饰器；调用后把单个用户函数包装为单节点 Pregel</td><td>不是一个只执行函数的 wrapper</td></tr>
+<tr><td><code>task</code></td><td>把函数包装为 <code>_TaskFunction</code>；调用产生可等待的 future</td><td>调用瞬间不是普通 Python 直接调用</td></tr>
+<tr><td><code>Call</code></td><td>内部载体，保存 func、(args, kwargs)、retry/cache/callback/timeout</td><td>不是公共 <code>Send</code>，但同属 PUSH 调度</td></tr>
+<tr><td>PUSH task</td><td>由父任务 path、call 序号、父 task id 和 Call 构造的运行任务</td><td>不同于 Channel/Edge 版本触发的 PULL</td></tr>
+<tr><td><code>SyncAsyncFuture</code></td><td>公开返回标注使用的可 <code>.result()</code> 且可 <code>await</code> future 表面</td><td>实际 future 由 sync/async Runner 创建</td></tr>
+<tr><td><code>previous</code></td><td>同一 thread 上一轮保存在 PREVIOUS Channel 的值</td><td>不是当前超级步兄弟 task 的共享可变状态</td></tr>
+<tr><td><code>entrypoint.final</code></td><td><code>value</code> 返回调用者，<code>save</code> 写 PREVIOUS</td><td>两者都允许显式为 <code>None</code></td></tr>
+</tbody></table></div>
+<p><code>Call</code> 的输入严格保存为 <code>(args, kwargs)</code>，functional PUSH 的 runnable 在执行前再 explode 参数；结果通过保留的 RETURN write 交回父 future。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:120-152</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_call.py:200-242</code></span></p>
+</section>
+
+<section class="section" id="components">
+<h2>4. 架构组成</h2>
+<h3>4.1 <code>_TaskFunction</code> 与 task decorator</h3>
+<p><code>_TaskFunction.__call__</code> 不运行用户函数，而是把函数、实参和策略送入 <code>_call_with_options</code>；task 还提供同步/异步清 cache API，cache namespace 使用函数 identifier，动态函数回退为 <code>__dynamic__</code>。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:59-106</code></span></p>
+<h3>4.2 entrypoint Pregel 外壳</h3>
+<p>entrypoint 节点订阅 START，writers 同时把结果映射到 END 与 PREVIOUS；START 是 <code>EphemeralValue</code>，END/PREVIOUS 是 <code>LastValue</code>。默认 <code>stream_mode="updates"</code> 且 <code>stream_eager=True</code>。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:531-609</code></span></p>
+<h3>4.3 Runner call bridge</h3>
+<p>Runner 给当前任务 config 注入 <code>CONFIG_KEY_CALL</code>。每次调用用 scratchpad 的 <code>call_counter()</code> 取得顺序号，交 Loop 的 <code>accept_push</code> 构造稳定子任务；已运行 task 直接从 RETURN/ERROR writes 完成 future，否则提交执行。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:700-786</code></span></p>
+<h3>4.4 functional PUSH materializer</h3>
+<p><code>prepare_push_task_functional</code> 使用 checkpoint、namespace、step、函数名、父 path 与调用序号生成 task id，注入 task-local scratchpad、Runtime、Store、Checkpointer 和 checkpoint map，并按 call 级策略覆盖图级策略。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:800-933</code></span></p>
+</section>
+
+<section class="section" id="flows">
+<h2>5. 完整运行流程</h2>
+<h3>5.1 正常成功路径</h3>
+<ol>
+  <li>调用 <code>workflow.invoke(input)</code> 或 <code>ainvoke</code>，Pregel 把 input 写 START，调度 entrypoint PULL task。</li>
+  <li>entrypoint 内调用 decorated task；<code>get_config()</code> 找到 Runner 注入的 call bridge，立即得到 future。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_call.py:276-298</code></span></li>
+  <li>Runner 用父 scratchpad call counter 创建 <code>Call</code>，Loop 以 PUSH path 接受并注册 task。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:718-733</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:550-587</code></span></li>
+  <li>functional task runnable 执行并写 RETURN；commit 先调用 task 级 <code>put_writes</code>，链式 future 后完成，保证结果/stream 提交顺序。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_call.py:200-242</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:604-613</code></span></li>
+  <li>父函数等待 future，最终值写 END；保存值写 PREVIOUS。invoke 返回 END，后续同 thread 从 PREVIOUS 注入 <code>previous</code>。</li>
+</ol>
+<h3>5.2 拒绝与提前结束路径</h3>
+<ul>
+  <li>entrypoint 没有任何参数：装饰时抛 <code>ValueError</code>；生成器/异步生成器直接抛 <code>NotImplementedError</code>。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:525-543</code></span></li>
+  <li>同步 task/entrypoint 配 timeout：装饰时拒绝，因为进程内同步函数不能安全取消；不会“尽力超时后继续”。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:224-246</code></span></li>
+  <li>同步运行上下文调用 async task：Runner 抛 <code>RuntimeError("In an sync context async tasks cannot be called")</code>。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:700-717</code></span></li>
+  <li>空 <code>Command</code>、无 checkpointer 的 resume、多 pending interrupt 却给单值都 fail closed。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:902-931</code></span></li>
+</ul>
+<h3>5.3 Interrupt 与恢复路径</h3>
+<ol>
+  <li>entrypoint 或 child task 调用 <code>interrupt(value)</code>，GraphInterrupt 由 commit 保存为 INTERRUPT pending write；child call path 的 interrupt 由父任务统一对外呈现。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:574-603</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:1417-1451</code></span></li>
+  <li>客户端以同一 thread 发送 <code>Command(resume=...)</code>；Loop 先持久化 RESUME，再从 entrypoint 开头重跑。<span class="evidence"><code>libs/langgraph/langgraph/types.py:851-871</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:902-951</code></span></li>
+  <li>相同父 path 与 call 顺序产生相同 task id；Loop 把成功 task 的 pending writes 重放到内存 task，Runner 直接从 RETURN 完成 future，不重做已成功 task。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:831-846</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_loop.py:736-749</code></span></li>
+  <li>先前失败/中断的 task 不重放 ERROR/INTERRUPT，因而按规则重试或再次中断；这不是恢复 Python 栈帧。</li>
+</ol>
+<div class="warn"><strong>恢复约束：</strong>恢复依赖调用路径与调用序号稳定。修改分支、循环次数或 task 调用顺序会改变后续 functional task 的身份；发布代码变更后恢复旧 checkpoint 必须做兼容验证。已成功 LangGraph task 可跳过，不代表 task 内外部副作用天然 exactly-once。</div>
+</section>
+
+<section class="section" id="state-model">
+<h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>数据</th><th>Owner / 生命周期</th><th>持久化与可见性</th></tr></thead>
+<tbody>
+<tr><td>START input</td><td>entrypoint 每次调用；<code>EphemeralValue</code></td><td>触发入口，不是长期 previous</td></tr>
+<tr><td>END output</td><td>本轮 entrypoint；<code>LastValue</code></td><td>invoke 返回与默认 stream channel</td></tr>
+<tr><td>PREVIOUS</td><td>同 thread 最近保存值；<code>LastValue</code></td><td>有 checkpointer 才跨调用可用；无 saver 时每次为 None</td></tr>
+<tr><td>Call input</td><td>functional PUSH task；args + kwargs</td><td>启用 checkpointer 时必须可序列化</td></tr>
+<tr><td>RETURN/ERROR/INTERRUPT</td><td>task 级 pending writes</td><td>用于 future 完成、失败与恢复去重</td></tr>
+<tr><td>Runtime context/store</td><td>run scoped 注入</td><td>context 不等同 checkpoint state；Store 不负责调度恢复</td></tr>
+</tbody></table></div>
+<p><code>previous</code> 来自 checkpoint 的 PREVIOUS Channel，并通过 Runtime 注入到函数同名参数；普通返回同时作为 END 与 PREVIOUS，<code>entrypoint.final(value, save)</code> 才把两者分开。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:688-701</code></span> <span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:475-514</code></span></p>
+<p>当 strict msgpack 模式启用时，entrypoint 根据 input/output/save/context schema 与 Channel 构建 serde allowlist，并包装 checkpointer；这是可选反序列化约束，不等于业务输入校验或远程鉴权。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:610-619</code></span></p>
+</section>
+
+<section class="section" id="interfaces">
+<h2>7. 接口、协议与事件</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>公共表面</th><th>返回/行为</th><th>错误与版本语义</th></tr></thead>
+<tbody>
+<tr><td><code>@task</code> / <code>@task(...)</code></td><td><code>_TaskFunction</code>；调用返回可等待 future</td><td>仅运行上下文内有效；sync timeout 被拒绝</td></tr>
+<tr><td><code>@entrypoint(...)</code></td><td>装饰后得到 <code>Pregel</code></td><td>入口至少一个业务 input 参数；generator 不支持</td></tr>
+<tr><td><code>entrypoint.final[R,S]</code></td><td><code>value:R</code> 返回，<code>save:S</code> 保存</td><td>泛型参数不完整时装饰阶段抛 TypeError</td></tr>
+<tr><td><code>invoke/ainvoke</code></td><td>最终 END 或 interrupt payload</td><td>继承 Pregel/Runnable 契约</td></tr>
+<tr><td><code>stream/astream</code></td><td>默认 updates；task 与 entrypoint 更新可增量到达</td><td>并发 task 更新顺序不应当作业务排序</td></tr>
+<tr><td><code>Command(resume=...)</code></td><td>恢复 pending interrupt</td><td>必须有 checkpointer；多 interrupt 推荐 id→value map</td></tr>
+<tr><td><code>get_state/update_state</code></td><td>复用 Pregel state API</td><td>无 checkpointer 时 get_state 拒绝</td></tr>
+</tbody></table></div>
+<p>函数可按签名接收 <code>config</code>、<code>previous</code>、<code>runtime</code> 等注入参数；显式传入同名 task kwargs 优先于自动注入。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_runnable.py:166-245</code></span> <span class="evidence"><code>libs/langgraph/langgraph/_internal/_runnable.py:374-419</code></span></p>
+<div class="key"><strong>事件顺序：</strong>Runner 返回链式 future，目的就是让 task commit callback 先完成，再让父函数观察结果，从而维持 pending write 与 stream 的顺序。同步和异步桥均明确实现这一点。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:783-786</code></span> <span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:808-840</code></span></div>
+</section>
+
+<section class="section" id="configuration">
+<h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>配置项</th><th>类型/可选值</th><th>默认</th><th>优先级与边界</th><th>失败行为</th><th>来源</th></tr></thead>
+<tbody>
+<tr><td>entrypoint <code>checkpointer</code></td><td><code>BaseCheckpointSaver | None</code></td><td>None</td><td>决定 previous、interrupt 与跨 run 恢复</td><td>resume 无 saver 时拒绝</td><td><code>func/__init__.py:437-473</code></td></tr>
+<tr><td><code>store</code> / <code>cache</code></td><td>BaseStore / BaseCache</td><td>None</td><td>分别注入长期数据与缓存 task/entrypoint writes</td><td>无实例则能力关闭</td><td><code>func/__init__.py:437-473</code></td></tr>
+<tr><td><code>context_schema</code></td><td><code>type | None</code></td><td>None</td><td>run-scoped context schema</td><td>旧 config_schema 发 warning</td><td><code>func/__init__.py:437-456</code></td></tr>
+<tr><td><code>retry_policy</code></td><td>单个或 Sequence</td><td>空</td><td>call 级优先于 graph 级；按异常策略重试</td><td>耗尽后异常进入父 future</td><td><code>func/__init__.py:132-232</code></td></tr>
+<tr><td><code>cache_policy</code></td><td>CachePolicy</td><td>None</td><td>task 级优先；key_func 接收原 args/kwargs</td><td>不可序列化/错误 key 传播异常</td><td><code>pregel/_algo.py:856-872</code></td></tr>
+<tr><td><code>timeout</code></td><td>秒、timedelta、TimeoutPolicy</td><td>None</td><td>task/entrypoint attempt；仅 async</td><td>sync 装饰时拒绝，async 抛 NodeTimeoutError</td><td><code>func/__init__.py:158-169</code></td></tr>
+<tr><td><code>name</code></td><td>str | None（task）</td><td>函数名</td><td>影响 trace、namespace 与 task id</td><td>不可识别函数名时 PUSH 准备拒绝</td><td><code>func/__init__.py:59-84</code></td></tr>
+<tr><td>stream mode</td><td>Pregel StreamMode</td><td>updates</td><td>entrypoint 构造默认值；调用方可按 Pregel API 指定</td><td>非法 mode 由 Pregel 校验</td><td><code>func/__init__.py:531-532</code></td></tr>
+</tbody></table></div>
+<p>默认 retry 参数来自公共 <code>RetryPolicy</code>：初始间隔 0.5 秒、backoff 2、最大间隔 128 秒、最多 3 次尝试（含首次）、默认 jitter 开启；不要把这些值误写成 task 独有配置。<span class="evidence"><code>libs/langgraph/langgraph/types.py:418-437</code></span></p>
+</section>
+
+<section class="section" id="concurrency">
+<h2>9. 并发、性能与资源</h2>
+<ul>
+  <li><strong>并行来源：</strong>先创建多个 task futures，再集中 <code>.result()</code> 或 <code>asyncio.gather</code>，Runner 可并发执行；先创建一个并立即等待会串行化。同步测试明确说明 mapper stream 顺序不确定。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:1277-1314</code></span></li>
+  <li><strong>线程安全边界：</strong>每个 task 有独立 writes deque；注入的 send 使用 <code>deque.extend</code>，源码标记线程安全。外部数据库和文件不受此保护。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:893-925</code></span></li>
+  <li><strong>失败传播：</strong>未处理异常使 Runner 停止其他任务并取消 inflight futures；取消是尽力而为，阻塞同步函数不能安全抢占。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_runner.py:616-697</code></span></li>
+  <li><strong>async 取消：</strong>异步 child future 取消会向 source future 传播；跨 event loop 时用 thread-safe callback。<span class="evidence"><code>libs/langgraph/langgraph/_internal/_future.py:82-124</code></span></li>
+  <li><strong>stream 不缓冲到结尾：</strong>同步 Functional 测试验证两个慢 task 更新分开到达。<span class="evidence"><code>libs/langgraph/tests/test_pregel.py:6269-6304</code></span></li>
+  <li><strong>资源预算：</strong>大量未等待 future 会占用 executor/task、内存、pending writes 与外部连接；源码不声明 Functional API 自带背压容量，应用应限制 fan-out。</li>
+</ul>
+<div class="warn"><strong>并发失败安全：</strong>一个 sibling 失败后，另一个可能已完成并提交副作用，也可能只收到取消请求。恢复能重用已持久化 RETURN，但不能回滚外部世界。设计 task 时使用幂等键（可由 thread/task/run 身份派生）、事务或补偿流程。</div>
+</section>
+
+<section class="section" id="security">
+<h2>10. 安全与信任边界</h2>
+<div class="grid2">
+  <div class="card"><strong>输入与序列化</strong>类型注解主要用于 JSON schema 与 serde allowlist，不自动执行完整业务校验。启用 checkpointer 时 task 输入输出必须可序列化。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:150-156</code></span></div>
+  <div class="card"><strong>反序列化</strong>strict msgpack allowlist 是可选防线；升级 schema、移动类型模块或恢复旧 checkpoint 前应做 migration 测试。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:610-619</code></span></div>
+  <div class="card"><strong>Secret</strong>不要把密钥放进 entrypoint 返回、PREVIOUS、task args、interrupt value 或 stream chunk；这些表面可能进入 checkpoint、trace 或客户端。</div>
+  <div class="card"><strong>权限与租户</strong>本地 Functional API 不提供 Auth 或多租户隔离。Store namespace、thread_id 的授权与工具副作用策略必须由应用/Server 边界实施。</div>
+</div>
+<p>task 允许类方法、partial 和 callable object，并尝试生成稳定 identifier；动态/本地函数可能退化为动态身份。不要把可调用对象名称或 cache key 当安全授权依据。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_call.py:84-154</code></span></p>
+</section>
+
+<section class="section" id="failure">
+<h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>故障/现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试/恢复</th><th>运维操作</th></tr></thead>
+<tbody>
+<tr><td>task 抛异常</td><td>future.result/await 抛出；tasks stream ERROR</td><td>父 task 失败；其他 inflight 尝试取消</td><td>ERROR pending write；无新超级步 checkpoint</td><td>按 task/graph retry policy；后续 run 重做失败 task</td><td>区分瞬时错误与业务拒绝</td></tr>
+<tr><td>动态 interrupt</td><td>输出含 <code>__interrupt__</code></td><td>暂停而非普通失败</td><td>INTERRUPT/RESUME task writes</td><td>同 thread 发送 Command(resume)</td><td>核对 interrupt id 与调用顺序</td></tr>
+<tr><td>父 async timeout</td><td>NodeTimeoutError</td><td>父运行取消；已启动 child 可能已经运行</td><td>已提交 child write 可能保留</td><td>仅在幂等时重试</td><td>检查 task start 与 pending writes</td></tr>
+<tr><td>恢复后 task 重跑</td><td>调用计数/trace 增加</td><td>未匹配旧 task id</td><td>可能重复副作用</td><td>恢复旧代码或迁移 checkpoint</td><td>比较函数名、父 path、call 序号</td></tr>
+<tr><td>无 previous</td><td>参数为 None</td><td>工作流仍运行</td><td>无跨 run PREVIOUS</td><td>配置 saver + thread_id</td><td>不要只传 thread_id 而漏 saver</td></tr>
+<tr><td>cache 命中错误结果</td><td>updates 标记 cached/调用计数不变</td><td>直接重放 writes</td><td>跨 thread 可复用错误业务假设</td><td>修 key_func 或 clear_cache</td><td>缓存只用于纯函数式 task</td></tr>
+</tbody></table></div>
+<h3>11.1 Deprecated 参数迁移</h3>
+<ul>
+  <li><code>@task(retry=...)</code> → <code>@task(retry_policy=...)</code>；旧参数发 <code>LangGraphDeprecatedSinceV05</code>，且仅当新参数未设置时回填。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:216-232</code></span></li>
+  <li><code>@entrypoint(retry=...)</code> → <code>@entrypoint(retry_policy=...)</code>，同样“新参数优先”。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:458-472</code></span></li>
+  <li><code>config_schema</code> → <code>context_schema</code>；公开 docstring 标注 v0.6 起弃用、计划 v2.0 移除，兼容实现只在新参数缺省时采用旧值。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:294-316</code></span> <span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:449-456</code></span></li>
+  <li>公共类型从 <code>langgraph.pregel.types</code> 迁至 <code>langgraph.types</code>；旧模块导入即告警。<span class="evidence"><code>libs/langgraph/langgraph/pregel/types.py:1-38</code></span></li>
+</ul>
+</section>
+
+<section class="section" id="observability">
+<h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>现象</th><th>先检查</th><th>常见原因</th><th>修复</th></tr></thead>
+<tbody>
+<tr><td>task 没并行</td><td>future 创建与等待顺序、tasks stream</td><td>每创建一个就立即等待</td><td>先 fan-out，再 gather/result</td></tr>
+<tr><td>恢复重复调用 task</td><td>task name/path/id、pending RETURN</td><td>代码改变调用序号或未持久化成功 write</td><td>保持调用结构兼容；提高 durability；补 migration 测试</td></tr>
+<tr><td>stream 只有最终结果</td><td>stream mode、是否用 invoke、task 是否独立</td><td>没有订阅 updates/tasks 或函数内没有 durable task</td><td>使用 stream/astream 并指定所需 mode</td></tr>
+<tr><td>interrupt 看似来自 child 两次</td><td>task path 末尾 call 标记、parent payload</td><td>误把内部 child event 与父暴露事件重复消费</td><td>消费公开 stream payload，不依赖内部 path</td></tr>
+<tr><td><code>previous</code> 总为 None</td><td>checkpointer、thread_id、PREVIOUS state</td><td>无 saver、thread 变化或 save 显式为 None</td><td>固定 thread；检查 <code>entrypoint.final.save</code></td></tr>
+<tr><td>async task 在 sync run 报错</td><td>entrypoint 定义与调用 API</td><td>同步上下文调用 coroutine task</td><td>改 async entrypoint + ainvoke/astream</td></tr>
+<tr><td>取消后仍出现外部写</td><td>task 类型、执行日志、幂等键</td><td>同步阻塞任务不可抢占或请求已提交</td><td>异步协作取消；外部系统幂等/补偿</td></tr>
+</tbody></table></div>
+<p>优先打开 <code>tasks</code> 与 <code>updates</code> stream：task 调试输出包含 id、name、error、RETURN/result 与 interrupts；state snapshot 的 <code>PregelTask</code> 也公开 path/error/interrupt/result。<span class="evidence"><code>libs/langgraph/langgraph/pregel/debug.py:112-128</code></span> <span class="evidence"><code>libs/langgraph/langgraph/types.py:637-701</code></span></p>
+</section>
+
+<section class="section" id="testing">
+<h2>13. 测试与验证</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>契约/不变量</th><th>测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+<tbody>
+<tr><td>并发 PUSH、interrupt 后不重跑成功 task</td><td><code>libs/langgraph/tests/test_pregel.py:1269-1329</code></td><td>sync 参数化</td><td>mapper 并发、stream、resume、调用计数</td><td>外部数据库副作用不在此测试</td></tr>
+<tr><td>async gather 与恢复</td><td><code>libs/langgraph/tests/test_pregel_async.py:2289-2339</code></td><td>async 参数化</td><td>async future、trace 子运行、resume 去重</td><td>Python 3.10 async 不覆盖</td></tr>
+<tr><td>entrypoint/task 内 interrupt</td><td><code>libs/langgraph/tests/test_pregel.py:4985-5072</code></td><td>恢复</td><td>父入口与 child task 两种暂停位置</td><td>真实持久化数据库由其他套件承担</td></tr>
+<tr><td>多次 interrupt + task/cache</td><td><code>libs/langgraph/tests/test_pregel.py:5710-5815</code></td><td>边界</td><td>call identity、cache 清理、resume 序列</td><td>并发多 interrupt id map 需额外集成覆盖</td></tr>
+<tr><td>task-before-interrupt 回归</td><td><code>libs/langgraph/tests/test_pregel.py:5818-5904</code></td><td>回归</td><td>mid-step put_writes 后 child scratchpad 正确消费 resume</td><td>跨版本 checkpoint fixture 可扩展</td></tr>
+<tr><td>增量 streaming</td><td><code>libs/langgraph/tests/test_pregel.py:6269-6304</code></td><td>时序</td><td>更新不会全部缓冲到图结束</td><td>仅使用宽松时间阈值</td></tr>
+<tr><td>previous 与 final</td><td><code>libs/langgraph/tests/test_pregel.py:6307-6367</code>、<code>6755-6809</code></td><td>状态/Schema</td><td>无 saver 为 None、同 thread 链、value/save 分离</td><td>生产 saver 迁移另测</td></tr>
+<tr><td>deprecated 参数</td><td><code>libs/langgraph/tests/test_deprecation.py:38-57</code>、<code>100-148</code></td><td>兼容</td><td>warning 类别与迁移目标</td><td>最终移除版本尚需 release 门禁</td></tr>
+<tr><td>async timeout 与 child 启动</td><td><code>libs/langgraph/tests/test_retry.py:786-825</code></td><td>失败安全</td><td>timeout retry 与父超时前 child 可运行</td><td>外部补偿不可能由单元测试证明</td></tr>
+</tbody></table></div>
+<h3>13.1 建议扩展的最小测试矩阵</h3>
+<ul>
+  <li>对 sync/async、无 saver/InMemory/SQLite/Postgres、durability sync/async/exit 做恢复矩阵；断言 task 调用次数、pending RETURN/ERROR 与最终 PREVIOUS。</li>
+  <li>注入“一个 sibling 成功且产生幂等外部写、一个 sibling 失败”，重启进程后证明成功 task 不重跑、失败 task 可重试、外部记录不重复。</li>
+  <li>保存旧版本 checkpoint，改变 task 名、分支与 call 次序，明确断言兼容或拒绝，避免静默以新身份重复副作用。</li>
+  <li>取消/timeout 测试同时覆盖 async cooperative task、线程池 sync task 与已提交 HTTP/DB 请求，记录各自可取消边界。</li>
+  <li>安全测试覆盖不可序列化输入、strict allowlist 拒绝、Secret 不进入 stream/checkpoint/trace，以及 Store namespace 租户隔离。</li>
+</ul>
+</section>
+
+<section class="section" id="development">
+<h2>14. 开发与扩展指南</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>变更目标</th><th>Owner 表面</th><th>同步修改</th><th>必要证明</th></tr></thead>
+<tbody>
+<tr><td>新增 task decorator 参数</td><td><code>func/__init__.py</code></td><td><code>Call</code>、Runner bridge、prepare functional PUSH、类型和 docstring</td><td>sync/async、继承优先级、恢复 task id 不漂移</td></tr>
+<tr><td>改变 future 行为</td><td><code>pregel/_call.py</code>、<code>_runner.py</code>、<code>_internal/_future.py</code></td><td>commit/stream/cancel 顺序</td><td>结果前 writes 已提交；取消双向传播；无死锁</td></tr>
+<tr><td>改变 task identity</td><td><code>pregel/_algo.py</code></td><td>checkpoint migration、缓存 namespace、测试 fixture</td><td>旧 checkpoint 不静默重复副作用</td></tr>
+<tr><td>扩展 previous/final</td><td><code>func/__init__.py</code> 与 PREVIOUS Channel</td><td>Schema、serde allowlist、update_state/state API</td><td>None、泛型、历史恢复、sync/async 一致</td></tr>
+<tr><td>调整 stream</td><td><code>func/__init__.py</code>、Loop output_writes</td><td>updates/tasks/debug 与 child interrupt 抑制</td><td>增量到达、namespace、cached 标记、事件顺序</td></tr>
+<tr><td>弃用公共参数/类型</td><td>公开签名、warnings、deprecation tests</td><td>迁移文档与目标移除版本</td><td>新参数优先、旧参数 warning、移除前兼容测试</td></tr>
+</tbody></table></div>
+<div class="key"><strong>禁止捷径：</strong>不要绕过 <code>CONFIG_KEY_CALL</code> 直接在线程池执行 decorated task；不要把 task 结果只塞进进程内 future 而跳过 RETURN pending write；不要用函数完成顺序生成身份。三者都会破坏 stream 顺序、恢复去重或确定性。</div>
+</section>
+
+<section class="section" id="tradeoffs">
+<h2>15. 设计权衡与已知限制</h2>
+<div class="grid2">
+  <div class="card"><strong>代码控制流 vs 图可见性</strong>Python 分支与循环开发自然，但静态图只能看到 entrypoint 外壳，运行前难以完整展示动态 task DAG。</div>
+  <div class="card"><strong>稳定 call 序号 vs 演进自由</strong>父 path + 顺序号让恢复可重放，却使流程代码重排成为 checkpoint 兼容事件。<span class="evidence"><code>libs/langgraph/langgraph/pregel/_algo.py:831-846</code></span></div>
+  <div class="card"><strong>future 易用性 vs 资源无界</strong>批量创建 future 很适合 fan-out；核心源码未声明固定容量或业务背压策略，调用方必须限流。</div>
+  <div class="card"><strong>task 级 durable writes vs 外部一致性</strong>RETURN 可避免成功 task 重算；外部副作用仍需事务、幂等键或补偿。</div>
+  <div class="card"><strong>统一 Runtime vs 不同 State 模型</strong>Functional 与 Graph API 共用 Pregel/checkpoint/interrupt/stream，但 Functional 的主要持久值是 input/output/previous/task writes，不等同 StateGraph reducer map。</div>
+  <div class="card"><strong>async timeout vs sync 拒绝</strong>只支持可协作取消的 async timeout 是保守且安全的选择；同步阻塞工作需外部进程/作业系统管理。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:158-169</code></span></div>
+</div>
+<p>当前生成器 entrypoint 明确不支持；若需要业务进度流，使用注入的 <code>Runtime.stream_writer</code>/<code>StreamWriter</code> 或把进度拆成 task，而不是依赖 <code>yield</code>。<span class="evidence"><code>libs/langgraph/langgraph/func/__init__.py:525-529</code></span></p>
+</section>
+
+<section class="section" id="source-index">
+<h2>16. 源码索引与进一步阅读</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>角色</th><th>路径与当前行号</th><th>阅读重点</th></tr></thead>
+<tbody>
+<tr><td>公共入口</td><td><code>libs/langgraph/langgraph/func/__init__.py:56-251</code></td><td>task 签名、策略、future、弃用参数</td></tr>
+<tr><td>entrypoint 构造</td><td><code>libs/langgraph/langgraph/func/__init__.py:262-620</code></td><td>注入、final、三 Channel Pregel、serde</td></tr>
+<tr><td>call adapter</td><td><code>libs/langgraph/langgraph/pregel/_call.py:175-298</code></td><td>Runnable 包装、RETURN writer、call bridge</td></tr>
+<tr><td>Call Schema</td><td><code>libs/langgraph/langgraph/pregel/_algo.py:120-152</code></td><td>func/input/retry/cache/callback/timeout</td></tr>
+<tr><td>PUSH materialize</td><td><code>libs/langgraph/langgraph/pregel/_algo.py:800-935</code></td><td>task id、namespace、cache、Runtime、策略优先级</td></tr>
+<tr><td>sync/async future</td><td><code>libs/langgraph/langgraph/pregel/_runner.py:700-941</code></td><td>调度、重放、异常、取消与链式完成</td></tr>
+<tr><td>Loop 接入/恢复</td><td><code>libs/langgraph/langgraph/pregel/_loop.py:415-587</code>、<code>736-749</code></td><td>put_writes、accept_push、成功 writes 重放</td></tr>
+<tr><td>公共类型</td><td><code>libs/langgraph/langgraph/types.py:418-517</code>、<code>575-701</code>、<code>799-871</code></td><td>Retry/Timeout、Interrupt、Task/Snapshot、Command</td></tr>
+<tr><td>迁移 shim</td><td><code>libs/langgraph/langgraph/pregel/types.py:1-38</code></td><td>公共 import 迁至 langgraph.types</td></tr>
+<tr><td>同步主测试</td><td><code>libs/langgraph/tests/test_pregel.py:1269-1432</code>、<code>4985-5072</code>、<code>5710-6432</code>、<code>6755-6809</code></td><td>并发、恢复、interrupt、stream、previous/final</td></tr>
+<tr><td>异步主测试</td><td><code>libs/langgraph/tests/test_pregel_async.py:2289-2444</code>、<code>6325-6374</code>、<code>6968-7005</code></td><td>gather、取消、interrupt、async stream</td></tr>
+<tr><td>示例图</td><td><code>libs/langgraph/tests/example_app/example_graph.py:62-89</code></td><td>异步 entrypoint、task await、final value/save</td></tr>
+</tbody></table></div>
+<p>总览回链：<a href="../../langgraph_architecture.html#s15">LangGraph 架构深度解析 · 第 15 章</a>。本页有意不重复第 07 章完整 Loop 生命周期、第 09 章 saver 实现、第 11 章 interrupt 协议和第 13 章所有 stream mode；这里只解释它们与 Functional API 的连接点。</p>
+</section>
+
+<section class="section" id="glossary">
+<h2>17. 术语表</h2>
+<div class="table-wrap"><table>
+<thead><tr><th>术语</th><th>本章含义</th></tr></thead>
+<tbody>
+<tr><td>Functional API</td><td>用 Python 函数控制流表达工作流、由 entrypoint/task 映射到 Pregel 的公开编程表面。</td></tr>
+<tr><td>Entrypoint</td><td>一次 Functional 工作流的入口函数及其生成的单节点 Pregel。</td></tr>
+<tr><td>Task</td><td>可独立调度、重试、缓存、持久化结果并返回 future 的函数调用。</td></tr>
+<tr><td>PUSH Call</td><td>由正在运行的父任务主动创建、携带 <code>Call</code> 的 Pregel PUSH 任务。</td></tr>
+<tr><td>PULL</td><td>由 Channel 版本与图触发关系选出的普通节点任务；entrypoint 自身从 START 以此方式触发。</td></tr>
+<tr><td>Future</td><td>代表尚未完成 task 结果的对象；同步用 <code>.result()</code>，异步可 <code>await</code>。</td></tr>
+<tr><td>Call counter</td><td>父 scratchpad 中按调用顺序递增的序号，是 functional task 稳定身份的一部分。</td></tr>
+<tr><td>RETURN write</td><td>functional task 的保留结果 write，用于恢复和完成父 future。</td></tr>
+<tr><td>Previous</td><td>同一 thread 上一轮 entrypoint 保存到 PREVIOUS Channel 的值。</td></tr>
+<tr><td><code>entrypoint.final</code></td><td>把当前调用返回值 <code>value</code> 与供下一轮读取的 <code>save</code> 分离的泛型数据类。</td></tr>
+<tr><td>Pending writes</td><td>绑定 checkpoint 与 task id 的中间写；承载 RETURN、ERROR、INTERRUPT、RESUME 等恢复证据。</td></tr>
+<tr><td>Durable execution</td><td>依靠 checkpoint 与 task writes 在进程/时间边界后恢复执行；不承诺外部副作用 exactly-once。</td></tr>
+<tr><td>Checkpoint namespace</td><td>区分入口、嵌套任务和子图持久化作用域的路径。</td></tr>
+<tr><td>Interrupt / Resume</td><td>可持久暂停并用 <code>Command(resume=...)</code> 从任务开头重跑、消费已保存恢复值的协议。</td></tr>
+<tr><td>Graph API</td><td>StateGraph 的声明式 Node/Edge/Channel/Reducer 表面；与 Functional API 共享 Pregel 内核。</td></tr>
+<tr><td>Exactly-once</td><td>副作用恰好发生一次的强保证；LangGraph task 恢复去重本身不提供该保证。</td></tr>
+</tbody></table></div>
+</section>
+<div class="footer">LangGraph Functional API · 源码审计开发文档 · 2026-08-14</div>
+</main>
+<script>
+(function(){
+  const links=[...document.querySelectorAll('.sidebar a')];
+  const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);
+  function update(){let id='';for(const section of sections){if(section.getBoundingClientRect().top<90)id=section.id}for(const link of links)link.classList.toggle('active',link.hash==='#'+id)}
+  addEventListener('scroll',update,{passive:true});update();
+})();
+</script>
+</body>
+</html>

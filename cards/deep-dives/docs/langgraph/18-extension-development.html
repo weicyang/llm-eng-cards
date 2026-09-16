@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>十八、LangGraph 扩展与二次开发：公共契约、所有权与最低证明</title>
+  <style>
+    :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--panel2:#e8e1d4;--text:#1c1917;--muted:#78716c;--line:rgba(28,25,23,.12);--accent:#4338ca;--good:#15803d;--warn:#c2410c;--bad:#b91c1c;--code:#44403c}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.72 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+    a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--code);background:rgba(120,113,108,.16);padding:.12em .34em;border-radius:4px;font-family:"Cascadia Code",Consolas,monospace}
+    .layout{display:grid;grid-template-columns:268px minmax(0,1fr);min-height:100vh}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;border-right:1px solid var(--line);background:color-mix(in srgb, var(--bg) 88%, transparent);padding:20px 14px;backdrop-filter:blur(12px)}.sidebar strong{display:block;margin:0 8px 12px}.sidebar a{display:block;padding:6px 9px;border-radius:6px;color:var(--muted);line-height:1.35}.sidebar a.active{color:var(--text);background:var(--panel)}
+    main{min-width:0}.container{max-width:1160px;margin:auto;padding:38px 44px 80px}.back{display:inline-block;margin-bottom:20px}.eyebrow{color:var(--accent);font-weight:700;letter-spacing:.08em}h1{font-size:34px;line-height:1.2;margin:8px 0 14px}h2{font-size:25px;margin:0 0 16px;padding-top:12px}h3{font-size:18px;margin:25px 0 10px}.subtitle{font-size:17px;color:var(--muted);max-width:920px}.section{padding:34px 0;border-top:1px solid var(--line);border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section:first-of-type{margin-top:32px}.lead{font-size:16px}
+    .meta,.grid2,.grid3{display:grid;gap:12px}.meta{grid-template-columns:repeat(4,minmax(0,1fr));margin:24px 0}.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:repeat(3,minmax(0,1fr))}.card,.callout{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:14px 16px}.card small{display:block;color:var(--muted);margin-bottom:4px}.callout{margin:14px 0}.callout.good{border-left:4px solid var(--good)}.callout.warn{border-left:4px solid var(--warn)}.callout.bad{border-left:4px solid var(--bad)}.tag{display:inline-block;border:1px solid var(--line);border-radius:99px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12px;color:var(--muted)}.tag.fact{color:#15803d}.tag.remote{color:#0f766e}.tag.beta{color:#a16207}.tag.gap{color:#b91c1c}
+    .table-wrap{overflow-x:auto;margin:14px 0}table{width:100%;border-collapse:collapse;min-width:720px}th,td{border:1px solid var(--line);padding:10px 12px;text-align:left;vertical-align:top}th{background:var(--panel);white-space:nowrap}td ul{margin:0;padding-left:18px}.flow{white-space:pre-wrap;border:1px solid var(--line);border-radius:8px;background:var(--panel2);padding:16px;overflow:auto;font-family:"Cascadia Code",Consolas,monospace;line-height:1.55}.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}.checklist li{margin:5px 0}.muted{color:var(--muted)}.top{position:fixed;right:18px;bottom:18px;border:1px solid var(--line);background:var(--panel);padding:8px 11px;border-radius:7px}
+    @media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);columns:2}.sidebar strong{column-span:all}.container{padding:28px 20px 70px}.meta,.grid3{grid-template-columns:repeat(2,minmax(0,1fr))}h1{font-size:29px}}
+    @media(max-width:560px){.sidebar{columns:1}.meta,.grid2,.grid3{grid-template-columns:1fr}.container{padding-left:15px;padding-right:15px}h1{font-size:26px}}
+  </style>
+</head>
+<body>
+<div class="layout">
+  <nav class="sidebar" id="toc" aria-label="本页目录">
+    <strong>第 18 章目录</strong>
+    <a href="#position">1. 模块定位</a>
+    <a href="#dependencies">2. 系统位置与依赖</a>
+    <a href="#concepts">3. 核心概念</a>
+    <a href="#architecture">4. 架构组成</a>
+    <a href="#flows">5. 完整运行流程</a>
+    <a href="#state">6. 数据与状态模型</a>
+    <a href="#protocols">7. 接口、协议与事件</a>
+    <a href="#configuration">8. 配置与默认行为</a>
+    <a href="#concurrency">9. 并发、性能与资源</a>
+    <a href="#security">10. 安全与信任边界</a>
+    <a href="#failure">11. 失败、恢复与兼容</a>
+    <a href="#observability">12. 可观测性与排障</a>
+    <a href="#testing">13. 测试与验证</a>
+    <a href="#development">14. 开发与扩展指南</a>
+    <a href="#tradeoffs">15. 设计权衡与限制</a>
+    <a href="#sources">16. 源码索引</a>
+    <a href="#glossary">17. 术语表</a>
+  </nav>
+  <main id="top">
+    <div class="container">
+      <a class="back" href="../../langgraph_architecture.html#s18">← 返回 LangGraph 架构总览第 18 章</a>
+      <div class="eyebrow">LANGGRAPH ARCHITECTURE · CHAPTER 18</div>
+      <h1>扩展与二次开发：公共契约、所有权与最低证明</h1>
+      <p class="subtitle">面向需要自定义 Channel、Saver、Store、Cache、ToolNode wrapper、StreamTransformer，或把 SDK Auth / Encryption 接入 Server 配置的开发者。目标不是罗列“可继承的类”，而是把扩展行为限制在当前代码明确拥有的契约内，并给出上线前最低可复现证明。</p>
+      <div class="meta">
+        <div class="card"><small>事实基线</small><strong>langgraph 1.2.11<br>checkpoint 4.2.0</strong></div>
+        <div class="card"><small>扩展包基线</small><strong>prebuilt 1.1.0<br>sdk-py 0.4.2 · cli 0.4.31</strong></div>
+        <div class="card"><small>证据状态</small><strong>当前源码与聚焦测试已审计</strong><br><span class="muted">Git SHA 未取得（本地 git 不可用）</span></div>
+        <div class="card"><small>最近验证</small><strong>2026-08-14</strong><br><span class="muted">Owner：跨包公共扩展契约</span></div>
+      </div>
+      <p>
+        <span class="tag fact">当前事实</span><span class="tag">默认行为</span>
+        <span class="tag remote">远程能力</span><span class="tag beta">Beta / 实验</span>
+        <span class="tag gap">证据边界</span>
+      </p>
+
+      <section class="section" id="position">
+        <h2>1. 模块定位：扩展的是契约，不是内部偶然结构</h2>
+        <p class="lead">第 18 章负责跨包回答三个问题：扩展点由谁拥有、实现者必须保持什么不变量、需要哪些测试才足以声称“兼容”。它不重复讲 StateGraph、Pregel、持久化、Streaming 或远程 SDK 的完整实现；这些模块只在决定扩展边界时被引用。</p>
+        <div class="table-wrap"><table>
+          <thead><tr><th>目标</th><th>Owner 与公共表面</th><th>本章要求保持</th><th>明确不负责</th></tr></thead>
+          <tbody>
+            <tr><td>自定义 Channel</td><td><code>BaseChannel</code><br><span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:19-121</code></span></td><td>Value/Update 类型、空状态、step 末批量 update、checkpoint/copy</td><td>调度顺序、Saver 表结构、远程传输</td></tr>
+            <tr><td>自定义 Saver</td><td><code>BaseCheckpointSaver</code><br><span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:176-318</code></span></td><td>checkpoint tuple、pending writes、namespace、sync/async、版本单调性</td><td>跨 thread 业务记忆、节点结果缓存</td></tr>
+            <tr><td>自定义 Store</td><td><code>BaseStore.batch/abatch</code><br><span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:708-755</code></span></td><td>输入输出顺序、namespace 隔离、可选 TTL / 搜索能力</td><td>执行恢复与 task 去重</td></tr>
+            <tr><td>自定义 Cache</td><td><code>BaseCache</code> + <code>CachePolicy</code><br><span class="evidence"><code>libs/checkpoint/langgraph/cache/base/__init__.py:15-48</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/types.py:520-529</code></span></td><td>批量 key、TTL、sync/async、namespace clear</td><td>副作用 exactly-once、长期事实存储</td></tr>
+            <tr><td>工具治理</td><td><code>ToolNode</code> wrappers<br><span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:202-283</code></span></td><td>准入、参数重写、短路、错误与 <code>GraphBubbleUp</code> 传播</td><td>外部系统事务与权限数据库</td></tr>
+            <tr><td>自定义流投影</td><td><code>StreamTransformer</code><br><span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:44-115</code></span></td><td>projection key 所有权、sync/async lane、关闭/失败、事件顺序</td><td>把 v3 当稳定跨版本 wire protocol</td></tr>
+            <tr><td>服务端安全扩展</td><td>SDK <code>Auth</code>/<code>Encryption</code> + CLI schema</td><td>handler 签名、拒绝默认、密钥边界、配置打包可达</td><td>本地 Pregel 内建鉴权或加密</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout warn"><strong>边界结论：</strong>SDK 中存在 <code>Auth</code> 与 <code>Encryption</code> 类型，不表示本地 <code>Pregel</code> 会执行它们。Auth 文件由 LangGraph Server 在请求时加载；Encryption handler 也在服务端执行。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:21-40</code></span>；<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:201-233</code></span></div>
+      </section>
+
+      <section class="section" id="dependencies">
+        <h2>2. 系统位置与依赖：从业务扩展到真正副作用</h2>
+        <div class="flow">调用方
+├─ StateGraph / Functional API
+│  ├─ Channel ──► step 屏障后的状态合并 ──► Checkpointer
+│  ├─ Node + CachePolicy ──► BaseCache
+│  └─ ToolNode ──► wrapper ──► Tool / 外部系统
+├─ stream_events(version="v3")
+│  └─ StreamMux ──► StreamTransformer ──► extensions / StreamChannel
+└─ langgraph.json ──► CLI 校验与容器路径重写
+   └─ 仓库外 API Server ──► Auth / Encryption handlers
+
+独立持久边界
+├─ Checkpointer：thread 执行位置与恢复
+├─ Store：跨 thread 的业务记忆
+└─ Cache：由输入 key 命中的节点结果</div>
+        <div class="grid2">
+          <div class="card"><strong>核心包方向</strong><p><code>langgraph 1.2.11</code> 声明依赖 checkpoint <code>&gt;=4.1,&lt;5</code>、sdk <code>&gt;=0.4.2,&lt;0.5</code>、prebuilt <code>&gt;=1.1,&lt;1.2</code>。扩展发布不能只固定核心包而忽略这些窗口。<span class="evidence"><code>libs/langgraph/pyproject.toml:5-33</code></span></p></div>
+          <div class="card"><strong>持久化兄弟实现</strong><p>SQLite 3.1.1 与 Postgres 3.1.2 都声明 checkpoint <code>&gt;=4.1,&lt;5</code>，并在测试依赖中引入 conformance。<span class="evidence"><code>libs/checkpoint-sqlite/pyproject.toml:5-35</code></span>；<span class="evidence"><code>libs/checkpoint-postgres/pyproject.toml:5-36</code></span></p></div>
+          <div class="card"><strong>运行进程边界</strong><p>Tool wrapper 在节点执行进程内包围工具；Saver/Store/Cache 由本地 Runtime 调用；Auth/Encryption 的实际消费方是仓库外 Server。不要让领域节点反向 import CLI 内部函数。</p></div>
+          <div class="card"><strong>SDK-JS 证据边界</strong><p>当前工作区没有可审计的 <code>libs/sdk-js/package.json</code>；因此本章不给出 JS SDK 版本或 Auth/Encryption 等价实现承诺，只陈述 Python SDK 和 CLI 当前代码。</p></div>
+        </div>
+      </section>
+
+      <section class="section" id="concepts">
+        <h2>3. 核心概念：四种存储、两种拦截、一个所有权原则</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>概念</th><th>精确定义</th><th>最常见混淆</th></tr></thead>
+          <tbody>
+            <tr><td>Channel</td><td>State key 的值容器、update 合并器和可 checkpoint 状态机；<code>update(values)</code> 在每个 step 末被调用，输入顺序被契约声明为任意。<span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:89-99</code></span></td><td>不是多个节点即时共享修改的 dict。</td></tr>
+            <tr><td>Checkpointer</td><td>按 <code>thread_id + checkpoint_ns + checkpoint_id</code> 保存 checkpoint、metadata 与 task pending writes；无 <code>thread_id</code> 不能可靠恢复。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:182-192</code></span></td><td>不是跨用户业务知识库。</td></tr>
+            <tr><td>Store</td><td>以任意层级 namespace 组织、跨 thread 共享的持久 KV，<code>batch/abatch</code> 是实现者最小核心。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:708-745</code></span></td><td>不是 checkpoint，也不自动参与 replay。</td></tr>
+            <tr><td>Cache</td><td>以 <code>(namespace,key)</code> 批量读取/写入节点结果，entry TTL 单位由 <code>BaseCache.set</code> 契约传入为秒数；策略 TTL 也是秒。<span class="evidence"><code>libs/checkpoint/langgraph/cache/base/__init__.py:10-38</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/types.py:524-529</code></span></td><td>命中只复用结果，不证明外部副作用发生过一次。</td></tr>
+            <tr><td>Tool wrapper</td><td>围绕单个 tool call 的策略函数，可零次、一次或多次调用 <code>execute</code>，并返回 <code>ToolMessage</code> 或 <code>Command</code>。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:202-217</code></span></td><td>多次 execute 就是多次真实工具副作用，除非工具自身幂等。</td></tr>
+            <tr><td>StreamTransformer</td><td>观察 <code>ProtocolEvent</code> 并产生 typed projection；<code>process/aprocess</code> 的布尔返回值决定事件是否保留在主事件日志。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:127-184</code></span></td><td>不是改变图状态的 reducer，也不应把 projection 当 checkpoint。</td></tr>
+            <tr><td>所有权</td><td>谁定义数据生命周期、顺序、错误和兼容语义，谁就是 Owner；扩展只能实现公开协议，不应复制私有调度或服务端行为。</td><td>“能 import”不等于“稳定公共契约”。</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section class="section" id="architecture">
+        <h2>4. 架构组成：逐扩展面实现契约</h2>
+        <h3>4.1 自定义 Channel</h3>
+        <p>必须实现 <code>ValueType</code>、<code>UpdateType</code>、<code>from_checkpoint</code>、<code>get</code>、<code>update</code>。空 Channel 的 <code>get()</code> 抛 <code>EmptyChannelError</code>；默认 <code>checkpoint()</code> 把空状态编码为 <code>MISSING</code>；默认 <code>copy()</code> 走 checkpoint round-trip，因此复杂对象必须在恢复时复制，不能共享可变引用。<span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:28-65</code></span></p>
+        <div class="callout bad"><strong>禁止依赖 update 顺序。</strong><code>values</code> 的顺序明确是 arbitrary。若业务要求顺序，应把顺序编码进 update 并显式排序，或证明 reducer 具备所需结合/交换性质；不能依赖线程完成先后。<span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:90-99</code></span></div>
+
+        <h3>4.2 自定义 Saver</h3>
+        <p>基础 async 能力是 <code>aput</code>、<code>aput_writes</code>、<code>aget_tuple</code>、<code>alist</code>、<code>adelete_thread</code>；copy、按 run 删除、prune 与 delta history 是可选扩展。Conformance 通过“方法是否覆盖基类”检测能力，因此空壳 override 会使测试启动后失败，而不是安全降级。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/capabilities.py:29-63</code></span></p>
+        <p><code>put_writes</code> 属于 task 级中间写，<code>put</code> 属于超级步 checkpoint；二者不能合并成同一“保存函数”。同一 <code>(task_id, idx)</code> 重放必须幂等，pending writes 还必须按 checkpoint namespace 隔离。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_put_writes.py:148-167</code></span>；<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_put_writes.py:207-239</code></span></p>
+
+        <h3>4.3 自定义 Store</h3>
+        <p>实现 <code>batch</code> 与 <code>abatch</code> 后，基类用它们组合 get/search/put/delete/list API；结果必须与输入操作同序。TTL 默认关闭，只有子类显式 <code>supports_ttl=True</code> 才能接受非空 TTL。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:716-755</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:919-935</code></span></p>
+        <p>namespace 不能为空、标签必须是无点号的非空字符串，根标签不能是保留值 <code>langgraph</code>。这些是本地准入规则，不是多租户授权；租户身份仍必须由应用或 Server Auth 强制加入 namespace。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:1263-1283</code></span></p>
+
+        <h3>4.4 自定义 Cache</h3>
+        <p>同时实现 sync/async 的批量 <code>get/set/clear</code>。默认 serializer 是禁用 pickle fallback 的 <code>JsonPlusSerializer</code>；如替换 serde，必须单测跨版本 round-trip 与不可信数据边界。<span class="evidence"><code>libs/checkpoint/langgraph/cache/base/__init__.py:15-48</code></span></p>
+        <p><code>CachePolicy.key_func</code> 默认对输入做 pickle hash，TTL 缺省为永不过期。密钥稳定性属于应用责任：模型版本、prompt 版本、租户、权限、工具实现版本若影响结果，就必须进入 key 或 namespace。<span class="evidence"><code>libs/langgraph/langgraph/types.py:520-529</code></span></p>
+
+        <h3>4.5 ToolNode wrapper</h3>
+        <p>同步 wrapper 和异步 wrapper 分开；异步执行优先 <code>awrap_tool_call</code>，缺失时会回退到同步 wrapper，并使用同步工具执行路径。若策略需要异步 KMS、数据库或网络调用，应提供真正的 async wrapper，不能阻塞 event loop。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1191-1210</code></span></p>
+        <p>工具参数注入发生在 wrapper 选择之后、真正 invoke 之前；wrapper 因而可短路未注册工具或替换 tool 实现。<code>GraphBubbleUp</code> 始终重新抛出，不能被普通 <code>handle_tool_errors</code> 转成错误消息。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:944-983</code></span></p>
+
+        <h3>4.6 StreamTransformer</h3>
+        <p><code>init()</code> 必须返回 dict，key 合并到 <code>run.extensions</code>；冲突 key 会在注册时拒绝并指出既有 Owner。Transformer 需要 async lane 时，sync <code>stream()</code> 会 fail-fast。<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:227-267</code></span></p>
+        <p><code>before_builtins=True</code> 可用于在 built-in snapshot 前做内容脱敏，但不得修改 tasks 事件中被生命周期 bookkeeping 使用的 namespace、id、result、error、interrupts。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:94-109</code></span></p>
+
+        <h3>4.7 SDK Auth / Encryption 与 CLI</h3>
+        <p>Auth 每个请求先认证，再按“resource+action → resource → global”选择最具体 handler；没有 global handler 时，未匹配请求会被接受，所以安全基线应显式注册 global deny。handler 返回 <code>False</code> 表示 403，<code>None/True</code> 表示接受，filter 用于约束查询。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:96-106</code></span>；<span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:140-149</code></span></p>
+        <p>Encryption 是 Beta；blob 与 JSON 各自只允许注册一对 handler，handler 必须是恰好两个位置参数的 async 函数。JSON encryptor 只能改变 value，不能增删 key，因为 Server 的 JSONB merge 依赖 key 级结构。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:22-64</code></span>；<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:235-255</code></span></p>
+      </section>
+
+      <section class="section" id="flows">
+        <h2>5. 完整运行流程：正常、拒绝与恢复</h2>
+        <h3>5.1 正常路径：审批后执行幂等副作用</h3>
+        <ol class="checklist">
+          <li>Graph 节点先规范化业务请求，只向 State 写入“待审批操作 + 幂等键”，不调用外部系统。</li>
+          <li>审批节点调用 <code>interrupt(proposal)</code>；checkpointer 持久化可恢复状态并把 interrupt 返回客户端。interrupt 要求启用 checkpointer。<span class="evidence"><code>libs/langgraph/langgraph/types.py:851-871</code></span></li>
+          <li>客户端以 <code>Command(resume=decision)</code> 恢复；节点从头执行，interrupt 按 task 内调用顺序匹配 resume 值。<span class="evidence"><code>libs/langgraph/langgraph/types.py:862-868</code></span></li>
+          <li>审批为允许时，路由到独立副作用节点；该节点用稳定业务键调用外部 API，重复请求返回同一结果或查询既有结果。</li>
+          <li>节点输出成为 task writes，step 屏障后 Channel 批量合并；Saver 分别保存 pending writes 与 checkpoint。</li>
+          <li>如节点声明 CachePolicy，只缓存纯计算或可安全复用的读取结果；副作用节点默认不缓存。</li>
+        </ol>
+        <div class="callout good"><strong>最终状态：</strong>审批决定与副作用结果都是显式 State/Write；外部调用至少一次时仍由业务幂等键消除重复效果。Checkpoint 不保存 Python 栈，也不提供外部系统的 exactly-once。</div>
+
+        <h3>5.2 拒绝 / 提前结束路径</h3>
+        <ol class="checklist">
+          <li>Tool wrapper 检查用户、租户、工具名、参数范围和审批证明；不满足策略时不调用 <code>execute</code>，直接返回 status=error 的 <code>ToolMessage</code> 或明确的 <code>Command</code> 路由。</li>
+          <li>远程请求先进入 Auth；认证失败由 handler 抛 401，授权 handler 返回 <code>False</code> 得到 403。若没有 global handler，未匹配授权默认接受，因此拒绝策略必须显式配置。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:49-64</code></span></li>
+          <li>Store 在 namespace 非法或不支持 TTL 时拒绝，不应把请求静默降级到全局 namespace 或永久存储。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:919-924</code></span></li>
+          <li>StreamTransformer projection key 冲突、<code>init()</code> 非 dict、sync 注册 async-only transformer 时在运行开始前拒绝。<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:227-256</code></span></li>
+        </ol>
+        <div class="callout warn"><strong>最终状态：</strong>拒绝应成为明确 4xx、ToolMessage(error)、Command 分支或配置异常；不要 fail-open 调用工具，也不要把拒绝伪装成空成功结果。</div>
+
+        <h3>5.3 恢复 / 重试 / 降级路径</h3>
+        <ol class="checklist">
+          <li>节点失败后，Runtime 可按 retry policy 再次执行；Tool wrapper 也可多次调用 <code>execute</code>。两层重试预算必须统一，否则产生乘法放大。</li>
+          <li>interrupt 恢复从节点开头重跑。中断前已经执行的审计写、通知或扣款必须幂等，最佳做法是把它们移到审批后的独立节点。</li>
+          <li>Saver 恢复读取 checkpoint tuple 与 pending writes，已持久化 task 结果可被复用；但外部副作用是否成功仍需业务记录核对。</li>
+          <li>Stream async scheduled task 默认 <code>on_error="log"</code> 只记录错误，不终止 run；关键投影应改用 <code>"raise"</code>，使 close 路径转为 fail。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:233-257</code></span></li>
+          <li>Encryption 解密必须接受加密时不同的 model/field，因为 Server merge 可能移动值；密钥不可用时应 fail-closed，不可返回密文冒充明文。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:314-355</code></span></li>
+          <li>可选 Saver 能力没有 override 时 conformance 跳过；应用必须在启动时核对能力矩阵，不能调用失败后才临时降级。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/validate.py:74-90</code></span></li>
+        </ol>
+      </section>
+
+      <section class="section" id="state">
+        <h2>6. 数据与状态模型：生命周期、namespace 与 Secret</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>数据</th><th>Owner / 生命周期</th><th>复制、事务与清理</th><th>隐私与 Secret</th></tr></thead>
+          <tbody>
+            <tr><td>Channel value</td><td>单次 graph run 的逻辑 State；step 间由 Channel 保存</td><td><code>copy()</code> 默认 checkpoint round-trip；复杂 checkpoint 必须深复制。<span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:40-65</code></span></td><td>进入 checkpoint 的值会被 serde 持久化；不要把长期 Secret 放 State。</td></tr>
+            <tr><td>Checkpoint / pending writes</td><td>thread + checkpoint namespace 的执行历史</td><td>task 写与 step checkpoint 分离；delete/copy/prune 必须保持 Delta ancestor chain。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:350-415</code></span></td><td>自定义 serde/Encryption 不替代数据库访问控制。</td></tr>
+            <tr><td>Store Item</td><td>namespace + key 的跨 thread 业务事实</td><td>batch 顺序稳定；delete 编码为 value=None 的 PutOp。<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:937-944</code></span></td><td>tenant identity 必须成为 namespace 且由服务端策略强制。</td></tr>
+            <tr><td>Cache entry</td><td>节点或 task 输入 key 对应的派生结果</td><td>TTL 到期与 clear 由 Cache 实现；<code>clear(None)</code> 表示全清。<span class="evidence"><code>libs/checkpoint/langgraph/cache/base/__init__.py:40-48</code></span></td><td>权限、tenant、模型版本必须进入 key/namespace；避免跨用户命中。</td></tr>
+            <tr><td>ProtocolEvent</td><td>单次 v3 run 的流事件</td><td>根 mux 分配单调 seq；timestamp 是可回拨墙钟，不能用于总序。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:14-41</code></span></td><td>脱敏 transformer 应位于 built-ins 前，且只改允许字段。</td></tr>
+            <tr><td>EncryptionContext.metadata</td><td>请求级上下文，随加密数据保存供后续解密</td><td>context handler 在 auth 后每请求调用一次。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/types.py:124-146</code></span></td><td>metadata 声明为 non-secret；不要把 DEK、原始 token 塞入其中。</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout bad"><strong>Delta 所有权陷阱：</strong>naive <code>keep_latest</code> 可能删除最近 snapshot 与 head 之间的 ancestor writes，导致 DeltaChannel 静默恢复为空。若自定义 Saver 宣称 prune/copy/delete-for-runs，必须证明完整祖先链或先物化新 snapshot。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:387-413</code></span></div>
+      </section>
+
+      <section class="section" id="protocols">
+        <h2>7. 接口、协议与事件：签名就是兼容边界</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>接口</th><th>输入 → 输出</th><th>可空 / 错误</th><th>幂等与顺序</th></tr></thead>
+          <tbody>
+            <tr><td><code>BaseChannel.update</code></td><td><code>Sequence[Update] → bool</code></td><td>无写仍传空序列；非法多写应抛 <code>InvalidUpdateError</code></td><td>输入顺序任意；bool 表示状态是否变化。</td></tr>
+            <tr><td><code>BaseCheckpointSaver.put</code></td><td>config + checkpoint + metadata + new_versions → 新 config</td><td>基类未实现；版本必须单调，默认数值 +1。<span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:692-711</code></span></td><td>checkpoint_id / parent 关系必须可重建。</td></tr>
+            <tr><td><code>put_writes</code></td><td>config + writes + task_id + task_path → None</td><td>支持 ERROR / INTERRUPT 特殊 channel。<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_put_writes.py:170-203</code></span></td><td>同 task_id 与 write index 重放不重复。</td></tr>
+            <tr><td><code>BaseStore.batch</code></td><td><code>Iterable[Op] → list[Result]</code></td><td>能力不支持应抛明确异常</td><td>结果顺序必须对应输入操作。</td></tr>
+            <tr><td><code>ToolCallWrapper</code></td><td>request + execute → ToolMessage / Command</td><td>可不调用 execute；异常是否转 ToolMessage 受 <code>handle_tool_errors</code> 控制。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:1044-1067</code></span></td><td>execute 可多次调用，每次独立但可能产生真实副作用。</td></tr>
+            <tr><td><code>StreamTransformer.process</code></td><td>ProtocolEvent → bool</td><td>未覆盖 sync/async 之一会明确失败</td><td>所有 transformer 按注册顺序被调用；任一 False 仅阻止主日志追加，已发生的 transformer 副作用不会回滚。<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:269-296</code></span></td></tr>
+            <tr><td>Auth handler</td><td>AuthContext + endpoint value → None/True/False/filter</td><td>False=403；认证 handler 只能注册一次。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:225-301</code></span></td><td>store value 可被原地改写以施加 namespace scope。</td></tr>
+            <tr><td>Encryption handlers</td><td>(context, bytes/dict) → awaitable bytes/dict</td><td>非 async、参数数目错误、重复 handler 均拒绝。<span class="evidence"><code>libs/sdk-py/tests/test_encryption.py:6-72</code></span></td><td>decrypt 必须兼容既有密文与 key rotation 方案。</td></tr>
+          </tbody>
+        </table></div>
+        <p><code>StateGraph.compile(transformers=...)</code> 接收 class 或 factory；v3 每次 run 实例化，并把 factory 传播到子图 scope。只传预构造 instance 不能克隆到 child mux。<span class="evidence"><code>libs/langgraph/langgraph/graph/state.py:1220-1226</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:193-225</code></span></p>
+      </section>
+
+      <section class="section" id="configuration">
+        <h2>8. 配置与默认行为：版本矩阵必须与部署一起固定</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>配置项</th><th>类型 / 可选值</th><th>当前默认</th><th>优先级与边界</th><th>失败行为</th><th>来源</th></tr></thead>
+          <tbody>
+            <tr><td><code>CachePolicy.key_func</code></td><td>Callable → str/bytes</td><td>pickle-hash 输入</td><td>node/task policy 决定 cache key</td><td>不可序列化或不稳定 key 使命中失真</td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:520-526</code></span></td></tr>
+            <tr><td><code>CachePolicy.ttl</code></td><td>int 秒或 None</td><td>None，永不过期</td><td>entry 写入时生效</td><td>过期语义由 Cache 实现</td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:528-529</code></span></td></tr>
+            <tr><td><code>BaseStore.supports_ttl</code></td><td>bool</td><td>False</td><td>子类显式开启</td><td>传非空 TTL 抛 NotImplementedError</td><td><span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:723-728</code></span></td></tr>
+            <tr><td><code>StreamTransformer.before_builtins</code></td><td>bool</td><td>False</td><td>先分 pre/rest lane，再保持各 lane 注册顺序</td><td>误改 lifecycle 字段会破坏 bookkeeping</td><td><span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:94-115</code></span></td></tr>
+            <tr><td><code>schedule(on_error)</code></td><td><code>log | raise</code></td><td><code>log</code></td><td>仅 async lane</td><td>log 吞下并记录；raise 在 close join 时传播</td><td><span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:233-257</code></span></td></tr>
+            <tr><td><code>auth.path</code></td><td><code>file.py:object</code></td><td>无</td><td>CLI 打包；Server 加载执行</td><td>缺文件、目录、未纳入 dependencies 均拒绝</td><td><span class="evidence"><code>libs/cli/langgraph_cli/config.py:927-965</code></span></td></tr>
+            <tr><td><code>auth.disable_studio_auth</code></td><td>bool</td><td>False</td><td>仅 Server/Studio 请求来源</td><td>True 后所有请求走 custom auth</td><td><span class="evidence"><code>libs/cli/langgraph_cli/schemas.py:308-322</code></span></td></tr>
+            <tr><td><code>encryption.path</code></td><td><code>file.py:object</code></td><td>无</td><td>CLI 打包；Server at-rest 数据面</td><td>格式、文件可达性或 dependencies 覆盖不足时拒绝</td><td><span class="evidence"><code>libs/cli/langgraph_cli/schemas.py:356-373</code></span>；<span class="evidence"><code>libs/cli/langgraph_cli/config.py:968-1008</code></span></td></tr>
+            <tr><td><code>http.middleware_order</code></td><td>auth_first / middleware_first</td><td>middleware_first</td><td>Server middleware 与认证顺序</td><td>顺序选错可能让自定义 middleware 在认证前处理敏感请求</td><td><span class="evidence"><code>libs/cli/langgraph_cli/schemas.py:511-521</code></span></td></tr>
+            <tr><td><code>api_version</code></td><td>semver 或兼容 range</td><td>latest</td><td>CLI 选择 Server image/API</td><td>格式或范围无候选时 UsageError</td><td><span class="evidence"><code>libs/cli/langgraph_cli/schemas.py:628-633</code></span>；<span class="evidence"><code>libs/cli/langgraph_cli/config.py:348-365</code></span></td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>8.1 当前版本矩阵</h3>
+        <div class="table-wrap"><table>
+          <thead><tr><th>组件</th><th>当前工作区</th><th>声明兼容窗口 / 运行要求</th><th>扩展发布建议</th></tr></thead>
+          <tbody>
+            <tr><td>langgraph</td><td>1.2.11</td><td>Python ≥3.10；checkpoint ≥4.1,&lt;5；sdk ≥0.4.2,&lt;0.5；prebuilt ≥1.1,&lt;1.2</td><td>至少测试窗口下界、当前锁定版本和允许的最高 minor。</td></tr>
+            <tr><td>checkpoint</td><td>4.2.0</td><td>Python ≥3.10</td><td>Saver 必须把 conformance 版本与 checkpoint 版本一起记录。</td></tr>
+            <tr><td>SQLite / Postgres</td><td>3.1.1 / 3.1.2</td><td>均依赖 checkpoint ≥4.1,&lt;5</td><td>参考兄弟实现，但不要复制私有表结构当公共协议。</td></tr>
+            <tr><td>checkpoint-conformance</td><td>0.0.2</td><td>声明 checkpoint ≥2.0；当前扩展能力会随已安装基类动态检测</td><td>固定 conformance 与 checkpoint 组合，避免“旧测试通过新契约”。</td></tr>
+            <tr><td>prebuilt</td><td>1.1.0</td><td>checkpoint ≥2.1,&lt;5；langchain-core ≥1.3.1</td><td>ToolNode wrapper 同时跑 sync/async 与拒绝/interrupt。</td></tr>
+            <tr><td>sdk-py</td><td>0.4.2</td><td>Python ≥3.10；Encryption 为 Beta</td><td>与实际 API Server 版本做集成矩阵，不把 SDK 单测当 Server 证明。</td></tr>
+            <tr><td>cli</td><td>0.4.31</td><td>CLI 包 Python ≥3.10；部署 schema 要求 Python ≥3.11、Node ≥20。<span class="evidence"><code>libs/cli/langgraph_cli/schemas.py:615-625</code></span></td><td>固定 cli + api_version + base image；在产物中验证 handler 路径。</td></tr>
+          </tbody>
+        </table></div>
+        <p class="muted">版本来源：<span class="evidence"><code>libs/langgraph/pyproject.toml:5-33</code></span>；<span class="evidence"><code>libs/checkpoint/pyproject.toml:5-17</code></span>；<span class="evidence"><code>libs/prebuilt/pyproject.toml:5-29</code></span>；<span class="evidence"><code>libs/sdk-py/langgraph_sdk/__init__.py:1-6</code></span>；<span class="evidence"><code>libs/cli/langgraph_cli/__init__.py:1</code></span>。</p>
+      </section>
+
+      <section class="section" id="concurrency">
+        <h2>9. 并发、性能与资源：扩展不能破坏 Runtime 的节奏</h2>
+        <div class="grid2">
+          <div class="card"><strong>Channel 屏障</strong><p>同 step 收集到的 updates 在 step 末一次交给 Channel。Channel reducer 不应做网络 I/O，也不能依赖 task 完成顺序；慢 reducer 直接拉长屏障。</p></div>
+          <div class="card"><strong>Tool 并行</strong><p>同步 ToolNode 使用 executor.map，异步路径使用 <code>asyncio.gather</code> 并发工具调用。两个工具对同一外部资源写入时，图 reducer 不提供锁。<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:793-860</code></span></p></div>
+          <div class="card"><strong>Store 批处理</strong><p><code>batch/abatch</code> 应保留结果顺序，并明确事务粒度：接口只要求一个调用返回对应结果，不自动承诺整个 batch 原子。</p></div>
+          <div class="card"><strong>Stream 串行点</strong><p><code>aprocess</code> 按 transformer 顺序 await；慢操作会串行化事件管线。独立异步计算应使用 <code>schedule</code>，并选择 log/raise。<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:351-378</code></span></p></div>
+          <div class="card"><strong>关闭与取消</strong><p>async close 先 join scheduled tasks，再 afinalize；fail 会取消并等待 scheduled tasks，最后 afail。自建裸 task 会逃逸这一生命周期。<span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:216-227</code></span></p></div>
+          <div class="card"><strong>重试预算</strong><p>Runtime retry × wrapper retry × HTTP client retry 会乘法放大。统一总尝试次数、deadline 与幂等键，并把每层 attempt 写入 trace。</p></div>
+        </div>
+        <div class="callout warn"><strong>性能数字边界：</strong>当前代码没有为第三方 Saver/Store/Cache 或 transformer 提供通用 SLA。文档只能要求基准覆盖吞吐、p95、连接池耗尽、锁竞争、队列积压与取消清理，不能从内存实现推导生产数据库性能。</div>
+      </section>
+
+      <section class="section" id="security">
+        <h2>10. 安全与信任边界：认证、授权、加密和工具策略分层</h2>
+        <ol class="checklist">
+          <li><strong>认证不等于授权：</strong><code>@auth.authenticate</code> 只产生 identity/permissions；resource/action handler 再做准入、filter 或 namespace 重写。建议 global deny + 精确 allow。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:129-202</code></span></li>
+          <li><strong>OpenAPI security 不等于执行策略：</strong><code>auth.openapi</code> 描述文档中的 scheme/requirements，真实拒绝仍由 Server 调用 Auth handler。<span class="evidence"><code>libs/cli/langgraph_cli/schemas.py:323-343</code></span></li>
+          <li><strong>Store namespace 是数据组织，不是天然 ACL：</strong>Auth handler 可原地重写 <code>value["namespace"]</code>，应强制 tenant 前缀，而不是信任客户端提供的首段。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:190-215</code></span></li>
+          <li><strong>Tool policy 在执行前：</strong>wrapper 必须先校验 tool、args、identity、审批 token，再调用 execute；日志中对 token、PII 与工具返回做脱敏。GraphBubbleUp 必须继续传播。</li>
+          <li><strong>加密只覆盖 at-rest 指定字段：</strong>它不自动覆盖日志、trace、stream、模型 prompt、网络 transport 或外部工具。JSON 非确定性密文不可可靠搜索，需把可过滤 owner/tenant 字段保持明文或建立独立受控索引。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/types.py:74-101</code></span></li>
+          <li><strong>EncryptionContext metadata 非 Secret：</strong>该 metadata 会随密文持久化；KMS key id 可以保存，原始密钥、token、DEK 不应保存。<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/types.py:17-40</code></span></li>
+          <li><strong>配置打包边界：</strong>auth/encryption 文件必须位于 dependencies 覆盖范围，CLI 会拒绝漏打包路径；Secret 应来自环境/Secret manager，不写入 <code>langgraph.json</code>。</li>
+        </ol>
+        <div class="callout bad"><strong>Fail-closed 原则：</strong>认证服务、KMS、审批存储不可用时，拒绝敏感操作；不要为了“可用性”跳过 Auth、返回未解密数据、扩大 Store namespace 或直接执行工具。</div>
+      </section>
+
+      <section class="section" id="failure">
+        <h2>11. 失败、恢复与兼容：先定义状态影响，再谈重试</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>故障 / 现象</th><th>检测</th><th>即时行为</th><th>状态影响</th><th>重试 / 恢复</th><th>运维操作</th></tr></thead>
+          <tbody>
+            <tr><td>Channel 多写非法</td><td><code>InvalidUpdateError</code></td><td>当前 step 失败</td><td>writes 不应被错误合并</td><td>修改 reducer/拓扑后从 checkpoint 重跑</td><td>检查同 step writers，不按偶然顺序修复</td></tr>
+            <tr><td>Saver pending writes 重复</td><td>conformance idempotency 失败</td><td>禁止上线</td><td>恢复可能重复 task 结果</td><td>以 checkpoint/task/index 唯一约束修复</td><td>清点历史重复行与特殊 channels</td></tr>
+            <tr><td>Delta prune 后空状态</td><td>delta history / graph round-trip 测试</td><td>停止 prune</td><td>可能静默数据损坏</td><td>从备份恢复祖先链或物化 snapshot</td><td>回滚清理任务，核验全部 live heads</td></tr>
+            <tr><td>Tool wrapper 拒绝</td><td>ToolMessage(error) / Command</td><td>不调用 execute</td><td>只记录拒绝结果</td><td>修正权限或重新审批，不盲重试</td><td>审计 identity、policy version、args</td></tr>
+            <tr><td>Tool 已副作用后超时</td><td>外部幂等记录 + timeout</td><td>结果未知</td><td>checkpoint 可能没有成功 write</td><td>用幂等键查询外部结果，再决定补偿</td><td>禁止直接无键重试</td></tr>
+            <tr><td>Async transformer 用于 sync</td><td>注册 RuntimeError</td><td>run 前拒绝</td><td>无 graph state 变化</td><td>改用 astream 或实现真实 sync lane</td><td>矩阵测试两条 lane</td></tr>
+            <tr><td>scheduled projection 失败</td><td>日志或 close 异常</td><td>log 模式继续；raise 模式 fail</td><td>graph 执行与投影完整性可能分离</td><td>按业务关键性选择策略</td><td>监控 projection lag / failure</td></tr>
+            <tr><td>Auth 无匹配 handler</td><td>策略覆盖测试</td><td>当前默认接受</td><td>可能越权</td><td>添加 global deny 与精确 allow</td><td>发布前枚举 endpoint/resource/action</td></tr>
+            <tr><td>Encryption handler/KMS 失败</td><td>Server 5xx / handler telemetry</td><td>fail-closed</td><td>不得写明文降级</td><td>恢复 KMS 后重试幂等请求</td><td>验证 key rotation 与旧密文解密</td></tr>
+            <tr><td>CLI handler 路径漏依赖</td><td>validate/build 报错</td><td>拒绝镜像生成</td><td>无运行时数据变化</td><td>把所属 package 加入 dependencies/source closure</td><td>检查容器内重写后的 path</td></tr>
+          </tbody>
+        </table></div>
+        <p>Tool wrapper 抛出的普通异常在 <code>handle_tool_errors=True</code> 时会转为 error ToolMessage；设为 False 则传播。测试同时覆盖两条路径。<span class="evidence"><code>libs/prebuilt/tests/test_on_tool_call.py:710-788</code></span></p>
+      </section>
+
+      <section class="section" id="observability">
+        <h2>12. 可观测性与排障：用契约字段定位所有权</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>现象</th><th>先检查</th><th>高概率原因</th><th>修复</th></tr></thead>
+          <tbody>
+            <tr><td>恢复后节点重复调用外部 API</td><td>thread/checkpoint_ns、pending writes、业务幂等记录</td><td>interrupt 从节点头重跑；副作用位于 interrupt 前</td><td>拆成审批后独立节点并使用稳定幂等键</td></tr>
+            <tr><td>Cache 跨用户返回旧结果</td><td>FullKey namespace、key_func 输入、TTL</td><td>tenant/权限/版本没进入 key</td><td>版本化 namespace，清理污染 entry</td></tr>
+            <tr><td>Store 搜索越权</td><td>Auth store handler 与实际 namespace</td><td>只信任客户端 namespace；无 global deny</td><td>服务端重写 tenant 前缀并加拒绝测试</td></tr>
+            <tr><td>v3 extensions 缺字段</td><td>transformer init、projection key、所需 stream modes</td><td>key 冲突、transformer 未实例化、mode 未声明</td><td>检查注册错误与 <code>required_stream_modes</code></td></tr>
+            <tr><td>流顺序看似倒退</td><td><code>ProtocolEvent.seq</code></td><td>使用 wall-clock timestamp 排序</td><td>根事件总序使用 seq</td></tr>
+            <tr><td>async 流越来越慢</td><td>每个 <code>aprocess</code> 时延、scheduled task 数</td><td>把独立网络 I/O 放在串行 aprocess</td><td>改用 schedule，并设置 deadline/on_error</td></tr>
+            <tr><td>Auth 文件本地存在但镜像启动失败</td><td>CLI 重写后的 path、dependencies/source closure</td><td>文件未打入镜像或 object 名错误</td><td>运行 validate/build 产物检查和 Server smoke test</td></tr>
+            <tr><td>旧密文解不开</td><td>密文版本、key id、decrypt 是否依赖 model/field</td><td>轮换未保留旧 key；上下文耦合错误</td><td>自描述密文 + 多版本 decrypt + 回放 fixture</td></tr>
+          </tbody>
+        </table></div>
+        <p>Transformer 的根日志顺序应看单调 <code>seq</code>；事件通过所有 transformer 后才决定是否进入主日志，前序 transformer 的投影副作用不会因为后续返回 False 而撤销。测试明确覆盖 suppress 后主日志为空。<span class="evidence"><code>libs/langgraph/tests/test_pregel_stream_events_v3.py:899-939</code></span></p>
+      </section>
+
+      <section class="section" id="testing">
+        <h2>13. 测试与验证：最低证明不是“能跑一次”</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>契约 / 不变量</th><th>真实测试路径</th><th>类型</th><th>能证明什么</th><th>证据缺口</th></tr></thead>
+          <tbody>
+            <tr><td>Channel 空状态、多写、round-trip、复制隔离</td><td><span class="evidence"><code>libs/langgraph/tests/test_channels.py:33-107</code></span></td><td>单元</td><td>内建 Channel 给出实现参照</td><td>第三方 Channel 必须复用同类断言；无通用 conformance 包</td></tr>
+            <tr><td>Saver 基础与扩展能力</td><td><span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/validate.py:31-128</code></span></td><td>Conformance</td><td>逐 capability 新建 saver，运行 put/get/list/delete/delta 等套件</td><td>不证明生产并发、迁移、备份恢复与性能</td></tr>
+            <tr><td>InMemorySaver 基础能力</td><td><span class="evidence"><code>libs/checkpoint-conformance/tests/test_validate_memory.py:11-21</code></span></td><td>Conformance self-test</td><td>当前套件能对基准实现通过 base</td><td>不是第三方实现证明</td></tr>
+            <tr><td>pending writes 幂等与 namespace</td><td><span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/spec/test_put_writes.py:148-239</code></span></td><td>Conformance</td><td>重复写不重复、不同 checkpoint_ns 隔离</td><td>需数据库故障注入验证事务边界</td></tr>
+            <tr><td>SQLite/Postgres Delta</td><td><span class="evidence"><code>libs/checkpoint-sqlite/tests/test_conformance_delta.py:1-19</code></span>；<span class="evidence"><code>libs/checkpoint-postgres/tests/test_conformance_delta.py:1-21</code></span></td><td>集成 / conformance</td><td>兄弟实现声明并验证 delta capability</td><td>依赖实际数据库环境</td></tr>
+            <tr><td>Tool wrapper 拒绝、传播、重试</td><td><span class="evidence"><code>libs/prebuilt/tests/test_on_tool_call.py:710-840</code></span></td><td>单元</td><td>异常转消息/传播与多次 execute 模式</td><td>不证明外部工具幂等</td></tr>
+            <tr><td>StreamTransformer 注册与过滤</td><td><span class="evidence"><code>libs/langgraph/tests/test_pregel_stream_events_v3.py:887-939</code></span></td><td>单元</td><td>非 dict 拒绝、事件 suppress 与观察顺序</td><td>还需应用级慢消费者、取消、子图测试</td></tr>
+            <tr><td>Encryption 注册拒绝</td><td><span class="evidence"><code>libs/sdk-py/tests/test_encryption.py:6-72</code></span></td><td>单元</td><td>重复、非 async、参数数目错误被拒绝</td><td>Server 的 key-preservation enforcement 不在本仓库测试</td></tr>
+            <tr><td>CLI encryption path</td><td><span class="evidence"><code>libs/cli/tests/unit_tests/test_config.py:1001-1052</code></span></td><td>单元</td><td>配置保留、格式拒绝、容器路径输出</td><td>不证明 Server 成功加载与数据 round-trip</td></tr>
+            <tr><td>Cache 与 interrupt 恢复</td><td><span class="evidence"><code>libs/langgraph/tests/test_pregel.py:5745-5815</code></span></td><td>运行时</td><td>cached task 跨多次 interrupt 不重复计算，clear 后重算</td><td>副作用节点不应照搬该模式</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>13.1 每类扩展的最低测试证明</h3>
+        <ul class="checklist">
+          <li><strong>Channel：</strong>空 get、空 update、单写、多写/非法写、乱序 updates、consume/finish、copy 不共享引用、checkpoint round-trip、serde round-trip、并发 step 集成。</li>
+          <li><strong>Saver：</strong><code>report.passed_all_base()</code> 必须为真；每个宣称的扩展 capability 必须被 detected 且通过；再加数据库断连、事务中断、并发 writer、schema migration、备份恢复与 Delta prune/copy。</li>
+          <li><strong>Store：</strong>batch/abatch 同序、namespace 拒绝与租户隔离、分页、search filter、TTL 支持/拒绝、并发 put/delete、索引失败回滚边界。</li>
+          <li><strong>Cache：</strong>sync/async parity、批量部分命中、TTL、clear namespace/all、key 稳定性、租户与版本隔离、不可序列化结果、并发 set/get。</li>
+          <li><strong>Tool wrapper：</strong>透传、参数修改、零次执行拒绝、一次执行、多次执行、sync/async、未注册工具替换、handle_tool_errors 两态、Command、GraphBubbleUp、重复副作用幂等。</li>
+          <li><strong>StreamTransformer：</strong>projection key 冲突、sync/async 注册、process false、before_builtins、子图 factory、schedule log/raise、close/fail/cancel、慢消费者与资源释放。</li>
+          <li><strong>Auth/Encryption/CLI：</strong>401、403、global deny、资源特例、Store namespace 重写；四类加解密 round-trip、旧 key、错误 key、KMS 不可用、JSON key preservation；CLI validate/build + 实际 Server smoke/integration。</li>
+        </ul>
+      </section>
+
+      <section class="section" id="development">
+        <h2>14. 开发与扩展指南：变更目标、Owner 与同步证明</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>变更目标</th><th>Owner 表面</th><th>必须同步修改</th><th>必要证明</th><th>禁止捷径</th></tr></thead>
+          <tbody>
+            <tr><td>新增 Channel 语义</td><td><code>BaseChannel</code> 与 graph schema 解析</td><td>公共导出、serde allowlist、Channel 测试、文档</td><td>乱序 update、copy、checkpoint、恢复</td><td>在 reducer 中访问 Runtime 私有状态</td></tr>
+            <tr><td>发布第三方 Saver</td><td><code>BaseCheckpointSaver</code></td><td>schema/setup/migration、sync/async、conformance 版本矩阵</td><td>base 全过 + 声明 capability 全过 + 故障注入</td><td>只实现 sync；把 put 与 put_writes 混存无区分</td></tr>
+            <tr><td>接入业务 Store</td><td><code>BaseStore.batch/abatch</code></td><td>namespace policy、TTL/index capability、资源关闭</td><td>租户隔离、同序、分页、并发与降级</td><td>把 thread_id 当唯一租户边界</td></tr>
+            <tr><td>替换 Cache</td><td><code>BaseCache</code></td><td>serde、TTL、key schema/version、清理工具</td><td>sync/async parity、部分命中、跨租户拒绝</td><td>缓存有不可逆副作用的节点</td></tr>
+            <tr><td>增加工具审批/审计</td><td>ToolNode wrapper + 独立审批/副作用节点</td><td>policy version、幂等键、审计事件、错误映射</td><td>拒绝零执行、resume 重跑、多重 retry 上限</td><td>在副作用之后 interrupt；吞 GraphBubbleUp</td></tr>
+            <tr><td>增加流脱敏/投影</td><td>StreamTransformer factory</td><td>required modes、projection schema、close/fail</td><td>before_builtins 顺序、子图、async-only 拒绝</td><td>修改 task lifecycle 字段；裸 create_task</td></tr>
+            <tr><td>新增远程 Auth</td><td>SDK Auth + Server + CLI config</td><td>global deny、endpoint policy、OpenAPI、integration</td><td>认证失败、授权拒绝、filter、namespace 重写</td><td>把 OpenAPI 描述当真实授权</td></tr>
+            <tr><td>新增 at-rest Encryption</td><td>SDK Encryption Beta + Server</td><td>密文格式版本、KMS、rotation、CLI path</td><td>key-preserving JSON、旧密文、fail-closed</td><td>依赖 model/field 解密；把 key 放 metadata</td></tr>
+          </tbody>
+        </table></div>
+
+        <h3>14.1 推荐交付顺序</h3>
+        <ol>
+          <li>先写行为矩阵：sync/async、成功/拒绝/恢复、内存/目标后端、本地/Server、当前/最低依赖版本。</li>
+          <li>再实现最小公共接口，不 override 未支持的可选 capability。</li>
+          <li>先跑单元与 conformance，再跑真实 Graph 集成；安全扩展必须进入实际 Server。</li>
+          <li>故障注入覆盖连接中断、重复请求、取消、超时、KMS/数据库不可用和进程重启。</li>
+          <li>记录 schema/config/密文/key/cache namespace 版本；提供升级、回滚、清理与数据恢复说明。</li>
+        </ol>
+        <div class="callout good"><strong>验收口径：</strong>“能被导入”不是完成；只有声明的契约、拒绝语义、恢复行为、资源关闭和版本矩阵都有自动化证明，扩展才可进入共享环境。</div>
+      </section>
+
+      <section class="section" id="tradeoffs">
+        <h2>15. 设计权衡、所有权违规与典型反模式</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>反模式 / 所有权违规</th><th>为什么错</th><th>可见失败</th><th>正确替代</th></tr></thead>
+          <tbody>
+            <tr><td>Channel reducer 做 DB/HTTP 副作用</td><td>Reducer 属状态合并 Owner，输入顺序任意且可重放</td><td>屏障变慢、重复副作用、不可测试顺序</td><td>独立幂等节点；Channel 只做纯合并</td></tr>
+            <tr><td>把 Store 当 Checkpointer</td><td>Store 没有 checkpoint tuple、版本与 pending writes 契约</td><td>interrupt/time-travel 无法恢复</td><td>执行恢复用 Saver；业务记忆用 Store</td></tr>
+            <tr><td>把 Checkpointer 当长期知识库</td><td>生命周期按 thread/graph 执行组织</td><td>跨 thread 查询困难、删除边界混乱</td><td>提取稳定事实到租户化 Store</td></tr>
+            <tr><td>缓存发送邮件、扣款、建单节点</td><td>Cache 复用返回值，不协调外部事实</td><td>命中时没执行，miss/retry 时重复执行</td><td>幂等副作用节点 + 外部 operation record；一般不缓存</td></tr>
+            <tr><td>Tool wrapper 多层无限重试</td><td>execute 可多次调用且外层 Runtime/HTTP 也可能重试</td><td>请求风暴、重复写、成本失控</td><td>总 deadline、总 attempts、幂等键、可重试错误白名单</td></tr>
+            <tr><td>wrapper 捕获所有 BaseException</td><td>会吞 interrupt/control-flow</td><td>HITL 消失，图错误继续</td><td>保持 GraphBubbleUp 传播；只处理声明的业务异常</td></tr>
+            <tr><td>StreamTransformer 复用同一实例跨 run</td><td>projection 与 scheduled tasks 是 run 生命周期状态</td><td>跨 run 数据串扰、子图无法克隆</td><td>传 class/factory，每个 scope 新实例</td></tr>
+            <tr><td>用 timestamp 作为跨事件总序</td><td>墙钟可因 NTP 回拨</td><td>展示/审计乱序</td><td>根 stream 使用 <code>seq</code></td></tr>
+            <tr><td>Auth 没有 global deny</td><td>当前未匹配 handler 默认接受</td><td>新 endpoint/resource 自动放行</td><td>global deny + 明确 allow + 覆盖测试</td></tr>
+            <tr><td>把 Auth/Encryption 写成本地 Runtime 能力</td><td>实际执行方是仓库外 Server</td><td>本地测试通过但生产策略未加载</td><td>明确进程边界并做 Server integration</td></tr>
+            <tr><td>JSON 加密合并全部字段到新 key</td><td>破坏 Server JSONB key-level merge</td><td>运行时拒绝或 partial update 错乱</td><td>保持 key 集合，只加密 value</td></tr>
+            <tr><td>naive Delta prune/copy</td><td>破坏 snapshot + ancestor writes 重建链</td><td>可能静默恢复为空</td><td>保留链、先物化 snapshot，或不声明能力</td></tr>
+            <tr><td>从私有表/私有 mux 方法派生长期 API</td><td>私有实现不承担兼容承诺</td><td>minor 升级即破坏</td><td>只包装公共基类；确需私有面时固定版本并隔离适配层</td></tr>
+          </tbody>
+        </table></div>
+        <p><strong>何时重评：</strong>只有当公共基类新增明确能力、conformance 覆盖对应行为、Server 协议发布稳定版本，或生产指标证明现有边界无法满足需求时，才扩大扩展面。当前 Encryption 与 Delta history 都带 Beta 边界；v3 streaming 也应固定版本并保留兼容层。</p>
+      </section>
+
+      <section class="section" id="sources">
+        <h2>16. 源码索引与进一步阅读</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>角色</th><th>决定性源码 / 测试</th><th>用途</th></tr></thead>
+          <tbody>
+            <tr><td>Channel 公共契约</td><td><span class="evidence"><code>libs/langgraph/langgraph/channels/base.py:19-121</code></span></td><td>类型、空状态、copy/checkpoint、update/consume/finish</td></tr>
+            <tr><td>Channel 参照测试</td><td><span class="evidence"><code>libs/langgraph/tests/test_channels.py:33-129</code></span></td><td>多写拒绝、round-trip、复制隔离、untracked</td></tr>
+            <tr><td>Saver 公共契约</td><td><span class="evidence"><code>libs/checkpoint/langgraph/checkpoint/base/__init__.py:176-711</code></span></td><td>sync/async、生命周期、Delta、版本</td></tr>
+            <tr><td>Saver conformance</td><td><span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/capabilities.py:15-96</code></span>；<span class="evidence"><code>libs/checkpoint-conformance/langgraph/checkpoint/conformance/validate.py:45-128</code></span></td><td>能力检测、suite 调度与报告</td></tr>
+            <tr><td>Store 公共契约</td><td><span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:708-755</code></span>；<span class="evidence"><code>libs/checkpoint/langgraph/store/base/__init__.py:1263-1304</code></span></td><td>batch/abatch、namespace 与 TTL 默认</td></tr>
+            <tr><td>Cache 公共契约</td><td><span class="evidence"><code>libs/checkpoint/langgraph/cache/base/__init__.py:15-48</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/types.py:520-529</code></span></td><td>批量接口、serde、key 与 TTL</td></tr>
+            <tr><td>ToolNode wrapper</td><td><span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:202-283</code></span>；<span class="evidence"><code>libs/prebuilt/langgraph/prebuilt/tool_node.py:922-1222</code></span></td><td>多次 execute、错误、sync/async、control flow</td></tr>
+            <tr><td>StreamTransformer</td><td><span class="evidence"><code>libs/langgraph/langgraph/stream/_types.py:44-330</code></span>；<span class="evidence"><code>libs/langgraph/langgraph/stream/_mux.py:50-408</code></span></td><td>投影、lane、调度、关闭与冲突</td></tr>
+            <tr><td>动态 interrupt</td><td><span class="evidence"><code>libs/langgraph/langgraph/types.py:851-974</code></span></td><td>节点重跑、resume 顺序与 checkpointer 要求</td></tr>
+            <tr><td>SDK Auth</td><td><span class="evidence"><code>libs/sdk-py/langgraph_sdk/auth/__init__.py:13-301</code></span></td><td>Server 加载、默认接受、handler 结果与优先级</td></tr>
+            <tr><td>SDK Encryption</td><td><span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/__init__.py:1-466</code></span>；<span class="evidence"><code>libs/sdk-py/langgraph_sdk/encryption/types.py:17-146</code></span></td><td>Beta、签名、key-preserving、context 与搜索边界</td></tr>
+            <tr><td>CLI schema 与路径</td><td><span class="evidence"><code>libs/cli/langgraph_cli/schemas.py:308-373</code></span>；<span class="evidence"><code>libs/cli/langgraph_cli/config.py:323-468</code></span>；<span class="evidence"><code>libs/cli/langgraph_cli/config.py:927-1008</code></span></td><td>版本、Auth/Encryption 配置与容器可达性</td></tr>
+            <tr><td>相邻阅读</td><td><a href="17-remotegraph-sdk-cli.html">第 17 章 RemoteGraph / SDK / CLI</a><br><a href="../../langgraph_architecture.html#s18">LangGraph 架构总览 · s18</a></td><td>连接远程扩展边界并回到全系统上下文</td></tr>
+          </tbody>
+        </table></div>
+      </section>
+
+      <section class="section" id="glossary">
+        <h2>17. 术语表</h2>
+        <div class="table-wrap"><table>
+          <thead><tr><th>术语</th><th>本章含义</th></tr></thead>
+          <tbody>
+            <tr><td>ABC</td><td>Abstract Base Class，抽象基类；定义扩展实现必须满足的方法表面。</td></tr>
+            <tr><td>Channel</td><td>State key 的值容器、update 合并和 checkpoint 协议，不是并发共享 dict。</td></tr>
+            <tr><td>Checkpoint</td><td>超级步边界的 Channel 值、版本、versions_seen 等可恢复执行状态。</td></tr>
+            <tr><td>Pending writes</td><td>绑定 checkpoint 与 task id 的中间写；与超级步 <code>put</code> 分离。</td></tr>
+            <tr><td>Conformance</td><td>一致性测试；验证第三方实现是否满足公共存储契约，而不只验证其自身示例。</td></tr>
+            <tr><td>Capability</td><td>实现声明支持的一组能力；base 必需，extended 通过 override 检测并按需测试。</td></tr>
+            <tr><td>Store</td><td>跨 thread、按 namespace 组织的长期业务记忆。</td></tr>
+            <tr><td>Cache</td><td>按稳定输入 key 复用节点结果的派生数据层；不提供副作用 exactly-once。</td></tr>
+            <tr><td>TTL</td><td>Time To Live，存活时间；Store 的文档单位为分钟，CachePolicy 的单位为秒，不能混用。</td></tr>
+            <tr><td>ToolNode wrapper</td><td>包围单个工具调用的策略函数，可修改、拒绝、短路或多次执行请求。</td></tr>
+            <tr><td>GraphBubbleUp</td><td>interrupt 等图控制流向上传播的异常族，普通工具错误处理不得吞掉。</td></tr>
+            <tr><td>StreamTransformer</td><td>v3 stream 的自定义事件投影扩展点，拥有独立 projection 与生命周期。</td></tr>
+            <tr><td>Projection</td><td>Transformer 从 ProtocolEvent 派生并放入 <code>run.extensions</code> 的视图/通道。</td></tr>
+            <tr><td>StreamMux</td><td>按顺序分发协议事件、合并 projection、管理 close/fail 和 seq 的流多路复用器。</td></tr>
+            <tr><td>Fail-fast / Fail-closed</td><td>尽早拒绝错误配置 / 安全依赖失败时拒绝访问或写入，而不是放行降级。</td></tr>
+            <tr><td>Idempotency key</td><td>幂等键；让外部系统把重复业务请求识别为同一操作的稳定标识。</td></tr>
+            <tr><td>Exactly-once</td><td>恰好一次效果。LangGraph checkpoint 与 pending writes 不自动给外部 API 提供该保证。</td></tr>
+            <tr><td>Auth</td><td>Python SDK 定义、API Server 执行的认证与授权 handler 系统，不属于本地 Pregel 内核。</td></tr>
+            <tr><td>Encryption at rest</td><td>静态数据加密；当前 SDK Encryption 为 Beta，不能推导为 trace、stream 或网络加密。</td></tr>
+            <tr><td>KMS / DEK</td><td>Key Management Service / Data Encryption Key，密钥管理服务 / 数据加密密钥。</td></tr>
+            <tr><td>ACL</td><td>Access Control List，访问控制列表；namespace 自身不是 ACL。</td></tr>
+            <tr><td>Owner</td><td>定义数据生命周期、顺序、错误与兼容语义的源码模块或外部系统。</td></tr>
+            <tr><td>Version matrix</td><td>核心包、扩展包、Python/Node、CLI 与 API Server 的被测组合，不是单一版本号。</td></tr>
+          </tbody>
+        </table></div>
+        <p><a href="../../langgraph_architecture.html#s18">返回 LangGraph 架构总览第 18 章</a></p>
+      </section>
+    </div>
+  </main>
+</div>
+<a class="top" href="#top" aria-label="回到顶部">↑ 顶部</a>
+<script>
+  (() => {
+    const links = [...document.querySelectorAll('#toc a')];
+    const targets = links.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+    const activate = () => {
+      let current = targets[0];
+      for (const target of targets) {
+        if (target.getBoundingClientRect().top <= 120) current = target;
+      }
+      links.forEach(a => a.classList.toggle('active', a.getAttribute('href') === `#${current.id}`));
+    };
+    addEventListener('scroll', activate, {passive: true});
+    activate();
+  })();
+</script>
+</body>
+</html>

@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>OpenClaw Gateway 协议与信任边界详细设计</title>
+<style>
+:root{--bg:#f4f1ea;--surface:#fffdf8;--surface2:#e8e1d4;--border:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--blue2:#0f766e;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}*{box-sizing:border-box;margin:0;padding:0}html{scroll-behavior:smooth;scroll-padding-top:68px}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);line-height:1.75;padding:64px 22px 48px 300px}a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .35rem;border-radius:4px;font-size:.9em;overflow-wrap:anywhere}h1{font-size:2.35rem;line-height:1.2;background:linear-gradient(135deg,var(--blue),var(--purple),var(--orange));-webkit-background-clip:text;-webkit-text-fill-color:transparent;margin:.5rem 0 .65rem}h2{color:var(--blue);font-size:1.5rem;border-bottom:1px solid var(--border);padding-bottom:.5rem;margin-bottom:1rem}h3{color:var(--blue2);font-size:1.16rem;margin:1.45rem 0 .55rem}.topbar{position:fixed;top:0;left:0;right:0;height:48px;background:#fffdf8;border-bottom:1px solid var(--border);display:flex;align-items:center;z-index:300;padding:0 18px;gap:12px}.topbar a{border:1px solid var(--border);border-radius:7px;padding:.28rem .72rem;font-size:.84rem}.topbar .crumb{color:var(--muted);font-size:.84rem}.sidebar{position:fixed;left:0;top:48px;bottom:0;width:280px;background:color-mix(in srgb, var(--bg) 88%, transparent);border-right:1px solid var(--border);padding:1.15rem 1rem 2rem;overflow-y:auto;z-index:200;backdrop-filter:blur(12px)}.sidebar h2{font-size:.92rem;border:0;margin:0 0 .55rem;padding:0}.sidebar a{display:block;color:var(--muted);font-size:.79rem;padding:.24rem .45rem;border-left:2px solid transparent}.sidebar a:hover,.sidebar a.active{color:var(--blue);background:rgba(67,56,202,.07);border-left-color:var(--blue);text-decoration:none}.container{max-width:1160px;margin:auto}.subtitle{color:var(--muted);font-size:1.02rem;margin-bottom:1.2rem}.meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.7rem;margin:1rem 0 1.5rem}.meta>div,.card{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:.8rem}.meta dt{color:var(--muted);font-size:.74rem;text-transform:uppercase}.meta dd{font-size:.88rem;margin-top:.15rem}.section{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.8rem 2rem;margin:0 0 1.4rem;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.section p{margin:.58rem 0}.section ul,.section ol{margin:.55rem 0 .55rem 1.35rem}.section li{margin:.28rem 0}.table-wrap{overflow-x:auto;margin:1rem 0}table{width:100%;border-collapse:collapse;font-size:.87rem;min-width:760px}th,td{border:1px solid var(--border);padding:.58rem .7rem;text-align:left;vertical-align:top}th{background:#e8e1d4;color:var(--blue)}tr:nth-child(even){background:rgba(244,241,234,.25)}.lead,.insight,.warning,.boundary,.evidence{border-radius:8px;padding:.92rem 1.08rem;margin:.9rem 0}.section span.evidence{display:inline;background:transparent;border:0;border-radius:0;padding:0;margin:0;color:var(--muted);font-size:.82rem;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;-webkit-box-decoration-break:clone;box-decoration-break:clone}.lead{background:rgba(21,128,61,.06);border:1px solid var(--green)}.lead strong{color:var(--green)}.insight{background:rgba(67,56,202,.06);border-left:4px solid var(--blue)}.warning{background:rgba(185,28,28,.06);border-left:4px solid var(--red)}.boundary{background:rgba(109,40,217,.06);border-left:4px solid var(--purple)}.evidence{background:#f4f1ea;border:1px solid var(--border);color:var(--muted);font-size:.83rem}.badge{display:inline-block;border:1px solid;border-radius:99px;padding:.04rem .45rem;margin-right:.32rem;font-size:.72rem;font-weight:700}.fact{color:var(--green)}.optional{color:var(--yellow)}.owner{color:var(--purple)}.gap{color:var(--red)}.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem;margin:.9rem 0}.card strong{display:block;color:var(--blue2);margin-bottom:.25rem}.flow{font-family:"Cascadia Code",Consolas,monospace;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:1rem;white-space:pre-wrap;color:var(--blue2);font-size:.82rem;line-height:1.58;margin:.8rem 0;overflow:auto}.steps{counter-reset:step;list-style:none!important;margin-left:0!important}.steps>li{counter-increment:step;background:#f4f1ea;border:1px solid var(--border);border-radius:8px;padding:.72rem .85rem .72rem 3.25rem;position:relative;margin:.55rem 0}.steps>li:before{content:counter(step);position:absolute;left:.9rem;top:.72rem;width:1.55rem;height:1.55rem;border-radius:50%;background:var(--blue);color:#f4f1ea;font-weight:800;text-align:center;line-height:1.55rem}.status-good{color:var(--green)}.source-list{columns:2;column-gap:2rem}.source-list li{break-inside:avoid}.footer{text-align:center;color:var(--muted);font-size:.8rem;margin:2rem 0}.back-top{position:fixed;right:18px;bottom:18px;border:1px solid var(--border);background:var(--surface);border-radius:50%;width:38px;height:38px;text-align:center;line-height:36px;z-index:250}@media(max-width:980px){body{padding:62px 13px 32px}.sidebar{display:none}.meta,.grid{grid-template-columns:1fr}.section{padding:1.25rem;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.source-list{columns:1}h1{font-size:1.82rem}.topbar .crumb{display:none}}
+</style>
+</head>
+<body>
+<div class="topbar"><a href="../../openclaw_architecture.html">← 返回架构总览</a><span class="crumb">第 5 章 · Gateway 协议与信任边界 · 开发级详细设计</span></div>
+<aside class="sidebar" aria-label="页面目录">
+<h2>协议与信任边界</h2>
+<a href="#position">1. 模块定位</a><a href="#context">2. 系统位置与依赖</a><a href="#concepts">3. 核心概念</a><a href="#components">4. 架构组成</a><a href="#flows">5. 完整运行流程</a><a href="#state">6. 数据与状态</a><a href="#interfaces">7. 协议与事件</a><a href="#config">8. 配置与默认行为</a><a href="#resources">9. 背压与资源</a><a href="#security">10. 安全边界</a><a href="#failure">11. 失败与恢复</a><a href="#operations">12. 可观测性</a><a href="#tests">13. 测试与验证</a><a href="#development">14. 开发指南</a><a href="#tradeoffs">15. 权衡与限制</a><a href="#sources">16. 源码索引</a>
+</aside>
+<main class="container">
+<header id="top">
+<h1>OpenClaw Gateway 协议与信任边界详细设计</h1>
+<p class="subtitle">从不可信 WebSocket 字节到已认证、已配对、按 Role/Scope 再授权的 Gateway 会话。</p>
+<div class="meta">
+<div><dl><dt>源码基线</dt><dd>OpenClaw 2026.7.2 工作副本；环境无可用 Git 命令，SHA 未验证</dd></dl></div>
+<div><dl><dt>证据状态</dt><dd><span class="status-good">部分验证</span>：Schema、服务端、参考客户端、测试与官方文档已审计；Live 网络未执行</dd></dl></div>
+<div><dl><dt>主要所有者</dt><dd><code>packages/gateway-protocol/</code>、<code>src/gateway/server/ws-connection/</code></dd></dl></div>
+<div><dl><dt>目标读者</dt><dd>Gateway/Node/Control UI 客户端、插件与安全评审人员</dd></dl></div>
+<div><dl><dt>最近验证</dt><dd>2026-07-27</dd></dl></div>
+<div><dl><dt>事实标签</dt><dd><span class="badge fact">当前事实</span><span class="badge optional">兼容窗口</span><span class="badge owner">安全边界</span></dd></dl></div>
+</div>
+<div class="lead"><strong>一句话目标：</strong>协议层先用严格 Frame/Connect Schema 和 challenge-bound Device Proof 建立身份，再用 pairing、Role、Scope、方法 descriptor 与动态 generation 限制每次操作；客户端声明的 capability 只描述“能做什么”，从不授予“允许做什么”。</div>
+</header>
+
+<section class="section" id="position"><h2>1. 模块定位</h2>
+<p>Gateway 协议是 Operator、Control UI、Node 和轻量 probe 共用的控制面线协议。它拥有顶层帧、握手、版本范围、错误结构和跨语言生成契约；Gateway runtime 拥有认证、配对、连接状态及 RPC 授权。它不拥有具体 RPC 业务、Agent Tool Policy、Sandbox 或 Channel 平台认证。<span class="evidence">证据：<code>packages/gateway-protocol/src/schema/frames.ts:148-179</code>、<code>src/gateway/server/ws-connection/message-handler.ts:283-394</code></span></p>
+<div class="table-wrap"><table><thead><tr><th>边界</th><th>负责</th><th>委托/不负责</th></tr></thead><tbody>
+<tr><td>Wire</td><td>JSON text frame；<code>req/res/event</code> envelope；Connect/Hello/Error shape。</td><td>方法 payload 由选中方法 Schema 再验证。</td></tr>
+<tr><td>握手</td><td>challenge、版本、origin、shared/device/bootstrap auth、Device Proof、pairing。</td><td>TLS 证书和反向代理身份由 listener/auth owner 处理。</td></tr>
+<tr><td>会话权限</td><td>把批准后的 role/scopes 固定到连接；auth generation 改变时失效。</td><td>每个 RPC 仍由 method registry 二次授权。</td></tr>
+<tr><td>Node 声明</td><td>携带 caps/commands/permissions 并与批准面调和。</td><td>声明不是授权，也不绕过命令 deny、approval 或 OS permission。</td></tr>
+<tr><td>可靠性</td><td>payload 限制、slow-consumer policy、tick/ping、结构化 retry hints。</td><td>广播不是持久事件日志；断线请求不自动 replay。</td></tr>
+</tbody></table></div>
+<div class="boundary"><strong>相邻边界：</strong>第 4 章解释 server/listener 与 RPC composition；第 7 章解释 Session；第 13 章解释 Tool Approval/Sandbox；第 15 章解释 Node invoke。协议通过 typed frame 和连接 principal 跨越这些边界，不接管它们的业务状态。</div>
+</section>
+
+<section class="section" id="context"><h2>2. 系统位置与依赖</h2>
+<div class="flow">Gateway 客户端 / 原生 app / node
+  → ws 传输（text JSON）
+  → pre-auth 字节 + 连接预算
+  → connect.challenge
+  → RequestFrame(connect) + ConnectParams
+  → 准入 → 认证 → 设备证明 → pairing
+  → 注册 GatewayWsClient → hello-ok
+  → 已认证请求 → method descriptor 授权 → 所有者 handler
+  ← response / 经 scope 过滤的 event</div>
+<div class="table-wrap"><table><thead><tr><th>方向</th><th>公共契约</th><th>决定性证据</th></tr></thead><tbody>
+<tr><td>Client → Schema</td><td><code>@openclaw/gateway-protocol</code>、TypeBox-free frame guards/version entrypoints</td><td><code>packages/gateway-protocol/README.md:30-53</code></td></tr>
+<tr><td>Client → Transport</td><td><code>GatewayProtocolClient</code> 单 socket/握手/重连状态机</td><td><code>packages/gateway-client/src/protocol-client.ts:160-188</code></td></tr>
+<tr><td>Transport → Gateway</td><td><code>attachGatewayWsConnectionHandler</code> 与按需 message handler</td><td><code>src/gateway/server/ws-connection.ts:191-227</code>、<code>src/gateway/server/ws-connection.ts:262-431</code></td></tr>
+<tr><td>Handshake → Pairing 存储</td><td>device/bootstrap token、pairing 请求/批准 API</td><td><code>src/gateway/server/ws-connection/connect-device-pairing.ts:153-178</code>、<code>src/gateway/server/ws-connection/connect-device-pairing.ts:283-300</code></td></tr>
+<tr><td>Session → RPC 所有者</td><td><code>GatewayWsClient</code> + method registry</td><td><code>src/gateway/server/ws-connection/authenticated-request-dispatch.ts:52-163</code></td></tr>
+<tr><td>Schema → 原生 client</td><td>JSON Schema、Swift、Kotlin 代码生成</td><td><code>scripts/protocol-gen.ts:34-68</code>、<code>scripts/protocol-gen-swift.ts:775-831</code>、<code>scripts/protocol-gen-kotlin.ts:324-367</code></td></tr>
+</tbody></table></div>
+<p class="evidence">外部依赖：根包锁定 <code>typebox 1.3.3</code> 与 <code>ws 8.21.0</code>（<code>package.json:1940</code>、<code>package.json:1945</code>）。本地无 <code>node_modules</code>，因此未逐行检查安装副本；已对照 ws 官方契约：<code>maxPayload</code> 限制入站消息，<code>bufferedAmount</code> 表示尚未发出的排队字节。实际安全阈值仍以 OpenClaw 常量与运行时为准。</p>
+</section>
+
+<section class="section" id="concepts"><h2>3. 核心概念与术语</h2><div class="grid">
+<div class="card"><strong>Frame Schema</strong>顶层 envelope 是闭合对象；<code>params/payload/details</code> 在 envelope 层有意开放，由 method/event/error owner 再收窄。</div>
+<div class="card"><strong>Challenge</strong>服务端先发随机 nonce；Device Proof 必须签入同一个 nonce，防止旧签名重放。</div>
+<div class="card"><strong>Auth ≠ Pairing</strong>Shared secret/可信代理证明“可以进入 Gateway”；pairing 把设备公钥绑定到批准的 role/scopes。</div>
+<div class="card"><strong>Role ≠ Scope</strong>Role 选择主体类别；Scope 是 Operator 方法与事件的细粒度授权。缺省 scope 为零权限。</div>
+<div class="card"><strong>Capability ≠ Authorization</strong><code>caps/commands/permissions</code> 是客户端/Node 声明；服务端 allowlist、pairing generation 和 RPC policy 才能授权。</div>
+<div class="card"><strong>Protocol window</strong>普通客户端只接受当前 v4；已认证 node 与 probe 允许 v3–v4 的 N−1 窗口，且不放宽其他安全门。</div>
+<div class="card"><strong>Discovery ≠ callable set</strong><code>hello-ok.features.methods</code> 是保守发现列表，不是全部可调用方法，也不是授权列表。</div>
+<div class="card"><strong>Generation fencing</strong>shared auth、pairing 或设备凭证变化后，旧连接被关闭或在请求前拒绝，避免 stale principal 继续使用。</div>
+</div></section>
+
+<section class="section" id="components"><h2>4. 架构组成</h2>
+<div class="table-wrap"><table><thead><tr><th>组件</th><th>输入 → 输出</th><th>故障隔离/扩展点</th><th>源码</th></tr></thead><tbody>
+<tr><td>Frame schemas</td><td>未知 JSON → typed Connect/Hello/Req/Res/Event</td><td><code>closedObject</code> 拒绝额外字段；open payload 留给 owner。</td><td><code>packages/gateway-protocol/src/schema/frames.ts:31-179</code></td></tr>
+<tr><td>懒校验器</td><td>TypeBox schema → 可调用 type guard + 错误</td><td>首次调用才编译，避免公共 entry 启动成本。</td><td><code>packages/gateway-protocol/src/protocol-validator.ts:12-64</code></td></tr>
+<tr><td>WS 连接所有者</td><td>升级 socket → challenge、timer、client set、ping</td><td>pre-auth budget、16 帧 lazy-load queue、统一 close cleanup。</td><td><code>src/gateway/server/ws-connection.ts:191-227</code>、<code>src/gateway/server/ws-connection.ts:353-431</code></td></tr>
+<tr><td>Connect 准入</td><td>ConnectParams + headers/config → role/scopes/version/origin 事实</td><td>startup、protocol、role、origin 均可提前终止。</td><td><code>src/gateway/server/ws-connection/connect-admission.ts:55-246</code></td></tr>
+<tr><td>Auth/Device Proof</td><td>凭证 + 签名元数据 → 已认证身份</td><td>nonce、fingerprint、2 分钟时钟偏差、v2/v3 signature。</td><td><code>src/gateway/server/ws-connection/connect-auth.ts:47-483</code>、<code>src/gateway/server/ws-connection/connect-device-proof.ts:14-100</code></td></tr>
+<tr><td>Pairing</td><td>设备/role/scopes → approved principal/token 或 pairing-required</td><td>silent local、trusted CIDR/proxy、bootstrap 是受限特例。</td><td><code>src/gateway/server/ws-connection/connect-device-pairing.ts:76-595</code></td></tr>
+<tr><td>Hello 构建器</td><td>已授权连接 → snapshot/features/auth/policy</td><td>hello 发送失败恢复已撤销 bootstrap token 并关闭。</td><td><code>src/gateway/server/ws-connection/connect-hello.ts:32-171</code></td></tr>
+<tr><td>RPC 分发器</td><td>认证后请求 → registry handler/res</td><td>invalid frame、auth generation、unauthorized flood、device mutation barrier。</td><td><code>src/gateway/server/ws-connection/authenticated-request-dispatch.ts:52-166</code></td></tr>
+<tr><td>参考 client</td><td>challenge/frames → connect 计划、pending map、gap/重连</td><td>明文远程拒绝、TLS pin、超时、结构化 pause/retry。</td><td><code>packages/gateway-client/src/client.ts:378-458</code>、<code>packages/gateway-client/src/client.ts:490-605</code></td></tr>
+</tbody></table></div>
+</section>
+
+<section class="section" id="flows"><h2>5. 完整运行流程</h2>
+<h3>5.1 成功：challenge → connect → hello-ok</h3>
+<ol class="steps">
+<li>WS upgrade 成功后，服务端生成 <code>connId</code> 和 <code>connectNonce</code>，启动握手超时，并立即发 <code>connect.challenge</code>。<span class="evidence"><code>src/gateway/server/ws-connection.ts:262-376</code>、<code>src/gateway/server/ws-connection.ts:424-431</code></span></li>
+<li>参考客户端要求 challenge，读取非空 nonce 后才构造 connect；v3 Device Proof 签入 device/client/mode/role/scopes/time/token/nonce/platform/family。<span class="evidence"><code>packages/gateway-client/src/protocol-client.ts:517-545</code>、<code>packages/gateway-client/src/client.ts:709-812</code></span></li>
+<li>服务端先做 64 KiB pre-auth 限制，再要求第一帧是合法 <code>RequestFrame(method="connect")</code> 且 params 通过 Schema。<span class="evidence"><code>src/gateway/server/ws-connection/message-handler.ts:184-203</code>、<code>src/gateway/server/ws-connection/message-handler.ts:283-324</code></span></li>
+<li>Admission 检查 startup、版本范围、Role、Scope 缺省拒绝与浏览器 Origin；认证解析 shared/password/trusted-proxy/bootstrap/device token。<span class="evidence"><code>src/gateway/server/ws-connection/connect-admission.ts:82-150</code>、<code>src/gateway/server/ws-connection/connect-auth.ts:100-133</code></span></li>
+<li>Device Proof 验证公钥派生 ID、±2 分钟时间、challenge nonce 与签名；Pairing 再检查 role/scope 是否在批准集合内，必要时签发 device token。<span class="evidence"><code>src/gateway/server/ws-connection/connect-device-proof.ts:64-100</code>、<code>src/gateway/server/ws-connection/connect-device-pairing.ts:521-594</code></span></li>
+<li>连接成功注册为 <code>GatewayWsClient</code> 后发送成功 response，payload 为 <code>hello-ok</code>；包含当前 protocol、方法/事件、snapshot、实际 auth role/scopes 和 payload/tick policy。注册失败会先回滚并终止。<span class="evidence"><code>src/gateway/server/ws-connection/connect-session.ts:412-421</code>、<code>src/gateway/server/ws-connection/connect-session.ts:555</code>；payload：<code>src/gateway/server/ws-connection/connect-hello.ts:84-121</code>；发送与回滚：<code>src/gateway/server/ws-connection/connect-hello.ts:155-171</code></span></li>
+</ol>
+<h3>5.2 拒绝：协议、认证、设备、配对</h3>
+<div class="flow">connect frame
+  ├─ 无效 envelope/params → INVALID_REQUEST + close 1008
+  ├─ 无兼容协议 → PROTOCOL_MISMATCH + close 1002
+  ├─ 无效 origin/role → 结构化错误 + close 1008
+  ├─ 错误/缺失凭证 → auth 详情 + close 1008
+  ├─ 过期/错误 nonce/signature → DEVICE_AUTH_* + close 1008
+  └─ 未配对/scope 升级 → 持久化 pairing 请求 + NOT_PAIRED + close 1008</div>
+<p>拒绝发生在 client 注册和业务 handler 前。Pairing-required 会广播 pending request；默认建议暂停自动重连，只有 bootstrap/SSH detached approval 明确给出 <code>wait_then_retry</code>、<code>pauseReconnect:false</code> 时持续重试。<span class="evidence">证据：<code>src/gateway/server/ws-connection/connect-device-pairing.ts:430-516</code>；<code>packages/gateway-client/src/reconnect-policy.ts:20-47</code></span></p>
+<h3>5.3 恢复：启动中、token mismatch、断线与 gap</h3>
+<ul>
+<li>Gateway sidecars 未 ready：connect 返回 retryable <code>UNAVAILABLE</code> 和 <code>retryAfterMs</code>，客户端用 1013 + 指定延迟重连。<span class="evidence"><code>src/gateway/server/ws-connection/connect-admission.ts:82-95</code>、<code>packages/gateway-client/src/client.ts:872-879</code></span></li>
+<li>shared token mismatch：仅可信 endpoint 可进行一次 cached device-token 快速重试；失败后暂停循环。<span class="evidence"><code>packages/gateway-client/src/client.ts:837-871</code>、<code>packages/gateway-client/src/client.ts:1066-1082</code></span></li>
+<li>一般断线：1 秒起步、乘 2、上限 30 秒；pending RPC 全部 reject，不在重连后 replay。<span class="evidence"><code>packages/gateway-client/src/client.ts:449-456</code>、<code>packages/gateway-client/src/protocol-client.ts:594-626</code>、<code>packages/gateway-client/src/protocol-client.ts:636-643</code></span></li>
+<li>事件 seq 跳变：调用 <code>onGap(expected,received)</code>；协议没有 replay，客户端必须重新读取权威 snapshot/session/health。<span class="evidence"><code>packages/gateway-client/src/protocol-client.ts:546-557</code></span></li>
+</ul>
+</section>
+
+<section class="section" id="state"><h2>6. 数据与状态模型</h2>
+<div class="table-wrap"><table><thead><tr><th>状态</th><th>Owner/位置</th><th>生命周期与安全含义</th></tr></thead><tbody>
+<tr><td>连接 nonce/phase</td><td>WS 连接关闭</td><td>每连接随机；phase 单调；ready/close 后失效。</td></tr>
+<tr><td><code>GatewayWsClient</code></td><td>Gateway client 集合</td><td>握手成功后加入；close 删除并清理 subscription/node presence。</td></tr>
+<tr><td>pending 请求/seq</td><td>参考客户端内存</td><td>socket generation 内；close flush，seq gap 只报告。</td></tr>
+<tr><td>已配对 device、token、generation</td><td>Gateway pairing owner/共享状态 DB</td><td>跨重启权威；设备+role+scope 绑定；rotate/revoke 不扩权。</td></tr>
+<tr><td>snapshot</td><td>Hello 时即时投影</td><td>不是持续同步源；后续靠事件和读取 RPC 刷新。</td></tr>
+<tr><td>Schema 产物</td><td>源 TypeBox + checked-in Swift/Kotlin；npm tarball JSON</td><td>生成物必须由同一 source of truth 重建。</td></tr>
+</tbody></table></div>
+<p class="warning"><strong>Secret 分类：</strong>shared token/password、bootstrap token、device token 与私钥属于凭证；challenge nonce、device ID/public key、Role/Scope 不是 secret，但仍是安全元数据。日志对 device ID 做 hash，错误详情不给出 bearer。证据：<code>src/gateway/server/ws-connection/connect-auth-security.ts:8-57</code>。</p>
+</section>
+
+<section class="section" id="interfaces"><h2>7. 接口、协议与事件</h2>
+<h3>7.1 Frame Schema</h3>
+<div class="table-wrap"><table><thead><tr><th>Frame</th><th>必填</th><th>开放字段</th><th>顺序/约束</th></tr></thead><tbody>
+<tr><td><code>req</code></td><td>type、非空 id、非空 method</td><td><code>params?: unknown</code></td><td>握手前只允许 connect；握手后只接收 req。</td></tr>
+<tr><td><code>res</code></td><td>type、id、ok</td><td>payload/error 详情</td><td>id 对应 pending request；错误含 retry hints。</td></tr>
+<tr><td><code>event</code></td><td>type、event</td><td>payload</td><td>普通广播可有 per-client seq/stateVersion；targeted 可无 seq。</td></tr>
+<tr><td><code>hello-ok</code></td><td>protocol/server/features/snapshot/auth/policy</td><td>plugin UI/surface 可选扩展</td><td>只作为 connect 成功 response payload。</td></tr>
+</tbody></table></div>
+<p>完整 TypeBox Schema 是严格契约；TypeBox-free guards 则只验证 dispatch-critical 字段并容忍 additive envelope 字段，供浏览器 bundle/CSP 敏感消费者使用。两者用途不同，不得用轻量 guard 替代方法 payload 校验。<span class="evidence">证据：<code>packages/gateway-protocol/src/frame-guards.ts:37-55</code>、<code>packages/gateway-protocol/src/frame-guards.test.ts:4-50</code></span></p>
+<h3>7.2 版本协商</h3>
+<p>当前 <code>PROTOCOL_VERSION=4</code>；普通客户端最低 4，Node 与 probe 最低 3。Server 接受范围覆盖 v4；只有 <code>role=node + mode=node</code> 才能使用 N−1 node 路径。Legacy node 不因此获得 plugin-owned capability。<span class="evidence">证据：<code>packages/gateway-protocol/src/version.ts:1-8</code>、<code>src/gateway/server/ws-connection/connect-admission.ts:98-134</code>、<code>docs/gateway/protocol.md:964-977</code></span></p>
+<h3>7.3 Error 与 codegen</h3>
+<p>客户端应按顶层 <code>code</code> 和 <code>details.code</code> 分支，message 仅供人读。JSON Schema 由 <code>ProtocolSchemas</code> 和 core method metadata 生成；Swift/Kotlin 从同一图生成，guard test 锁住 native 常量和 N−1 规则。<span class="evidence">证据：<code>scripts/protocol-gen.ts:34-68</code>、<code>packages/gateway-protocol/src/native-protocol-levels.guard.test.ts:110-182</code></span></p>
+</section>
+
+<section class="section" id="config"><h2>8. 配置与默认行为</h2>
+<div class="table-wrap"><table><thead><tr><th>表面</th><th>当前默认/值</th><th>优先级/生效</th><th>失败行为</th><th>来源</th></tr></thead><tbody>
+<tr><td>协议版本</td><td>client 4；node/probe 3–4</td><td>ConnectParams min/max 与 server constants 交集</td><td>1002 + PROTOCOL_MISMATCH</td><td><code>packages/gateway-protocol/src/version.ts:1-8</code></td></tr>
+<tr><td>auth mode</td><td>none/token/password/trusted-proxy；实际默认由 Gateway resolver 决定</td><td>resolved config/env/SecretRef；不在协议层猜测空凭证</td><td>结构化 auth details + 1008</td><td><code>docs/gateway/protocol.md:1019-1028</code></td></tr>
+<tr><td>Role</td><td>省略按 operator 解析</td><td>只接受 parser 关闭集合</td><td>无效 role + 1008</td><td><code>src/gateway/server/ws-connection/connect-admission.ts:137-150</code></td></tr>
+<tr><td>Scope</td><td>省略/空 = 无权限</td><td>device token/paired approved set 限制 self declaration</td><td>握手可成功，RPC 返回 missing scope</td><td><code>src/gateway/server/ws-connection/connect-admission.ts:145-150</code></td></tr>
+<tr><td>challenge 超时</td><td>默认 15 秒；可通过统一握手预算提高</td><td>client/server 超时解析器</td><td>1008/close，不发 connect</td><td><code>docs/gateway/protocol.md:996-1000</code></td></tr>
+<tr><td>请求 timeout</td><td>参考 client 30 秒；<code>expectFinal</code> 可无界</td><td>每请求覆盖 → client 默认</td><td>只 reject 本地 pending；不自动取消服务端副作用</td><td><code>packages/gateway-client/src/client.ts:1174-1194</code></td></tr>
+</tbody></table></div>
+<p class="boundary">协议版本提升需要显式 owner 决策；兼容变化应 additive-first。不要把 npm package 版本 <code>2026.7.2</code> 与 wire protocol <code>4</code> 混为一谈。证据：<code>packages/gateway-protocol/README.md:11-22</code>。</p>
+</section>
+
+<section class="section" id="resources"><h2>9. 并发、背压与资源</h2>
+<div class="table-wrap"><table><thead><tr><th>机制</th><th>限制/行为</th><th>结果</th></tr></thead><tbody>
+<tr><td>Pre-auth payload</td><td>64 KiB</td><td>超限 close 1009；不进入 JSON/auth。</td></tr>
+<tr><td>Post-auth payload</td><td>25 MiB</td><td>WS max payload 保护高分辨率 Node 结果。</td></tr>
+<tr><td>出站 buffer</td><td>50 MiB/connection</td><td>直接 response/不可丢 event close 1008；<code>dropIfSlow</code> event 丢帧并推进 seq。</td></tr>
+<tr><td>懒 handler 队列</td><td>最多 16 帧</td><td>加载期间溢出 close 1008，避免无界内存。</td></tr>
+<tr><td>Heartbeat</td><td>server WS ping 每 25 秒；一次未 pong 即 terminate；wire tick policy 30 秒</td><td>释放半开连接和 Node state；client silence 超过 tick×2 close 4000。</td></tr>
+<tr><td>RPC pending</td><td>Map by request id；每次断线整体 reject</td><td>防止旧 generation response 解析到新 socket。</td></tr>
+<tr><td>未授权泛洪</td><td>连续角色拒绝计数与日志抑制</td><td>达到门槛 close 1008；正常 response 重置。</td></tr>
+</tbody></table></div>
+<p class="evidence">阈值：<code>src/gateway/server-constants.ts:1-14</code>；direct send：<code>src/gateway/server/ws-connection.ts:399-421</code>；广播背压：<code>src/gateway/server-broadcast.ts:229-265</code>；heartbeat：<code>src/gateway/server/ws-connection.ts:617-635</code>。</p>
+</section>
+
+<section class="section" id="security"><h2>10. 安全与信任边界</h2>
+<ol>
+<li><strong>Transport：</strong>参考 client 拒绝公网明文 <code>ws://</code>；远程用 <code>wss://</code>，可选证书 fingerprint pin。<span class="evidence"><code>packages/gateway-client/src/client.ts:181-207</code>、<code>packages/gateway-client/src/client.ts:490-553</code></span></li>
+<li><strong>Origin：</strong>浏览器 UI/WebChat 在 auth 前检查 allowed origin；Host-header fallback 是显式危险配置并产生 security warning。<span class="evidence"><code>src/gateway/server/ws-connection/connect-admission.ts:187-234</code></span></li>
+<li><strong>Device Proof：</strong>公钥 fingerprint 必须等于 device id；签名绑定 challenge、role、scope、token 与设备元数据，且时间窗口有限。<span class="evidence"><code>src/gateway/server/ws-connection/connect-device-proof.ts:64-100</code></span></li>
+<li><strong>Pairing：</strong>新设备、role upgrade、scope upgrade 都进入批准决策；local/trusted-proxy/bootstrap 特例有精确条件和 scope cap。<span class="evidence"><code>src/gateway/server/ws-connection/connect-device-pairing.ts:153-217</code>、<code>src/gateway/server/ws-connection/connect-device-pairing.ts:243-300</code></span></li>
+<li><strong>RPC/事件：</strong>握手只建立 principal。RPC 方法在 dispatch 时由 <code>authorizeGatewayMethod()</code> 按 descriptor、Role 与 Scope 判定；事件 guard 独立过滤，未知广播 fail-closed。authenticated dispatch 只负责 post-auth frame、generation 与 flood 控制。<span class="evidence"><code>src/gateway/server-methods.ts:313-357</code>、<code>src/gateway/server-methods.ts:928-931</code>、<code>src/gateway/server-broadcast.ts:101-150</code></span></li>
+<li><strong>Capability 不授权：</strong>Node 的 caps、commands、permissions 只参与功能/批准面；调用还需要 paired generation、server command allowlist、方法角色和必要 Approval。</li>
+</ol>
+<div class="warning"><strong>常见错误：</strong>不要因为 <code>hello-ok.features.methods</code> 含某方法或 Node 声明某 command 就启用 UI/执行；先看 negotiated role/scopes、pairing generation 和方法结果。Discovery 是可见性提示，capability 是支持声明，authorization 才是许可。</div>
+</section>
+
+<section class="section" id="failure"><h2>11. 失败、恢复与兼容</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>即时行为</th><th>状态影响</th><th>恢复</th></tr></thead><tbody>
+<tr><td>首帧不是 connect/Schema 无效</td><td>INVALID_REQUEST（可识别 req 时）+ 1008</td><td>无 client principal</td><td>修客户端 frame；不重试原字节。</td></tr>
+<tr><td>协议不匹配</td><td>details 含 client range/expected；1002</td><td>无连接状态</td><td>升级客户端；普通客户端不能借 node N−1。</td></tr>
+<tr><td>启动/排空</td><td>可重试 UNAVAILABLE/1013</td><td>无业务副作用</td><td>遵守 retryAfterMs。</td></tr>
+<tr><td>token 缺失/不匹配</td><td>结构化 next step；通常 1008</td><td>auth 失败安全事件（ID hash）</td><td>可信 endpoint 最多一次 device-token retry，否则停循环。</td></tr>
+<tr><td>device nonce/signature 错误</td><td>DEVICE_AUTH_* detail + 1008</td><td>不建立/修改 pairing</td><td>等新 challenge，重签 v3；校准时钟。</td></tr>
+<tr><td>需要 pairing</td><td>写 pending request、广播、NOT_PAIRED</td><td>pending 可被批准/替代</td><td>批准后新连接；按 hint 暂停或等待重试。</td></tr>
+<tr><td>auth generation 已轮换</td><td>close 4001</td><td>旧 principal 失效</td><td>用新 credential 重新握手。</td></tr>
+<tr><td>慢消费者</td><td>丢可丢事件或 close 1008</td><td>可能出现 seq gap</td><td>重连并重读权威状态。</td></tr>
+<tr><td>hello send 失败</td><td>恢复刚撤销的 bootstrap token、释放 cleanup claim、close</td><td>避免凭证已消费但客户端未收到</td><td>重新连接。</td></tr>
+</tbody></table></div>
+<p class="evidence">Hello rollback：<code>src/gateway/server/ws-connection/connect-hello.ts:125-171</code>；认证兼容回归测试：<code>src/gateway/server.auth.compat-baseline.test.ts:157-230</code>。</p>
+</section>
+
+<section class="section" id="operations"><h2>12. 可观测性与排障</h2>
+<div class="table-wrap"><table><thead><tr><th>现象</th><th>先检查</th><th>可能原因</th><th>修复</th></tr></thead><tbody>
+<tr><td>connect 前已关闭</td><td>close metadata 的 phase/cause/host/origin</td><td>challenge timeout、payload、首帧、origin</td><td>按 phase 定位；不要只看 close code。</td></tr>
+<tr><td>协议不匹配</td><td>client min/max 与 server v4</td><td>旧 operator/UI 或错误 role/mode</td><td>升级/生成客户端。</td></tr>
+<tr><td>未授权</td><td>auth mode、authProvided、details.code</td><td>缺失/不匹配/限流/过期 token</td><td>按 recommendedNextStep；不要无限重试。</td></tr>
+<tr><td>缺失 scope</td><td><code>hello-ok.auth.scopes</code></td><td>device-less scopes 被清空、token scope 较窄</td><td>配对/批准正确 scope，不要仅改客户端声明。</td></tr>
+<tr><td>pairing 循环</td><td>requestId、reason、approvedRoles/scopes</td><td>key 不匹配、role/scope 升级、过期请求</td><td>批准最新 request，检查设备 key 持久化。</td></tr>
+<tr><td>事件缺口</td><td>onGap、慢消费者诊断</td><td>buffer drop、网络重连</td><td>刷新状态；不等待 replay。</td></tr>
+</tbody></table></div>
+<p>握手日志记录单调 phase（<code>tcp_accepted → ws_upgrade_started → credentials → auth_validated → hello_payload_prepared → ready</code>）与最后 frame 元数据；认证安全事件只记录 hash 后 device ID 和计数，不记录 token。<span class="evidence">证据：<code>src/gateway/server/ws-connection.ts:307-351</code>、<code>src/gateway/server/ws-connection.ts:475-541</code>；<code>src/gateway/server/ws-connection/connect-auth-security.ts:30-57</code></span></p>
+</section>
+
+<section class="section" id="tests"><h2>13. 测试与验证</h2>
+<div class="table-wrap"><table><thead><tr><th>契约</th><th>测试</th><th>证明</th><th>缺口</th></tr></thead><tbody>
+<tr><td>轻量 guards 容忍 additive fields</td><td><code>packages/gateway-protocol/src/frame-guards.test.ts:4-50</code></td><td>dispatch fields/error hints 验证</td><td>方法 payload 语义</td></tr>
+<tr><td>Native 版本同步</td><td><code>packages/gateway-protocol/src/native-protocol-levels.guard.test.ts:110-250</code></td><td>Swift/Kotlin/dev script 与 TS v4/N−1 一致</td><td>真实旧客户端互操作</td></tr>
+<tr><td>Device payload 字节契约</td><td><code>src/gateway/device-auth.test.ts:11-71</code></td><td>v2/v3 canonical 向量</td><td>密钥硬件/系统 Keychain</td></tr>
+<tr><td>Scope fail-closed</td><td><code>src/gateway/server.auth.compat-baseline.test.ts:57-135</code></td><td>device-less scope 清空与受限 local exception</td><td>生产 proxy 配置</td></tr>
+<tr><td>WS 资源与 heartbeat</td><td><code>src/gateway/server/ws-connection.test.ts:214-343</code></td><td>延迟注册、ping/pong、慢 buffer、phase</td><td>长时间真实网络</td></tr>
+<tr><td>Role/Scope/Pairing 前置</td><td><code>src/gateway/server-methods.authorization.test.ts:34-223</code></td><td>handler 前拒绝</td><td>外部插件所有方法</td></tr>
+</tbody></table></div>
+<p class="warning"><strong>本次验证范围：</strong>因环境无 pnpm/git 可执行文件且无 node_modules，未运行测试、<code>protocol:check</code> 或 live WS。结论来自决定性源码、已存在测试和官方协议文档交叉审计；依赖安装副本与真实 TLS/proxy/三平台客户端互操作是剩余证据缺口。</p>
+</section>
+
+<section class="section" id="development"><h2>14. 开发与扩展指南</h2>
+<div class="table-wrap"><table><thead><tr><th>变更目标</th><th>Owner 表面</th><th>必须同步</th><th>必要证明</th></tr></thead><tbody>
+<tr><td>新增/改变 frame 字段</td><td><code>packages/gateway-protocol/src/schema/</code></td><td>导出类型、validator、JSON/Swift/Kotlin 生成物、docs</td><td>additive compatibility、旧 client decode。</td></tr>
+<tr><td>改变协议版本</td><td><code>version.ts</code> + owner 决策</td><td>server admission、所有 native/reference clients、生成物</td><td>明确兼容窗口；不得自动 bump。</td></tr>
+<tr><td>新增 connect 字段</td><td><code>ConnectParamsSchema</code> + auth phase owner</td><td>签名 payload（若安全相关）、client assembler、错误码</td><td>tamper/replay、旧客户端。</td></tr>
+<tr><td>新增 auth mode</td><td>Gateway auth 解析器/决策</td><td>安全事件、bind 策略、docs/doctor</td><td>fail-closed、secret 脱敏、rotation generation。</td></tr>
+<tr><td>新增 Node capability</td><td>Node/plugin 所有者 + protocol 元数据</td><td>server allowlist、pairing 批准、invoke 检查</td><td>声明不扩权、旧 node 不暴露。</td></tr>
+<tr><td>新增 event</td><td>event schema/catalog + broadcaster 守卫</td><td>Scope、dropIfSlow、client gap 恢复</td><td>未知/低 scope 不泄露。</td></tr>
+</tbody></table></div>
+<ul><li>不要把 <code>Type.Unknown</code> 当作已验证对象；在 owner boundary 再解析。</li><li>不要从 <code>features.methods</code> 推断授权。</li><li>不要在断线后自动 replay 任意 RPC；副作用需要方法级 idempotency contract。</li><li>不要只改 TS Schema 而忘记 <code>pnpm protocol:check</code> 所覆盖的 native artifacts。</li></ul>
+</section>
+
+<section class="section" id="tradeoffs"><h2>15. 设计权衡与已知限制</h2>
+<div class="table-wrap"><table><thead><tr><th>问题</th><th>当前选择</th><th>收益</th><th>成本/限制</th></tr></thead><tbody>
+<tr><td>统一多客户端</td><td>单一 JSON/WS protocol + role</td><td>共享 auth、Schema、事件</td><td>大契约面，需 codegen discipline。</td></tr>
+<tr><td>兼容性</td><td>additive first；仅 node/probe N−1</td><td>rolling upgrade 不放宽 operator UI</td><td>旧 node plugin capabilities 被 withholding。</td></tr>
+<tr><td>Schema 严格性</td><td>闭合 envelope + owner-local unknown payload</td><td>边界清晰、可扩展</td><td>每个 dispatcher 必须二次验证。</td></tr>
+<tr><td>事件可靠性</td><td>per-client seq、best-effort、不 replay</td><td>低状态成本</td><td>客户端必须能重建 projection。</td></tr>
+<tr><td>背压</td><td>buffer threshold 后 drop 或 close</td><td>保护 Gateway 内存</td><td>不可提供无损事件流。</td></tr>
+<tr><td>设备信任</td><td>共享 auth + 签名身份 + pairing</td><td>credential 与设备/权限分层</td><td>时钟、密钥持久化和批准 UX 更复杂。</td></tr>
+</tbody></table></div>
+<div class="evidence"><strong>证据缺口：</strong>未验证真实 reverse proxy/Tailscale/TLS pin、移动端 Keychain、v3 Node 与 v4 Gateway 的现场互操作；worker closed protocol 是独立信任域，仅在本章标出边界，未展开其 credential/epoch/session CAS 内部。Git SHA 因工具不可用而未知。</div>
+</section>
+
+<section class="section" id="sources"><h2>16. 源码索引与进一步阅读</h2>
+<ul class="source-list">
+<li><code>packages/gateway-protocol/src/schema/frames.ts:31-189</code> — Frame/Connect/Hello/Error。</li>
+<li><code>packages/gateway-protocol/src/version.ts:1-8</code> — 版本窗口。</li>
+<li><code>packages/gateway-protocol/src/protocol-validator.ts:12-64</code> — lazy TypeBox validator。</li>
+<li><code>packages/gateway-protocol/src/frame-guards.ts:12-55</code> — 轻量 guards。</li>
+<li><code>src/gateway/server/ws-connection.ts:191-227</code>、<code>src/gateway/server/ws-connection.ts:262-709</code> — connection owner。</li>
+<li><code>src/gateway/server/ws-connection/message-handler.ts:184-394</code> — 首帧与握手编排。</li>
+<li><code>src/gateway/server/ws-connection/connect-admission.ts:55-246</code> — 版本/Role/Origin。</li>
+<li><code>src/gateway/server/ws-connection/connect-auth.ts:47-483</code> — auth decision。</li>
+<li><code>src/gateway/server/ws-connection/connect-device-proof.ts:14-100</code> — Device Proof。</li>
+<li><code>src/gateway/server/ws-connection/connect-device-pairing.ts:76-595</code> — Pairing。</li>
+<li><code>src/gateway/server/ws-connection/connect-hello.ts:32-268</code> — Hello/rollback。</li>
+<li><code>src/gateway/server/ws-connection/authenticated-request-dispatch.ts:52-166</code> — post-auth RPC。</li>
+<li><code>src/gateway/server-broadcast.ts:30-300</code> — event Scope/seq/backpressure。</li>
+<li><code>packages/gateway-client/src/protocol-client.ts:160-714</code> — wire state machine。</li>
+<li><code>packages/gateway-client/src/client.ts:378-458</code>、<code>packages/gateway-client/src/client.ts:709-973</code> — auth/reconnect。</li>
+<li><code>scripts/protocol-gen.ts:34-68</code> — JSON Schema。</li>
+<li><code>scripts/protocol-gen-swift.ts:775-831</code> — Swift。</li>
+<li><code>scripts/protocol-gen-kotlin.ts:324-367</code> — Kotlin。</li>
+<li><code>docs/gateway/protocol.md:34-164</code>、<code>docs/gateway/protocol.md:964-1150</code> — 官方契约。</li>
+</ul>
+<h3>进一步阅读</h3><ul>
+<li><a href="https://docs.openclaw.ai/gateway/protocol">Gateway protocol</a></li>
+<li><a href="https://docs.openclaw.ai/gateway/clients">Building a Gateway client</a></li>
+<li><a href="https://docs.openclaw.ai/gateway/operator-scopes">Operator scopes</a></li>
+<li><a href="https://github.com/websockets/ws/blob/8.21.0/doc/ws.md">ws 8.21.0 API contract</a>（本地安装源码缺失）</li>
+</ul>
+</section>
+<div class="footer">OpenClaw Architecture Module 05 · Gateway Protocol &amp; Trust Boundary<br>开发级子文档 · 基于源码、测试、官方文档与依赖契约交叉核验</div>
+</main>
+<a class="back-top" href="#top" aria-label="返回顶部">↑</a>
+<script>(function(){const links=[...document.querySelectorAll('.sidebar a')];const sections=links.map(a=>document.querySelector(a.getAttribute('href'))).filter(Boolean);const activate=()=>{let current=sections[0];for(const section of sections){if(section.getBoundingClientRect().top<=92)current=section}if(!current)return;links.forEach(a=>a.classList.toggle('active',a.getAttribute('href')==='#'+current.id))};document.addEventListener('scroll',activate,{passive:true});activate()})();</script>
+</body>
+</html>
