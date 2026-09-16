@@ -2211,6 +2211,79 @@ window.CATALOG = {
       ]
     }
   ],
+  "career": [
+    {
+      "label": "职业与认知 (Career & Cognition)",
+      "cards": [
+        {
+          "code": "H01",
+          "title": "AI 编程新范式",
+          "tagline": "已知/未知矩阵 / 重心迁移 / 开发者四重新定位 / 低成本探索。",
+          "href": "./cards/career/ai_programming_paradigm.html"
+        },
+        {
+          "code": "H02",
+          "title": "AI 时代专业知识的价值",
+          "tagline": "知识贬值 vs 知识升维 / 不可替代性 / 人机协作新范式。",
+          "href": "./cards/career/ai_era_professional_knowledge.html"
+        },
+        {
+          "code": "H03",
+          "title": "AI 时代编程学习的本质",
+          "tagline": "心智模型 / 认知悖论 / 必要难度理论 / 人才管道危机。",
+          "href": "./cards/career/ai_programming_learning.html"
+        },
+        {
+          "code": "H04",
+          "title": "AI 编程与老程序员优势",
+          "tagline": "AI 局限边界 / 全息思维 / 经验沉淀 / 执行工具+决策中枢。",
+          "href": "./cards/career/senior_developer_advantages.html"
+        },
+        {
+          "code": "H05",
+          "title": "AI 时代的开发者能力重建",
+          "tagline": "K 型分化 / Ralph Loop / 验证技术跃迁 / 能力重建三阶段。",
+          "href": "./cards/career/ai_developer_survival_guide.html"
+        },
+        {
+          "code": "H06",
+          "title": "AI 时代代码审查新挑战",
+          "tagline": "缺陷率 9%→54% / 意图丢失 / 五级解决方案 / 审查者角色重构。",
+          "href": "./cards/career/ai_code_review_challenges.html"
+        },
+        {
+          "code": "H07",
+          "title": "AI 产品设计工具 Paraflow",
+          "tagline": "AI 原生画布 / 一句话生成 PRD / 智能体工作流 / 效率提升 20 倍。",
+          "href": "./cards/career/paraflow_product_design.html"
+        },
+        {
+          "code": "H08",
+          "title": "AI 数据悖论：从生数据到高质量数据集",
+          "tagline": "Model Collapse 论文精读 / 替换 vs 累积策略 / 合成数据质量陷阱 / 数据飞轮 vs 数据债务 / 高质量数据建设四阶段路线图。",
+          "href": "./cards/career/ai_data_paradox.html"
+        },
+        {
+          "code": "H09",
+          "title": "AI 求职误区与解决方案",
+          "tagline": "Demo vs 生产 / 四大能力差距 / 数据升级·工程强化·系统打通。",
+          "href": "./cards/career/ai_job_seeking_pitfalls.html"
+        },
+        {
+          "code": "H10",
+          "title": "AI 岗位核心能力图谱",
+          "tagline": "六大评估维度 / 技术栈全景（深度学习·NLP·CV·大模型应用）/ Agent 与 GraphRAG 前沿技术 / 业务理解与准备策略。",
+          "href": "./cards/career/ai_job_interview_essentials.html"
+        },
+        {
+          "code": "H11",
+          "title": "AI 开发岗招聘现状与职业路径",
+          "tagline": "市场现状与结构性分化 / 四大热门岗位画像 / LLM 应用 vs 算法研究员能力模型 / 转型策略与长期发展。",
+          "href": "./cards/career/ai_dev_career_path.html"
+        }
+      ]
+    }
+  ],
   "python": [
     {
       "label": "I · 零基础入门 (Getting Started)",
