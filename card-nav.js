@@ -1,11 +1,13 @@
 /*
  * card-nav.js — 卡片内「上一卡 / 下一卡」导航
  *
- * 顺序口径：只认 catalog.js 的组（模块）内顺序。
- *   - 组内第 1 张没有 prev，最后 1 张没有 next；
- *   - 绝不跨组、不跨 layer、不循环；
- *   - 首页「先学 20 / 主干 42」只是视图，不产生独立索引，
- *     所以同一张卡无论从哪个入口进来，prev/next 完全一致。
+ * 顺序跟着「你从哪个入口进来」走，由 URL 上的 ?p= 决定：
+ *   ?p=core20  先学 20：按首页「先学 20」的学习顺序（跨模块，因为路径本身就跨模块）
+ *   ?p=main42  主干 42：按主干 01→42 的顺序
+ *   不带 p     全部卡片：按 catalog.js 的组（模块）内顺序，组首无 prev、组尾无 next，
+ *              不跨组、不跨 layer、不循环
+ * 翻页链接会继承当前的 p，所以在同一条路径里连续翻不会跳回全量顺序。
+ * 参数缺失、或带了 p 但当前卡不在这条序列里 → 退回全量组内顺序。
  * 不在 catalog.js 里的卡片（deep-dives 子页 / interview / topics）静默跳过。
  *
  * 卡片通过 <script src="../../catalog.js"> + <script src="../../card-nav.js">
@@ -17,16 +19,107 @@
   var CATALOG = window.CATALOG;
   if (!CATALOG) return;
 
-  // 展平目录，保留 layer + 组标签 + 组内序号，供「不跨组」判定使用
+  /* PATHS:BEGIN 由 _gen_card_paths.py 从 index.html 的 CARDS / CORE_GROUPS 同步，勿手改 */
+  var PATHS = {
+    core20: { name: '先学 20', hrefs: [
+        './cards/transformer/attention_from_scratch.html',
+        './cards/transformer/decoder_only_transformer.html',
+        './cards/llm/token_mechanism_complete.html',
+        './cards/llm/decoding_strategies_deep.html',
+        './cards/deploy/kv_cache_inference.html',
+        './cards/deploy/prefill_decode_disaggregation.html',
+        './cards/deploy/continuous_batching_scheduling.html',
+        './cards/deploy/quantization_guide.html',
+        './cards/engineering/prompt_vs_context_engineering.html',
+        './cards/rag/rag_architecture.html',
+        './cards/rag/hybrid_retrieval_guide.html',
+        './cards/rag/retrieval_reranking.html',
+        './cards/agent/loop_engineering_vs_react.html',
+        './cards/agent/mcp_vs_function_calling.html',
+        './cards/memory/ai_memory_system.html',
+        './cards/engineering/evaluation_testing.html',
+        './cards/architecture/inference_serving_architecture_panorama.html',
+        './cards/deploy/latency_throughput_cost_metrics.html',
+        './cards/engineering/api_stability.html',
+        './cards/security/prompt_injection_battle.html'
+      ] },
+    main42: { name: '主干 42', hrefs: [
+        './cards/transformer/attention_from_scratch.html',
+        './cards/transformer/tensor_fundamentals.html',
+        './cards/transformer/mha_from_scratch.html',
+        './cards/transformer/positional_encoding.html',
+        './cards/transformer/decoder_only_transformer.html',
+        './cards/llm/token_mechanism_complete.html',
+        './cards/llm/decoding_strategies_deep.html',
+        './cards/deploy/kv_cache_inference.html',
+        './cards/transformer/moe_architecture.html',
+        './cards/llm/lora_finetuning.html',
+        './cards/reinforcement/rl_for_llm.html',
+        './cards/llm/reasoning_models_test_time_compute.html',
+        './cards/engineering/five_layer_prompt_architecture.html',
+        './cards/engineering/prompt_vs_context_engineering.html',
+        './cards/rag/rag_architecture.html',
+        './cards/rag/chunking_semantic_solutions.html',
+        './cards/rag/hybrid_retrieval_guide.html',
+        './cards/rag/retrieval_reranking.html',
+        './cards/rag/rag_evaluation_practice.html',
+        './cards/agent/loop_engineering_vs_react.html',
+        './cards/agent/mcp_vs_function_calling.html',
+        './cards/agent/single_agent_context_window.html',
+        './cards/memory/ai_memory_system.html',
+        './cards/agent/agent_evaluation_metrics.html',
+        './cards/rag/multimodal_visual_document_rag.html',
+        './cards/agent/gui_agent_computer_use.html',
+        './cards/deploy/deployment_decision_framework.html',
+        './cards/deploy/vram_estimation_hardware.html',
+        './cards/deploy/inference_framework_selection.html',
+        './cards/deploy/continuous_batching_scheduling.html',
+        './cards/deploy/speculative_decoding_production.html',
+        './cards/engineering/streaming_five_layers.html',
+        './cards/engineering/llm_token_pricing.html',
+        './cards/architecture/observability_llm.html',
+        './cards/security/prompt_injection_battle.html',
+        './cards/security/sandbox_architecture.html',
+        './cards/deploy/prefill_decode_disaggregation.html',
+        './cards/deploy/quantization_guide.html',
+        './cards/engineering/evaluation_testing.html',
+        './cards/engineering/api_stability.html',
+        './cards/architecture/inference_serving_architecture_panorama.html',
+        './cards/deploy/latency_throughput_cost_metrics.html'
+      ] }
+  };
+  /* PATHS:END */
+
+  function norm(href) {
+    return String(href || '').replace(/^\.\//, '').toLowerCase();
+  }
+
+  // 展平全量目录：组（模块）内顺序，供「不跨组」的默认导航使用
   var flat = [];
+  var byHref = {};
   Object.keys(CATALOG).forEach(function (layer) {
     (CATALOG[layer] || []).forEach(function (group) {
-      (group.cards || []).forEach(function (card) {
-        flat.push({ layer: layer, group: group.label || layer, card: card });
+      var cards = group.cards || [];
+      cards.forEach(function (card, i) {
+        var e = {
+          layer: layer,
+          group: group.label || layer,
+          index: i,
+          size: cards.length,
+          card: card
+        };
+        flat.push(e);
+        byHref[norm(card.href)] = e;
       });
     });
   });
   if (!flat.length) return;
+
+  // 定位当前卡：从 pathname 尾部取 cards/<dir>/<file>.html（query 不参与）
+  var m = decodeURIComponent(location.pathname).match(/\/cards\/([^\/]+)\/([^\/?#]+\.html)$/i);
+  if (!m) return;
+  var cur = byHref[('cards/' + m[1] + '/' + m[2]).toLowerCase()];
+  if (!cur) return; // 非目录卡：不注入导航
 
   function rel(href) {
     // catalog 里是仓库根相对路径 "./cards/<dir>/<file>.html"，
@@ -34,30 +127,39 @@
     return String(href || '').replace(/^\.\//, '').replace(/^cards\//, '../');
   }
 
-  // 定位当前卡：从 pathname 尾部取 cards/<dir>/<file>.html
-  var m = decodeURIComponent(location.pathname).match(/\/cards\/([^\/]+)\/([^\/?#]+\.html)$/i);
-  if (!m) return;
-  var here = ('cards/' + m[1] + '/' + m[2]).toLowerCase();
-
-  var pos = -1;
-  for (var i = 0; i < flat.length; i++) {
-    if (String(flat[i].card.href || '').replace(/^\.\//, '').toLowerCase() === here) {
-      pos = i;
-      break;
+  // 选序列：?p= 命中且当前卡确实在序列里才用，否则退回全量组内顺序
+  var p = new URLSearchParams(location.search).get('p');
+  var path = p && PATHS[p] ? PATHS[p] : null;
+  var at = -1;
+  if (path) {
+    for (var i = 0; i < path.hrefs.length; i++) {
+      if (norm(path.hrefs[i]) === norm(cur.card.href)) { at = i; break; }
     }
-  }
-  if (pos < 0) return; // 非目录卡：不注入导航
-
-  var cur = flat[pos];
-
-  function sibling(delta) {
-    var t = flat[pos + delta];
-    if (!t || t.layer !== cur.layer || t.group !== cur.group) return null;
-    return t;
+    if (at < 0) path = null;
   }
 
-  var prev = sibling(-1);
-  var next = sibling(1);
+  var prev, next, meta, query = '';
+  if (path) {
+    var pick = function (k) {
+      if (k < 0 || k >= path.hrefs.length) return null;
+      var e = byHref[norm(path.hrefs[k])];
+      return e ? e.card : null;
+    };
+    prev = pick(at - 1);
+    next = pick(at + 1);
+    meta = path.name + ' · 第 ' + (at + 1) + ' / ' + path.hrefs.length + ' 张';
+    query = '?p=' + encodeURIComponent(p);
+  } else {
+    var sibling = function (delta) {
+      var t = flat[flat.indexOf(cur) + delta];
+      // 组首/组尾到此为止：换组或换 layer 都算越界
+      if (!t || t.layer !== cur.layer || t.group !== cur.group) return null;
+      return t.card;
+    };
+    prev = sibling(-1);
+    next = sibling(1);
+    meta = '全部卡片 · ' + cur.group + ' · 第 ' + (cur.index + 1) + ' / ' + cur.size + ' 张';
+  }
   if (!prev && !next) return;
 
   function esc(s) {
@@ -72,23 +174,27 @@
 
   function link(side, card) {
     var dir = side === 'prev' ? '← 上一卡' : '下一卡 →';
-    return '<a class="' + side + '" href="' + esc(rel(card.href)) + '" title="' + esc(dir + '：' + label(card)) + '">' +
+    return '<a class="' + side + '" href="' + esc(rel(card.href)) + query + '" title="' + esc(dir + '：' + label(card)) + '">' +
       '<span class="dir">' + dir + '</span>' +
       '<span class="t">' + esc(label(card)) + '</span></a>';
   }
 
   var html = '<nav class="card-nav" aria-label="卡片导航">' +
-    (prev ? link('prev', prev.card) : '<span class="spacer"></span>') +
-    (next ? link('next', next.card) : '<span class="spacer"></span>') +
-    '</nav>';
+    '<p class="card-nav-meta">' + esc(meta) + '</p>' +
+    '<div class="card-nav-row">' +
+    (prev ? link('prev', prev) : '<span class="spacer"></span>') +
+    (next ? link('next', next) : '<span class="spacer"></span>') +
+    '</div></nav>';
 
   var css =
-    '.card-nav{display:flex;gap:1rem;margin:2.5rem 0 .5rem;flex-wrap:wrap}' +
-    '.card-nav a,.card-nav .spacer{flex:1 1 260px;min-width:0}' +
-    '.card-nav a{display:block;padding:.85rem 1rem;text-decoration:none;' +
+    '.card-nav{margin:2.5rem 0 .5rem}' +
+    '.card-nav-meta{margin-bottom:.5rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,#78716c)}' +
+    '.card-nav-row{display:flex;gap:1rem;flex-wrap:wrap}' +
+    '.card-nav-row a,.card-nav-row .spacer{flex:1 1 260px;min-width:0}' +
+    '.card-nav-row a{display:block;padding:.85rem 1rem;text-decoration:none;' +
     'background:var(--surface,#fffdf8);border:1px solid var(--border,rgba(28,25,23,.12));border-radius:10px;' +
     'color:var(--text,#1c1917);transition:border-color .15s,transform .15s,box-shadow .15s}' +
-    '.card-nav a:hover{border-color:var(--accent,var(--blue,#4338ca));transform:translateY(-2px);box-shadow:0 4px 14px rgba(28,25,23,.08)}' +
+    '.card-nav-row a:hover{border-color:var(--accent,var(--blue,#4338ca));transform:translateY(-2px);box-shadow:0 4px 14px rgba(28,25,23,.08)}' +
     '.card-nav .dir{display:block;margin-bottom:.15rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,#78716c)}' +
     '.card-nav .t{display:block;font-size:.95rem;font-weight:600;line-height:1.5}' +
     '.card-nav .next{text-align:right}';
