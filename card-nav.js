@@ -10,10 +10,11 @@
  * 参数缺失、或带了 p 但当前卡不在这条序列里 → 退回全量组内顺序。
  * 不在 catalog.js 里的卡片（deep-dives 子页 / interview / topics）静默跳过。
  *
- * 呈现位置有两份，都常驻：
- *   右下角竖条  贴视口右边缘，上一卡在上、下一卡在下，只占窄窄一条，不压正文；
+ * 呈现位置有两份，按屏宽分工（980px 是卡片自己收起侧栏的那条线）：
+ *   右边缘竖条  贴视口右边缘常驻，上一卡在上、下一卡在下，只占窄窄一条，不压正文；
  *               卡片标题走 title / aria-label 悬浮提示
- *   正文末尾完整版  带进度行和卡片标题，读到最后顺手翻
+ *   正文末尾完整版  带进度行和卡片标题；只在 <980px（手机、小平板竖屏）出现，
+ *               宽屏已经有竖条了，再放一份就是重复
  * 右下角如果被卡片自己的悬浮控件占了（个别 deep-dive 卡的 ☰ 目录按钮），竖条会自动抬到它上面。
  *
  * 卡片通过 <script src="../../catalog.js"> + <script src="../../card-nav.js">
@@ -192,7 +193,7 @@
       '<span class="t">' + esc(label(card)) + '</span></a>';
   }
 
-  // 同一组 prev/next 渲染两份：右边缘常驻竖条 + 正文末尾完整版，两份都显示。
+  // 同一组 prev/next 渲染两份：右边缘竖条常驻，正文末尾完整版只在 <980px 显示（见下面 CSS）。
   var row =
     (prev ? link('prev', prev) : '<span class="spacer"></span>') +
     (next ? link('next', next) : '<span class="spacer"></span>');
@@ -218,10 +219,11 @@
     '.card-nav .next .dir,.card-nav-dock .next .dir{justify-content:flex-end}' +
     '.card-nav .t,.card-nav-dock .t{display:block;font-size:.95rem;font-weight:600;line-height:1.5}' +
     '.card-nav .next,.card-nav-dock .next{text-align:right}' +
-    /* 正文末尾完整版 */
+    /* 正文末尾完整版：只在窄屏出现，宽屏（大平板横屏 / 桌面）已经有右边缘竖条，不重复 */
     '.card-nav{margin:2.5rem 0 .5rem}' +
     '.card-nav-meta{margin-bottom:.5rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,var(--muted,#78716c))}' +
-    /* 右下角常驻竖条：贴右边缘、上一卡在上下一卡在下，宽度只占一条，不压正文。
+    '@media(min-width:980px){.card-nav{display:none}}' +
+    /* 右边缘常驻竖条：贴右边缘、上一卡在上下一卡在下，宽度只占一条，不压正文。
        bottom 可能被 JS 抬高以避开卡片自己的悬浮控件 */
     '.card-nav-dock{position:fixed;right:0;bottom:14px;z-index:101;box-sizing:border-box;' +
     'padding:.35rem .25rem;background:var(--surface,#fffdf8);' +
@@ -240,7 +242,8 @@
     /* 竖排时把 ←/→ 转成 ↑/↓ */
     '.card-nav-dock .ar{display:inline-block;transform:rotate(90deg);font-size:.95rem;line-height:1}' +
     '.card-nav-dock .dw{writing-mode:vertical-rl;letter-spacing:.14em}' +
-    '@media print{.card-nav-dock{display:none !important}}' +
+    /* 打印时反过来：竖条没意义，正文那份（宽屏下本来是隐藏的）恢复出来 */
+    '@media print{.card-nav-dock{display:none !important}.card-nav{display:block !important}}' +
     '.card-nav-off{display:none !important}';
 
   var style = document.createElement('style');
