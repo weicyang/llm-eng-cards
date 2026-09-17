@@ -10,10 +10,10 @@
  * 参数缺失、或带了 p 但当前卡不在这条序列里 → 退回全量组内顺序。
  * 不在 catalog.js 里的卡片（deep-dives 子页 / interview / topics）静默跳过。
  *
- * 呈现位置有两份，同时只显一份：
- *   宽屏  钉在侧栏底部的常驻条（不用滚到正文末尾就能翻页）
- *   窄屏  卡片自身的媒体查询会把侧栏隐藏（各卡断点 640~1050px 不统一），
- *         此时改显正文末尾的完整版；判断依据是侧栏实际是否可见，不写死断点
+ * 呈现位置有两份，都常驻：
+ *   右下角悬浮条  钉在视口右下（和侧栏无关，宽屏窄屏都在），窄屏自动收成两个圆形箭头按钮
+ *   正文末尾完整版  带进度行，读到最后顺手翻
+ * 右下角如果被卡片自己的悬浮控件占了（个别 deep-dive 卡的 ☰ 目录按钮），dock 会自动抬到它上面。
  *
  * 卡片通过 <script src="../../catalog.js"> + <script src="../../card-nav.js">
  * 引入（见 _publish_all.py / _add_card_nav.py）。
@@ -178,14 +178,20 @@
   }
 
   function link(side, card) {
-    var dir = side === 'prev' ? '← 上一卡' : '下一卡 →';
-    return '<a class="' + side + '" href="' + esc(rel(card.href)) + query + '" title="' + esc(meta + ' — ' + dir + '：' + label(card)) + '">' +
-      '<span class="dir">' + dir + '</span>' +
+    var isPrev = side === 'prev';
+    // 箭头和文字分开包，窄屏时只留箭头
+    var word = isPrev ? '上一卡' : '下一卡';
+    return '<a class="' + side + '" href="' + esc(rel(card.href)) + query + '" ' +
+      'aria-label="' + esc(word + '：' + label(card)) + '" ' +
+      'title="' + esc(meta + ' — ' + word + '：' + label(card)) + '">' +
+      '<span class="dir">' +
+      (isPrev ? '<span class="ar">←</span><span class="dw">' + word + '</span>'
+              : '<span class="dw">' + word + '</span><span class="ar">→</span>') +
+      '</span>' +
       '<span class="t">' + esc(label(card)) + '</span></a>';
   }
 
-  // 同一组 prev/next 渲染两份：宽屏钉在侧栏底部（常驻可点，不用滚到正文末尾），
-  // 窄屏卡片自身媒体查询把侧栏隐藏时回落到正文末尾的完整版。两份互斥显示，见下面 sync()。
+  // 同一组 prev/next 渲染两份：右下角常驻悬浮条 + 正文末尾完整版，两份都显示。
   var row =
     (prev ? link('prev', prev) : '<span class="spacer"></span>') +
     (next ? link('next', next) : '<span class="spacer"></span>');
@@ -206,23 +212,34 @@
     'color:var(--text,#1c1917);transition:border-color .15s,transform .15s,box-shadow .15s,background .15s}' +
     '.card-nav-row a:hover{border-color:var(--accent,var(--blue,#4338ca));text-decoration:none;' +
     'transform:translateY(-2px);box-shadow:0 4px 14px rgba(28,25,23,.08)}' +
-    '.card-nav .dir,.card-nav-dock .dir{display:block;margin-bottom:.15rem;font-size:.78rem;letter-spacing:.02em;' +
-    'color:var(--text-muted,var(--muted,#78716c))}' +
+    '.card-nav .dir,.card-nav-dock .dir{display:flex;align-items:center;gap:.35em;margin-bottom:.15rem;' +
+    'font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,var(--muted,#78716c))}' +
+    '.card-nav .next .dir,.card-nav-dock .next .dir{justify-content:flex-end}' +
     '.card-nav .t,.card-nav-dock .t{display:block;font-size:.95rem;font-weight:600;line-height:1.5}' +
     '.card-nav .next,.card-nav-dock .next{text-align:right}' +
     /* 正文末尾完整版 */
     '.card-nav{margin:2.5rem 0 .5rem}' +
     '.card-nav-meta{margin-bottom:.5rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,var(--muted,#78716c))}' +
-    /* 侧栏底部常驻版：left/width 由 JS 按侧栏实测值写入 */
-    '.card-nav-dock{position:fixed;left:0;bottom:0;width:280px;z-index:101;box-sizing:border-box;' +
-    'padding:.6rem .8rem .75rem;background:var(--surface,#fffdf8);' +
-    'border-top:1px solid var(--border,rgba(28,25,23,.12));box-shadow:0 -6px 18px rgba(28,25,23,.06)}' +
-    '.card-nav-dock .card-nav-row{gap:.5rem;flex-wrap:nowrap}' +
-    '.card-nav-dock .card-nav-row a,.card-nav-dock .card-nav-row .spacer{flex:1 1 0;min-width:0}' +
-    '.card-nav-dock .card-nav-row a{padding:.45rem .55rem;border-radius:8px;background:transparent}' +
-    '.card-nav-dock .card-nav-row a:hover{transform:none;box-shadow:none;background:rgba(127,127,127,.07)}' +
-    '.card-nav-dock .dir{margin-bottom:.1rem;font-size:.7rem}' +
+    /* 右下角常驻悬浮条：bottom 可能被 JS 抬高以避开卡片自己的悬浮控件 */
+    '.card-nav-dock{position:fixed;right:14px;bottom:14px;z-index:101;box-sizing:border-box;' +
+    'max-width:calc(100vw - 28px);padding:.45rem .55rem;background:var(--surface,#fffdf8);' +
+    'border:1px solid var(--border,rgba(28,25,23,.14));border-radius:12px;' +
+    'box-shadow:0 6px 22px rgba(28,25,23,.13)}' +
+    '.card-nav-dock .card-nav-row{gap:.35rem;flex-wrap:nowrap}' +
+    '.card-nav-dock .card-nav-row a,.card-nav-dock .card-nav-row .spacer{flex:0 1 178px}' +
+    '.card-nav-dock .card-nav-row a{padding:.35rem .55rem;border-color:transparent;border-radius:8px;background:transparent}' +
+    '.card-nav-dock .card-nav-row a:hover{transform:none;box-shadow:none;border-color:transparent;background:rgba(127,127,127,.09)}' +
+    '.card-nav-dock .dir{margin-bottom:.05rem;font-size:.7rem}' +
     '.card-nav-dock .t{font-size:.8rem;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    /* 窄屏收成两个圆形箭头按钮，别挡住正文（完整标题在 aria-label / title 里） */
+    '@media (max-width:640px){' +
+    '.card-nav-dock{right:10px;bottom:10px;max-width:calc(100vw - 20px);padding:.3rem;border-radius:999px}' +
+    '.card-nav-dock .dw,.card-nav-dock .t,.card-nav-dock .spacer{display:none}' +
+    '.card-nav-dock .card-nav-row a{flex:0 0 auto;display:flex;align-items:center;justify-content:center;' +
+    'width:2.5rem;height:2.5rem;padding:0}' +
+    '.card-nav-dock .dir{margin:0;font-size:1.05rem}' +
+    '}' +
+    '@media print{.card-nav-dock{display:none !important}}' +
     '.card-nav-off{display:none !important}';
 
   var style = document.createElement('style');
@@ -237,45 +254,40 @@
   } else {
     document.body.insertAdjacentHTML('beforeend', bodyHTML);
   }
-  var bodyNav = document.querySelector('.card-nav');
 
-  // 侧栏容器：目录卡以 .sidebar 为主，个别用 #sidebar / .side，全部都有 <aside>，用它兜底
-  var side = document.querySelector('.sidebar') || document.querySelector('#sidebar') || document.querySelector('aside');
-  if (!side) return; // 没有侧栏：只留正文末尾那份
-
+  // 右下角那份：钉在视口右下，与侧栏无关，所以宽屏窄屏都能常驻
   document.body.insertAdjacentHTML('beforeend', dockHTML);
   var dock = document.querySelector('.card-nav-dock');
   if (!dock) return;
 
-  var padWas = side.style.paddingBottom;
-
-  function sideShown() {
-    var cs = window.getComputedStyle(side);
-    return cs.display !== 'none' && cs.visibility !== 'hidden' && side.offsetWidth > 0;
-  }
-
-  function put(el, prop, val) {
-    if (el.style[prop] !== val) el.style[prop] = val;
-  }
-
-  function sync() {
-    if (sideShown()) {
-      var r = side.getBoundingClientRect();
-      put(dock, 'left', Math.round(r.left) + 'px');
-      put(dock, 'width', Math.round(r.width) + 'px');
-      dock.classList.remove('card-nav-off');
-      // 给侧栏底部留出 dock 的高度，目录滚到最后一项时不被压住（先显形再量高）
-      put(side, 'paddingBottom', (dock.offsetHeight + 20) + 'px');
-      if (bodyNav) bodyNav.classList.add('card-nav-off');
-    } else {
-      dock.classList.add('card-nav-off');
-      put(side, 'paddingBottom', padWas || '');
-      if (bodyNav) bodyNav.classList.remove('card-nav-off');
+  // 个别卡片自己在右下角放了悬浮控件（deep-dive 卡的 ☰ 目录按钮），撞上就把 dock 抬到它上面。
+  // 只看 fixed/sticky 的候选，整屏遮罩（lightbox 之类）跳过——它 z-index 更高，本来就会盖住 dock。
+  function place() {
+    dock.classList.remove('card-nav-off');
+    dock.style.bottom = '';
+    var r = dock.getBoundingClientRect();
+    var area = window.innerWidth * window.innerHeight * 0.5;
+    var lift = 0;
+    var all = document.body.getElementsByTagName('*');
+    for (var i = 0; i < all.length; i++) {
+      var el = all[i];
+      if (el === dock || dock.contains(el)) continue;
+      var q = el.getBoundingClientRect();
+      if (q.width <= 0 || q.height <= 0) continue;                       // display:none 的不算
+      if (q.width * q.height > area) continue;                           // 整屏遮罩跳过
+      if (!(q.right > r.left && q.left < r.right && q.bottom > r.top && q.top < r.bottom)) continue;
+      var pos = window.getComputedStyle(el).position;
+      if (pos !== 'fixed' && pos !== 'sticky') continue;
+      lift = Math.max(lift, window.innerHeight - q.top + 10);
     }
+    if (lift) dock.style.bottom = lift + 'px';
   }
 
-  sync();
-  window.addEventListener('resize', sync);
-  // 各卡隐藏侧栏的断点不统一（640/900/980…），不写死媒体查询，直接看侧栏是否真的可见
-  if (window.ResizeObserver) new ResizeObserver(sync).observe(side);
+  place();
+  var queued = false;
+  window.addEventListener('resize', function () {
+    if (queued) return;
+    queued = true;
+    window.requestAnimationFrame(function () { queued = false; place(); });
+  });
 })();
