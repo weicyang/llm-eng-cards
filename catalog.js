@@ -2030,9 +2030,40 @@ window.CATALOG = {
           "href": "./cards/audit/data_privacy.html"
         }
       ]
+    }
+  ],
+  "deep": [
+    {
+      "label": "I · 专题指南 (Guides)",
+      "cards": [
+        {
+          "code": "TG01",
+          "title": "Cache 全景指南",
+          "tagline": "从 GPU 显存到业务层：KV Cache / Prompt Cache / Semantic Cache / Redis 缓存全链路解析，三层缓存体系、五大原则、生产案例汇总。",
+          "href": "./cards/deep-dives/cache_complete_guide.html"
+        },
+        {
+          "code": "TG02",
+          "title": "Prompt 全链路指南",
+          "tagline": "从基础认知到生产级 Prompt 工程：五层资产模型、场景化设计、Prompt vs Context 工程、高阶技巧、Agent Prompt 优化、安全与评估、Prompt 工程化管理方法论。",
+          "href": "./cards/deep-dives/prompt_complete_guide.html"
+        },
+        {
+          "code": "TG03",
+          "title": "AI 应用全链路性能评测指南",
+          "tagline": "四维评测模型 + 分模块评测（RAG/Agent/Prompt/系统层）+ 分段延迟采集 + MockLLM/RealLLM 双轨压测 + CI/CD 质量门禁 + 上线后持续评测模式，聚合 10 张知识卡片 + 6 篇社区文章。",
+          "href": "./cards/deep-dives/performance_evaluation_guide.html"
+        },
+        {
+          "code": "TG04",
+          "title": "AI Token 节省与优化完全指南",
+          "tagline": "从 Token 机制到系统级降本：Prompt 压缩（74%）/ 三级缓存（拦截 40%~60%）/ 推理加速（PagedAttention+量化）/ 上下文工程（Token 降 72%）/ 模型路由（降本 25%~70%）/ 预算熔断，六层优化体系全景解析，聚合 22 张知识卡片 + 4 篇社区文章。",
+          "href": "./cards/deep-dives/token_optimization_guide.html"
+        }
+      ]
     },
     {
-      "label": "VIII · Agent 框架案例 (Framework Case Studies)",
+      "label": "II · Agent 框架案例 (Agent Cases)",
       "cards": [
         {
           "code": "HC01",
@@ -2131,40 +2162,9 @@ window.CATALOG = {
           "href": "./cards/topics/openclaw_architecture_deep.html"
         }
       ]
-    }
-  ],
-  "deep": [
-    {
-      "label": "I · 专题指南 (Guides)",
-      "cards": [
-        {
-          "code": "TG01",
-          "title": "Cache 全景指南",
-          "tagline": "从 GPU 显存到业务层：KV Cache / Prompt Cache / Semantic Cache / Redis 缓存全链路解析，三层缓存体系、五大原则、生产案例汇总。",
-          "href": "./cards/deep-dives/cache_complete_guide.html"
-        },
-        {
-          "code": "TG02",
-          "title": "Prompt 全链路指南",
-          "tagline": "从基础认知到生产级 Prompt 工程：五层资产模型、场景化设计、Prompt vs Context 工程、高阶技巧、Agent Prompt 优化、安全与评估、Prompt 工程化管理方法论。",
-          "href": "./cards/deep-dives/prompt_complete_guide.html"
-        },
-        {
-          "code": "TG03",
-          "title": "AI 应用全链路性能评测指南",
-          "tagline": "四维评测模型 + 分模块评测（RAG/Agent/Prompt/系统层）+ 分段延迟采集 + MockLLM/RealLLM 双轨压测 + CI/CD 质量门禁 + 上线后持续评测模式，聚合 10 张知识卡片 + 6 篇社区文章。",
-          "href": "./cards/deep-dives/performance_evaluation_guide.html"
-        },
-        {
-          "code": "TG04",
-          "title": "AI Token 节省与优化完全指南",
-          "tagline": "从 Token 机制到系统级降本：Prompt 压缩（74%）/ 三级缓存（拦截 40%~60%）/ 推理加速（PagedAttention+量化）/ 上下文工程（Token 降 72%）/ 模型路由（降本 25%~70%）/ 预算熔断，六层优化体系全景解析，聚合 22 张知识卡片 + 4 篇社区文章。",
-          "href": "./cards/deep-dives/token_optimization_guide.html"
-        }
-      ]
     },
     {
-      "label": "II · 源码拆解 (Source Reading)",
+      "label": "III · 源码拆解 (Source Reading)",
       "cards": [
         {
           "code": "SR01",
