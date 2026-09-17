@@ -1,13 +1,15 @@
 /*
  * card-nav.js — 卡片内「上一卡 / 下一卡」导航
  *
- * 顺序跟着「你从哪个入口进来」走，由 URL 上的 ?p= 决定：
- *   ?p=core20  先学 20：按首页「先学 20」的学习顺序（跨模块，因为路径本身就跨模块）
- *   ?p=main42  主干 42：按主干 01→42 的顺序
- *   不带 p     全部卡片：按 catalog.js 的组（模块）内顺序，组首无 prev、组尾无 next，
- *              不跨组、不跨 layer、不循环
- * 翻页链接会继承当前的 p，所以在同一条路径里连续翻不会跳回全量顺序。
- * 参数缺失、或带了 p 但当前卡不在这条序列里 → 退回全量组内顺序。
+ * 顺序跟着「你从哪个入口进来」走，由 URL 上的 ?p= / ?g= 决定，翻页一律不跨模块：
+ *   ?p=core20  先学 20：按首页「先学 20」的 5 个分组，组内顺序翻
+ *   ?p=main42  主干 42：按首页的 4 条链路（理解 LLM / 做 RAG / 跑稳 Agent / 撑上线）
+ *   不带 p     全部卡片：按 catalog.js 的组（模块）内顺序
+ *   ?g=<id>    组 id；主干有跨链路的重复卡（14、36），靠它决定走哪条链路，没带就取首次出现的组
+ *   ?f=<token> 首页条目 token，翻页时原样带着，「⌂ 首页」用它滚回你点进来的那个条目
+ * 三种情况都是组首无 prev、组尾无 next，不跨组、不跨 layer、不循环。
+ * 翻页链接会继承当前的 p / g / f，所以在同一条路径里连续翻不会跳回全量顺序。
+ * 参数缺失、或带了 p 但当前卡不在这条路径里 → 退回全量组内顺序。
  * 不在 catalog.js 里的卡片（deep-dives 子页 / interview / topics）静默跳过。
  *
  * 呈现位置有两份，按屏宽分工（980px 是卡片自己收起侧栏的那条线）：
@@ -26,74 +28,94 @@
   var CATALOG = window.CATALOG;
   if (!CATALOG) return;
 
-  /* PATHS:BEGIN 由 _gen_card_paths.py 从 index.html 的 CARDS / CORE_GROUPS 同步，勿手改 */
+  /* PATHS:BEGIN 由 _gen_card_paths.py 从 index.html 的 CARDS / GOALS / CORE_GROUPS 同步，勿手改 */
   var PATHS = {
-    core20: { name: '先学 20', hrefs: [
-        './cards/transformer/attention_from_scratch.html',
-        './cards/transformer/decoder_only_transformer.html',
-        './cards/llm/token_mechanism_complete.html',
-        './cards/llm/decoding_strategies_deep.html',
-        './cards/deploy/kv_cache_inference.html',
-        './cards/deploy/prefill_decode_disaggregation.html',
-        './cards/deploy/continuous_batching_scheduling.html',
-        './cards/deploy/quantization_guide.html',
-        './cards/engineering/prompt_vs_context_engineering.html',
-        './cards/rag/rag_architecture.html',
-        './cards/rag/hybrid_retrieval_guide.html',
-        './cards/rag/retrieval_reranking.html',
-        './cards/agent/loop_engineering_vs_react.html',
-        './cards/agent/mcp_vs_function_calling.html',
-        './cards/memory/ai_memory_system.html',
-        './cards/engineering/evaluation_testing.html',
-        './cards/architecture/inference_serving_architecture_panorama.html',
-        './cards/deploy/latency_throughput_cost_metrics.html',
-        './cards/engineering/api_stability.html',
-        './cards/security/prompt_injection_battle.html'
-      ] },
-    main42: { name: '主干 42', hrefs: [
-        './cards/transformer/attention_from_scratch.html',
-        './cards/transformer/tensor_fundamentals.html',
-        './cards/transformer/mha_from_scratch.html',
-        './cards/transformer/positional_encoding.html',
-        './cards/transformer/decoder_only_transformer.html',
-        './cards/llm/token_mechanism_complete.html',
-        './cards/llm/decoding_strategies_deep.html',
-        './cards/deploy/kv_cache_inference.html',
-        './cards/transformer/moe_architecture.html',
-        './cards/llm/lora_finetuning.html',
-        './cards/reinforcement/rl_for_llm.html',
-        './cards/llm/reasoning_models_test_time_compute.html',
-        './cards/engineering/five_layer_prompt_architecture.html',
-        './cards/engineering/prompt_vs_context_engineering.html',
-        './cards/rag/rag_architecture.html',
-        './cards/rag/chunking_semantic_solutions.html',
-        './cards/rag/hybrid_retrieval_guide.html',
-        './cards/rag/retrieval_reranking.html',
-        './cards/rag/rag_evaluation_practice.html',
-        './cards/agent/loop_engineering_vs_react.html',
-        './cards/agent/mcp_vs_function_calling.html',
-        './cards/agent/single_agent_context_window.html',
-        './cards/memory/ai_memory_system.html',
-        './cards/agent/agent_evaluation_metrics.html',
-        './cards/rag/multimodal_visual_document_rag.html',
-        './cards/agent/gui_agent_computer_use.html',
-        './cards/deploy/deployment_decision_framework.html',
-        './cards/deploy/vram_estimation_hardware.html',
-        './cards/deploy/inference_framework_selection.html',
-        './cards/deploy/continuous_batching_scheduling.html',
-        './cards/deploy/speculative_decoding_production.html',
-        './cards/engineering/streaming_five_layers.html',
-        './cards/engineering/llm_token_pricing.html',
-        './cards/architecture/observability_llm.html',
-        './cards/security/prompt_injection_battle.html',
-        './cards/security/sandbox_architecture.html',
-        './cards/deploy/prefill_decode_disaggregation.html',
-        './cards/deploy/quantization_guide.html',
-        './cards/engineering/evaluation_testing.html',
-        './cards/engineering/api_stability.html',
-        './cards/architecture/inference_serving_architecture_panorama.html',
-        './cards/deploy/latency_throughput_cost_metrics.html'
-      ] }
+    core20: { name: '先学 20', groups: [
+        { id: 'model', title: '模型是怎么算出下一个 token 的', hrefs: [
+          './cards/transformer/attention_from_scratch.html',
+          './cards/transformer/decoder_only_transformer.html',
+          './cards/llm/token_mechanism_complete.html',
+          './cards/llm/decoding_strategies_deep.html',
+          './cards/deploy/kv_cache_inference.html'
+        ] },
+        { id: 'infer', title: '推理为什么又慢又贵', hrefs: [
+          './cards/deploy/prefill_decode_disaggregation.html',
+          './cards/deploy/continuous_batching_scheduling.html',
+          './cards/deploy/quantization_guide.html'
+        ] },
+        { id: 'context', title: '上下文怎么给才有效', hrefs: [
+          './cards/engineering/prompt_vs_context_engineering.html',
+          './cards/rag/rag_architecture.html',
+          './cards/rag/hybrid_retrieval_guide.html',
+          './cards/rag/retrieval_reranking.html'
+        ] },
+        { id: 'agent', title: '智能体怎么闭环、怎么评', hrefs: [
+          './cards/agent/loop_engineering_vs_react.html',
+          './cards/agent/mcp_vs_function_calling.html',
+          './cards/memory/ai_memory_system.html',
+          './cards/engineering/evaluation_testing.html'
+        ] },
+        { id: 'prod', title: '上线前后各留一手', hrefs: [
+          './cards/architecture/inference_serving_architecture_panorama.html',
+          './cards/deploy/latency_throughput_cost_metrics.html',
+          './cards/engineering/api_stability.html',
+          './cards/security/prompt_injection_battle.html'
+        ] }
+    ] },
+    main42: { name: '主干 42', groups: [
+        { id: 'llm', title: '理解 LLM', hrefs: [
+          './cards/transformer/attention_from_scratch.html',
+          './cards/transformer/tensor_fundamentals.html',
+          './cards/transformer/mha_from_scratch.html',
+          './cards/transformer/positional_encoding.html',
+          './cards/transformer/decoder_only_transformer.html',
+          './cards/llm/token_mechanism_complete.html',
+          './cards/llm/decoding_strategies_deep.html',
+          './cards/deploy/kv_cache_inference.html',
+          './cards/transformer/moe_architecture.html',
+          './cards/llm/lora_finetuning.html',
+          './cards/reinforcement/rl_for_llm.html',
+          './cards/llm/reasoning_models_test_time_compute.html'
+        ] },
+        { id: 'rag', title: '做 RAG', hrefs: [
+          './cards/engineering/five_layer_prompt_architecture.html',
+          './cards/engineering/prompt_vs_context_engineering.html',
+          './cards/rag/rag_architecture.html',
+          './cards/rag/chunking_semantic_solutions.html',
+          './cards/rag/hybrid_retrieval_guide.html',
+          './cards/rag/retrieval_reranking.html',
+          './cards/rag/rag_evaluation_practice.html',
+          './cards/rag/multimodal_visual_document_rag.html'
+        ] },
+        { id: 'agent', title: '跑稳 Agent', hrefs: [
+          './cards/engineering/prompt_vs_context_engineering.html',
+          './cards/agent/loop_engineering_vs_react.html',
+          './cards/agent/mcp_vs_function_calling.html',
+          './cards/agent/single_agent_context_window.html',
+          './cards/memory/ai_memory_system.html',
+          './cards/agent/agent_evaluation_metrics.html',
+          './cards/agent/gui_agent_computer_use.html',
+          './cards/security/sandbox_architecture.html'
+        ] },
+        { id: 'prod', title: '撑上线', hrefs: [
+          './cards/deploy/deployment_decision_framework.html',
+          './cards/deploy/vram_estimation_hardware.html',
+          './cards/deploy/inference_framework_selection.html',
+          './cards/deploy/continuous_batching_scheduling.html',
+          './cards/deploy/speculative_decoding_production.html',
+          './cards/engineering/streaming_five_layers.html',
+          './cards/engineering/llm_token_pricing.html',
+          './cards/architecture/observability_llm.html',
+          './cards/security/prompt_injection_battle.html',
+          './cards/security/sandbox_architecture.html',
+          './cards/deploy/prefill_decode_disaggregation.html',
+          './cards/deploy/quantization_guide.html',
+          './cards/engineering/evaluation_testing.html',
+          './cards/engineering/api_stability.html',
+          './cards/architecture/inference_serving_architecture_panorama.html',
+          './cards/deploy/latency_throughput_cost_metrics.html'
+        ] }
+    ] }
   };
   /* PATHS:END */
 
@@ -134,28 +156,51 @@
     return String(href || '').replace(/^\.\//, '').replace(/^cards\//, '../');
   }
 
-  // 选序列：?p= 命中且当前卡确实在序列里才用，否则退回全量组内顺序
-  var p = new URLSearchParams(location.search).get('p');
+  // 入口参数（都由 index.html 的链接带上，翻页时原样继承）：
+  //   p = 路径（core20 / main42），决定按哪一套分组翻
+  //   g = 组 id（先学的 5 个分组 / 主干的 4 条链路）；主干有跨链路的重复卡，靠它消歧
+  //   f = 首页条目 token，「⌂ 首页」用它滚回你点进来的那个条目
+  var qs = new URLSearchParams(location.search);
+  var p = qs.get('p');
+  var g = qs.get('g');
+  var f = qs.get('f');
+
+  // 首页按钮带上锚点：返回首页时停在你点进来的那个条目上（没有 f 就保持原样）
+  if (f) {
+    var home = document.querySelector('a.home-btn');
+    if (home) home.setAttribute('href', home.getAttribute('href') + '#' + encodeURIComponent(f));
+  }
+
+  // 选组：?p= 命中且当前卡确实在某组里才用，否则退回全量组内顺序
   var path = p && PATHS[p] ? PATHS[p] : null;
+  var group = null;
   var at = -1;
   if (path) {
-    for (var i = 0; i < path.hrefs.length; i++) {
-      if (norm(path.hrefs[i]) === norm(cur.card.href)) { at = i; break; }
+    var firstGrp = null, firstAt = -1;
+    for (var i = 0; i < path.groups.length; i++) {
+      var grp = path.groups[i];
+      var k = -1;
+      for (var j = 0; j < grp.hrefs.length; j++) {
+        if (norm(grp.hrefs[j]) === norm(cur.card.href)) { k = j; break; }
+      }
+      if (k < 0) continue;
+      if (g === grp.id) { group = grp; at = k; break; }   // g 指定的组优先
+      if (!firstGrp) { firstGrp = grp; firstAt = k; }     // 没带 g：取首次出现的组（兼容旧链接）
     }
-    if (at < 0) path = null;
+    if (!group && firstGrp) { group = firstGrp; at = firstAt; }
   }
 
   var prev, next, meta, query = '';
-  if (path) {
+  if (group) {
     var pick = function (k) {
-      if (k < 0 || k >= path.hrefs.length) return null;
-      var e = byHref[norm(path.hrefs[k])];
+      if (k < 0 || k >= group.hrefs.length) return null;   // 组首/组尾到此为止，不跨模块
+      var e = byHref[norm(group.hrefs[k])];
       return e ? e.card : null;
     };
     prev = pick(at - 1);
     next = pick(at + 1);
-    meta = path.name + ' · 第 ' + (at + 1) + ' / ' + path.hrefs.length + ' 张';
-    query = '?p=' + encodeURIComponent(p);
+    meta = path.name + ' · ' + group.title + ' · 第 ' + (at + 1) + ' / ' + group.hrefs.length + ' 张';
+    query = '?p=' + encodeURIComponent(p) + '&g=' + encodeURIComponent(group.id);
   } else {
     var sibling = function (delta) {
       var t = flat[flat.indexOf(cur) + delta];
@@ -167,6 +212,7 @@
     next = sibling(1);
     meta = '全部卡片 · ' + cur.group + ' · 第 ' + (cur.index + 1) + ' / ' + cur.size + ' 张';
   }
+  if (f) query += (query ? '&' : '?') + 'f=' + encodeURIComponent(f);
   if (!prev && !next) return;
 
   function esc(s) {

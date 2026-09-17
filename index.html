@@ -201,6 +201,9 @@ button, input { font:inherit; color:inherit; }
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
 }
 .row.hidden { display:none; }
+/* 从卡片返回首页时，闪一下你点进来的那个条目 */
+.row.flash { border-color:var(--fund); background:var(--fund-soft); animation:rowFlash 1.8s ease-out; }
+@keyframes rowFlash { 0% { box-shadow:0 0 0 5px var(--fund-soft); } 100% { box-shadow:0 0 0 0 transparent; } }
 
 .updates { display:flex; flex-direction:column; gap:12px; }
 .update { display:grid; grid-template-columns:92px 1fr; gap:14px; padding:12px 0; border-bottom:1px solid var(--line); }
@@ -553,7 +556,8 @@ const byN = Object.fromEntries(CARDS.map(c => [c.n, c]));
 const QA = window.QA_CATALOG || [];
 
 function groupHTML(g, prefix) {
-  // 带上入口标记：卡片内的 prev/next 就按这条路径的顺序翻，而不是全量目录顺序（见 card-nav.js）
+  // g = 分组 id：卡片内的 prev/next 只在这一组里翻，不跨模块；
+  // f = 这条条目自己的 token：卡片里的「⌂ 首页」靠它滚回你点进来的位置（见 card-nav.js）
   const p = prefix === "core" ? "?p=core20" : "?p=main42";
   return `
   <section class="group" id="${prefix}-${g.id}">
@@ -564,7 +568,8 @@ function groupHTML(g, prefix) {
     </div>
     <div class="kgrid">${g.nums.map(n => {
       const c = byN[n];
-      return `<a class="row" href="${c.href}${p}" data-q="${(c.n+c.title+c.out).toLowerCase()}">
+      const tok = `${prefix}-${g.id}-${c.n}`;
+      return `<a class="row" id="${tok}" href="${c.href}${p}&g=${g.id}&f=${tok}" data-q="${(c.n+c.title+c.out).toLowerCase()}">
         <div class="no">${c.n}</div>
         <div class="title">${c.title}</div>
         <div class="out">${c.out}</div>
@@ -587,14 +592,17 @@ function flattenCatalog() {
   });
   return all;
 }
-function cardRow(code, title, out, href) {
+// tok = 条目 token：既是这条条目的 id，也随出链带给卡片，卡片点「⌂ 首页」就滚回这里
+function cardRow(code, title, out, href, tok) {
   const q = (code + title + out).toLowerCase();
-  return `<a class="row" href="${href}" data-q="${q}"><div class="no">${code}</div><div class="title">${title}</div><div class="out">${out}</div></a>`;
+  const id = tok ? ` id="${tok}"` : "";
+  const qs = tok ? `?f=${tok}` : "";
+  return `<a class="row"${id} href="${href}${qs}" data-q="${q}"><div class="no">${code}</div><div class="title">${title}</div><div class="out">${out}</div></a>`;
 }
 function renderFull(layer) {
   const groups = (window.CATALOG || {})[layer] || [];
   document.getElementById("fullRoot").innerHTML = groups.map(g =>
-    `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href)).join("")}</div></section>`
+    `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href, `full-${layer}-${c.code}`)).join("")}</div></section>`
   ).join("");
 }
 function showFull(layer) {
@@ -630,7 +638,7 @@ function renderQA(i) {
   if (!g) return;
   qaTabs.querySelectorAll(".tab").forEach((t, k) => t.classList.toggle("on", k === i));
   document.getElementById("qaRoot").innerHTML =
-    `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href)).join("")}</div></section>`;
+    `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href, `qa-${i}-${c.code}`)).join("")}</div></section>`;
 }
 qaTabs.innerHTML = QA.map((g, i) =>
   `<button class="tab${i === 0 ? " on" : ""}" type="button" data-qa="${i}">${g.label} <span>${g.cards.length}</span></button>`).join("");
@@ -643,7 +651,7 @@ renderQA(0);
 
 // 职业与认知：独立板块，数据仍取自 CATALOG.career
 document.getElementById("careerRoot").innerHTML = ((window.CATALOG || {}).career || []).map(g =>
-  `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href)).join("")}</div></section>`
+  `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href, `career-${c.code}`)).join("")}</div></section>`
 ).join("");
 
 function applyFilter(term) {
@@ -658,7 +666,7 @@ function applyFilter(term) {
   hits.forEach(c => { (byGroup[c.group] = byGroup[c.group] || []).push(c); });
   document.getElementById("fullRoot").innerHTML = Object.keys(byGroup).length
     ? Object.entries(byGroup).map(([label, cards]) =>
-        `<section class="group"><h3>${label}</h3><div class="kgrid">${cards.map(c => cardRow(c.code, c.title, c.tagline, c.href)).join("")}</div></section>`
+        `<section class="group"><h3>${label}</h3><div class="kgrid">${cards.map(c => cardRow(c.code, c.title, c.tagline, c.href, `full-${c.layer}-${c.code}`)).join("")}</div></section>`
       ).join("")
     : `<p class="empty show">完整目录里没有匹配「${term}」的卡片。</p>`;
 }
@@ -706,6 +714,45 @@ themeBtn.onclick = () => {
   document.documentElement.classList.toggle("dark");
   localStorage.setItem("lec-theme", document.documentElement.classList.contains("dark") ? "dark" : "light");
 };
+
+// 从卡片返回首页：滚回你点进来的那条条目并闪一下。
+// token 由 card-nav.js 写进卡片「⌂ 首页」按钮的 hash；同一张卡在不同板块 token 不同，位置天然区分。
+(function restorePosition() {
+  let tok = location.hash.slice(1);
+  if (!tok) {                        // 工程问题的问答卡没注入 card-nav.js，靠 referrer + sessionStorage 兜底
+    try {
+      const rec = JSON.parse(sessionStorage.getItem("lec-from") || "null");
+      if (rec && document.referrer) {
+        const r = new URL(document.referrer);
+        if (r.pathname + r.search === rec.url) tok = rec.token;
+      }
+    } catch (e) { /* 隐私模式下 sessionStorage / URL 可能不可用 */ }
+  }
+  if (!tok) return;
+  const parts = tok.split("-");
+  if (parts[0] === "full" && parts[1]) showFull(parts[1]);   // 条目可能在别的 layer tab 里
+  if (parts[0] === "qa" && parts[1]) renderQA(+parts[1]);    // 条目可能在别的问答 tab 里
+  const el = document.getElementById(tok);
+  // 只认条目本身：#track-rag 这类分组锚点走浏览器默认行为，不要抢过来
+  if (!el || !el.classList.contains("row")) return;
+  const html = document.documentElement;
+  const prev = html.style.scrollBehavior;
+  html.style.scrollBehavior = "auto";          // 载入时直接到位，别从顶部慢慢滑下来
+  el.scrollIntoView({ block: "center" });
+  requestAnimationFrame(() => { html.style.scrollBehavior = prev; });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 1800);
+})();
+
+// 点条目时记住「这张卡 → 这个 token」，供没注入 card-nav.js 的问答卡返回首页时兜底
+document.addEventListener("click", e => {
+  const a = e.target.closest("a.row");
+  if (!a || !a.id) return;
+  try {
+    const u = new URL(a.getAttribute("href"), location.href);
+    sessionStorage.setItem("lec-from", JSON.stringify({ url: u.pathname + u.search, token: a.id }));
+  } catch (err) { /* 同上 */ }
+});
 
 const navLinks = [...document.querySelectorAll(".page-nav a")];
 const secs = navLinks.map(a => document.querySelector(a.getAttribute("href"))).filter(Boolean);
