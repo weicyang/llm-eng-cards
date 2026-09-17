@@ -73,6 +73,7 @@
 ```
 index.html             学习入口：先学 20 + 42 张主干 + 目标入口 + 完整目录 + 深度专题 + 工程问题
 catalog.js             完整目录数据
+card-nav.js            卡片内 prev/next 导航（读 catalog.js 组内顺序，不跨板块/模块）
 qa-catalog.js          工程问题目录数据（独立于 catalog.js）
 LEARNING_PATH.md       先学 20 与主干 42 的编号、链接
 cards/                 按主题存放，便于维护，不是阅读顺序
