@@ -6,9 +6,9 @@
 
 > 每张卡回答一个判断：什么时候用，什么时候不要用。别人讲「RAG 是什么」，这里讲「什么时候该上 RAG，什么时候不要上」。
 
-402 张卡片 · 先学 20 · 主干 40 · 原理 → 应用 → 生产 · 72 篇工程问题
+404 张卡片 · 先学 20 · 主干 42 · 原理 → 应用 → 生产 · 72 篇工程问题
 
-**[在线阅读](https://weicyang.github.io/llm-eng-cards/)** · **[先学 20](https://weicyang.github.io/llm-eng-cards/#core)** · **[主干 40](https://weicyang.github.io/llm-eng-cards/#start)**
+**[在线阅读](https://weicyang.github.io/llm-eng-cards/)** · **[先学 20](https://weicyang.github.io/llm-eng-cards/#core)** · **[主干 42](https://weicyang.github.io/llm-eng-cards/#start)**
 
 ## 为什么有这个库
 
@@ -29,10 +29,10 @@
 | 想干什么 | 走哪一层 | 张数 | 大概用时 |
 |---|---|---|---|
 | 先建一张完整骨架 | [先学 20](https://weicyang.github.io/llm-eng-cards/#core) | 20 | 2–4 小时 |
-| 系统学一遍设计判断 | [主干 40](https://weicyang.github.io/llm-eng-cards/#start) | 40 | 1–2 天 |
-| 查资料 | [全部卡片](https://weicyang.github.io/llm-eng-cards/#full) | 402 | 按需 |
+| 系统学一遍设计判断 | [主干 42](https://weicyang.github.io/llm-eng-cards/#start) | 42 | 1–2 天 |
+| 查资料 | [全部卡片](https://weicyang.github.io/llm-eng-cards/#full) | 404 | 按需 |
 
-先学 20 是主干 40 的子集，不是另一套卡，也不含框架选型和源码拆解：模型 01/05/06/07/08 → 推理 37/30/38 → 上下文与检索 14/15/17/18 → 智能体与评测 20/21/23/39 → 生产 27/33/40/35。
+先学 20 是主干 42 的子集，不是另一套卡，也不含框架选型和源码拆解：模型 01/05/06/07/08 → 推理 37/30/38 → 上下文与检索 14/15/17/18 → 智能体与评测 20/21/23/39 → 生产 41/42/40/35。
 
 已经会调 API、只想补某一段：按目标走主干里对应的卡。
 
@@ -41,7 +41,7 @@
 | LLM 原理 | 01–12 |
 | RAG | 13–19、25 |
 | Agent | 14、20–24、26、36 |
-| 上生产 | 27–40 |
+| 上生产 | 27–42 |
 
 想完整从头学：按 [原理 → 应用 → 生产](https://weicyang.github.io/llm-eng-cards/#paths) 一层层读，不要按 `cards/` 文件夹乱点。文件夹是存放结构，不是学习顺序。
 
@@ -58,11 +58,11 @@
 
 - 基础原理 67
 - 应用能力 149
-- 生产工程 101
+- 生产工程 103
 - Python 编程 58
 - 深度专题 27
 
-以上合计 402 张，即首页「全部卡片」的计数口径。职业与认知 11 张是独立板块，不计入。
+以上合计 404 张，即首页「全部卡片」的计数口径。职业与认知 11 张是独立板块，不计入。
 
 深度专题 = 专题指南 4 篇（TG01-04）+ Agent 框架案例 16 张 + 源码拆解 7 个（SR01-07），是主干之外的延伸阅读。
 
@@ -71,10 +71,10 @@
 ## 仓库结构
 
 ```
-index.html             学习入口：先学 20 + 40 张主干 + 目标入口 + 完整目录 + 深度专题 + 工程问题
+index.html             学习入口：先学 20 + 42 张主干 + 目标入口 + 完整目录 + 深度专题 + 工程问题
 catalog.js             完整目录数据
 qa-catalog.js          工程问题目录数据（独立于 catalog.js）
-LEARNING_PATH.md       先学 20 与主干 40 的编号、链接
+LEARNING_PATH.md       先学 20 与主干 42 的编号、链接
 cards/                 按主题存放，便于维护，不是阅读顺序
 cards/interview/       工程问题页
 notebooks/             手撕类最小可运行片段

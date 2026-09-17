@@ -1,4 +1,4 @@
-# 主干路径 40
+# 主干路径 42
 
 卡片请在 GitHub Pages 上打开，不要点仓库里的 `.html`（那是源码）。更省事：[首页主干](https://weicyang.github.io/llm-eng-cards/#start)。
 
@@ -10,11 +10,11 @@
 2. 推理为什么又慢又贵：37 · 30 · 38
 3. 上下文怎么给才有效：14 · 15 · 17 · 18
 4. 智能体怎么闭环、怎么评：20 · 21 · 23 · 39
-5. 上线前后各留一手：27 · 33 · 40 · 35
+5. 上线前后各留一手：41 · 42 · 40 · 35
 
-这 20 张全部来自主干 40，不是另一套卡；读完接着走完整主干即可。
+这 20 张全部来自主干 42，不是另一套卡；读完接着走完整主干即可。
 
-## 完整主干 40
+## 完整主干 42
 
 按这个顺序读完主干。完整目录在首页底部。
 
@@ -23,7 +23,7 @@
 - 理解 LLM：01–12
 - 做 RAG：13–19、25
 - 做 Agent：14、20–24、26、36
-- 上生产：27–40
+- 上生产：27–42
 
 ## 原理
 
@@ -79,3 +79,5 @@
 | 38 | [模型量化](https://weicyang.github.io/llm-eng-cards/cards/deploy/quantization_guide.html) |
 | 39 | [评估与测试](https://weicyang.github.io/llm-eng-cards/cards/engineering/evaluation_testing.html) |
 | 40 | [API 调用稳定性](https://weicyang.github.io/llm-eng-cards/cards/engineering/api_stability.html) |
+| 41 | [推理服务架构全景](https://weicyang.github.io/llm-eng-cards/cards/architecture/inference_serving_architecture_panorama.html) |
+| 42 | [延迟·吞吐·成本指标体系](https://weicyang.github.io/llm-eng-cards/cards/deploy/latency_throughput_cost_metrics.html) |

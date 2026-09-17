@@ -1458,6 +1458,12 @@ window.CATALOG = {
           "title": "K8s 上运行 LLM 推理服务",
           "tagline": "GPU 整数资源不可超卖 / 权重交付四条路径的冷启动代价 / 启动探针预算算错就是重启循环 / 优雅退出怎么不截断流式响应。",
           "href": "./cards/architecture/k8s_llm_serving_practice.html"
+        },
+        {
+          "code": "S12",
+          "title": "推理服务架构全景",
+          "tagline": "Client→Gateway→Scheduler→Worker→GPU 五段分工与段间契约 / 推理感知路由为何必须看见显存与队列 / 集群级与引擎级两级调度 / TP-PP-DP-EP 与多机 Worker / 全链路时间线与症状归因表。",
+          "href": "./cards/architecture/inference_serving_architecture_panorama.html"
         }
       ]
     },
@@ -1625,6 +1631,12 @@ window.CATALOG = {
           "title": "TensorRT 与推理编译栈",
           "tagline": "编译式与解释式执行 / 构建流水线五阶段 / INT8 标定与 tactic 选优 / engine 强绑定与 CI 约束 / TensorRT-LLM 的 in-flight batching / ONNX opset 与动态 shape 的坑。",
           "href": "./cards/deploy/tensorrt_compilation_stack.html"
+        },
+        {
+          "code": "DP28",
+          "title": "延迟·吞吐·成本指标体系",
+          "tagline": "指标关系网与三条换算锚点 / Goodput 才是卖得掉的吞吐 / 三本账与 $/1M token 单位成本公式 / 延迟-吞吐-成本不可能三角与七个手段 / SLA 分级与容量推导链。",
+          "href": "./cards/deploy/latency_throughput_cost_metrics.html"
         }
       ]
     },
