@@ -11,9 +11,10 @@
  * 不在 catalog.js 里的卡片（deep-dives 子页 / interview / topics）静默跳过。
  *
  * 呈现位置有两份，都常驻：
- *   右下角悬浮条  钉在视口右下（和侧栏无关，宽屏窄屏都在），窄屏自动收成两个圆形箭头按钮
- *   正文末尾完整版  带进度行，读到最后顺手翻
- * 右下角如果被卡片自己的悬浮控件占了（个别 deep-dive 卡的 ☰ 目录按钮），dock 会自动抬到它上面。
+ *   右下角竖条  贴视口右边缘，上一卡在上、下一卡在下，只占窄窄一条，不压正文；
+ *               卡片标题走 title / aria-label 悬浮提示
+ *   正文末尾完整版  带进度行和卡片标题，读到最后顺手翻
+ * 右下角如果被卡片自己的悬浮控件占了（个别 deep-dive 卡的 ☰ 目录按钮），竖条会自动抬到它上面。
  *
  * 卡片通过 <script src="../../catalog.js"> + <script src="../../card-nav.js">
  * 引入（见 _publish_all.py / _add_card_nav.py）。
@@ -179,7 +180,7 @@
 
   function link(side, card) {
     var isPrev = side === 'prev';
-    // 箭头和文字分开包，窄屏时只留箭头
+    // 箭头和文字分开包：竖条里箭头转成上下向、文字竖排
     var word = isPrev ? '上一卡' : '下一卡';
     return '<a class="' + side + '" href="' + esc(rel(card.href)) + query + '" ' +
       'aria-label="' + esc(word + '：' + label(card)) + '" ' +
@@ -191,7 +192,7 @@
       '<span class="t">' + esc(label(card)) + '</span></a>';
   }
 
-  // 同一组 prev/next 渲染两份：右下角常驻悬浮条 + 正文末尾完整版，两份都显示。
+  // 同一组 prev/next 渲染两份：右边缘常驻竖条 + 正文末尾完整版，两份都显示。
   var row =
     (prev ? link('prev', prev) : '<span class="spacer"></span>') +
     (next ? link('next', next) : '<span class="spacer"></span>');
@@ -220,25 +221,25 @@
     /* 正文末尾完整版 */
     '.card-nav{margin:2.5rem 0 .5rem}' +
     '.card-nav-meta{margin-bottom:.5rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,var(--muted,#78716c))}' +
-    /* 右下角常驻悬浮条：bottom 可能被 JS 抬高以避开卡片自己的悬浮控件 */
-    '.card-nav-dock{position:fixed;right:14px;bottom:14px;z-index:101;box-sizing:border-box;' +
-    'max-width:calc(100vw - 28px);padding:.45rem .55rem;background:var(--surface,#fffdf8);' +
-    'border:1px solid var(--border,rgba(28,25,23,.14));border-radius:12px;' +
-    'box-shadow:0 6px 22px rgba(28,25,23,.13)}' +
-    '.card-nav-dock .card-nav-row{gap:.35rem;flex-wrap:nowrap}' +
-    '.card-nav-dock .card-nav-row a,.card-nav-dock .card-nav-row .spacer{flex:0 1 178px}' +
-    '.card-nav-dock .card-nav-row a{padding:.35rem .55rem;border-color:transparent;border-radius:8px;background:transparent}' +
+    /* 右下角常驻竖条：贴右边缘、上一卡在上下一卡在下，宽度只占一条，不压正文。
+       bottom 可能被 JS 抬高以避开卡片自己的悬浮控件 */
+    '.card-nav-dock{position:fixed;right:0;bottom:14px;z-index:101;box-sizing:border-box;' +
+    'padding:.35rem .25rem;background:var(--surface,#fffdf8);' +
+    'border:1px solid var(--border,rgba(28,25,23,.14));border-right:0;border-radius:10px 0 0 10px;' +
+    'box-shadow:-4px 4px 16px rgba(28,25,23,.10)}' +
+    '.card-nav-dock .card-nav-row{display:grid;grid-template-rows:1fr 1fr;gap:.2rem}' +
+    /* 卡片标题不塞进竖条（会很长），完整标题在 title / aria-label 和正文末尾那份里 */
+    '.card-nav-dock .t{display:none}' +
+    /* 两格等高：路径首张没有上一卡、末张没有下一卡时，占位格照样撑住，
+       保证「上一卡永远在上、下一卡永远在下」，不因缺一格而跳位 */
+    '.card-nav-dock .spacer{width:2.2rem}' +
+    '.card-nav-dock .card-nav-row a{display:flex;align-items:center;justify-content:center;box-sizing:border-box;' +
+    'width:2.2rem;padding:.5rem .25rem;border-color:transparent;border-radius:8px;background:transparent}' +
     '.card-nav-dock .card-nav-row a:hover{transform:none;box-shadow:none;border-color:transparent;background:rgba(127,127,127,.09)}' +
-    '.card-nav-dock .dir{margin-bottom:.05rem;font-size:.7rem}' +
-    '.card-nav-dock .t{font-size:.8rem;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
-    /* 窄屏收成两个圆形箭头按钮，别挡住正文（完整标题在 aria-label / title 里） */
-    '@media (max-width:640px){' +
-    '.card-nav-dock{right:10px;bottom:10px;max-width:calc(100vw - 20px);padding:.3rem;border-radius:999px}' +
-    '.card-nav-dock .dw,.card-nav-dock .t,.card-nav-dock .spacer{display:none}' +
-    '.card-nav-dock .card-nav-row a{flex:0 0 auto;display:flex;align-items:center;justify-content:center;' +
-    'width:2.5rem;height:2.5rem;padding:0}' +
-    '.card-nav-dock .dir{margin:0;font-size:1.05rem}' +
-    '}' +
+    '.card-nav-dock .dir{flex-direction:column;justify-content:center;gap:.3rem;margin:0;font-size:.72rem}' +
+    /* 竖排时把 ←/→ 转成 ↑/↓ */
+    '.card-nav-dock .ar{display:inline-block;transform:rotate(90deg);font-size:.95rem;line-height:1}' +
+    '.card-nav-dock .dw{writing-mode:vertical-rl;letter-spacing:.14em}' +
     '@media print{.card-nav-dock{display:none !important}}' +
     '.card-nav-off{display:none !important}';
 
@@ -255,7 +256,7 @@
     document.body.insertAdjacentHTML('beforeend', bodyHTML);
   }
 
-  // 右下角那份：钉在视口右下，与侧栏无关，所以宽屏窄屏都能常驻
+  // 右边缘那份：钉在视口右侧下沿，与侧栏无关，所以宽屏窄屏都能常驻
   document.body.insertAdjacentHTML('beforeend', dockHTML);
   var dock = document.querySelector('.card-nav-dock');
   if (!dock) return;
