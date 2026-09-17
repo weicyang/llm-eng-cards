@@ -1,6 +1,20 @@
-# 主干路径 36
+# 主干路径 40
 
 卡片请在 GitHub Pages 上打开，不要点仓库里的 `.html`（那是源码）。更省事：[首页主干](https://weicyang.github.io/llm-eng-cards/#start)。
+
+## 先学 20：只建骨架（2–4 小时）
+
+时间有限，或想先有一张完整地图，按这五组读 20 张，编号就是下面三张表里的序号，也可以直接在[首页「先学 20」](https://weicyang.github.io/llm-eng-cards/#core)点：
+
+1. 模型怎么算出下一个 token：01 · 05 · 06 · 07 · 08
+2. 推理为什么又慢又贵：37 · 30 · 38
+3. 上下文怎么给才有效：14 · 15 · 17 · 18
+4. 智能体怎么闭环、怎么评：20 · 21 · 23 · 39
+5. 上线前后各留一手：27 · 33 · 40 · 35
+
+这 20 张全部来自主干 40，不是另一套卡；读完接着走完整主干即可。
+
+## 完整主干 40
 
 按这个顺序读完主干。完整目录在首页底部。
 
@@ -9,7 +23,7 @@
 - 理解 LLM：01–12
 - 做 RAG：13–19、25
 - 做 Agent：14、20–24、26、36
-- 上生产：27–36
+- 上生产：27–40
 
 ## 原理
 
@@ -61,3 +75,7 @@
 | 34 | [可观测性](https://weicyang.github.io/llm-eng-cards/cards/architecture/observability_llm.html) |
 | 35 | [Prompt 注入](https://weicyang.github.io/llm-eng-cards/cards/security/prompt_injection_battle.html) |
 | 36 | [Agent 沙箱](https://weicyang.github.io/llm-eng-cards/cards/security/sandbox_architecture.html) |
+| 37 | [Prefill / Decode 分离](https://weicyang.github.io/llm-eng-cards/cards/deploy/prefill_decode_disaggregation.html) |
+| 38 | [模型量化](https://weicyang.github.io/llm-eng-cards/cards/deploy/quantization_guide.html) |
+| 39 | [评估与测试](https://weicyang.github.io/llm-eng-cards/cards/engineering/evaluation_testing.html) |
+| 40 | [API 调用稳定性](https://weicyang.github.io/llm-eng-cards/cards/engineering/api_stability.html) |
