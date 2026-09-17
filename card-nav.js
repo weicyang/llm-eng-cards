@@ -10,6 +10,11 @@
  * 参数缺失、或带了 p 但当前卡不在这条序列里 → 退回全量组内顺序。
  * 不在 catalog.js 里的卡片（deep-dives 子页 / interview / topics）静默跳过。
  *
+ * 呈现位置有两份，同时只显一份：
+ *   宽屏  钉在侧栏底部的常驻条（不用滚到正文末尾就能翻页）
+ *   窄屏  卡片自身的媒体查询会把侧栏隐藏（各卡断点 640~1050px 不统一），
+ *         此时改显正文末尾的完整版；判断依据是侧栏实际是否可见，不写死断点
+ *
  * 卡片通过 <script src="../../catalog.js"> + <script src="../../card-nav.js">
  * 引入（见 _publish_all.py / _add_card_nav.py）。
  */
@@ -174,41 +179,103 @@
 
   function link(side, card) {
     var dir = side === 'prev' ? '← 上一卡' : '下一卡 →';
-    return '<a class="' + side + '" href="' + esc(rel(card.href)) + query + '" title="' + esc(dir + '：' + label(card)) + '">' +
+    return '<a class="' + side + '" href="' + esc(rel(card.href)) + query + '" title="' + esc(meta + ' — ' + dir + '：' + label(card)) + '">' +
       '<span class="dir">' + dir + '</span>' +
       '<span class="t">' + esc(label(card)) + '</span></a>';
   }
 
-  var html = '<nav class="card-nav" aria-label="卡片导航">' +
-    '<p class="card-nav-meta">' + esc(meta) + '</p>' +
-    '<div class="card-nav-row">' +
+  // 同一组 prev/next 渲染两份：宽屏钉在侧栏底部（常驻可点，不用滚到正文末尾），
+  // 窄屏卡片自身媒体查询把侧栏隐藏时回落到正文末尾的完整版。两份互斥显示，见下面 sync()。
+  var row =
     (prev ? link('prev', prev) : '<span class="spacer"></span>') +
-    (next ? link('next', next) : '<span class="spacer"></span>') +
-    '</div></nav>';
+    (next ? link('next', next) : '<span class="spacer"></span>');
+
+  var bodyHTML = '<nav class="card-nav" aria-label="卡片导航">' +
+    '<p class="card-nav-meta">' + esc(meta) + '</p>' +
+    '<div class="card-nav-row">' + row + '</div></nav>';
+
+  var dockHTML = '<nav class="card-nav-dock card-nav-off" aria-label="卡片导航">' +
+    '<div class="card-nav-row">' + row + '</div></nav>';
 
   var css =
-    '.card-nav{margin:2.5rem 0 .5rem}' +
-    '.card-nav-meta{margin-bottom:.5rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,#78716c)}' +
+    /* 两处共用的行与链接 */
     '.card-nav-row{display:flex;gap:1rem;flex-wrap:wrap}' +
     '.card-nav-row a,.card-nav-row .spacer{flex:1 1 260px;min-width:0}' +
     '.card-nav-row a{display:block;padding:.85rem 1rem;text-decoration:none;' +
     'background:var(--surface,#fffdf8);border:1px solid var(--border,rgba(28,25,23,.12));border-radius:10px;' +
-    'color:var(--text,#1c1917);transition:border-color .15s,transform .15s,box-shadow .15s}' +
-    '.card-nav-row a:hover{border-color:var(--accent,var(--blue,#4338ca));transform:translateY(-2px);box-shadow:0 4px 14px rgba(28,25,23,.08)}' +
-    '.card-nav .dir{display:block;margin-bottom:.15rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,#78716c)}' +
-    '.card-nav .t{display:block;font-size:.95rem;font-weight:600;line-height:1.5}' +
-    '.card-nav .next{text-align:right}';
+    'color:var(--text,#1c1917);transition:border-color .15s,transform .15s,box-shadow .15s,background .15s}' +
+    '.card-nav-row a:hover{border-color:var(--accent,var(--blue,#4338ca));text-decoration:none;' +
+    'transform:translateY(-2px);box-shadow:0 4px 14px rgba(28,25,23,.08)}' +
+    '.card-nav .dir,.card-nav-dock .dir{display:block;margin-bottom:.15rem;font-size:.78rem;letter-spacing:.02em;' +
+    'color:var(--text-muted,var(--muted,#78716c))}' +
+    '.card-nav .t,.card-nav-dock .t{display:block;font-size:.95rem;font-weight:600;line-height:1.5}' +
+    '.card-nav .next,.card-nav-dock .next{text-align:right}' +
+    /* 正文末尾完整版 */
+    '.card-nav{margin:2.5rem 0 .5rem}' +
+    '.card-nav-meta{margin-bottom:.5rem;font-size:.78rem;letter-spacing:.02em;color:var(--text-muted,var(--muted,#78716c))}' +
+    /* 侧栏底部常驻版：left/width 由 JS 按侧栏实测值写入 */
+    '.card-nav-dock{position:fixed;left:0;bottom:0;width:280px;z-index:101;box-sizing:border-box;' +
+    'padding:.6rem .8rem .75rem;background:var(--surface,#fffdf8);' +
+    'border-top:1px solid var(--border,rgba(28,25,23,.12));box-shadow:0 -6px 18px rgba(28,25,23,.06)}' +
+    '.card-nav-dock .card-nav-row{gap:.5rem;flex-wrap:nowrap}' +
+    '.card-nav-dock .card-nav-row a,.card-nav-dock .card-nav-row .spacer{flex:1 1 0;min-width:0}' +
+    '.card-nav-dock .card-nav-row a{padding:.45rem .55rem;border-radius:8px;background:transparent}' +
+    '.card-nav-dock .card-nav-row a:hover{transform:none;box-shadow:none;background:rgba(127,127,127,.07)}' +
+    '.card-nav-dock .dir{margin-bottom:.1rem;font-size:.7rem}' +
+    '.card-nav-dock .t{font-size:.8rem;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+    '.card-nav-off{display:none !important}';
 
   var style = document.createElement('style');
   style.setAttribute('data-card-nav', '');
   style.textContent = css;
   document.head.appendChild(style);
 
-  // 插到正文末尾的 footer 之上；没有 footer 的卡片退化为追加到 body 末尾
+  // 正文末尾那份：插到 footer 之上；没有 footer 的卡片退化为追加到 body 末尾
   var footer = document.querySelector('.footer');
   if (footer && footer.parentNode) {
-    footer.insertAdjacentHTML('beforebegin', html);
+    footer.insertAdjacentHTML('beforebegin', bodyHTML);
   } else {
-    document.body.insertAdjacentHTML('beforeend', html);
+    document.body.insertAdjacentHTML('beforeend', bodyHTML);
   }
+  var bodyNav = document.querySelector('.card-nav');
+
+  // 侧栏容器：目录卡以 .sidebar 为主，个别用 #sidebar / .side，全部都有 <aside>，用它兜底
+  var side = document.querySelector('.sidebar') || document.querySelector('#sidebar') || document.querySelector('aside');
+  if (!side) return; // 没有侧栏：只留正文末尾那份
+
+  document.body.insertAdjacentHTML('beforeend', dockHTML);
+  var dock = document.querySelector('.card-nav-dock');
+  if (!dock) return;
+
+  var padWas = side.style.paddingBottom;
+
+  function sideShown() {
+    var cs = window.getComputedStyle(side);
+    return cs.display !== 'none' && cs.visibility !== 'hidden' && side.offsetWidth > 0;
+  }
+
+  function put(el, prop, val) {
+    if (el.style[prop] !== val) el.style[prop] = val;
+  }
+
+  function sync() {
+    if (sideShown()) {
+      var r = side.getBoundingClientRect();
+      put(dock, 'left', Math.round(r.left) + 'px');
+      put(dock, 'width', Math.round(r.width) + 'px');
+      dock.classList.remove('card-nav-off');
+      // 给侧栏底部留出 dock 的高度，目录滚到最后一项时不被压住（先显形再量高）
+      put(side, 'paddingBottom', (dock.offsetHeight + 20) + 'px');
+      if (bodyNav) bodyNav.classList.add('card-nav-off');
+    } else {
+      dock.classList.add('card-nav-off');
+      put(side, 'paddingBottom', padWas || '');
+      if (bodyNav) bodyNav.classList.remove('card-nav-off');
+    }
+  }
+
+  sync();
+  window.addEventListener('resize', sync);
+  // 各卡隐藏侧栏的断点不统一（640/900/980…），不写死媒体查询，直接看侧栏是否真的可见
+  if (window.ResizeObserver) new ResizeObserver(sync).observe(side);
 })();
