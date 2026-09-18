@@ -3,9 +3,9 @@
  *
  * 进度只保存在当前设备的浏览器里：不登录、不上传、换设备/换浏览器不带过去。
  * 存储键 lecReadMarks（与 lec-theme / lec-from 同一命名系），形如
- *   { "cards/transformer/architecture_overview.html": {ts:毫秒, pct:0-100}, ... }
- * key 用「cards/ 起的相对路径」，首页与卡片页对同一张卡算出的 key 一致；
- * deep-dives 子页（cards/deep-dives/docs/...）层级更深也一样成立。
+ *   { "transformer/architecture_overview.html": {ts:毫秒, pct:0-100}, ... }
+ * key 用「cards/ 下的 目录/文件名」两段式，首页与卡片页对同一张卡算出的
+ * key 一致；deep-dives 子页（cards/deep-dives/docs/...）取 docs/xxx.html。
  *
  * 两种形态，按所在页面自动分工：
  *   卡片页（路径含 /cards/）  打开即记已读；滚动算 pct（只升不降，防止往回滚
@@ -44,11 +44,33 @@
     return v < 0 ? 0 : v > 100 ? 100 : v;
   }
 
-  /* href（"./cards/x/y.html?p=..." 或 "cards/x/y.html"）→ 存储 key */
+  /* href（"./cards/x/y.html?p=..." 或 "cards/x/y.html"）→ 存储 key。
+   * 统一取「cards/ 下最后两段」（目录/文件名.html）：卡片文件名全站唯一，
+   * 个别网络环境给 pathname 套一层 /cards/ 前缀、或深链路径不同时，
+   * 卡片页与首页算出的 key 依然一致；deep-dives 子页（docs/xxx.html）同样成立。 */
   function keyOf(href) {
     var s = String(href).split('?')[0].split('#')[0];
-    var i = s.indexOf('cards/');
-    return i >= 0 ? s.slice(i) : s.replace(/^\.\//, '');
+    var i = s.lastIndexOf('cards/');
+    if (i < 0) return s.replace(/^\.\//, '');
+    var tail = s.slice(i + 6);
+    var m = tail.match(/([^/]+\/[^/]+)$/);
+    return m ? m[1] : tail;
+  }
+
+  /* 一次性迁移：把旧版 indexOf 写坏的 "cards/cards/..." 键归一成 "cards/..."，
+   * 同卡两条记录合并（ts 取最早、pct 取最大），无脏键时不写回。 */
+  function migrateKeys() {
+    var all = loadAll(), out = {}, dirty = false, k;
+    for (k in all) {
+      if (!Object.prototype.hasOwnProperty.call(all, k)) continue;
+      var nk = keyOf(k);
+      if (nk !== k) dirty = true;
+      var o = out[nk];
+      out[nk] = o
+        ? { ts: Math.min(o.ts, all[k].ts || o.ts), pct: Math.max(o.pct || 0, all[k].pct || 0) }
+        : all[k];
+    }
+    if (dirty) saveAll(out);
   }
 
   function pagePct() {
@@ -262,6 +284,7 @@
   /* ---------------- 入口分流 ---------------- */
 
   injectStyle();   /* 面板 / ✓ / 进度条的样式都在这里，首页与卡片页都要注入 */
+  migrateKeys();   /* 先归一旧脏键，卡片页写入 / 首页读取都用干净 key */
 
   if (location.pathname.indexOf('/cards/') >= 0) {
     var key = keyOf(location.pathname);
