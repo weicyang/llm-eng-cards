@@ -40,8 +40,7 @@
         ] },
         { id: 'infer', title: '推理为什么又慢又贵', hrefs: [
           './cards/deploy/prefill_decode_disaggregation.html',
-          './cards/deploy/continuous_batching_scheduling.html',
-          './cards/deploy/quantization_guide.html'
+          './cards/deploy/continuous_batching_scheduling.html'
         ] },
         { id: 'context', title: '上下文怎么给才有效', hrefs: [
           './cards/engineering/prompt_vs_context_engineering.html',
@@ -49,9 +48,10 @@
           './cards/rag/hybrid_retrieval_guide.html',
           './cards/rag/retrieval_reranking.html'
         ] },
-        { id: 'agent', title: '智能体怎么闭环、怎么评', hrefs: [
+        { id: 'agent', title: '智能体怎么闭环，怎么知道它变好了', hrefs: [
           './cards/agent/loop_engineering_vs_react.html',
           './cards/agent/mcp_vs_function_calling.html',
+          './cards/agent/single_agent_context_window.html',
           './cards/memory/ai_memory_system.html',
           './cards/engineering/evaluation_testing.html'
         ] },
