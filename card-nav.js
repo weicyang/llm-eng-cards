@@ -32,8 +32,8 @@
   var PATHS = {
     core20: { name: '先学 20', groups: [
         { id: 'model', title: '模型是怎么算出下一个 token 的', hrefs: [
+          './cards/transformer/architecture_overview.html',
           './cards/transformer/attention_from_scratch.html',
-          './cards/transformer/decoder_only_transformer.html',
           './cards/llm/token_mechanism_complete.html',
           './cards/llm/decoding_strategies_deep.html',
           './cards/deploy/kv_cache_inference.html'
@@ -64,8 +64,8 @@
     ] },
     main42: { name: '主干 42', groups: [
         { id: 'llm', title: '理解 LLM', hrefs: [
+          './cards/transformer/architecture_overview.html',
           './cards/transformer/attention_from_scratch.html',
-          './cards/transformer/tensor_fundamentals.html',
           './cards/transformer/mha_from_scratch.html',
           './cards/transformer/positional_encoding.html',
           './cards/transformer/decoder_only_transformer.html',

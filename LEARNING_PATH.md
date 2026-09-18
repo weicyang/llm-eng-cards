@@ -6,7 +6,7 @@
 
 时间有限，或想先有一张完整地图，按这五组读 20 张，编号就是下面三张表里的序号，也可以直接在[首页「先学 20」](https://weicyang.github.io/llm-eng-cards/#core)点：
 
-1. 模型怎么算出下一个 token：01 · 05 · 06 · 07 · 08
+1. 模型怎么算出下一个 token：01 · 02 · 06 · 07 · 08
 2. 推理为什么又慢又贵：37 · 30
 3. 上下文怎么给才有效：14 · 15 · 17 · 18
 4. 智能体怎么闭环，怎么知道它变好了：20 · 21 · 22 · 23 · 39
@@ -16,7 +16,7 @@
 
 ## 学完这 20 张，你应该能够
 
-- 讲清模型怎么算出下一个 token：注意力、架构、采样与 KV Cache
+- 讲清模型怎么算出下一个 token：架构全景、注意力、采样与 KV Cache
 - 解释推理为什么又慢又贵：Prefill / Decode 两阶段与并发下的吞吐 / 延迟权衡
 - 设计一套 RAG 上下文供给：检索、混合检索、重排与上下文组织
 - 搭出并评估一个最小 Agent 闭环：模型、工具、上下文预算、记忆与停止条件，并用评测门禁判断有没有真的变好
@@ -37,8 +37,8 @@
 
 | 序 | 卡 |
 |---|---|
-| 01 | [Attention 手撕](https://weicyang.github.io/llm-eng-cards/cards/transformer/attention_from_scratch.html) |
-| 02 | [张量与维度](https://weicyang.github.io/llm-eng-cards/cards/transformer/tensor_fundamentals.html) |
+| 01 | [Transformer 架构全景](https://weicyang.github.io/llm-eng-cards/cards/transformer/architecture_overview.html) |
+| 02 | [Attention 手撕](https://weicyang.github.io/llm-eng-cards/cards/transformer/attention_from_scratch.html) |
 | 03 | [Multi-Head Attention](https://weicyang.github.io/llm-eng-cards/cards/transformer/mha_from_scratch.html) |
 | 04 | [位置编码](https://weicyang.github.io/llm-eng-cards/cards/transformer/positional_encoding.html) |
 | 05 | [Decoder-only](https://weicyang.github.io/llm-eng-cards/cards/transformer/decoder_only_transformer.html) |
@@ -49,6 +49,8 @@
 | 10 | [LoRA / QLoRA](https://weicyang.github.io/llm-eng-cards/cards/llm/lora_finetuning.html) |
 | 11 | [RL for LLM](https://weicyang.github.io/llm-eng-cards/cards/reinforcement/rl_for_llm.html) |
 | 12 | [推理模型与测试时计算](https://weicyang.github.io/llm-eng-cards/cards/llm/reasoning_models_test_time_compute.html) |
+
+张量与维度（T01 深度学习张量核心）不在主干里；手撕卡的形状变换看不熟，去[全部卡片](https://weicyang.github.io/llm-eng-cards/#full)找它。
 
 ## 应用
 
