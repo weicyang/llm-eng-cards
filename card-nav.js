@@ -2,7 +2,7 @@
  * card-nav.js — 卡片内「上一卡 / 下一卡」导航
  *
  * 顺序跟着「你从哪个入口进来」走，由 URL 上的 ?p= / ?g= 决定，翻页一律不跨模块：
- *   ?p=core20  先学 20：按首页「先学 20」的 5 个分组，组内顺序翻
+ *   ?p=core20  先学 21：按首页「先学 21」的 5 个分组，组内顺序翻
  *   ?p=main42  主干 42：按首页的 4 条链路（理解 LLM / 做 RAG / 跑稳 Agent / 撑上线）
  *   不带 p     全部卡片：按 catalog.js 的组（模块）内顺序
  *   ?g=<id>    组 id；主干有跨链路的重复卡（14、36），靠它决定走哪条链路，没带就取首次出现的组
@@ -30,15 +30,16 @@
 
   /* PATHS:BEGIN 由 _gen_card_paths.py 从 index.html 的 CARDS / GOALS / CORE_GROUPS 同步，勿手改 */
   var PATHS = {
-    core20: { name: '先学 20', groups: [
+    core20: { name: '先学 21', groups: [
         { id: 'model', title: '模型是怎么算出下一个 token 的', hrefs: [
           './cards/transformer/architecture_overview.html',
           './cards/transformer/attention_from_scratch.html',
+          './cards/transformer/ffn_from_scratch.html',
           './cards/llm/token_mechanism_complete.html',
-          './cards/llm/decoding_strategies_deep.html',
-          './cards/deploy/kv_cache_inference.html'
+          './cards/llm/decoding_strategies_deep.html'
         ] },
         { id: 'infer', title: '推理为什么又慢又贵', hrefs: [
+          './cards/deploy/kv_cache_inference.html',
           './cards/deploy/prefill_decode_disaggregation.html',
           './cards/deploy/continuous_batching_scheduling.html'
         ] },
@@ -75,7 +76,7 @@
           './cards/transformer/moe_architecture.html',
           './cards/llm/lora_finetuning.html',
           './cards/reinforcement/rl_for_llm.html',
-          './cards/llm/reasoning_models_test_time_compute.html'
+          './cards/transformer/ffn_from_scratch.html'
         ] },
         { id: 'rag', title: '做 RAG', hrefs: [
           './cards/engineering/five_layer_prompt_architecture.html',

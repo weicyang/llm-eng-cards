@@ -2,22 +2,22 @@
 
 卡片请在 GitHub Pages 上打开，不要点仓库里的 `.html`（那是源码）。更省事：[首页主干](https://weicyang.github.io/llm-eng-cards/#start)。
 
-## 先学 20：只建骨架（2–4 小时）
+## 先学 21：只建骨架（2–4 小时）
 
-时间有限，或想先有一张完整地图，按这五组读 20 张，编号就是下面三张表里的序号，也可以直接在[首页「先学 20」](https://weicyang.github.io/llm-eng-cards/#core)点：
+时间有限，或想先有一张完整地图，按这五组读 21 张，编号就是下面三张表里的序号，也可以直接在[首页「先学 21」](https://weicyang.github.io/llm-eng-cards/#core)点：
 
-1. 模型怎么算出下一个 token：01 · 02 · 06 · 07 · 08
-2. 推理为什么又慢又贵：37 · 30
+1. 模型怎么算出下一个 token：01 · 02 · 12 · 06 · 07
+2. 推理为什么又慢又贵：08 · 37 · 30
 3. 上下文怎么给才有效：14 · 15 · 17 · 18
 4. 智能体怎么闭环，怎么知道它变好了：20 · 21 · 22 · 23 · 39
 5. 上线前后各留一手：41 · 42 · 40 · 35
 
-这 20 张全部来自主干 42，不是另一套卡；读完接着走完整主干即可。
+这 21 张全部来自主干 42，不是另一套卡；读完接着走完整主干即可。
 
-## 学完这 20 张，你应该能够
+## 学完这 21 张，你应该能够
 
-- 讲清模型怎么算出下一个 token：架构全景、注意力、采样与 KV Cache
-- 解释推理为什么又慢又贵：Prefill / Decode 两阶段与并发下的吞吐 / 延迟权衡
+- 讲清模型怎么算出下一个 token：架构全景、注意力、FFN 与采样
+- 解释推理为什么又慢又贵：从 KV Cache 讲起，Prefill / Decode 两阶段与并发下的吞吐 / 延迟权衡
 - 设计一套 RAG 上下文供给：检索、混合检索、重排与上下文组织
 - 搭出并评估一个最小 Agent 闭环：模型、工具、上下文预算、记忆与停止条件，并用评测门禁判断有没有真的变好
 - 理解上线后的关键旋钮：架构、性能、成本、可靠性与安全
@@ -48,9 +48,9 @@
 | 09 | [MoE](https://weicyang.github.io/llm-eng-cards/cards/transformer/moe_architecture.html) |
 | 10 | [LoRA / QLoRA](https://weicyang.github.io/llm-eng-cards/cards/llm/lora_finetuning.html) |
 | 11 | [RL for LLM](https://weicyang.github.io/llm-eng-cards/cards/reinforcement/rl_for_llm.html) |
-| 12 | [推理模型与测试时计算](https://weicyang.github.io/llm-eng-cards/cards/llm/reasoning_models_test_time_compute.html) |
+| 12 | [FFN 手撕](https://weicyang.github.io/llm-eng-cards/cards/transformer/ffn_from_scratch.html) |
 
-张量与维度（T01 深度学习张量核心）不在主干里；手撕卡的形状变换看不熟，去[全部卡片](https://weicyang.github.io/llm-eng-cards/#full)找它。
+张量与维度（T01 深度学习张量核心）和推理模型与测试时计算（L21）不在主干里；手撕卡的形状变换看不熟，或想补 o1 / R1 这条线，去[全部卡片](https://weicyang.github.io/llm-eng-cards/#full)找它们。
 
 ## 应用
 
