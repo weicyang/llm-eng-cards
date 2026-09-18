@@ -146,7 +146,7 @@ div.highlight{border-left:3px solid #4338ca;padding-left:1rem;margin:1rem 0;colo
 <ul>
 <li>自回归生成是<strong>串行的</strong>，无法对输出 Token 进行并行化（与训练形成鲜明对比）</li>
 <li>朴素推理的瓶颈在于<strong>重复计算 K/V</strong>，这正是 KV Cache 要解决的问题</li>
-<li>计算复杂度从 O(n²) 降到 O(n) 是 KV Cache 最核心的价值</li>
+<li>把重复计算 K/V 的累计计算量从 O(n²) 降到 O(n)（代价是显存随序列线性增长），是 KV Cache 最核心的价值</li>
 </ul>
 </div>
 
@@ -230,7 +230,7 @@ step t: 从缓存取 K₁..Kₜ₋₁, V₁..Vₜ₋₁
 <h3>内存换速度</h3>
 <p>KV Cache 是典型的 <strong>空间换时间</strong>策略：</p>
 <ul>
-<li><span class="tag tag-green">优势</span> 每步只需计算 1 个 Token 的 K/V，计算量从 O(n²) → O(n)</li>
+<li><span class="tag tag-green">优势</span> 每步只需计算 1 个 Token 的 K/V，K/V 累计计算量从 O(n²) → O(n)（换缓存显存 O(n)）</li>
 <li><span class="tag tag-orange">代价</span> 需要额外显存存储所有历史 K/V，且随序列长度线性增长</li>
 </ul>
 
@@ -258,7 +258,7 @@ KV Cache Size = 2 × L × n_heads × d_head × seq_len × dtype_bytes
 
 <div class="interview-tip">
 <ul>
-<li>KV Cache 将推理计算量从 O(n²) 降到 O(n)，是<strong>所有现代推理引擎的基础</strong></li>
+<li>KV Cache 将 decode 阶段重复计算 K/V 的累计计算量从 O(n²) 降到 O(n)（代价是显存随序列线性增长），是<strong>所有现代推理引擎的基础</strong></li>
 <li>必须能手算 KV Cache 大小 — 高频考点</li>
 <li>KV Cache 只在<strong>推理阶段</strong>使用；训练使用 Teacher Forcing，可以并行处理所有 Token</li>
 <li>GQA/MQA 通过减少 KV 头数来压缩 Cache 大小（见第 7 节）</li>
@@ -980,7 +980,7 @@ TPS 主要受 Decode 影响:
 <summary>Q1: 什么是 KV Cache？为什么需要它？</summary>
 <div class="answer">
 <p><strong>KV Cache</strong> 是在自回归推理时，将已计算过的每层 Attention 的 Key 和 Value 向量缓存在 GPU 显存中的机制。</p>
-<p><strong>为什么需要：</strong>自回归生成每步都需要当前 Token 的 Query 与所有前文 Token 的 Key 做点积。如果不缓存，每步都要重新计算所有前文的 K/V，总计算量为 O(n²)。有了 KV Cache，每步只计算一个新 Token 的 K/V 并追加到缓存中，总计算量降为 O(n)。这是<strong>用显存空间换计算时间</strong>的经典策略。</p>
+<p><strong>为什么需要：</strong>自回归生成每步都需要当前 Token 的 Query 与所有前文 Token 的 Key 做点积。如果不缓存，每步都要重新计算所有前文的 K/V，这部分累计计算量为 O(n²)。有了 KV Cache，每步只计算一个新 Token 的 K/V 并追加到缓存中，K/V 的累计计算量降为 O(n)（注意：与前文 Key 的注意力点积本身每步仍是 O(n)，这部分省不掉）。这是<strong>用显存空间换计算时间</strong>的经典策略。</p>
 </div>
 </details>
 
