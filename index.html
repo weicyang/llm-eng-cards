@@ -507,6 +507,7 @@ button, input { font:inherit; color:inherit; }
 
 <script src="./catalog.js"></script>
 <script src="./qa-catalog.js"></script>
+<script src="./read-marks.js"></script>
 <script>
 const CARDS = [
   {n:"01", layer:"fundamentals", title:"Transformer 架构全景", out:"先有一张地图：QKV、多头、FFN 与三种架构各在哪一段", href:"./cards/transformer/architecture_overview.html"},
@@ -622,6 +623,7 @@ function renderFull(layer) {
 function showFull(layer) {
   document.querySelectorAll("#fullTabs .tab").forEach(t => t.classList.toggle("on", t.dataset.layer === layer));
   renderFull(layer);
+  if (window.LEC_READ) LEC_READ.decorate(document.getElementById("fullRoot"));
 }
 document.getElementById("fullTabs").addEventListener("click", e => {
   const t = e.target.closest(".tab");
@@ -654,6 +656,7 @@ function renderQA(i) {
   qaTabs.querySelectorAll(".tab").forEach((t, k) => t.classList.toggle("on", k === i));
   document.getElementById("qaRoot").innerHTML =
     `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href, `qa-${i}-${c.code}`)).join("")}</div></section>`;
+  if (window.LEC_READ) LEC_READ.decorate(document.getElementById("qaRoot"));
 }
 qaTabs.innerHTML = QA.map((g, i) =>
   `<button class="tab${i === 0 ? " on" : ""}" type="button" data-qa="${i}">${g.label} <span>${g.cards.length}</span></button>`).join("");
@@ -668,6 +671,19 @@ renderQA(0);
 document.getElementById("careerRoot").innerHTML = ((window.CATALOG || {}).career || []).map(g =>
   `<section class="group"><h3>${g.label}</h3><div class="kgrid">${g.cards.map(c => cardRow(c.code, c.title, c.tagline, c.href, `career-${c.code}`)).join("")}</div></section>`
 ).join("");
+
+// 三层阅读进度（见 read-marks.js，纯 localStorage、仅保存在当前设备）。
+// 面板由脚本注入在 .stats 之后；口径：全部卡片不含 career，与「知识卡片」计数一致。
+if (window.LEC_READ) {
+  const coreNums = new Set(CORE_GROUPS.flatMap(g => g.nums));
+  LEC_READ.renderHome({
+    statsEl: document.querySelector(".hero .stats"),
+    coreHrefs: CARDS.filter(c => coreNums.has(c.n)).map(c => c.href),
+    mainHrefs: CARDS.map(c => c.href),
+    allHrefs: flattenCatalog().filter(c => c.layer !== "career").map(c => c.href),
+  });
+  LEC_READ.decorate();
+}
 
 function applyFilter(term) {
   const q = term.trim().toLowerCase();
@@ -684,6 +700,7 @@ function applyFilter(term) {
         `<section class="group"><h3>${label}</h3><div class="kgrid">${cards.map(c => cardRow(c.code, c.title, c.tagline, c.href, `full-${c.layer}-${c.code}`)).join("")}</div></section>`
       ).join("")
     : `<p class="empty show">完整目录里没有匹配「${term}」的卡片。</p>`;
+  if (window.LEC_READ) LEC_READ.decorate(document.getElementById("fullRoot"));
 }
 document.getElementById("q").addEventListener("input", e => applyFilter(e.target.value));
 
@@ -747,16 +764,25 @@ themeBtn.onclick = () => {
   const parts = tok.split("-");
   if (parts[0] === "full" && parts[1]) showFull(parts[1]);   // 条目可能在别的 layer tab 里
   if (parts[0] === "qa" && parts[1]) renderQA(+parts[1]);    // 条目可能在别的问答 tab 里
+  if (window.LEC_READ) LEC_READ.decorate();                  // 上面两步会重渲染，已读 ✓ 要重新打
   const el = document.getElementById(tok);
   // 只认条目本身：#track-rag 这类分组锚点走浏览器默认行为，不要抢过来
   if (!el || !el.classList.contains("row")) return;
   const html = document.documentElement;
-  const prev = html.style.scrollBehavior;
-  html.style.scrollBehavior = "auto";          // 载入时直接到位，别从顶部慢慢滑下来
-  el.scrollIntoView({ block: "center" });
-  requestAnimationFrame(() => { html.style.scrollBehavior = prev; });
-  el.classList.add("flash");
-  setTimeout(() => el.classList.remove("flash"), 1800);
+  const settle = () => {
+    const prev = html.style.scrollBehavior;
+    html.style.scrollBehavior = "auto";        // 直接到位，别从当前位置慢慢滑过去
+    el.scrollIntoView({ block: "center" });
+    requestAnimationFrame(() => { html.style.scrollBehavior = prev; });
+    el.classList.add("flash");
+    setTimeout(() => el.classList.remove("flash"), 1800);
+  };
+  settle();
+  // 这段脚本在解析期就执行，首屏的大图/头图还没加载完；等 load 之后上方内容
+  // 被撑高，条目会整体下移，滚动位置却停在旧布局上（看起来比卡片低半截）。
+  // 所以布局稳定后再校准一次；若图片有缓存，load 已触发则立即补一次。
+  if (document.readyState !== "complete") window.addEventListener("load", settle, { once: true });
+  else settle();
 })();
 
 // 点条目时记住「这张卡 → 这个 token」，供没注入 card-nav.js 的问答卡返回首页时兜底
