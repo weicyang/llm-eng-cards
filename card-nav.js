@@ -41,7 +41,7 @@
         { id: 'infer', title: '推理为什么又慢又贵', hrefs: [
           './cards/deploy/kv_cache_inference.html',
           './cards/deploy/prefill_decode_disaggregation.html',
-          './cards/deploy/continuous_batching_scheduling.html'
+          './cards/engineering/llm_token_pricing.html'
         ] },
         { id: 'context', title: '上下文怎么给才有效', hrefs: [
           './cards/engineering/prompt_vs_context_engineering.html',
