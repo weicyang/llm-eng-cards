@@ -2,27 +2,29 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
+<script id="lec-theme-early">/* 首屏前定主题，避免深色用户先看到一屏浅色。与首页共用 localStorage 的 lec-theme 约定 */
+(function(){try{var s=localStorage.getItem("lec-theme");if(s==="dark"||(!s&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();</script>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>SWE-agent 架构深度解析</title>
 <style>
 :root{--bg:#f4f1ea;--panel:#fffdf8;--line:rgba(28,25,23,.12);--text:#1c1917;--muted:#78716c;--blue:#4338ca;--green:#15803d;--orange:#c2410c;--purple:#6d28d9;--red:#b91c1c;--yellow:#c2410c}
 *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;padding:78px 24px 60px 306px}
 a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{color:var(--orange);background:rgba(194,65,12,.1);padding:.08rem .35rem;border-radius:4px}
-.nav{position:fixed;left:0;top:48px;bottom:0;width:282px;padding:22px 16px;background:#f0ebe0;border-right:1px solid var(--line);overflow:auto}
+.nav{position:fixed;left:0;top:48px;bottom:0;width:282px;padding:22px 16px;background:var(--lec-surface-3,#f0ebe0);border-right:1px solid var(--line);overflow:auto}
 .nav strong{display:block;color:var(--blue);margin-bottom:10px}.nav a{display:block;color:var(--muted);font-size:12.5px;padding:3px 8px;border-left:2px solid transparent}.nav a:hover{color:var(--text);border-left-color:var(--blue);text-decoration:none}
-.wrap{max-width:1120px;margin:auto}h1{font-size:34px;text-align:center;margin:12px 0 3px;color:#fff}h2{font-size:22px;color:var(--blue);border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 18px}h3{color:#0f766e;margin:24px 0 8px}h4{color:var(--purple);margin:18px 0 6px}.sub{text-align:center;color:var(--muted);margin-bottom:28px}
+.wrap{max-width:1120px;margin:auto}h1{font-size:34px;text-align:center;margin:12px 0 3px;color:#fff}h2{font-size:22px;color:var(--blue);border-bottom:1px solid var(--line);padding-bottom:8px;margin:0 0 18px}h3{color:var(--lec-accent2,#0f766e);margin:24px 0 8px}h4{color:var(--purple);margin:18px 0 6px}.sub{text-align:center;color:var(--muted);margin-bottom:28px}
 .doc-link{display:inline-block;margin-left:.6rem;border:1px solid var(--blue);border-radius:999px;padding:.08rem .55rem;font-size:.68em;font-weight:600;vertical-align:.16rem}.doc-link:hover{background:rgba(67,56,202,.1);text-decoration:none}.subdoc-tag{display:inline-block;margin-left:.3rem;border:1px solid var(--line);border-radius:999px;padding:0 .38rem;color:var(--blue);font-size:.72em;line-height:1.45}
 .section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:25px 28px;margin:0 0 20px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.lead,.insight,.warning,.fact{padding:15px 17px;border-radius:8px;margin:14px 0}
 .lead{border:1px solid var(--green);background:rgba(21,128,61,.05)}.insight{border-left:4px solid var(--blue);background:rgba(67,56,202,.06)}.warning{border:1px solid var(--red);background:rgba(185,28,28,.05)}.fact{border:1px solid var(--purple);background:rgba(109,40,217,.05)}
-table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:13.5px}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--blue);background:#e8e1d4}tr:nth-child(even){background:rgba(244,241,234,.35)}
-.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{border:1px solid var(--line);border-radius:8px;padding:14px;background:#f4f1ea}.card strong{display:block;color:#0f766e;margin-bottom:5px}
+table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:13.5px}th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}th{color:var(--blue);background:var(--lec-code-bg,#e8e1d4)}tr:nth-child(even){background:rgba(244,241,234,.35)}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--lec-bg,#f4f1ea)}.card strong{display:block;color:var(--lec-accent2,#0f766e);margin-bottom:5px}
 .badge{display:inline-block;font-size:11px;font-weight:700;border:1px solid;border-radius:999px;padding:0 7px;margin-right:5px}.main{color:var(--green)}.optional{color:var(--yellow)}.external{color:var(--purple)}.risk{color:var(--red)}
 .flow{background:white;border-radius:8px;overflow:auto;border:1px solid var(--line)}.flow img{display:block;width:100%;min-width:1100px}.links{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}.links a{border:1px solid var(--blue);border-radius:7px;padding:5px 10px}
-.path{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;counter-reset:n}.path div{counter-increment:n;border:1px solid var(--line);background:#f4f1ea;padding:12px;border-radius:7px}.path div:before{content:"模块 " counter(n);display:block;color:var(--blue);font-weight:700;font-size:11px}
+.path{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;counter-reset:n}.path div{counter-increment:n;border:1px solid var(--line);background:var(--lec-bg,#f4f1ea);padding:12px;border-radius:7px}.path div:before{content:"模块 " counter(n);display:block;color:var(--blue);font-weight:700;font-size:11px}
 ul,ol{padding-left:22px}.small{font-size:12.5px;color:var(--muted)}.footer{text-align:center;color:var(--muted);padding:20px}
 @media(max-width:980px){body{padding:68px 20px 20px}.nav{display:none}.grid,.path{grid-template-columns:1fr}.section{padding:19px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}.flow img{min-width:900px}}
 /* ===== 顶部 Tab 栏（与 trae/software_agent 对齐） ===== */
-.project-tabs{position:fixed;top:0;left:0;right:0;z-index:300;height:48px;display:flex;align-items:center;padding:0 1.25rem;background:#fffdf8;border-bottom:1px solid var(--line);box-shadow:0 1px 8px rgba(28,25,23,.5)}
+.project-tabs{position:fixed;top:0;left:0;right:0;z-index:300;height:48px;display:flex;align-items:center;padding:0 1.25rem;background:var(--lec-surface,#fffdf8);border-bottom:1px solid var(--line);box-shadow:0 1px 8px rgba(28,25,23,.5)}
 .project-tabs .tab-home{color:var(--blue);font-size:.88rem;font-weight:600;text-decoration:none;margin-right:2rem;white-space:nowrap;padding:.32rem .85rem;border:1px solid var(--line);border-radius:8px;transition:all .25s}
 .project-tabs .tab-home:hover{background:var(--blue);color:var(--bg);border-color:var(--blue);text-decoration:none;transform:translateY(-1px)}
 .project-tabs .tab-btn{background:none;border:none;cursor:pointer;font-family:inherit;font-size:.95rem;font-weight:600;color:var(--muted);padding:.95rem 1.25rem;position:relative;transition:color .2s}
@@ -38,26 +40,26 @@ body.tab-flow{padding-left:24px}
 .lightbox{position:fixed;display:none;z-index:999;inset:0;background:rgba(240,235,224,.92);align-items:center;justify-content:center;padding:28px}
 .lightbox.open{display:flex}
 .lightbox img{max-width:100%;max-height:100%;background:#fff;cursor:grab;user-select:none}
-.lb-close{position:absolute;top:16px;right:18px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(28,25,23,.18);background:rgba(255,253,248,.9);color:#1c1917;font-size:16px;line-height:1;cursor:pointer;z-index:1}
+.lb-close{position:absolute;top:16px;right:18px;width:36px;height:36px;border-radius:50%;border:1px solid rgba(28,25,23,.18);background:rgba(255,253,248,.9);color:var(--lec-text,#1c1917);font-size:16px;line-height:1;cursor:pointer;z-index:1}
 .flow img.zoom{cursor:zoom-in}
 @media(max-width:640px){.project-tabs{padding:0 .35rem;overflow-x:auto;overflow-y:hidden}.project-tabs .tab-home{margin-right:.15rem;padding:.3rem .5rem;font-size:.8rem}.project-tabs .tab-btn{padding:.95rem .5rem;font-size:.8rem;white-space:nowrap}.project-tabs .tab-btn.active::after{left:.5rem;right:.5rem}}
 .data-asof{margin:-4px 0 14px;font-size:13px;line-height:1.7;color:var(--ink-3,#78716c);}
 .data-asof strong{color:var(--amber,#c2410c);}
 /* ===== 知识卡通用组件（与全站 A 级卡片一致） ===== */
-.arch-diagram{font-family:"Cascadia Code",Consolas,'Courier New',monospace;background:#f4f1ea;border:1px solid var(--line);border-radius:8px;padding:1rem 1.15rem;white-space:pre;overflow-x:auto;color:#0f766e;font-size:.82rem;line-height:1.55;margin:.9rem 0}
+.arch-diagram{font-family:"Cascadia Code",Consolas,'Courier New',monospace;background:var(--lec-bg,#f4f1ea);border:1px solid var(--line);border-radius:8px;padding:1rem 1.15rem;white-space:pre;overflow-x:auto;color:var(--lec-accent2,#0f766e);font-size:.82rem;line-height:1.55;margin:.9rem 0}
 .intuition-box{background:rgba(21,128,61,.06);border:1px solid var(--green);border-radius:8px;padding:.9rem 1.15rem;margin:.9rem 0}
 .intuition-box::before{content:"⚡ 一句话直觉";display:block;font-weight:700;color:var(--green);margin-bottom:.28rem;font-size:.78rem}
 .intuition-box p{margin:0;font-style:italic;color:var(--text)}
 .term{background:rgba(194,65,12,.12);color:var(--orange);padding:.05rem .38rem;border-radius:4px;font-size:.9em;font-weight:500;border-bottom:1px solid rgba(194,65,12,.3)}
-.highlight{border-left:3px solid var(--blue);padding-left:1rem;margin:.9rem 0;color:#44403c}
+.highlight{border-left:3px solid var(--blue);padding-left:1rem;margin:.9rem 0;color:var(--lec-text-2,#44403c)}
 .practice-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem;margin:1.1rem 0}
 .practice-grid .do{background:rgba(21,128,61,.08);border:1px solid var(--green);border-radius:8px;padding:1rem}
 .practice-grid .do::before{content:"✅ Do";display:block;font-weight:700;color:var(--green);margin-bottom:.35rem}
 .practice-grid .dont{background:rgba(185,28,28,.08);border:1px solid var(--red);border-radius:8px;padding:1rem}
 .practice-grid .dont::before{content:"❌ Don't";display:block;font-weight:700;color:var(--red);margin-bottom:.35rem}
 .practice-grid ul{margin:.25rem 0 0 1.1rem!important}.practice-grid li{margin:.28rem 0}
-.qa-section details{background:#f4f1ea;border:1px solid var(--line);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
-.qa-section summary{cursor:pointer;font-weight:600;color:#0f766e;list-style:none;display:flex;align-items:center;gap:.5rem}
+.qa-section details{background:var(--lec-bg,#f4f1ea);border:1px solid var(--line);border-radius:8px;margin:.6rem 0;padding:.8rem 1.2rem}
+.qa-section summary{cursor:pointer;font-weight:600;color:var(--lec-accent2,#0f766e);list-style:none;display:flex;align-items:center;gap:.5rem}
 .qa-section summary::-webkit-details-marker{display:none}
 .qa-section summary::before{content:"Q";background:var(--blue);color:var(--bg);border-radius:50%;width:1.4rem;height:1.4rem;display:inline-flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
 .qa-section details[open] summary{margin-bottom:.6rem}
@@ -65,6 +67,10 @@ body.tab-flow{padding-left:24px}
 .nav a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
 @media (max-width: 980px){.practice-grid{grid-template-columns:1fr}.arch-diagram{font-size:.68rem;padding:.7rem}}
 </style>
+
+<link rel="stylesheet" href="../theme.css">
+<style data-lec-dark>/* 本卡 :root 的变量名按本卡取值映射深色；放在 theme.css 之后，同特异性靠源码顺序生效 */
+html.dark{--bg:#12110f;--panel:#1c1a17;--text:#f5f0e8;--muted:#a8a097;--blue:#a5b4fc;--green:#4ade80;--orange:#fdba74;--purple:#c4b5fd;--red:#fca5a5;--yellow:#fdba74;}</style>
 </head>
 <body>
 <div class="project-tabs">
@@ -798,5 +804,6 @@ document.querySelectorAll('.project-tabs .tab-btn').forEach(function(btn){btn.ad
 <script src="../../catalog.js"></script>
 <script src="../../card-nav.js"></script>
 <script src="../../read-marks.js"></script>
-</body>
+
+<script src="../theme.js"></script></body>
 </html>

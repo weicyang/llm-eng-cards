@@ -2,25 +2,31 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+<script id="lec-theme-early">/* 首屏前定主题，避免深色用户先看到一屏浅色。与首页共用 localStorage 的 lec-theme 约定 */
+(function(){try{var s=localStorage.getItem("lec-theme");if(s==="dark"||(!s&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();</script>
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>07 Pregel Runtime：同步与异步超级步执行内核</title>
   <style>
     :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--panel2:#e8e1d4;--text:#1c1917;--muted:#78716c;--line:rgba(28,25,23,.12);--blue:#4338ca;--green:#15803d;--yellow:#c2410c;--red:#b91c1c;--purple:#6d28d9;--code:#e8e1d4}
     *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:16px/1.72 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
-    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:Consolas,"SFMono-Regular",monospace;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:.08em .35em;color:#4338ca}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:Consolas,"SFMono-Regular",monospace;background:var(--code);border:1px solid var(--line);border-radius:5px;padding:.08em .35em;color:var(--lec-accent,#4338ca)}
     .layout{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1500px;margin:auto}.sidebar{position:sticky;top:0;height:100vh;padding:22px 18px;border-right:1px solid var(--line);background:color-mix(in srgb, var(--bg) 88%, transparent);overflow:auto;backdrop-filter:blur(12px)}
     .sidebar strong{display:block;margin-bottom:10px}.sidebar a{display:block;padding:5px 9px;border-left:2px solid transparent;color:var(--muted);font-size:14px}.sidebar a.active{color:var(--text);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
     main{min-width:0;max-width:1080px;padding:34px 48px 80px}.back{display:inline-block;margin-bottom:18px}.hero,.section{border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
-    .hero{padding:28px;margin-bottom:22px;background:linear-gradient(135deg,#fffdf8,#e8e1d4)}h1{font-size:clamp(28px,4vw,46px);line-height:1.18;margin:0 0 12px}.lead{font-size:18px;color:#44403c;max-width:850px}
-    .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 24px;margin-top:20px;color:var(--muted)}.tags{margin-top:16px}.tag{display:inline-block;margin:3px 5px 3px 0;padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:13px}.current{color:#15803d}.default{color:#0f766e}.optional{color:#6d28d9}.migration{color:#a16207}
-    .section{padding:24px 28px;margin:18px 0;scroll-margin-top:16px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}h2{margin:0 0 15px;font-size:25px}h3{margin:22px 0 8px;font-size:19px;color:#4338ca}p,ul,ol{margin:8px 0 13px}.flow{white-space:pre-wrap;background:#e8e1d4;border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto;color:#44403c;font-family:Consolas,monospace}
+    .hero{padding:28px;margin-bottom:22px;background:linear-gradient(135deg,var(--lec-surface,#fffdf8),var(--lec-code-bg,#e8e1d4))}h1{font-size:clamp(28px,4vw,46px);line-height:1.18;margin:0 0 12px}.lead{font-size:18px;color:var(--lec-text-2,#44403c);max-width:850px}
+    .meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px 24px;margin-top:20px;color:var(--muted)}.tags{margin-top:16px}.tag{display:inline-block;margin:3px 5px 3px 0;padding:2px 9px;border:1px solid var(--line);border-radius:999px;font-size:13px}.current{color:var(--lec-green,#15803d)}.default{color:var(--lec-accent2,#0f766e)}.optional{color:var(--lec-purple,#6d28d9)}.migration{color:var(--lec-amber,#a16207)}
+    .section{padding:24px 28px;margin:18px 0;scroll-margin-top:16px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}h2{margin:0 0 15px;font-size:25px}h3{margin:22px 0 8px;font-size:19px;color:var(--lec-accent,#4338ca)}p,ul,ol{margin:8px 0 13px}.flow{white-space:pre-wrap;background:var(--lec-code-bg,#e8e1d4);border:1px solid var(--line);border-radius:8px;padding:16px;overflow:auto;color:var(--lec-text-2,#44403c);font-family:Consolas,monospace}
     .note,.warn,.danger{border-left:4px solid var(--blue);padding:11px 14px;margin:14px 0;background:rgba(67,56,202,.07)}.warn{border-color:var(--yellow);background:rgba(194,65,12,.08)}.danger{border-color:var(--red);background:rgba(185,28,28,.08)}
     .table-wrap{overflow-x:auto;margin:12px 0}table{width:100%;border-collapse:collapse;min-width:720px}th,td{padding:10px 12px;border:1px solid var(--line);vertical-align:top}th{background:var(--panel2);text-align:left}tbody tr:nth-child(even){background:rgba(255,255,255,.018)}
-    .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;color:#4338ca}
-    .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{border:1px solid var(--line);border-radius:8px;padding:14px;background:#fffdf8}.card h3{margin-top:0}.footer{color:var(--muted);text-align:center;margin-top:34px}
+    .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word;color:var(--lec-accent,#4338ca)}
+    .cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.card{border:1px solid var(--line);border-radius:8px;padding:14px;background:var(--lec-surface,#fffdf8)}.card h3{margin-top:0}.footer{color:var(--muted);text-align:center;margin-top:34px}
     @media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);columns:2}.sidebar strong{column-span:all}.sidebar a{break-inside:avoid}main{padding:24px 18px 60px}.meta,.cards{grid-template-columns:1fr}}
     @media(max-width:520px){.sidebar{columns:1}.hero,.section{padding:19px 16px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}body{font-size:15px}h2{font-size:21px}}
   </style>
+
+<link rel="stylesheet" href="../../../theme.css">
+<style data-lec-dark>/* 本卡 :root 的变量名按本卡取值映射深色；放在 theme.css 之后，同特异性靠源码顺序生效 */
+html.dark{--bg:#12110f;--panel:#1c1a17;--panel2:#262420;--text:#f5f0e8;--muted:#a8a097;--blue:#a5b4fc;--green:#4ade80;--yellow:#fdba74;--red:#fca5a5;--purple:#c4b5fd;--code:#262420;}</style>
 </head>
 <body>
 <div class="layout">
@@ -335,5 +341,6 @@ ainvoke ─→ astream ─→ AsyncPregelLoop ─→ PregelRunner.atick
   },{rootMargin:'-12% 0px -72% 0px'});
   sections.forEach(s=>observer.observe(s));
 </script>
-</body>
+
+<script src="../../../theme.js"></script></body>
 </html>

@@ -2,25 +2,31 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+<script id="lec-theme-early">/* 首屏前定主题，避免深色用户先看到一屏浅色。与首页共用 localStorage 的 lec-theme 约定 */
+(function(){try{var s=localStorage.getItem("lec-theme");if(s==="dark"||(!s&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}})();</script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>第 10 章：SQLite、Postgres、Serde 与 Conformance｜LangGraph 架构开发文档</title>
   <style>
     :root{color-scheme:light;--bg:#f4f1ea;--panel:#fffdf8;--panel2:#e8e1d4;--text:#44403c;--muted:#78716c;--line:rgba(28,25,23,.12);--blue:#4338ca;--green:#15803d;--yellow:#c2410c;--red:#b91c1c;--code:#fffdf8}
     *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:20px}body{margin:0;background:radial-gradient(900px 420px at 12% -10%, rgba(67,56,202,.08), transparent 55%),radial-gradient(800px 380px at 92% 0%, rgba(15,118,110,.08), transparent 50%),var(--bg);color:var(--text);font:15px/1.75 system-ui,-apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
-    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--code);border:1px solid var(--line);border-radius:4px;padding:.08em .32em;color:#1c1917}
+    a{color:var(--blue);text-decoration:none}a:hover{text-decoration:underline}code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;background:var(--code);border:1px solid var(--line);border-radius:4px;padding:.08em .32em;color:var(--lec-text,#1c1917)}
     .layout{display:grid;grid-template-columns:280px minmax(0,1fr);max-width:1500px;margin:auto}.sidebar{position:sticky;top:0;height:100vh;overflow:auto;padding:22px 18px;border-right:1px solid var(--line);background:color-mix(in srgb, var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
-    .sidebar strong{display:block;color:#1c1917;margin-bottom:10px}.sidebar a{display:block;padding:5px 9px;border-left:2px solid transparent;color:var(--muted);font-size:13px}.sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
+    .sidebar strong{display:block;color:var(--lec-text,#1c1917);margin-bottom:10px}.sidebar a{display:block;padding:5px 9px;border-left:2px solid transparent;color:var(--muted);font-size:13px}.sidebar a.active{color:var(--blue);border-left-color:var(--blue);background:rgba(67,56,202,.08)}
     main{min-width:0;padding:34px clamp(22px,5vw,72px) 80px}.back{display:inline-block;margin-bottom:18px}.hero,.section{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:clamp(20px,3vw,34px);margin-bottom:22px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}
-    h1{font-size:clamp(28px,4vw,44px);line-height:1.2;color:#1c1917;margin:0 0 14px}h2{font-size:24px;color:#1c1917;border-bottom:1px solid var(--line);padding-bottom:9px;margin:0 0 18px}h3{font-size:18px;color:#1c1917;margin:24px 0 8px}
-    p,ul,ol{margin:8px 0 14px}.subtitle{font-size:18px;color:var(--muted)}.meta,.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:20px}.meta div,.card{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:12px}.meta b,.card b{display:block;color:#1c1917}
-    .tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 9px;margin:2px 3px 2px 0;font-size:12px}.current{color:var(--green)}.optional{color:var(--yellow)}.migration{color:#6d28d9}.risk{color:#b91c1c}
+    h1{font-size:clamp(28px,4vw,44px);line-height:1.2;color:var(--lec-text,#1c1917);margin:0 0 14px}h2{font-size:24px;color:var(--lec-text,#1c1917);border-bottom:1px solid var(--line);padding-bottom:9px;margin:0 0 18px}h3{font-size:18px;color:var(--lec-text,#1c1917);margin:24px 0 8px}
+    p,ul,ol{margin:8px 0 14px}.subtitle{font-size:18px;color:var(--muted)}.meta,.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:20px}.meta div,.card{background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:12px}.meta b,.card b{display:block;color:var(--lec-text,#1c1917)}
+    .tag{display:inline-block;border:1px solid var(--line);border-radius:999px;padding:2px 9px;margin:2px 3px 2px 0;font-size:12px}.current{color:var(--green)}.optional{color:var(--yellow)}.migration{color:var(--lec-purple,#6d28d9)}.risk{color:var(--lec-red,#b91c1c)}
     .flow{white-space:pre-wrap;background:var(--code);border:1px solid var(--line);border-radius:7px;padding:14px;overflow:auto}.note,.warn,.danger{border-left:4px solid var(--blue);background:rgba(67,56,202,.07);padding:11px 14px;margin:14px 0}.warn{border-color:var(--yellow);background:rgba(194,65,12,.08)}.danger{border-color:var(--red);background:rgba(185,28,28,.08)}
-    .table-wrap{overflow-x:auto;margin:12px 0 18px}table{width:100%;border-collapse:collapse;min-width:720px}th,td{border:1px solid var(--line);padding:9px 11px;vertical-align:top;text-align:left}th{background:var(--panel2);color:#1c1917}
+    .table-wrap{overflow-x:auto;margin:12px 0 18px}table{width:100%;border-collapse:collapse;min-width:720px}th,td{border:1px solid var(--line);padding:9px 11px;vertical-align:top;text-align:left}th{background:var(--panel2);color:var(--lec-text,#1c1917)}
     .section span.evidence{display:inline;background:transparent;border:0;padding:0;margin:0;line-height:inherit;overflow-wrap:anywhere}.section span.evidence code{display:inline;white-space:normal;overflow-wrap:anywhere;word-break:break-word}
-    .evidence{color:var(--muted);font-size:.92em}.ok{color:var(--green)}.no{color:var(--red)}dl{display:grid;grid-template-columns:minmax(130px,220px) 1fr;gap:8px 16px}dt{font-weight:700;color:#1c1917}dd{margin:0}
+    .evidence{color:var(--muted);font-size:.92em}.ok{color:var(--green)}.no{color:var(--red)}dl{display:grid;grid-template-columns:minmax(130px,220px) 1fr;gap:8px 16px}dt{font-weight:700;color:var(--lec-text,#1c1917)}dd{margin:0}
     @media(max-width:900px){.layout{display:block}.sidebar{position:relative;height:auto;border-right:0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.sidebar strong{grid-column:1/-1}.sidebar a{font-size:12px}main{padding:22px 14px 60px}.hero,.section{padding:20px;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}dl{grid-template-columns:1fr}dd{margin-bottom:8px}}
     @media print{.sidebar{display:none}.layout{display:block}main{padding:0}.hero,.section{break-inside:avoid;background:#fff;color:#111;border-color:#bbb;border-radius:16px;box-shadow:0 10px 30px -18px rgba(28,25,23,.35)}body{background:#fff;color:#111}code{color:#111;background:#eee}}
   </style>
+
+<link rel="stylesheet" href="../../../theme.css">
+<style data-lec-dark>/* 本卡 :root 的变量名按本卡取值映射深色；放在 theme.css 之后，同特异性靠源码顺序生效 */
+html.dark{--bg:#12110f;--panel:#1c1a17;--panel2:#262420;--text:#d6d0c6;--muted:#a8a097;--blue:#a5b4fc;--green:#4ade80;--yellow:#fdba74;--red:#fca5a5;--code:#1c1a17;}</style>
 </head>
 <body>
 <div class="layout">
@@ -388,5 +394,6 @@ Pregel Runtime ── put_writes / aput_writes ──► task 级 writes
     addEventListener('scroll', update, {passive:true}); update();
   })();
 </script>
-</body>
+
+<script src="../../../theme.js"></script></body>
 </html>
